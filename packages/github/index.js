@@ -52,10 +52,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -155,7 +152,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "00869fdb3a7eb4a1eff5f8619bfb30abf7e3613656d24de2eb0143792ce3362e", import.meta.url);
+__registerModuleFingerprint("index.agency", "d58fc13c85bda424cc3abfe64602781a54ee4a060cfa689fc1a356dfd74aa783", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -187,28 +184,30 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "createBranch", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["name"] = name;
@@ -217,7 +216,7 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createBranch", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -244,14 +243,14 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "createBranch",
@@ -266,9 +265,9 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(createBranchImpl, {
+        runner2.halt(await __call(__run3, createBranchImpl, {
           type: "positional",
           args: [{
             "name": __stack.args.name,
@@ -307,15 +306,15 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "createBranch",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "createBranch",
@@ -370,19 +369,20 @@ const createBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "from": z.string().nullable().describe("Default: "), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "deleteBranch", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["name"] = name;
@@ -390,7 +390,7 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "deleteBranch", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "deleteBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -413,14 +413,14 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "deleteBranch",
@@ -434,9 +434,9 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(deleteBranchImpl, {
+        runner2.halt(await __call(__run3, deleteBranchImpl, {
           type: "positional",
           args: [{
             "name": __stack.args.name,
@@ -474,15 +474,15 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "deleteBranch",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "deleteBranch",
@@ -530,19 +530,20 @@ const deleteBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "branchExists", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["name"] = name;
@@ -550,7 +551,7 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "branchExists", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "branchExists", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -573,14 +574,14 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "branchExists",
@@ -594,9 +595,9 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(branchExistsImpl, {
+        runner2.halt(await __call(__run3, branchExistsImpl, {
           type: "positional",
           args: [{
             "name": __stack.args.name,
@@ -634,15 +635,15 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "branchExists",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "branchExists",
@@ -690,19 +691,20 @@ const branchExists = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET, authorEmail = __UNSET, push = __UNSET, branch = __UNSET) {
-  const __setupData = setupFunction();
+async function __commitFiles_impl(__run, message, files = __UNSET, authorName = __UNSET, authorEmail = __UNSET, push = __UNSET, branch = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "commitFiles", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["message"] = message;
@@ -712,7 +714,7 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
   __stack.args["push"] = push === __UNSET ? true : push;
   __stack.args["branch"] = branch === __UNSET ? `` : branch;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commitFiles", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commitFiles", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -743,14 +745,14 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "commitFiles",
@@ -766,9 +768,9 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(commitFilesImpl, {
+        runner2.halt(await __call(__run3, commitFilesImpl, {
           type: "positional",
           args: [{
             "message": __stack.args.message,
@@ -808,15 +810,15 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "commitFiles",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "commitFiles",
@@ -878,19 +880,20 @@ const commitFiles = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "message": z.string(), "files": z.array(z.string()).nullable().describe("Default: []"), "authorName": z.string().nullable().describe("Default: "), "authorEmail": z.string().nullable().describe("Default: "), "push": z.boolean().nullable().describe("Default: true"), "branch": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET, draft = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "openPullRequest", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["title"] = title;
@@ -903,7 +906,7 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "openPullRequest", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "openPullRequest", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -946,14 +949,14 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "openPullRequest",
@@ -972,9 +975,9 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(openPullRequestImpl, {
+        runner2.halt(await __call(__run3, openPullRequestImpl, {
           type: "positional",
           args: [{
             "title": __stack.args.title,
@@ -1017,15 +1020,15 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "openPullRequest",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "openPullRequest",
@@ -1108,19 +1111,20 @@ const openPullRequest = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "title": z.string(), "body": z.string(), "head": z.string(), "base": z.string().nullable().describe("Default: "), "draft": z.boolean().nullable().describe("Default: false"), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, head2 = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "listPullRequests", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["state"] = state === __UNSET ? `open` : state;
@@ -1130,7 +1134,7 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listPullRequests", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listPullRequests", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -1161,14 +1165,14 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "listPullRequests",
@@ -1184,9 +1188,9 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(listPullRequestsImpl, {
+        runner2.halt(await __call(__run3, listPullRequestsImpl, {
           type: "positional",
           args: [{
             "state": __stack.args.state,
@@ -1226,15 +1230,15 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "listPullRequests",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "listPullRequests",
@@ -1296,19 +1300,20 @@ const listPullRequests = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "state": z.string().nullable().describe("Default: open"), "base": z.string().nullable().describe("Default: "), "head": z.string().nullable().describe("Default: "), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "commentOnPullRequest", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["number"] = number;
@@ -1317,7 +1322,7 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnPullRequest", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnPullRequest", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -1344,14 +1349,14 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "commentOnPullRequest",
@@ -1366,9 +1371,9 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(commentOnPullRequestImpl, {
+        runner2.halt(await __call(__run3, commentOnPullRequestImpl, {
           type: "positional",
           args: [{
             "number": __stack.args.number,
@@ -1407,15 +1412,15 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "commentOnPullRequest",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "commentOnPullRequest",
@@ -1470,19 +1475,20 @@ const commentOnPullRequest = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "body": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "addLabel", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["number"] = number;
@@ -1491,7 +1497,7 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "addLabel", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "addLabel", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -1518,14 +1524,14 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "addLabel",
@@ -1540,9 +1546,9 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(addLabelImpl, {
+        runner2.halt(await __call(__run3, addLabelImpl, {
           type: "positional",
           args: [{
             "number": __stack.args.number,
@@ -1581,15 +1587,15 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "addLabel",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "addLabel",
@@ -1644,19 +1650,20 @@ const addLabel = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "labels": z.array(z.string()), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __requestReview_impl(__run, number, reviewers = __UNSET, teamReviewers = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "requestReview", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["number"] = number;
@@ -1666,7 +1673,7 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "requestReview", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "requestReview", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -1697,14 +1704,14 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "requestReview",
@@ -1720,9 +1727,9 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(requestReviewImpl, {
+        runner2.halt(await __call(__run3, requestReviewImpl, {
           type: "positional",
           args: [{
             "number": __stack.args.number,
@@ -1762,15 +1769,15 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "requestReview",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "requestReview",
@@ -1832,19 +1839,20 @@ const requestReview = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "reviewers": z.array(z.string()).nullable().describe("Default: []"), "teamReviewers": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "listIssues", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["state"] = state === __UNSET ? `open` : state;
@@ -1853,7 +1861,7 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listIssues", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listIssues", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -1880,14 +1888,14 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "listIssues",
@@ -1902,9 +1910,9 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(listIssuesImpl, {
+        runner2.halt(await __call(__run3, listIssuesImpl, {
           type: "positional",
           args: [{
             "state": __stack.args.state,
@@ -1943,15 +1951,15 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "listIssues",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "listIssues",
@@ -2006,19 +2014,20 @@ const listIssues = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "state": z.string().nullable().describe("Default: open"), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "commentOnIssue", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["number"] = number;
@@ -2027,7 +2036,7 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnIssue", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnIssue", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -2054,14 +2063,14 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "commentOnIssue",
@@ -2076,9 +2085,9 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(commentOnIssueImpl, {
+        runner2.halt(await __call(__run3, commentOnIssueImpl, {
           type: "positional",
           args: [{
             "number": __stack.args.number,
@@ -2117,15 +2126,15 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "commentOnIssue",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "commentOnIssue",
@@ -2180,19 +2189,20 @@ const commentOnIssue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "body": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "createIssue", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["title"] = title;
@@ -2202,7 +2212,7 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createIssue", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createIssue", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -2233,14 +2243,14 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "createIssue",
@@ -2256,9 +2266,9 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(createIssueImpl, {
+        runner2.halt(await __call(__run3, createIssueImpl, {
           type: "positional",
           args: [{
             "title": __stack.args.title,
@@ -2298,15 +2308,15 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "createIssue",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "createIssue",
@@ -2368,26 +2378,27 @@ const createIssue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "title": z.string(), "body": z.string(), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __UNSET) {
-  const __setupData = setupFunction();
+async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, token = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "defaultBranch", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "defaultBranch", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "defaultBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -2406,14 +2417,14 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "defaultBranch",
@@ -2426,9 +2437,9 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(defaultBranchImpl, {
+        runner2.halt(await __call(__run3, defaultBranchImpl, {
           type: "positional",
           args: [{
             "owner": __stack.args.owner,
@@ -2465,15 +2476,15 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "defaultBranch",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "defaultBranch",
@@ -2514,7 +2525,8 @@ const defaultBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:createBranch": { "1": { "line": 20, "col": 2 } }, "index.agency:deleteBranch": { "1": { "line": 25, "col": 2 } }, "index.agency:branchExists": { "1": { "line": 30, "col": 2 } }, "index.agency:commitFiles": { "1": { "line": 35, "col": 2 } }, "index.agency:openPullRequest": { "1": { "line": 47, "col": 2 } }, "index.agency:listPullRequests": { "1": { "line": 52, "col": 2 } }, "index.agency:commentOnPullRequest": { "1": { "line": 57, "col": 2 } }, "index.agency:addLabel": { "1": { "line": 62, "col": 2 } }, "index.agency:requestReview": { "1": { "line": 67, "col": 2 } }, "index.agency:listIssues": { "1": { "line": 72, "col": 2 } }, "index.agency:commentOnIssue": { "1": { "line": 77, "col": 2 } }, "index.agency:createIssue": { "1": { "line": 82, "col": 2 } }, "index.agency:defaultBranch": { "1": { "line": 87, "col": 2 } } };

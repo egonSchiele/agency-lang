@@ -40,10 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -143,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "56e12422d8b77efdac52ce811f17f457cec7bee6ac9da556ed14d7f83f16103a", import.meta.url);
+__registerModuleFingerprint("index.agency", "2fac37bc6dae94b0893c7cd88720c2c37190a56288e488df36b03b765b6b9551", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -175,34 +172,36 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __readText_impl(filepath, language = __UNSET) {
-  const __setupData = setupFunction();
+async function __readText_impl(__run, filepath, language = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "readText", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["filepath"] = filepath;
   __stack.args["language"] = language === __UNSET ? `eng` : language;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "readText", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "readText", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -217,14 +216,14 @@ async function __readText_impl(filepath, language = __UNSET) {
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "readText",
@@ -236,9 +235,9 @@ async function __readText_impl(filepath, language = __UNSET) {
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(readTextImpl, {
+        runner2.halt(await __call(__run3, readTextImpl, {
           type: "positional",
           args: [__stack.args.filepath, __stack.args.language]
         }));
@@ -271,15 +270,15 @@ async function __readText_impl(filepath, language = __UNSET) {
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "readText",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "readText",
@@ -318,7 +317,8 @@ const readText = __AgencyFunction.create({
   @param language - Tesseract language code; only "eng" ships today`,
     schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: eng") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:readText": { "1": { "line": 37, "col": 2 } } };

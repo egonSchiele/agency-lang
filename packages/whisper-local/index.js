@@ -40,10 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -143,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d2cd234066de7a6c514626e088cb5cd18d12547c420751e5406f2ab49bf1b053", import.meta.url);
+__registerModuleFingerprint("index.agency", "b23b18f426ab1396f4ecb1aac351dc7ae980ee9951d0858f87dcce198d50b229", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -175,35 +172,37 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) {
-  const __setupData = setupFunction();
+async function __transcribe_impl(__run, filepath, language = __UNSET, model = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "transcribe", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["filepath"] = filepath;
   __stack.args["language"] = language === __UNSET ? `` : language;
   __stack.args["model"] = model === __UNSET ? `base.en` : model;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -222,14 +221,14 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "transcribe",
@@ -242,9 +241,9 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(transcribeImpl, {
+        runner2.halt(await __call(__run3, transcribeImpl, {
           type: "positional",
           args: [__stack.args.filepath, __stack.args.language, __stack.args.model]
         }));
@@ -277,15 +276,15 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "transcribe",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "transcribe",
@@ -326,7 +325,8 @@ const transcribe = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: "), "model": z.string().nullable().describe("Default: base.en") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:transcribe": { "1": { "line": 30, "col": 2 } } };

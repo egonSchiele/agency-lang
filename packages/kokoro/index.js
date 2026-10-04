@@ -47,10 +47,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -150,7 +147,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "de066003c18fd9fa919bd1987292497c06e882ca4c7dc9f61af638f95d1ae1f0", import.meta.url);
+__registerModuleFingerprint("index.agency", "297980d675c09eb4e59d6b7ad5cd2d88cbb01350e3fa0c95f964854814ba3b15", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -182,34 +179,36 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 const Voice = z.object({ "id": z.string(), "name": z.string(), "language": z.string(), "gender": z.string(), "grade": z.string() });
-async function __realOutput_impl(outputFile) {
-  const __setupData = setupFunction();
+async function __realOutput_impl(__run, outputFile) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "realOutput", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["outputFile"] = outputFile;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -220,14 +219,14 @@ async function __realOutput_impl(outputFile) {
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "realOutput",
@@ -238,11 +237,11 @@ async function __realOutput_impl(outputFile) {
           }
         });
       });
-      await runner.ifElse(1, [
+      await runner.ifElse(1, __run2, [
         {
-          condition: async () => __eq(__stack.args.outputFile, ``),
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
+          condition: async (__run3) => __eq(__stack.args.outputFile, ``),
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
               __functionCompleted = true;
               runner3.halt(``);
               return;
@@ -250,17 +249,17 @@ async function __realOutput_impl(outputFile) {
           }
         }
       ]);
-      await runner.step(2, async (runner2) => {
-        __stack.locals.real = await __tryCall(async () => await __call(_realTarget, {
+      await runner.step(2, __run2, async (runner2, __run3) => {
+        __stack.locals.real = await __tryCall(async () => await __call(__run3, _realTarget, {
           type: "positional",
           args: [__stack.args.outputFile]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "realOutput",
           args: __stack.args
         });
         if (hasInterrupts(__stack.locals.real)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.real);
           return;
         }
@@ -269,10 +268,10 @@ async function __realOutput_impl(outputFile) {
           return;
         }
       });
-      await runner.step(3, async (runner2) => {
+      await runner.step(3, __run2, async (runner2, __run3) => {
         __stack.locals.__hoist_0 = await isFailure(__stack.locals.real);
         if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_0);
           return;
         }
@@ -281,20 +280,20 @@ async function __realOutput_impl(outputFile) {
           return;
         }
       });
-      await runner.ifElse(4, [
+      await runner.ifElse(4, __run2, [
         {
-          condition: async () => __stack.locals.__hoist_0,
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
+          condition: async (__run3) => __stack.locals.__hoist_0,
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
               __stack.locals.why = __stack.locals.real.error;
             });
-            await runner2.step(1, async (runner3) => {
+            await runner2.step(1, __run3, async (runner3, __run4) => {
               throw new Error(`${__stack.locals.why}`);
             });
           }
         }
       ]);
-      await runner.step(5, async (runner2) => {
+      await runner.step(5, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(__stack.locals.real.value);
         return;
@@ -326,15 +325,15 @@ async function __realOutput_impl(outputFile) {
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "realOutput",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "realOutput",
@@ -361,19 +360,20 @@ const realOutput = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "outputFile": z.string() })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
-async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model = __UNSET, speed = __UNSET, allowedPaths = __UNSET, format = __UNSET, modelsDir = __UNSET) {
-  const __setupData = setupFunction();
+async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, model = __UNSET, speed = __UNSET, allowedPaths = __UNSET, format = __UNSET, modelsDir = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "speak", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["text"] = text;
@@ -385,7 +385,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
   __stack.args["format"] = format === __UNSET ? `` : format;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -424,14 +424,14 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "speak",
@@ -449,13 +449,13 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           }
         });
       });
-      await runner.step(1, async (runner2) => {
-        __stack.locals.audioFormat = await __call(_validateSpeakArgs, {
+      await runner.step(1, __run2, async (runner2, __run3) => {
+        __stack.locals.audioFormat = await __call(__run3, _validateSpeakArgs, {
           type: "positional",
           args: [__stack.args.text, __stack.args.outputFile, __stack.args.voice, __stack.args.model, __stack.args.speed, __stack.args.format]
         });
         if (hasInterrupts(__stack.locals.audioFormat)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.audioFormat);
           return;
         }
@@ -464,13 +464,13 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           return;
         }
       });
-      await runner.step(2, async (runner2) => {
-        __stack.locals.status = await __call(_modelStatus, {
+      await runner.step(2, __run2, async (runner2, __run3) => {
+        __stack.locals.status = await __call(__run3, _modelStatus, {
           type: "positional",
           args: [__stack.args.model, __stack.args.modelsDir]
         });
         if (hasInterrupts(__stack.locals.status)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.status);
           return;
         }
@@ -479,46 +479,46 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           return;
         }
       });
-      await runner.ifElse(3, [
+      await runner.ifElse(3, __run2, [
         {
-          condition: async () => __eq(__stack.locals.status.installed, false),
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
-              const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_3_0);
+          condition: async (__run3) => __eq(__stack.locals.status.installed, false),
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
+              const __response = __run4.ctx.getInterruptResponse(__self.__interruptId_3_0);
               if (__response) {
                 if (__response.type === "approve") {
                 } else if (__response.type === "reject") {
-                  runner3.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+                  runner3.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: __run4.ctx.getResultCheckpoint() }));
                   return;
                 }
               } else {
-                const __handlerResult = await interruptWithHandlers("kokoro::download", `Download the Kokoro text-to-speech model?`, {
+                const __handlerResult = await interruptWithHandlers(__run4, "kokoro::download", `Download the Kokoro text-to-speech model?`, {
                   "model": __stack.args.model,
                   "sizeBytes": __stack.locals.status.sizeBytes,
                   "source": __stack.locals.status.source,
                   "dir": __stack.locals.status.dir
-                }, "./index.agency", __ctx, __stateStack());
+                }, "./index.agency");
                 if (isRejected(__handlerResult)) {
-                  runner3.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+                  runner3.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: __run4.ctx.checkpoints.get(__resultCheckpointId) }));
                   return;
                 }
                 if (!isApproved(__handlerResult)) {
                   __self.__interruptId_3_0 = __handlerResult[0].interruptId;
-                  const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "3.0" });
+                  const __checkpointId = __run4.ctx.checkpoints.create(__run4.stack, __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "3.0" });
                   __handlerResult[0].checkpointId = __checkpointId;
-                  __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+                  __handlerResult[0].checkpoint = __run4.ctx.checkpoints.get(__checkpointId);
                   runner3.halt(__handlerResult);
                   return;
                 }
               }
             });
-            await runner2.step(1, async (runner3) => {
-              const __funcResult = await __call(_download, {
+            await runner2.step(1, __run3, async (runner3, __run4) => {
+              const __funcResult = await __call(__run4, _download, {
                 type: "positional",
                 args: [__stack.args.model, __stack.args.modelsDir]
               });
               if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll();
+                await __run4.ctx.pendingPromises.awaitAll();
                 runner3.halt(__funcResult);
                 return;
               }
@@ -530,13 +530,13 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           }
         }
       ]);
-      await runner.step(4, async (runner2) => {
-        __stack.locals.out = await __call(realOutput, {
+      await runner.step(4, __run2, async (runner2, __run3) => {
+        __stack.locals.out = await __call(__run3, realOutput, {
           type: "positional",
           args: [__stack.args.outputFile]
         });
         if (hasInterrupts(__stack.locals.out)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.out);
           return;
         }
@@ -545,38 +545,38 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           return;
         }
       });
-      await runner.step(5, async (runner2) => {
-        const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_5);
+      await runner.step(5, __run2, async (runner2, __run3) => {
+        const __response = __run3.ctx.getInterruptResponse(__self.__interruptId_5);
         if (__response) {
           if (__response.type === "approve") {
           } else if (__response.type === "reject") {
-            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.getResultCheckpoint() }));
             return;
           }
         } else {
-          const __handlerResult = await interruptWithHandlers("kokoro::speak", `Allow Kokoro to write an audio file?`, {
+          const __handlerResult = await interruptWithHandlers(__run3, "kokoro::speak", `Allow Kokoro to write an audio file?`, {
             "textLength": __stack.args.text.length,
             "voice": __stack.args.voice,
             "outputFile": __stack.locals.out,
             "format": __stack.locals.audioFormat
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./index.agency");
           if (isRejected(__handlerResult)) {
-            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_5 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "5" });
+            const __checkpointId = __run3.ctx.checkpoints.create(__run3.stack, __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "5" });
             __handlerResult[0].checkpointId = __checkpointId;
-            __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+            __handlerResult[0].checkpoint = __run3.ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
             return;
           }
         }
       });
-      await runner.step(6, async (runner2) => {
+      await runner.step(6, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(_speak, {
+        runner2.halt(await __call(__run3, _speak, {
           type: "positional",
           args: [__stack.args.text, __stack.locals.out, __stack.args.voice, __stack.args.model, __stack.args.speed, __stack.args.allowedPaths, __stack.locals.audioFormat, __stack.args.modelsDir]
         }));
@@ -609,15 +609,15 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "speak",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "speak",
@@ -702,25 +702,26 @@ const speak = __AgencyFunction.create({
   @param modelsDir - Where models are kept. Leave null for the default.`,
     schema: z.object({ "text": z.string(), "outputFile": z.string().nullable().describe("Default: "), "voice": z.string().nullable().describe("Default: af_heart"), "model": z.string().nullable().describe("Default: fp32"), "speed": z.number().nullable().describe("Default: 1"), "allowedPaths": z.array(z.string()).nullable().describe("Default: []"), "format": z.string().nullable().describe("Default: "), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
-  const __setupData = setupFunction();
+async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "download", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["model"] = model === __UNSET ? `fp32` : model;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "download", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "download", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -735,14 +736,14 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "download",
@@ -754,13 +755,13 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
           }
         });
       });
-      await runner.step(1, async (runner2) => {
-        __stack.locals.status = await __call(_modelStatus, {
+      await runner.step(1, __run2, async (runner2, __run3) => {
+        __stack.locals.status = await __call(__run3, _modelStatus, {
           type: "positional",
           args: [__stack.args.model, __stack.args.modelsDir]
         });
         if (hasInterrupts(__stack.locals.status)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.status);
           return;
         }
@@ -769,11 +770,11 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
           return;
         }
       });
-      await runner.ifElse(2, [
+      await runner.ifElse(2, __run2, [
         {
-          condition: async () => __stack.locals.status.installed,
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
+          condition: async (__run3) => __stack.locals.status.installed,
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
               __functionCompleted = true;
               runner3.halt(__stack.locals.status.dir);
               return;
@@ -781,42 +782,42 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
           }
         }
       ]);
-      await runner.step(3, async (runner2) => {
-        const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_3);
+      await runner.step(3, __run2, async (runner2, __run3) => {
+        const __response = __run3.ctx.getInterruptResponse(__self.__interruptId_3);
         if (__response) {
           if (__response.type === "approve") {
           } else if (__response.type === "reject") {
-            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.getResultCheckpoint() }));
             return;
           }
         } else {
-          const __handlerResult = await interruptWithHandlers("kokoro::download", `Download the Kokoro text-to-speech model?`, {
+          const __handlerResult = await interruptWithHandlers(__run3, "kokoro::download", `Download the Kokoro text-to-speech model?`, {
             "model": __stack.args.model,
             "sizeBytes": __stack.locals.status.sizeBytes,
             "source": __stack.locals.status.source,
             "dir": __stack.locals.status.dir
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./index.agency");
           if (isRejected(__handlerResult)) {
-            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_3 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "download", stepPath: "3" });
+            const __checkpointId = __run3.ctx.checkpoints.create(__run3.stack, __ctx, { moduleId: "index.agency", scopeName: "download", stepPath: "3" });
             __handlerResult[0].checkpointId = __checkpointId;
-            __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+            __handlerResult[0].checkpoint = __run3.ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
             return;
           }
         }
       });
-      await runner.step(4, async (runner2) => {
-        const __funcResult = await __call(_download, {
+      await runner.step(4, __run2, async (runner2, __run3) => {
+        const __funcResult = await __call(__run3, _download, {
           type: "positional",
           args: [__stack.args.model, __stack.args.modelsDir]
         });
         if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__funcResult);
           return;
         }
@@ -825,7 +826,7 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
           return;
         }
       });
-      await runner.step(5, async (runner2) => {
+      await runner.step(5, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(__stack.locals.status.dir);
         return;
@@ -857,15 +858,15 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "download",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "download",
@@ -902,37 +903,38 @@ const download = __AgencyFunction.create({
   @param modelsDir - Where models are kept. Leave null for the default.`,
     schema: z.object({ "model": z.string().nullable().describe("Default: fp32"), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __voices_impl() {
-  const __setupData = setupFunction();
+async function __voices_impl(__run) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "voices", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
     __ctx._pendingArgOverrides = void 0;
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "voices",
@@ -941,9 +943,9 @@ async function __voices_impl() {
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(_voices, {
+        runner2.halt(await __call(__run3, _voices, {
           type: "positional",
           args: []
         }));
@@ -976,15 +978,15 @@ async function __voices_impl() {
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "voices",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "voices",
@@ -1005,7 +1007,8 @@ const voices = __AgencyFunction.create({
   quality grade from A (best) to F.`,
     schema: z.object({})
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:realOutput": { "1": { "line": 48, "col": 2 }, "2": { "line": 51, "col": 2 }, "3": { "line": 52, "col": 14 }, "4": { "line": 52, "col": 2 }, "5": { "line": 55, "col": 2 }, "1.0": { "line": 49, "col": 4 }, "4.0": { "line": 52, "col": 2 }, "4.1": { "line": 53, "col": 4 } }, "index.agency:speak": { "1": { "line": 91, "col": 2 }, "2": { "line": 92, "col": 2 }, "3": { "line": 93, "col": 2 }, "4": { "line": 102, "col": 2 }, "5": { "line": 103, "col": 2 }, "6": { "line": 109, "col": 2 }, "3.0": { "line": 94, "col": 4 }, "3.1": { "line": 100, "col": 4 } }, "index.agency:download": { "1": { "line": 124, "col": 2 }, "2": { "line": 125, "col": 2 }, "3": { "line": 128, "col": 2 }, "4": { "line": 134, "col": 2 }, "5": { "line": 135, "col": 2 }, "2.0": { "line": 126, "col": 4 } }, "index.agency:voices": { "1": { "line": 143, "col": 2 } } };

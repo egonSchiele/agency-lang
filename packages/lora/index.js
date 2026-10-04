@@ -51,10 +51,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -154,7 +151,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "294ff191da702bf805234dacb0a7c9025b9b02cbf523d2c05b9abaa6f5b04df4", import.meta.url);
+__registerModuleFingerprint("index.agency", "cf95b9e2a343477f2a6da3bd40114b09723ade9104af255afec9ee4817198e3d", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -192,7 +189,8 @@ __registerAlwaysScope("lora::train", [{ "field": "outDir", "matchSubpaths": true
 __registerAlwaysScope("lora::info", [{ "field": "dir", "matchSubpaths": true }]);
 let __staticInitPromise = null;
 let STYLE_TAGS = __UNINIT_STATIC;
-async function __initializeStatic(__ctx) {
+async function __initializeStatic(__run) {
+  const __ctx = __run.ctx;
   if (__staticInitPromise) {
     return __staticInitPromise;
   }
@@ -208,32 +206,34 @@ function __getStaticVars() {
 }
 __globalCtx.getStaticVars = __getStaticVars;
 __registerStaticInit("index.agency", __initializeStatic);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
-  await __initializeStatic(__ctx);
+  await __initializeStatic(__run);
   await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars());
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 const TrainedLora = z.object({ "path": z.string(), "steps": z.number(), "images": z.number(), "minutes": z.number(), "samples": z.array(z.string()) });
 const LoraInfo = z.object({ "base": z.string(), "trigger": z.string(), "rank": z.number(), "steps": z.number(), "sizeBytes": z.number() });
-async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNSET, rank = __UNSET, learningRate = __UNSET, resolution = __UNSET, flip = __UNSET, seed = __UNSET, samplePrompts = __UNSET, sampleEvery = __UNSET) {
-  const __setupData = setupFunction();
+async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps = __UNSET, rank = __UNSET, learningRate = __UNSET, resolution = __UNSET, flip = __UNSET, seed = __UNSET, samplePrompts = __UNSET, sampleEvery = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "trainLora", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["imagesDir"] = imagesDir;
@@ -249,7 +249,7 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
   __stack.args["samplePrompts"] = samplePrompts === __UNSET ? [] : samplePrompts;
   __stack.args["sampleEvery"] = sampleEvery === __UNSET ? 250 : sampleEvery;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "trainLora", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "trainLora", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -304,14 +304,14 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "trainLora",
@@ -333,17 +333,17 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           }
         });
       });
-      await runner.step(1, async (runner2) => {
-        __stack.locals.plan = await __tryCall(async () => await __call(_planTraining, {
+      await runner.step(1, __run2, async (runner2, __run3) => {
+        __stack.locals.plan = await __tryCall(async () => await __call(__run3, _planTraining, {
           type: "positional",
           args: [__stack.args.imagesDir, __stack.args.trigger, __stack.args.base, __stack.args.outPath, __stack.args.steps, __stack.args.rank, __stack.args.learningRate, __stack.args.resolution, __stack.args.flip, __stack.args.seed, __stack.args.samplePrompts, __stack.args.sampleEvery]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "trainLora",
           args: __stack.args
         });
         if (hasInterrupts(__stack.locals.plan)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.plan);
           return;
         }
@@ -352,10 +352,10 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           return;
         }
       });
-      await runner.step(2, async (runner2) => {
+      await runner.step(2, __run2, async (runner2, __run3) => {
         __stack.locals.__hoist_0 = await isFailure(__stack.locals.plan);
         if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_0);
           return;
         }
@@ -364,11 +364,11 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           return;
         }
       });
-      await runner.ifElse(3, [
+      await runner.ifElse(3, __run2, [
         {
-          condition: async () => __stack.locals.__hoist_0,
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
+          condition: async (__run3) => __stack.locals.__hoist_0,
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
               __functionCompleted = true;
               runner3.halt(__stack.locals.plan);
               return;
@@ -376,13 +376,13 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           }
         }
       ]);
-      await runner.step(4, async (runner2) => {
-        __stack.locals.__hoist_1 = await __call(dirname, {
+      await runner.step(4, __run2, async (runner2, __run3) => {
+        __stack.locals.__hoist_1 = await __call(__run3, dirname, {
           type: "positional",
           args: [__stack.locals.plan.value.outPath]
         });
         if (hasInterrupts(__stack.locals.__hoist_1)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_1);
           return;
         }
@@ -391,13 +391,13 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           return;
         }
       });
-      await runner.step(5, async (runner2) => {
-        __stack.locals.__hoist_2 = await __call(basename, {
+      await runner.step(5, __run2, async (runner2, __run3) => {
+        __stack.locals.__hoist_2 = await __call(__run3, basename, {
           type: "positional",
           args: [__stack.locals.plan.value.outPath]
         });
         if (hasInterrupts(__stack.locals.__hoist_2)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_2);
           return;
         }
@@ -406,44 +406,44 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
           return;
         }
       });
-      await runner.step(6, async (runner2) => {
-        const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_6);
+      await runner.step(6, __run2, async (runner2, __run3) => {
+        const __response = __run3.ctx.getInterruptResponse(__self.__interruptId_6);
         if (__response) {
           if (__response.type === "approve") {
           } else if (__response.type === "reject") {
-            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.getResultCheckpoint() }));
             return;
           }
         } else {
-          const __handlerResult = await interruptWithHandlers("lora::train", `Train a LoRA adapter on the images in ${__stack.locals.plan.value.imagesDir} for ${__stack.locals.plan.value.steps} steps, about ${__stack.locals.plan.value.estimatedMinutes} minutes on the GPU plus a few seconds an image, writing ${__stack.locals.plan.value.outPath}?`, {
+          const __handlerResult = await interruptWithHandlers(__run3, "lora::train", `Train a LoRA adapter on the images in ${__stack.locals.plan.value.imagesDir} for ${__stack.locals.plan.value.steps} steps, about ${__stack.locals.plan.value.estimatedMinutes} minutes on the GPU plus a few seconds an image, writing ${__stack.locals.plan.value.outPath}?`, {
             "imagesDir": __stack.locals.plan.value.imagesDir,
             "base": __stack.locals.plan.value.base,
             "outDir": __stack.locals.__hoist_1,
             "outFilename": __stack.locals.__hoist_2,
             "steps": __stack.locals.plan.value.steps,
             "estimatedMinutes": __stack.locals.plan.value.estimatedMinutes
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./index.agency");
           if (isRejected(__handlerResult)) {
-            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_6 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "trainLora", stepPath: "6" });
+            const __checkpointId = __run3.ctx.checkpoints.create(__run3.stack, __ctx, { moduleId: "index.agency", scopeName: "trainLora", stepPath: "6" });
             __handlerResult[0].checkpointId = __checkpointId;
-            __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+            __handlerResult[0].checkpoint = __run3.ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
             return;
           }
         }
       });
-      await runner.step(7, async (runner2) => {
+      await runner.step(7, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(_train, {
+        runner2.halt(await __tryCall(async () => await __call(__run3, _train, {
           type: "positional",
           args: [__stack.locals.plan.value]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "trainLora",
           args: __stack.args
         }));
@@ -476,15 +476,15 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "trainLora",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "trainLora",
@@ -607,24 +607,25 @@ const trainLora = __AgencyFunction.create({
   @param sampleEvery - Steps between sample grids. 0 for none`,
     schema: z.object({ "imagesDir": z.string(), "trigger": z.string(), "base": z.string(), "outPath": z.string(), "steps": z.number().nullable().describe("Default: 1000"), "rank": z.number().nullable().describe("Default: 16"), "learningRate": z.number().nullable().describe("Default: 0.0001"), "resolution": z.number().nullable().describe("Default: 1024"), "flip": z.boolean().nullable().describe("Default: false"), "seed": z.number().nullable().describe("Default: 1"), "samplePrompts": z.array(z.string()).nullable().describe("Default: []"), "sampleEvery": z.number().nullable().describe("Default: 250") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
-async function __loraInfo_impl(path2) {
-  const __setupData = setupFunction();
+async function __loraInfo_impl(__run, path2) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "loraInfo", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["path"] = path2;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "loraInfo", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "loraInfo", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -635,14 +636,14 @@ async function __loraInfo_impl(path2) {
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "loraInfo",
@@ -653,17 +654,17 @@ async function __loraInfo_impl(path2) {
           }
         });
       });
-      await runner.step(1, async (runner2) => {
-        __stack.locals.real = await __tryCall(async () => await __call(_realTarget, {
+      await runner.step(1, __run2, async (runner2, __run3) => {
+        __stack.locals.real = await __tryCall(async () => await __call(__run3, _realTarget, {
           type: "positional",
           args: [__stack.args.path]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "loraInfo",
           args: __stack.args
         });
         if (hasInterrupts(__stack.locals.real)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.real);
           return;
         }
@@ -672,10 +673,10 @@ async function __loraInfo_impl(path2) {
           return;
         }
       });
-      await runner.step(2, async (runner2) => {
+      await runner.step(2, __run2, async (runner2, __run3) => {
         __stack.locals.__hoist_0 = await isFailure(__stack.locals.real);
         if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_0);
           return;
         }
@@ -684,11 +685,11 @@ async function __loraInfo_impl(path2) {
           return;
         }
       });
-      await runner.ifElse(3, [
+      await runner.ifElse(3, __run2, [
         {
-          condition: async () => __stack.locals.__hoist_0,
-          body: async (runner2) => {
-            await runner2.step(0, async (runner3) => {
+          condition: async (__run3) => __stack.locals.__hoist_0,
+          body: async (runner2, __run3) => {
+            await runner2.step(0, __run3, async (runner3, __run4) => {
               __functionCompleted = true;
               runner3.halt(__stack.locals.real);
               return;
@@ -696,13 +697,13 @@ async function __loraInfo_impl(path2) {
           }
         }
       ]);
-      await runner.step(4, async (runner2) => {
-        __stack.locals.__hoist_1 = await __call(dirname, {
+      await runner.step(4, __run2, async (runner2, __run3) => {
+        __stack.locals.__hoist_1 = await __call(__run3, dirname, {
           type: "positional",
           args: [__stack.locals.real.value]
         });
         if (hasInterrupts(__stack.locals.__hoist_1)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_1);
           return;
         }
@@ -711,13 +712,13 @@ async function __loraInfo_impl(path2) {
           return;
         }
       });
-      await runner.step(5, async (runner2) => {
-        __stack.locals.__hoist_2 = await __call(basename, {
+      await runner.step(5, __run2, async (runner2, __run3) => {
+        __stack.locals.__hoist_2 = await __call(__run3, basename, {
           type: "positional",
           args: [__stack.locals.real.value]
         });
         if (hasInterrupts(__stack.locals.__hoist_2)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          await __run3.ctx.pendingPromises.awaitAll();
           runner2.halt(__stack.locals.__hoist_2);
           return;
         }
@@ -726,40 +727,40 @@ async function __loraInfo_impl(path2) {
           return;
         }
       });
-      await runner.step(6, async (runner2) => {
-        const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_6);
+      await runner.step(6, __run2, async (runner2, __run3) => {
+        const __response = __run3.ctx.getInterruptResponse(__self.__interruptId_6);
         if (__response) {
           if (__response.type === "approve") {
           } else if (__response.type === "reject") {
-            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.getResultCheckpoint() }));
             return;
           }
         } else {
-          const __handlerResult = await interruptWithHandlers("lora::info", `Read this adapter's header?`, {
+          const __handlerResult = await interruptWithHandlers(__run3, "lora::info", `Read this adapter's header?`, {
             "dir": __stack.locals.__hoist_1,
             "filename": __stack.locals.__hoist_2
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./index.agency");
           if (isRejected(__handlerResult)) {
-            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: __run3.ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_6 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "loraInfo", stepPath: "6" });
+            const __checkpointId = __run3.ctx.checkpoints.create(__run3.stack, __ctx, { moduleId: "index.agency", scopeName: "loraInfo", stepPath: "6" });
             __handlerResult[0].checkpointId = __checkpointId;
-            __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+            __handlerResult[0].checkpoint = __run3.ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
             return;
           }
         }
       });
-      await runner.step(7, async (runner2) => {
+      await runner.step(7, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(_loraInfo, {
+        runner2.halt(await __tryCall(async () => await __call(__run3, _loraInfo, {
           type: "positional",
           args: [__stack.locals.real.value]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "loraInfo",
           args: __stack.args
         }));
@@ -792,15 +793,15 @@ async function __loraInfo_impl(path2) {
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "loraInfo",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "loraInfo",
@@ -832,6 +833,7 @@ const loraInfo = __AgencyFunction.create({
     schema: z.object({ "path": z.string() })
   },
   exported: true,
+  takesRun: true,
   markers: {
     idempotent: true
   }

@@ -41,10 +41,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withRun as __withRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -144,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "3cb9b9620312437280d26191817398c298045e654e77bf5ec928d35e7fbe17b3", import.meta.url);
+__registerModuleFingerprint("index.agency", "5e482788548cf1688b242a4982465d263d36d65701d5a35d53f3e9af763fbd85", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -176,28 +173,30 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSET, cc = __UNSET, bcc = __UNSET, replyTo = __UNSET, host = __UNSET, port = __UNSET, secure = __UNSET, user = __UNSET, pass2 = __UNSET) {
-  const __setupData = setupFunction();
+async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text = __UNSET, cc = __UNSET, bcc = __UNSET, replyTo = __UNSET, host = __UNSET, port = __UNSET, secure = __UNSET, user = __UNSET, pass2 = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
   claimFrameForScope(__stack, "sendEmail", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["from"] = from;
@@ -214,7 +213,7 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
   __stack.args["user"] = user === __UNSET ? `` : user;
   __stack.args["pass"] = pass2 === __UNSET ? `` : pass2;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "sendEmail", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "sendEmail", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -273,14 +272,14 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "sendEmail",
@@ -303,9 +302,9 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(sendEmailImpl, {
+        runner2.halt(await __tryCall(async () => await __call(__run3, sendEmailImpl, {
           type: "positional",
           args: [{
             "from": __stack.args.from,
@@ -323,7 +322,7 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
             "pass": __stack.args.pass
           }]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "sendEmail",
           args: __stack.args
         }));
@@ -356,15 +355,15 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "sendEmail",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "sendEmail",
@@ -475,7 +474,8 @@ const sendEmail = __AgencyFunction.create({
     description: `Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST env var or pass host directly. Authentication (SMTP_USER/SMTP_PASS) is optional. Set port to 0 for auto-detection (default 587). Secure is auto-detected from port and SMTP_SECURE env var when not explicitly set.`,
     schema: z.object({ "from": z.string(), "to": z.string(), "subject": z.string(), "html": z.string().nullable().describe("Default: "), "text": z.string().nullable().describe("Default: "), "cc": z.string().nullable().describe("Default: "), "bcc": z.string().nullable().describe("Default: "), "replyTo": z.string().nullable().describe("Default: "), "host": z.string().nullable().describe("Default: "), "port": z.number().nullable().describe("Default: 0"), "secure": z.boolean().nullable().describe("Default: false"), "user": z.string().nullable().describe("Default: "), "pass": z.string().nullable().describe("Default: ") })
   },
-  exported: true
+  exported: true,
+  takesRun: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:sendEmail": { "1": { "line": 47, "col": 2 } } };

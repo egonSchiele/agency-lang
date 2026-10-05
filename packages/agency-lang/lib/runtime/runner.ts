@@ -1351,6 +1351,9 @@ export class Runner {
               log.endSpan(spanId);
             }
           }),
+        // The collector calls this from inside whichever arm reached the
+        // cap. The warning is about the block, so it goes on the block's
+        // logger, with the block's spans and tags.
         capReached: (model, cap) => {
           run.log.warn({
             warnType: "decisionBatchCap",

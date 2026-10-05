@@ -1141,9 +1141,8 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
 
   const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
-  // Fire within the parent's captured ALS frame so an AgencyFunction callback
-  // body resolves __globals()/__threads() against the parent's real state (we
-  // run from the event-loop message handler, outside any agencyStore frame).
+  // Fire under a copy of the stored parent run, so an AgencyFunction callback
+  // body sees the parent's real globals and threads.
   // Firing is fire-and-forget, but NOT bare `void`: fireWithGuard re-throws
   // AgencyAbort (a cost-guard trip or cancellation raised inside a parent
   // callback), so invokeCallbacks can reject. A bare void would orphan that as

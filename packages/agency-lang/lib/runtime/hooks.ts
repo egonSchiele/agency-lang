@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { assertUsable, callPlain, withChildRun, type Run } from "./asyncContext.js";
+import { assertUsable, callPlain, RunInUseError, withChildRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -212,6 +212,10 @@ async function fireWithGuard(
     // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
     if (error instanceof RunControlSignal) throw error;
     if (error instanceof AgencyAbort) throw error;
+    // A wrong-run error is a mistake in the code that handed the run over,
+    // not a crash in the callback. Dropping it here would hide the mistake:
+    // the work it stopped would look like it had been skipped on purpose.
+    if (error instanceof RunInUseError) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so
     // there is no interrupt path to surface here.
@@ -269,20 +273,8 @@ export function hasCallbackConsumer<K extends keyof CallbackMap>(
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
  *  public `callHook` is now a thin wrapper that omits `stateStack`.
  *
- *  `ctx` is optional — when omitted, it's resolved from the active ALS
- *  frame via `getRuntimeContext()`. Every codegen-emitted `callHook(...)`
- *  site omits it. Within this repo, the remaining explicit-ctx callers
- *  are all in runtime code where an ALS frame *is* installed and the
- *  param is redundant:
- *    - `node.ts` — `onAgentStart` (inside `runInBootstrapFrame`) and
- *      `onAgentEnd` (inside `agencyStore.run` with the real threads).
- *    - `prompt.ts` — `onLLMCallStart`/`End` and the per-tool
- *      `onToolCallStart`/`End`, all called from inside a
- *      `Runner.runInScope` frame seeded by the generated node body.
- *  Those sites pass `ctx` defensively (predating the ALS migration)
- *  and could be tightened in a follow-up by dropping the param and
- *  making it required-via-ALS again. The slot stays optional so
- *  external callers that have a ctx but no ALS frame still work. */
+ *  The caller passes the run the callbacks fire under. `fireWithGuard`
+ *  keeps its recursion guard on that run. */
 export async function invokeCallbacks<K extends keyof CallbackMap>(
   run: Run,
   args: {

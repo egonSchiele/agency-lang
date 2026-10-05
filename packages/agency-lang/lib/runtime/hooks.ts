@@ -10,7 +10,14 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { assertUsable, callPlain, sameRun, withChildRun, type Run } from "./asyncContext.js";
+import {
+  assertUsable,
+  callPlain,
+  RunInUseError,
+  sameRun,
+  withChildRun,
+  type Run,
+} from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -212,6 +219,10 @@ async function fireWithGuard(
     // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
     if (error instanceof RunControlSignal) throw error;
     if (error instanceof AgencyAbort) throw error;
+    // A wrong-run error is a mistake in the code that handed the run over,
+    // not a crash in the callback. Dropping it here would hide the mistake:
+    // the work it stopped would look like it had been skipped on purpose.
+    if (error instanceof RunInUseError) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so
     // there is no interrupt path to surface here.

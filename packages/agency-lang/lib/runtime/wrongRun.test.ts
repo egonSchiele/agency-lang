@@ -1,6 +1,7 @@
 import { describe, it as baseIt, expect } from "vitest";
 import { assertUsable, RunInUseError, detachedRun, withChildRun } from "./asyncContext.js";
-import { __call } from "./call.js";
+import { __call, __callMethod } from "./call.js";
+import { AgencyFunction } from "./agencyFunction.js";
 import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 const it = withTestFrame(baseIt);
@@ -75,6 +76,41 @@ describe("the wrong-run check", () => {
       const copy = detachedRun(parent, {});
       expect(copy.state).not.toBe(parent.state);
       expect(assertUsable(copy, "make a call")).toBe(copy);
+    });
+  });
+
+  // Each operation that starts work for Agency code or a helper has its own
+  // check. Every test here hands the operation the outer run from inside a
+  // child, and expects it to be refused before it does anything.
+  describe("each operation that starts work refuses a waiting run", () => {
+    it("a method call", async () => {
+      const parent = testRun();
+      const calls: string[] = [];
+      const target = { save: () => calls.push("ran") };
+      await withChildRun(parent, {}, "its step", async () => {
+        await expect(
+          __callMethod(parent, target, "save", { type: "positional", args: [] }),
+        ).rejects.toThrow(RunInUseError);
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it("AgencyFunction.invoke", async () => {
+      const parent = testRun();
+      const calls: string[] = [];
+      const save = new AgencyFunction({
+        name: "save",
+        module: "test.agency",
+        fn: async () => calls.push("ran"),
+        params: [],
+        toolDefinition: null,
+      });
+      await withChildRun(parent, {}, "its step", async () => {
+        await expect(save.invoke(parent, { type: "positional", args: [] })).rejects.toThrow(
+          "Wrong run: cannot call save() with a run that is waiting for its step.",
+        );
+      });
+      expect(calls).toEqual([]);
     });
   });
 });

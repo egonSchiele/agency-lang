@@ -1353,8 +1353,11 @@ export class Runner {
               log.endSpan(spanId);
             }
           }),
+        // The collector calls this from inside whichever arm reached the
+        // cap. The block's own logger is bound to the block's span stack and
+        // refuses to be used from an arm, so this goes through the client.
         capReached: (model, cap) => {
-          run.log.warn({
+          this.ctx.statelogClient.warn({
             warnType: "decisionBatchCap",
             message: `A batch of decision calls to ${model} reached the model's cap of ${cap} questions and was sent early. Later calls in the block go in another request.`,
           });

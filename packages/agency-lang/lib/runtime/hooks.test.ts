@@ -2,6 +2,7 @@ import { describe, it as baseIt, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { callHook, invokeCallbacks, isInsideCallback, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { currentRun } from "./asyncContext.js";
 import { inFrameOf, testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
@@ -212,11 +213,15 @@ describe("callHook", () => {
     let maxDepth = 0;
     const ctxHolder: { ctx: any } = { ctx: undefined };
     const fn = async (data: any) => {
+      // The callback runs under its own run. Take it on the first line and
+      // re-fire with it. Re-firing with the test's root run would be stopped
+      // by the wrong-run check, and this test would pass without ever
+      // reaching the recursion guard.
+      const run = currentRun();
       depth++;
       maxDepth = Math.max(maxDepth, depth);
       if (depth < 5) {
-        // The callback body runs under its own run, so read the current one.
-        await callHook(testRun(), { name: "onNodeStart", data } as any);
+        await callHook(run, { name: "onNodeStart", data } as any);
       }
       depth--;
     };

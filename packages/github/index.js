@@ -23,10 +23,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -152,7 +152,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "0ab8c4074ff22870632a27f67f0f04d26f8be6a40fc1f21a7c96019639198146", import.meta.url);
+__registerModuleFingerprint("index.agency", "4a9b72354f25faf27960beacd8fbbb21d5ca64113063abdc3d51c072fe43dcaf", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -368,8 +368,7 @@ const createBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "from": z.string().nullable().describe("Default: "), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -528,8 +527,7 @@ const deleteBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -688,8 +686,7 @@ const branchExists = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "name": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __commitFiles_impl(__run, message, files = __UNSET, authorName = __UNSET, authorEmail = __UNSET, push = __UNSET, branch = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -876,8 +873,7 @@ const commitFiles = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "message": z.string(), "files": z.array(z.string()).nullable().describe("Default: []"), "authorName": z.string().nullable().describe("Default: "), "authorEmail": z.string().nullable().describe("Default: "), "push": z.boolean().nullable().describe("Default: true"), "branch": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET, draft = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1106,8 +1102,7 @@ const openPullRequest = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "title": z.string(), "body": z.string(), "head": z.string(), "base": z.string().nullable().describe("Default: "), "draft": z.boolean().nullable().describe("Default: false"), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, head2 = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1294,8 +1289,7 @@ const listPullRequests = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "state": z.string().nullable().describe("Default: open"), "base": z.string().nullable().describe("Default: "), "head": z.string().nullable().describe("Default: "), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1468,8 +1462,7 @@ const commentOnPullRequest = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "body": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1642,8 +1635,7 @@ const addLabel = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "labels": z.array(z.string()), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __requestReview_impl(__run, number, reviewers = __UNSET, teamReviewers = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -1830,8 +1822,7 @@ const requestReview = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "reviewers": z.array(z.string()).nullable().describe("Default: []"), "teamReviewers": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -2004,8 +1995,7 @@ const listIssues = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "state": z.string().nullable().describe("Default: open"), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -2178,8 +2168,7 @@ const commentOnIssue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "number": z.number(), "body": z.string(), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -2366,8 +2355,7 @@ const createIssue = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "title": z.string(), "body": z.string(), "labels": z.array(z.string()).nullable().describe("Default: []"), "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, token = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -2512,8 +2500,7 @@ const defaultBranch = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "owner": z.string().nullable().describe("Default: "), "repo": z.string().nullable().describe("Default: "), "token": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:createBranch": { "1": { "line": 20, "col": 2 } }, "index.agency:deleteBranch": { "1": { "line": 25, "col": 2 } }, "index.agency:branchExists": { "1": { "line": 30, "col": 2 } }, "index.agency:commitFiles": { "1": { "line": 35, "col": 2 } }, "index.agency:openPullRequest": { "1": { "line": 47, "col": 2 } }, "index.agency:listPullRequests": { "1": { "line": 52, "col": 2 } }, "index.agency:commentOnPullRequest": { "1": { "line": 57, "col": 2 } }, "index.agency:addLabel": { "1": { "line": 62, "col": 2 } }, "index.agency:requestReview": { "1": { "line": 67, "col": 2 } }, "index.agency:listIssues": { "1": { "line": 72, "col": 2 } }, "index.agency:commentOnIssue": { "1": { "line": 77, "col": 2 } }, "index.agency:createIssue": { "1": { "line": 82, "col": 2 } }, "index.agency:defaultBranch": { "1": { "line": 87, "col": 2 } } };

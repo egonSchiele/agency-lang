@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "679cf9deace2f5e81525c61de99a678a32c4cc48b55218ceb0b1b22c4d7afb90", import.meta.url);
+__registerModuleFingerprint("index.agency", "0be9443814cc3861480f755bcbe2c7bbb91ae21503c5e761ddeddcd4cbcf4479", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -316,8 +316,7 @@ const readText = __AgencyFunction.create({
   @param language - Tesseract language code; only "eng" ships today`,
     schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: eng") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:readText": { "1": { "line": 37, "col": 2 } } };

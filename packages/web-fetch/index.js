@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d7684f5efc8a2411476483b0cd0694d73848d022d213e633fa8c84a94f29b9cf", import.meta.url);
+__registerModuleFingerprint("index.agency", "b23cf8c698ac784ad16651bfb1c882aa073537b8a9ec6edf5f19b247628c9129", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -327,8 +327,7 @@ const fetchPage = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "url": z.string(), "maxChars": z.number().nullable().describe("Default: 20000"), "timeout": z.number().nullable().describe("Default: 15000") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:fetchPage": { "1": { "line": 24, "col": 2 } } };

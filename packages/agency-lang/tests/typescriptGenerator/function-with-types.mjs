@@ -10,7 +10,7 @@ import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -378,8 +379,7 @@ export const add = __AgencyFunction.create({
     description: `Adds two numbers together`,
     schema: z.object({"x": z.number(), "y": z.number(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __greet_impl(__run: __Run, name: string) {
   const __setupData = setupFunction(__run);
@@ -545,8 +545,7 @@ export const greet = __AgencyFunction.create({
     description: `Greets a person by name`,
     schema: z.object({"name": z.string(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __mixed_impl(__run: __Run, count: number, label: any) {
   const __setupData = setupFunction(__run);
@@ -725,8 +724,7 @@ export const mixed = __AgencyFunction.create({
     description: `Mixed typed and untyped parameters`,
     schema: z.object({"count": z.number(), "label": z.string(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __processArray_impl(__run: __Run, items: number[]) {
   const __setupData = setupFunction(__run);
@@ -892,8 +890,7 @@ export const processArray = __AgencyFunction.create({
     description: `Processes an array of numbers`,
     schema: z.object({"items": z.array(z.number()), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __flexible_impl(__run: __Run, value: string | number) {
   const __setupData = setupFunction(__run);
@@ -1059,8 +1056,7 @@ export const flexible = __AgencyFunction.create({
     description: `Handles either a string or number`,
     schema: z.object({"value": z.union([z.string(), z.number()]), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({

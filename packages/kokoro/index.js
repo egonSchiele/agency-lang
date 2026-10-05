@@ -12,10 +12,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -147,7 +147,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "ff3b701b82cf5fef895d1979598bc9ade09ac2cd1b65c474fa189c800d4b52de", import.meta.url);
+__registerModuleFingerprint("index.agency", "f5e50b81525b08104edc6f677cdbee66b235ec0acc5fa025529a1faba18ab9a5", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -359,8 +359,7 @@ const realOutput = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "outputFile": z.string() })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, model = __UNSET, speed = __UNSET, allowedPaths = __UNSET, format = __UNSET, modelsDir = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -700,8 +699,7 @@ const speak = __AgencyFunction.create({
   @param modelsDir - Where models are kept. Leave null for the default.`,
     schema: z.object({ "text": z.string(), "outputFile": z.string().nullable().describe("Default: "), "voice": z.string().nullable().describe("Default: af_heart"), "model": z.string().nullable().describe("Default: fp32"), "speed": z.number().nullable().describe("Default: 1"), "allowedPaths": z.array(z.string()).nullable().describe("Default: []"), "format": z.string().nullable().describe("Default: "), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
   const __setupData = setupFunction(__run);
@@ -900,8 +898,7 @@ const download = __AgencyFunction.create({
   @param modelsDir - Where models are kept. Leave null for the default.`,
     schema: z.object({ "model": z.string().nullable().describe("Default: fp32"), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __voices_impl(__run) {
   const __setupData = setupFunction(__run);
@@ -1003,8 +1000,7 @@ const voices = __AgencyFunction.create({
   quality grade from A (best) to F.`,
     schema: z.object({})
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:realOutput": { "1": { "line": 48, "col": 2 }, "2": { "line": 51, "col": 2 }, "3": { "line": 52, "col": 14 }, "4": { "line": 52, "col": 2 }, "5": { "line": 55, "col": 2 }, "1.0": { "line": 49, "col": 4 }, "4.0": { "line": 52, "col": 2 }, "4.1": { "line": 53, "col": 4 } }, "index.agency:speak": { "1": { "line": 91, "col": 2 }, "2": { "line": 92, "col": 2 }, "3": { "line": 93, "col": 2 }, "4": { "line": 102, "col": 2 }, "5": { "line": 103, "col": 2 }, "6": { "line": 109, "col": 2 }, "3.0": { "line": 94, "col": 4 }, "3.1": { "line": 100, "col": 4 } }, "index.agency:download": { "1": { "line": 124, "col": 2 }, "2": { "line": 125, "col": 2 }, "3": { "line": 128, "col": 2 }, "4": { "line": 134, "col": 2 }, "5": { "line": 135, "col": 2 }, "2.0": { "line": 126, "col": 4 } }, "index.agency:voices": { "1": { "line": 143, "col": 2 } } };

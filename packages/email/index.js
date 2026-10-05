@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -141,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "742783b70804c7cc0a19bba3a1652bec0c9695fcf5602a5f76f319745b3470a4", import.meta.url);
+__registerModuleFingerprint("index.agency", "2bab85b9010a4cf1bca7ba4bf32b202c21ce805dd925613391b0bb090afa10a3", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -473,8 +473,7 @@ const sendEmail = __AgencyFunction.create({
     description: `Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST env var or pass host directly. Authentication (SMTP_USER/SMTP_PASS) is optional. Set port to 0 for auto-detection (default 587). Secure is auto-detected from port and SMTP_SECURE env var when not explicitly set.`,
     schema: z.object({ "from": z.string(), "to": z.string(), "subject": z.string(), "html": z.string().nullable().describe("Default: "), "text": z.string().nullable().describe("Default: "), "cc": z.string().nullable().describe("Default: "), "bcc": z.string().nullable().describe("Default: "), "replyTo": z.string().nullable().describe("Default: "), "host": z.string().nullable().describe("Default: "), "port": z.number().nullable().describe("Default: 0"), "secure": z.boolean().nullable().describe("Default: false"), "user": z.string().nullable().describe("Default: "), "pass": z.string().nullable().describe("Default: ") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:sendEmail": { "1": { "line": 47, "col": 2 } } };

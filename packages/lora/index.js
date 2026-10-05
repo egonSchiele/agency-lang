@@ -13,10 +13,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -151,7 +151,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "42b81877ed0b3656383ebc34e3d295ca91ab406e13ef91b9aa4cef147cd31a6d", import.meta.url);
+__registerModuleFingerprint("index.agency", "a489ef1a3ffa91dc461e799ccd9bf384e010b526d9354af59766c290e12a15ea", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -606,8 +606,7 @@ const trainLora = __AgencyFunction.create({
   @param sampleEvery - Steps between sample grids. 0 for none`,
     schema: z.object({ "imagesDir": z.string(), "trigger": z.string(), "base": z.string(), "outPath": z.string(), "steps": z.number().nullable().describe("Default: 1000"), "rank": z.number().nullable().describe("Default: 16"), "learningRate": z.number().nullable().describe("Default: 0.0001"), "resolution": z.number().nullable().describe("Default: 1024"), "flip": z.boolean().nullable().describe("Default: false"), "seed": z.number().nullable().describe("Default: 1"), "samplePrompts": z.array(z.string()).nullable().describe("Default: []"), "sampleEvery": z.number().nullable().describe("Default: 250") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 async function __loraInfo_impl(__run, path2) {
   const __setupData = setupFunction(__run);
@@ -831,7 +830,6 @@ const loraInfo = __AgencyFunction.create({
     schema: z.object({ "path": z.string() })
   },
   exported: true,
-  takesRun: true,
   markers: {
     idempotent: true
   }

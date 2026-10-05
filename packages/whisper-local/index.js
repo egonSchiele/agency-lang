@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "eb4c0745270540c92676746d7a6f39d0d3e90f79c5ddfa3a88a55f61679d4be4", import.meta.url);
+__registerModuleFingerprint("index.agency", "d5398accf9027e160d41585ae562be98e025fa6e0c7452c2a93340f3b532c713", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -324,8 +324,7 @@ const transcribe = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: "), "model": z.string().nullable().describe("Default: base.en") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:transcribe": { "1": { "line": 30, "col": 2 } } };

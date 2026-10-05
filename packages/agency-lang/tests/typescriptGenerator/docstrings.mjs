@@ -10,7 +10,7 @@ import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -167,7 +167,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -356,8 +357,7 @@ export const add = __AgencyFunction.create({
   This is a simple addition function.`,
     schema: z.object({"a": z.string(), "b": z.string(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __greet_impl(__run: __Run, name: any) {
   const __setupData = setupFunction(__run);
@@ -500,8 +500,7 @@ export const greet = __AgencyFunction.create({
     description: `Generate a greeting message for the given name.`,
     schema: z.object({"name": z.string(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __calculateArea_impl(__run: __Run, width: any, height: any) {
   const __setupData = setupFunction(__run);
@@ -663,8 +662,7 @@ export const calculateArea = __AgencyFunction.create({
   Returns: the area as a number`,
     schema: z.object({"width": z.string(), "height": z.string(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __processData_impl(__run: __Run) {
   const __setupData = setupFunction(__run);
@@ -793,8 +791,7 @@ export const processData = __AgencyFunction.create({
     description: `Single line docstring`,
     schema: z.object({})
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __versionedTool_impl(__run: __Run) {
   const __setupData = setupFunction(__run);
@@ -923,8 +920,7 @@ export const versionedTool = __AgencyFunction.create({
     description: `This tool is version ${__globalCtx.globals.get("docstrings.agency", "toolVersion")}.`,
     schema: z.object({})
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{},"docstrings.agency:versionedTool":{}};

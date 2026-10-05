@@ -10,7 +10,7 @@ import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -344,8 +345,7 @@ export const prep = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function ___doWrite_impl(__run: __Run, p: number) {
   const __setupData = setupFunction(__run);
@@ -493,8 +493,7 @@ export const _doWrite = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"p": z.number(), })
   },
-  exported: false,
-  takesRun: true
+  exported: false
 }, __toolRegistry);
 async function __writeThing_impl(__run: __Run, x: number) {
   const __setupData = setupFunction(__run);
@@ -664,7 +663,6 @@ export const writeThing = __AgencyFunction.create({
     schema: z.object({"x": z.number(), })
   },
   exported: false,
-  takesRun: true,
   markers: {
     destructive: true
   }

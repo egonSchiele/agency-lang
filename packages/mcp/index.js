@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "fd421a329744a8169686ff7bea0722d65d92715a2486f556b86350b90869cd83", import.meta.url);
+__registerModuleFingerprint("index.agency", "85da9c823d8dfa69ff9e6dfc3d23280b15b41de3b86f90b0ef7ba8716ecfb353", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -311,8 +311,7 @@ const mcp = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({ "serverName": z.string(), "onOAuthRequired": z.string().nullable().describe("Default: null") })
   },
-  exported: true,
-  takesRun: true
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:mcp": { "1": { "line": 41, "col": 2 } } };

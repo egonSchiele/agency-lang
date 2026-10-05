@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import type { Result, PromptResult, SmolConfig, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { RuntimeContext } from "./state/context.js";
@@ -9,6 +10,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
 import { runPrompt } from "./prompt.js";
 import { toSmolConfig } from "./llmClient.js";
+import { asRootRun, callHelper } from "./__tests__/testHelpers.js";
 
 function makeCtx(
   smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
@@ -28,9 +30,9 @@ function makeCtx(
 function inFrame<T>(
   ctx: RuntimeContext<any>,
   threads: ThreadStore,
-  fn: () => Promise<T>,
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, fn);
+  return runInTestContext(ctx, ctx.stateStack, threads, asRootRun(fn));
 }
 
 /** Custom LLM client that records every PromptConfig it sees. Used to
@@ -151,7 +153,7 @@ describe("agency.llm — options mapping", () => {
         provider: "openai-compat",
         baseUrl: { openAiCompat: "http://localhost:8000/v1" },
       });
-      await agency.llm("second");
+      await callHelper(agency.llm, "second");
     });
     const [first, second] = client.configs.map(toSmolConfig);
     expect(first.provider).toBe("openai-compat");
@@ -186,7 +188,7 @@ describe("agency.llm — options mapping", () => {
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, async () => {
       await agency.llm("first", { model: "override-model" });
-      await agency.llm("second");
+      await callHelper(agency.llm, "second");
     });
     // Call 1 carries the override; call 2 falls back to smoltalkDefaults
     // ("default-model"). If `opts.model` accidentally mutates the
@@ -257,20 +259,20 @@ describe("agency.llm — v1 surface lock", () => {
       // @ts-expect-error — tools are not part of LlmOpts in v1.
       await agency.llm("p", { tools: [] });
       // @ts-expect-error — removedTools is codegen-internal.
-      await agency.llm("p", { removedTools: [] });
+      await callHelper(agency.llm, "p", { removedTools: [] });
       // @ts-expect-error — maxToolCallRounds is codegen-internal.
-      await agency.llm("p", { maxToolCallRounds: 1 });
+      await callHelper(agency.llm, "p", { maxToolCallRounds: 1 });
     });
   });
 });
 
 describe("agency.llm — frame requirement", () => {
   it("throws when called outside any agency frame", async () => {
-    // Without `inFrame(...)`, there is no agencyStore frame installed,
+    // Without `inFrame(...)`, no run is current,
     // so getRuntimeContext() inside the helper throws. Pin this so a
     // future "auto-wrap in a bootstrap frame" change is a conscious
     // decision, not silent drift.
-    await expect(agency.llm("hi")).rejects.toThrow(/outside an Agency execution frame/);
+    await expect(agency.llm("hi")).rejects.toThrow(/No run is current here/);
   });
 });
 
@@ -278,13 +280,13 @@ describe("model and provider precedence", () => {
   /** The pair the client was actually asked for. */
   async function effectivePair(
     baked: Partial<SmolConfig>,
-    call: (threads: ThreadStore) => Promise<unknown>,
+    call: (threads: ThreadStore, run: Run) => Promise<unknown>,
   ): Promise<{ model?: string; provider?: string }> {
     const ctx = makeCtx(baked);
     const client = new RecordingClient(["ok"]);
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await inFrame(ctx, threads, () => call(threads));
+    await inFrame(ctx, threads, (run) => call(threads, run));
     const config = client.configs[0];
     if (config === undefined) {
       throw new Error("the prompt never reached the recording client");
@@ -333,15 +335,17 @@ describe("model and provider precedence", () => {
     // not provider. Generated Agency code passes its options object through
     // verbatim, so this calls the runPrompt seam directly to exercise the
     // per-call spread the way compiled code does.
-    const pair = await effectivePair({ model: "baked-model", provider: "openrouter" }, (threads) =>
-      runPrompt({
-        prompt: "hi",
-        messages: threads.getOrCreateActive(),
-        clientConfig: {
-          model: "call-model",
-          provider: "anthropic",
-        },
-      }),
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      (threads, run) =>
+        runPrompt(run, {
+          prompt: "hi",
+          messages: threads.getOrCreateActive(),
+          clientConfig: {
+            model: "call-model",
+            provider: "anthropic",
+          },
+        }),
     );
     expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });

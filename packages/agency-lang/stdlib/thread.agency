@@ -18,7 +18,7 @@ primitives, so you can compose your own variants in user code.
   ```
 */
 
-// `_*` exports read ctx/stack/threads from AsyncLocalStorage (see
+// `_*` exports read ctx/stack/threads from the current run (see
 // `lib/runtime/asyncContext.ts`) so message pushes target the active
 // scope's thread, cost/token reads see the branch-local
 // accumulators, and guard scopes push/pop on the right stack. The

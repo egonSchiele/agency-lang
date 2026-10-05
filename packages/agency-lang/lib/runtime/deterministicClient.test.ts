@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { agencyStore, lineageOf } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { PromptConfig } from "./llmClient.js";
 import {
@@ -14,20 +13,10 @@ const baseConfig: PromptConfig = {
   messages: [],
 };
 
-/** Runs `fn` inside a minimal ALS frame whose callsite names `moduleId`,
- *  mimicking what `Runner.runInScope` seeds for a step body. */
-function inModule<T>(moduleId: string, fn: () => T): T {
-  return agencyStore.run(
-    {
-      ctx: {} as any,
-      stack: {} as any,
-      threads: {} as any,
-      globals: {} as any,
-      callsite: { moduleId, scopeName: "main", stepPath: "" },
-      ...lineageOf(undefined),
-    },
-    fn,
-  );
+/** The config of a call made from `moduleId`. The runtime puts the calling
+ *  module on the config; see `PromptConfig.moduleId`. */
+function fromModule(moduleId: string): PromptConfig {
+  return { ...baseConfig, moduleId };
 }
 
 describe("DeterministicClient", () => {
@@ -147,9 +136,7 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
-      client.text(baseConfig),
-    );
+    const result = await client.text(fromModule("lib/agents/optimize/mutatePrompt.agency"));
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -160,9 +147,7 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
-      client.text(baseConfig),
-    );
+    const result = await client.text(fromModule("lib/agents/optimize/mutatePrompt.agency"));
 
     expect(result.success && result.value.output).toBe("from mutator queue");
   });
@@ -173,7 +158,7 @@ describe("DeterministicClient scoped mocks", () => {
       "*": [{ return: "from fallback" }],
     });
 
-    const result = await inModule("agents/taskAgent.agency", () => client.text(baseConfig));
+    const result = await client.text(fromModule("agents/taskAgent.agency"));
 
     expect(result.success && result.value.output).toBe("from fallback");
   });
@@ -192,18 +177,10 @@ describe("DeterministicClient scoped mocks", () => {
       judgePairwise: [{ return: "j1" }, { return: "j2" }],
     });
 
-    const m1 = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
-      client.text(baseConfig),
-    );
-    const j1 = await inModule("lib/agents/eval/judgePairwise.agency", () =>
-      client.text(baseConfig),
-    );
-    const m2 = await inModule("lib/agents/optimize/mutatePrompt.agency", () =>
-      client.text(baseConfig),
-    );
-    const j2 = await inModule("lib/agents/eval/judgePairwise.agency", () =>
-      client.text(baseConfig),
-    );
+    const m1 = await client.text(fromModule("lib/agents/optimize/mutatePrompt.agency"));
+    const j1 = await client.text(fromModule("lib/agents/eval/judgePairwise.agency"));
+    const m2 = await client.text(fromModule("lib/agents/optimize/mutatePrompt.agency"));
+    const j2 = await client.text(fromModule("lib/agents/eval/judgePairwise.agency"));
 
     expect(m1.success && m1.value.output).toBe("m1");
     expect(j1.success && j1.value.output).toBe("j1");
@@ -214,19 +191,19 @@ describe("DeterministicClient scoped mocks", () => {
   it("names the scope when its queue is exhausted", async () => {
     const client = new DeterministicClient({ mutatePrompt: [{ return: "only" }] });
 
-    await inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig));
+    await client.text(fromModule("lib/agents/optimize/mutatePrompt.agency"));
 
     await expect(
-      inModule("lib/agents/optimize/mutatePrompt.agency", () => client.text(baseConfig)),
+      client.text(fromModule("lib/agents/optimize/mutatePrompt.agency")),
     ).rejects.toThrow(/call #2.*"mutatePrompt"/);
   });
 
   it("lists available scopes when nothing matches and there is no fallback", async () => {
     const client = new DeterministicClient({ mutatePrompt: [{ return: "only" }] });
 
-    await expect(
-      inModule("agents/taskAgent.agency", () => client.text(baseConfig)),
-    ).rejects.toThrow(/no llmMocks queue.*taskAgent.*mutatePrompt/s);
+    await expect(client.text(fromModule("agents/taskAgent.agency"))).rejects.toThrow(
+      /no llmMocks queue.*taskAgent.*mutatePrompt/s,
+    );
   });
 
   it("does not treat user-controlled scope keys as prototype properties", async () => {
@@ -237,12 +214,12 @@ describe("DeterministicClient scoped mocks", () => {
       JSON.parse('{"__proto__": [{"return": "proto queue"}]}'),
     );
 
-    const result = await inModule("agents/__proto__.agency", () => client.text(baseConfig));
+    const result = await client.text(fromModule("agents/__proto__.agency"));
     expect(result.success && result.value.output).toBe("proto queue");
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    await expect(
-      inModule("agents/constructor.agency", () => client.text(baseConfig)),
-    ).rejects.toThrow(/no llmMocks queue/);
+    await expect(client.text(fromModule("agents/constructor.agency"))).rejects.toThrow(
+      /no llmMocks queue/,
+    );
   });
 
   describe("audio (transcribe / speak)", () => {

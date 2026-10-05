@@ -1,16 +1,18 @@
 import { describe, it as baseIt, expect } from "vitest";
 import { __call, __callMethod } from "./call.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
 
+/** `fn` takes only the function's own arguments. The run every body is
+ *  handed is dropped. */
 function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
   return new AgencyFunction({
     name,
     module: "test.agency",
-    fn,
+    fn: (_run: unknown, ...args: any[]) => fn(...args),
     params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }],
     toolDefinition: null,
   });
@@ -19,7 +21,7 @@ function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
 describe("__call", () => {
   it("calls AgencyFunction via .invoke() with descriptor", async () => {
     const fn = makeAgencyFn(async (x: number) => ({ x }));
-    const result = await __call(fn, { type: "positional", args: [42] });
+    const result = await __call(testRun(), fn, { type: "positional", args: [42] });
     expect(result).toEqual({ x: 42 });
   });
 
@@ -28,19 +30,22 @@ describe("__call", () => {
     const target = (...args: unknown[]) => {
       seen.push(args);
     };
-    await __call(target, { type: "positional", args: [1, 2] });
+    await __call(testRun(), target, { type: "positional", args: [1, 2] });
     expect(seen[0]).toEqual([1, 2]);
   });
 
   it("rejects unknown third positional via the type system", async () => {
     const fn = makeAgencyFn(async (x: number) => x);
     // @ts-expect-error — third positional was stateExtras; removed in this PR.
-    await __call(fn, { type: "positional", args: [1] }, { somethingCustom: true });
+    await __call(testRun(), fn, { type: "positional", args: [1] }, { somethingCustom: true });
   });
 
   it("normalizes a Result a plain TS function built by hand", async () => {
     const foreign = { __type: "resultType", success: false, error: { code: 404 } };
-    const result = (await __call(() => foreign, { type: "positional", args: [] })) as any;
+    const result = (await __call(testRun(), () => foreign, {
+      type: "positional",
+      args: [],
+    })) as any;
     expect(result.error).toBe('{"code":404}');
     expect(result.data).toEqual({});
   });
@@ -48,21 +53,21 @@ describe("__call", () => {
   it("normalizes a Result an AgencyFunction wrapping TS built by hand", async () => {
     const foreign = { __type: "resultType", success: false, error: { code: 404 } };
     const fn = makeAgencyFn(async () => foreign);
-    const result = (await __call(fn, { type: "positional", args: [] })) as any;
+    const result = (await __call(testRun(), fn, { type: "positional", args: [] })) as any;
     expect(result.error).toBe('{"code":404}');
     expect(result.data).toEqual({});
   });
 
   it("calls plain TS function by spreading positional args", async () => {
     const fn = (a: number, b: number) => a + b;
-    const result = await __call(fn, { type: "positional", args: [3, 4] });
+    const result = await __call(testRun(), fn, { type: "positional", args: [3, 4] });
     expect(result).toBe(7);
   });
 
   it("throws on named args to a TS function", async () => {
     const fn = (a: number) => a;
     await expect(
-      __call(fn, { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
+      __call(testRun(), fn, { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
     ).rejects.toThrow("Named arguments are not supported");
   });
 
@@ -75,7 +80,7 @@ describe("__call", () => {
     const fn = (cb: () => void) => cb();
     const blockArg = makeAgencyFn(async () => "block-ran");
     await expect(
-      __call(fn, {
+      __call(testRun(), fn, {
         type: "named",
         positionalArgs: [],
         namedArgs: {},
@@ -85,7 +90,7 @@ describe("__call", () => {
   });
 
   it("throws on non-callable target", async () => {
-    await expect(__call(42, { type: "positional", args: [] })).rejects.toThrow(
+    await expect(__call(testRun(), 42, { type: "positional", args: [] })).rejects.toThrow(
       "Cannot call non-function value",
     );
   });
@@ -95,43 +100,65 @@ describe("__callMethod", () => {
   it("calls AgencyFunction stored as object property via .invoke()", async () => {
     const fn = makeAgencyFn(async (x: number, state: any) => x * 2);
     const obj = { myFunc: fn };
-    const result = await __callMethod(obj, "myFunc", { type: "positional", args: [5] });
+    const result = await __callMethod(testRun(), obj, "myFunc", { type: "positional", args: [5] });
     expect(result).toBe(10);
   });
 
   it("calls TS method preserving this binding", async () => {
     const s = new Set<number>();
-    await __callMethod(s, "add", { type: "positional", args: [42] });
+    await __callMethod(testRun(), s, "add", { type: "positional", args: [42] });
     expect(s.has(42)).toBe(true);
   });
 
   it("calls AgencyFunction stored in array by index", async () => {
     const fn = makeAgencyFn(async (x: number, state: any) => x + 1);
     const arr = [fn];
-    const result = await __callMethod(arr, 0, { type: "positional", args: [10] });
+    const result = await __callMethod(testRun(), arr, 0, { type: "positional", args: [10] });
     expect(result).toBe(11);
   });
 
   it("short-circuits to undefined when optional and obj is null", async () => {
-    const result = await __callMethod(null, "foo", { type: "positional", args: [] }, true);
+    const result = await __callMethod(
+      testRun(),
+      null,
+      "foo",
+      { type: "positional", args: [] },
+      true,
+    );
     expect(result).toBeUndefined();
   });
 
   it("short-circuits to undefined when optional and obj is undefined", async () => {
-    const result = await __callMethod(undefined, "foo", { type: "positional", args: [] }, true);
+    const result = await __callMethod(
+      testRun(),
+      undefined,
+      "foo",
+      { type: "positional", args: [] },
+      true,
+    );
     expect(result).toBeUndefined();
   });
 
   it("calls normally when optional and obj is non-nullish", async () => {
     const obj = { greet: (name: string) => `hi ${name}` };
-    const result = await __callMethod(obj, "greet", { type: "positional", args: ["Bob"] }, true);
+    const result = await __callMethod(
+      testRun(),
+      obj,
+      "greet",
+      { type: "positional", args: ["Bob"] },
+      true,
+    );
     expect(result).toBe("hi Bob");
   });
 
   it("throws on named args to a TS method", async () => {
     const obj = { fn: (a: number) => a };
     await expect(
-      __callMethod(obj, "fn", { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
+      __callMethod(testRun(), obj, "fn", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: { a: 1 },
+      }),
     ).rejects.toThrow("Named arguments are not supported");
   });
 
@@ -142,7 +169,7 @@ describe("__callMethod", () => {
     const obj = { fn: (cb: () => void) => cb() };
     const blockArg = makeAgencyFn(async () => "block-ran");
     await expect(
-      __callMethod(obj, "fn", {
+      __callMethod(testRun(), obj, "fn", {
         type: "named",
         positionalArgs: [],
         namedArgs: {},
@@ -153,7 +180,10 @@ describe("__callMethod", () => {
 
   it("dispatches .preapprove() with no args", async () => {
     const fn = makeAgencyFn(async (x: number) => x);
-    const result = await __callMethod(fn, "preapprove", { type: "positional", args: [] });
+    const result = await __callMethod(testRun(), fn, "preapprove", {
+      type: "positional",
+      args: [],
+    });
     expect(AgencyFunction.isAgencyFunction(result)).toBe(true);
     expect((result as AgencyFunction).isPreapproved).toBe(true);
   });
@@ -161,14 +191,18 @@ describe("__callMethod", () => {
   it("throws when .preapprove() is called with positional args", async () => {
     const fn = makeAgencyFn(async (x: number) => x);
     await expect(
-      __callMethod(fn, "preapprove", { type: "positional", args: ["bad"] }),
+      __callMethod(testRun(), fn, "preapprove", { type: "positional", args: ["bad"] }),
     ).rejects.toThrow(".preapprove() takes no arguments");
   });
 
   it("throws when .preapprove() is called with named args", async () => {
     const fn = makeAgencyFn(async (x: number) => x);
     await expect(
-      __callMethod(fn, "preapprove", { type: "named", positionalArgs: [], namedArgs: { foo: 1 } }),
+      __callMethod(testRun(), fn, "preapprove", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: { foo: 1 },
+      }),
     ).rejects.toThrow(".preapprove() takes no arguments");
   });
 });

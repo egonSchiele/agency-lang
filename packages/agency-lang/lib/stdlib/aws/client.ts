@@ -2,7 +2,7 @@ import { signRequest } from "./sigv4.js";
 import { type AwsCredentials } from "./credentials.js";
 import { type AwsPartition } from "./endpoints.js";
 import { runHttp, readBodyBytesCapped } from "../http.js";
-import { getRuntimeContext } from "../../runtime/asyncContext.js";
+import type { Run } from "../../runtime/asyncContext.js";
 import { failure, type ResultFailure } from "../../runtime/result.js";
 
 /**
@@ -93,6 +93,7 @@ export function hostOutsidePartitionFailure(
  * thrown errors via `runHttp`.
  */
 export async function sendAwsRequest(
+  run: Run,
   partition: AwsPartition,
   credentials: AwsCredentials,
   request: AwsRequest,
@@ -101,7 +102,7 @@ export async function sendAwsRequest(
   const hostError = hostOutsidePartitionFailure(request.target, partition);
   if (hostError) return hostError;
 
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = run;
   const signal = ctx.getAbortSignal(stack);
   const headers = signRequest({
     method: request.method,
@@ -116,23 +117,27 @@ export async function sendAwsRequest(
     extraHeaders: request.headers,
   });
 
-  return runHttp(async () => {
-    const response = await fetch(wireUrl, {
-      method: request.method,
-      headers,
-      // Node's fetch accepts a Uint8Array body at runtime; the cast sidesteps
-      // TS 5.x's ArrayBufferLike-vs-ArrayBuffer strictness on BufferSource.
-      body: request.method === "GET" ? undefined : (request.body as BodyInit | undefined),
-      signal,
-    });
-    const bytes = await readBodyBytesCapped(response, wireUrl, signal);
-    return {
-      ok: response.ok,
-      status: response.status,
-      statusText: response.statusText,
-      url: wireUrl,
-      bytes,
-      headers: response.headers,
-    };
-  }, wireUrl);
+  return runHttp(
+    async () => {
+      const response = await fetch(wireUrl, {
+        method: request.method,
+        headers,
+        // Node's fetch accepts a Uint8Array body at runtime; the cast sidesteps
+        // TS 5.x's ArrayBufferLike-vs-ArrayBuffer strictness on BufferSource.
+        body: request.method === "GET" ? undefined : (request.body as BodyInit | undefined),
+        signal,
+      });
+      const bytes = await readBodyBytesCapped(response, wireUrl, signal);
+      return {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        url: wireUrl,
+        bytes,
+        headers: response.headers,
+      };
+    },
+    wireUrl,
+    signal,
+  );
 }

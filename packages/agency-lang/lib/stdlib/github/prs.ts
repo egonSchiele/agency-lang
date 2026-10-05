@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currentRun, type Run } from "../../runtime/asyncContext.js";
 import { _githubRequest, type GithubEndpoint } from "./request.js";
 import { pagingQuery, _ghCheckNumber } from "./args.js";
 
@@ -226,7 +227,7 @@ const prCheckRuns: GithubEndpoint<
 // --- Bindings stdlib/github.agency imports -----------------------------------
 
 export async function _ghPrGet(number: number, owner: string, repo: string): Promise<PrSummary> {
-  return _githubRequest(prGet, { owner, repo, number });
+  return _githubRequest(currentRun(), prGet, { owner, repo, number });
 }
 
 export async function _ghPrList(
@@ -237,11 +238,11 @@ export async function _ghPrList(
   owner: string,
   repo: string,
 ): Promise<PrListItem[]> {
-  return _githubRequest(prList, { owner, repo, state, base, perPage, page });
+  return _githubRequest(currentRun(), prList, { owner, repo, state, base, perPage, page });
 }
 
 export async function _ghPrDiff(number: number, owner: string, repo: string): Promise<string> {
-  return _githubRequest(prDiff, { owner, repo, number });
+  return _githubRequest(currentRun(), prDiff, { owner, repo, number });
 }
 
 export async function _ghPrFiles(
@@ -251,7 +252,7 @@ export async function _ghPrFiles(
   owner: string,
   repo: string,
 ): Promise<PrFile[]> {
-  return _githubRequest(prFiles, { owner, repo, number, perPage, page });
+  return _githubRequest(currentRun(), prFiles, { owner, repo, number, perPage, page });
 }
 
 export async function _ghPrReviews(
@@ -261,7 +262,7 @@ export async function _ghPrReviews(
   owner: string,
   repo: string,
 ): Promise<ReviewSummary[]> {
-  return _githubRequest(prReviews, { owner, repo, number, perPage, page });
+  return _githubRequest(currentRun(), prReviews, { owner, repo, number, perPage, page });
 }
 
 export async function _ghPrReviewComments(
@@ -271,15 +272,19 @@ export async function _ghPrReviewComments(
   owner: string,
   repo: string,
 ): Promise<ReviewCommentInfo[]> {
-  return _githubRequest(prReviewComments, { owner, repo, number, perPage, page });
+  return _githubRequest(currentRun(), prReviewComments, { owner, repo, number, perPage, page });
 }
 
-export async function _ghPrHeadSha(number: number, owner: string, repo: string): Promise<string> {
-  const pr = await _githubRequest(prGet, { owner, repo, number });
+async function prHeadSha(run: Run, number: number, owner: string, repo: string): Promise<string> {
+  const pr = await _githubRequest(run, prGet, { owner, repo, number });
   if (pr.headSha === "") {
     throw new Error(`Could not resolve the head commit of PR #${number}`);
   }
   return pr.headSha;
+}
+
+export async function _ghPrHeadSha(number: number, owner: string, repo: string): Promise<string> {
+  return prHeadSha(currentRun(), number, owner, repo);
 }
 
 // Two requests behind the one prChecks interrupt, because check runs are
@@ -292,8 +297,9 @@ export async function _ghPrChecks(
   owner: string,
   repo: string,
 ): Promise<CheckRun[]> {
-  const sha = await _ghPrHeadSha(number, owner, repo);
-  return _githubRequest(prCheckRuns, { owner, repo, sha, perPage, page });
+  const run = currentRun();
+  const sha = await prHeadSha(run, number, owner, repo);
+  return _githubRequest(run, prCheckRuns, { owner, repo, sha, perPage, page });
 }
 
 // --- Write endpoints ---------------------------------------------------------
@@ -347,7 +353,7 @@ export async function _ghPrReviewComment(
   owner: string,
   repo: string,
 ): Promise<ReviewCommentInfo> {
-  return _githubRequest(prReviewCommentCreate, {
+  return _githubRequest(currentRun(), prReviewCommentCreate, {
     owner,
     repo,
     number,
@@ -384,7 +390,14 @@ export async function _ghPrReview(
   repo: string,
 ): Promise<ReviewSummary> {
   _ghCheckReview(event, body, comments);
-  return _githubRequest(prReviewCreate, { owner, repo, number, event, body, comments });
+  return _githubRequest(currentRun(), prReviewCreate, {
+    owner,
+    repo,
+    number,
+    event,
+    body,
+    comments,
+  });
 }
 
 export async function _ghPrApprove(
@@ -393,7 +406,7 @@ export async function _ghPrApprove(
   owner: string,
   repo: string,
 ): Promise<ReviewSummary> {
-  return _githubRequest(prReviewCreate, {
+  return _githubRequest(currentRun(), prReviewCreate, {
     owner,
     repo,
     number,

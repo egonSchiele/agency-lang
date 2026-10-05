@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
-import { agencyStore, withPushedHandler } from "./asyncContext.js";
+import {
+  assertUsable,
+  callPlain,
+  currentRun,
+  withPushedHandler,
+  type Run,
+} from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
@@ -76,10 +82,23 @@ export type ToolMarkers = {
   handoff?: boolean;
 };
 
+/**
+ * The body of an `AgencyFunction`. Its first parameter is the run it is
+ * called under, and the function's own arguments follow:
+ *
+ *   fn: (run, name: string, age: number) => `${name} is ${age}`
+ *
+ * This holds for every body, whether the compiler wrote it or a person did.
+ * A body that needs nothing from the run still declares the parameter, or
+ * declares none at all. A body that puts one of its own typed parameters
+ * first does not compile.
+ */
+export type AgencyFunctionBody = (run: Run, ...args: any[]) => any;
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
-  fn: (...args: any[]) => any;
+  fn: AgencyFunctionBody;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
@@ -94,7 +113,7 @@ export class AgencyFunction {
   readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
-  private readonly _fn: (...args: any[]) => any;
+  private readonly _fn: AgencyFunctionBody;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
@@ -173,14 +192,15 @@ export class AgencyFunction {
     return this._unboundParams;
   }
 
-  async invoke(descriptor: CallType): Promise<unknown> {
+  async invoke(outerRun: Run, descriptor: CallType): Promise<unknown> {
     // Guard every Agency call against runaway recursion. `invoke()` is the
     // single chokepoint all calls pass through, so counting logical nesting
     // here catches the async-recursion case that never trips V8's stack but
     // grows the promise chain until the process OOMs. The limit (config-
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
-    return withCallDepth(this.name, async () => {
+    assertUsable(outerRun, `call ${this.name}()`);
+    return withCallDepth(outerRun, this.name, async (run) => {
       let args: unknown[];
       try {
         args = this._isBound
@@ -205,13 +225,13 @@ export class AgencyFunction {
       // short-circuiting is safe: the call never begins, so no partial run
       // can raise an effect past an unregistered handler.
       if (this._checksFailures) {
-        const propagated = checkFailureArgs(this.name, this.params, args);
+        const propagated = checkFailureArgs(run, this.name, this.params, args);
         if (propagated !== null) {
           return propagated;
         }
       }
       // `_fn` may be imported TypeScript that built a Result by hand.
-      return normalizeForeignResult(await this._fn(...args));
+      return normalizeForeignResult(await this._fn(run, ...args));
     });
   }
 
@@ -293,14 +313,11 @@ export class AgencyFunction {
     // propagate to someone who can actually grant budget.
     const autoApprove = async (intr: { effect: string }) =>
       intr.effect === "std::guard" ? pass() : approve();
-    const wrapped = (...args: any[]) => {
-      const ctx = agencyStore.getStore()?.ctx;
-      if (!ctx) return original(...args);
-      // liveGuardIds: [] is an explicit decision, not a default — this
-      // handler conceptually registers above any guard (its body never
-      // spends, so the hide-everything reading is also harmless).
-      return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
-    };
+    // liveGuardIds: [] is an explicit decision, not a default — this
+    // handler conceptually registers above any guard (its body never
+    // spends, so the hide-everything reading is also harmless).
+    const wrapped: AgencyFunctionBody = (run, ...args) =>
+      withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), []);
     return new AgencyFunction({
       name: this.name,
       module: this.module,

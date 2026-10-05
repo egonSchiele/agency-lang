@@ -5,12 +5,11 @@ import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
 import { ThreadStore } from "./threadStore.js";
 
-// Post-ALS migration: `_callbackImpl` reads `ctx` from
-// `getRuntimeContext()`, so each call must run inside an ALS frame
-// seeded with the fake ctx. Wrap _callbackImpl invocations here.
+// `_callbackImpl` takes the run it is called under, so each call here is
+// made under a run built from the fake ctx.
 function callCallback(ctx: any, name: string, fn: unknown): void {
-  runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => {
-    _callbackImpl(name, fn);
+  runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) => {
+    _callbackImpl(run, name, fn);
   });
 }
 
@@ -845,14 +844,14 @@ describe("StateStack.setSavedDraft", () => {
 describe("claimFrameForScope moduleId stamping", () => {
   it("stamps moduleId alongside scopeName", () => {
     const frame = new State({});
-    claimFrameForScope(frame, "main", "mod.agency");
+    claimFrameForScope(frame, "main", "mod.agency", undefined);
     expect(frame.scopeName).toBe("main");
     expect(frame.moduleId).toBe("mod.agency");
   });
 
   it("moduleId survives the State JSON round trip", () => {
     const frame = new State({});
-    claimFrameForScope(frame, "main", "mod.agency");
+    claimFrameForScope(frame, "main", "mod.agency", undefined);
     const revived = State.fromJSON(JSON.parse(JSON.stringify(frame.toJSON())));
     expect(revived.moduleId).toBe("mod.agency");
   });
@@ -862,22 +861,22 @@ describe("claimFrameForScope moduleId stamping", () => {
     // set, moduleId null.
     const frame = new State({});
     frame.scopeName = "main";
-    claimFrameForScope(frame, "main", "mod.agency");
+    claimFrameForScope(frame, "main", "mod.agency", undefined);
     expect(frame.moduleId).toBe("mod.agency");
   });
 
   it("throws the module-aware desync error on a same-scope, different-module re-claim", () => {
     const frame = new State({});
-    claimFrameForScope(frame, "main", "a.agency");
-    expect(() => claimFrameForScope(frame, "main", "b.agency")).toThrow(
+    claimFrameForScope(frame, "main", "a.agency", undefined);
+    expect(() => claimFrameForScope(frame, "main", "b.agency", undefined)).toThrow(
       /Resume desync: "main" in module "b.agency".*"main" in module "a.agency"/,
     );
   });
 
   it("a matching same-module re-claim is a no-op", () => {
     const frame = new State({});
-    claimFrameForScope(frame, "main", "mod.agency");
-    expect(() => claimFrameForScope(frame, "main", "mod.agency")).not.toThrow();
+    claimFrameForScope(frame, "main", "mod.agency", undefined);
+    expect(() => claimFrameForScope(frame, "main", "mod.agency", undefined)).not.toThrow();
     expect(frame.moduleId).toBe("mod.agency");
   });
 });

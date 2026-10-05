@@ -15,7 +15,7 @@ import {
 import type { InterruptResponse } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { inFrameOf, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -43,7 +43,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     return ctx;
   };
 
@@ -73,7 +75,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([async () => ({ type: "approve", value: "ok" })]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "approve", value: "ok" });
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "approved", resolvedBy: "handler" }),
@@ -86,7 +90,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "approve", value: "parent-ok" });
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "approved", resolvedBy: "ipc" }),
@@ -100,7 +106,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([async () => ({ type: "reject", value: "no" })]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "reject", value: "no" });
     expect(send).not.toHaveBeenCalled();
     expect(resolved).toHaveBeenCalledTimes(1);
@@ -114,7 +122,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     ctx.runId = "run-test"; // the surfaced Interrupt carries the runId
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(Array.isArray(verdict)).toBe(true); // surfaced as Interrupt[]
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "propagated", resolvedBy: null }),
@@ -128,7 +138,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     ctx.runId = "run-test";
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(Array.isArray(verdict)).toBe(true);
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "passed", resolvedBy: null }),
@@ -142,7 +154,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     ctx.runId = "run-test";
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(Array.isArray(verdict)).toBe(true);
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "passed", resolvedBy: null }),
@@ -156,11 +170,13 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([async () => ({ type: "reject", value: "no" })]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const { outcome } = await gatherChainOutcome(
-      { effect: "std::bash", message: "m", data: {}, origin: "o" },
-      ctx,
-      new StateStack(),
-      "child-intr-1",
+    const { outcome } = await inFrameOf(ctx, new StateStack(), (run) =>
+      gatherChainOutcome(
+        run,
+        { effect: "std::bash", message: "m", data: {}, origin: "o" },
+        run.stack,
+        "child-intr-1",
+      ),
     );
     expect(outcome).toEqual({ kind: "rejected", value: "no" });
     expect(resolved).not.toHaveBeenCalled();
@@ -180,7 +196,9 @@ describe("interruptWithHandlers expectsValue", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -188,21 +206,17 @@ describe("interruptWithHandlers expectsValue", () => {
   };
 
   it("a surfaced assignment-position interrupt carries expectsValue", async () => {
-    const verdict = await interruptWithHandlers(
-      "unknown",
-      "Question for user",
-      {},
-      "o",
-      makeCtx([]),
-      undefined,
-      { expectsValue: true },
+    const verdict = await inFrameOf(makeCtx([]), new StateStack(), (run) =>
+      interruptWithHandlers(run, "unknown", "Question for user", {}, "o", { expectsValue: true }),
     );
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].expectsValue).toBe(true);
   });
 
   it("a statement-position interrupt does NOT carry expectsValue", async () => {
-    const verdict = await interruptWithHandlers("std::error", "m", {}, "o", makeCtx([]));
+    const verdict = await inFrameOf(makeCtx([]), new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::error", "m", {}, "o"),
+    );
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].expectsValue).toBeUndefined();
   });
@@ -215,14 +229,8 @@ describe("interruptWithHandlers expectsValue", () => {
         return { type: "approve", value: "Adit" };
       },
     ]);
-    const verdict = await interruptWithHandlers(
-      "unknown",
-      "Question for user",
-      {},
-      "o",
-      ctx,
-      new StateStack(),
-      { expectsValue: true },
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "unknown", "Question for user", {}, "o", { expectsValue: true }),
     );
     expect(verdict).toEqual({ type: "approve", value: "Adit" });
     expect(seen).toEqual([true]);
@@ -373,7 +381,9 @@ describe("pass()", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -385,13 +395,17 @@ describe("pass()", () => {
       async () => ({ type: "approve", value: "outer" }), // outer (walked last)
       async () => pass(), // inner (walked first)
     ]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });
 
   it("a handler returning undefined still defers (back-compat)", async () => {
     const ctx = makeCtx([async () => ({ type: "approve", value: "outer" }), async () => undefined]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });
 
@@ -402,14 +416,18 @@ describe("pass()", () => {
       async () => pass(),
     ]);
     const decisions = vi.spyOn(ctx.statelogClient, "handlerDecision");
-    await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     const kinds = decisions.mock.calls.map((c) => c[0].decision);
     expect(kinds).toEqual(["pass", "pass", "approve"]);
   });
 
   it("every handler passing surfaces the interrupt", async () => {
     const ctx = makeCtx([async () => pass(), async () => pass()]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].effect).toBe("std::bash");
   });

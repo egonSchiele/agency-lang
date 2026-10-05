@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { runInTestContext } from "../runtime/asyncContext.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -131,10 +132,15 @@ describe("std::statelog eval annotations", () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     const spies = spyClient(ctx);
-    await runInTestContext(ctx, new StateStack(), threads, async () => {
-      await expect(_setAgentName("agent\n")).rejects.toThrow(/setAgentName/);
-      await _setAgentName("agency-agent/coordinator");
-    });
+    await runInTestContext(
+      ctx,
+      new StateStack(),
+      threads,
+      asRootRun(async () => {
+        await expect(_setAgentName("agent\n")).rejects.toThrow(/setAgentName/);
+        await callHelper(_setAgentName, "agency-agent/coordinator");
+      }),
+    );
     expect(spies.agentName).toHaveBeenCalledOnce();
     expect(spies.agentName).toHaveBeenCalledWith({ name: "agency-agent/coordinator" });
   });
@@ -159,10 +165,15 @@ describe("std::statelog eval annotations", () => {
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     const spies = spyClient(ctx);
 
-    await runInTestContext(ctx, new StateStack(), threads, async () => {
-      await _evalOutput(null);
-      await _evalOutput(undefined);
-    });
+    await runInTestContext(
+      ctx,
+      new StateStack(),
+      threads,
+      asRootRun(async () => {
+        await _evalOutput(null);
+        await callHelper(_evalOutput, undefined);
+      }),
+    );
 
     expect(spies.evalOutputRecorded).toHaveBeenNthCalledWith(1, {
       value: null,

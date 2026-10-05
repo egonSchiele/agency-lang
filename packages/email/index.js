@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -41,10 +41,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -144,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "3cb9b9620312437280d26191817398c298045e654e77bf5ec928d35e7fbe17b3", import.meta.url);
+__registerModuleFingerprint("index.agency", "2bab85b9010a4cf1bca7ba4bf32b202c21ce805dd925613391b0bb090afa10a3", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -176,28 +173,30 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSET, cc = __UNSET, bcc = __UNSET, replyTo = __UNSET, host = __UNSET, port = __UNSET, secure = __UNSET, user = __UNSET, pass2 = __UNSET) {
-  const __setupData = setupFunction();
+async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text = __UNSET, cc = __UNSET, bcc = __UNSET, replyTo = __UNSET, host = __UNSET, port = __UNSET, secure = __UNSET, user = __UNSET, pass2 = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "sendEmail", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  claimFrameForScope(__stack, "sendEmail", "index.agency", __run.log);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["from"] = from;
@@ -214,7 +213,7 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
   __stack.args["user"] = user === __UNSET ? `` : user;
   __stack.args["pass"] = pass2 === __UNSET ? `` : pass2;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "sendEmail", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "sendEmail", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -273,14 +272,13 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, "its body", async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "sendEmail",
@@ -303,9 +301,9 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(sendEmailImpl, {
+        runner2.halt(await __tryCall(__run3.log, async () => await __call(__run3, sendEmailImpl, {
           type: "positional",
           args: [{
             "from": __stack.args.from,
@@ -323,7 +321,7 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
             "pass": __stack.args.pass
           }]
         }), {
-          checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+          checkpoint: __run3.ctx.getResultCheckpoint(),
           functionName: "sendEmail",
           args: __stack.args
         }));
@@ -341,7 +339,7 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "sendEmail");
+      return AbortedResult.fromError(__run.log, __error, __stack, "sendEmail");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -349,22 +347,22 @@ async function __sendEmail_impl(from, to, subject, html = __UNSET, text = __UNSE
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function sendEmail threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "sendEmail"
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "sendEmail",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "sendEmail",

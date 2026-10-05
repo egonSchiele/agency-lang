@@ -6,11 +6,11 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -185,15 +186,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("multipleNodes.agency")) {
     return;
   }
   __ctx.globals.markInitialized("multipleNodes.agency")
 }
 __registerGlobalsInit("multipleNodes.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("multipleNodes.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
@@ -201,34 +203,34 @@ graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "multipleNodes.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet", threads: __setupData.threads });
+  claimFrameForScope(__stack, "greet", "multipleNodes.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "greet"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.greeting = await runPrompt({
+__stack.locals.greeting = await runPrompt(__run, {
           prompt: `say hello`,
-          messages: __threads().getOrCreateActive(),
+          messages: __run.threads.getOrCreateActive(),
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
@@ -237,30 +239,31 @@ __stack.locals.greeting = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.greeting)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads(),
+            messages: __run.threads,
             data: __stack.locals.greeting
           })
           return;
         }
       });
-      await runner.step(2, async (runner) => {
-__stateStack()?.pop()
+      await runner.step(2, __run, async (runner, __run) => {
+__run.stack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
-          messages: __threads(),
-          ctx: getRuntimeContext().ctx,
+          messages: __run.threads,
+          ctx: __run.ctx,
           data: {
             msg: __stack.locals.greeting
-          }
+          },
+          run: __state.run
         }))
 return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, async () => {
-await callHook({
+    await runner.hook(3, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "greet",
@@ -269,7 +272,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -285,14 +288,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node greet crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "greet",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "greet" })
     };
   }
@@ -301,37 +304,37 @@ graph.node("processGreeting", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "processGreeting", "multipleNodes.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting", threads: __setupData.threads });
+  claimFrameForScope(__stack, "processGreeting", "multipleNodes.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting", stack: __run.stack, threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["msg"] = __state.data.msg;
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "processGreeting"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.result = await runPrompt({
+__stack.locals.result = await runPrompt(__run, {
           prompt: `format this greeting: ${__stack.args.msg}`,
-          messages: __threads().getOrCreateActive(),
+          messages: __run.threads.getOrCreateActive(),
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
@@ -340,21 +343,21 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads(),
+            messages: __run.threads,
             data: __stack.locals.result
           })
           return;
         }
       });
-      await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+      await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
           type: "positional",
           args: [__stack.locals.result]
         });
 if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -367,8 +370,8 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, async () => {
-await callHook({
+    await runner.hook(3, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "processGreeting",
@@ -377,7 +380,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -393,14 +396,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node processGreeting crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "processGreeting",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "processGreeting" })
     };
   }
@@ -409,43 +412,44 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "multipleNodes.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main", threads: __setupData.threads });
+  claimFrameForScope(__stack, "main", "multipleNodes.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
-__stateStack()?.pop()
+      await runner.step(1, __run, async (runner, __run) => {
+__run.stack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
-          messages: __threads(),
-          ctx: getRuntimeContext().ctx,
-          data: {}
+          messages: __run.threads,
+          ctx: __run.ctx,
+          data: {},
+          run: __state.run
         }))
 return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, async () => {
-await callHook({
+    await runner.hook(2, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -454,7 +458,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -470,14 +474,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

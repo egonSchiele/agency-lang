@@ -9,11 +9,11 @@ function gen(src: string): string {
 }
 
 describe("finalize binder codegen", () => {
-  it("the closure takes the binder as a bare parameter", () => {
+  it("the closure takes the binder as a bare parameter, after the run", () => {
     const out = gen(
       'def f(): string {\n  return "x"\n  finalize as draft {\n    if (draft != null) { return draft }\n    return "none"\n  }\n}\nnode main() { return f() }\n',
     );
-    expect(out).toContain("const __finalize = async (draft: any): Promise<any>");
+    expect(out).toContain("const __finalize = async (__run: __Run, draft: any): Promise<any>");
     // The body must reference the parameter BARE, not a frame local —
     // that is the whole trick (handler-param precedent).
     expect(out).not.toContain("__stack.locals.draft");
@@ -23,13 +23,15 @@ describe("finalize binder codegen", () => {
     const out = gen(
       'def f(): string {\n  return "x"\n  finalize as draft: string {\n    return "none"\n  }\n}\nnode main() { return f() }\n',
     );
-    expect(out).toContain("const __finalize = async (draft: string | null): Promise<any>");
+    expect(out).toContain(
+      "const __finalize = async (__run: __Run, draft: string | null): Promise<any>",
+    );
   });
 
-  it("binder-less output is byte-identical to the old form", () => {
+  it("binder-less output takes only the run", () => {
     const out = gen(
       'def f(): string {\n  return "x"\n  finalize {\n    return "y"\n  }\n}\nnode main() { return f() }\n',
     );
-    expect(out).toContain("const __finalize = async (): Promise<any>");
+    expect(out).toContain("const __finalize = async (__run: __Run): Promise<any>");
   });
 });

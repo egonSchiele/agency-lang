@@ -33,7 +33,7 @@ describe("issue #229: top-level bare `with` modifier", () => {
     expect(() => compileSource(src)).not.toThrow();
   });
 
-  it("emits a pushHandler/popHandler wrapper inside __initializeGlobals", () => {
+  it("emits a pushRunHandler/popHandler wrapper inside __initializeGlobals", () => {
     const src =
       `def foo(): number { return 42 }\n` +
       `foo() with approve\n` +
@@ -46,8 +46,8 @@ describe("issue #229: top-level bare `with` modifier", () => {
     const initStart = out.indexOf("async function __initializeGlobals");
     expect(initStart).toBeGreaterThan(-1);
     const initBody = out.slice(initStart);
-    const push = initBody.indexOf("pushHandler");
-    const call = initBody.indexOf("__call(foo");
+    const push = initBody.indexOf("pushRunHandler");
+    const call = initBody.indexOf("__call(__run, foo");
     const pop = initBody.indexOf("popHandler");
     expect(push).toBeGreaterThan(-1);
     expect(call).toBeGreaterThan(push);

@@ -1,4 +1,4 @@
-import { agencyStore, requireFrame } from "./asyncContext.js";
+import { withChildRun, type Run } from "./asyncContext.js";
 import type { HandlerEntry } from "./types.js";
 
 /**
@@ -37,17 +37,26 @@ import type { HandlerEntry } from "./types.js";
  */
 
 /** Run a handler body, recording its entry as executing for the duration. */
-export function runAsHandler<T>(entry: HandlerEntry, fn: () => Promise<T>): Promise<T> {
-  const frame = requireFrame("runAsHandler()");
-  return agencyStore.run({ ...frame, executingHandlers: [...frame.executingHandlers, entry] }, fn);
+export function runAsHandler<T>(
+  run: Run,
+  entry: HandlerEntry,
+  fn: (run: Run) => Promise<T>,
+): Promise<T> {
+  const frame = run;
+  return withChildRun(
+    frame,
+    { executingHandlers: [...frame.executingHandlers, entry] },
+    "a handler function",
+    fn,
+  );
 }
 
 /** The entries executing in this lineage, outermost first. */
-export function executingHandlers(): HandlerEntry[] {
-  return requireFrame("executingHandlers()").executingHandlers;
+export function executingHandlers(run: Run): HandlerEntry[] {
+  return run.executingHandlers;
 }
 
 /** True when any handler body is executing in this lineage. */
-export function insideHandlerFunction(): boolean {
-  return executingHandlers().length > 0;
+export function insideHandlerFunction(run: Run): boolean {
+  return executingHandlers(run).length > 0;
 }

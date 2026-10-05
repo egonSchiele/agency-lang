@@ -1,0 +1,33 @@
+import { askOneAfterTheOther, askBothAtOnce } from "./helper.js"
+
+effect test::first { asked: string }
+effect test::second { asked: string }
+
+// The helper raises `test::first`, gets an answer, and then tries to raise
+// `test::second` through the same handle. The handler here would approve
+// both. It is only ever asked about the first.
+node oneAfterTheOther() {
+  const askedAbout = []
+  let result: any = null
+  handle {
+    result = askOneAfterTheOther()
+  } with (intr) {
+    askedAbout.push(intr.effect)
+    return approve()
+  }
+  return { result: result, askedAbout: askedAbout }
+}
+
+// The helper raises both at the same time. The handle refuses the second
+// here too, so the handler is asked about the first only.
+node bothAtOnce() {
+  const askedAbout = []
+  let result: any = null
+  handle {
+    result = askBothAtOnce()
+  } with (intr) {
+    askedAbout.push(intr.effect)
+    return approve()
+  }
+  return { result: result, askedAbout: askedAbout }
+}

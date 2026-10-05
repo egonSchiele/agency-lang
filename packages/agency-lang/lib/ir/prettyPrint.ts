@@ -288,7 +288,7 @@ export function printTs(node: TsNode, indent = 0): string {
         //     gives per-branch isolation in Stage 2: the branch's
         //     cloned GlobalStore is read here instead of the
         //     canonical one.
-        const receiver = node.topLevel ? "__globalCtx.globals" : "__globals()!";
+        const receiver = node.topLevel ? "__globalCtx.globals" : "__run.globals";
         return `${receiver}.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
       }
       if (node.scope === "static") {
@@ -327,7 +327,7 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "runnerStep": {
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.step(${node.id}, async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.step(${node.id}, __run, async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerThread": {
@@ -350,18 +350,18 @@ export function printTs(node: TsNode, indent = 0): string {
       // then dereference an unset local and throw. Deferring lets the early
       // return win — same fix as `runnerLoop`.
       const optsObj = optsParts.length === 0 ? "{}" : `{ ${optsParts.join(", ")} }`;
-      return `await runner.thread(${node.id}, "${node.method}", async () => (${optsObj}), async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.thread(${node.id}, __run, "${node.method}", async (__run) => (${optsObj}), async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerHandle": {
       const handler = printTs(node.handler, indent);
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.handle(${node.id}, ${handler}, async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.handle(${node.id}, __run, ${handler}, async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerHookStep": {
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.hook(${node.id}, async () => {\n${body}\n${ind(indent)}});`;
+      return `await runner.hook(${node.id}, __run, async (__run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "withHandler": {
@@ -388,14 +388,16 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "runnerDebugger": {
-      return `await runner.debugger(${node.id}, ${JSON.stringify(node.label)});`;
+      return `await runner.debugger(${node.id}, __run, ${JSON.stringify(node.label)});`;
     }
 
     case "runnerPipe": {
       const target = printTs(node.target, indent);
       const input = printTs(node.input, indent);
       const fn = printTs(node.fn, indent);
-      return `${target} = await runner.pipe(${node.id}, ${input}, ${fn});`;
+      // The stage is wrapped so that it is built inside a body that declares
+      // `__run`: the stage's own calls then use the run of this step.
+      return `${target} = await runner.pipe(${node.id}, __run, ${input}, async (__pipeValue, __run) => (${fn})(__pipeValue));`;
     }
 
     case "runnerIfElse": {
@@ -449,7 +451,7 @@ export function printTs(node: TsNode, indent = 0): string {
       const items = printTs(node.items, indent + 1);
       const idxVar = node.indexVar ?? "_";
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.loop(${node.id}, async () => (${items}), async (${node.itemVar}, ${idxVar}, runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.loop(${node.id}, __run, async (__run) => (${items}), async (${node.itemVar}, ${idxVar}, runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerWhileLoop": {
@@ -461,12 +463,12 @@ export function printTs(node: TsNode, indent = 0): string {
       // `whileLoop` accepts `() => boolean | Promise<boolean>` and awaits
       // the result, so a sync condition like `x < 3` still works (a sync
       // value inside an async arrow is wrapped as Promise<boolean>).
-      return `await runner.whileLoop(${node.id}, async () => ${cond}, async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.whileLoop(${node.id}, __run, async (__run) => ${cond}, async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerBranchStep": {
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.branchStep(${node.id}, "${node.branchKey}", async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.branchStep(${node.id}, __run, "${node.branchKey}", async (runner, __run) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "empty":

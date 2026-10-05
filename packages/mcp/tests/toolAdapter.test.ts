@@ -58,11 +58,8 @@ describe("mcpToolToAgencyFunction", () => {
     expect(fn.params.map(p => p.name)).toEqual(["a", "b"]);
 
     // Invoke with named args (as runPrompt does for tool calls)
-    const result = await inTestFrame(() =>
-      fn.invoke(
-        { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
-        { ctx: null, threads: null, isToolCall: true },
-      ),
+    const result = await inTestFrame((run) =>
+      fn.invoke(run, { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } }),
     );
     expect(result).toBe("7");
 

@@ -1,0 +1,56 @@
+import { raiseLater } from "./helper.js"
+
+effect test::later { asked: string }
+effect test::own { asked: string }
+
+def trigger(): string {
+  raise("start")
+  return "ok"
+}
+
+// A helper waits and then raises an interrupt. The handler around the call
+// is asked about it, the same as for an interrupt raised by Agency code.
+node approved() {
+  handle {
+    return raiseLater("test::later")
+  } with (intr) {
+    if (intr.effect == "test::later") {
+      return approve("from-agency")
+    }
+    return reject()
+  }
+}
+
+node rejected() {
+  handle {
+    return raiseLater("test::later")
+  } with (intr) {
+    return reject("no")
+  }
+}
+
+// The inner handler function calls the helper, and the helper raises after
+// its wait. A handler function is never asked about an interrupt raised
+// inside itself, so only the outer handler is asked about `test::own`.
+//
+// The inner handler function rejects `test::own`. So if it were asked, the
+// helper would get a rejection back.
+node raisedInsideHandlerFunction() {
+  let seenByHelper: any = "not run"
+  const outerAskedAbout = []
+  handle {
+    handle {
+      trigger()
+    } with (intr) {
+      if (intr.effect == "test::own") {
+        return reject("the inner handler was asked about its own raise")
+      }
+      seenByHelper = raiseLater("test::own")
+      return approve()
+    }
+  } with (intr) {
+    outerAskedAbout.push(intr.effect)
+    return approve("from-outer")
+  }
+  return { seenByHelper: seenByHelper, outerAskedAbout: outerAskedAbout }
+}

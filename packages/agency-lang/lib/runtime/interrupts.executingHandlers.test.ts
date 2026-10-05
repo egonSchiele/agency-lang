@@ -1,9 +1,10 @@
 import { describe, it as baseIt, expect } from "vitest";
-import { interruptWithHandlers, isRejected } from "./interrupts.js";
+import { gatherChainOutcome, interruptWithHandlers, isRejected } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { HandlerEntry } from "./types.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import type { Run } from "./asyncContext.js";
+import { inFrameOf, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -18,10 +19,19 @@ const makeCtx = (): RuntimeContext<any> =>
 describe("stack-carried handler execution mark", () => {
   it("throws when handlers are registered but no stack is passed", async () => {
     const ctx = makeCtx();
-    ctx.handlers = [{ fn: async () => ({ type: "approve" }), liveGuardIds: [] }];
-    await expect(interruptWithHandlers("std::x", "m", {}, "o", ctx, undefined)).rejects.toThrow(
-      /no StateStack/,
-    );
+    ctx.handlers = [{ fn: async () => ({ type: "approve" as const }), liveGuardIds: [] }];
+    // A run always carries a stack, so the missing stack is handed to the
+    // chain walk directly.
+    await expect(
+      inFrameOf(ctx, new StateStack(), (run) =>
+        gatherChainOutcome(
+          run,
+          { effect: "std::x", message: "m", data: {}, origin: "o" },
+          undefined,
+          "intr-1",
+        ),
+      ),
+    ).rejects.toThrow(/no StateStack/);
   });
 
   it("marks the stack for the duration of a handler body", async () => {
@@ -32,12 +42,12 @@ describe("stack-carried handler execution mark", () => {
       {
         fn: async () => {
           seenDuring = stack.executingHandlerEntries.length;
-          return { type: "approve" };
+          return { type: "approve" as const };
         },
         liveGuardIds: [],
       },
     ];
-    await interruptWithHandlers("std::x", "m", {}, "o", ctx, stack);
+    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "std::x", "m", {}, "o"));
     expect(seenDuring).toBe(1);
     expect(stack.executingHandlerEntries).toEqual([]);
   });
@@ -50,25 +60,25 @@ describe("stack-carried handler execution mark", () => {
     let selfHeard = 0;
     let outerHeard = 0;
     const inner: HandlerEntry = {
-      fn: async (intr: any) => {
+      fn: async (run: Run, intr: any) => {
         if (intr.effect === "inner::raise") {
           selfHeard++;
-          return { type: "approve" };
+          return { type: "approve" as const };
         }
-        const verdict = await interruptWithHandlers("inner::raise", "m", {}, "o", ctx, stack);
-        return { type: "approve", value: verdict };
+        const verdict = await interruptWithHandlers(run, "inner::raise", "m", {}, "o");
+        return { type: "approve" as const, value: verdict };
       },
       liveGuardIds: [],
     };
     const outer: HandlerEntry = {
-      fn: async (intr: any) => {
+      fn: async (_run: unknown, intr: any) => {
         if (intr.effect === "inner::raise") outerHeard++;
-        return { type: "approve" };
+        return { type: "approve" as const };
       },
       liveGuardIds: [],
     };
     ctx.handlers = [outer, inner]; // chain walks last-registered first, so `inner` runs first
-    await interruptWithHandlers("kickoff", "m", {}, "o", ctx, stack);
+    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
     expect(selfHeard).toBe(0);
     expect(outerHeard).toBe(1);
   });
@@ -79,16 +89,16 @@ describe("stack-carried handler execution mark", () => {
     let refusal: any = null;
     ctx.handlers = [
       {
-        fn: async (intr: any) => {
+        fn: async (run: Run, intr: any) => {
           if (intr.effect === "kickoff") {
-            refusal = await interruptWithHandlers("nobody::answers", "m", {}, "o", ctx, stack);
+            refusal = await interruptWithHandlers(run, "nobody::answers", "m", {}, "o");
           }
-          return { type: "approve" };
+          return { type: "approve" as const };
         },
         liveGuardIds: [],
       },
     ];
-    await interruptWithHandlers("kickoff", "m", {}, "o", ctx, stack);
+    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
     expect(isRejected(refusal)).toBe(true);
     expect(refusal.value).toMatch(/inside a handler/);
   });
@@ -106,12 +116,12 @@ describe("stack-carried handler execution mark", () => {
               markAtStragglerEnd = stack.executingHandlerEntries.length;
             })(),
           );
-          return { type: "approve" }; // handler returns while the straggler still runs
+          return { type: "approve" as const }; // handler returns while the straggler still runs
         },
         liveGuardIds: [],
       },
     ];
-    await interruptWithHandlers("kickoff", "m", {}, "o", ctx, stack);
+    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
     expect(markAtStragglerEnd).toBe(1); // straggler finished BEFORE the pop
     expect(stack.executingHandlerEntries).toEqual([]);
   });
@@ -128,8 +138,8 @@ describe("stack-carried handler execution mark", () => {
         }, 30),
       ),
     );
-    ctx.handlers = [{ fn: async () => ({ type: "approve" }), liveGuardIds: [] }];
-    await interruptWithHandlers("kickoff", "m", {}, "o", ctx, stack);
+    ctx.handlers = [{ fn: async () => ({ type: "approve" as const }), liveGuardIds: [] }];
+    await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));
     expect(preSettled).toBe(false); // the deadlock-shaped promise was left alone
   });
 });

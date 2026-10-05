@@ -1,0 +1,27 @@
+// Served nodes and a served function that call a helper which waits and
+// then raises an interrupt through the handle from agency.current().
+// See test.js.
+import { raiseLater } from "./helper.js"
+
+effect test::later { asked: string }
+
+// A handler in the program answers the helper's interrupt.
+export node handled() {
+  handle {
+    return raiseLater("test::later")
+  } with (intr) {
+    return approve("from-agency")
+  }
+}
+
+// Nothing in the program answers it. A host policy does, or it surfaces.
+export node bare() {
+  return raiseLater("test::later")
+}
+
+export def bareFn(): any {
+  """
+  Calls the helper with no handler around it.
+  """
+  return raiseLater("test::later")
+}

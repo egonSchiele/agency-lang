@@ -13,12 +13,14 @@ import type { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
+import type { Run } from "./asyncContext.js";
 
 /** Dispatch the LLM request and extract `{completion, toolCalls}`,
  *  branching on the `stream` flag. Streaming uses `handleStreamingResponse`
  *  to accumulate chunks; non-streaming awaits the single response Promise.
  *  Throws on transport/protocol errors. */
 export async function dispatchLLMRequest({
+  run,
   ctx,
   promptConfig,
   prompt,
@@ -26,6 +28,7 @@ export async function dispatchLLMRequest({
   stateStack,
   decisionPlan,
 }: {
+  run: Run;
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
   prompt: string | UserContentInput;
@@ -39,12 +42,15 @@ export async function dispatchLLMRequest({
   // branch returns a completion shaped like a text model's, so everything
   // after this point runs unchanged. There is nothing to stream.
   if (decisionPlan !== undefined) {
-    const completion = await dispatchDecision(ctx, promptConfig, decisionPlan);
+    const completion = await dispatchDecision(run, promptConfig, decisionPlan);
     return { completion, toolCalls: [] };
   }
+  // The client is told which module is calling. See `PromptConfig.moduleId`.
+  const withModule = { ...promptConfig, moduleId: run.callsite?.moduleId };
   if (stream) {
-    const streamGen = ctx.llmClient.textStream(promptConfig);
+    const streamGen = ctx.llmClient.textStream(withModule);
     const response = await handleStreamingResponse({
+      run,
       ctx,
       completion: streamGen,
       prompt,
@@ -61,7 +67,7 @@ export async function dispatchLLMRequest({
       toolCalls: response.value.toolCalls,
     };
   }
-  const response = await ctx.llmClient.text(promptConfig);
+  const response = await ctx.llmClient.text(withModule);
   if (!response.success) {
     throw new Error(`Error getting completion: ${response.error}`);
   }
@@ -220,6 +226,7 @@ export async function runWithRetry<T>(
  * that function stays focused.
  */
 export async function dispatchWithRetry(args: {
+  run: Run;
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
   prompt: string | UserContentInput;
@@ -228,7 +235,7 @@ export async function dispatchWithRetry(args: {
   parentSignal: AbortSignal | undefined;
   stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[]; usageKind: UsageKind }> {
-  const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } = args;
+  const { run, ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } = args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
     if (ctx.llmClient.normalizeError) {
@@ -247,9 +254,9 @@ export async function dispatchWithRetry(args: {
       delayMs: number;
       reason: LLMRetryReason;
       detail: string;
-    }) => callHook({ ctx, name: "onLLMRetry", data }),
+    }) => callHook(run, { name: "onLLMRetry", data }),
     onTimeout: (data: { limitMs: number; attempt: number }) =>
-      callHook({ ctx, name: "onLLMTimeout", data }),
+      callHook(run, { name: "onLLMTimeout", data }),
   };
 
   const targetStack = stateStack ?? ctx.stateStack;
@@ -266,6 +273,7 @@ export async function dispatchWithRetry(args: {
     (signal) =>
       meteredDispatch(ctx, targetStack, usageKind, () =>
         dispatchLLMRequest({
+          run,
           ctx,
           promptConfig: {
             ...promptConfig,

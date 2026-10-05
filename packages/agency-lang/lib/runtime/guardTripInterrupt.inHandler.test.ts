@@ -4,7 +4,7 @@ import { raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { HandlerEntry } from "./types.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { inFrameOf, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -42,17 +42,21 @@ describe("in-handler guard trips refuse to surface", () => {
     const { ctx, stack, time, err } = arrangeTrippedInHandler();
     const key = `__guardTrip_${time.guardId}#time@${time.currentLimit()}`;
     stack.other[key] = "stale-interrupt-id"; // open question, no recorded answer
-    await expect(raiseGuardTripsUntilClear(ctx, stack, () => err)).rejects.toBe(err);
+    await expect(
+      inFrameOf(ctx, stack, (run) => raiseGuardTripsUntilClear(run, stack, () => err)),
+    ).rejects.toBe(err);
     expect(guardTripKeys(stack)).toEqual([]); // stale key dropped, nothing new persisted
   });
 
   it("unanswered dispatch: throws the trip error, persists nothing, checkpoints nothing", async () => {
     const { ctx, stack, err } = arrangeTrippedInHandler();
     ctx.handlers = []; // nobody can answer
-    // The stack is marked but there is deliberately no ALS scope: this is
-    // the lost-ALS shape from the issue-616 investigation. The stack-read
-    // refusal must hold on its own.
-    await expect(raiseGuardTripsUntilClear(ctx, stack, () => err)).rejects.toBe(err);
+    // The stack is marked but the run's own executing-handler list is
+    // empty: this is the lost-lineage shape from the issue-616
+    // investigation. The stack-read refusal must hold on its own.
+    await expect(
+      inFrameOf(ctx, stack, (run) => raiseGuardTripsUntilClear(run, stack, () => err)),
+    ).rejects.toBe(err);
     expect(guardTripKeys(stack)).toEqual([]);
     expect(ctx.checkpoints.getSorted()).toEqual([]);
   });

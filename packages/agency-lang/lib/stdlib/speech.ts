@@ -7,7 +7,7 @@ import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
 import {
   root,
@@ -122,7 +122,7 @@ export async function _say(
   outputFile: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return speakImpl(ctx, stack, text, voice, rate, outputFile, allowedPaths);
 }
 
@@ -247,7 +247,7 @@ export async function _record(
   silenceTimeout: number,
   allowedPaths?: string[],
 ): Promise<string> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return recordImpl(ctx, stack, outputFile, silenceTimeout, allowedPaths);
 }
 
@@ -332,9 +332,9 @@ export async function _transcribe(
   timestampGranularity: string,
   apiKey: string,
 ): Promise<string> {
+  const { ctx, stack, log } = currentRun();
   validateTranscribeGranularity(timestampGranularity);
 
-  const { ctx, stack } = getRuntimeContext();
   const client = ctx.llmClient;
   if (!client.transcribe) {
     throw new Error(
@@ -398,7 +398,7 @@ export async function _transcribe(
     cost: tr.cost,
     tokens: tr.usage,
   });
-  ctx.statelogClient.transcription({
+  log.transcription({
     textPreview: tr.text.slice(0, PROMPT_PREVIEW_MAX),
     model,
     durationSeconds: tr.durationSeconds,
@@ -445,6 +445,7 @@ export async function _synthesizeSpeech(
   apiKey: string,
   instructions: string = "",
 ): Promise<string> {
+  const run = currentRun();
   // Normalize + validate before any work: an unsupported format or out-of-range
   // speed must never reach dispatch or publish a mislabeled artifact, even for a
   // direct/deterministic caller that bypassed speech.agency's pre-interrupt check.
@@ -459,7 +460,7 @@ export async function _synthesizeSpeech(
     );
   }
 
-  const client = speakClient();
+  const client = speakClient(run);
   const config: SpeakConfig = {
     model,
     voice,
@@ -470,7 +471,7 @@ export async function _synthesizeSpeech(
   if (apiKey) config.apiKey = { openAi: apiKey };
   if (instructions !== "") config.instructions = instructions;
 
-  return synthesizeToFile({
+  return synthesizeToFile(run, {
     name: "speak",
     text,
     outputFile,
@@ -484,8 +485,8 @@ export async function _synthesizeSpeech(
 }
 
 /** The active client's speak, or a clear error when it has none. */
-function speakClient(): LLMClient {
-  const client = getRuntimeContext().ctx.llmClient;
+function speakClient(run: Run): LLMClient {
+  const client = run.ctx.llmClient;
   if (!client.speak) {
     throw new Error(
       "The active LLM client does not support text-to-speech. Use the default client or register one with speak() support.",
@@ -519,8 +520,8 @@ type Synthesis = {
 /** The file, accounting and publish steps both speak paths share. Resolves +
  *  authorizes the output path and refuses to overwrite an existing file
  *  BEFORE any dispatch, then accounts the work and publishes atomically. */
-async function synthesizeToFile(s: Synthesis): Promise<string> {
-  const { ctx, stack } = getRuntimeContext();
+async function synthesizeToFile(run: Run, s: Synthesis): Promise<string> {
+  const { ctx, stack } = run;
   const signal = ctx.getAbortSignal(stack);
   if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
 
@@ -558,7 +559,7 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
     cost: produced.cost,
     tokens: undefined, // TTS is per-character; no token usage
   });
-  ctx.statelogClient.speechSynthesis({
+  run.log.speechSynthesis({
     textPreview: s.text.slice(0, PROMPT_PREVIEW_MAX),
     model: s.model,
     voice: s.voice,
@@ -726,12 +727,13 @@ export async function _speakLocal(
   allowedPaths: string[],
   speed: number,
 ): Promise<string> {
+  const run = currentRun();
   // Again at the runtime boundary, for a direct or deterministic caller
   // that bypassed speech.agency's pre-interrupt check.
   const localFormat = _validateSpeakLocalArgs(text, model, format, outputFile, speed);
   const transcoded = needsFfmpeg(localFormat, speed);
   const resolved = _resolveModel(model);
-  const client = speakClient();
+  const client = speakClient(run);
   const baseUrl = mlxBaseUrl();
   const config: SpeakConfig = {
     model: _mlxServedName(resolved),
@@ -745,7 +747,7 @@ export async function _speakLocal(
   }
   const pieces = sentencePieces(text, LOCAL_PIECE_CHARS);
 
-  return synthesizeToFile({
+  return synthesizeToFile(run, {
     name: "speakLocal",
     text,
     outputFile,

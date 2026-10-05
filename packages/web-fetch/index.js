@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -40,10 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -143,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "4f1bdb86addc7dfb78e5a1f0fa32ca33281fd584c38a567e5846587a32e6390c", import.meta.url);
+__registerModuleFingerprint("index.agency", "b23cf8c698ac784ad16651bfb1c882aa073537b8a9ec6edf5f19b247628c9129", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -175,35 +172,37 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
-  const __setupData = setupFunction();
+async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "fetchPage", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  claimFrameForScope(__stack, "fetchPage", "index.agency", __run.log);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["url"] = url;
   __stack.args["maxChars"] = maxChars === __UNSET ? 2e4 : maxChars;
   __stack.args["timeout"] = timeout === __UNSET ? 15e3 : timeout;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -222,14 +221,13 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, "its body", async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "fetchPage",
@@ -242,9 +240,9 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(fetchPageImpl, {
+        runner2.halt(await __call(__run3, fetchPageImpl, {
           type: "positional",
           args: [__stack.args.url, {
             "maxChars": __stack.args.maxChars,
@@ -265,7 +263,7 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "fetchPage");
+      return AbortedResult.fromError(__run.log, __error, __stack, "fetchPage");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -273,22 +271,22 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function fetchPage threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "fetchPage"
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "fetchPage",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "fetchPage",

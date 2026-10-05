@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { agencyStore, getRuntimeContext, requireFrame } from "./asyncContext.js";
+import { assertUsable, callPlain, RunInUseError, withChildRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -141,8 +141,8 @@ export type AgencyCallbacks = {
 /** True while a callback body is executing on this async path. The runner
  *  defers an external pause here, because a checkpoint taken inside a
  *  callback dispatch is not a place a resume can re-enter. */
-export function isInsideCallback(): boolean {
-  return requireFrame("isInsideCallback()").activeCallbacks.length > 0;
+export function isInsideCallback(run: Run): boolean {
+  return run.activeCallbacks.length > 0;
 }
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
@@ -160,9 +160,9 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
 }
 
 async function invokeCallback(
+  run: Run,
   fn: any,
   data: unknown,
-  ctx: RuntimeContext<any>,
   stateStack?: StateStack,
 ): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
@@ -173,36 +173,37 @@ async function invokeCallback(
     // branch's frame chain must be discovered via the branch's stack.
     const af = fn as AgencyFunction;
     const desc = { type: "positional" as const, args: [data] };
-    const parent = agencyStore.getStore();
-    if (stateStack && parent) {
-      await agencyStore.run({ ...parent, stack: stateStack }, () => af.invoke(desc));
+    if (stateStack) {
+      await withChildRun(run, { stack: stateStack }, "a callback", (branchRun) =>
+        af.invoke(branchRun, desc),
+      );
     } else {
-      await af.invoke(desc);
+      await af.invoke(run, desc);
     }
     return;
   }
   // Plain JS callbacks (from AgencyCallbacks TS arg) — just async funcs.
-  await fn(data);
+  await callPlain(run, fn, [data]);
 }
 
 async function fireWithGuard(
+  run: Run,
   fn: any,
   data: unknown,
-  ctx: RuntimeContext<any>,
   errorLabel: string,
   stateStack?: StateStack,
 ): Promise<void> {
   const key = fn as object;
   // Recursion guard scoped to the current frame. See the comment above
   // `isInsideCallback` for why the list lives on the frame.
-  const frame = requireFrame("fireWithGuard()");
+  const frame = assertUsable(run, "fire a callback");
   if (frame.activeCallbacks.includes(key)) return;
   // A new list per fire, holding the inherited entries plus our own key, so
   // a deeper fire can re-enter without changing the outer list.
   const active = [...frame.activeCallbacks, key];
   try {
-    await agencyStore.run({ ...frame, activeCallbacks: active }, () =>
-      invokeCallback(fn, data, ctx, stateStack),
+    await withChildRun(frame, { activeCallbacks: active }, "a callback", (callbackRun) =>
+      invokeCallback(callbackRun, fn, data, stateStack),
     );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
@@ -211,6 +212,10 @@ async function fireWithGuard(
     // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
     if (error instanceof RunControlSignal) throw error;
     if (error instanceof AgencyAbort) throw error;
+    // A wrong-run error is a mistake in the code that handed the run over,
+    // not a crash in the callback. Dropping it here would hide the mistake:
+    // the work it stopped would look like it had been skipped on purpose.
+    if (error instanceof RunInUseError) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so
     // there is no interrupt path to surface here.
@@ -268,27 +273,16 @@ export function hasCallbackConsumer<K extends keyof CallbackMap>(
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
  *  public `callHook` is now a thin wrapper that omits `stateStack`.
  *
- *  `ctx` is optional — when omitted, it's resolved from the active ALS
- *  frame via `getRuntimeContext()`. Every codegen-emitted `callHook(...)`
- *  site omits it. Within this repo, the remaining explicit-ctx callers
- *  are all in runtime code where an ALS frame *is* installed and the
- *  param is redundant:
- *    - `node.ts` — `onAgentStart` (inside `runInBootstrapFrame`) and
- *      `onAgentEnd` (inside `agencyStore.run` with the real threads).
- *    - `prompt.ts` — `onLLMCallStart`/`End` and the per-tool
- *      `onToolCallStart`/`End`, all called from inside a
- *      `Runner.runInScope` frame seeded by the generated node body.
- *  Those sites pass `ctx` defensively (predating the ALS migration)
- *  and could be tightened in a follow-up by dropping the param and
- *  making it required-via-ALS again. Every caller needs an ALS frame
- *  whether or not it passes `ctx`: `fireWithGuard` keeps its recursion
- *  guard on the frame and throws when there is none. */
-export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
-  ctx?: RuntimeContext<any>;
-  name: K;
-  data: CallbackMap[K];
-  stateStack?: StateStack;
-}): Promise<void> {
+ *  The caller passes the run the callbacks fire under. `fireWithGuard`
+ *  keeps its recursion guard on that run. */
+export async function invokeCallbacks<K extends keyof CallbackMap>(
+  run: Run,
+  args: {
+    name: K;
+    data: CallbackMap[K];
+    stateStack?: StateStack;
+  },
+): Promise<void> {
   const { name, data, stateStack } = args;
 
   // Forward every event to the parent when running inside a std::agency run()
@@ -296,28 +290,30 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   // (fire-and-forget; strips functions; no-op outside IPC). Purely additive: the
   // child still fires its own callbacks below. When THIS process is itself a
   // subprocess, this re-forwards relayed events upward -> automatic nested relay.
-  sendCallbackToParent(name, data);
+  sendCallbackToParent(name, data, run.log);
 
-  const ctx = args.ctx ?? getRuntimeContext().ctx;
+  const ctx = run.ctx;
   const walkStack = stateStack ?? ctx.stateStack;
 
   // Fire global hooks (from external packages) first. Order matches the
   // pre-refactor behaviour of callHook.
   for (const fn of _globalHooks[name] ?? []) {
-    await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
+    await fireWithGuard(run, fn, data, `global ${name}`, stateStack);
   }
 
   for (const fn of gatherCallbacks(ctx, name, walkStack)) {
-    await fireWithGuard(fn, data, ctx, name, stateStack);
+    await fireWithGuard(run, fn, data, name, stateStack);
   }
 }
 
 /** Today's call sites that fire on the top-level stack. Thin wrapper over
  *  `invokeCallbacks` with no `stateStack` override. */
-export async function callHook<K extends keyof CallbackMap>(args: {
-  ctx?: RuntimeContext<any>;
-  name: K;
-  data: CallbackMap[K];
-}): Promise<void> {
-  await invokeCallbacks(args);
+export async function callHook<K extends keyof CallbackMap>(
+  run: Run,
+  args: {
+    name: K;
+    data: CallbackMap[K];
+  },
+): Promise<void> {
+  await invokeCallbacks(run, args);
 }

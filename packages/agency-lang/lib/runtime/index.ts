@@ -22,14 +22,18 @@ export type { CallsiteLocation } from "./asyncContext.js";
  * `agency-lang/runtime`.
  */
 export {
-  agencyStore,
   getRuntimeContext,
+  currentRun,
+  callPlain,
   runInTestContext,
-  __threads,
-  __stateStack,
-  __ctx,
-  __globals,
-  type AgencyStore,
+  runInBootstrapFrame,
+  withRun,
+  withChildRun,
+  detachedRun,
+  assertUsable,
+  RunInUseError,
+  freshState,
+  type Run,
 } from "./asyncContext.js";
 export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";
 export { __codeLiteral } from "./template/codeLiteral.js";
@@ -134,8 +138,15 @@ export type { Guard, GuardJSON } from "./guard.js";
 export { CostGuard, TimeGuard, guardFromJSON } from "./guard.js";
 export type { RestoreOptions } from "./errors.js";
 
-export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
-export { _run } from "./ipc.js";
+export {
+  checkpoint,
+  checkpointFor,
+  getCheckpoint,
+  getCheckpointFor,
+  restore,
+  restoreFor,
+} from "./checkpoint.js";
+export { _run, _runFor } from "./ipc.js";
 
 export { registerModuleFingerprint, getModuleFingerprint } from "./moduleFingerprintRegistry.js";
 export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";

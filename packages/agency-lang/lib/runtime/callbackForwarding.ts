@@ -21,6 +21,7 @@
  */
 
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { CallbackName } from "../types/function.js";
 
 export type IpcCallbackMessage = {
@@ -61,6 +62,7 @@ export const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = [
 export function sendCallbackToParent(
   name: CallbackName,
   data: unknown,
+  log: StatelogClient | undefined,
   maxBytes: number = CALLBACK_PAYLOAD_LIMIT,
 ): void {
   if (!isIpcMode() || typeof process.send !== "function") return;
@@ -75,11 +77,12 @@ export function sendCallbackToParent(
   } catch (err) {
     ipcChildDebug(
       `callback_unserializable ${name} ${err instanceof Error ? err.message : String(err)}`,
+      log,
     );
     return;
   }
   if (Buffer.byteLength(serialized, "utf8") > maxBytes) {
-    ipcChildDebug(`callback_dropped_oversize ${name}`);
+    ipcChildDebug(`callback_dropped_oversize ${name}`, log);
     return;
   }
   try {
@@ -94,6 +97,7 @@ export function sendCallbackToParent(
     // Channel gone — parent died; the watchdog will reap this process.
     ipcChildDebug(
       `callback_send_failed ${name} ${err instanceof Error ? err.message : String(err)}`,
+      log,
     );
   }
 }

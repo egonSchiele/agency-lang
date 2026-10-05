@@ -1,3 +1,5 @@
+import type { Run } from "./asyncContext.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
@@ -41,6 +43,9 @@ export type PromptRunnerOpts = {
   /** Frame-local `self` object (== the function's locals bag). */
   self: any;
   ctx: RuntimeContext<any>;
+  /** The logger of the run `runPrompt` was called under. `step()` runs in
+   *  that run's own flow, never inside a tool branch. */
+  log: StatelogClient;
   stateStack: StateStack;
   /** The runPrompt frame (== `stateStack.lastFrame()`). Used by
    * `parallel()` as `runBatch`'s `parentFrame` for per-tool branch
@@ -117,7 +122,7 @@ export class PromptRunner {
         intr.checkpoint = cp;
         intr.checkpointId = cpId;
       }
-      this.opts.ctx.statelogClient.checkpointCreated({
+      this.opts.log.checkpointCreated({
         checkpointId: cpId,
         reason: "interrupt",
         sourceLocation: {
@@ -161,10 +166,11 @@ export class PromptRunner {
    * `branchFn` propagates out of `runBatch` and aborts the whole batch.
    */
   async parallel<T>(
+    run: Run,
     keyPrefix: string,
     items: T[],
     keyFor: (item: T, index: number) => string,
-    branchFn: (item: T, b: BranchRunner, index: number) => Promise<void>,
+    branchFn: (item: T, b: BranchRunner, index: number, branchRun: Run) => Promise<void>,
   ): Promise<RunBatchResult<void>> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
     const parentFrame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
@@ -172,6 +178,7 @@ export class PromptRunner {
     const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
 
     const result = await runBatch<void>({
+      run,
       ctx: this.opts.ctx,
       parentStack: this.opts.stateStack,
       parentFrame,
@@ -200,8 +207,8 @@ export class PromptRunner {
       shareThreads: true,
       children: items.map((item, i) => ({
         key: keyFor(item, i),
-        invoke: async () => {
-          await branchFn(item, branches[i], i);
+        invoke: async (branchRun) => {
+          await branchFn(item, branches[i], i, branchRun);
           // Surface the branch's collected interrupts (if any) as the
           // invoke's return value. runBatch will batch them with sibling
           // interrupts and stamp the shared checkpoint.
@@ -240,7 +247,7 @@ export class PromptRunner {
         },
         onCheckpoint: (cpId) => {
           const cp = this.opts.ctx.checkpoints.get(cpId)!;
-          this.opts.ctx.statelogClient.checkpointCreated({
+          run.log.checkpointCreated({
             checkpointId: cpId,
             reason: "interrupt",
             sourceLocation: {

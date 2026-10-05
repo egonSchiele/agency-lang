@@ -3,8 +3,8 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __finalize = async ({{{binderParam:string}}}): Promise<any> => {
-  const runner = new Runner(__ctx, {{{frameVar:string}}}, { state: {{{frameVar:string}}}, moduleId: {{{moduleId:string}}}, scopeName: {{{scopeName:string}}} });
+export const template = `const __finalize = async (__run: __Run{{{binderParam:string}}}): Promise<any> => {
+  const runner = new Runner(__ctx, {{{frameVar:string}}}, { state: {{{frameVar:string}}}, moduleId: {{{moduleId:string}}}, scopeName: {{{scopeName:string}}}, stack: __run.stack, threads: __run.threads });
 {{{body:string}}}
   return runner.halted ? runner.haltResult : AbortedResult.FINALIZE_DID_NOT_RETURN;
 };

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it as baseIt, expect, vi, beforeEach, afterEach } from "vitest";
 import { userMessage, assistantMessage, systemMessage, toolMessage } from "smoltalk";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
@@ -7,7 +7,8 @@ import { agency } from "../agency.js";
 import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
-import { runInTestContext } from "../asyncContext.js";
+import { runInTestContext, type Run } from "../asyncContext.js";
+import { asRootRun, testRun } from "../__tests__/testHelpers.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
@@ -57,6 +58,19 @@ function makeEmbedCtx() {
   });
 }
 
+// Every manager method takes the run it charges, so each test body runs in
+// a frame and passes `testRun()`. The frame has a real context, because the
+// charge goes into its usage meter.
+const it = (name: string, fn: () => unknown, timeout?: number) =>
+  baseIt(
+    name,
+    () => {
+      const ctx = makeEmbedCtx();
+      return runInTestContext(ctx, ctx.stateStack, new ThreadStore(), asRootRun(fn));
+    },
+    timeout,
+  );
+
 function wrapTextResult(output: string) {
   return {
     success: true,
@@ -88,7 +102,7 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
-    expect(manager.getMemoryId()).toBe("default");
+    expect(manager.getMemoryId(testRun())).toBe("default");
   });
 
   it("accounts a priced embedding that returns no vectors, then throws the no-vector error", async () => {
@@ -126,8 +140,8 @@ describe("MemoryManager", () => {
     // The provider charged us even though it returned no vectors: usage is
     // accounted (guards + meter), then the structural no-vector error is thrown.
     await expect(
-      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () =>
-        (manager as any)._embed("hello"),
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) =>
+        (manager as any)._embed(run, "hello"),
       ),
     ).rejects.toThrow(/no vectors/);
     expect(ctx.stateStack.localCost).toBeCloseTo(0.5);
@@ -170,9 +184,9 @@ describe("MemoryManager", () => {
     const ctx = makeEmbedCtx();
     ctx.stateStack.guards.push(new CostGuard(0.1));
     let caught: unknown;
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => {
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
       try {
-        await (manager as any)._embed("hello");
+        await (manager as any)._embed(run, "hello");
       } catch (err) {
         caught = err;
       }
@@ -187,8 +201,8 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
-    manager.setMemoryId("user-123");
-    expect(manager.getMemoryId()).toBe("user-123");
+    manager.setMemoryId(testRun(), "user-123");
+    expect(manager.getMemoryId(testRun())).toBe("user-123");
   });
 
   it("lazily initializes on first operation", async () => {
@@ -198,9 +212,9 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
-    expect(manager.isInitialized()).toBe(false);
-    await manager.remember("Mom likes pottery");
-    expect(manager.isInitialized()).toBe(true);
+    expect(manager.isInitialized(testRun())).toBe(false);
+    await manager.remember(testRun(), "Mom likes pottery");
+    expect(manager.isInitialized(testRun())).toBe(true);
   });
 
   it("persists graph on save", async () => {
@@ -220,7 +234,7 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Mom likes pottery");
+    await manager.remember(testRun(), "Mom likes pottery");
     await manager.save();
 
     const manager2 = new MemoryManager({
@@ -228,8 +242,8 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
-    await manager2.init();
-    const entities = manager2.getGraph().getEntities();
+    await manager2.init(testRun());
+    const entities = manager2.getGraph(testRun()).getEntities();
     expect(entities).toHaveLength(1);
     expect(entities[0].name).toBe("Mom");
   });
@@ -264,15 +278,15 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    manager.setMemoryId("user-a");
-    await manager.remember("Alice info");
-    manager.setMemoryId("user-b");
-    await manager.remember("Bob info");
+    manager.setMemoryId(testRun(), "user-a");
+    await manager.remember(testRun(), "Alice info");
+    manager.setMemoryId(testRun(), "user-b");
+    await manager.remember(testRun(), "Bob info");
     // Switch back
-    manager.setMemoryId("user-a");
-    expect(manager.getGraph().getEntities()[0].name).toBe("Alice");
-    manager.setMemoryId("user-b");
-    expect(manager.getGraph().getEntities()[0].name).toBe("Bob");
+    manager.setMemoryId(testRun(), "user-a");
+    expect(manager.getGraph(testRun()).getEntities()[0].name).toBe("Alice");
+    manager.setMemoryId(testRun(), "user-b");
+    expect(manager.getGraph(testRun()).getEntities()[0].name).toBe("Bob");
   });
 
   it("persists on every write (remember auto-saves)", async () => {
@@ -292,15 +306,15 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Mom likes pottery");
+    await manager.remember(testRun(), "Mom likes pottery");
     // Without explicit save, a fresh manager should still see the data.
     const fresh = new MemoryManager({
       store,
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: mockLlmClient(),
     });
-    await fresh.init();
-    expect(fresh.getGraph().getEntities()).toHaveLength(1);
+    await fresh.init(testRun());
+    expect(fresh.getGraph(testRun()).getEntities()).toHaveLength(1);
   });
 
   it("recall pipes cheap-tier candidates through the LLM filter and returns matches", async () => {
@@ -321,13 +335,13 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Mom likes pottery");
-    const mom = manager.getGraph().findEntityByName("Mom")!;
+    await manager.remember(testRun(), "Mom likes pottery");
+    const mom = manager.getGraph(testRun()).findEntityByName("Mom")!;
     // Tier 3 (filter) returns Mom's id from the candidate set Tier 1
     // surfaced. We assert end-to-end that the formatted recall text
     // includes the entity and its observation.
     client.text.mockResolvedValue(wrapTextResult(JSON.stringify({ ids: [mom.id] })));
-    const text = await manager.recall("mom");
+    const text = await manager.recall(testRun(), "mom");
     expect(text).toContain("Mom");
     expect(text).toContain("Likes pottery");
   });
@@ -349,12 +363,12 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Mom likes pottery");
+    await manager.remember(testRun(), "Mom likes pottery");
     // LLM hallucinates an id outside the candidate set. With the
     // hallucination guard this collapses to an empty filter result,
     // and recall should return "" rather than a corrupted entity ref.
     client.text.mockResolvedValue(wrapTextResult(JSON.stringify({ ids: ["entity-totally-fake"] })));
-    const text = await manager.recall("mom");
+    const text = await manager.recall(testRun(), "mom");
     expect(text).toBe("");
   });
 
@@ -375,7 +389,7 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Maggie loves to weave");
+    await manager.remember(testRun(), "Maggie loves to weave");
     // The embed call we care about is the one made during the
     // remember above (when Tier 2 vectors are written). Inspect the
     // first arg passed to embed.
@@ -408,7 +422,7 @@ describe("MemoryManager", () => {
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
-    await manager.remember("Mom's favorite color is blue");
+    await manager.remember(testRun(), "Mom's favorite color is blue");
     // forget asks the LLM what to expire — return a substring that should match.
     client.text.mockResolvedValueOnce(
       wrapTextResult(
@@ -418,9 +432,9 @@ describe("MemoryManager", () => {
         }),
       ),
     );
-    await manager.forget("forget mom's favorite color");
-    const mom = manager.getGraph().findEntityByName("Mom")!;
-    const current = manager.getGraph().getCurrentObservations(mom.id);
+    await manager.forget(testRun(), "forget mom's favorite color");
+    const mom = manager.getGraph(testRun()).findEntityByName("Mom")!;
+    const current = manager.getGraph(testRun()).getCurrentObservations(mom.id);
     expect(current).toHaveLength(0);
     // Original observation still present, just expired
     expect(mom.observations[0].validTo).toBeTruthy();
@@ -464,6 +478,12 @@ describe("MemoryManager", () => {
      * `span_id` / `parent_span_id`. To assert that the umbrella spans
      * exist we spy on the call directly.
      */
+    /** The test's run with `log` as its logger. Memory logs through the
+     *  logger of the run each call is given. */
+    function runLoggingTo(log: StatelogClient): Run {
+      return { ...testRun(), log };
+    }
+
     function spyOnSpans(statelogClient: StatelogClient): string[] {
       const opened: string[] = [];
       const realStart = statelogClient.startSpan.bind(statelogClient);
@@ -492,10 +512,9 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
 
-      await manager.remember("Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
 
       // The umbrella + inner spans were all opened in the right
       // shape — memoryRemember wraps an llmCall (extraction) and an
@@ -528,18 +547,17 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember("Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
 
       // Tier-3 LLM returns the seeded entity id.
-      const mom = manager.getGraph().findEntityByName("Mom")!;
+      const mom = manager.getGraph(runLoggingTo(statelogClient)).findEntityByName("Mom")!;
       client.text.mockResolvedValueOnce(wrapTextResult(JSON.stringify({ ids: [mom.id] })));
 
       // Spy on spans + reset the events file so we only see recall.
       const openedSpans = spyOnSpans(statelogClient);
       fs.writeFileSync(eventsFile, "");
-      await manager.recall("mom");
+      await manager.recall(runLoggingTo(statelogClient), "mom");
 
       expect(openedSpans).toContain("memoryRecall");
       // Tier 2 fires an embedding span; tier 3 fires an llmCall.
@@ -577,9 +595,8 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember("Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
       client.text.mockResolvedValueOnce(
         wrapTextResult(
           JSON.stringify({
@@ -590,7 +607,7 @@ describe("MemoryManager", () => {
       );
       const openedSpans = spyOnSpans(statelogClient);
       fs.writeFileSync(eventsFile, "");
-      await manager.forget("forget mom pottery");
+      await manager.forget(runLoggingTo(statelogClient), "forget mom pottery");
       expect(openedSpans).toContain("memoryForget");
     });
 
@@ -619,9 +636,8 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember("Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
       const events = readEvents(eventsFile);
       expect(events.length).toBeGreaterThan(0);
       for (const evt of events) {
@@ -697,11 +713,11 @@ describe("MemoryManager", () => {
         llmClient: client,
       });
       const before = env.stack.localCost;
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         // `remember` calls `_text` once for the extraction prompt and
         // returns early when the parse yields no entities — no embed
         // call follows, so this isolates the text-cost charge.
-        await manager.remember("nothing notable");
+        await manager.remember(run, "nothing notable");
       });
       expect(env.stack.localCost).toBeCloseTo(before + 0.05, 10);
     });
@@ -727,23 +743,31 @@ describe("MemoryManager", () => {
         llmClient: client,
       });
       const before = env.stack.localCost;
-      await agency.withTestContext(env, async () => {
-        await manager.remember("Maggie weaves baskets");
+      await agency.withTestContext(env, async (run) => {
+        await manager.remember(run, "Maggie weaves baskets");
       });
       expect(env.stack.localCost).toBeCloseTo(before + 0.05 + 0.01, 10);
     });
 
-    it("no-ops cleanly when called outside any Agency frame", async () => {
-      // Direct-construction unit tests (the rest of this file) call
-      // the manager without ever installing a frame. The charge path
-      // must silently skip in that case rather than throwing.
+    it("charges the run it is handed, not the frame the call happens in", async () => {
+      // One manager serves every fork branch, so the branch to charge is
+      // named on each call. Here the call is made inside one frame and
+      // handed the run of another: the spend must land on the run handed in.
+      const charged = makeFrame();
+      const other = makeFrame();
       const client = mockLlmClientWithCost(0.05, 0);
       const manager = new MemoryManager({
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      await expect(manager.remember("anything")).resolves.toBeUndefined();
+      const run = agency.withTestContext(charged, (chargedRun) => chargedRun);
+      await agency.withTestContext(other, async () => {
+        await expect(manager.remember(run, "anything")).resolves.toBeUndefined();
+      });
+      expect(charged.stack.localCost).toBeCloseTo(0.05, 10);
+      expect(other.stack.localCost).toBe(0);
+      expect(charged.ctx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.05, 10);
     });
 
     it("trips a withCostGuard when memory's spend exceeds the budget", async () => {
@@ -754,12 +778,12 @@ describe("MemoryManager", () => {
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         // $0.50 budget, memory's _text call charges $1.00 →
         // `enforceGuards()` inside `agency.addCost` throws.
         await expect(
           agency.withCostGuard(0.5, async () => {
-            await manager.remember("anything");
+            await manager.remember(run, "anything");
           }),
         ).rejects.toThrow(/cost/i);
       });
@@ -793,10 +817,10 @@ describe("MemoryManager", () => {
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         await expect(
           agency.withCostGuard(0.5, async () => {
-            await manager.remember("Maggie weaves baskets");
+            await manager.remember(run, "Maggie weaves baskets");
           }),
         ).rejects.toThrow(/cost/i);
       });
@@ -834,50 +858,58 @@ describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
   }
 
   it("explicit embeddings.model wins over derivation", () => {
-    expect(mgr({ embeddings: { model: "my-embed", provider: "x" } }).resolveEmbedding()).toEqual({
+    expect(
+      mgr({ embeddings: { model: "my-embed", provider: "x" } }).resolveEmbedding(testRun()),
+    ).toEqual({
       model: "my-embed",
       provider: "x",
     });
   });
 
   it("derives text-embedding-3-small for an openai provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "openai" } }).resolveEmbedding()).toEqual({
+    expect(mgr({ smoltalkDefaults: { provider: "openai" } }).resolveEmbedding(testRun())).toEqual({
       model: "text-embedding-3-small",
       provider: "openai",
     });
   });
 
   it("derives the google embedding model for a google provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding()).toEqual({
+    expect(mgr({ smoltalkDefaults: { provider: "google" } }).resolveEmbedding(testRun())).toEqual({
       model: "gemini-embedding-001",
       provider: "google",
     });
   });
 
   it("derives the ollama embedding model for an ollama provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "ollama" } }).resolveEmbedding()).toEqual({
+    expect(mgr({ smoltalkDefaults: { provider: "ollama" } }).resolveEmbedding(testRun())).toEqual({
       model: "nomic-embed-text",
       provider: "ollama",
     });
   });
 
   it("derives the provider from the model name when no provider is set", () => {
-    expect(mgr({ smoltalkDefaults: { model: "gpt-4o-mini" } }).resolveEmbedding()).toEqual({
-      model: "text-embedding-3-small",
-      provider: "openai",
-    });
+    expect(mgr({ smoltalkDefaults: { model: "gpt-4o-mini" } }).resolveEmbedding(testRun())).toEqual(
+      {
+        model: "text-embedding-3-small",
+        provider: "openai",
+      },
+    );
   });
 
   it("disables Tier-2 for a provider with no embedding endpoint (anthropic)", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "anthropic" } }).resolveEmbedding()).toBeNull();
+    expect(
+      mgr({ smoltalkDefaults: { provider: "anthropic" } }).resolveEmbedding(testRun()),
+    ).toBeNull();
   });
 
   it("disables Tier-2 for the local llama-cpp provider", () => {
-    expect(mgr({ smoltalkDefaults: { provider: "llama-cpp" } }).resolveEmbedding()).toBeNull();
+    expect(
+      mgr({ smoltalkDefaults: { provider: "llama-cpp" } }).resolveEmbedding(testRun()),
+    ).toBeNull();
   });
 
   it("disables Tier-2 when no provider or model can be determined", () => {
-    expect(mgr({ smoltalkDefaults: {} }).resolveEmbedding()).toBeNull();
+    expect(mgr({ smoltalkDefaults: {} }).resolveEmbedding(testRun())).toBeNull();
   });
 });
 
@@ -931,7 +963,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     const manager = makeManager(client);
     const messages = toolLoopThread();
 
-    const plan = await manager.compactIfNeeded(messages);
+    const plan = await manager.compactIfNeeded(testRun(), messages);
 
     expect(plan).not.toBeNull();
     // Head keeps the real system message.
@@ -947,11 +979,11 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     const manager = makeManager(client);
 
     const first = [userMessage("alpha fact"), assistantMessage("noted")];
-    await manager.onTurn(first);
+    await manager.onTurn(testRun(), first);
     expect(promptOfCall(client, 0)).toContain("alpha fact");
 
     const second = [...first, assistantMessage("gamma detail")];
-    await manager.onTurn(second);
+    await manager.onTurn(testRun(), second);
     expect(client.text.mock.calls.length).toBe(2);
     expect(promptOfCall(client, 1)).toContain("gamma detail");
     expect(promptOfCall(client, 1)).not.toContain("alpha fact");
@@ -963,11 +995,11 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     const messages = toolLoopThread();
 
     // Turn 1 extracts the whole thread (interval=1, nothing seen yet).
-    await manager.onTurn(messages);
+    await manager.onTurn(testRun(), messages);
     const callsBeforeCompaction = client.text.mock.calls.length;
 
     // Compact, then rebuild the thread exactly the way prompt.ts does.
-    const plan = await manager.compactIfNeeded(messages);
+    const plan = await manager.compactIfNeeded(testRun(), messages);
     expect(plan).not.toBeNull();
     const head = plan!.systemPrefixIndices.map((i) => messages[i]);
     const tail = plan!.tailIndices.map((i) => messages[i]);
@@ -975,7 +1007,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
 
     // Next turn adds one genuinely new message.
     const next = [...reshaped, assistantMessage("BRAND NEW FACT")];
-    await manager.onTurn(next);
+    await manager.onTurn(testRun(), next);
 
     const lastCall = client.text.mock.calls.length - 1;
     expect(lastCall).toBeGreaterThanOrEqual(callsBeforeCompaction);
@@ -1001,10 +1033,10 @@ describe("MemoryManager embeddings for local providers", () => {
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: { provider: "mlx", model: "mlx-community/Qwen3-Coder-Next-4bit" },
     });
-    expect(manager.resolveEmbedding()).toBeNull();
+    expect(manager.resolveEmbedding(testRun())).toBeNull();
     const info = vi.spyOn((manager as any).logger, "info");
-    await (manager as any).noteEmbeddingDisabled();
-    await (manager as any).noteEmbeddingDisabled();
+    await (manager as any).noteEmbeddingDisabled(testRun());
+    await (manager as any).noteEmbeddingDisabled(testRun());
     expect(info).toHaveBeenCalledTimes(1);
     const msg = String(info.mock.calls[0][0]);
     expect(msg).toContain('provider "mlx"');
@@ -1020,7 +1052,7 @@ describe("MemoryManager embeddings for local providers", () => {
       smoltalkDefaults: { provider: "llama-cpp", model: "/m/x.gguf" },
     });
     const info = vi.spyOn((manager as any).logger, "info");
-    await (manager as any).noteEmbeddingDisabled();
+    await (manager as any).noteEmbeddingDisabled(testRun());
     const msg = String(info.mock.calls[0][0]);
     expect(msg).toContain("agency local download nomic-embed-text");
     expect(msg).toContain("memory.embeddings");
@@ -1034,8 +1066,8 @@ describe("MemoryManager embeddings for local providers", () => {
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
     });
-    const first = await manager.resolveEmbeddingTarget();
-    const second = await manager.resolveEmbeddingTarget();
+    const first = await manager.resolveEmbeddingTarget(testRun());
+    const second = await manager.resolveEmbeddingTarget(testRun());
     expect(first).toEqual({ model: "/models/nomic-embed-text.Q4_K_M.gguf", provider: "llama-cpp" });
     expect(second).toEqual(first);
     expect(_resolveLocalEmbeddingModel).toHaveBeenCalledTimes(1);
@@ -1049,7 +1081,7 @@ describe("MemoryManager embeddings for local providers", () => {
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
     });
-    expect(await local.resolveEmbeddingTarget()).toEqual({
+    expect(await local.resolveEmbeddingTarget(testRun())).toEqual({
       model: "/x/emb.gguf",
       provider: "llama-cpp",
     });
@@ -1061,7 +1093,7 @@ describe("MemoryManager embeddings for local providers", () => {
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
     });
-    expect(await hosted.resolveEmbeddingTarget()).toEqual({
+    expect(await hosted.resolveEmbeddingTarget(testRun())).toEqual({
       model: "text-embedding-3-small",
       provider: "openai",
     });
@@ -1077,8 +1109,8 @@ describe("MemoryManager embeddings for local providers", () => {
       smoltalkDefaults: {},
     });
     const warn = vi.spyOn((manager as any).logger, "warn");
-    expect(await manager.resolveEmbeddingTarget()).toBeNull();
-    expect(await manager.resolveEmbeddingTarget()).toBeNull();
+    expect(await manager.resolveEmbeddingTarget(testRun())).toBeNull();
+    expect(await manager.resolveEmbeddingTarget(testRun())).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][0])).toContain("network down");
   });
@@ -1094,13 +1126,13 @@ describe("MemoryManager embeddings for local providers", () => {
       llmClient: client as any,
       smoltalkDefaults: { baseUrl: { mlx: "http://127.0.0.1:9000/v1" } },
     });
-    expect(manager.resolveEmbedding()).toEqual({
+    expect(manager.resolveEmbedding(testRun())).toEqual({
       model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
       provider: "mlx",
     });
     const ctx = makeEmbedCtx();
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => {
-      await (manager as any)._embed("hello", { model: "m", provider: "mlx" });
+      await (manager as any)._embed(testRun(), "hello", { model: "m", provider: "mlx" });
     });
     expect(client.embed).toHaveBeenCalledWith(
       "hello",

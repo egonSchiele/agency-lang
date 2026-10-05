@@ -14,6 +14,8 @@ import { meteredDispatch } from "./recordPaidUsage.js";
 import { dispatchWithRetry } from "./llmDispatch.js";
 import type { PromptConfig } from "./llmClient.js";
 import { DEFAULT_RETRY_POLICY } from "./llmRetry.js";
+import { runInTestContext } from "./asyncContext.js";
+import { ThreadStore } from "./state/threadStore.js";
 
 function ctxWith(client: Record<string, unknown>) {
   return {
@@ -21,6 +23,13 @@ function ctxWith(client: Record<string, unknown>) {
     stateStack: {},
     isCancelled: () => false,
   } as any;
+}
+
+/** Dispatch under a frame built from the test's own ctx. */
+function dispatch(args: Omit<Parameters<typeof dispatchWithRetry>[0], "run">) {
+  return runInTestContext(args.ctx, args.ctx.stateStack, new ThreadStore(), (run) =>
+    dispatchWithRetry({ run, ...args }),
+  );
 }
 
 const dept = z.union([z.literal("billing"), z.literal("support")]);
@@ -42,7 +51,7 @@ describe("dispatchWithRetry with a decision call", () => {
   it("refuses a call with no schema before any metered attempt", async () => {
     const decide = vi.fn();
     await expect(
-      dispatchWithRetry({
+      dispatch({
         ctx: ctxWith({ decide }),
         promptConfig: config({ responseFormat: undefined }),
         prompt: "Which department?",
@@ -58,7 +67,7 @@ describe("dispatchWithRetry with a decision call", () => {
   it("refuses a call with tools before any metered attempt", async () => {
     const decide = vi.fn();
     await expect(
-      dispatchWithRetry({
+      dispatch({
         ctx: ctxWith({ decide }),
         promptConfig: config({ tools: [{ name: "t", schema: z.object({}) }] }),
         prompt: "Which department?",
@@ -86,7 +95,7 @@ describe("dispatchWithRetry with a decision call", () => {
         model: "jev-1.13",
       },
     }));
-    const { completion, usageKind } = await dispatchWithRetry({
+    const { completion, usageKind } = await dispatch({
       ctx: ctxWith({ decide }),
       promptConfig: config({}),
       prompt: "Which department?",

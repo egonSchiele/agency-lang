@@ -37,14 +37,19 @@ function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
   return !!fn.exported && !!fn.toolDefinition && fn.module === moduleId;
 }
 
-/** The public raw invoker: prefer the module's `__invokeFunction`, falling back
- *  to a bare `agencyFunction.invoke` for older bundles / plain-JS test bodies. */
+/** The public raw invoker: the module's `__invokeFunction`, which gives the
+ *  call a run. A bundle without one was compiled before functions took a
+ *  run, and there is none to call it with here, so invoking it is refused. */
 function makeRawInvoker(
   fn: AgencyFunction,
   moduleInvoke: ModuleInvokeFunction | undefined,
 ): (namedArgs: Record<string, unknown>) => Promise<unknown> {
   if (moduleInvoke) return (namedArgs) => moduleInvoke(fn, namedArgs);
-  return (namedArgs) => fn.invoke({ type: "named", positionalArgs: [], namedArgs });
+  return async () => {
+    throw new Error(
+      `Cannot invoke "${fn.name}": this agent bundle has no __invokeFunction. ${RECOMPILE_HINT}`,
+    );
+  };
 }
 
 function toExportedFunction(

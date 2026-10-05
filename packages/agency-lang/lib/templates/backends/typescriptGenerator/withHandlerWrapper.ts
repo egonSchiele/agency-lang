@@ -3,11 +3,11 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `getRuntimeContext().ctx.pushHandler({{{handler}}}, []);
+export const template = `__run.ctx.pushRunHandler({{{handler}}}, []);
 {{{indent}}}try {
 {{{body}}}
 {{{indent}}}} finally {
-{{{indentInner}}}getRuntimeContext().ctx.popHandler();
+{{{indentInner}}}__run.ctx.popHandler();
 {{{indent}}}}`;
 
 export type TemplateType = {

@@ -5,14 +5,11 @@
  * A subprocess executes exactly one run per process, so module scope is the
  * correct lifetime here (the same arrangement as the bootstrap's
  * ipcPayloadLimit). Kept intentionally minimal so both `ipc.ts` and
- * `state/context.ts` / `node.ts` can read it without import cycles. Its only
- * runtime import is `asyncContext` (for `ipcChildDebug`'s best-effort statelog
- * emission); that edge is cycle-safe because asyncContext's value-chain
- * (bootstrapThreadStore -> threadStore -> statelogClient / messageThread) never
- * imports back into this module, ipc.ts, or the leaf senders.
+ * `state/context.ts` / `node.ts` can read it without import cycles. It has
+ * no runtime imports: `ipcChildDebug` is handed the logger it posts to.
  */
 
-import { agencyStore } from "./asyncContext.js";
+import type { RootLog } from "../statelogClient.js";
 
 export type SubprocessRunInfo = {
   /** The parent's runId — the child adopts it instead of minting its own,
@@ -45,11 +42,10 @@ export function isIpcMode(): boolean {
  * costTelemetry.ts (ipcLog in ipc.ts is unreachable from these leaves without
  * violating the layering rule). Two independent sinks:
  *   - statelog `debug` event (best-effort) so the diagnostic is visible in the
- *     trace when observability is on — resolved from the active ALS frame's
- *     ctx.statelogClient; no-ops with no frame/client, never throws;
+ *     trace when observability is on, through the `log` the caller passes;
+ *     no-ops when the caller has none, never throws;
  *   - stderr, gated on AGENCY_IPC_DEBUG=1, for local IPC debugging. */
-export function ipcChildDebug(line: string): void {
-  const client = agencyStore.getStore()?.ctx?.statelogClient;
+export function ipcChildDebug(line: string, client: RootLog | undefined): void {
   if (client) {
     try {
       // Fire-and-forget; a failed statelog post must never affect the run. The

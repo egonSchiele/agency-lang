@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
 import { runInTestContext } from "../../runtime/asyncContext.js";
+import { asRootRun, testRun } from "../../runtime/__tests__/testHelpers.js";
 import {
   createAwsRequestTarget,
   sendAwsRequest,
@@ -27,7 +28,7 @@ function makeCtx() {
 async function withCtx<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = makeCtx();
   const execCtx = await ctx.createExecutionContext({ runId: "aws-client-test" });
-  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
+  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), asRootRun(fn));
 }
 
 const partition: AwsPartition = { region: "us-east-1", dnsSuffix: "amazonaws.com" };
@@ -70,7 +71,7 @@ describe("sendAwsRequest", () => {
         }),
       );
       const target = createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k");
-      const res = (await sendAwsRequest(partition, creds, getReq(target))) as any;
+      const res = (await sendAwsRequest(testRun(), partition, creds, getReq(target))) as any;
       expect(res.ok).toBe(true);
       expect(new TextDecoder().decode(res.bytes)).toBe("hi");
       expect(res.headers.get("etag")).toBe('"abc"');
@@ -86,7 +87,7 @@ describe("sendAwsRequest", () => {
         }),
       );
       const target = createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k");
-      const res = (await sendAwsRequest(partition, creds, getReq(target))) as any;
+      const res = (await sendAwsRequest(testRun(), partition, creds, getReq(target))) as any;
       expect(res.ok).toBe(false);
       expect(res.status).toBe(404);
       expect(new TextDecoder().decode(res.bytes)).toContain("NoSuchBucket");
@@ -96,7 +97,7 @@ describe("sendAwsRequest", () => {
     withCtx(async () => {
       const spy = vi.spyOn(globalThis, "fetch");
       const target = createAwsRequestTarget("https://b.s3.evil.com", "/k");
-      const res = (await sendAwsRequest(partition, creds, getReq(target))) as any;
+      const res = (await sendAwsRequest(testRun(), partition, creds, getReq(target))) as any;
       expect("error" in res).toBe(true);
       expect(spy).not.toHaveBeenCalled();
     }));

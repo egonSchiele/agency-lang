@@ -17,8 +17,8 @@ describe("llm() multimodal codegen", () => {
     // The prompt argument is compiled to an array literal, not a bare string.
     expect(out).toMatch(/prompt:\s*\[/);
     // The image()/file() builder calls survive inside the array.
-    expect(out).toContain("__call(image");
-    expect(out).toContain("__call(file");
+    expect(out).toContain("__call(__run, image");
+    expect(out).toContain("__call(__run, file");
   });
 
   it("still compiles a plain-string prompt unchanged", () => {

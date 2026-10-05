@@ -854,7 +854,8 @@ Drop-in REPL widget for interactive CLI agents. Bundles a scrollable
   that buffer. Returning false from `onSubmit` exits. While it is
   active, the transcript captures any console / stdout / stderr writes
   from code running underneath, instead of losing them behind the
-  alt-screen.
+  alt-screen. If two REPLs are open at once in one process, those
+  writes all go to the transcript of the one opened most recently.
 
   @param status - Re-evaluated every render; populates the status line
   @param onSubmit - Called with the submitted line; return a string to append or false to exit

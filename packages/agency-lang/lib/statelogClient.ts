@@ -1,13 +1,11 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 import * as path from "path";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
 import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
-import { __globals } from "./runtime/asyncContext.js";
 import { sendStatelogPost } from "./statelogSender.js";
 
 // Bump this when the wire format changes in a way the viewer needs
@@ -156,25 +154,27 @@ export class StatelogClient {
   // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
   // still receive events.
   private remoteEnabled: boolean = false;
-  // The "root" span stack — used by the outer agent run thread. Code
-  // running inside `runInBranchContext` sees a branch-local stack
-  // delivered via AsyncLocalStorage instead.
+  // The root span stack, used by the run outside any fork branch. The
+  // client itself logs with it. A logger made by `logFor` or `forBranch`
+  // holds its own stack instead: each concurrent fork/race branch gets one,
+  // so its `startSpan`/`endSpan` calls never reach the parent's stack or a
+  // sibling's, even though all of them share this one client.
   private rootStack: SpanContext[] = [];
-  // Per-branch span stacks live in this AsyncLocalStorage. Each concurrent
-  // fork/race branch gets its own stack so its `startSpan`/`endSpan`
-  // calls never bleed into the parent or siblings — even though they all
-  // share this single StatelogClient instance.
-  private spanStorage = new AsyncLocalStorage<SpanContext[]>();
   private metadata?: RunMetadata;
   private code?: CodeIdentity;
   private requestTimeoutMs: number;
-  // Fallback tag-store accessor for posts that fire OUTSIDE any ALS frame
-  // (agentEnd and the resume-path finalization events post after the run's
-  // agencyStore frame has ended). Wired by the execution context to read the
-  // CURRENT top-level GlobalStore — a getter, not a captured reference,
-  // because checkpoint restore reassigns execCtx.globals. Branch posts are
-  // unaffected: they run inside an ALS frame, where __globals() wins.
+  // The tag store the client itself redacts with, for posts made outside
+  // any run (agentEnd and the resume-path finalization events post after the
+  // run has ended). Wired by the execution context to read the CURRENT
+  // top-level GlobalStore: a getter, not a captured reference, because
+  // checkpoint restore reassigns execCtx.globals. A run's logger redacts
+  // with its own branch's store and never reads this.
   private fallbackGlobals: (() => GlobalStore | undefined) | null = null;
+  // Set only on a logger made by `logFor` or `forBranch`: the span stack and
+  // the tag store of the branch that logger belongs to. The client itself
+  // has neither, and logs with the root stack and the fallback globals.
+  private boundStack: SpanContext[] | null = null;
+  private boundGlobals: GlobalStore | null = null;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -235,15 +235,35 @@ export class StatelogClient {
 
   // === Span management ===
   //
-  // Spans are tracked per-async-context. Outside fork/race branches the
-  // active stack is `rootStack`. Inside `runInBranchContext` it is the
-  // per-branch stack delivered by `spanStorage`. This means concurrent
-  // branches each get a private stack — their `startSpan`/`endSpan`
-  // calls cannot interleave or pop each other's spans, and events
-  // emitted inside a branch are attributed to that branch's current
-  // span (which inherits the parent fork span at branch entry).
+  // Each logger has one span stack. The client itself uses `rootStack`. A
+  // run's logger uses the stack it was bound to. Concurrent branches each
+  // have their own logger, so their `startSpan`/`endSpan` calls cannot
+  // interleave or pop each other's spans, and events emitted inside a
+  // branch are attributed to that branch's current span (which inherits
+  // the parent fork span at branch entry).
   private currentStack(): SpanContext[] {
-    return this.spanStorage.getStore() ?? this.rootStack;
+    return this.boundStack ?? this.rootStack;
+  }
+
+  /**
+   * The logger for a run: this client, bound to one branch's tag store and
+   * span stack. Every run in a branch shares one, as `run.log`. Posts made
+   * through it redact with that branch's tags and nest under that branch's
+   * spans, wherever the call is made from.
+   *
+   * `logFor` binds the span stack of the logger it is called on. Use it
+   * where a run is made at the root of a branch that already exists.
+   */
+  logFor(globals: GlobalStore): StatelogClient {
+    return this.forBranch(globals, this.currentStack());
+  }
+
+  /** The logger for a new branch, with the branch's own span stack. */
+  forBranch(globals: GlobalStore, spans: SpanContext[]): StatelogClient {
+    const logger = Object.create(this) as StatelogClient;
+    logger.boundStack = spans;
+    logger.boundGlobals = globals;
+    return logger;
   }
 
   // Returns a shallow snapshot of the active span stack — used by the
@@ -258,22 +278,21 @@ export class StatelogClient {
     return [...this.currentStack()];
   }
 
-  // Run `fn` with a fresh, branch-local span stack seeded from
-  // `parentStack`. Each call to this method creates an independent ALS
-  // context; sibling calls (e.g. concurrent fork branches) see
-  // independent stacks even though they share this StatelogClient.
+  // Run `fn` with a new span stack for a branch, seeded from
+  // `parentStack`. The copy means sibling calls (concurrent fork branches)
+  // get independent stacks, and the caller's array is never mutated.
   //
-  // Spans pushed inside `fn` are popped against this private stack only,
-  // never the parent. Defensively copies `parentStack` so the caller's
-  // array is never mutated.
+  // `fn` is handed the branch's stack, and gives it to the branch's logger
+  // (`forBranch`). Spans opened through that logger are pushed and popped
+  // on this stack only.
   //
-  // When observability is disabled the ALS plumbing is skipped entirely
-  // — we just invoke `fn()` directly. The runner can therefore always
-  // wrap branches in this call without paying ALS overhead in no-op
-  // mode.
-  runInBranchContext<T>(parentStack: SpanContext[], fn: () => Promise<T>): Promise<T> {
-    if (!this.enabled) return fn();
-    return this.spanStorage.run([...parentStack], fn);
+  // When observability is disabled no copy is made.
+  runInBranchContext<T>(
+    parentStack: SpanContext[],
+    fn: (spans: SpanContext[]) => Promise<T>,
+  ): Promise<T> {
+    if (!this.enabled) return fn(parentStack);
+    return fn([...parentStack]);
   }
 
   startSpan(type: SpanType): string | undefined {
@@ -1569,17 +1588,14 @@ export class StatelogClient {
     // replacer runs inside a real stringify) and keeps envelope handling as
     // ordinary object construction — no string surgery.
     //
-    // Reads the caller's branch tag store via __globals() (the lenient,
-    // returns-undefined accessor — post() can fire outside an ALS frame, so it
-    // must not throw like getRuntimeContext() would). hasAnyTags() skips the
-    // whole redaction pass when nothing is tagged, so the common case is one
-    // stringify, byte-identical to before. Events posted outside an ALS frame
-    // fall back to the execution's top-level store (fallbackGlobals) — the
-    // result-bearing agentEnd event posts after the run's frame has ended and
-    // must still redact. See docs/dev/runtime/globalstore.md on per-branch isolation:
-    // __globals() returns the branch-local clone, so each branch redacts using
-    // its own tags.
-    const globals = __globals() ?? this.fallbackGlobals?.();
+    // A run's logger redacts with its own branch's tag store, so each branch
+    // redacts using its own tags (see docs/dev/runtime/globalstore.md on
+    // per-branch isolation). The client itself redacts with the execution's
+    // top-level store: the result-bearing agentEnd event posts after the run
+    // has ended and must still redact. hasAnyTags() skips the whole
+    // redaction pass when nothing is tagged, so the common case is one
+    // stringify.
+    const globals = this.boundGlobals ?? this.fallbackGlobals?.();
     const rawData = { ...body, timestamp: new Date().toISOString() };
     const data =
       globals && globals.hasAnyTags()
@@ -1655,3 +1671,14 @@ export function getStatelogClient(config: {
   const client = new StatelogClient(statelogConfig);
   return client;
 }
+
+/**
+ * The logging client without `startSpan` and `endSpan`. This is the type of
+ * `ctx.statelogClient` and `ctx.rootLog`.
+ *
+ * A span opened on the client itself goes on the root span stack, which
+ * every fork branch shares. Two branches doing that at once would pop each
+ * other's spans. A run's own logger, `run.log`, is bound to its branch's
+ * span stack and keeps the span methods.
+ */
+export type RootLog = Omit<StatelogClient, "startSpan" | "endSpan">;

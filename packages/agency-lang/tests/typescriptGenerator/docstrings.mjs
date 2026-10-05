@@ -6,11 +6,11 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -81,7 +81,7 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
-__initializeGlobals(__globalCtx);
+__runInBootstrapFrame(__globalCtx, (__run) => __initializeGlobals(__run));
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
@@ -167,7 +167,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -186,7 +187,8 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("docstrings.agency")) {
     return;
   }
@@ -194,29 +196,29 @@ async function __initializeGlobals(__ctx) {
   __ctx.globals.set("docstrings.agency", "toolVersion", `2.0`)
 }
 __registerGlobalsInit("docstrings.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("docstrings.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 //  Test docstrings in functions
-async function __add_impl(a: any, b: any) {
-  const __setupData = setupFunction();
+async function __add_impl(__run: __Run, a: any, b: any) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "add", "docstrings.agency");
-  if (!__globals()!.isInitialized("docstrings.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "add", "docstrings.agency", __run.log);
+  if (!__run.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -248,14 +250,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "add",
@@ -291,7 +292,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "add");
+  return AbortedResult.fromError(__run.log, __error, __stack, "add");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -305,23 +306,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "add" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "add",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "add",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "add",
@@ -358,22 +359,22 @@ export const add = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __greet_impl(name: any) {
-  const __setupData = setupFunction();
+async function __greet_impl(__run: __Run, name: any) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "docstrings.agency");
-  if (!__globals()!.isInitialized("docstrings.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "greet", "docstrings.agency", __run.log);
+  if (!__run.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -401,14 +402,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "greet",
@@ -443,7 +443,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "greet");
+  return AbortedResult.fromError(__run.log, __error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -457,23 +457,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "greet",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -502,23 +502,23 @@ export const greet = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __calculateArea_impl(width: any, height: any) {
-  const __setupData = setupFunction();
+async function __calculateArea_impl(__run: __Run, width: any, height: any) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "calculateArea", "docstrings.agency");
-  if (!__globals()!.isInitialized("docstrings.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "calculateArea", "docstrings.agency", __run.log);
+  if (!__run.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["width"] = width;
   __stack.args["height"] = height;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -550,14 +550,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "calculateArea",
@@ -593,7 +592,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "calculateArea");
+  return AbortedResult.fromError(__run.log, __error, __stack, "calculateArea");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -607,23 +606,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "calculateArea" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "calculateArea",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "calculateArea",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "calculateArea",
@@ -665,21 +664,21 @@ export const calculateArea = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __processData_impl() {
-  const __setupData = setupFunction();
+async function __processData_impl(__run: __Run) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "processData", "docstrings.agency");
-  if (!__globals()!.isInitialized("docstrings.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "processData", "docstrings.agency", __run.log);
+  if (!__run.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -703,14 +702,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "processData",
@@ -743,7 +741,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "processData");
+  return AbortedResult.fromError(__run.log, __error, __stack, "processData");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -757,23 +755,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "processData" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "processData",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "processData",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "processData",
@@ -795,21 +793,21 @@ export const processData = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __versionedTool_impl() {
-  const __setupData = setupFunction();
+async function __versionedTool_impl(__run: __Run) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "versionedTool", "docstrings.agency");
-  if (!__globals()!.isInitialized("docstrings.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "versionedTool", "docstrings.agency", __run.log);
+  if (!__run.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -833,14 +831,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "versionedTool",
@@ -873,7 +870,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "versionedTool");
+  return AbortedResult.fromError(__run.log, __error, __stack, "versionedTool");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -887,23 +884,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "versionedTool" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "versionedTool",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "versionedTool",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "versionedTool",

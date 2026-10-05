@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveDir, resolveCwdPath } from "./resolveDir.js";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { withRun } from "../runtime/asyncContext.js";
 
 describe("resolveDir", () => {
   let tmpRoot: string;
@@ -56,13 +56,13 @@ describe("resolveDir", () => {
     await expect(resolveDir(path.join(tmpRoot, "outside"), [allowed])).rejects.toThrow(/not under/);
   });
 
-  it("stays cwd-anchored inside an active ALS frame", async () => {
-    const result = await agencyStore.run(
+  it("stays cwd-anchored under a run", async () => {
+    const result = await withRun(
       {
-        ctx: {} as any,
-        stack: {} as any,
-        threads: {} as any,
-      },
+        ctx: {},
+        stack: {},
+        threads: {},
+      } as any,
       () => resolveDir("./prompts"),
     );
     expect(result).toBe(path.join(fs.realpathSync(tmpRoot), "prompts"));

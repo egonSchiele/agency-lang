@@ -1,4 +1,4 @@
-import { getRuntimeContext } from "agency-lang/runtime";
+import { currentRun } from "agency-lang/runtime";
 import { validateSpeakArguments } from "./argumentChecks.js";
 import { isAudioFormat, resolveFormat, type AudioFormat } from "./audioFormat.js";
 import { assertFfmpegAvailable } from "./ffmpeg.js";
@@ -44,7 +44,7 @@ export function _modelStatus(model: string, modelsDir: string | null): ModelStat
 }
 
 export async function _download(model: string, modelsDir: string | null): Promise<void> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   await downloadModel(checkedModel(model), resolveModelsDir(modelsDir), {
     signal: ctx.getAbortSignal(stack),
   });
@@ -60,7 +60,7 @@ export async function _speak(
   format: AudioFormat,
   modelsDir: string | null,
 ): Promise<string> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   const request = {
     text,
     outputFile,

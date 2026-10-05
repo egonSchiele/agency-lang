@@ -39,6 +39,10 @@ export type PromptConfig = {
   model?: string;
   provider?: string;
   metadata?: Record<string, any>;
+  /** The module of the Agency code making the call. The runtime sets it.
+   *  The deterministic test client picks its mock queue by it; a real
+   *  client ignores it, and it is never sent to a provider. */
+  moduleId?: string;
   abortSignal?: AbortSignal;
   hooks?: Partial<{
     onStart: (config: PromptConfig) => void;
@@ -83,7 +87,9 @@ export type ImageRef = smoltalk.ImageRef;
 export type DecisionState = smoltalk.DecisionState;
 export type DecisionQuestion = smoltalk.DecisionQuestion;
 export type DecisionAnswer = smoltalk.DecisionAnswer;
-export type DecideConfig = smoltalk.DecideConfig;
+/** `moduleId` is the module of the Agency code making the call, as on
+ *  `PromptConfig`. It is never sent to a provider. */
+export type DecideConfig = smoltalk.DecideConfig & { moduleId?: string };
 export type DecideResult = smoltalk.DecideResult;
 
 export type TranscriptionResult = smoltalk.TranscriptionResult;
@@ -295,7 +301,8 @@ export class SmoltalkClient implements LLMClient {
     config: DecideConfig,
     signal: AbortSignal,
   ): Promise<Result<DecideResult>> {
-    const result = await smoltalk.decide(state, questions, { ...config, abortSignal: signal });
+    const { moduleId: _moduleId, ...smolConfig } = config;
+    const result = await smoltalk.decide(state, questions, { ...smolConfig, abortSignal: signal });
     if (!result.success) {
       rejectIfAborted(signal);
     }

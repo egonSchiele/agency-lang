@@ -60,7 +60,8 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
-import { agencyStore, lineageOf } from "./asyncContext.js";
+import { freshState, lineageOf, withRun, type Run } from "./asyncContext.js";
+import type { SpanContext, StatelogClient } from "../statelogClient.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
@@ -79,7 +80,9 @@ export type BatchChild<T> = {
    * signal composed with parent) and that stack's abort signal. Must
    * return either a value `T` (success) or an `Interrupt[]` (halted with
    * interrupts). MUST NOT throw `Interrupt[]`. May throw other errors. */
-  invoke: (childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
+  /** `run` is the branch's own run: its stack, its thread view, and its
+   *  copy of the globals. */
+  invoke: (run: Run, childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
 };
 
 export type BatchHooks = {
@@ -128,6 +131,8 @@ export type BatchHooks = {
 };
 
 export type RunBatchOpts<T> = {
+  /** The run the batch was started under. Each branch gets a child of it. */
+  run: Run;
   ctx: RuntimeContext<any>;
   /** The parent's local state stack — used as the capture stack for the
    * shared batch-level checkpoint. MUST be the local slice (e.g. the
@@ -380,9 +385,15 @@ function startInvoke<T>(
       ? undefined
       : { collector: opts.decisionCollector, armKey: t.child.key };
   return ctx.statelogClient
-    .runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, decisions, () =>
-        t.child.invoke(t.branch.stack, signal),
+    .runInBranchContext(parentSpanStack, (spans) =>
+      runInBranchAlsFrame(
+        opts.run,
+        t.branch,
+        shareGlobals,
+        shareThreads,
+        decisions,
+        spans,
+        (branchRun) => t.child.invoke(branchRun, t.branch.stack, signal),
       ),
     )
     .then((value) => {
@@ -400,7 +411,7 @@ function startInvoke<T>(
       // machinery speaks settled promises, and this .then is the adapter
       // between them. It also makes caching an aborted value impossible.
       if (isAborted(value)) {
-        throw value.atForkBoundary().toError();
+        throw value.atForkBoundary(opts.run.log).toError();
       }
       return value;
     })
@@ -427,24 +438,24 @@ function startInvoke<T>(
  *  fallback path is dead code for the migration's existing call sites
  *  and exists purely to keep `runBatch` usable from future contexts
  *  that haven't installed a top-level frame yet. */
+/** The logger for a branch: the parent's client, bound to the branch's tag
+ *  store and span stack. A test's stub client has no `forBranch`, and is
+ *  used as it is. */
+function branchLog(parent: Run, globals: GlobalStore, spans: SpanContext[]): StatelogClient {
+  // The field, not `ctx.rootLogWithSpans`, for the reason given in `logOf`.
+  const client = parent.ctx.statelogClient as StatelogClient;
+  return typeof client?.forBranch === "function" ? client.forBranch(globals, spans) : client;
+}
+
 function runInBranchAlsFrame<T>(
-  ctx: RuntimeContext<any>,
+  parent: Run,
   branch: BranchState,
   shareGlobals: boolean,
   shareThreads: boolean,
   decisions: DecisionScope | undefined,
-  fn: () => Promise<T>,
+  spans: SpanContext[],
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  const parent = agencyStore.getStore();
-  if (!parent) {
-    // No outer frame — invoke without seeding (the generated
-    // function/node body inside the branch will install its own
-    // scoped frame via the Runner's per-step wrap). No snapshot
-    // capture either: there's no parent state to clone from and no
-    // resume-time restore to feed.
-    return fn();
-  }
-
   // Build the per-branch globals + threads. Two independent dials:
   //   - `shareGlobals=false` (default): clone parent's GlobalStore,
   //     restore from `branch.globalsJSON` if present (resume after
@@ -462,13 +473,20 @@ function runInBranchAlsFrame<T>(
     : branch.globalsJSON
       ? GlobalStore.fromJSON(branch.globalsJSON)
       : parent.globals.clone();
+  // The branch's own logger: its tag store and its span stack.
+  const log = branchLog(parent, branchGlobals, spans);
+  // Each branch's thread store logs through the branch's logger. A branch
+  // that shares the parent's threads gets the same store under that logger.
+  // The subthread a new view starts with is made here, before the branch's
+  // run exists: the branch's spans are current but the parent's tag store
+  // still is, so that one event is logged with exactly that pair.
   const branchThreads: ThreadStore = shareThreads
-    ? parent.threads
+    ? parent.threads.sharedView(log)
     : branch.activeStack
-      ? parent.threads.restoreBranchView(branch.activeStack)
-      : parent.threads.forkBranchView();
+      ? parent.threads.restoreBranchView(branch.activeStack, log)
+      : parent.threads.forkBranchView(log, branchLog(parent, parent.globals, spans));
 
-  return agencyStore.run(
+  return withRun(
     {
       ctx: parent.ctx,
       stack: branch.stack,
@@ -479,9 +497,11 @@ function runInBranchAlsFrame<T>(
       // that installs none (a tool-dispatch batch) inherits the outer
       // frame's scope, so its tools keep registering under this arm.
       decisions: decisions ?? parent.decisions,
+      log,
+      state: freshState(),
       ...lineageOf(parent),
     },
-    async () => {
+    async (branchRun) => {
       try {
         // Capture-on-INTERRUPT discipline: snapshot the per-branch
         // globals + active-thread pointer only when the body settles
@@ -492,7 +512,7 @@ function runInBranchAlsFrame<T>(
         //
         // Only meaningful for the corresponding isolated dial.
         // Pointer-shared dials have nothing to snapshot.
-        const value = await fn();
+        const value = await fn(branchRun);
         if (hasInterrupts(value)) {
           if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
           if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
@@ -546,6 +566,22 @@ function stampSharedCheckpoint<T>(opts: RunBatchOpts<T>, interrupts: Interrupt[]
 }
 
 export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {
+  // The parent run waits for the batch, not for each branch. A race returns
+  // while its losers are still running, and the parent is usable again from
+  // that moment. Each loser keeps its own run until it stops.
+  const state = opts.run.state;
+  const previous = state.waitingFor;
+  state.waiting++;
+  state.waitingFor = "its branches";
+  try {
+    return await runBranches(opts);
+  } finally {
+    state.waiting--;
+    state.waitingFor = previous;
+  }
+}
+
+async function runBranches<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {
   const { ctx, parentStack, parentFrame, mode, children, hooks } = opts;
 
   // 0a. Cheap insurance against caller bugs.
@@ -604,7 +640,10 @@ export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult
       cached: recordOutcomes && branch.result !== undefined,
     };
   });
-  const parentSpanStack = ctx.statelogClient.snapshotStack();
+  // The caller's own span stack. Inside a fork branch that is the branch's
+  // stack, so a nested branch's spans sit under the nested fork's span. The
+  // client's own stack is the root one, which every branch shares.
+  const parentSpanStack = opts.run.log.snapshotStack();
 
   if (mode === "race") {
     return runRaceFirstTime(opts, tasks, parentSpanStack);
@@ -912,16 +951,25 @@ async function runRaceResume<T>(
   // rehydrate above) — same reasoning as startInvoke's arming.
   branch.stack.guards.forEach((g) => g.resume(branch.stack));
 
-  const parentSpanStack = ctx.statelogClient.snapshotStack();
+  // The caller's own span stack. Inside a fork branch that is the branch's
+  // stack, so a nested branch's spans sit under the nested fork's span. The
+  // client's own stack is the root one, which every branch shares.
+  const parentSpanStack = opts.run.log.snapshotStack();
   const startedAt = performance.now();
   hooks?.onBranchStart?.(child.key, winnerIndex);
   let value: T | Interrupt[];
   try {
     const shareGlobals = opts.shareGlobals ?? false;
     const shareThreads = opts.shareThreads ?? false;
-    value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, undefined, () =>
-        child.invoke(branch.stack, signal),
+    value = await ctx.statelogClient.runInBranchContext(parentSpanStack, (spans) =>
+      runInBranchAlsFrame(
+        opts.run,
+        branch,
+        shareGlobals,
+        shareThreads,
+        undefined,
+        spans,
+        (branchRun) => child.invoke(branchRun, branch.stack, signal),
       ),
     );
   } catch (err) {
@@ -938,7 +986,7 @@ async function runRaceResume<T>(
     hooks?.onBranchEnd?.(child.key, winnerIndex, "failure", performance.now() - startedAt);
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
-    throw value.atForkBoundary().toError();
+    throw value.atForkBoundary(opts.run.log).toError();
   }
 
   if (hasInterrupts(value)) {

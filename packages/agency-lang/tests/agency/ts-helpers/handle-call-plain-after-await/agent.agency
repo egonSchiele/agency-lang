@@ -1,0 +1,7 @@
+import { messagesAfterWait } from "./helper.js"
+
+// The helper waits, then tries `agency.thread.user` twice: once directly,
+// which throws, and once through `run.call`, which works.
+node main() {
+  return messagesAfterWait()
+}

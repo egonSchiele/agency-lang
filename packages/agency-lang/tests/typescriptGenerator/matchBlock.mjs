@@ -6,11 +6,11 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -185,15 +186,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("matchBlock.agency")) {
     return;
   }
   __ctx.globals.markInitialized("matchBlock.agency")
 }
 __registerGlobalsInit("matchBlock.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("matchBlock.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
@@ -201,48 +203,48 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "matchBlock.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main", threads: __setupData.threads });
+  claimFrameForScope(__stack, "main", "matchBlock.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 //  Test match blocks (pattern matching)
 //  Simple match with string literals
       });
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.action = `start`;
       });
-      await runner.ifElse(3, [
+      await runner.ifElse(3, __run, [
 
   {
-    condition: async () => __stack.locals.action === `start`,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.action === `start`,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Starting...`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -257,15 +259,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.action === `stop`,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.action === `stop`,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Stopping...`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -280,15 +282,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.action === `restart`,
-    body: async (runner) => {
-await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.action === `restart`,
+    body: async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Restarting...`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -302,14 +304,14 @@ if (isAborted(__funcResult)) {
     },
   },
 
-], async (runner) => {
-await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
+], async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
               type: "positional",
               args: [`Unknown action`]
             });
 if (hasInterrupts(__funcResult)) {
-              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 ...__state,
                 data: __funcResult
@@ -321,24 +323,24 @@ if (isAborted(__funcResult)) {
             }
           });
 });
-      await runner.step(4, async (runner) => {
+      await runner.step(4, __run, async (runner, __run) => {
 //  Match with number literals
       });
-      await runner.step(5, async (runner) => {
+      await runner.step(5, __run, async (runner, __run) => {
 __stack.locals.statusCode = 200;
       });
-      await runner.ifElse(6, [
+      await runner.ifElse(6, __run, [
 
   {
-    condition: async () => __stack.locals.statusCode === 200,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.statusCode === 200,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`OK`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -353,15 +355,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.statusCode === 404,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.statusCode === 404,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Not Found`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -376,15 +378,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.statusCode === 500,
-    body: async (runner) => {
-await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.statusCode === 500,
+    body: async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Internal Server Error`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -398,14 +400,14 @@ if (isAborted(__funcResult)) {
     },
   },
 
-], async (runner) => {
-await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
+], async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
               type: "positional",
               args: [`Unknown status`]
             });
 if (hasInterrupts(__funcResult)) {
-              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 ...__state,
                 data: __funcResult
@@ -417,76 +419,76 @@ if (isAborted(__funcResult)) {
             }
           });
 });
-      await runner.step(7, async (runner) => {
+      await runner.step(7, __run, async (runner, __run) => {
 //  Match with variable assignment in body
       });
-      await runner.step(8, async (runner) => {
+      await runner.step(8, __run, async (runner, __run) => {
 __stack.locals.grade = `A`;
       });
-      await runner.step(9, async (runner) => {
+      await runner.step(9, __run, async (runner, __run) => {
 __stack.locals.points = 0;
       });
-      await runner.ifElse(10, [
+      await runner.ifElse(10, __run, [
 
   {
-    condition: async () => __stack.locals.grade === `A`,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
+    condition: async (__run) => __stack.locals.grade === `A`,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.a = 100;
             });
     },
   },
 
   {
-    condition: async () => __stack.locals.grade === `B`,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
+    condition: async (__run) => __stack.locals.grade === `B`,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.b = 85;
             });
     },
   },
 
   {
-    condition: async () => __stack.locals.grade === `C`,
-    body: async (runner) => {
-await runner.step(2, async (runner) => {
+    condition: async (__run) => __stack.locals.grade === `C`,
+    body: async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.c = 70;
             });
     },
   },
 
   {
-    condition: async () => __stack.locals.grade === `D`,
-    body: async (runner) => {
-await runner.step(3, async (runner) => {
+    condition: async (__run) => __stack.locals.grade === `D`,
+    body: async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
 __stack.locals.d = 55;
             });
     },
   },
 
-], async (runner) => {
-await runner.step(4, async (runner) => {
+], async (runner, __run) => {
+await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.e = 0;
           });
 });
-      await runner.step(11, async (runner) => {
+      await runner.step(11, __run, async (runner, __run) => {
 //  Match with function calls in body
       });
-      await runner.step(12, async (runner) => {
+      await runner.step(12, __run, async (runner, __run) => {
 __stack.locals.level = `debug`;
       });
-      await runner.ifElse(13, [
+      await runner.ifElse(13, __run, [
 
   {
-    condition: async () => __stack.locals.level === `debug`,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.level === `debug`,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Debug mode enabled`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -501,15 +503,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.level === `info`,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.level === `info`,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Info level logging`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -524,15 +526,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.level === `warn`,
-    body: async (runner) => {
-await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.level === `warn`,
+    body: async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Warning level`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -547,15 +549,15 @@ if (isAborted(__funcResult)) {
   },
 
   {
-    condition: async () => __stack.locals.level === `error`,
-    body: async (runner) => {
-await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
+    condition: async (__run) => __stack.locals.level === `error`,
+    body: async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
                 args: [`Error level`]
               });
 if (hasInterrupts(__funcResult)) {
-                await getRuntimeContext().ctx.pendingPromises.awaitAll()
+                await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   ...__state,
                   data: __funcResult
@@ -570,27 +572,27 @@ if (isAborted(__funcResult)) {
   },
 
 ]);
-      await runner.step(14, async (runner) => {
+      await runner.step(14, __run, async (runner, __run) => {
 //  Match with array results
       });
-      await runner.step(15, async (runner) => {
+      await runner.step(15, __run, async (runner, __run) => {
 __stack.locals.resultType = `array`;
       });
-      await runner.ifElse(16, [
+      await runner.ifElse(16, __run, [
 
   {
-    condition: async () => __stack.locals.resultType === `array`,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
+    condition: async (__run) => __stack.locals.resultType === `array`,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.data1 = [1, 2, 3];
             });
     },
   },
 
   {
-    condition: async () => __stack.locals.resultType === `object`,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
+    condition: async (__run) => __stack.locals.resultType === `object`,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.data2 = {
                 "x": 1,
                 "y": 2
@@ -599,23 +601,23 @@ __stack.locals.data2 = {
     },
   },
 
-], async (runner) => {
-await runner.step(2, async (runner) => {
+], async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.data3 = [];
           });
 });
-      await runner.step(17, async (runner) => {
+      await runner.step(17, __run, async (runner, __run) => {
 //  Match with object results
       });
-      await runner.step(18, async (runner) => {
+      await runner.step(18, __run, async (runner, __run) => {
 __stack.locals.format = `json`;
       });
-      await runner.ifElse(19, [
+      await runner.ifElse(19, __run, [
 
   {
-    condition: async () => __stack.locals.format === `xml`,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
+    condition: async (__run) => __stack.locals.format === `xml`,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.output1 = {
                 "type": `xml`,
                 "ext": `.xml`
@@ -625,9 +627,9 @@ __stack.locals.output1 = {
   },
 
   {
-    condition: async () => __stack.locals.format === `json`,
-    body: async (runner) => {
-await runner.step(1, async (runner) => {
+    condition: async (__run) => __stack.locals.format === `json`,
+    body: async (runner, __run) => {
+await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.output2 = {
                 "type": `json`,
                 "ext": `.json`
@@ -637,9 +639,9 @@ __stack.locals.output2 = {
   },
 
   {
-    condition: async () => __stack.locals.format === `csv`,
-    body: async (runner) => {
-await runner.step(2, async (runner) => {
+    condition: async (__run) => __stack.locals.format === `csv`,
+    body: async (runner, __run) => {
+await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.output3 = {
                 "type": `csv`,
                 "ext": `.csv`
@@ -648,8 +650,8 @@ __stack.locals.output3 = {
     },
   },
 
-], async (runner) => {
-await runner.step(3, async (runner) => {
+], async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
 __stack.locals.output4 = {
               "type": `unknown`,
               "ext": ``
@@ -658,8 +660,8 @@ __stack.locals.output4 = {
 });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(20, async () => {
-await callHook({
+    await runner.hook(20, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -668,7 +670,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -684,14 +686,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

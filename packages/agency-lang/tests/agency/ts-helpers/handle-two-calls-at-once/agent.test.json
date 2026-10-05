@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A helper makes two run.call()s at once through one handle. Both finish, and the handler around the helper is asked about the interrupt each one raises.",
+      "input": "",
+      "expectedOutput": "{\"results\":[\"slow a\",\"fast b\"],\"askedAbout\":[\"work a\",\"work b\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

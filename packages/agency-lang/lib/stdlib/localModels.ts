@@ -29,7 +29,7 @@ import {
   loadLocalProviderDetailed,
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
-import { __ctx } from "../runtime/asyncContext.js";
+import { currentRunOrNone } from "../runtime/asyncContext.js";
 import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
@@ -1268,18 +1268,16 @@ function requireSupport(): void {
   }
 }
 
-/** Register the llama-cpp provider into agency's own smoltalk. When called
- *  from inside a run (the agent's --local path), emit the `localModelLoaded`
- *  statelog event saying where the provider package came from; the plain CLI
- *  has no runtime frame, so `__ctx()` is undefined there and nothing is
- *  emitted. */
+/** Register the llama-cpp provider into agency's own smoltalk. Inside a run
+ *  (the agent's --local path), emit the `localModelLoaded` statelog event
+ *  saying where the provider package came from. The plain CLI has no runtime
+ *  frame, so there is no run logger there and nothing is emitted. */
 export async function _registerLocalProvider(): Promise<void> {
+  // run-read-ok: the log line is optional. A caller that has already awaited, or the plain CLI, emits nothing.
+  const log = currentRunOrNone()?.log;
   requireSupport();
-  const { choice } = await loadLocalProviderDetailed();
-  void __ctx()?.statelogClient.localModelLoaded({
-    entryPath: choice.entryPath,
-    entrySource: choice.source,
-  });
+  const { entryPath, source } = (await loadLocalProviderDetailed()).choice;
+  void log?.localModelLoaded({ entryPath, entrySource: source });
 }
 
 /** The pinned SHA-256 for a model name/alias, or undefined when none is known

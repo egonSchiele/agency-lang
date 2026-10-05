@@ -23,11 +23,10 @@ import {
 } from "./compaction.js";
 import { MEMORY_COMPACTION_DEFAULT_THRESHOLD } from "../../constants.js";
 import { createLogger, type Logger, type LogLevel } from "../../logger.js";
-import type { StatelogClient } from "../../statelogClient.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
-import { agencyStore, getRuntimeContext } from "../asyncContext.js";
+import type { Run } from "../asyncContext.js";
 import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
 import { projectProviderTokenUsage } from "../invocationUsage.js";
 import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
@@ -35,36 +34,43 @@ import { isGuardExceededError } from "../guard.js";
 import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
 
 /**
+ * The part of a run memory reads: the context it accounts into, the
+ * branch stack it charges, the calling module, and the branch's logger.
+ * Callers pass their whole `Run`.
+ */
+export type MemoryRun = Pick<Run, "ctx" | "stack" | "callsite" | "log">;
+
+/**
  * Record one memory provider outcome (a text completion or an embedding)
- * against the active branch — accounting its cost/tokens into the invocation
- * usage meter and the branch's `withCostGuard` budget — if (and only if) we're
- * inside an Agency execution frame. Memory's text + embed calls run from inside
- * `runPrompt`'s post-completion hook or from stdlib agency calls — both reach
- * this code with an `agencyStore` frame already installed, so production paths
- * always account correctly. The frame check is for direct-construction unit
- * tests that exercise `MemoryManager` without going through the runner.
+ * against the branch `run` is on: its cost and tokens go into the invocation
+ * usage meter and the branch's `withCostGuard` budget.
  *
- * `recordUsage` bills the guards but does not throw; this enforces the active
+ * The run is required. One manager serves every fork branch, so each call
+ * names the branch it charges, and a caller with no run does not compile.
+ * A missing run must never quietly stop memory spending from counting
+ * against a cost guard.
+ *
+ * `recordUsage` bills the guards but does not throw; this enforces the
  * stack once afterwards, so an over-budget memory charge trips its surrounding
  * `withCostGuard` — the trip is a `GuardExceededError` that `rethrowIfGuard`
  * re-raises out of memory's best-effort catches.
  */
-function recordMemoryUsageIfInFrame(observation: UsageObservation): void {
-  if (!agencyStore.getStore()) return;
-  const { ctx, stack } = getRuntimeContext();
+function recordMemoryUsage(run: MemoryRun, observation: UsageObservation): void {
+  const { ctx, stack } = run;
   recordUsage(ctx, stack, observation);
   stack.enforceGuards();
 }
 
-/** Run a memory provider dispatch as a metered attempt WHEN in an execution
- *  frame: a rejected dispatch records one unresolved attempt (so the throw
- *  still counts as an unpriced call), mirroring the prompt path. Outside a frame (direct-construction unit tests) it just runs
- *  the dispatch — there is no meter to record into. A resolved `Result.failure`
- *  is NOT metered here (deferred to agency-lang #809). */
-function meteredMemoryDispatch<T>(kind: ProviderUsageKind, dispatch: () => Promise<T>): Promise<T> {
-  if (!agencyStore.getStore()) return dispatch();
-  const { ctx, stack } = getRuntimeContext();
-  return meteredDispatch(ctx, stack, kind, dispatch);
+/** Run a memory provider dispatch as a metered attempt on `run`'s branch: a
+ *  rejected dispatch records one unresolved attempt (so the throw still
+ *  counts as an unpriced call), mirroring the prompt path. A resolved
+ *  `Result.failure` is NOT metered here (deferred to agency-lang #809). */
+function meteredMemoryDispatch<T>(
+  run: MemoryRun,
+  kind: ProviderUsageKind,
+  dispatch: () => Promise<T>,
+): Promise<T> {
+  return meteredDispatch(run.ctx, run.stack, kind, dispatch);
 }
 
 /**
@@ -72,7 +78,7 @@ function meteredMemoryDispatch<T>(kind: ProviderUsageKind, dispatch: () => Promi
  * guards trip the surrounding `withCostGuard` / `withTimeGuard`
  * scope even when raised from inside one of memory's "best effort"
  * catches (tier-2 embed, tier-3 LLM filter, per-observation embed).
- * Without this, `chargeCostIfInFrame` could push the stack over the
+ * Without this, `recordMemoryUsage` could push the stack over the
  * limit, throw, and have its throw silently absorbed — defeating
  * the budget the user set. Provider / parse errors are not guard
  * errors and continue to fall through to the catch body as before.
@@ -97,10 +103,13 @@ const QUERY_PREVIEW_CHARS = 80;
  * Per resolved decision #1, in production this is backed by
  * `stateStack.other.memoryId` so it survives interrupt/resume. For tests
  * an in-memory ref is used.
+ *
+ * Both take the run of the call they serve. One manager is shared by every
+ * fork branch, and each branch keeps its own id on its own stack.
  */
 export type MemoryIdRef = {
-  get(): string;
-  set(id: string): void;
+  get(run: MemoryRun): string;
+  set(run: MemoryRun, id: string): void;
 };
 
 // Default MemoryIdRef used when callers don't supply one (i.e. tests
@@ -114,7 +123,7 @@ function createInMemoryRef(initial = "default"): MemoryIdRef {
   let id = initial;
   return {
     get: () => id,
-    set: (value: string) => {
+    set: (_run: MemoryRun, value: string) => {
       id = value;
     },
   };
@@ -133,13 +142,6 @@ export type MemoryManagerOptions = {
   smoltalkDefaults?: Partial<SmolConfig>;
   source?: string;
   memoryIdRef?: MemoryIdRef;
-  /** Statelog client used to emit `llmCall`/`embedding` spans and
-   *  `promptCompletion`/`embedCompletion` events for memory's
-   *  internal LLM/embed calls. Optional so tests can construct
-   *  managers without one; production wires the per-execCtx
-   *  client through `context.ts`. When absent, every statelog hook
-   *  is a no-op. */
-  statelogClient?: StatelogClient;
   /** Threshold for the manager's internal logger. The manager
    *  creates one logger per instance via `createLogger(logLevel)`;
    *  every line is `[memory]`-prefixed so users can grep/filter. */
@@ -203,9 +205,6 @@ export class MemoryManager {
   private smoltalkDefaults: Partial<SmolConfig>;
   private source: string;
   private memoryIdRef: MemoryIdRef;
-  /** Optional — every call site uses `?.` so the absence of a
-   *  statelog client (e.g. in unit tests) is a clean no-op. */
-  private statelogClient?: StatelogClient;
   /** Built once in the constructor from `options.logLevel`. Each line
    *  emitted by the manager is prefixed `[memory]` so users can
    *  filter on the prefix from stderr. */
@@ -231,7 +230,6 @@ export class MemoryManager {
     this.smoltalkDefaults = options.smoltalkDefaults ?? {};
     this.source = options.source ?? "unknown";
     this.memoryIdRef = options.memoryIdRef ?? createInMemoryRef();
-    this.statelogClient = options.statelogClient;
     // Default "info" so tests that don't pass a level don't get a
     // wall of debug output. Production reads `AgencyConfig.logLevel`
     // through `RuntimeContext.logLevel`.
@@ -253,19 +251,21 @@ export class MemoryManager {
    * running.
    */
   private async _text(
+    run: MemoryRun,
     prompt: string,
     options?: { model?: string; responseFormat?: z.ZodType; phase?: string },
   ): Promise<string> {
     const model = options?.model ?? this.smoltalkDefaults.model;
     const phase = options?.phase ?? "memory.text";
-    const spanId = this.statelogClient?.startSpan("llmCall");
+    const spanId = run.log?.startSpan("llmCall");
     const startTime = performance.now();
     try {
-      const result = await meteredMemoryDispatch("completion", () =>
+      const result = await meteredMemoryDispatch(run, "completion", () =>
         this.llmClient.text({
           ...this.smoltalkDefaults,
           messages: [smoltalk.userMessage(prompt)],
           model,
+          moduleId: run.callsite?.moduleId,
           ...(options?.responseFormat ? { responseFormat: options.responseFormat } : {}),
         } as any),
       );
@@ -279,7 +279,7 @@ export class MemoryManager {
           // ("memory.text", "remember.extract", etc.) carries the
           // memory-specific signal so a viewer can filter without
           // needing a dedicated enum value.
-          await this.statelogClient?.error({
+          await run.log?.error({
             errorType: "llmError",
             message: String(result.error),
             functionName: phase,
@@ -291,7 +291,7 @@ export class MemoryManager {
       }
       try {
         const projectedUsage = projectProviderTokenUsage(result.value.usage, "completion").usage;
-        await this.statelogClient?.promptCompletion({
+        await run.log?.promptCompletion({
           messages: [smoltalk.userMessage(prompt)],
           completion: { ...result.value, usage: projectedUsage },
           model,
@@ -308,7 +308,7 @@ export class MemoryManager {
       // Mirrors the post-completion accounting that `prompt.ts` performs for
       // agency-side `llm()` calls, so a `withCostGuard($X)` wrapping the agent
       // now sees memory's extraction / compaction / tier-3 spend too.
-      recordMemoryUsageIfInFrame({
+      recordMemoryUsage(run, {
         type: "provider",
         kind: "completion",
         reportedModel: result.value.model,
@@ -318,7 +318,7 @@ export class MemoryManager {
       });
       return result.value.output ?? "";
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -330,14 +330,15 @@ export class MemoryManager {
    *  span type is distinct from `llmCall` so the viewer can render
    *  cost/latency for embeddings separately. */
   private async _embed(
+    run: MemoryRun,
     text: string,
     options?: { model?: string; provider?: string; phase?: string },
   ): Promise<number[]> {
     const phase = options?.phase ?? "memory.embed";
-    const spanId = this.statelogClient?.startSpan("embedding");
+    const spanId = run.log?.startSpan("embedding");
     const startTime = performance.now();
     try {
-      const result = await meteredMemoryDispatch("embedding", () =>
+      const result = await meteredMemoryDispatch(run, "embedding", () =>
         this.llmClient.embed(text, {
           model: options?.model,
           // Pass the provider explicitly so smoltalk routes to the right embed
@@ -353,7 +354,7 @@ export class MemoryManager {
         try {
           // Same rationale as `_text` above: reuse `llmError` and let
           // the phase string convey the embed-specific context.
-          await this.statelogClient?.error({
+          await run.log?.error({
             errorType: "llmError",
             message: String(result.error),
             functionName: phase,
@@ -371,7 +372,7 @@ export class MemoryManager {
       // AFTER accounting + guard enforcement, so a guard trip wins over it.
       if (vector) {
         try {
-          await this.statelogClient?.embedCompletion({
+          await run.log?.embedCompletion({
             inputPreview: text.slice(0, EMBED_PREVIEW_CHARS),
             inputCount: 1,
             model: result.value.model ?? options?.model,
@@ -392,7 +393,7 @@ export class MemoryManager {
       // and `tokenUsage` (smoltalk's names) are optional; an absent estimate is
       // recorded as an unpriced embedding rather than dropped. Recorded (and
       // guards enforced) BEFORE the no-vector throw below, so a guard trip wins.
-      recordMemoryUsageIfInFrame({
+      recordMemoryUsage(run, {
         type: "provider",
         kind: "embedding",
         reportedModel: result.value.model,
@@ -405,7 +406,7 @@ export class MemoryManager {
       }
       return vector;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -413,13 +414,13 @@ export class MemoryManager {
    *  not on every recall. */
   private _embeddingDisabledLogged = false;
 
-  /** The active LLM provider, used to derive the embedding model. Reads the
-   *  active branch stack's `llmDefaults` (set by setModel/setLlmOptions — e.g.
+  /** The active LLM provider, used to derive the embedding model. Reads
+   *  `run`'s branch stack's `llmDefaults` (set by setModel/setLlmOptions — e.g.
    *  the agent's `--local-model`), falling back to the baked smoltalk defaults
    *  and finally to deriving the provider from the model name. Returns
    *  undefined when no provider can be determined. */
-  private activeEmbeddingProvider(): string | undefined {
-    const active = agencyStore.getStore()?.stack?.other?.llmDefaults as
+  private activeEmbeddingProvider(run: MemoryRun): string | undefined {
+    const active = run.stack?.other?.llmDefaults as
       { model?: string; provider?: string } | undefined;
     const baked = this.smoltalkDefaults as { model?: string; provider?: string } | undefined;
     const provider = active?.provider || baked?.provider || undefined;
@@ -442,12 +443,12 @@ export class MemoryManager {
    *  be disabled. An explicit `embeddings.model` wins; otherwise the model is
    *  derived from the active provider via `EMBED_MODEL_BY_PROVIDER`. Providers
    *  with no embedding endpoint (anthropic, llama-cpp, custom) yield null. */
-  resolveEmbedding(): { model: string; provider?: string } | null {
+  resolveEmbedding(run: MemoryRun): { model: string; provider?: string } | null {
     const explicit = this.config.embeddings?.model;
     if (explicit) {
       return { model: explicit, provider: this.config.embeddings?.provider };
     }
-    const provider = this.activeEmbeddingProvider();
+    const provider = this.activeEmbeddingProvider(run);
     if (!provider) return null;
     const model = EMBED_MODEL_BY_PROVIDER[provider];
     if (!model) return null;
@@ -460,18 +461,18 @@ export class MemoryManager {
 
   /** resolveEmbedding, with a local model name turned into what smoltalk
    *  needs: a .gguf path for llama-cpp, the served name for mlx. */
-  resolveEmbeddingTarget(): Promise<{ model: string; provider?: string } | null> {
+  resolveEmbeddingTarget(run: MemoryRun): Promise<{ model: string; provider?: string } | null> {
     if (this._embeddingTarget === undefined) {
-      this._embeddingTarget = this.resolveEmbeddingTargetOnce();
+      this._embeddingTarget = this.resolveEmbeddingTargetOnce(run);
     }
     return this._embeddingTarget;
   }
 
-  private async resolveEmbeddingTargetOnce(): Promise<{
+  private async resolveEmbeddingTargetOnce(run: MemoryRun): Promise<{
     model: string;
     provider?: string;
   } | null> {
-    const target = this.resolveEmbedding();
+    const target = this.resolveEmbedding(run);
     if (target === null || !MemoryManager.LOCAL_PROVIDERS.includes(target.provider ?? "")) {
       return target;
     }
@@ -492,13 +493,13 @@ export class MemoryManager {
   /** Embed `text`, or return null (logging once) when Tier-2 is disabled
    *  because the active provider has no embedding endpoint. Callers treat null
    *  as "skip semantic embedding for this item" — no remote call is made. */
-  private async embedOrSkip(text: string, phase: string): Promise<number[] | null> {
-    const target = await this.resolveEmbeddingTarget();
+  private async embedOrSkip(run: MemoryRun, text: string, phase: string): Promise<number[] | null> {
+    const target = await this.resolveEmbeddingTarget(run);
     if (!target) {
-      await this.noteEmbeddingDisabled();
+      await this.noteEmbeddingDisabled(run);
       return null;
     }
-    return this._embed(text, {
+    return this._embed(run, text, {
       model: target.model,
       provider: target.provider,
       phase,
@@ -531,51 +532,51 @@ export class MemoryManager {
   /** Emit a single notice (logger + statelog) the first time Tier-2 is
    *  disabled, so the user sees semantic recall is off (e.g. a local model
    *  with no embedding endpoint) without per-recall warn spam. */
-  private async noteEmbeddingDisabled(): Promise<void> {
+  private async noteEmbeddingDisabled(run: MemoryRun): Promise<void> {
     if (this._embeddingDisabledLogged) return;
     this._embeddingDisabledLogged = true;
-    const provider = this.activeEmbeddingProvider() ?? "unknown";
+    const provider = this.activeEmbeddingProvider(run) ?? "unknown";
     const msg = this.embeddingDisabledMessage(provider);
     this.logger.info(msg);
     try {
-      await this.statelogClient?.debug(msg, { provider });
+      await run.log?.debug(msg, { provider });
     } catch (err) {
       this.logger.debug(`[memory] statelog notice failed: ${(err as Error).message}`);
     }
   }
 
-  getMemoryId(): string {
-    return this.memoryIdRef.get();
+  getMemoryId(run: MemoryRun): string {
+    return this.memoryIdRef.get(run);
   }
 
-  setMemoryId(id: string): void {
-    this.memoryIdRef.set(id);
+  setMemoryId(run: MemoryRun, id: string): void {
+    this.memoryIdRef.set(run, id);
   }
 
-  isInitialized(): boolean {
-    return this.cache[this.getMemoryId()] !== undefined;
+  isInitialized(run: MemoryRun): boolean {
+    return this.cache[this.getMemoryId(run)] !== undefined;
   }
 
   /**
    * Returns the graph for the active memoryId. Throws if the cache
    * has not been loaded yet (call init() or any async operation first).
    */
-  getGraph(): MemoryGraph {
-    const entry = this.cache[this.getMemoryId()];
+  getGraph(run: MemoryRun): MemoryGraph {
+    const entry = this.cache[this.getMemoryId(run)];
     if (!entry) {
       throw new Error(
-        `MemoryManager not initialized for memoryId "${this.getMemoryId()}". Call init() first.`,
+        `MemoryManager not initialized for memoryId "${this.getMemoryId(run)}". Call init() first.`,
       );
     }
     return entry.getGraph();
   }
 
-  async init(): Promise<void> {
-    await this.getEntry();
+  async init(run: MemoryRun): Promise<void> {
+    await this.getEntry(run);
   }
 
-  private async getEntry(): Promise<MemoryCacheEntry> {
-    const id = this.getMemoryId();
+  private async getEntry(run: MemoryRun): Promise<MemoryCacheEntry> {
+    const id = this.getMemoryId(run);
     const existing = this.cache[id];
     if (existing) return existing;
 
@@ -657,8 +658,8 @@ export class MemoryManager {
    * tracing, cost/token accounting, and the structured-output Zod
    * schema all flow through the standard path.
    */
-  async buildExtractionPromptFor(content: string): Promise<string> {
-    const entry = await this.getEntry();
+  async buildExtractionPromptFor(run: MemoryRun, content: string): Promise<string> {
+    const entry = await this.getEntry(run);
     const messages: smoltalk.Message[] = [smoltalk.userMessage(content)];
     return buildExtractionPrompt(messages, entry.getGraph());
   }
@@ -672,24 +673,24 @@ export class MemoryManager {
    * call shape (`buildExtractionPromptFor` → `llm` → `applyExtractionFromLLM`)
    * still nests its embedding work under one parent in the viewer.
    */
-  async applyExtractionFromLLM(result: ExtractionResult): Promise<void> {
-    const spanId = this.statelogClient?.startSpan("memoryRemember");
+  async applyExtractionFromLLM(run: MemoryRun, result: ExtractionResult): Promise<void> {
+    const spanId = run.log?.startSpan("memoryRemember");
     // Marker event so the umbrella span materializes in the viewer.
     // The agency runtime path takes this branch (not `remember()`), so
     // without a marker the embedding writes would re-parent to the
     // trace root and the operation would be effectively invisible.
     try {
-      await this.statelogClient?.memoryRemember({
+      await run.log?.memoryRemember({
         contentPreview: `apply ${result.entities.length} entities, ${result.relations.length} relations`,
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryRemember failed: ${(err as Error).message}`);
     }
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       const outcome = entry.applyExtraction(result, this.source);
-      await this.generateEmbeddings(entry, outcome.newObservations);
+      await this.generateEmbeddings(run, entry, outcome.newObservations);
       await entry.persist(this.store);
       this.logger.debug(
         `[memory] applyExtraction added observations=${outcome.newObservations.length} expired=${outcome.expiredObservationIds.length}`,
@@ -698,7 +699,7 @@ export class MemoryManager {
       this.logger.debug(`[memory] applyExtractionFromLLM caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -714,8 +715,8 @@ export class MemoryManager {
    * but the duplication is harmless and avoids coupling the two
    * methods through a flag.
    */
-  async remember(content: string): Promise<void> {
-    const spanId = this.statelogClient?.startSpan("memoryRemember");
+  async remember(run: MemoryRun, content: string): Promise<void> {
+    const spanId = run.log?.startSpan("memoryRemember");
     this.logger.debug(
       `[memory] remember content="${truncatePreview(content, QUERY_PREVIEW_CHARS)}"`,
     );
@@ -723,16 +724,16 @@ export class MemoryManager {
     // the right label and nests inner `llmCall`/`embedding` under it.
     // See StatelogClient.memoryRemember for the full reasoning.
     try {
-      await this.statelogClient?.memoryRemember({
+      await run.log?.memoryRemember({
         contentPreview: truncatePreview(content, QUERY_PREVIEW_CHARS),
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryRemember failed: ${(err as Error).message}`);
     }
     try {
-      const prompt = await this.buildExtractionPromptFor(content);
-      const response = await this._text(prompt, {
+      const prompt = await this.buildExtractionPromptFor(run, content);
+      const response = await this._text(run, prompt, {
         model: this.model(),
         phase: "remember.extract",
       });
@@ -741,12 +742,12 @@ export class MemoryManager {
         this.logger.debug(`[memory] remember: extraction parse returned null (no-op)`);
         return;
       }
-      await this.applyExtractionFromLLM(result);
+      await this.applyExtractionFromLLM(run, result);
     } catch (err) {
       this.logger.debug(`[memory] remember caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -754,7 +755,11 @@ export class MemoryManager {
   // return entity ids in priority order, deduped. Used by both
   // `recall` (which then layers Tier 3 LLM recall on top) and
   // `recallForInjection` (which intentionally stops here for latency).
-  private async tier1And2(entry: MemoryCacheEntry, query: string): Promise<string[]> {
+  private async tier1And2(
+    run: MemoryRun,
+    entry: MemoryCacheEntry,
+    query: string,
+  ): Promise<string[]> {
     const orderedIds: string[] = [];
 
     const tier1 = structuredLookup(entry.getGraph(), query);
@@ -763,7 +768,7 @@ export class MemoryManager {
     }
     this.logger.debug(`[memory] tier1 matched ${tier1.length} entities`);
 
-    const tier2EntityIds = await this.embeddingRecallEntityIds(entry, query);
+    const tier2EntityIds = await this.embeddingRecallEntityIds(run, entry, query);
     for (const id of tier2EntityIds) {
       if (!orderedIds.includes(id)) orderedIds.push(id);
     }
@@ -774,20 +779,20 @@ export class MemoryManager {
     return orderedIds;
   }
 
-  async recall(query: string, options?: { model?: string }): Promise<string> {
-    const spanId = this.statelogClient?.startSpan("memoryRecall");
+  async recall(run: MemoryRun, query: string, options?: { model?: string }): Promise<string> {
+    const spanId = run.log?.startSpan("memoryRecall");
     this.logger.debug(`[memory] recall query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`);
     try {
-      await this.statelogClient?.memoryRecall({
+      await run.log?.memoryRecall({
         queryPreview: truncatePreview(query, QUERY_PREVIEW_CHARS),
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
         phase: "recall",
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryRecall failed: ${(err as Error).message}`);
     }
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       const graph = entry.getGraph();
       if (graph.getEntities().length === 0) {
         this.logger.debug(`[memory] recall: empty graph, returning ""`);
@@ -795,7 +800,7 @@ export class MemoryManager {
       }
 
       // Stage A: cheap tiers gather candidate ids.
-      let candidateIds = await this.tier1And2(entry, query);
+      let candidateIds = await this.tier1And2(run, entry, query);
 
       // Stage B (fallback): if cheap tiers found nothing AND the graph
       // is small enough to fit in the prompt without blowing tokens,
@@ -826,7 +831,7 @@ export class MemoryManager {
       const model = options?.model ?? this.model();
       let relevantIds: string[];
       try {
-        relevantIds = await this.llmFilterCandidates(entry, query, candidateIds, model);
+        relevantIds = await this.llmFilterCandidates(run, entry, query, candidateIds, model);
         this.logger.debug(
           `[memory] tier3 matched ${relevantIds.length} / candidates=${candidateIds.length}${usedFallback ? " (fallback)" : ""}`,
         );
@@ -858,30 +863,30 @@ export class MemoryManager {
       this.logger.debug(`[memory] recall caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
-  async recallForInjection(query: string): Promise<string> {
-    const spanId = this.statelogClient?.startSpan("memoryRecall");
+  async recallForInjection(run: MemoryRun, query: string): Promise<string> {
+    const spanId = run.log?.startSpan("memoryRecall");
     this.logger.debug(
       `[memory] recallForInjection query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`,
     );
     try {
-      await this.statelogClient?.memoryRecall({
+      await run.log?.memoryRecall({
         queryPreview: truncatePreview(query, QUERY_PREVIEW_CHARS),
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
         phase: "recallForInjection",
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryRecall failed: ${(err as Error).message}`);
     }
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       const graph = entry.getGraph();
 
       // Tiers 1+2 only for low latency (resolved decision #4).
-      const orderedIds = await this.tier1And2(entry, query);
+      const orderedIds = await this.tier1And2(run, entry, query);
 
       const result = this.formatTopK(graph, orderedIds);
       this.logger.debug(
@@ -892,7 +897,7 @@ export class MemoryManager {
       this.logger.debug(`[memory] recallForInjection caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -916,8 +921,8 @@ export class MemoryManager {
    * stdlib agency code calls this, hands it to `llm()` with a typed
    * `ForgetResult`, then calls `applyForgetFromLLM`.
    */
-  async buildForgetPromptFor(query: string): Promise<string> {
-    const entry = await this.getEntry();
+  async buildForgetPromptFor(run: MemoryRun, query: string): Promise<string> {
+    const entry = await this.getEntry(run);
     return forgetTemplate({
       graphIndex: entry.getGraph().toCompactIndex(),
       query,
@@ -932,18 +937,18 @@ export class MemoryManager {
    * shape (`buildForgetPromptFor` → `llm` → `applyForgetFromLLM`)
    * groups its writes under one parent in the viewer.
    */
-  async applyForgetFromLLM(parsed: ForgetResult): Promise<void> {
-    const spanId = this.statelogClient?.startSpan("memoryForget");
+  async applyForgetFromLLM(run: MemoryRun, parsed: ForgetResult): Promise<void> {
+    const spanId = run.log?.startSpan("memoryForget");
     try {
-      await this.statelogClient?.memoryForget({
+      await run.log?.memoryForget({
         queryPreview: `apply ${parsed.observations.length} observations, ${parsed.relations.length} relations`,
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryForget failed: ${(err as Error).message}`);
     }
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       const graph = entry.getGraph();
       let expiredObservations = 0;
       let expiredRelations = 0;
@@ -992,7 +997,7 @@ export class MemoryManager {
       this.logger.debug(`[memory] applyForgetFromLLM caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -1001,20 +1006,20 @@ export class MemoryManager {
    * round-trip in one call. The agency runtime path goes through
    * `buildForgetPromptFor` + `applyForgetFromLLM` instead.
    */
-  async forget(query: string): Promise<void> {
-    const spanId = this.statelogClient?.startSpan("memoryForget");
+  async forget(run: MemoryRun, query: string): Promise<void> {
+    const spanId = run.log?.startSpan("memoryForget");
     this.logger.debug(`[memory] forget query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}"`);
     try {
-      await this.statelogClient?.memoryForget({
+      await run.log?.memoryForget({
         queryPreview: truncatePreview(query, QUERY_PREVIEW_CHARS),
-        memoryId: this.getMemoryId(),
+        memoryId: this.getMemoryId(run),
       });
     } catch (err) {
       this.logger.debug(`[memory] statelog memoryForget failed: ${(err as Error).message}`);
     }
     try {
-      const prompt = await this.buildForgetPromptFor(query);
-      const response = await this._text(prompt, {
+      const prompt = await this.buildForgetPromptFor(run, query);
+      const response = await this._text(run, prompt, {
         model: this.model(),
         phase: "forget.plan",
       });
@@ -1023,18 +1028,18 @@ export class MemoryManager {
         this.logger.debug(`[memory] forget: parse returned null (no-op)`);
         return;
       }
-      await this.applyForgetFromLLM(parsed);
+      await this.applyForgetFromLLM(run, parsed);
     } catch (err) {
       this.logger.debug(`[memory] forget caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
-  async onTurn(messages: smoltalk.Message[]): Promise<void> {
+  async onTurn(run: MemoryRun, messages: smoltalk.Message[]): Promise<void> {
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       entry.turnsSinceExtraction++;
       const interval = this.config.autoExtract?.interval ?? 5;
       if (entry.turnsSinceExtraction >= interval) {
@@ -1048,7 +1053,7 @@ export class MemoryManager {
           this.logger.debug(
             `[memory] onTurn: turn ${entry.turnsSinceExtraction}/${interval} — running autoExtract on ${fresh.length} new messages`,
           );
-          await this.autoExtract(entry, fresh);
+          await this.autoExtract(run, entry, fresh);
         }
         entry.extractedUpTo = messages.length;
         entry.turnsSinceExtraction = 0;
@@ -1059,10 +1064,13 @@ export class MemoryManager {
     }
   }
 
-  async compactIfNeeded(messages: smoltalk.Message[]): Promise<CompactionPlan | null> {
-    const spanId = this.statelogClient?.startSpan("memoryCompaction");
+  async compactIfNeeded(
+    run: MemoryRun,
+    messages: smoltalk.Message[],
+  ): Promise<CompactionPlan | null> {
+    const spanId = run.log?.startSpan("memoryCompaction");
     try {
-      const entry = await this.getEntry();
+      const entry = await this.getEntry(run);
       const compactionConfig = {
         trigger: this.config.compaction?.trigger ?? ("token" as const),
         threshold: this.config.compaction?.threshold ?? MEMORY_COMPACTION_DEFAULT_THRESHOLD,
@@ -1075,8 +1083,8 @@ export class MemoryManager {
       // `shouldCompact` returns early above, so we don't materialize a
       // memoryCompaction span for every turn that simply checked.
       try {
-        await this.statelogClient?.memoryCompaction({
-          memoryId: this.getMemoryId(),
+        await run.log?.memoryCompaction({
+          memoryId: this.getMemoryId(run),
           messageCount: messages.length,
           threshold: compactionConfig.threshold,
         });
@@ -1125,10 +1133,10 @@ export class MemoryManager {
       // tool outputs (the summary then captures any facts from them);
       // the role mapping inside buildCompactionPrompt prefixes tool
       // messages naturally so the LLM can read them.
-      await this.autoExtract(entry, toCompact);
+      await this.autoExtract(run, entry, toCompact);
 
       const compactionPrompt = buildCompactionPrompt(toCompact);
-      let newSummary = await this._text(compactionPrompt, {
+      let newSummary = await this._text(run, compactionPrompt, {
         model: this.model(),
         phase: "compaction.summary",
       });
@@ -1137,7 +1145,7 @@ export class MemoryManager {
       const merged = prevSummary !== null;
       if (prevSummary) {
         const mergePrompt = buildMergeSummaryPrompt(prevSummary.summary, newSummary);
-        newSummary = await this._text(mergePrompt, {
+        newSummary = await this._text(run, mergePrompt, {
           model: this.model(),
           phase: "compaction.merge",
         });
@@ -1171,7 +1179,7 @@ export class MemoryManager {
       this.logger.debug(`[memory] compactIfNeeded caught: ${(err as Error).message}`);
       throw err;
     } finally {
-      this.statelogClient?.endSpan(spanId);
+      run.log?.endSpan(spanId);
     }
   }
 
@@ -1184,9 +1192,13 @@ export class MemoryManager {
 
   // ---- internals ----
 
-  private async autoExtract(entry: MemoryCacheEntry, messages: smoltalk.Message[]): Promise<void> {
+  private async autoExtract(
+    run: MemoryRun,
+    entry: MemoryCacheEntry,
+    messages: smoltalk.Message[],
+  ): Promise<void> {
     const prompt = buildExtractionPrompt(messages, entry.getGraph());
-    const response = await this._text(prompt, {
+    const response = await this._text(run, prompt, {
       model: this.model(),
       phase: "autoExtract",
     });
@@ -1196,7 +1208,7 @@ export class MemoryManager {
       return;
     }
     const outcome = entry.applyExtraction(result, this.source);
-    await this.generateEmbeddings(entry, outcome.newObservations);
+    await this.generateEmbeddings(run, entry, outcome.newObservations);
     await entry.persist(this.store);
     this.logger.debug(
       `[memory] autoExtract added observations=${outcome.newObservations.length} expired=${outcome.expiredObservationIds.length}`,
@@ -1204,6 +1216,7 @@ export class MemoryManager {
   }
 
   private async generateEmbeddings(
+    run: MemoryRun,
     entry: MemoryCacheEntry,
     observations: NewObservation[],
   ): Promise<void> {
@@ -1222,7 +1235,7 @@ export class MemoryManager {
         continue;
       }
       try {
-        const vector = await this.embedOrSkip(embedText, "new-observation");
+        const vector = await this.embedOrSkip(run, embedText, "new-observation");
         // Tier-2 disabled (provider has no embedding endpoint): skip the
         // vector for this observation; structured recall still indexes it.
         if (vector === null) continue;
@@ -1270,12 +1283,13 @@ export class MemoryManager {
   }
 
   private async embeddingRecallEntityIds(
+    run: MemoryRun,
     entry: MemoryCacheEntry,
     query: string,
   ): Promise<string[]> {
     let queryVector: number[];
     try {
-      const v = await this.embedOrSkip(query, "recall-query");
+      const v = await this.embedOrSkip(run, query, "recall-query");
       // Tier-2 disabled (provider has no embedding endpoint): no query vector,
       // so semantic recall contributes nothing this turn.
       if (v === null) return [];
@@ -1315,6 +1329,7 @@ export class MemoryManager {
    * silently dropped instead of crashing the recall.
    */
   private async llmFilterCandidates(
+    run: MemoryRun,
     entry: MemoryCacheEntry,
     query: string,
     candidateIds: string[],
@@ -1327,7 +1342,7 @@ export class MemoryManager {
     // strings at the output layer. Without this, a model that "thinks
     // out loud" or wraps the array in prose makes `parseStringArray`
     // return null and the filter silently produces no hits.
-    const response = await this._text(prompt, {
+    const response = await this._text(run, prompt, {
       model,
       responseFormat: StringArraySchema,
       phase: "recall.tier3",

@@ -9,7 +9,7 @@ import { StatelogClient } from "../../statelogClient.js";
 import { mkdtempSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
-import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "../../runtime/__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -20,7 +20,7 @@ function makeTestExports(): ServedExportedItem[] {
     {
       name: "add",
       module: "test",
-      fn: async (a: number, b: number) => a + b,
+      fn: async (_run: unknown, a: number, b: number) => a + b,
       params: [
         { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
         { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -46,7 +46,9 @@ function makeTestExports(): ServedExportedItem[] {
       agencyFunction: addFn,
       interruptEffects: [],
       invokeServed: async (namedArgs) =>
-        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        returnedOutcome(
+          await addFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+        ),
     },
     {
       kind: "node",
@@ -190,7 +192,7 @@ describe("MCP adapter", () => {
           interruptEffects: [{ effect: "myapp::deploy" }, { effect: "myapp::approve" }],
           invokeServed: async (namedArgs) =>
             returnedOutcome(
-              await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+              await deployFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
             ),
         },
       ],
@@ -240,7 +242,9 @@ describe("MCP adapter", () => {
         agencyFunction: fn,
         interruptEffects: [],
         invokeServed: async (namedArgs: Record<string, unknown>) =>
-          returnedOutcome(await fn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+          returnedOutcome(
+            await fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+          ),
       };
     });
     const handler = createMcpHandler({
@@ -448,7 +452,9 @@ describe("MCP adapter — policy tools", () => {
           agencyFunction: greetFn,
           interruptEffects: [{ effect: "test::greet" }],
           invokeServed: async (namedArgs) =>
-            returnedOutcome(await greetFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+            returnedOutcome(
+              await greetFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+            ),
         },
       ],
       policyConfig: {
@@ -517,7 +523,9 @@ describe("MCP adapter — policy tools", () => {
           agencyFunction: sendFn,
           interruptEffects: [{ effect: "email::send" }],
           invokeServed: async (namedArgs) =>
-            returnedOutcome(await sendFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+            returnedOutcome(
+              await sendFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+            ),
         },
       ],
       policyConfig: {

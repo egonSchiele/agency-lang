@@ -1,4 +1,4 @@
-import { agencyStore } from "./asyncContext.js";
+import type { Run } from "./asyncContext.js";
 import {
   failure,
   isFailure,
@@ -14,16 +14,14 @@ import type { FuncParam } from "./agencyFunction.js";
  *  "warn": warnings only, legacy behavior otherwise. "off": no checks. */
 export type FailurePropagationMode = "off" | "warn" | "on";
 
-/** Resolve the active mode. Two defaults exist ON PURPOSE and only the
- *  other one flips at Stage 2: real compiled programs read the mode off
- *  their ExecutionContext (whose constructor default is the staged
- *  rollout value — "warn" in Stage 1); the `?? "on"` here applies only
- *  OUTSIDE an execution frame, i.e. bare unit tests and direct runtime
- *  callers, which have no config to honor and no corpus at risk, so they
- *  always get the strict rule. Do not change this fallback when flipping
- *  the rollout default. */
-export function getFailurePropagationMode(): FailurePropagationMode {
-  return agencyStore.getStore()?.ctx?.failurePropagation ?? "on";
+/** The mode of the run the check happens in. Real compiled programs carry
+ *  it on their ExecutionContext, whose constructor default is the staged
+ *  rollout value. The `?? "on"` covers a hand-built context that never set
+ *  one, such as a unit test's stub: it has no config to honor and no corpus
+ *  at risk, so it gets the strict rule. Do not change this fallback when
+ *  flipping the rollout default. */
+export function getFailurePropagationMode(run: Run): FailurePropagationMode {
+  return run.ctx?.failurePropagation ?? "on";
 }
 
 /** Symbol.for so the tag survives duplicated module instances (e.g. a
@@ -86,6 +84,7 @@ function origin(f: ResultFailure): string {
 }
 
 function logWarn(
+  run: Run,
   mode: FailurePropagationMode,
   message: string,
   detail: {
@@ -95,10 +94,9 @@ function logWarn(
   },
   consoleLine: string,
 ): void {
-  const ctx = agencyStore.getStore()?.ctx;
   // Fire-and-forget, like handlerDecision in interrupts.ts. Optional-chained
   // end to end: unit tests and mock contexts may lack a statelog client.
-  void ctx?.statelogClient?.warn?.({
+  void run.log?.warn?.({
     warnType: "failurePropagation",
     message,
     functionName: detail.functionName,
@@ -138,11 +136,12 @@ function findFailureInArg(param: FuncParam, arg: unknown): ResultFailure | undef
  * handcrafted param, which fails open.
  */
 export function checkFailureArgs(
+  run: Run,
   fnName: string,
   params: FuncParam[],
   args: unknown[],
 ): ResultFailure | null {
-  const mode = getFailurePropagationMode();
+  const mode = getFailurePropagationMode(run);
   if (mode === "off") {
     return null;
   }
@@ -160,6 +159,7 @@ export function checkFailureArgs(
     // reads as if the legacy behavior already changed.
     const verb = mode === "warn" ? "would be skipped" : "skipped";
     logWarn(
+      run,
       mode,
       `call to '${fnName}' ${verb}: parameter '${param.name}' received a failure produced by '${origin(hit)}' (${truncate(hit.error)})`,
       { functionName: fnName, param: param.name, error: hit.error },
@@ -182,11 +182,12 @@ export function checkFailureArgs(
  * the enclosing auto-try must convert it into a catchable failure).
  */
 export function checkTsFunctionArgs(
+  run: Run,
   target: (...args: unknown[]) => unknown,
   fnName: string,
   args: unknown[],
 ): void {
-  const mode = getFailurePropagationMode();
+  const mode = getFailurePropagationMode(run);
   if (mode === "off" || isFailureTolerant(target)) {
     return;
   }
@@ -199,6 +200,7 @@ export function checkTsFunctionArgs(
       `TypeScript functions cannot receive failures. Check the Result before passing it, ` +
       `or tag the function with acceptsFailures().`;
     logWarn(
+      run,
       mode,
       message,
       { functionName: fnName, error: arg.error },
@@ -217,12 +219,12 @@ export function checkTsFunctionArgs(
  * AgencyFunction). Prototype methods like .toString() throw too. Plain
  * Error only — see checkTsFunctionArgs.
  */
-export function checkResultMethodCall(obj: unknown, prop: string | number): void {
+export function checkResultMethodCall(run: Run, obj: unknown, prop: string | number): void {
   const isFailureObj = isFailure(obj);
   if (!isFailureObj && !isSuccess(obj)) {
     return;
   }
-  const mode = getFailurePropagationMode();
+  const mode = getFailurePropagationMode(run);
   if (mode === "off") {
     return;
   }
@@ -238,7 +240,7 @@ export function checkResultMethodCall(obj: unknown, prop: string | number): void
   const consoleLine = isFailureObj
     ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' — check the Result before using it`
     : `called '.${String(prop)}()' on a success Result — did you mean .value.${String(prop)}(...)?`;
-  logWarn(mode, message, { param: String(prop) }, consoleLine);
+  logWarn(run, mode, message, { param: String(prop) }, consoleLine);
   if (mode === "on") {
     throw new Error(message);
   }

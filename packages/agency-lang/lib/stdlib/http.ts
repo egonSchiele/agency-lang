@@ -1,5 +1,5 @@
 import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun } from "../runtime/asyncContext.js";
 import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -169,9 +169,14 @@ export function normalizeSnippet(body: string, max = 300): string {
  * session creation/polling) can share the same abort-error translation
  * without each one re-implementing it. Each caller still has to thread
  * the `AbortSignal` from `ctx.getAbortSignal(stack)` into its `fetch`
- * call — this helper only handles the catch side.
+ * call — this helper only handles the catch side. `signal` is that same
+ * signal, read here only to recover the abort cause.
  */
-export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> {
+export async function runHttp<T>(
+  fn: () => Promise<T>,
+  url: string,
+  signal: AbortSignal | undefined,
+): Promise<T> {
   try {
     return await fn();
   } catch (e) {
@@ -182,16 +187,8 @@ export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> 
       // cancel escape. In current Node, `fetch` rejects with `signal.reason`
       // directly, so the cause is on `e`. But an abort delivered as a bare
       // DOMException (no reason) wouldn't carry it, so fall back to reading
-      // the cause off the active runtime abort signal.
-      let cause = readCause(e);
-      if (cause === undefined) {
-        try {
-          const { ctx, stack } = getRuntimeContext();
-          cause = readCause(ctx.getAbortSignal(stack));
-        } catch {
-          /* not inside an execution frame — no signal cause to recover */
-        }
-      }
+      // the cause off the signal the caller gave the request.
+      const cause = readCause(e) ?? (signal ? readCause(signal) : undefined);
       throw new AgencyCancelledError(`fetch ${url} cancelled`, cause);
     }
     // Network-level failure (undici surfaces a bare "fetch failed" TypeError):
@@ -220,19 +217,23 @@ async function fetchImpl(
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
-  return await runHttp(async () => {
-    const result = await fetch(url, buildInit(method, headers, body, signal));
-    let responseBody: string;
-    try {
-      responseBody = await readBodyCapped(result, url, signal);
-    } catch (e) {
-      if (isAbortError(e)) throw e;
-      throw new Error(`Failed to get text from ${url}: ${e}`);
-    }
-    const statusFailure = httpStatusFailure(result, url, responseBody);
-    if (statusFailure) return statusFailure;
-    return responseBody;
-  }, url);
+  return await runHttp(
+    async () => {
+      const result = await fetch(url, buildInit(method, headers, body, signal));
+      let responseBody: string;
+      try {
+        responseBody = await readBodyCapped(result, url, signal);
+      } catch (e) {
+        if (isAbortError(e)) throw e;
+        throw new Error(`Failed to get text from ${url}: ${e}`);
+      }
+      const statusFailure = httpStatusFailure(result, url, responseBody);
+      if (statusFailure) return statusFailure;
+      return responseBody;
+    },
+    url,
+    signal,
+  );
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -260,7 +261,7 @@ export async function _fetch(
   method: string,
   body: any,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
@@ -276,17 +277,21 @@ async function fetchJSONImpl(
 ): Promise<any> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
-  return await runHttp(async () => {
-    const result = await fetch(url, buildInit(method, headers, body, signal));
-    const text = await readBodyCapped(result, url, signal);
-    const statusFailure = httpStatusFailure(result, url, text);
-    if (statusFailure) return statusFailure;
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      throw new Error(`Failed to parse JSON from ${url}: ${e}`);
-    }
-  }, url);
+  return await runHttp(
+    async () => {
+      const result = await fetch(url, buildInit(method, headers, body, signal));
+      const text = await readBodyCapped(result, url, signal);
+      const statusFailure = httpStatusFailure(result, url, text);
+      if (statusFailure) return statusFailure;
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Failed to parse JSON from ${url}: ${e}`);
+      }
+    },
+    url,
+    signal,
+  );
 }
 
 /** Deprecated; see `_fetchJSON`. */
@@ -313,7 +318,7 @@ export async function _fetchJSON(
   method: string,
   body: any,
 ): Promise<any> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
@@ -329,17 +334,21 @@ async function fetchMarkdownImpl(
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
   const signal = ctx.getAbortSignal(stack);
-  return await runHttp(async () => {
-    const result = await fetch(url, buildInit(method, headers, body, signal));
-    const contentType = result.headers.get("content-type") ?? "";
-    const responseBody = await readBodyCapped(result, url, signal);
-    const statusFailure = httpStatusFailure(result, url, responseBody);
-    if (statusFailure) return statusFailure;
-    if (contentType.includes("text/html")) {
-      return htmlToMarkdown(responseBody);
-    }
-    return responseBody;
-  }, url);
+  return await runHttp(
+    async () => {
+      const result = await fetch(url, buildInit(method, headers, body, signal));
+      const contentType = result.headers.get("content-type") ?? "";
+      const responseBody = await readBodyCapped(result, url, signal);
+      const statusFailure = httpStatusFailure(result, url, responseBody);
+      if (statusFailure) return statusFailure;
+      if (contentType.includes("text/html")) {
+        return htmlToMarkdown(responseBody);
+      }
+      return responseBody;
+    },
+    url,
+    signal,
+  );
 }
 
 /** Deprecated; see `_fetchMarkdown`. */
@@ -366,7 +375,7 @@ export async function _fetchMarkdown(
   method: string,
   body: any,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 

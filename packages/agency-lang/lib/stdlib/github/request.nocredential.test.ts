@@ -31,7 +31,7 @@ it("does not fetch when no credential resolves", async () => {
   const spy = vi
     .spyOn(globalThis, "fetch")
     .mockRejectedValue(new Error("fetch reached the network"));
-  await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
+  await expect(withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }))).rejects.toThrow(
     /No GitHub credential/,
   );
   expect(spy).not.toHaveBeenCalled();

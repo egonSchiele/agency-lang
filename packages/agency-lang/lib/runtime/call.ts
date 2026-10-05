@@ -1,5 +1,6 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
+import { assertUsable, callPlain, type Run } from "./asyncContext.js";
 import {
   checkTsFunctionArgs,
   checkResultMethodCall,
@@ -64,14 +65,12 @@ function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
  * and this helper figures out whether `target` is an `AgencyFunction`
  * (named-arg aware, preapprove handler wiring) or a plain TS callable.
  *
- * All execution context (`ctx`, `stack`, `threads`, per-call-site
- * `callsite`) is read from the active `agencyStore` ALS frame seeded
- * by `Runner.runInScope`. No state extras pass through this layer —
- * call sites that need to override the active branch stack (e.g. the
- * async-fork operator) install their own ALS frame around the
- * `__call(...)` invocation in codegen.
+ * `run` is the run the call site runs under. An Agency function is handed
+ * it, and makes its own child run from it. A plain TypeScript function is
+ * called with its arguments only.
  */
 export async function __call(
+  run: Run,
   target: unknown,
   descriptor: CallType,
   optional?: boolean,
@@ -79,19 +78,20 @@ export async function __call(
   if (optional && (target === null || target === undefined)) {
     return undefined;
   }
+  assertUsable(run, "make a call");
   // An aborted callee's result must never enter another call as an
   // argument. The call does not run; the abort continues as this call's
   // own result, minus the partial (see droppedAtArgPosition).
   const abortedArg = findAbortedArg(descriptor);
   if (abortedArg !== undefined) {
-    return abortedArg.droppedAtArgPosition();
+    return abortedArg.droppedAtArgPosition(run.log);
   }
   const interruptArg = findInterruptArg(descriptor);
   if (interruptArg !== undefined) {
     return interruptArg;
   }
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor);
+    return target.invoke(run, descriptor);
   }
   if (typeof target !== "function") {
     if (isFailure(target)) {
@@ -117,14 +117,18 @@ export async function __call(
     );
   }
   checkTsFunctionArgs(
+    run,
     target as (...args: unknown[]) => unknown,
     target.name || "(anonymous)",
     descriptor.args,
   );
-  return normalizeForeignResult(await target(...descriptor.args));
+  return normalizeForeignResult(
+    await callPlain(run, target as (...args: unknown[]) => unknown, descriptor.args),
+  );
 }
 
 export async function __callMethod(
+  run: Run,
   obj: unknown,
   prop: string | number,
   descriptor: CallType,
@@ -133,6 +137,7 @@ export async function __callMethod(
   if (optional && (obj === null || obj === undefined)) {
     return undefined;
   }
+  assertUsable(run, "make a call");
 
   // Same argument rules as __call: an aborted result never enters a
   // method call (the abort continues without its partial), and an
@@ -143,7 +148,7 @@ export async function __callMethod(
   }
   const abortedArg = findAbortedArg(descriptor);
   if (abortedArg !== undefined) {
-    return abortedArg.droppedAtArgPosition();
+    return abortedArg.droppedAtArgPosition(run.log);
   }
 
   // AgencyFunction methods: .partial() and .describe() are handled directly
@@ -195,11 +200,11 @@ export async function __callMethod(
   // and `arr.push(someFailure)` / `arr.includes(f)` must keep working
   // (collecting Results into arrays is the pattern the shallow check
   // protects). The TS-function argument scan lives in __call only.
-  checkResultMethodCall(obj, prop);
+  checkResultMethodCall(run, obj, prop);
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor);
+    return target.invoke(run, descriptor);
   }
   if (typeof target !== "function") {
     throw new Error(
@@ -219,5 +224,5 @@ export async function __callMethod(
     throw new Error(`Named arguments are not supported for non-Agency function '${String(prop)}'`);
   }
   // Reuse the single property lookup while preserving `this` binding.
-  return Reflect.apply(target, obj, descriptor.args);
+  return callPlain(run, target as (...args: unknown[]) => unknown, descriptor.args, obj);
 }

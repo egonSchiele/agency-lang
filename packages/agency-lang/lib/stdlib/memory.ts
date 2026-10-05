@@ -1,6 +1,6 @@
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun, logOf, type Run } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
-import type { ExtractionResult, ForgetResult } from "../runtime/memory/index.js";
+import type { ExtractionResult, ForgetResult, MemoryManager } from "../runtime/memory/index.js";
 import { MemoryFrame } from "../runtime/memory/frame.js";
 import type { MemoryConfig } from "../runtime/memory/types.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -28,168 +28,163 @@ import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 export async function __internal_setMemoryId(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   id: string,
 ): Promise<void> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  manager.setMemoryId(id);
+  manager.setMemoryId({ ctx, stack, log: logOf(ctx, ctx.globals) }, id);
 }
 
 export function __internal_shouldRunMemory(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
 ): boolean {
-  return ctx?.getActiveMemoryManager?.() !== undefined;
+  return ctx?.getActiveMemoryManager?.(stack ?? undefined) !== undefined;
 }
 
 export async function __internal_buildExtractionPrompt(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   content: string,
 ): Promise<string> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.buildExtractionPromptFor(content);
+  return manager.buildExtractionPromptFor({ ctx, stack, log: logOf(ctx, ctx.globals) }, content);
 }
 
 export async function __internal_applyExtractionResult(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   result: ExtractionResult,
 ): Promise<void> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.applyExtractionFromLLM(result);
+  await manager.applyExtractionFromLLM({ ctx, stack, log: logOf(ctx, ctx.globals) }, result);
 }
 
 export async function __internal_buildForgetPrompt(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   query: string,
 ): Promise<string> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.buildForgetPromptFor(query);
+  return manager.buildForgetPromptFor({ ctx, stack, log: logOf(ctx, ctx.globals) }, query);
 }
 
 export async function __internal_applyForgetResult(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   result: ForgetResult,
 ): Promise<void> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.applyForgetFromLLM(result);
+  await manager.applyForgetFromLLM({ ctx, stack, log: logOf(ctx, ctx.globals) }, result);
 }
 
 export async function __internal_remember(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   content: string,
 ): Promise<void> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.remember(content);
+  await manager.remember({ ctx, stack, log: logOf(ctx, ctx.globals) }, content);
 }
 
 export async function __internal_recall(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   query: string,
 ): Promise<string> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.recall(query);
+  return manager.recall({ ctx, stack, log: logOf(ctx, ctx.globals) }, query);
 }
 
 export async function __internal_forget(
   ctx: RuntimeContext<any>,
-  _stack: StateStack,
+  stack: StateStack,
   _threads: ThreadStore,
   query: string,
 ): Promise<void> {
-  const manager = ctx?.getActiveMemoryManager?.();
+  const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.forget(query);
+  await manager.forget({ ctx, stack, log: logOf(ctx, ctx.globals) }, query);
 }
 
-// ── ALS-reading replacements for the `__internal_*` exports above ──
-// All memory helpers only need `ctx`; `stack`/`threads` are unused.
+// ── Replacements for the `__internal_*` exports above ──
+// Each takes the current run on its first line and hands it to the manager.
+// One manager serves every fork branch, so it is told the run on each call.
+
+/** The memory manager of the run's branch, or undefined when no memory
+ *  frame is active there. */
+function activeManager(run: Run): MemoryManager | undefined {
+  return run.ctx?.getActiveMemoryManager?.(run.stack);
+}
 
 export async function _setMemoryId(id: string): Promise<void> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  if (!manager) return;
-  manager.setMemoryId(id);
+  const run = currentRun();
+  activeManager(run)?.setMemoryId(run, id);
 }
 
 export function _getMemoryId(): string {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  return manager?.getMemoryId?.() ?? "default";
+  const run = currentRun();
+  return activeManager(run)?.getMemoryId?.(run) ?? "default";
 }
 
 export function _shouldRunMemory(): boolean {
-  const { ctx } = getRuntimeContext();
-  return ctx?.getActiveMemoryManager?.() !== undefined;
+  return activeManager(currentRun()) !== undefined;
 }
 
 export async function _buildExtractionPrompt(content: string): Promise<string> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
+  const run = currentRun();
+  const manager = activeManager(run);
   if (!manager) return "";
-  return manager.buildExtractionPromptFor(content);
+  return manager.buildExtractionPromptFor(run, content);
 }
 
 export async function _applyExtractionResult(result: ExtractionResult): Promise<void> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  if (!manager) return;
-  await manager.applyExtractionFromLLM(result);
+  const run = currentRun();
+  await activeManager(run)?.applyExtractionFromLLM(run, result);
 }
 
 export async function _buildForgetPrompt(query: string): Promise<string> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
+  const run = currentRun();
+  const manager = activeManager(run);
   if (!manager) return "";
-  return manager.buildForgetPromptFor(query);
+  return manager.buildForgetPromptFor(run, query);
 }
 
 export async function _applyForgetResult(result: ForgetResult): Promise<void> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  if (!manager) return;
-  await manager.applyForgetFromLLM(result);
+  const run = currentRun();
+  await activeManager(run)?.applyForgetFromLLM(run, result);
 }
 
 export async function _remember(content: string): Promise<void> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  if (!manager) return;
-  await manager.remember(content);
+  const run = currentRun();
+  await activeManager(run)?.remember(run, content);
 }
 
 export async function _recall(query: string): Promise<string> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
+  const run = currentRun();
+  const manager = activeManager(run);
   if (!manager) return "";
-  return manager.recall(query);
+  return manager.recall(run, query);
 }
 
 export async function _forget(query: string): Promise<void> {
-  const { ctx } = getRuntimeContext();
-  const manager = ctx?.getActiveMemoryManager?.();
-  if (!manager) return;
-  await manager.forget(query);
+  const run = currentRun();
+  await activeManager(run)?.forget(run, query);
 }
 
 // ── New: enable / disable / block ──
@@ -212,21 +207,18 @@ export async function _forget(query: string): Promise<void> {
  * every path-taking stdlib function.
  */
 export async function _enableMemory(config: MemoryConfig): Promise<void> {
-  const { ctx, stack } = getRuntimeContext();
-  if (!stack) return;
-  stack.pushMemoryFrame(new MemoryFrame(config));
-  startLocalEmbeddingResolution(ctx, config);
+  const run = currentRun();
+  if (!run.stack) return;
+  run.stack.pushMemoryFrame(new MemoryFrame(config));
+  startLocalEmbeddingResolution(run, config);
 }
 
 /** A local embedding model may need a download. Start it at enable time
  *  rather than inside the first recall. */
-function startLocalEmbeddingResolution(
-  ctx: ReturnType<typeof getRuntimeContext>["ctx"],
-  config: MemoryConfig,
-): void {
+function startLocalEmbeddingResolution(run: Run, config: MemoryConfig): void {
   const provider = config.embeddings?.provider ?? "";
   if (provider !== "mlx" && provider !== "llama-cpp") return;
-  void ctx.getActiveMemoryManager()?.resolveEmbeddingTarget();
+  void activeManager(run)?.resolveEmbeddingTarget(run);
 }
 
 /** Pop the top memory frame from the current branch's stateStack.
@@ -234,7 +226,7 @@ function startLocalEmbeddingResolution(
  *  affects that branch. Pops the JSON-seeded bottom frame too —
  *  library authors should avoid calling this casually. */
 export function _disableMemory(): void {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   stack?.popMemoryFrame();
 }
 
@@ -250,11 +242,11 @@ export function _disableMemory(): void {
  * because Agency callers need the boolean to decide whether to pop.
  */
 export function _pushMemoryFrame(config: MemoryConfig): boolean {
-  const { ctx, stack } = getRuntimeContext();
-  if (!stack) return false;
-  const pushed = stack.pushMemoryFrame(new MemoryFrame(config));
+  const run = currentRun();
+  if (!run.stack) return false;
+  const pushed = run.stack.pushMemoryFrame(new MemoryFrame(config));
   if (pushed) {
-    startLocalEmbeddingResolution(ctx, config);
+    startLocalEmbeddingResolution(run, config);
   }
   return pushed;
 }
@@ -264,6 +256,6 @@ export function _pushMemoryFrame(config: MemoryConfig): boolean {
  *  returned true so dedup-no-op pushes don't accidentally pop the
  *  caller's frame. */
 export function _popMemoryFrame(): void {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   stack?.popMemoryFrame();
 }

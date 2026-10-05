@@ -1,0 +1,17 @@
+{
+  "handled": {
+    "type": "approve",
+    "value": "from-agency"
+  },
+  "hostRejects": "reject",
+  "policyApproves": "approve",
+  "fnPolicyApproves": {
+    "status": "returned",
+    "type": "approve"
+  },
+  "surfaced": true,
+  "resumed": {
+    "type": "approve",
+    "value": "from-host"
+  }
+}

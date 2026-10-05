@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  agencyStore,
+  callPlain,
+  currentRunOrNone,
+  freshState,
+  logOf,
   getRuntimeContext,
+  withRun,
   runInBootstrapFrame,
   runInTestContext,
   withCallsite,
@@ -21,18 +25,27 @@ function makeStore() {
   });
   const stack = new StateStack();
   const threads = new ThreadStore();
-  return { ctx, stack, threads, globals: ctx.globals, ...lineageOf(undefined) };
+  return {
+    ctx,
+    stack,
+    threads,
+    globals: ctx.globals,
+    log: logOf(ctx, ctx.globals),
+    state: freshState(),
+    ...lineageOf(undefined),
+  };
 }
 
-describe("agencyStore", () => {
+describe("the current run", () => {
   it("throws when called outside a frame", () => {
-    expect(() => getRuntimeContext()).toThrow(/outside an Agency execution frame/);
+    expect(() => getRuntimeContext()).toThrow(/No run is current here/);
   });
 
-  it("returns the store inside agencyStore.run", () => {
+  it("returns the run inside withRun", () => {
     const seed = makeStore();
-    agencyStore.run(seed, () => {
+    withRun(seed, (run) => {
       const s = getRuntimeContext();
+      expect(s).toBe(run);
       expect(s.ctx).toBe(seed.ctx);
       expect(s.stack).toBe(seed.stack);
       expect(s.threads).toBe(seed.threads);
@@ -47,38 +60,80 @@ describe("agencyStore", () => {
     });
   });
 
-  it("propagates across await", async () => {
+  it("is readable until the first await, and throws after it", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
-      await Promise.resolve();
-      const s = getRuntimeContext();
-      expect(s.ctx).toBe(seed.ctx);
-      await new Promise((r) => setTimeout(r, 1));
+    await withRun(seed, async () => {
       expect(getRuntimeContext().ctx).toBe(seed.ctx);
+      await Promise.resolve();
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+      await new Promise((r) => setTimeout(r, 1));
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+      // Nothing carries the run across the await.
+      expect(currentRunOrNone()).toBeUndefined();
     });
   });
 
-  it("propagates across setImmediate", async () => {
+  it("the run is not readable in a setImmediate callback", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
-      await new Promise<void>((resolve) =>
+    await withRun(seed, async () => {
+      const seen = await new Promise<{ frame: unknown; error: unknown }>((resolve) =>
         setImmediate(() => {
-          expect(getRuntimeContext().ctx).toBe(seed.ctx);
-          resolve();
+          let error: unknown;
+          try {
+            getRuntimeContext();
+          } catch (e) {
+            error = e;
+          }
+          resolve({ frame: currentRunOrNone(), error });
         }),
       );
+      expect(seen.frame).toBeUndefined();
+      expect(String(seen.error)).toMatch(/read after an await/);
     });
   });
 
-  it("propagates across Promise.all branches", async () => {
+  it("the run is not readable in a promise continuation", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
+    await withRun(seed, async () => {
       const results = await Promise.all([
-        Promise.resolve().then(() => getRuntimeContext().ctx),
-        Promise.resolve().then(() => getRuntimeContext().ctx),
+        Promise.resolve().then(() => currentRunOrNone()),
+        Promise.resolve().then(() => currentRunOrNone()),
       ]);
-      expect(results[0]).toBe(seed.ctx);
-      expect(results[1]).toBe(seed.ctx);
+      expect(results[0]).toBeUndefined();
+      expect(results[1]).toBeUndefined();
+    });
+  });
+
+  it("callPlain makes the run readable for the synchronous part of one call", async () => {
+    const seed = makeStore();
+    await withRun(seed, async (run) => {
+      await Promise.resolve();
+      expect(callPlain(run, getRuntimeContext, [])).toBe(run);
+      // The call is over, so the run is no longer readable.
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+    });
+  });
+
+  it("callPlain puts the previous run back when the function throws", async () => {
+    // One module variable serves the whole process. If a throw skipped the
+    // restore, the next helper would read another request's run.
+    const outer = makeStore();
+    const inner = makeStore();
+    await withRun(outer, async (outerRun) => {
+      await Promise.resolve();
+      callPlain(outerRun, () => {
+        expect(() =>
+          withRun(inner, (innerRun) =>
+            callPlain(innerRun, () => {
+              throw new Error("helper failed");
+            }, []),
+          ),
+        ).toThrow("helper failed");
+        // Back in the outer call: the outer run is readable again.
+        expect(getRuntimeContext()).toBe(outerRun);
+      }, []);
+      // And after the outer call nothing is left behind.
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
     });
   });
 
@@ -86,14 +141,14 @@ describe("agencyStore", () => {
     const outer = makeStore();
     const innerStack = new StateStack();
     const innerThreads = new ThreadStore();
-    await agencyStore.run(outer, async () => {
+    await withRun(outer, async (outerRun) => {
       expect(getRuntimeContext().stack).toBe(outer.stack);
-      await agencyStore.run({ ...outer, stack: innerStack, threads: innerThreads }, async () => {
+      await withRun({ ...outer, stack: innerStack, threads: innerThreads }, async () => {
         expect(getRuntimeContext().stack).toBe(innerStack);
         expect(getRuntimeContext().threads).toBe(innerThreads);
         expect(getRuntimeContext().ctx).toBe(outer.ctx);
       });
-      expect(getRuntimeContext().stack).toBe(outer.stack);
+      expect(callPlain(outerRun, getRuntimeContext, []).stack).toBe(outer.stack);
     });
   });
 
@@ -103,13 +158,13 @@ describe("agencyStore", () => {
     const sawA: any[] = [];
     const sawB: any[] = [];
     await Promise.all([
-      agencyStore.run(a, async () => {
+      withRun(a, async (run) => {
         await new Promise((r) => setTimeout(r, 5));
-        sawA.push(getRuntimeContext().ctx);
+        sawA.push(callPlain(run, getRuntimeContext, []).ctx);
       }),
-      agencyStore.run(b, async () => {
+      withRun(b, async (run) => {
         await new Promise((r) => setTimeout(r, 2));
-        sawB.push(getRuntimeContext().ctx);
+        sawB.push(callPlain(run, getRuntimeContext, []).ctx);
       }),
     ]);
     expect(sawA[0]).toBe(a.ctx);
@@ -146,24 +201,24 @@ describe("runInBootstrapFrame", () => {
 describe("withCallsite", () => {
   it("installs callsite on the active frame", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
-      expect(agencyStore.getStore()?.callsite).toBeUndefined();
-      withCallsite({ moduleId: "m", scopeName: "s", stepPath: "1.2" }, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
+      expect(getRuntimeContext().callsite).toBeUndefined();
+      withCallsite(run, { moduleId: "m", scopeName: "s", stepPath: "1.2" }, () => {
         expect(getRuntimeContext().callsite).toEqual({
           moduleId: "m",
           scopeName: "s",
           stepPath: "1.2",
         });
       });
-      expect(agencyStore.getStore()?.callsite).toBeUndefined();
+      expect(getRuntimeContext().callsite).toBeUndefined();
     });
   });
 
   it("nests; inner overrides, outer restored on return", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
-      withCallsite({ moduleId: "m", scopeName: "outer", stepPath: "" }, () => {
-        withCallsite({ moduleId: "m", scopeName: "inner", stepPath: "1" }, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
+      withCallsite(run, { moduleId: "m", scopeName: "outer", stepPath: "" }, (outer) => {
+        withCallsite(outer, { moduleId: "m", scopeName: "inner", stepPath: "1" }, () => {
           expect(getRuntimeContext().callsite?.scopeName).toBe("inner");
         });
         expect(getRuntimeContext().callsite?.scopeName).toBe("outer");
@@ -171,16 +226,10 @@ describe("withCallsite", () => {
     });
   });
 
-  it("throws outside an agency frame", () => {
-    expect(() => withCallsite({ moduleId: "", scopeName: "", stepPath: "" }, () => 1)).toThrow(
-      /outside an Agency execution frame/,
-    );
-  });
-
   it("preserves ctx/stack/threads from the parent frame", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
-      withCallsite({ moduleId: "m", scopeName: "s", stepPath: "1" }, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
+      withCallsite(run, { moduleId: "m", scopeName: "s", stepPath: "1" }, () => {
         const s = getRuntimeContext();
         expect(s.ctx).toBe(seed.ctx);
         expect(s.stack).toBe(seed.stack);
@@ -197,7 +246,7 @@ describe("withPushedHandler", () => {
     const seed = makeStore();
     await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
       const before = seed.ctx.handlers.length;
-      const result = await withPushedHandler(seed.ctx, noopHandler, async () => "result");
+      const result = await withPushedHandler(seed.ctx, noopHandler, async () => "result", []);
       expect(result).toBe("result");
       expect(seed.ctx.handlers.length).toBe(before);
     });
@@ -208,9 +257,14 @@ describe("withPushedHandler", () => {
     await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
       const before = seed.ctx.handlers.length;
       await expect(
-        withPushedHandler(seed.ctx, noopHandler, async () => {
-          throw new Error("boom");
-        }),
+        withPushedHandler(
+          seed.ctx,
+          noopHandler,
+          async () => {
+            throw new Error("boom");
+          },
+          [],
+        ),
       ).rejects.toThrow("boom");
       expect(seed.ctx.handlers.length).toBe(before);
     });
@@ -221,9 +275,14 @@ describe("withPushedHandler", () => {
     await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
       const before = seed.ctx.handlers.length;
       let lenDuring = -1;
-      await withPushedHandler(seed.ctx, noopHandler, async () => {
-        lenDuring = seed.ctx.handlers.length;
-      });
+      await withPushedHandler(
+        seed.ctx,
+        noopHandler,
+        async () => {
+          lenDuring = seed.ctx.handlers.length;
+        },
+        [],
+      );
       expect(lenDuring).toBe(before + 1);
       expect(seed.ctx.handlers.length).toBe(before);
     });

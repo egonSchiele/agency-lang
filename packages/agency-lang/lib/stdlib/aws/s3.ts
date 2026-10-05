@@ -1,5 +1,5 @@
 import { failure, type ResultFailure } from "../../runtime/result.js";
-import { getRuntimeContext } from "../../runtime/asyncContext.js";
+import { currentRun, type Run } from "../../runtime/asyncContext.js";
 import { decodeBase64Strict } from "../base64.js";
 import { objectSizeFailure } from "../objectBytes.js";
 import { awsUriEncode } from "./uri.js";
@@ -171,6 +171,7 @@ function responseErrorOrNull(response: AwsResponse): ResultFailure | null {
  * redaction, and result shaping. The extern helpers below are one-call adapters.
  */
 export async function runS3Operation(
+  run: Run,
   region: string,
   operation: S3Operation,
 ): Promise<S3OperationResult> {
@@ -187,7 +188,7 @@ export async function runS3Operation(
       const keyError = keyFailure(operation.key);
       if (keyError) return keyError;
       const target = createObjectTarget(partition, bucket, operation.key);
-      const response = await sendAwsRequest(partition, credentials, {
+      const response = await sendAwsRequest(run, partition, credentials, {
         target,
         method: "GET",
         service: "s3",
@@ -200,8 +201,7 @@ export async function runS3Operation(
         return new TextDecoder("utf-8").decode(response.bytes);
       }
       const base64 = Buffer.from(response.bytes).toString("base64");
-      const { globals } = getRuntimeContext();
-      globals.markRedacted(base64, BINARY_MARKER);
+      run.globals.markRedacted(base64, BINARY_MARKER);
       return base64;
     }
     case "putText":
@@ -221,7 +221,7 @@ export async function runS3Operation(
       const sizeError = objectSizeFailure(body);
       if (sizeError) return sizeError;
       const target = createObjectTarget(partition, bucket, operation.key);
-      const response = await sendAwsRequest(partition, credentials, {
+      const response = await sendAwsRequest(run, partition, credentials, {
         target,
         method: "PUT",
         service: "s3",
@@ -241,7 +241,7 @@ export async function runS3Operation(
           ? ""
           : `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">` +
             `<LocationConstraint>${partition.region}</LocationConstraint></CreateBucketConfiguration>`;
-      const response = await sendAwsRequest(partition, credentials, {
+      const response = await sendAwsRequest(run, partition, credentials, {
         target,
         method: "PUT",
         service: "s3",
@@ -274,15 +274,14 @@ export async function runS3Operation(
         sessionToken: credentials.sessionToken,
         expiresIn: operation.expiresIn,
       });
-      const { globals } = getRuntimeContext();
-      globals.markRedacted(url, PRESIGN_MARKER);
+      run.globals.markRedacted(url, PRESIGN_MARKER);
       return url;
     }
   }
 }
 
 export function _s3Get(bucket: string, key: string, region: string): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "getText", bucket, key });
+  return runS3Operation(currentRun(), region, { kind: "getText", bucket, key });
 }
 
 export function _s3GetBinary(
@@ -290,7 +289,7 @@ export function _s3GetBinary(
   key: string,
   region: string,
 ): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "getBinary", bucket, key });
+  return runS3Operation(currentRun(), region, { kind: "getBinary", bucket, key });
 }
 
 export function _s3Put(
@@ -300,7 +299,13 @@ export function _s3Put(
   region: string,
   contentType: string,
 ): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "putText", bucket, key, content, contentType });
+  return runS3Operation(currentRun(), region, {
+    kind: "putText",
+    bucket,
+    key,
+    content,
+    contentType,
+  });
 }
 
 export function _s3PutBinary(
@@ -310,7 +315,13 @@ export function _s3PutBinary(
   region: string,
   contentType: string,
 ): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "putBinary", bucket, key, base64, contentType });
+  return runS3Operation(currentRun(), region, {
+    kind: "putBinary",
+    bucket,
+    key,
+    base64,
+    contentType,
+  });
 }
 
 export function _s3PresignGet(
@@ -319,9 +330,9 @@ export function _s3PresignGet(
   expiresIn: number,
   region: string,
 ): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "presignGet", bucket, key, expiresIn });
+  return runS3Operation(currentRun(), region, { kind: "presignGet", bucket, key, expiresIn });
 }
 
 export function _createBucket(bucket: string, region: string): Promise<S3OperationResult> {
-  return runS3Operation(region, { kind: "createBucket", bucket });
+  return runS3Operation(currentRun(), region, { kind: "createBucket", bucket });
 }

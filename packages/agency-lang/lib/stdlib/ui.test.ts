@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it as baseIt, expect, beforeEach, afterEach } from "vitest";
 import {
   _runLoop,
   _runReplLoop,
@@ -29,7 +29,11 @@ import { failure } from "../runtime/result.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
-import { runInTestContext } from "../runtime/asyncContext.js";
+import { callPlain, runInTestContext } from "../runtime/asyncContext.js";
+import { callHelper, withTestFrame } from "../runtime/__tests__/testHelpers.js";
+
+// The bridge calls its callbacks through the runtime, which needs a frame.
+const it = withTestFrame(baseIt);
 
 afterEach(() => {
   _setInputSource(null);
@@ -196,7 +200,7 @@ describe("std::ui bridge — _beginSubmit", () => {
     // The bridge flag is set instead of state.done — see
     // `_signalReplExit` in lib/stdlib/ui.ts for why mutating
     // `state.done` directly is unsafe across reducer-state turnover.
-    expect(_peekReplExitSignal()).toBe(true);
+    expect(callHelper(_peekReplExitSignal)).toBe(true);
   });
 
   it("surfaces thrown JS errors as {red-fg}Error{/red-fg} transcript entries", async () => {
@@ -496,7 +500,7 @@ describe("std::ui bridge — choice prompts", () => {
         items: [{ key: "b", label: "B" }],
       }),
     ).rejects.toThrow(/already open/);
-    _cancelChoice("cleanup");
+    callHelper(_cancelChoice, "cleanup");
     await expect(first).rejects.toThrow();
   });
 
@@ -544,7 +548,7 @@ describe("std::ui bridge — choice prompts", () => {
     });
 
     // ctxB should see NEITHER the prompt nor the exit signal.
-    await runInTestContext(ctxB, stackB, threadsB, async () => {
+    await runInTestContext(ctxB, stackB, threadsB, async (runB) => {
       expect(_hasPendingChoice()).toBe(false);
       expect(_peekReplExitSignal()).toBe(false);
 
@@ -557,7 +561,7 @@ describe("std::ui bridge — choice prompts", () => {
       _signalReplExit();
       _resolveChoice("b");
       await expect(promiseB).resolves.toBe("b");
-      _resetReplExitSignal();
+      callPlain(runB, _resetReplExitSignal, []);
     });
 
     // ctxA's prompt and exit signal are still pending — resolve them.

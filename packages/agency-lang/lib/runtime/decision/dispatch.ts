@@ -13,7 +13,7 @@ import type { DecideConfig, PromptConfig } from "../llmClient.js";
 import { answersToValue, messagesToState, planDecision, type DecisionPlan } from "./questions.js";
 import type { RuntimeContext } from "../state/context.js";
 import type { GraphState } from "../types.js";
-import { agencyStore } from "../asyncContext.js";
+import type { Run } from "../asyncContext.js";
 import { DEFAULT_QUESTION_CAP } from "./collector.js";
 import { modelRecord } from "../llmConfig.js";
 
@@ -114,10 +114,11 @@ function decisionRequestError(failed: { error: string; status?: number }): Error
 }
 
 export async function dispatchDecision(
-  ctx: RuntimeContext<GraphState>,
+  run: Run,
   config: PromptConfig,
-  plan: DecisionPlan = prepareDecision(ctx, config),
+  plan: DecisionPlan = prepareDecision(run.ctx, config),
 ): Promise<PromptResult> {
+  const ctx = run.ctx as RuntimeContext<GraphState>;
   const decide = ctx.llmClient.decide;
   if (decide === undefined) {
     throw new Error("The active LLM client does not support decision models.");
@@ -133,15 +134,16 @@ export async function dispatchDecision(
     apiKey: config.apiKey ? { ...maps.apiKey, ...config.apiKey } : maps.apiKey,
     baseUrl: maps.baseUrl,
     modelData: maps.modelData,
+    moduleId: run.callsite?.moduleId,
   };
 
   const signal = config.abortSignal ?? new AbortController().signal;
-  // Inside a fork or parallel block, a collector on the frame batches this
+  // Inside a fork or parallel block, a collector on the run batches this
   // call with its siblings. Outside one, the call sends on its own. Either
   // way the answer comes back in the same `Result<DecideResult>` shape, so
   // nothing after the send changes.
   const state = messagesToState(stateMessages(config.messages));
-  const scope = agencyStore.getStore()?.decisions;
+  const scope = run.decisions;
   const result =
     scope === undefined
       ? await decide.call(ctx.llmClient, state, plan.questions, decideConfig, signal)

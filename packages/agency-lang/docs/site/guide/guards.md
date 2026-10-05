@@ -207,11 +207,11 @@ When the time guard fires, any in-flight HTTP and LLM requests are cancelled and
 When an abort is fired, TypeScript code does not stop automatically. You need to thread in the abort signal.
 
 ```ts
-import { getRuntimeContext } from "agency-lang/runtime"
+import { agency } from "agency-lang/runtime"
 
 export async function fetchAll(urls: string[]): Promise<string[]> {
-  const { ctx, stack } = getRuntimeContext()
-  const signal = ctx.getAbortSignal(stack)
+  const run = agency.current()
+  const signal = run.ctx.getAbortSignal(run.stack)
   // Hand it to anything AbortSignal-aware:
   return Promise.all(urls.map((u) => fetch(u, { signal })))
 }

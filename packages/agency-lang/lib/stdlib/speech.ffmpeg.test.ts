@@ -6,11 +6,12 @@ import os from "node:os";
 import path from "node:path";
 import { realpathSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { transcode } from "./ffmpeg.js";
 import { _speakLocal } from "./speech.js";
 import { wavFile } from "./wavFile.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 const probe = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
 const hasFfmpeg = probe.error === undefined && probe.status === 0;
@@ -115,6 +116,7 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
           invocationUsage: new InvocationUsageMeter(),
           getAbortSignal: () => signal,
         },
+        log: { speechSynthesis: async () => undefined },
         stack: {
           localCost: 0,
           localTokens: 0,
@@ -127,8 +129,11 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
         callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
       } as any;
       const out = path.join(root, "hello.mp3");
-      await agencyStore.run(store, () =>
-        _speakLocal("Hello there.", out, "qwen3-tts-mlx", "", "", "", [root], 1),
+      await withRun(
+        store,
+        asRootRun(() =>
+          callHelper(_speakLocal, "Hello there.", out, "qwen3-tts-mlx", "", "", "", [root], 1),
+        ),
       );
       const bytes = new Uint8Array(await readFile(out));
       expect(bytes.length).toBeGreaterThan(1000);

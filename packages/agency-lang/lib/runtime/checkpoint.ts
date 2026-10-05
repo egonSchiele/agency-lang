@@ -1,6 +1,6 @@
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import type { RestoreOptions } from "./errors.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { currentRun, type Run } from "./asyncContext.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 
 /**
@@ -12,7 +12,13 @@ import { Checkpoint } from "./state/checkpointStore.js";
  * fall back to the empty `""::""::""` location.
  */
 export async function checkpoint(): Promise<number> {
-  const { ctx, callsite } = getRuntimeContext();
+  return checkpointFor(currentRun());
+}
+
+/** `checkpoint()` for a helper that already holds its run, so it can take
+ *  a checkpoint after an `await`. */
+export async function checkpointFor(run: Run): Promise<number> {
+  const { ctx, callsite } = run;
   await ctx.pendingPromises.awaitAll();
   return ctx.checkpoints.create(ctx.stateStack, ctx, {
     moduleId: callsite?.moduleId ?? "",
@@ -22,7 +28,12 @@ export async function checkpoint(): Promise<number> {
 }
 
 export function getCheckpoint(checkpointId: number): Checkpoint {
-  const { ctx } = getRuntimeContext();
+  return getCheckpointFor(currentRun(), checkpointId);
+}
+
+/** `getCheckpoint()` for a helper that already holds its run. */
+export function getCheckpointFor(run: Run, checkpointId: number): Checkpoint {
+  const { ctx } = run;
   const cp = ctx.checkpoints.get(checkpointId);
   if (!cp)
     throw new CheckpointError(`Checkpoint ${checkpointId} does not exist or has been deleted`);
@@ -33,7 +44,17 @@ export function restore(
   checkpointIdOrCheckpoint: number | Checkpoint | Record<string, unknown>,
   options: RestoreOptions,
 ): void {
-  const { ctx } = getRuntimeContext();
+  restoreFor(currentRun(), checkpointIdOrCheckpoint, options);
+}
+
+/** `restore` for a run the caller already holds. Generated code wraps this
+ *  one as an AgencyFunction, whose body is handed the run first. */
+export function restoreFor(
+  run: Run,
+  checkpointIdOrCheckpoint: number | Checkpoint | Record<string, unknown>,
+  options: RestoreOptions,
+): void {
+  const { ctx } = run;
   let cp: Checkpoint;
   if (typeof checkpointIdOrCheckpoint === "number") {
     const found = ctx.checkpoints.get(checkpointIdOrCheckpoint);

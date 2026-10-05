@@ -46,9 +46,11 @@ function recordUsageDelta(target: AccountingTarget, delta: NormalizedDelta): voi
   const attributionTransition = delta.attributionLost
     ? target.ctx.invocationUsage.markIncomplete()
     : false;
-  sendInvocationUsageToParent(delta);
+  // The send only logs when the channel to the parent is gone. The target
+  // carries no run, so that diagnostic goes through the context's client.
+  sendInvocationUsageToParent(delta, target.ctx.statelogClient);
   if (overflowTransition || attributionTransition) {
-    sendInvocationUsageIncompleteToParent();
+    sendInvocationUsageIncompleteToParent(target.ctx.statelogClient);
   }
 }
 
@@ -131,6 +133,6 @@ export function meteredDispatch<T>(
  *  without spamming. */
 export function markInvocationUsageIncompleteAt(ctx: RuntimeContext<GraphState>): void {
   if (ctx.invocationUsage.markIncomplete()) {
-    sendInvocationUsageIncompleteToParent();
+    sendInvocationUsageIncompleteToParent(ctx.statelogClient);
   }
 }

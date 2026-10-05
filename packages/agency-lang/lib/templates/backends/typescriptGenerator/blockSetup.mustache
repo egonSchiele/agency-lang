@@ -1,14 +1,14 @@
-const __bsetup = setupFunction();
+const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 const {{{frameVar}}} = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, {{{scopeName}}}, {{{moduleId}}});
+claimFrameForScope(__bstack, {{{scopeName}}}, {{{moduleId}}}, __run.log);
 {{#params}}
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __run.stack, threads: __run.threads });
 {{{finalizeDecl}}}try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;

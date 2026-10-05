@@ -243,7 +243,8 @@ Other process docs:
 ### Runtime
 
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
-- `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
+- `docs/dev/runtime/async-context.md` — The `Run` value that carries runtime state as an ordinary argument: what it holds, where runs come from, `callPlain` and `currentRun()` for functions that take no run, the lenient read, the lint check, the wrong-run check, logging, and stored callbacks.
+- `docs/dev/runtime/running-without-node.md` — The goals for running Agency outside Node, the rule about branching between targets, and the decision to pass the run explicitly in place of `AsyncLocalStorage`, with what it cost and what was set aside.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.
@@ -268,7 +269,7 @@ Other process docs:
 
 - `docs/dev/compiler/agency-only-bound-names.md` — The `--agency-only` JS-globals bind-check: the sandbox allowlist, the four capability positions it refuses, and why it is defense in depth rather than the boundary.
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
-- `docs/dev/compiler/codegen-als-accessors.md` — How generated code reads runtime values out of the active async-context frame.
+- `docs/dev/compiler/codegen-run-parameter.md` — How generated code receives the run as `__run` and passes it on: the four rules, how runtime values are read, and what to do when adding a place that emits code.
 - `docs/dev/compiler/effect-propagation.md` — How the interrupt effects a function carries are computed and propagated through calls.
 - `docs/dev/compiler/hoist-calls.md` — Why helper calls are hoisted into their own statements, so resuming never re-runs a call that already finished.
 - `docs/dev/compiler/incremental-builds.md` — The build manifest that lets the compiler skip files whose inputs have not changed.

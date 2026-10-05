@@ -13,7 +13,7 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
-import { __ctx } from "../runtime/asyncContext.js";
+import { currentRunOrNone, currentRun, type Run } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
@@ -58,11 +58,11 @@ let bridgeActiveScreen: Screen | null = null;
 // don't clobber each other's pending promises / exit signals /
 // transcripts.
 //
-// `fallbackUiState` is used when no ALS frame is active, which only
-// happens for the unit-level tests in `ui.test.ts` that drive the
-// helpers directly without `runInTestContext`. Production code always
-// runs inside an Agency execution frame so `__ctx()` returns the
-// per-run RuntimeContext and the WeakMap branch wins.
+// `fallbackUiState` is used when no run is current, which only happens
+// for the unit-level tests in `ui.test.ts` that drive the helpers
+// directly without `runInTestContext`. Production code calls these
+// helpers from Agency code, so the run's RuntimeContext is found and the
+// WeakMap branch wins.
 // ---------------------------------------------------------------------------
 
 type ChoiceItem = { key: string; label: string };
@@ -102,8 +102,16 @@ function makeUiContextState(): UiContextState {
 const uiStateByCtx = new WeakMap<object, UiContextState>();
 const fallbackUiState: UiContextState = makeUiContextState();
 
+/** The UI state of the run this helper was called under. Only right until
+ *  the helper's first `await`: call it on the first line and keep the
+ *  result. */
 function getUiState(): UiContextState {
-  const ctx = __ctx();
+  return uiStateFor(currentRunOrNone()?.ctx);
+}
+
+/** The UI state of one run's context. A helper that works across an
+ *  `await` takes it once, from its run, and keeps it. */
+function uiStateFor(ctx: object | undefined): UiContextState {
   if (!ctx) return fallbackUiState;
   let s = uiStateByCtx.get(ctx);
   if (!s) {
@@ -227,8 +235,8 @@ export function _triggerRender(): void {
  *  AgencyFunction values dispatch through the runtime's normal call
  *  path (preserving handlers, ALS context, retry semantics) rather
  *  than being invoked as raw JS. */
-async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
-  return (await __call(fn, { type: "positional", args })) as T;
+async function callBridgeFn<T>(run: Run, fn: unknown, ...args: unknown[]): Promise<T> {
+  return (await __call(run, fn, { type: "positional", args })) as T;
 }
 
 /** Shape of the `state` arg `_beginSubmit` mutates while the async
@@ -268,23 +276,20 @@ type ConsoleSinks = {
   debug: typeof console.debug;
 };
 
-// `savedConsoleSinks` is process-wide because `console.*` itself is a
-// process-wide singleton — we can only save/restore the originals
-// once. The actual capture *target* (the transcript array we push
-// rows into) lives in the per-context `UiContextState` so concurrent
-// REPLs each write into their own transcript. The installed
-// overrides route to `getUiState().captureTarget`, so dispatch
-// follows the active ALS frame automatically.
+// `console.*` is one object for the whole process, and a `console.log`
+// call says nothing about which run made it. So captured output goes to
+// the transcript of the REPL that installed its capture most recently.
+// With one REPL in the process, which is the usual case, that is its own
+// transcript. With two REPLs open at once in one process, the newer one
+// gets the output of both until it closes.
 //
-// Install / uninstall is reference-counted because multiple concurrent
-// contexts may each call `repl()` (and therefore _installConsoleCapture)
-// on the same process. Without a refcount, the first uninstall would
-// restore `console.*` to its originals and any still-active context
-// would silently lose its capture (the overrides are gone but its
-// `captureTarget` is still set). The counter is process-wide for the
-// same reason `savedConsoleSinks` is.
+// `captureTargets` holds the transcript of every REPL that is capturing,
+// oldest first. Each run's `UiContextState` remembers its own entry, so
+// closing a REPL removes the right one. The original sinks are saved when
+// the first REPL installs and restored when the last one uninstalls: an
+// earlier uninstall must not blank a REPL that is still open.
 let savedConsoleSinks: ConsoleSinks | null = null;
-let captureInstallCount = 0;
+let captureTargets: string[][] = [];
 
 function formatConsoleArgs(args: unknown[]): string {
   return args
@@ -326,7 +331,7 @@ export function truncateForTui(text: string): string {
 }
 
 function pushCaptured(prefix: string, text: string): void {
-  const target = getUiState().captureTarget;
+  const target = captureTargets[captureTargets.length - 1];
   if (!target) return;
   // Split on newlines so multi-line writes become one transcript row
   // per line. Trailing empty strings from a final `\n` are dropped so
@@ -343,14 +348,12 @@ function pushCaptured(prefix: string, text: string): void {
 }
 
 export function _installConsoleCapture(messages: string[]): void {
-  // The capture target is per-context — set it whether or not we're
-  // the first installer. (Re-install in a nested REPL inside the same
-  // ALS frame is a no-op; a nested REPL in a *different* ALS frame
-  // gets its own slot.) The console overrides themselves are a
-  // process singleton, installed once and routed to whichever
-  // context is currently active.
-  getUiState().captureTarget = messages;
-  captureInstallCount += 1;
+  // A REPL that installs twice replaces its own entry. Any other REPL
+  // adds one, and becomes the newest.
+  const ui = getUiState();
+  captureTargets = captureTargets.filter((target) => target !== ui.captureTarget);
+  captureTargets.push(messages);
+  ui.captureTarget = messages;
   if (savedConsoleSinks) return;
   savedConsoleSinks = {
     log: console.log,
@@ -379,14 +382,18 @@ export function _installConsoleCapture(messages: string[]): void {
 }
 
 export function _uninstallConsoleCapture(): void {
-  // Clear the per-context target first so a stale ALS frame can't keep
-  // routing captured writes into a buffer the caller has dropped.
-  getUiState().captureTarget = null;
-  if (captureInstallCount > 0) captureInstallCount -= 1;
-  // Keep the overrides installed while any other context is still
-  // capturing. Restoring the originals here would silently blank that
-  // other context's transcript.
-  if (captureInstallCount > 0) return;
+  uninstallConsoleCapture(getUiState());
+}
+
+function uninstallConsoleCapture(ui: UiContextState): void {
+  // Drop this REPL's transcript first, so nothing more is routed into a
+  // buffer the caller has let go of.
+  captureTargets = captureTargets.filter((target) => target !== ui.captureTarget);
+  ui.captureTarget = null;
+  // Keep the overrides installed while any other REPL is still capturing.
+  // Restoring the originals here would silently blank that REPL's
+  // transcript.
+  if (captureTargets.length > 0) return;
   if (!savedConsoleSinks) return;
   console.log = savedConsoleSinks.log;
   console.warn = savedConsoleSinks.warn;
@@ -425,7 +432,11 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
  *  and from any future "force exit" plumbing. Wakes the loop so
  *  `_replIsDone` runs immediately. */
 export function _signalReplExit(): void {
-  getUiState().replExitSignaled = true;
+  signalReplExit(getUiState());
+}
+
+function signalReplExit(ui: UiContextState): void {
+  ui.replExitSignaled = true;
   _triggerRender();
 }
 
@@ -445,6 +456,7 @@ export function _resetReplExitSignal(): void {
 }
 
 export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubmit: unknown): void {
+  const run = currentRun();
   state.transcript.messages.push(`{bright-blue-fg}You{/bright-blue-fg} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
@@ -455,14 +467,14 @@ export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubm
   setTimeout(() => {
     void (async () => {
       try {
-        const reply = await callBridgeFn<unknown>(onSubmit, submitted);
+        const reply = await callBridgeFn<unknown>(run, onSubmit, submitted);
         if (reply === false) {
           // Signal exit via the bridge instead of mutating
           // `state.done`. The reducer can't see mutations on this
           // stale `state` record once subsequent keys have produced
           // new states (e.g. a modal that opened and closed during
           // onSubmit). See `_signalReplExit` comment above.
-          _signalReplExit();
+          signalReplExit(uiStateFor(run.ctx));
           return;
         }
         // Surface Failure-typed returns explicitly. Agency functions
@@ -516,6 +528,17 @@ export async function _runLoop(
   isDoneFn: unknown,
   tickMs?: number | null,
 ): Promise<any> {
+  return runLoop(currentRun(), initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+}
+
+async function runLoop(
+  run: Run,
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs?: number | null,
+): Promise<any> {
   // Coerce `null` / `0` / negative to undefined so Screen.runLoop's
   // `if (opts.tickMs !== undefined)` guard treats them as "no tick".
   // The Agency wrapper passes a default of `null` to mean "off" — JS
@@ -529,9 +552,9 @@ export async function _runLoop(
   try {
     return await screen.runLoop({
       initialState,
-      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
-      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
-      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      render: async (s) => await callBridgeFn<TuiElement>(run, renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(run, handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(run, isDoneFn, s),
       tickMs: effectiveTickMs,
     });
   } finally {
@@ -560,21 +583,23 @@ export async function _runReplLoop(
   tickMs: number | null | undefined,
   transcriptMessages: string[],
 ): Promise<any> {
+  const run = currentRun();
+  const ui = uiStateFor(run.ctx);
   // Reset the exit signal so a leftover flag from a previous REPL
   // doesn't immediately terminate this one.
-  _resetReplExitSignal();
+  ui.replExitSignaled = false;
   _installConsoleCapture(transcriptMessages);
   try {
-    return await _runLoop(initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+    return await runLoop(run, initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
   } finally {
-    _uninstallConsoleCapture();
+    uninstallConsoleCapture(ui);
     // Clear the exit signal so it can't leak across REPL invocations
     // in the same process (e.g. nested test runs).
-    _resetReplExitSignal();
+    ui.replExitSignaled = false;
     // Cancel any choice prompt left dangling by an exception path so
     // the awaiting Agency caller sees a rejection instead of a hang.
     // No-op when no prompt is open.
-    _cancelChoice("REPL loop exited before choice was made");
+    cancelChoice(ui, "REPL loop exited before choice was made");
   }
 }
 
@@ -1027,7 +1052,10 @@ export function _resolveChoice(answer: string): void {
  *  break out of any prompt left hanging by an exception. No-op when
  *  no prompt is open. */
 export function _cancelChoice(reason: string): void {
-  const ui = getUiState();
+  cancelChoice(getUiState(), reason);
+}
+
+function cancelChoice(ui: UiContextState, reason: string): void {
   if (!ui.pendingChoice) return;
   const { reject } = ui.pendingChoice;
   ui.pendingChoice = null;
@@ -1089,6 +1117,7 @@ export async function _runLoopHybrid(
   tickMs: number,
   bottomRows: number,
 ): Promise<any> {
+  const run = currentRun();
   ensureBridgeState();
   const hybridOutput: OutputTarget =
     bridgeOutputTarget instanceof FrameRecorder
@@ -1104,9 +1133,9 @@ export async function _runLoopHybrid(
   try {
     return await hybridScreen.runLoop({
       initialState,
-      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
-      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
-      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      render: async (s) => await callBridgeFn<TuiElement>(run, renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(run, handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(run, isDoneFn, s),
       tickMs,
     });
   } finally {

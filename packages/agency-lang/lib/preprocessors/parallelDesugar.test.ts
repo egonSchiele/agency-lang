@@ -464,7 +464,7 @@ describe("desugar → codegen snapshot", () => {
     // template literals for string args, so arm names show up as `arm_N`.
     // 1. The preprocessor introduced an __arms_0 binding fed by a fork call
     //    over the arm name strings.
-    expect(ts).toMatch(/runner\d*\.fork\(\s*\d+\s*,\s*\[\s*`arm_0`\s*,\s*`arm_1`\s*\]/);
+    expect(ts).toMatch(/runner\d*\.fork\(\s*\d+\s*,\s*__run\s*,\s*\[\s*`arm_0`\s*,\s*`arm_1`\s*\]/);
     // 2. Each arm is dispatched by a string-equality check on the arm param.
     //    Equality lowers to the __eq runtime helper (nullish unification).
     expect(ts).toMatch(/__eq\(\s*[^,]*__arm_0\s*,\s*`arm_0`\s*\)/);

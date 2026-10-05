@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import type { SmolConfig } from "smoltalk";
-import { agency } from "./agency.js";
+import { runInTestContext } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { DecideConfig, DecisionQuestion, DecisionState, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
@@ -136,20 +136,17 @@ describe("runPrompt decision provider selection", () => {
     ]);
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    const value = await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads },
-      async () => {
-        for (const options of Array.isArray(branch) ? branch : [branch]) {
-          _setLlmOptions(options);
-        }
-        return runPrompt({
-          prompt: "Is this spam?",
-          messages: threads.getOrCreateActive(),
-          responseFormat: z.object({ response: z.boolean() }),
-          clientConfig: call,
-        });
-      },
-    );
+    const value = await runInTestContext(ctx, ctx.stateStack, threads, async (run) => {
+      for (const options of Array.isArray(branch) ? branch : [branch]) {
+        _setLlmOptions(options);
+      }
+      return runPrompt(run, {
+        prompt: "Is this spam?",
+        messages: threads.getOrCreateActive(),
+        responseFormat: z.object({ response: z.boolean() }),
+        clientConfig: call,
+      });
+    });
     expect(value).toBe(true);
     expect(client.configs).toHaveLength(1);
     expect(client.configs[0].provider).toBe(provider);
@@ -200,12 +197,12 @@ describe("text calls after decision models", () => {
       const client = new RecordingDecisionClient([{ return: "hello" }]);
       ctx.setLLMClient(client);
       const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-      await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+      await runInTestContext(ctx, ctx.stateStack, threads, async (run) => {
         for (const options of setters) {
           _setLlmOptions(options);
         }
         expect(
-          await runPrompt({
+          await runPrompt(run, {
             prompt: "Hello",
             messages: threads.getOrCreateActive(),
             clientConfig: call,

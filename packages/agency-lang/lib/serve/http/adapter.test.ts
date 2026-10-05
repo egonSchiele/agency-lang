@@ -11,7 +11,7 @@ import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
 import { GuardExceededError } from "../../runtime/guard.js";
 import { CheckpointCodeChangedError } from "../../runtime/errors.js";
-import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "../../runtime/__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -55,7 +55,7 @@ function makeExports(): {
     {
       name: "add",
       module: "test",
-      fn: async (a: number, b: number) => a + b,
+      fn: async (_run: unknown, a: number, b: number) => a + b,
       params: [
         { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
         { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -80,7 +80,9 @@ function makeExports(): {
       agencyFunction: addFn,
       interruptEffects: [],
       invokeServed: async (namedArgs) =>
-        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        returnedOutcome(
+          await addFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+        ),
     },
     {
       kind: "node",
@@ -205,7 +207,11 @@ describe("HTTP adapter", () => {
       interruptEffects: [],
       invokeServed: async (namedArgs: Record<string, unknown>) =>
         returnedOutcome(
-          await mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs }),
+          await mk(name, markers).invoke(testRun(), {
+            type: "named",
+            positionalArgs: [],
+            namedArgs,
+          }),
         ),
     }));
     const h = createHttpHandler({
@@ -438,7 +444,7 @@ describe("HTTP adapter", () => {
           interruptEffects: [{ effect: "myapp::deploy" }],
           invokeServed: async (namedArgs) =>
             returnedOutcome(
-              await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+              await deployFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
             ),
         },
       ],
@@ -561,7 +567,9 @@ describe("startHttpServer auth and host validation", () => {
         agencyFunction: failFn,
         interruptEffects: [],
         invokeServed: async (namedArgs) =>
-          returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+          returnedOutcome(
+            await failFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+          ),
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {

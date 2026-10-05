@@ -1,5 +1,6 @@
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "../constants.js";
 import { CostGuard, TimeGuard } from "./guard.js";
+import type { Clock } from "./clock.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import type { StateStack } from "./state/stateStack.js";
 
@@ -51,12 +52,14 @@ function pushRootGuard(stack: StateStack, guard: CostGuard | TimeGuard): void {
  *  still pause it like any other time guard. */
 export function installRootBudget(
   stack: StateStack,
+  clock: Clock,
   contextBudget?: { maxCost?: number; maxTimeMs?: number },
 ): void {
   if (isIpcMode()) return;
   const { cost, timeMs } = resolveRootLimits(contextBudget);
   if (cost !== undefined && cost >= 0) pushRootGuard(stack, new CostGuard(cost));
-  if (timeMs !== undefined && timeMs > 0) pushRootGuard(stack, new TimeGuard(timeMs));
+  if (timeMs !== undefined && timeMs > 0)
+    pushRootGuard(stack, new TimeGuard(timeMs, undefined, clock));
 }
 
 /** Re-assert the root budget on a RESUMED exec context. The root guard is
@@ -78,6 +81,7 @@ export function installRootBudget(
  *  root guard for gets a fresh guard. No-op in IPC. */
 export function reinstallRootBudget(
   stack: StateStack,
+  clock: Clock,
   contextBudget?: { maxCost?: number; maxTimeMs?: number },
 ): void {
   if (isIpcMode()) return;
@@ -111,7 +115,8 @@ export function reinstallRootBudget(
 
   // The host caps a dimension the checkpoint had no root guard for.
   if (!sawCost && hostCost !== undefined) pushRootGuard(stack, new CostGuard(hostCost));
-  if (!sawTime && hostTimeMs !== undefined) pushRootGuard(stack, new TimeGuard(hostTimeMs));
+  if (!sawTime && hostTimeMs !== undefined)
+    pushRootGuard(stack, new TimeGuard(hostTimeMs, undefined, clock));
 }
 
 /** FAIL CLOSED on a malformed budget value. The env is an internal

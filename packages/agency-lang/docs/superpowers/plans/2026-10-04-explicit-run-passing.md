@@ -731,6 +731,112 @@ twice.
 
 `AsyncLocalStorage` stays, and every read is checked against it.
 
+#### Phase 2 is built
+
+Branch `explicit-run-phase-2`, PR #1170. The PR is based on main only so
+that CI runs: the workflows do not run for a PR into another branch.
+
+What the phase did, in the order it was built:
+
+1. **The seam.** Every generated function, block, handler function, init
+   function, and finalize closure takes `__run` first, and every body the
+   runtime calls back declares `__run`. Each Runner method takes the run it
+   is called under, checks it with `sameRun`, makes one child, and hands it
+   to both `AsyncLocalStorage` and the body. The call path, the handler
+   chain, `runBatch`, the `llm()` tool loop, and guard trips take the run.
+   A node gets its run from `GraphState.run`.
+2. **`callPlain` and `currentRun()`** (Tasks 10 and 13). A helper reads the
+   run before its first `await`. Every standard library helper that read it
+   later now takes it on its first line.
+3. **`run.log`** (Task 6). Each run has a logger bound to its branch's tag
+   store and span stack. A bound logger throws when it is used in a branch
+   other than the one `AsyncLocalStorage` says is current.
+4. **The stored run for subprocess listeners** (Task 9).
+5. **The wrong-run check** (Task 12): `withChildRun`, `assertUsable`,
+   `RunInUseError`.
+6. **The tail** (Tasks 5 and 8): the small readers and the remaining frame
+   reads in the runtime.
+
+Where the build differs from the design above:
+
+1. `new Runner(ctx, frame, opts)` keeps its shape. Generated code passes
+   `stack` and `threads` in `opts`.
+2. The run stored for a subprocess listener is the subprocess call's
+   **branch run**, not `s.parentStore`. The branch run carries the cloned
+   globals and the span stack the handler chain uses on main. `sameRun`
+   confirmed it is the frame the listener had.
+3. `run.log` is the logging client itself, as a view made with
+   `Object.create`, not a separate logger type. The posting methods are
+   still on the client's public type. `ctx.rootLog` names the posts made
+   outside any run.
+4. The logging client's own `AsyncLocalStorage`, `spanStorage`, is still
+   there. It is what the bound logger is checked against. Phase 3 removes
+   it with the other one.
+5. The wrong-run check needed one exemption the design did not list: a
+   helper that raises several interrupts at once with `agency.interrupt`.
+   Each raise gets a detached copy of the run.
+6. A thread store shared across branches cannot hold one logger, so the
+   logger lives on each view and the registry stays shared.
+
+What still reads `AsyncLocalStorage`, for Phase 3 to decide:
+
+| Read | Why it has no run to take |
+| --- | --- |
+| `warnDroppedData` in `result.ts` | Reached only through the public `failure()`, which user code calls with no run in hand |
+| The function-ref reviver's miss at revive time | Runs inside `JSON.parse` |
+| `agency.ctxMaybe`, `agency.callsite`, `agency.thread.storeMaybe` | Must work with no run |
+| `std::ui` console capture | Runs inside a `console.log` override. Decision 9 |
+| A few standard library helpers that must work with no run | `_registerLocalProvider`, the `statelog.ts` helpers, `resolveLlmRoute`, `date.ts`, `_attachToReply`, `_insideToolCall` |
+| `outerRunOrNone()` | The one read a root frame makes of the frame outside it, for a run started inside another run |
+| The logging client's unbound fallback and `spanStorage` | Kept as what the bound logger is checked against |
+
+Two behaviour changes, both in logging only:
+
+- An abort that reaches a node boundary now logs its event. It read the
+  frame after the frame had ended, so it almost never did.
+- A batched round of decision calls picks its mock queue by the first
+  call's module. It used the arm that triggered the round. Only scoped
+  test mocks can tell.
+
+What broke, as Decision 6 expected:
+
+- A helper that calls `__call` itself, or uses `agency.*` after an `await`.
+  Two test helpers did and now take `agency.current()` first.
+- Every package's compiled `index.js`. They are rebuilt here. Published
+  copies need a new release and a raised peer range, which is not done:
+  it needs the release number.
+- `std::ui` loops called from TypeScript with no run now throw.
+
+Three silent failures the strict rule turned into real ones, now fixed:
+`runHttp` dropped a guard-trip cause it read after an `await`, and the
+line REPL's Esc-to-cancel and its footer token counts both swallowed the
+throw.
+
+Size, in changed lines (added plus removed), against the Phase 1 branch:
+
+| | Lines |
+| --- | --- |
+| Generated: fixtures, package `index.js`, template output | about 10,360 |
+| Runtime source | about 2,670 |
+| Standard library helpers | about 870 |
+| Code generator | about 330 |
+| Hand-written tests | about 3,280 |
+| **Total** | **about 17,600** |
+
+Verified: `typecheck`, `lint:structure`, `fmt:ts`, the unit suite (15,252
+tests), the Agency-js suite (190), and the `handlers`, `handler-lineage`,
+`fork`, `subprocess`, `guards`, `threads`, `substeps`, `ts-helpers`,
+`blocks`, `memory`, and `agents` folders of the Agency suite. CI ran the
+full Agency suite on the push before the tail and it passed. No test found
+a place where the runtime handed a function the wrong run.
+
+Not done in this phase: the peer ranges of the published packages, and
+handing a handle to the callbacks of `agency.withHandler`,
+`withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with`. Those
+callbacks can still call `agency.*` on their first line.
+
+The task list below is kept as it was written.
+
 - [ ] **Task 5. Give the 10 small readers their value directly.** These
       read the frame only for a log line, a config flag, or the clock:
       `ipcChildDebug`, `abortedResult.statelogClient`, `warnDroppedData`,
@@ -804,6 +910,106 @@ twice.
       PR. Confirm Decision 4.
 
 ### Phase 3: remove `AsyncLocalStorage`.
+
+#### Phase 3 is built
+
+Branch `explicit-run-phase-3`, stacked on `explicit-run-phase-2`. Built on
+2026-10-05.
+
+What the phase did, in the order it was built:
+
+1. **`run.interrupt` on the handle, and the missing tests**, written as
+   predictions and run before anything was deleted.
+2. **The span methods came off the bare logging client's type**
+   (`RootLog`), so a span opened on the shared root stack from inside a
+   branch is a compile error. This was added to the phase at the owner's
+   request. See step 1a of the Phase 3 handoff.
+3. **The lint check** (Task 16), `scripts/lint-run-reads.mjs`, run by
+   `pnpm run lint:structure`. It replaces `scripts/audit-run-reads.mjs`,
+   which audited `AsyncLocalStorage` reads and now finds none.
+4. **`AsyncLocalStorage` was deleted** (Task 15): `agencyStore`, `sameRun`
+   and its 17 call sites, `WrongRunError`, `requireFrame`, `ambientRun`,
+   the four `__threads()`-style accessors, and the logging client's
+   `spanStorage`. `withRun(run, fn)` is `callPlain(run, fn, [run])`.
+5. **The reads with no caller** became `currentRunOrNone()`, the lenient
+   read of the module variable. `docs/dev/runtime/async-context.md` lists
+   every one with what a missing run means for it.
+6. **Console capture** follows Decision 9.
+7. **The unit tests** moved off the hidden frame.
+8. **The docs** (Task 18).
+
+Where the build differs from the task list below:
+
+1. **No generator change and no fixture rebuild.** Task 15 says to remove
+   the two frames generated code installs. Phase 2 had already replaced
+   them with `__withChildRun` and `__detachedRun`, which never named
+   `AsyncLocalStorage`.
+2. **`testRun()` stayed.** The handoff said it could not survive. It now
+   returns the test's root run from a test-only variable that
+   `inTestFrame`, `inFrameOf`, `withTestFrame`, and `asRootRun` set. A
+   nested use of the root run fails with `RunInUseError`, so the tests
+   that nested were changed to pass the inner run.
+3. **The lenient reads stayed lenient.** After a helper's first `await`
+   they return the same answer as outside a run. This is the fault the
+   plan holds against PR #1167, kept here for a named list of reads that
+   each have a harmless answer. The lint check reports any of them in
+   `lib/` that could run after an `await`, and reports none.
+4. **A batched round of decision calls redacts with the block's tags.**
+   It used the tags of whichever arm triggered the round, which it found
+   through the hidden frame. The round's log post carries a fork id, a
+   reason, group sizes, and a duration.
+5. **Of the eight tests in Task 17**, four were written and four already
+   existed: the fork-global test and the wrong-run tests (found by the
+   handoff), two runs paused and resumed together
+   (`tests/agency-js/concurrent-interrupt-isolation`), and memory spending
+   against a cost guard (`lib/runtime/memory/manager.test.ts`).
+6. **Rule 2 has no compile-time check.** The plan says the code generator
+   fails the compile when a body handed to the runtime has no `__run`.
+   That was never built, in Phase 2 or here.
+
+Two logging losses, both silent:
+
+- `_registerLocalProvider` logs `localModelLoaded` only when it is called
+  before an `await`. The memory manager and the `--local` flag call it
+  after one, so those paths no longer log the event.
+- The function-ref reviver's miss is logged at revive time only when the
+  restore is still in its synchronous part. The stub still reports when
+  something calls it.
+
+Not done: the callbacks of `agency.withHandler`, `withCostGuard`,
+`withTimeGuard`, `withLock`, and `thread.with` are still not handed a
+handle. The guide shows the pattern that works: take `agency.current()`
+first, and use `run.call` after an `await`.
+
+Not swept: about 190 comments in `lib/`, and about fifteen developer docs
+outside the ones Task 18 names, still describe frames found through
+`AsyncLocalStorage`. Most were already out of date after Phase 2.
+
+The browser bundle check passes with smoltalk left out of the bundle and
+fails with it in. See "How it was checked" in
+`docs/dev/runtime/running-without-node.md`.
+
+Size, in changed lines (added plus removed), against the Phase 2 branch:
+
+| | Lines |
+| --- | --- |
+| Generated | 3 |
+| Runtime source | about 720 |
+| Standard library helpers | about 140 |
+| Lint script added, audit script removed | about 690 |
+| Hand-written tests | about 930 |
+| Plans and docs | about 1,200 |
+| **Total** | **about 3,700** |
+
+The handoff estimated 2,000 to 3,000. The three phases together are about
+24,800 changed lines, of which about 10,400 are generated.
+
+Verified locally: `typecheck`, `lint:structure`, `fmt:ts`, the unit suite
+(15,250 tests), the Agency-js suite (191), and the `ts-helpers`,
+`handlers`, `handler-lineage`, `fork`, `subprocess`, `guards`, `threads`,
+`memory`, `substeps`, `blocks`, and `agents` folders of the Agency suite.
+
+The task list below is kept as it was written.
 
 - [ ] **Task 15. Delete it.** Remove `agencyStore`, the `agencyStore.run`
       half of each installer, `sameRun`, the stored-callback comparisons,

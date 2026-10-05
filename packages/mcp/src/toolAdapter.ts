@@ -45,8 +45,9 @@ export function mcpToolToAgencyFunction(
   return new AgencyFunction({
     name: tool.name,
     module: `mcp:${tool.serverName}`,
-    fn: async (...args: any[]) => {
-      // The last arg is __state from invoke(), the rest are positional params
+    // The run comes first, as for every AgencyFunction body. This one does
+    // not need it. The tool's own arguments follow.
+    fn: async (_run, ...args: any[]) => {
       const actualArgs = args.slice(0, params.length);
       const argsObj: Record<string, unknown> = {};
       params.forEach((p, i) => {

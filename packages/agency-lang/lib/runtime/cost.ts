@@ -1,4 +1,4 @@
-import { getRuntimeContext } from "./asyncContext.js";
+import { currentRun, type Run } from "./asyncContext.js";
 import { recordUsage } from "./recordPaidUsage.js";
 
 /** Charge `amount` USD to the active branch: account it (guards + invocation
@@ -12,10 +12,15 @@ import { recordUsage } from "./recordPaidUsage.js";
  *  any mutation, so a real charge is never silently dropped. Throws (a
  *  guard-trip) if enforcement fails — callers must not swallow it. */
 export function addCost(amount: number): void {
+  addCostTo(currentRun(), amount);
+}
+
+/** `addCost` for a caller that already holds the run. */
+export function addCostTo(run: Pick<Run, "ctx" | "stack">, amount: number): void {
   if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
     throw new Error("addCost: amount must be a finite, non-negative number");
   }
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = run;
   recordUsage(ctx, stack, { type: "manual", amount });
   stack.enforceGuards();
 }
@@ -25,5 +30,10 @@ export function addCost(amount: number): void {
  *  charge reaches getTokens() only: the run's `usage.tokens` counts provider
  *  tokens. */
 export function addTokens(amount: number): void {
-  getRuntimeContext().stack.localTokens += amount;
+  addTokensTo(currentRun(), amount);
+}
+
+/** `addTokens` for a caller that already holds the run. */
+export function addTokensTo(run: Pick<Run, "stack">, amount: number): void {
+  run.stack.localTokens += amount;
 }

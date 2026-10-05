@@ -6,11 +6,11 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -185,33 +186,34 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("function.agency")) {
     return;
   }
   __ctx.globals.markInitialized("function.agency")
 }
 __registerGlobalsInit("function.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("function.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __test_impl() {
-  const __setupData = setupFunction();
+async function __test_impl(__run: __Run) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "test", "function.agency");
-  if (!__globals()!.isInitialized("function.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "test", "function.agency", __run.log);
+  if (!__run.globals.isInitialized("function.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -235,14 +237,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "test",
@@ -251,7 +252,7 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.foo = 1;
       });
     })
@@ -278,7 +279,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "test");
+  return AbortedResult.fromError(__run.log, __error, __stack, "test");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -292,23 +293,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "test" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "test",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "test",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "test",
@@ -330,23 +331,23 @@ export const test = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __add_impl(a: any, b: any) {
-  const __setupData = setupFunction();
+async function __add_impl(__run: __Run, a: any, b: any) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "add", "function.agency");
-  if (!__globals()!.isInitialized("function.agency")) {
-    await __initializeGlobals(__ctx)
+  claimFrameForScope(__stack, "add", "function.agency", __run.log);
+  if (!__run.globals.isInitialized("function.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "add", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "add", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -378,14 +379,13 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "add",
@@ -397,7 +397,7 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 //  multi-param function
       });
     })
@@ -424,7 +424,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "add");
+  return AbortedResult.fromError(__run.log, __error, __stack, "add");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -438,23 +438,23 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "add" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "add",
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "add",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "add",
@@ -494,36 +494,36 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "function.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main", threads: __setupData.threads });
+  claimFrameForScope(__stack, "main", "function.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
-__stack.locals.__hoist_0 = await __call(test, {
+      await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await __call(__run, test, {
           type: "positional",
           args: []
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.__hoist_0
@@ -534,13 +534,13 @@ if (isAborted(__stack.locals.__hoist_0)) {
           throw __stack.locals.__hoist_0.toError()
         }
       });
-      await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+      await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
           type: "positional",
           args: [__stack.locals.__hoist_0]
         });
 if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -553,8 +553,8 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, async () => {
-await callHook({
+    await runner.hook(3, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -563,7 +563,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -579,14 +579,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

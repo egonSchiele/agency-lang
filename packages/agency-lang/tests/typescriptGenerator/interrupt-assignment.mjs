@@ -6,11 +6,11 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
-  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -166,7 +166,8 @@ function __registerTool(value: unknown, _aliasName?: string) {
   }
 }
 
-// Wrap stateful runtime functions as AgencyFunction instances
+// Wrap stateful runtime functions as AgencyFunction instances. Each `_impl`
+// takes the run first, as every AgencyFunction body does.
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -185,15 +186,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("interrupt-assignment.agency")) {
     return;
   }
   __ctx.globals.markInitialized("interrupt-assignment.agency")
 }
 __registerGlobalsInit("interrupt-assignment.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("interrupt-assignment.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
@@ -201,32 +203,32 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "interrupt-assignment.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main", threads: __setupData.threads });
+  claimFrameForScope(__stack, "main", "interrupt-assignment.agency", __run.log);
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, "its body", async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 // Resume path: check for a response by interruptId
-const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_1);
+const __response = __run.ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
@@ -237,17 +239,17 @@ if (__response) {
   } else if (__response.type === "reject") {
     // rejected, halt
     
-    runner.halt({ messages: __threads(), data: runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true }) });
+    runner.halt({ messages: __run.threads, data: runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
+  const __handlerResult = await interruptWithHandlers(__run, "unknown", `What is your name?`, {}, "./interrupt-assignment.agency", { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
+    runner.halt({ messages: __run.threads, data: runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
@@ -258,11 +260,11 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.__interruptId_1 = __handlerResult[0].interruptId;
-    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "1" });
+    const __checkpointId = __run.ctx.checkpoints.create(__run.stack, __ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
-    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpoint = __run.ctx.checkpoints.get(__checkpointId);
     
-    runner.halt({ messages: __threads(), data: __handlerResult });
+    runner.halt({ messages: __run.threads, data: __handlerResult });
     
     
     return;
@@ -270,11 +272,11 @@ if (__response) {
 }
 
       });
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.greeting = await runPrompt({
+__stack.locals.greeting = await runPrompt(__run, {
           prompt: `Say hello to {name}`,
-          messages: __threads().getOrCreateActive(),
+          messages: __run.threads.getOrCreateActive(),
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
@@ -283,25 +285,25 @@ __stack.locals.greeting = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.greeting)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads(),
+            messages: __run.threads,
             data: __stack.locals.greeting
           })
           return;
         }
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(3, __run, async (runner, __run) => {
 runner.halt({
-          messages: __threads(),
+          messages: __run.threads,
           data: __stack.locals.greeting
         })
 return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, async () => {
-await callHook({
+    await runner.hook(4, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -310,7 +312,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -326,14 +328,14 @@ await callHook({
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

@@ -41,8 +41,8 @@ describe("MCP integration", () => {
     const fn = mcpToolToAgencyFunction(deserialized[0], (serverName, toolName, args) =>
       manager.callTool(serverName, toolName, args),
     );
-    const toolResult = await inTestFrame(() =>
-      fn.invoke({ type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } }, { ctx: null }),
+    const toolResult = await inTestFrame((run) =>
+      fn.invoke(run, { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } }),
     );
     expect(toolResult).toContain("7");
   });

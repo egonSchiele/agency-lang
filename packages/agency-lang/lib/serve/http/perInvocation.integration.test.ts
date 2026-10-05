@@ -68,8 +68,10 @@ describe("per-invocation telemetry isolation", () => {
   ): ServedExportedFunction {
     const fn = {
       invoke: async () => {
+        // Take the run before the barrier. After an await it is not readable.
+        const { ctx: runCtx } = getRuntimeContext();
         if (beforeEmit) await beforeEmit();
-        await getRuntimeContext().ctx.statelogClient.debug("marker", {});
+        await runCtx.statelogClient.debug("marker", {});
         return "ok";
       },
     } as unknown as AgencyFunction;
@@ -157,6 +159,10 @@ describe("per-invocation telemetry isolation", () => {
 
     expect(ra.traceId).toBe("trace-A");
     expect(rb.traceId).toBe("trace-B");
+    // Both bodies ran to the end. A body that threw would still leave the
+    // runtime's own posts behind, and those alone would pass the checks below.
+    expect(ra.body).toEqual({ success: true, value: "ok" });
+    expect(rb.body).toEqual({ success: true, value: "ok" });
 
     expect(posts.some((p) => p.traceId === "trace-A")).toBe(true);
     expect(posts.some((p) => p.traceId === "trace-B")).toBe(true);

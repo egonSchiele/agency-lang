@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 // One embedding type surface — imported from llmClient.ts, not smoltalk directly.
@@ -61,7 +61,7 @@ export async function _embedTexts(
   apiKey: string,
   baseUrl: string,
 ): Promise<ResultValue> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack, log } = currentRun();
   if (texts.length === 0) {
     return failure("Nothing to embed: the input list is empty.");
   }
@@ -111,7 +111,7 @@ export async function _embedTexts(
     tokens: res.tokenUsage,
   });
   if (first) {
-    ctx.statelogClient.embedCompletion({
+    log.embedCompletion({
       inputPreview: texts[0].slice(0, PROMPT_PREVIEW_MAX),
       inputCount: texts.length,
       model: res.model,

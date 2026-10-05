@@ -63,7 +63,7 @@ describe("sendInvocationUsageToParent", () => {
         tokens: tokens({ totalTokens: 120 }),
       },
     });
-    sendInvocationUsageToParent(d);
+    sendInvocationUsageToParent(d, undefined);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...d });
   });
 
@@ -73,6 +73,7 @@ describe("sendInvocationUsageToParent", () => {
     process.send = send as any;
     sendInvocationUsageToParent(
       delta({ tokens: tokens({ inputTokens: 3, totalTokens: 4 }), unpricedCallCount: 1 }),
+      undefined,
     );
     expect(send).toHaveBeenCalledOnce();
   });
@@ -81,7 +82,7 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ attributionLost: true }));
+    sendInvocationUsageToParent(delta({ attributionLost: true }), undefined);
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -89,7 +90,7 @@ describe("sendInvocationUsageToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta());
+    sendInvocationUsageToParent(delta(), undefined);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -99,6 +100,7 @@ describe("sendInvocationUsageToParent", () => {
     process.send = send as any;
     sendInvocationUsageToParent(
       delta({ entry: { kind: "manual", model: "", cost: cost(), tokens: tokens() } }),
+      undefined,
     );
     expect(send).not.toHaveBeenCalled();
   });
@@ -112,6 +114,7 @@ describe("sendInvocationUsageToParent", () => {
         cost: cost({ totalCost: 0.03 }),
         entry: { kind: "manual", model: "", cost: cost({ totalCost: 0.03 }), tokens: tokens() },
       }),
+      undefined,
     );
     expect(send).toHaveBeenCalledOnce();
   });
@@ -122,7 +125,10 @@ describe("sendInvocationUsageToParent", () => {
     process.send = send as any;
     // { inputCost: 0.01, totalCost: 0 } — retained in-process, so it must survive
     // the subprocess boundary too (the component detail is real).
-    sendInvocationUsageToParent(delta({ cost: cost({ inputCost: 0.01, totalCost: 0 }) }));
+    sendInvocationUsageToParent(
+      delta({ cost: cost({ inputCost: 0.01, totalCost: 0 }) }),
+      undefined,
+    );
     expect(send).toHaveBeenCalledOnce();
   });
 
@@ -132,6 +138,7 @@ describe("sendInvocationUsageToParent", () => {
     process.send = send as any;
     sendInvocationUsageToParent(
       delta({ entry: { kind: "completion", model: "opus", cost: cost(), tokens: tokens() } }),
+      undefined,
     );
     expect(send).toHaveBeenCalledOnce();
   });
@@ -139,7 +146,7 @@ describe("sendInvocationUsageToParent", () => {
   it("no-ops outside IPC mode", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) }));
+    sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) }), undefined);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -149,7 +156,7 @@ describe("sendInvocationUsageToParent", () => {
       throw new Error("channel closed");
     }) as any;
     expect(() =>
-      sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) })),
+      sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.5 }) }), undefined),
     ).not.toThrow();
   });
 });
@@ -158,11 +165,11 @@ describe("sendInvocationUsageIncompleteToParent", () => {
   it("sends the marker in IPC mode and no-ops otherwise", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendInvocationUsageIncompleteToParent();
+    sendInvocationUsageIncompleteToParent(undefined);
     expect(send).not.toHaveBeenCalled();
 
     vi.stubEnv("AGENCY_IPC", "1");
-    sendInvocationUsageIncompleteToParent();
+    sendInvocationUsageIncompleteToParent(undefined);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
   });
 });

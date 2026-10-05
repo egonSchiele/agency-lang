@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import * as smoltalk from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
-import { agency } from "./agency.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { redactMessagesForLog, runPrompt, withMessageLabels } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
@@ -29,9 +29,9 @@ function makeCtx(): RuntimeContext<any> {
 function inFrame<T>(
   ctx: RuntimeContext<any>,
   threads: ThreadStore,
-  fn: () => Promise<T>,
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, fn);
+  return runInTestContext(ctx, ctx.stateStack, threads, fn);
 }
 
 /** Records every PromptConfig the provider is handed, so a leaked
@@ -87,8 +87,8 @@ async function runLabeled(
   const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
   thread.label = threadLabel;
   const completion = vi.spyOn(ctx.statelogClient, "promptCompletion").mockResolvedValue();
-  await inFrame(ctx, threads, () =>
-    runPrompt({
+  await inFrame(ctx, threads, (run) =>
+    runPrompt(run, {
       prompt: "go",
       messages: thread,
       clientConfig: (label === undefined ? {} : { label }) as any,

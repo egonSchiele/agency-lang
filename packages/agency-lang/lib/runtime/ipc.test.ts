@@ -24,6 +24,8 @@ import { InvocationUsageMeter } from "./invocationUsage.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 import { withTestFrame } from "./__tests__/testHelpers.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
+import { ThreadStore } from "./state/threadStore.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -249,7 +251,17 @@ describe("clampLimits", () => {
  * code under test reads, add it HERE so every suite sees it (the mocks
  * are `any`-typed, so a second hand-rolled literal would go stale
  * silently). Suites layer their specifics via `overrides`. */
-const makeSession = (overrides: Record<string, any> = {}): any => ({
+/** The run a real session captures as `parentStore`: built from the
+ *  session's own ctx, so callbacks fired for the child are read from it. */
+const parentRunOf = (session: any): Run =>
+  runInTestContext(session.ctx, session.stateStack, new ThreadStore(), (run) => run);
+
+const makeSession = (overrides: Record<string, any> = {}): any => {
+  const session = makeBareSession(overrides);
+  return { parentStore: parentRunOf(session), ...session };
+};
+
+const makeBareSession = (overrides: Record<string, any> = {}): any => ({
   sessionId: "test-session",
   child: {
     stdout: null,

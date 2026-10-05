@@ -1,13 +1,12 @@
-import { agency, RuntimeContext, ThreadStore } from "agency-lang/runtime";
+import { agency, RuntimeContext, ThreadStore, type Run } from "agency-lang/runtime";
 
 /**
  * Run `fn` inside an Agency execution frame.
  *
- * An Agency function keeps its call depth on the frame, so invoking one
- * with no frame throws. A test that calls `fn.invoke(...)` directly needs
- * a frame around the call.
+ * An Agency function is invoked with the run it is called under. A test
+ * that calls `fn.invoke(run, ...)` directly gets that run here.
  */
-export function inTestFrame<T>(fn: () => T): T {
+export function inTestFrame<T>(fn: (run: Run) => T): T {
   const ctx = new RuntimeContext({
     statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false },
     smoltalkDefaults: {},

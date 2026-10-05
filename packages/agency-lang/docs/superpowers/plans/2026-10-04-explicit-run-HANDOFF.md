@@ -1,5 +1,8 @@
 # Handoff: passing the run explicitly
 
+**For Phase 3, read `2026-10-04-explicit-run-PHASE-3-HANDOFF.md` first.** This
+document is the record of how Phases 1 and 2 were done.
+
 Written on 2026-10-04, at the end of Phase 1. It holds what the next session
 needs to do Phases 2 and 3. Paths are relative to `packages/agency-lang`
 unless they start with `/`.
@@ -39,6 +42,8 @@ against the rule in this repo:
 | --- | --- |
 | Phase 1 worktree | `/Users/adit/agency-lang/packages/agency-lang/.worktrees/explicit-run` |
 | Phase 1 branch and PR | `explicit-run`, PR [#1169](https://github.com/egonSchiele/agency-lang/pull/1169), based on main at `ad1d7ec9b` |
+| Phase 2 worktree | `/Users/adit/agency-lang/packages/agency-lang/.worktrees/explicit-run-phase-2` |
+| Phase 2 branch and PR | `explicit-run-phase-2`, draft PR [#1170](https://github.com/egonSchiele/agency-lang/pull/1170), stacked on `explicit-run` |
 | The other design, for comparison | PR [#1167](https://github.com/egonSchiele/agency-lang/pull/1167), branch `spike/portable-context`, worktree `.worktrees/portable-context`. Leave it open. |
 | The prototype | `.worktrees/explicit-context/packages/agency-lang/scripts/explicit-context-spike/`, branch `spike/explicit-context`, committed at `34350cf36`. The branch is local and not pushed. |
 | The audit script | `scripts/audit-run-reads.mjs`, committed in Phase 1 |
@@ -237,6 +242,38 @@ Write each as a prediction and run it before changing the code it covers.
   interpolation, condition, `return`, match scrutinee, comprehension. The
   method argument position is known to drop the interrupt today, so leave
   it out or mark it skipped with that reason.
+
+## Phase 2: built
+
+Read "Phase 2 is built" in the plan. It lists what was done, the six
+places the build differs from the design, what still reads
+`AsyncLocalStorage` and why, the two behaviour changes, and the size.
+
+How the work was done, which is the method for Phase 3 too: change a
+function's signature, run `npx tsc --noEmit`, and fix each caller it
+reports. Then `npx tsc -p tsconfig.tests.json` for the tests. A test gets
+the run of its frame from `testRun()` in
+`lib/runtime/__tests__/testHelpers.ts`, calls a helper the way the runtime
+does with `callHelper(fn, ...args)`, and builds a frame from its own `ctx`
+with `inFrameOf(ctx, stack, fn)` or `runInTestContext`.
+
+Things learned:
+
+- `lib/runtime/prompt.ts` sits at the linter's 1,250-line limit. Replace a
+  `ctx` parameter with `run` in place and read `run.ctx`.
+- After a generator change run `pnpm run templates`, then `make`, then
+  `make fixtures`, then recompile every package's entry file:
+  `node ../agency-lang/dist/scripts/agency.js compile index.agency` in each
+  of the eight package folders. Commit generated files separately.
+- CI only runs for a PR into main. Base a stacked PR on main and say so
+  in its first line.
+- Subagents did the mechanical parts from written briefs: the unit tests,
+  the standard library helpers, and the tail. The main session kept the
+  design and checked each result by rerunning the suites.
+- The checks that compare against `AsyncLocalStorage` found real things:
+  the subprocess listener's run, a thread store shared across branches,
+  and the decision batch's logger. Trust a failure of `sameRun` or of the
+  bound logger: it means the wrong run was chosen.
 
 ## How to do Phase 2
 

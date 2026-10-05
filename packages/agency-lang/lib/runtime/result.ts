@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { isAbortError, readCause, RunControlSignal } from "./errors.js";
 import { truncate } from "./truncate.js";
-import { isAborted } from "./abortedResult.js";
+import { isAborted, type AbortLog } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
-import { agencyStore } from "./asyncContext.js";
+import { currentRunOrNone } from "./asyncContext.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
  *  `guardTrip`-cause path (a trip that surfaced as an aborted leaf op)
@@ -169,10 +169,13 @@ function coerceData(data: unknown): Record<string, any> {
 function warnDroppedData(data: unknown): void {
   const kind = Array.isArray(data) ? "an array" : `a ${typeof data}`;
   const message = `failure() data must be an object; dropped ${kind}`;
-  const ctx = agencyStore.getStore()?.ctx;
+  // `failure()` is public and takes no run. A helper that calls it before
+  // its first await gets the warning in its own run's log. Anywhere else no
+  // run is current and only the console line is written.
   // Fire-and-forget, like failurePropagation's logWarn. The console line
   // carries no payload: the dropped value may hold anything.
-  void ctx?.statelogClient?.warn?.({ warnType: "failureData", message, error: data });
+  // run-read-ok: with no run current, the log line is skipped and the console line is still written.
+  void currentRunOrNone()?.log?.warn?.({ warnType: "failureData", message, error: data });
   console.warn(message);
 }
 
@@ -274,8 +277,14 @@ export function isFailure(result: unknown): result is ResultFailure {
 }
 
 /** Wrap a function call in try-catch, returning a Result.
- * If the function already returns a Result, pass it through (no double-wrapping). */
-export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
+ * If the function already returns a Result, pass it through (no double-wrapping).
+ * `log` is the logger of the run the `try` is in: a guard trip delivered
+ * here posts its closing event through it. */
+export async function __tryCall(
+  log: AbortLog,
+  fn: () => any,
+  opts?: FailureOpts,
+): Promise<ResultValue> {
   try {
     const value = await fn();
     // Interrupts are control flow, not values: a callee that paused on an
@@ -297,7 +306,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // the runner's shouldSkip must not re-throw an already-delivered
         // trip. Same contract as the exception path below.
         cause.delivered = true;
-        const salvaged = value.deliver();
+        const salvaged = value.deliver(log);
         if (salvaged !== undefined) {
           return success(salvaged.value);
         }

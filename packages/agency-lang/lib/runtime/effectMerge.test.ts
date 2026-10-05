@@ -3,7 +3,7 @@ import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { interruptWithHandlers, mergeChainOutcomes, pass } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { inFrameOf, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -64,7 +64,9 @@ describe("the chain merges approvals through the effect table", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     ctx.runId = "test-run";
     return ctx;
   };
@@ -74,7 +76,9 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: { maxCost: 0.5, message: "outer says go" } }),
       async () => ({ type: "approve", value: { maxCost: 0.5 } }),
     ]);
-    const verdict = await interruptWithHandlers("std::guard", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::guard", "m", {}, "o"),
+    );
     expect(verdict).toEqual({
       type: "approve",
       value: {
@@ -91,7 +95,9 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: undefined }),
       async () => ({ type: "approve", value: 42 }),
     ]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    const verdict = await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::bash", "m", {}, "o"),
+    );
     expect(verdict).toEqual({ type: "approve", value: undefined });
   });
 
@@ -101,13 +107,8 @@ describe("the chain merges approvals through the effect table", () => {
       async () => pass(),
       async () => ({ type: "approve", value: { maxCost: 0.75 } }),
     ]);
-    const verdict = (await interruptWithHandlers(
-      "std::guard",
-      "m",
-      {},
-      "o",
-      ctx,
-      new StateStack(),
+    const verdict = (await inFrameOf(ctx, new StateStack(), (run) =>
+      interruptWithHandlers(run, "std::guard", "m", {}, "o"),
     )) as any;
     expect(verdict.value.maxCost).toBe(1.0);
   });

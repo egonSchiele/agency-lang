@@ -46,7 +46,7 @@ export async function throwIfValueAborted(
   }
   // Drop the partial the same way the fork boundary does, so the salvage
   // trail says where it went and the abortUnwind span is ended.
-  const settled = value.atNodeBoundary();
+  const settled = value.atNodeBoundary(execCtx.rootLogWithSpans);
   if (endsRun) {
     await execCtx.closeTraceWriter();
   }

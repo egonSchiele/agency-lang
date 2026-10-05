@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ipcChildDebug } from "./subprocessRunInfo.js";
-import { agencyStore } from "./asyncContext.js";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -8,7 +7,7 @@ afterEach(() => {
 });
 
 describe("ipcChildDebug", () => {
-  it("posts a statelog debug event when an ALS frame has a statelog client", () => {
+  it("posts a statelog debug event to the logger it is handed", () => {
     const debugCalls: any[] = [];
     const store: any = {
       ctx: {
@@ -20,14 +19,12 @@ describe("ipcChildDebug", () => {
         },
       },
     };
-    agencyStore.run(store, () => {
-      ipcChildDebug("callback_send_failed onNodeStart boom");
-    });
+    ipcChildDebug("callback_send_failed onNodeStart boom", store.ctx.statelogClient);
     expect(debugCalls).toEqual([["[ipc:child] callback_send_failed onNodeStart boom", {}]]);
   });
 
-  it("does not throw when there is no active ALS frame / statelog client", () => {
-    expect(() => ipcChildDebug("callback_dropped_oversize onNodeStart")).not.toThrow();
+  it("does not throw when it is handed no logger", () => {
+    expect(() => ipcChildDebug("callback_dropped_oversize onNodeStart", undefined)).not.toThrow();
   });
 
   it("swallows a throwing statelog client (never affects the run)", () => {
@@ -41,9 +38,7 @@ describe("ipcChildDebug", () => {
       },
     };
     expect(() =>
-      agencyStore.run(store, () => {
-        ipcChildDebug("callback_unserializable onNodeStart");
-      }),
+      ipcChildDebug("callback_unserializable onNodeStart", store.ctx.statelogClient),
     ).not.toThrow();
   });
 });

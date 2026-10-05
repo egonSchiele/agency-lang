@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { agency } from "./agency.js";
+import { callPlain, detachedRun, getRuntimeContext } from "./asyncContext.js";
 import { approve, isApproved, isRejected, reject, type Interrupt } from "./interrupts.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
@@ -441,13 +442,14 @@ describe("agency.interrupt — raising inside a handler", () => {
       agency.withResumableScope({ name: "parallel" }, async (s) => {
         await s.step(async () => {
           await agency.withHandler(approveHandler, async () => {
+            // Each dispatch raises on a run of its own, as each tool call in
+            // one round does. TypeScript code may raise once per run.
+            const run = getRuntimeContext();
             results = await Promise.all(
               Array.from({ length: N }, (_, i) =>
-                agency.interrupt({
-                  effect: "read-file",
-                  message: `read file ${i}`,
-                  data: { i },
-                }),
+                callPlain(detachedRun(run, {}), agency.interrupt, [
+                  { effect: "read-file", message: `read file ${i}`, data: { i } },
+                ]),
               ),
             );
           });
@@ -483,13 +485,14 @@ describe("agency.interrupt — raising inside a handler", () => {
       agency.withResumableScope({ name: "parallel-nested" }, async (s) => {
         await s.step(async () => {
           await agency.withHandler(handler, async () => {
+            // Each dispatch raises on a run of its own, as each tool call in
+            // one round does. TypeScript code may raise once per run.
+            const run = getRuntimeContext();
             results = await Promise.all(
               Array.from({ length: N }, (_, i) =>
-                agency.interrupt({
-                  effect: "outer",
-                  message: `outer ${i}`,
-                  data: { i },
-                }),
+                callPlain(detachedRun(run, {}), agency.interrupt, [
+                  { effect: "outer", message: `outer ${i}`, data: { i } },
+                ]),
               ),
             );
           });
@@ -499,5 +502,39 @@ describe("agency.interrupt — raising inside a handler", () => {
     );
     expect(results).toHaveLength(N);
     for (const r of results) expect(isApproved(r)).toBe(true);
+  });
+});
+
+// Every raise from TypeScript on one run is stored under one key. Two of
+// them would share it, and on resume one would be handed the other's answer
+// with nobody asked. So a run takes one raise from TypeScript.
+describe("agency.interrupt — one raise per step", () => {
+  it("refuses a second raise made at the same time, and asks the handler about the first only", async () => {
+    const ctx = makeMockCtx();
+    const askedAbout: string[] = [];
+    const approveHandler = async (intr: { message: string }) => {
+      askedAbout.push(intr.message);
+      return approve("ok");
+    };
+    let outcomes: PromiseSettledResult<unknown>[] = [];
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "two-at-once" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(approveHandler, async () => {
+            outcomes = await Promise.allSettled([
+              agency.interrupt({ effect: "delete", message: "Delete notes.txt?", data: {} }),
+              agency.interrupt({ effect: "delete", message: "Delete taxes.pdf?", data: {} }),
+            ]);
+          });
+        });
+        return "done";
+      }),
+    );
+    expect(outcomes[0].status).toBe("fulfilled");
+    expect(outcomes[1].status).toBe("rejected");
+    expect(String((outcomes[1] as PromiseRejectedResult).reason)).toContain(
+      "has already raised an interrupt in this step",
+    );
+    expect(askedAbout).toEqual(["Delete notes.txt?"]);
   });
 });

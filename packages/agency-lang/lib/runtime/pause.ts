@@ -1,4 +1,5 @@
 import { PauseSignal } from "./errors.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { Checkpoint, SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import { pausedCheckpointSchema } from "./state/schemas.js";
@@ -43,6 +44,8 @@ export async function pausedReturnObject(
 
 type PauseAtStepArgs = {
   ctx: RuntimeContext<any>;
+  /** The logger of the run that is pausing. */
+  log: StatelogClient;
   stack: StateStack;
   location: SourceLocationOpts;
 };
@@ -55,7 +58,7 @@ type PauseAtStepArgs = {
  *  An async call keeps its result in a pending-promise resolver, not in the
  *  frame, so the checkpoint is stamped only after `awaitAll` has written
  *  those results into the frame locals. */
-export async function pauseAtStep({ ctx, stack, location }: PauseAtStepArgs): Promise<never> {
+export async function pauseAtStep({ ctx, log, stack, location }: PauseAtStepArgs): Promise<never> {
   await ctx.pendingPromises.awaitAll();
   ctx.throwIfCancelled();
   const checkpointId = ctx.checkpoints.create(stack, ctx, location);
@@ -63,7 +66,7 @@ export async function pauseAtStep({ ctx, stack, location }: PauseAtStepArgs): Pr
   if (!checkpoint) {
     throw new Error(`Pause checkpoint ${checkpointId} was not stored`);
   }
-  ctx.statelogClient.checkpointCreated({
+  log.checkpointCreated({
     checkpointId,
     reason: "pause",
     sourceLocation: location,

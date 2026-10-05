@@ -1,7 +1,6 @@
 import type { StateStack } from "./state/stateStack.js";
 import { AgencyAbort, AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { Clock, realClock, TimerHandle } from "./clock.js";
-import { __ctx } from "./asyncContext.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -569,10 +568,14 @@ export class TimeGuard implements Guard {
   isRootBudget: boolean = false;
   disarmed: boolean = false;
 
-  /** `timeLimit` is mutable ONLY through extendBudget. */
+  /** `timeLimit` is mutable ONLY through extendBudget. `clock` is the time
+   *  source the guard meters against for its whole life: the run's clock,
+   *  handed over by whoever makes or restores the guard. The default is the
+   *  real clock, which is what every run uses outside a fake-clock test. */
   constructor(
     public timeLimit: number,
     public readonly label?: string,
+    private readonly clock: Clock = realClock,
   ) {}
 
   install(stack: StateStack): void {
@@ -587,7 +590,7 @@ export class TimeGuard implements Guard {
     // popGuard rebuilds without this one.
     this.cancelTimer();
     if (this.state === "running") {
-      this.elapsedMs += this.clock().now() - this.windowStart!;
+      this.elapsedMs += this.clock.now() - this.windowStart!;
       this.windowStart = undefined;
       this.state = "paused";
     }
@@ -629,7 +632,7 @@ export class TimeGuard implements Guard {
 
   pause(): void {
     if (this.state === "paused") return;
-    this.elapsedMs += this.clock().now() - this.windowStart!;
+    this.elapsedMs += this.clock.now() - this.windowStart!;
     this.windowStart = undefined;
     this.cancelTimer();
     this.state = "paused";
@@ -720,7 +723,7 @@ export class TimeGuard implements Guard {
     if (this.state === "running") {
       this.cancelTimer();
       this.state = "paused";
-      this.elapsedMs += this.clock().now() - this.windowStart!;
+      this.elapsedMs += this.clock.now() - this.windowStart!;
       this.windowStart = undefined;
       this.startWindow();
     }
@@ -752,7 +755,7 @@ export class TimeGuard implements Guard {
     return (
       this.elapsedMs +
       (this.state === "running" && this.windowStart !== undefined
-        ? this.clock().now() - this.windowStart
+        ? this.clock.now() - this.windowStart
         : 0)
     );
   }
@@ -802,7 +805,7 @@ export class TimeGuard implements Guard {
     // branch pauses/resumes independently; resume() on the child stack
     // arms the fresh timer at the branch's first runner step.
     const remaining = Math.max(1, this.timeLimit - this.currentElapsed());
-    const clone = new TimeGuard(remaining, this.label);
+    const clone = new TimeGuard(remaining, this.label, this.clock);
     clone.guardId = this.guardId;
     // Hand-copied: cloning and serialization are DIFFERENT paths, and a
     // field added to toJSON alone silently misses branches (rev-3 plan
@@ -843,8 +846,9 @@ export class TimeGuard implements Guard {
       guardId?: string;
       label?: string;
     } & SharedGuardJSONFields,
+    clock: Clock = realClock,
   ): TimeGuard {
-    const g = new TimeGuard(j.timeLimit, j.label);
+    const g = new TimeGuard(j.timeLimit, j.label, clock);
     g.elapsedMs = j.elapsedMs;
     // Optional with a zero default: checkpoints written before the join
     // rule existed have no grantedMs, and "no recorded grants" is the
@@ -868,15 +872,6 @@ export class TimeGuard implements Guard {
     stack.rebuildAbortSignal();
   }
 
-  /** The time source. Reads the run's clock when a frame is present; a
-   *  guard revived from a checkpoint runs frameless and meters against the
-   *  real clock, exactly as before this seam existed. `__ctx()` is the
-   *  canonical lax accessor; do not use `agency.ctxMaybe()` here (agency.ts
-   *  imports TimeGuard, so that would be a circular import). */
-  private clock(): Clock {
-    return __ctx()?.clock ?? realClock;
-  }
-
   private startWindow(): void {
     // A disarmed guard must never arm its abort timer: check() already
     // reports nothing, but a live timer would still fire the branch's
@@ -886,14 +881,13 @@ export class TimeGuard implements Guard {
     if (this.disarmed) return;
     const remaining = this.timeLimit - this.elapsedMs;
     const delay = remaining > 0 ? remaining : 0;
-    this.timerHandle = this.clock().setTimer(() => {
+    this.timerHandle = this.clock.setTimer(() => {
       // Abort WITH a structured cause so any in-flight leaf op (sleep,
       // fetch, …) listening on the composed signal rejects carrying the
       // guard trip — not a bare cancel that the guard's `try` boundary
       // can't recognize and would let escape as an unhandled rejection.
       const spent =
-        this.elapsedMs +
-        (this.windowStart !== undefined ? this.clock().now() - this.windowStart : 0);
+        this.elapsedMs + (this.windowStart !== undefined ? this.clock.now() - this.windowStart : 0);
       // Abort with an AgencyCancelledError that CARRIES the structured
       // cause. Keeping `signal.reason` an Error (not a bare object) means
       // a `throw signal.reason` site — e.g. runBatch's race-loser path —
@@ -912,13 +906,13 @@ export class TimeGuard implements Guard {
         ),
       );
     }, delay);
-    this.windowStart = this.clock().now();
+    this.windowStart = this.clock.now();
     this.state = "running";
   }
 
   private cancelTimer(): void {
     if (this.timerHandle) {
-      this.clock().clearTimer(this.timerHandle);
+      this.clock.clearTimer(this.timerHandle);
       this.timerHandle = undefined;
     }
   }
@@ -926,12 +920,12 @@ export class TimeGuard implements Guard {
 
 /** Dispatch a serialized guard back to its class instance. Add a case
  *  per new guard variant. */
-export function guardFromJSON(json: GuardJSON): Guard {
+export function guardFromJSON(json: GuardJSON, clock: Clock = realClock): Guard {
   switch (json.kind) {
     case "cost":
       return CostGuard.fromJSON(json);
     case "time":
-      return TimeGuard.fromJSON(json);
+      return TimeGuard.fromJSON(json, clock);
     default: {
       // Fail loudly rather than returning undefined (which would
       // surface as a downstream "cannot read properties of undefined"

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "oneAfterTheOther",
+      "description": "A helper raises through its handle, is answered, and raises again. The handle refuses the second raise, so the handler is asked about the first only. If the second raise were allowed, it would get the first one's stored answer on resume without anyone being asked.",
+      "input": "",
+      "expectedOutput": "{\"result\":{\"firstAnswer\":\"approve\",\"secondRaise\":\"refused\"},\"askedAbout\":[\"test::first\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "bothAtOnce",
+      "description": "A helper raises two interrupts at the same time through one handle. The handle refuses the second, so the handler is asked about the first only. If both were allowed and no handler answered, only the second would reach the user, and both raises would get its answer.",
+      "input": "",
+      "expectedOutput": "{\"result\":{\"firstAnswer\":\"approve\",\"secondRaise\":\"refused\"},\"askedAbout\":[\"test::first\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

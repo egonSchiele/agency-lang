@@ -420,14 +420,14 @@ export const ts = {
   },
 
   /**
-   * `await __validateChainRecursive(value, <descriptor>)` — used at
+   * `await __validateChainRecursive(__run, value, <descriptor>)` — used at
    * `!` sites whose resolved type carries at least one `@validate(...)` tag
    * anywhere in the tree. The descriptor is a TS expression built via
    * `buildValidationDescriptor(...)`. Validators read `ctx` from the
    * active `agencyStore` ALS frame, so no explicit ctx arg is threaded.
    */
   validateChainRecursive(value: TsNode, descriptor: TsNode): TsAwait {
-    return ts.awaitCall(ts.id("__validateChainRecursive"), [value, descriptor]);
+    return ts.awaitCall(ts.id("__validateChainRecursive"), [ts.runtime.run, value, descriptor]);
   },
 
   scopedVar(
@@ -585,14 +585,13 @@ export const ts = {
     // (globals, callsite, runner) are inherited here instead of being
     // silently reset to undefined for stdlib helpers invoked from
     // inside this body frame.
-    return ts.awaitCall(ts.prop(ts.id("agencyStore"), "run"), [
-      ts.obj([
-        ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
-        ts.set("ctx", ctx),
-        ts.set("stack", stack),
-        ts.set("threads", threads),
-      ]),
-      ts.arrowFn([], ts.statements(body), { async: true }),
+    // The body is handed the run it runs under, as `__run`. That name hides
+    // the function's own `__run` parameter inside the body.
+    return ts.awaitCall(ts.id("__withChildRun"), [
+      ts.id("__run"),
+      ts.obj([ts.set("ctx", ctx), ts.set("stack", stack), ts.set("threads", threads)]),
+      ts.str("its body"),
+      ts.arrowFn([{ name: "__run" }], ts.statements(body), { async: true }),
     ]);
   },
 
@@ -612,6 +611,7 @@ export const ts = {
   callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
     const dataNode = "kind" in data ? (data as TsNode) : ts.obj(data as Record<string, TsNode>);
     return ts.awaitCall(ts.id("callHook"), [
+      ts.id("__run"),
       ts.obj({
         name: ts.str(hookName),
         data: dataNode,
@@ -796,12 +796,12 @@ export const ts = {
     // creates a self-typing cycle that makes TS infer `ts: any`. The
     // `__globals()!` raw is the canonical "current per-scope
     // GlobalStore" expression (see `ts.runtime.globals`).
-    const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
+    const receiver = globalsRef ?? ({ kind: "raw", code: "__run.globals" } as TsRaw);
     return ts.methodCall(receiver, "get", [ts.str(moduleId), ts.str(varName)]);
   },
 
   globalSet(moduleId: string, varName: string, value: TsNode, globalsRef?: TsNode): TsCall {
-    const receiver = globalsRef ?? ({ kind: "raw", code: "__globals()!" } as TsRaw);
+    const receiver = globalsRef ?? ({ kind: "raw", code: "__run.globals" } as TsRaw);
     return ts.methodCall(receiver, "set", [ts.str(moduleId), ts.str(varName), value]);
   },
 
@@ -840,9 +840,13 @@ export const ts = {
    *  `ts.id("__ctx")` directly to reach the setupEnv local. */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
-    ctx: { kind: "raw", code: "getRuntimeContext().ctx" } as TsRaw,
-    threads: { kind: "raw", code: "__threads()" } as TsRaw,
-    stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
+    /** The run the enclosing body runs under. Every function, node, block,
+     *  and body the runtime calls back declares it as a parameter, so the
+     *  name always means the innermost run. */
+    run: { kind: "identifier", name: "__run" } as TsIdentifier,
+    ctx: { kind: "raw", code: "__run.ctx" } as TsRaw,
+    threads: { kind: "raw", code: "__run.threads" } as TsRaw,
+    stateStack: { kind: "raw", code: "__run.stack" } as TsRaw,
     /** Per-scope GlobalStore accessor. Reads from the active ALS
      *  frame's `globals` slot — pointer-shared with the canonical
      *  store at every frame builder (Stage 1) and the branch-local
@@ -854,7 +858,7 @@ export const ts = {
      *  every emission site runs inside an Agency execution frame
      *  (function/node body wrapped in `withAlsFrame`, Runner step
      *  body, or bootstrap frame). */
-    globals: { kind: "raw", code: "__globals()!" } as TsRaw,
+    globals: { kind: "raw", code: "__run.globals" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,
     step: { kind: "identifier", name: "__step" } as TsIdentifier,
     state: { kind: "identifier", name: "__state" } as TsIdentifier,

@@ -47,7 +47,7 @@
  *    the generated function-body emission in
  *    `lib/backends/typescriptBuilder.ts`.
  */
-import { agencyStore, getRuntimeContext, lineageOf } from "./asyncContext.js";
+import { currentRun, freshState, lineageOf, withRun, type Run } from "./asyncContext.js";
 import { setupFunction } from "./node.js";
 import { Runner } from "./runner.js";
 import { claimFrameForScope } from "./state/stateStack.js";
@@ -115,15 +115,15 @@ export async function withResumableScope<T>(
   const moduleId = opts.moduleId ?? "<ts-helper>";
   const pin = opts.pinResultCheckpoint ?? false;
 
-  const runtime = getRuntimeContext();
+  const runtime = currentRun();
   const ctx = runtime.ctx;
 
   // Push a new frame on the active branch's stack (reads `stack` /
   // `threads` from the ALS frame, same as a generated function body).
-  const { stateStack, stack, threads } = setupFunction();
+  const { stateStack, stack, threads } = setupFunction(runtime);
   // Hand-written claim (generated code claims in its preambles; this
   // helper is TypeScript and pulls a real frame via setupFunction).
-  claimFrameForScope(stack, opts.name, typeof moduleId === "string" ? moduleId : "");
+  claimFrameForScope(stack, opts.name, typeof moduleId === "string" ? moduleId : "", runtime.log);
 
   if (pin) {
     await ctx.checkpoints.createPinned(stateStack, ctx, {
@@ -148,11 +148,31 @@ export async function withResumableScope<T>(
   // counter aligned with the persisted substep slots across resume.
   let nextStepId = 0;
 
+  // The run of the scope's body. `s.step` is called at the top level of the
+  // body, so this is the run that is current at each call.
+  const bodyRun: Run = {
+    ctx,
+    stack: stateStack,
+    threads,
+    // Inherit `globals` from the outer run so a resumable scope nested
+    // inside a fork branch sees the branch-local clone instead of the
+    // canonical store.
+    globals: runtime.globals,
+    toolInvocationStack: runtime.toolInvocationStack,
+    // Keep the enclosing arm's decision scope so a resumable scope
+    // nested inside a fork branch still batches with the block.
+    decisions: runtime.decisions,
+    log: runtime.log,
+    state: freshState(),
+    callsite: { moduleId, scopeName: opts.name, stepPath: "" },
+    ...lineageOf(runtime),
+  };
+
   const scope: ResumableScope = {
     step: async <U>(fn: () => U | Promise<U>): Promise<U> => {
       const id = nextStepId++;
       const key = `${STEP_RESULT_PREFIX}${id}`;
-      await runner.step(id, async () => {
+      await runner.step(id, bodyRun, async () => {
         stack.locals[key] = await fn();
       });
       // After a no-op short-circuit (halted, replayed substep), the
@@ -177,26 +197,7 @@ export async function withResumableScope<T>(
   };
 
   try {
-    const outer = agencyStore.getStore();
-    const bodyResult = await agencyStore.run(
-      {
-        ctx,
-        stack: stateStack,
-        threads,
-        // Inherit `globals` from any outer ALS frame so a resumable
-        // scope nested inside a fork branch sees the branch-local
-        // clone instead of the canonical store. Fall back to
-        // `ctx.globals` when no outer frame exists.
-        globals: outer?.globals ?? ctx.globals,
-        toolInvocationStack: outer?.toolInvocationStack,
-        // Keep the enclosing arm's decision scope so a resumable scope
-        // nested inside a fork branch still batches with the block.
-        decisions: outer?.decisions,
-        callsite: { moduleId, scopeName: opts.name, stepPath: "" },
-        ...lineageOf(outer),
-      },
-      () => body(scope),
-    );
+    const bodyResult = await withRun(bodyRun, () => body(scope));
     return runner.halted ? (runner.haltResult as T) : bodyResult;
   } finally {
     stateStack.pop();

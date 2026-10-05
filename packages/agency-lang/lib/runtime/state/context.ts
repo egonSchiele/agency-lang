@@ -3,13 +3,12 @@ import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { LogLevel } from "../../logger.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
-import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
+import { StatelogClient, StatelogConfig, type RootLog } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import { Clock, realClock, FakeClock } from "../clock.js";
-import { agencyStore } from "../asyncContext.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -25,7 +24,8 @@ import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
-import type { HandlerEntry, HandlerFn } from "../types.js";
+import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
+import { callPlain } from "../asyncContext.js";
 import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
@@ -149,7 +149,34 @@ export class RuntimeContext<T> {
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
-  statelogClient: StatelogClient;
+  //
+  // Its type has no `startSpan` or `endSpan`. A span opened on the client
+  // itself goes on the root span stack, which every branch shares, so two
+  // fork branches doing it would pop each other's spans. Code inside a run
+  // opens spans through `run.log`, which has the branch's own stack.
+  statelogClient: RootLog;
+
+  /**
+   * The logger for posts made outside any run: the run's start and end
+   * events and errors reported after the run's frame has ended. It is the
+   * client itself, so it nests under the root span stack and redacts with
+   * the top-level globals. Code inside a run logs through `run.log`.
+   */
+  get rootLog(): RootLog {
+    return this.statelogClient;
+  }
+
+  /**
+   * The client itself with its span methods, for the code that owns the
+   * root span stack: the `agentRun` span around a whole run, the graph
+   * engine's span around each node, the node boundary that closes an
+   * `abortUnwind` span after the run's own logger is gone, and the code
+   * that makes a run's logger out of the client. All of it runs at the root
+   * of a run, outside every fork branch.
+   */
+  get rootLogWithSpans(): StatelogClient {
+    return this.statelogClient as StatelogClient;
+  }
   smoltalkDefaults: Partial<SmolConfig>;
   /** Max characters of a single tool result fed back to the LLM (the
    *  full result is still returned to Agency code). `undefined` falls
@@ -537,15 +564,15 @@ export class RuntimeContext<T> {
    * push/pop/push of the same dir reuses one instance — important
    * for the "pop back to A returns A's manager" semantics.
    */
-  getActiveMemoryManager(): MemoryManager | undefined {
+  getActiveMemoryManager(branchStack: StateStack): MemoryManager | undefined {
     // Resolve memory against the ACTIVE branch stack, not the top-level
     // `this.stateStack`. Inside a fork/race/tool branch the active stack
     // is that branch's own slice (seeded from the parent at fork time via
     // `inheritMemoryFrom`), so `enableMemory`/`setMemoryId` inside a branch
-    // are visible to that branch and don't leak to siblings/parent. At the
-    // top level (and outside any ALS frame) this is `this.stateStack`.
-    const stack = agencyStore.getStore()?.stack ?? this.stateStack;
-    if (!stack) return undefined;
+    // are visible to that branch and don't leak to siblings/parent.
+    //
+    // The caller passes its run's stack.
+    const stack = branchStack;
     let frame = stack.activeMemoryFrame();
     if (
       !frame &&
@@ -582,9 +609,6 @@ export class RuntimeContext<T> {
       llmClient: this._llmClient,
       smoltalkDefaults: this.smoltalkDefaults,
       source: this.traceConfig?.program ?? "agent",
-      // Reuse the per-execCtx StatelogClient so memory's own LLM/embed
-      // spans nest under the same trace as the agent's calls.
-      statelogClient: this.statelogClient,
       // Threshold for memory's internal logger; promoting this to
       // "debug" in agency.json surfaces every tier/extract/compact
       // step on stderr.
@@ -592,20 +616,16 @@ export class RuntimeContext<T> {
       memoryIdRef: {
         // memoryId is orthogonal to which frame is active — it lives
         // on `<stack>.other.memoryId` and persists across frame
-        // pushes/pops. Read the ACTIVE branch stack dynamically on each
-        // access (not a captured one): this manager is cached per
-        // configKey and shared across concurrent branches, so each
-        // branch's get/set must resolve to ITS own stack. Falls back to
-        // `this.stateStack` outside any ALS frame.
-        get: () => {
-          const s = agencyStore.getStore()?.stack ?? this.stateStack;
-          const id = s?.other?.memoryId;
+        // pushes/pops. Each access takes the run of the call it serves
+        // (not a captured one): this manager is cached per configKey and
+        // shared across concurrent branches, so each branch's get/set
+        // must resolve to ITS own stack.
+        get: (run) => {
+          const id = run.stack.other.memoryId;
           return typeof id === "string" ? id : "default";
         },
-        set: (id: string) => {
-          const s = agencyStore.getStore()?.stack ?? this.stateStack;
-          if (!s) return;
-          s.other.memoryId = id;
+        set: (run, id: string) => {
+          run.stack.other.memoryId = id;
         },
       },
     });
@@ -658,6 +678,15 @@ export class RuntimeContext<T> {
    *  blocks capture it in Runner.handle; TS callers capture at call
    *  time in withPushedHandler. See HandlerEntry. */
   pushHandler(fn: HandlerFn, liveGuardIds: string[]): void {
+    // A handler from TypeScript takes only the interrupt. The chain calls
+    // every handler with the run first, so wrap it once here. `callPlain`
+    // makes the run readable on the handler's first line.
+    this.pushRunHandler((run, interrupt) => callPlain(run, fn, [interrupt]), liveGuardIds);
+  }
+  /** Register a handler function in the shape the chain calls: the run it
+   *  runs under, then the interrupt. Handler functions the compiler wrote
+   *  already have this shape. */
+  pushRunHandler(fn: RunHandlerFn, liveGuardIds: string[]): void {
     this.handlers.push({ fn, liveGuardIds });
   }
   popHandler(): void {
@@ -783,7 +812,7 @@ export class RuntimeContext<T> {
     const stack = reviveNative(checkpoint.stack);
     const globals = reviveNative(checkpoint.globals);
 
-    this.stateStack = StateStack.fromJSON(stack);
+    this.stateStack = StateStack.fromJSON(stack, this.clock);
     this.stateStack.deserializeMode();
 
     this.globals = GlobalStore.fromJSON(globals);

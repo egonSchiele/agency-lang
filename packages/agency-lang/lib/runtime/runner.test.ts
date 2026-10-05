@@ -4,8 +4,14 @@ import { makeRedactReplacer } from "./redactForStatelog.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
-import { makeMockCtx } from "./__tests__/testHelpers.js";
+import {
+  currentRun,
+  freshState,
+  getRuntimeContext,
+  runInTestContext,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import { TimeGuard } from "./guard.js";
 import { AgencyCancelledError, PauseSignal, readCause } from "./errors.js";
 import { callHook, isInsideCallback } from "./hooks.js";
@@ -15,10 +21,22 @@ import type { HandlerEntry } from "./types.js";
 import * as smoltalk from "smoltalk";
 import { ABANDONED_TURN_TEXT } from "./threadRepair.js";
 import type { MessageThread } from "./state/messageThread.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import {
+  adoptCtx,
+  asRootRun,
+  makeMockCtx as makeBareMockCtx,
+  testRun,
+  withTestFrame,
+} from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
+
+/** A mock ctx that is also the ctx of the frame the test runs in, so the run
+ *  a test hands a Runner has the same ctx as the Runner. */
+function makeMockCtx(opts: Parameters<typeof makeBareMockCtx>[0] = {}) {
+  return adoptCtx(makeBareMockCtx(opts));
+}
 
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
@@ -52,7 +70,7 @@ describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
     const stack = trippedGuardStack();
     const runner = new Runner(makeMockCtx(), makeFrame(), { stack });
     let ran = false;
-    await runner.step(0, async () => {
+    await runner.step(0, testRun(), async () => {
       ran = true;
     });
     expect(ran).toBe(false);
@@ -79,7 +97,7 @@ describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
     // rather than throw an unhandled GuardExceededError for an
     // already-handled trip (the second crash this PR fixes).
     await expect(
-      runner.step(0, async () => {
+      runner.step(0, testRun(), async () => {
         ran = true;
       }),
     ).resolves.toBeUndefined();
@@ -89,21 +107,21 @@ describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
 
 describe("safeStatelogValue", () => {
   it("deep-clones small JSON values", () => {
-    expect(safeStatelogValue(42)).toBe(42);
-    expect(safeStatelogValue([0, 1, 1, 2, 3])).toEqual([0, 1, 1, 2, 3]);
+    expect(safeStatelogValue(42, undefined)).toBe(42);
+    expect(safeStatelogValue([0, 1, 1, 2, 3], undefined)).toEqual([0, 1, 1, 2, 3]);
     const obj = { a: [1, 2] };
-    const out = safeStatelogValue(obj);
+    const out = safeStatelogValue(obj, undefined);
     expect(out).toEqual(obj);
     expect(out).not.toBe(obj); // cloned, not the same reference
   });
 
   it("returns undefined for undefined and values JSON can't represent", () => {
-    expect(safeStatelogValue(undefined)).toBeUndefined();
-    expect(safeStatelogValue(() => 1)).toBeUndefined();
+    expect(safeStatelogValue(undefined, undefined)).toBeUndefined();
+    expect(safeStatelogValue(() => 1, undefined)).toBeUndefined();
   });
 
   it("truncates an oversized value to a marked string", () => {
-    const out = safeStatelogValue("x".repeat(5000));
+    const out = safeStatelogValue("x".repeat(5000), undefined);
     expect(typeof out).toBe("string");
     expect((out as string).length).toBeLessThan(5000);
     expect(out as string).toMatch(/…\[truncated\]$/);
@@ -112,7 +130,7 @@ describe("safeStatelogValue", () => {
   it("returns a placeholder for an unserializable (circular) value", () => {
     const a: any = {};
     a.self = a;
-    expect(safeStatelogValue(a)).toBe("[unserializable]");
+    expect(safeStatelogValue(a, undefined)).toBe("[unserializable]");
   });
 
   it("preserves a durable redact tag on the clone (redaction runs on this copy)", () => {
@@ -121,7 +139,7 @@ describe("safeStatelogValue", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-secret" };
     gs.setTag(secret, "redact", true);
-    const out = safeStatelogValue({ wrapped: secret }) as {
+    const out = safeStatelogValue({ wrapped: secret }, undefined) as {
       wrapped: object;
     };
     expect(out.wrapped).toEqual({ apiKey: "sk-secret" });
@@ -129,9 +147,12 @@ describe("safeStatelogValue", () => {
   });
 
   it("preserves native types (Date) through the clone", () => {
-    const out = safeStatelogValue({
-      when: new Date("2026-01-01T00:00:00.000Z"),
-    }) as { when: Date };
+    const out = safeStatelogValue(
+      {
+        when: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      undefined,
+    ) as { when: Date };
     expect(out.when).toBeInstanceOf(Date);
   });
 
@@ -143,24 +164,18 @@ describe("safeStatelogValue", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-oversized-secret" };
     gs.setTag(secret, "redact", true);
-    const ctx: any = { globals: gs };
-    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      safeStatelogValue({ secret, filler: "x".repeat(5000) }),
-    );
+    const out = safeStatelogValue({ secret, filler: "x".repeat(5000) }, gs);
     expect(typeof out).toBe("string");
     expect(out).toMatch(/…\[truncated\]$/);
     expect(out).toContain("[REDACTED]");
     expect(out).not.toContain("sk-oversized-secret");
   });
 
-  it("redacts the small-path clone in place when a frame is present", () => {
+  it("redacts the small-path clone in place when it is handed the tag store", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-small-secret" };
     gs.setTag(secret, "redact", true);
-    const ctx: any = { globals: gs };
-    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      safeStatelogValue({ secret, other: 1 }),
-    ) as Record<string, unknown>;
+    const out = safeStatelogValue({ secret, other: 1 }, gs) as Record<string, unknown>;
     expect(out.secret).toBe("[REDACTED]");
     expect(out.other).toBe(1);
   });
@@ -173,7 +188,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async () => {
         executed = true;
       });
 
@@ -187,7 +202,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async () => {
         executed = true;
       });
 
@@ -199,13 +214,13 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const order: number[] = [];
 
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async () => {
         order.push(0);
       });
-      await runner.step(1, async () => {
+      await runner.step(1, testRun(), async () => {
         order.push(1);
       });
-      await runner.step(2, async () => {
+      await runner.step(2, testRun(), async () => {
         order.push(2);
       });
 
@@ -219,13 +234,13 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const order: number[] = [];
 
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async () => {
         order.push(0);
       });
-      await runner.step(1, async () => {
+      await runner.step(1, testRun(), async () => {
         order.push(1);
       });
-      await runner.step(2, async () => {
+      await runner.step(2, testRun(), async () => {
         order.push(2);
       });
 
@@ -240,11 +255,11 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const order: number[] = [];
 
-      await runner.step(0, async (runner) => {
+      await runner.step(0, testRun(), async (runner) => {
         order.push(0);
         runner.halt("interrupt-data");
       });
-      await runner.step(1, async () => {
+      await runner.step(1, testRun(), async () => {
         order.push(1);
       });
 
@@ -258,11 +273,11 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.step(0, async (runner) => {
-        await runner.step(0, async (runner) => {
+      await runner.step(0, testRun(), async (runner) => {
+        await runner.step(0, testRun(), async (runner) => {
           runner.halt("deep-halt");
         });
-        await runner.step(1, async () => {
+        await runner.step(1, testRun(), async () => {
           throw new Error("should not run");
         });
       });
@@ -275,7 +290,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.step(0, async (runner) => {
+      await runner.step(0, testRun(), async (runner) => {
         runner.halt("stopped");
       });
 
@@ -288,9 +303,9 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.step(0, async (runner) => {
-        await runner.step(0, async () => {});
-        await runner.step(1, async () => {});
+      await runner.step(0, testRun(), async (runner) => {
+        await runner.step(0, testRun(), async () => {});
+        await runner.step(1, testRun(), async () => {});
       });
 
       expect(frame.step).toBe(1);
@@ -305,12 +320,12 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const order: string[] = [];
 
-      await runner.step(0, async (runner) => {
+      await runner.step(0, testRun(), async (runner) => {
         // step 0 not skipped (counter is 0)
-        await runner.step(0, async () => {
+        await runner.step(0, testRun(), async () => {
           order.push("0.0");
         });
-        await runner.step(1, async () => {
+        await runner.step(1, testRun(), async () => {
           order.push("0.1");
         });
       });
@@ -323,9 +338,9 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.step(2, async (runner) => {
-        await runner.step(1, async (runner) => {
-          await runner.step(3, async () => {});
+      await runner.step(2, testRun(), async (runner) => {
+        await runner.step(1, testRun(), async (runner) => {
+          await runner.step(3, testRun(), async () => {});
         });
       });
 
@@ -340,7 +355,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let result = "";
 
-      await runner.ifElse(0, [
+      await runner.ifElse(0, testRun(), [
         {
           condition: () => false,
           body: async () => {
@@ -366,6 +381,7 @@ describe("Runner", () => {
 
       await runner.ifElse(
         0,
+        testRun(),
         [
           {
             condition: () => false,
@@ -390,7 +406,7 @@ describe("Runner", () => {
       let evalCount = 0;
       let result = "";
 
-      await runner.ifElse(0, [
+      await runner.ifElse(0, testRun(), [
         {
           condition: () => {
             evalCount++;
@@ -419,8 +435,8 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.step(3, async (runner) => {
-        await runner.ifElse(0, [{ condition: () => true, body: async () => {} }]);
+      await runner.step(3, testRun(), async (runner) => {
+        await runner.ifElse(0, testRun(), [{ condition: () => true, body: async () => {} }]);
       });
 
       // condbranch key should include the parent path
@@ -434,7 +450,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, ["a", "b", "c"], async (item) => {
+      await runner.loop(0, testRun(), ["a", "b", "c"], async (item) => {
         collected.push(item);
       });
 
@@ -448,7 +464,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, ["a", "b", "c"], async (item) => {
+      await runner.loop(0, testRun(), ["a", "b", "c"], async (item) => {
         collected.push(item);
       });
 
@@ -459,7 +475,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.loop(0, ["a", "b", "c"], async (item, i, runner) => {
+      await runner.loop(0, testRun(), ["a", "b", "c"], async (item, i, runner) => {
         if (item === "b") {
           runner.halt("stopped");
           return;
@@ -474,8 +490,8 @@ describe("Runner", () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame);
 
-      await runner.loop(0, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => {});
+      await runner.loop(0, testRun(), ["a", "b"], async (item, i, runner) => {
+        await runner.step(0, testRun(), async () => {});
       });
 
       // After completion, the iteration counter should reflect 2 iterations
@@ -487,7 +503,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, { alice: "approve", bob: "reject" }, async (key) => {
+      await runner.loop(0, testRun(), { alice: "approve", bob: "reject" }, async (key) => {
         collected.push(key);
       });
 
@@ -499,7 +515,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const pairs: [string, unknown][] = [];
 
-      await runner.loop(0, { a: 1, b: 2, c: 3 }, async (key, value) => {
+      await runner.loop(0, testRun(), { a: 1, b: 2, c: 3 }, async (key, value) => {
         pairs.push([key, value]);
       });
 
@@ -515,7 +531,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const pairs: [unknown, unknown][] = [];
 
-      await runner.loop(0, ["x", "y", "z"], async (item, index) => {
+      await runner.loop(0, testRun(), ["x", "y", "z"], async (item, index) => {
         pairs.push([item, index]);
       });
 
@@ -531,7 +547,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, {}, async (key) => {
+      await runner.loop(0, testRun(), {}, async (key) => {
         collected.push(key);
       });
 
@@ -547,7 +563,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, { a: 1, b: 2, c: 3 }, async (key, _i, runner) => {
+      await runner.loop(0, testRun(), { a: 1, b: 2, c: 3 }, async (key, _i, runner) => {
         collected.push(key);
         if (key === "b") {
           runner.halt("stopped");
@@ -567,7 +583,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       const collected: string[] = [];
 
-      await runner.loop(0, null as any, async (item) => {
+      await runner.loop(0, testRun(), null as any, async (item) => {
         collected.push(item);
       });
 
@@ -584,6 +600,7 @@ describe("Runner", () => {
 
       await runner.whileLoop(
         0,
+        testRun(),
         () => count < 3,
         async () => {
           count++;
@@ -603,6 +620,7 @@ describe("Runner", () => {
       // condition must account for iterations already done
       await runner.whileLoop(
         0,
+        testRun(),
         () => count + 2 < 3,
         async () => {
           count++;
@@ -623,6 +641,7 @@ describe("Runner", () => {
 
       await runner.whileLoop(
         0,
+        testRun(),
         async () => {
           // Force the condition to genuinely return a Promise.
           await Promise.resolve();
@@ -656,7 +675,7 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", {}, async () => {
+      await runner.thread(0, testRun(), "create", {}, async () => {
         calls.push("body");
       });
 
@@ -673,7 +692,7 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", {}, async (runner) => {
+      await runner.thread(0, testRun(), "create", {}, async (runner) => {
         runner.halt("interrupt");
       });
 
@@ -702,9 +721,15 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", { label: "coding task", summarize: true }, async () => {
-        /* body */
-      });
+      await runner.thread(
+        0,
+        testRun(),
+        "create",
+        { label: "coding task", summarize: true },
+        async () => {
+          /* body */
+        },
+      );
 
       expect(events.length).toBe(2);
       expect(events[0].kind).toBe("start");
@@ -728,7 +753,7 @@ describe("Runner", () => {
       const handler = async () => ({ type: "approve" as const });
 
       expect(ctx.handlers.length).toBe(0);
-      await runner.handle(0, handler, async () => {
+      await runner.handle(0, testRun(), handler, async () => {
         expect(ctx.handlers.length).toBe(1);
       });
       expect(ctx.handlers.length).toBe(0);
@@ -740,7 +765,7 @@ describe("Runner", () => {
       const runner = new Runner(ctx, frame);
       const handler = async () => ({ type: "approve" as const });
 
-      await runner.handle(0, handler, async (runner) => {
+      await runner.handle(0, testRun(), handler, async (runner) => {
         runner.halt("interrupt");
       });
 
@@ -755,7 +780,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
-      await runner.branchStep(0, "0_1", async () => {
+      await runner.branchStep(0, testRun(), "0_1", async () => {
         executed = true;
       });
 
@@ -769,7 +794,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
-      await runner.branchStep(0, "0_1", async () => {
+      await runner.branchStep(0, testRun(), "0_1", async () => {
         executed = true;
       });
 
@@ -782,7 +807,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
-      await runner.branchStep(0, "0_1", async () => {
+      await runner.branchStep(0, testRun(), "0_1", async () => {
         executed = true;
       });
 
@@ -798,22 +823,23 @@ describe("Runner", () => {
       const handler = async () => ({ type: "approve" as const });
       const trace: string[] = [];
 
-      await runner.handle(0, handler, async (runner) => {
-        await runner.loop(0, ["a", "b"], async (item, i, runner) => {
+      await runner.handle(0, testRun(), handler, async (runner) => {
+        await runner.loop(0, testRun(), ["a", "b"], async (item, i, runner) => {
           await runner.ifElse(
             0,
+            testRun(),
             [
               {
                 condition: () => item === "a",
                 body: async (runner) => {
-                  await runner.step(0, async () => {
+                  await runner.step(0, testRun(), async () => {
                     trace.push(`${item}-if`);
                   });
                 },
               },
             ],
             async (runner) => {
-              await runner.step(0, async () => {
+              await runner.step(0, testRun(), async () => {
                 trace.push(`${item}-else`);
               });
             },
@@ -832,22 +858,22 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       // Step 0: simple
-      await runner.step(0, async () => {});
+      await runner.step(0, testRun(), async () => {});
 
       // Step 1: ifElse
-      await runner.ifElse(1, [
+      await runner.ifElse(1, testRun(), [
         {
           condition: () => true,
           body: async (runner) => {
-            await runner.step(0, async () => {});
-            await runner.step(1, async () => {});
+            await runner.step(0, testRun(), async () => {});
+            await runner.step(1, testRun(), async () => {});
           },
         },
       ]);
 
       // Step 2: loop
-      await runner.loop(2, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => {});
+      await runner.loop(2, testRun(), ["a", "b"], async (item, i, runner) => {
+        await runner.step(0, testRun(), async () => {});
       });
 
       expect(frame.step).toBe(3);
@@ -867,7 +893,7 @@ describe("Runner", () => {
         threads: new ThreadStore(),
       });
       let seen: any = null;
-      await runner.step(1, async () => {
+      await runner.step(1, testRun(), async () => {
         seen = getRuntimeContext().callsite;
       });
       expect(seen).toEqual({
@@ -886,13 +912,13 @@ describe("Runner", () => {
         threads: new ThreadStore(),
       });
       const paths: string[] = [];
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async (_runner, stepRun) => {
         paths.push(getRuntimeContext().callsite!.stepPath);
-        await runner.ifElse(0, [
+        await runner.ifElse(0, stepRun, [
           {
             condition: () => true,
-            body: async (r) => {
-              await r.step(0, async () => {
+            body: async (r, branchRun) => {
+              await r.step(0, branchRun, async () => {
                 paths.push(getRuntimeContext().callsite!.stepPath);
               });
             },
@@ -923,9 +949,9 @@ describe("Runner", () => {
     it("keeps the executing-handler list", async () => {
       const entry: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
       let seen: HandlerEntry[] = [];
-      await runAsHandler(entry, () =>
-        makeRunner().step(0, async () => {
-          seen = executingHandlers();
+      await runAsHandler(testRun(), entry, (run) =>
+        makeRunner().step(0, run, async (_runner, stepRun) => {
+          seen = executingHandlers(stepRun);
         }),
       );
       expect(seen).toEqual([entry]);
@@ -933,9 +959,9 @@ describe("Runner", () => {
 
     it("keeps the call depth", async () => {
       let depth = 0;
-      await withCallDepth("outer", () =>
-        makeRunner().step(0, async () => {
-          await withCallDepth("inner", async () => {
+      await withCallDepth(testRun(), "outer", (run) =>
+        makeRunner().step(0, run, async (_runner, stepRun) => {
+          await withCallDepth(stepRun, "inner", async () => {
             depth = getRuntimeContext().callDepth!.depth;
           });
         }),
@@ -945,13 +971,18 @@ describe("Runner", () => {
 
     it("keeps the handler chain depth and the active callbacks", async () => {
       const callback = {};
-      const outer = getRuntimeContext();
+      const outer: Run = {
+        ...testRun(),
+        state: freshState(),
+        handlerChainDepth: 3,
+        activeCallbacks: [callback],
+      };
       let seenDepth = -1;
       let inside = false;
-      await agencyStore.run({ ...outer, handlerChainDepth: 3, activeCallbacks: [callback] }, () =>
-        makeRunner().step(0, async () => {
-          seenDepth = getRuntimeContext().handlerChainDepth;
-          inside = isInsideCallback();
+      await withRun(outer, (run) =>
+        makeRunner().step(0, run, async (_runner, stepRun) => {
+          seenDepth = stepRun.handlerChainDepth;
+          inside = isInsideCallback(stepRun);
         }),
       );
       expect(seenDepth).toBe(3);
@@ -963,11 +994,18 @@ describe("Runner", () => {
 describe("match exit propagation", () => {
   let frame: State;
   let runner: Runner;
+  let ctx: any;
 
   beforeEach(() => {
     frame = makeFrame();
-    runner = new Runner(makeMockCtx(), frame);
+    ctx = makeBareMockCtx();
+    runner = new Runner(ctx, frame);
   });
+
+  // The runner is built before the test's frame exists, so the frame is
+  // built from the runner's ctx.
+  const it = (name: string, fn: () => unknown) =>
+    baseIt(name, () => runInTestContext(ctx, ctx.stateStack, ctx.threads, asRootRun(fn)));
 
   const frameLocals = () => frame.locals;
 
@@ -975,6 +1013,7 @@ describe("match exit propagation", () => {
     const ran: string[] = [];
     await runner.ifElse(
       0,
+      testRun(),
       [
         {
           condition: async () => true,
@@ -988,7 +1027,7 @@ describe("match exit propagation", () => {
       undefined,
       { matchId: 7 },
     );
-    await runner.step(1, async () => {
+    await runner.step(1, testRun(), async () => {
       ran.push("after-match");
     });
     expect(ran).toContain("after-match"); // flag cleared by owner
@@ -1000,6 +1039,7 @@ describe("match exit propagation", () => {
     const ran: string[] = [];
     await runner.ifElse(
       2,
+      testRun(),
       [
         {
           condition: async () => true,
@@ -1011,7 +1051,7 @@ describe("match exit propagation", () => {
       undefined,
       { matchId: 2 },
     );
-    await runner.step(3, async () => {
+    await runner.step(3, testRun(), async () => {
       ran.push("after");
     });
     expect(ran).toEqual([]); // inner skipped, flag still set, step skipped
@@ -1021,12 +1061,14 @@ describe("match exit propagation", () => {
     const ran: string[] = [];
     await runner.ifElse(
       0,
+      testRun(),
       [
         {
           condition: async () => true,
           body: async (r) => {
             await r.ifElse(
               0,
+              testRun(),
               [
                 {
                   condition: async () => true,
@@ -1040,7 +1082,7 @@ describe("match exit propagation", () => {
             );
             // A post-yield statement in the outer arm is its own substep and
             // must be SKIPPED while exit 10 is pending.
-            await r.step(1, async () => {
+            await r.step(1, testRun(), async () => {
               ran.push("outer-arm-after-inner");
             });
           },
@@ -1049,7 +1091,7 @@ describe("match exit propagation", () => {
       undefined,
       { matchId: 10 },
     );
-    await runner.step(2, async () => {
+    await runner.step(2, testRun(), async () => {
       ran.push("after-outer");
     });
     expect(ran).toEqual(["after-outer"]);
@@ -1059,11 +1101,12 @@ describe("match exit propagation", () => {
     const ran: string[] = [];
     await runner.ifElse(
       0,
+      testRun(),
       [
         {
           condition: async () => true,
           body: async (r) => {
-            await r.ifElse(0, [
+            await r.ifElse(0, testRun(), [
               {
                 condition: async () => true,
                 body: async (r2) => {
@@ -1071,7 +1114,7 @@ describe("match exit propagation", () => {
                 },
               },
             ]); // plain if, no matchId
-            await r.step(1, async () => {
+            await r.step(1, testRun(), async () => {
               ran.push("skipped");
             });
           },
@@ -1080,7 +1123,7 @@ describe("match exit propagation", () => {
       undefined,
       { matchId: 5 },
     );
-    await runner.step(2, async () => {
+    await runner.step(2, testRun(), async () => {
       ran.push("after");
     });
     expect(ran).toEqual(["after"]);
@@ -1093,13 +1136,13 @@ describe("match exit propagation", () => {
       const f = makeFrame();
       const r = new Runner(makeMockCtx(), f);
       const seen: number[] = [];
-      await r.loop(0, [0, 1, 2], async (item, _i, rr) => {
+      await r.loop(0, testRun(), [0, 1, 2], async (item, _i, rr) => {
         seen.push(item);
         if (item === 0) rr.exitMatch(20, "x");
       });
       expect(seen).toEqual([0]); // iteration 1 never ran
       const ran: string[] = [];
-      await r.step(1, async () => {
+      await r.step(1, testRun(), async () => {
         ran.push("after");
       });
       expect(ran).toEqual([]); // loop did not clear the flag
@@ -1112,6 +1155,7 @@ describe("match exit propagation", () => {
       let n = 0;
       await r.whileLoop(
         0,
+        testRun(),
         () => n < 3,
         async (rr) => {
           seen.push(n);
@@ -1121,7 +1165,7 @@ describe("match exit propagation", () => {
       );
       expect(seen).toEqual([0]); // iteration 1 never ran
       const ran: string[] = [];
-      await r.step(1, async () => {
+      await r.step(1, testRun(), async () => {
         ran.push("after");
       });
       expect(ran).toEqual([]); // whileLoop did not clear the flag
@@ -1132,6 +1176,7 @@ describe("match exit propagation", () => {
     await expect(
       runner.ifElse(
         0,
+        testRun(),
         [
           {
             condition: async () => true,
@@ -1146,7 +1191,7 @@ describe("match exit propagation", () => {
       ),
     ).rejects.toThrow("boom");
     const ran: string[] = [];
-    await runner.step(1, async () => {
+    await runner.step(1, testRun(), async () => {
       ran.push("after");
     });
     expect(ran).toEqual(["after"]); // try/finally cleared the flag
@@ -1198,7 +1243,7 @@ describe("thread() — abandoned-turn repair on reopen", () => {
   async function openFresh(threads: ThreadStore, opts: Record<string, unknown>): Promise<string> {
     let tid = "";
     const runner = new Runner(makeMockCtx(), makeFrame(), { threads });
-    await runner.thread(0, "create", opts, async () => {
+    await runner.thread(0, testRun(), "create", opts, async () => {
       tid = threads.activeId()!;
     });
     return tid;
@@ -1252,7 +1297,7 @@ describe("thread() — abandoned-turn repair on reopen", () => {
     const frame = makeFrame();
     let tid = "";
     const r1 = new Runner(makeMockCtx(), frame, { threads });
-    await r1.thread(0, "create", { session: "main" }, async () => {
+    await r1.thread(0, testRun(), "create", { session: "main" }, async () => {
       tid = threads.activeId()!;
     });
     damage(threads.get(tid)!);
@@ -1263,7 +1308,7 @@ describe("thread() — abandoned-turn repair on reopen", () => {
     const resumedFrame = new State({ args: {}, locals: { ...frame.locals }, step: 0 });
     let reEntered = false;
     const r2 = new Runner(makeMockCtx(), resumedFrame, { threads });
-    await r2.thread(0, "create", { session: "main" }, async () => {
+    await r2.thread(0, testRun(), "create", { session: "main" }, async () => {
       reEntered = true;
     });
 
@@ -1288,24 +1333,16 @@ describe("custom redaction markers across both statelog paths", () => {
     expect(JSON.parse(ordinaryOutput)).toEqual({ secret: replacement });
     expect(ordinaryOutput).not.toContain(SECRET_PREFIX);
 
-    const safeSmallOutput = runInTestContext(
-      runtimeContext,
-      runtimeContext.stateStack,
-      new ThreadStore(),
-      () => safeStatelogValue({ secret }),
-    );
+    const safeSmallOutput = safeStatelogValue({ secret }, runtimeContext.globals);
     expect(safeSmallOutput).toEqual({ secret: replacement });
     expect(JSON.stringify(safeSmallOutput)).not.toContain(SECRET_PREFIX);
 
-    const safeOversizedOutput = runInTestContext(
-      runtimeContext,
-      runtimeContext.stateStack,
-      new ThreadStore(),
-      () =>
-        safeStatelogValue({
-          secret,
-          filler: "x".repeat(4_101),
-        }),
+    const safeOversizedOutput = safeStatelogValue(
+      {
+        secret,
+        filler: "x".repeat(4_101),
+      },
+      runtimeContext.globals,
     );
     expect(typeof safeOversizedOutput).toBe("string");
     expect(safeOversizedOutput).toContain(replacement);
@@ -1330,7 +1367,7 @@ describe("Runner — external pause", () => {
     let ran = false;
     let caught: unknown;
     try {
-      await runner.step(0, async () => {
+      await runner.step(0, testRun(), async () => {
         ran = true;
       });
     } catch (e) {
@@ -1350,7 +1387,7 @@ describe("Runner — external pause", () => {
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     await expect(
-      runner.hook(0, async () => {
+      runner.hook(0, testRun(), async () => {
         ran = true;
       }),
     ).rejects.toBeInstanceOf(PauseSignal);
@@ -1362,7 +1399,7 @@ describe("Runner — external pause", () => {
     ctx.pauseRequested = true;
     const frame = makeFrame();
     const runner = new Runner(ctx, frame, { stack: ctx.stateStack });
-    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(PauseSignal);
+    await expect(runner.step(0, testRun(), async () => {})).rejects.toBeInstanceOf(PauseSignal);
     expect(frame.step).toBe(0);
   });
 
@@ -1375,7 +1412,7 @@ describe("Runner — external pause", () => {
       vi.advanceTimersByTime(20);
       ctx.pauseRequested = true;
       const runner = new Runner(ctx, makeFrame(), { stack });
-      await runner.step(0, async () => {});
+      await runner.step(0, testRun(), async () => {});
       expect(runner.halted).toBe(true);
       expect(runner.haltResult[0].effect).toBe("std::guard");
       expect(ctx.pauseRequested).toBe(true);
@@ -1391,7 +1428,7 @@ describe("Runner — external pause", () => {
     stack.executingHandlerEntries.push({ fn: async () => undefined, liveGuardIds: [] });
     const runner = new Runner(ctx, makeFrame(), { stack });
     let ran = false;
-    await runner.step(0, async () => {
+    await runner.step(0, testRun(), async () => {
       ran = true;
     });
     expect(ran).toBe(true);
@@ -1404,11 +1441,13 @@ describe("Runner — external pause", () => {
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     ctx.callbacks.onNodeStart = async () => {
-      await runner.step(0, async () => {
+      await runner.step(0, currentRun(), async () => {
         ran = true;
       });
     };
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } });
+    await runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) =>
+      callHook(run, { name: "onNodeStart", data: { nodeName: "x" } }),
+    );
     expect(ran).toBe(true);
     expect(ctx.pauseRequested).toBe(true);
   });
@@ -1418,7 +1457,7 @@ describe("Runner — external pause", () => {
     ctx.pauseRequested = true;
     const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
     let ran = false;
-    await runner.step(0, async () => {
+    await runner.step(0, testRun(), async () => {
       ran = true;
     });
     expect(ran).toBe(true);
@@ -1431,7 +1470,7 @@ describe("Runner — external pause", () => {
     ctx.enterToolCall();
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
-    await runner.step(0, async () => {
+    await runner.step(0, testRun(), async () => {
       ran = true;
     });
     expect(ran).toBe(true);
@@ -1446,7 +1485,7 @@ describe("Runner — external pause", () => {
       frame.locals.asyncResult = value;
     });
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
-    const caught = await runner.step(0, async () => {}).catch((e: unknown) => e);
+    const caught = await runner.step(0, testRun(), async () => {}).catch((e: unknown) => e);
     expect(caught).toBeInstanceOf(PauseSignal);
     const checkpoint = (caught as PauseSignal).checkpoint;
     expect(checkpoint.stack.stack[0].locals.asyncResult).toBe("async value");
@@ -1466,7 +1505,7 @@ describe("Runner — external pause", () => {
         body: async () => {},
       },
     ];
-    await expect(runner.ifElse(0, branches)).rejects.toBeInstanceOf(PauseSignal);
+    await expect(runner.ifElse(0, testRun(), branches)).rejects.toBeInstanceOf(PauseSignal);
     expect(evaluated).toBe(false);
   });
 
@@ -1479,7 +1518,9 @@ describe("Runner — external pause", () => {
       read = true;
       return [1];
     };
-    await expect(runner.loop(0, items, async () => {})).rejects.toBeInstanceOf(PauseSignal);
+    await expect(runner.loop(0, testRun(), items, async () => {})).rejects.toBeInstanceOf(
+      PauseSignal,
+    );
     expect(read).toBe(false);
   });
 
@@ -1488,7 +1529,9 @@ describe("Runner — external pause", () => {
     ctx.abortController.abort(new AgencyCancelledError("stop"));
     ctx.pauseRequested = true;
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
-    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
+    await expect(runner.step(0, testRun(), async () => {})).rejects.toBeInstanceOf(
+      AgencyCancelledError,
+    );
   });
 
   it("cancel wins in the other order: pause requested, then aborted", async () => {
@@ -1496,6 +1539,8 @@ describe("Runner — external pause", () => {
     ctx.pauseRequested = true;
     ctx.abortController.abort(new AgencyCancelledError("stop"));
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
-    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
+    await expect(runner.step(0, testRun(), async () => {})).rejects.toBeInstanceOf(
+      AgencyCancelledError,
+    );
   });
 });

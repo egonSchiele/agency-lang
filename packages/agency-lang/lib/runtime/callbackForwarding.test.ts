@@ -19,21 +19,21 @@ describe("sendCallbackToParent", () => {
       sent.push(m);
       return true;
     }) as any;
-    sendCallbackToParent("onNodeStart", { nodeName: "n" });
+    sendCallbackToParent("onNodeStart", { nodeName: "n" }, undefined);
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "n" } }]);
   });
 
   it("no-ops outside IPC mode", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCallbackToParent("onNodeStart", { nodeName: "n" });
+    sendCallbackToParent("onNodeStart", { nodeName: "n" }, undefined);
     expect(send).not.toHaveBeenCalled();
   });
 
   it("no-ops when process.send is unavailable", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     (process as any).send = undefined;
-    expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" })).not.toThrow();
+    expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" }, undefined)).not.toThrow();
   });
 
   it("strips function-valued fields (e.g. onAgentStart.cancel) on the wire", () => {
@@ -47,12 +47,16 @@ describe("sendCallbackToParent", () => {
       sent.push(JSON.parse(JSON.stringify(m)));
       return true;
     }) as any;
-    sendCallbackToParent("onAgentStart", {
-      nodeName: "n",
-      args: {},
-      messages: [],
-      cancel: () => {},
-    });
+    sendCallbackToParent(
+      "onAgentStart",
+      {
+        nodeName: "n",
+        args: {},
+        messages: [],
+        cancel: () => {},
+      },
+      undefined,
+    );
     expect(sent).toEqual([
       { type: "callback", name: "onAgentStart", data: { nodeName: "n", args: {}, messages: [] } },
     ]);
@@ -62,7 +66,7 @@ describe("sendCallbackToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCallbackToParent("onNodeStart", { nodeName: "x".repeat(100) }, 10);
+    sendCallbackToParent("onNodeStart", { nodeName: "x".repeat(100) }, undefined, 10);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -72,7 +76,7 @@ describe("sendCallbackToParent", () => {
     process.send = send as any;
     const circular: any = {};
     circular.self = circular;
-    expect(() => sendCallbackToParent("onNodeStart", circular)).not.toThrow();
+    expect(() => sendCallbackToParent("onNodeStart", circular, undefined)).not.toThrow();
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -81,15 +85,15 @@ describe("sendCallbackToParent", () => {
     process.send = vi.fn(() => {
       throw new Error("channel closed");
     }) as any;
-    expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" })).not.toThrow();
+    expect(() => sendCallbackToParent("onNodeStart", { nodeName: "n" }, undefined)).not.toThrow();
   });
 
   it("does not forward a denylisted callback (onStream)", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCallbackToParent("onStream", { type: "text", text: "hi" } as any);
-    sendCallbackToParent("onOAuthRequired", { serverName: "s", authUrl: "u" } as any);
+    sendCallbackToParent("onStream", { type: "text", text: "hi" } as any, undefined);
+    sendCallbackToParent("onOAuthRequired", { serverName: "s", authUrl: "u" } as any, undefined);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -97,7 +101,7 @@ describe("sendCallbackToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCallbackToParent("onCheckpoint", { runId: "job-1", checkpoint: {} } as any);
+    sendCallbackToParent("onCheckpoint", { runId: "job-1", checkpoint: {} } as any, undefined);
     expect(send).not.toHaveBeenCalled();
   });
 });

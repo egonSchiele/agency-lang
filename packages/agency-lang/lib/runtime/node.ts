@@ -1,7 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { agencyStore, getRuntimeContext, lineageOf, runInBootstrapFrame } from "./asyncContext.js";
+import {
+  currentRunOrNone,
+  freshState,
+  lineageOf,
+  logOf,
+  runInBootstrapFrame,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -41,14 +49,13 @@ export function setupNode(args: { state: GraphState }): {
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
+  run: Run;
 } {
   const { state } = args;
-  // `ctx` flows through the ALS frame installed by `runNode` (or by
-  // `respondToInterrupts` / `rewindFrom`). The `state.ctx` field is still
-  // populated by graph.run for backwards compat, but we no longer rely on
-  // it here — reading from ALS keeps every per-scope helper consistent
-  // with the same source of truth.
-  const ctx = getRuntimeContext().ctx;
+  // The run the graph was started under: the frame installed by `runNode`,
+  // `respondToInterrupts`, or `rewindFrom` around `graph.run`.
+  const run = state.run;
+  const ctx = run.ctx;
 
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
@@ -58,23 +65,23 @@ export function setupNode(args: { state: GraphState }): {
   let threads: ThreadStore;
   if (stack.threads) {
     threads = ThreadStore.fromJSON(stack.threads);
-    threads.setStatelogClient(ctx.statelogClient);
+    threads.setStatelogClient(run.log);
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
-    threads.setStatelogClient(ctx.statelogClient);
+    threads.setStatelogClient(run.log);
   } else {
     // Fallback: create a new ThreadStore with a default active thread.
     // This can happen on debugger/rewind resume paths where messages is not passed
     // and the checkpoint frame doesn't have serialized threads.
     // Pass the client so the default thread is logged.
-    threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    threads = ThreadStore.withDefaultActive(run.log);
   }
   stack.threads = threads;
 
-  return { stack, step, self, threads };
+  return { stack, step, self, threads, run };
 }
 
-export function setupFunction(): {
+export function setupFunction(run: Run): {
   stateStack: StateStack;
   stack: State;
   step: number;
@@ -98,7 +105,7 @@ export function setupFunction(): {
   // would corrupt the parent's stack and break per-branch isolation
   // (interrupts, abort signals, restore on resume). The pre-migration
   // code preserved this with `state.stateStack ?? state.ctx.stateStack`.
-  const { stack: stateStack, threads } = getRuntimeContext();
+  const { stack: stateStack, threads } = run;
   const stack = stateStack.getNewState();
   return { stateStack, stack, step: stack.step, self: stack.locals, threads };
 }
@@ -133,7 +140,7 @@ export function setupFunction(): {
 async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
-    initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+    initializeGlobals?: (run: Run) => void | Promise<void>;
     // The invocation's root policy (ResolvedInvocation.policy).
     policy?: Policy;
   },
@@ -142,7 +149,7 @@ async function initFreshExecCtx(
 
   // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
-  installRootBudget(execCtx.stateStack, execCtx.budget);
+  installRootBudget(execCtx.stateStack, execCtx.clock, execCtx.budget);
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
@@ -192,16 +199,16 @@ async function initFreshExecCtx(
   // cheap to call on every fresh run.
   await loadProviderModules(execCtx);
   await ensureConfiguredLocalProvider(execCtx);
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx));
+  await runInBootstrapFrame(execCtx, (run) => __initAllRegistered(run));
   if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));
+    await runInBootstrapFrame(execCtx, (run) => initializeGlobals(run));
   }
   // Re-register top-level callbacks for EVERY module in the closure (not
   // just the entry) AFTER global init, so imported-module callbacks fire
   // and any globals they read are already set up. The driver owns the
   // single topLevelCallbacks reset. Keep this in sync with the resume
   // (interrupts.ts) and rewind (rewind.ts) paths.
-  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
+  await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
 }
 
 /**
@@ -265,7 +272,7 @@ type RunExportedFunctionArgs = {
   ctx: RuntimeContext<GraphState>;
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  initializeGlobals?: (run: Run) => void | Promise<void>;
   invocation?: InvocationOptions;
 };
 
@@ -282,6 +289,10 @@ async function runExportedFunctionCore({
   // Inherit the subprocess run id (as runNodeCore does) so a served function
   // executed in subprocess mode joins the parent's trace instead of minting a
   // new one.
+  // Read before the first await. After it no run is current, and this run
+  // would start a new lineage even when it was started from inside another.
+  // run-read-ok: a root run. With no run current it starts a new lineage.
+  const lineage = lineageOf(currentRunOrNone());
   const resolved = resolveInvocation({
     kind: "fresh",
     options: invocation,
@@ -291,17 +302,22 @@ async function runExportedFunctionCore({
   let outcome: RawOutcome<unknown>;
   try {
     await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
-    const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
-    const value = await agencyStore.run(
+    const threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
+    const value = await withRun(
       {
         ctx: execCtx,
         stack: execCtx.stateStack,
         threads: threadStore,
         globals: execCtx.globals,
-        ...lineageOf(agencyStore.getStore()),
+        log: logOf(execCtx, execCtx.globals),
+        state: freshState(),
+        ...lineage,
       },
-      async () => {
-        const result = await fn.invoke({ type: "named", positionalArgs: [], namedArgs });
+      async (run) => {
+        // The store was made before the run existed. From here its thread
+        // events belong to the run.
+        threadStore.setStatelogClient(run.log);
+        const result = await fn.invoke(run, { type: "named", positionalArgs: [], namedArgs });
         // Drain any async work the function spawned (async calls, pending
         // promises) before returning, mirroring runNode's awaitAll.
         await execCtx.pendingPromises.awaitAll();
@@ -345,7 +361,7 @@ type RunNodeArgs = {
   messages?: MessageJSON[];
   callbacks?: AgencyCallbacks;
   // initializes global variables on the execution context
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  initializeGlobals?: (run: Run) => void | Promise<void>;
   // An AbortSignal for cancelling the agent mid-execution. When aborted,
   // in-flight LLM requests are torn down and an AgencyCancelledError is thrown.
   // See pauseSignal for the case where the work should be kept.
@@ -376,6 +392,10 @@ async function runNodeCore({
   invocation,
   input,
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  // Read before the first await. After it no run is current, and this run
+  // would start a new lineage even when it was started from inside another.
+  // run-read-ok: a root run. With no run current it starts a new lineage.
+  const lineage = lineageOf(currentRunOrNone());
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
   // trace; otherwise an injected traceId wins, then a harness-set
@@ -404,7 +424,7 @@ async function runNodeCore({
   // bootstrap/setup failure still yields an outcome-with-usage and still runs
   // cleanup. ===
   const agentStartTime = performance.now();
-  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     // Bootstrapped and capped inside initFreshExecCtx; see its comment for
@@ -423,19 +443,18 @@ async function runNodeCore({
       // callbacks that reach for thread/message builtins get a clear error
       // instead of writing into a placeholder. `messages` is still
       // available to the callback via `data.messages`.
-      await runInBootstrapFrame(execCtx, () =>
-        callHook({
-          ctx: execCtx,
+      await runInBootstrapFrame(execCtx, (run) =>
+        callHook(run, {
           name: "onAgentStart",
           data: { nodeName, args: data, messages: messages || [], cancel },
         }),
       );
 
-      agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-      execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data, input });
+      agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
+      execCtx.rootLog.agentStart({ entryNode: nodeName, args: data, input });
 
       let isResume = false;
-      let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+      let threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
       while (true) {
         try {
           // Install an initial AsyncLocalStorage frame so stdlib helpers
@@ -446,15 +465,17 @@ async function runNodeCore({
           // bodies re-enter `agencyStore.run` inside each Runner step with
           // the scope-local stack/threads, so this top-level frame is just
           // the fallback for early code (callHook, validation, etc.).
-          const result = await agencyStore.run(
+          const result = await withRun(
             {
               ctx: execCtx,
               stack: execCtx.stateStack,
               threads: threadStore,
               globals: execCtx.globals,
-              ...lineageOf(agencyStore.getStore()),
+              log: logOf(execCtx, execCtx.globals),
+              state: freshState(),
+              ...lineage,
             },
-            () =>
+            (run) =>
               execCtx.graph.run(
                 nodeName,
                 {
@@ -462,10 +483,11 @@ async function runNodeCore({
                   data,
                   ctx: execCtx,
                   isResume,
+                  run,
                 },
                 {
                   onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                  statelogClient: execCtx.statelogClient,
+                  statelogClient: execCtx.rootLogWithSpans,
                 },
               ),
           );
@@ -489,7 +511,7 @@ async function runNodeCore({
             await execCtx.pauseTraceWriter();
           } else {
             // Final result: emit footer and close
-            execCtx.statelogClient.agentEnd({
+            execCtx.rootLog.agentEnd({
               entryNode: nodeName,
               result: returnObject.data,
               timeTaken: performance.now() - agentStartTime,
@@ -499,17 +521,18 @@ async function runNodeCore({
             // the real per-run ThreadStore: user callbacks that inspect
             // the final conversation through stdlib helpers see the
             // actual messages, not a sentinel.
-            await agencyStore.run(
+            await withRun(
               {
                 ctx: execCtx,
                 stack: execCtx.stateStack,
                 threads: threadStore,
                 globals: execCtx.globals,
-                ...lineageOf(agencyStore.getStore()),
+                log: logOf(execCtx, execCtx.globals),
+                state: freshState(),
+                ...lineage,
               },
-              () =>
-                callHook({
-                  ctx: execCtx,
+              (run) =>
+                callHook(run, {
                   name: "onAgentEnd",
                   data: {
                     nodeName,
@@ -533,7 +556,7 @@ async function runNodeCore({
             data = {};
             isResume = true;
             // Reset ThreadStore for the restored execution
-            threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+            threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
             continue;
           }
           throw e;
@@ -542,13 +565,13 @@ async function runNodeCore({
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    execCtx.statelogClient.error({
+    execCtx.rootLog.error({
       errorType: "runtimeError",
       message: errorMessage,
     });
     // Whatever was spent before the crash, so cost dashboards still attribute
     // partial spend to failed runs.
-    execCtx.statelogClient.agentEnd({
+    execCtx.rootLog.agentEnd({
       entryNode: nodeName,
       timeTaken: performance.now() - agentStartTime,
       tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
@@ -557,7 +580,7 @@ async function runNodeCore({
   } finally {
     // Guarded: a setup failure before the span was opened leaves it undefined.
     if (agentRunSpanId !== undefined) {
-      execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
+      execCtx.rootLogWithSpans.endSpan(agentRunSpanId); // end agentRun span
     }
   }
   return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));

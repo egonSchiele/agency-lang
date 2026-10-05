@@ -50,7 +50,9 @@ describe("doc string interpolation — runtime resolution", () => {
     // removed — it would now shadow the `__ctx` runtime import (which
     // is a function in the post-ALS migration) and break every
     // accessor call.
-    expect(compiled).toContain("__initializeGlobals(__globalCtx);");
+    expect(compiled).toContain(
+      "__runInBootstrapFrame(__globalCtx, (__run) => __initializeGlobals(__run));",
+    );
   });
 
   it("evaluates the tool description to the interpolated global value at runtime", async () => {

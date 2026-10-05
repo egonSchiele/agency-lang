@@ -11,10 +11,10 @@ import {
   setupFunction,
   claimFrameForScope,
   callHook,
-  checkpoint as __checkpoint_impl,
-  getCheckpoint as __getCheckpoint_impl,
-  restore as __restore_impl,
-  _run as __runtime_run_impl,
+  checkpointFor as __checkpoint_impl,
+  getCheckpointFor as __getCheckpoint_impl,
+  restoreFor as __restore_impl,
+  _runFor as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -40,10 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  __stateStack,
-  __globals,
-  getRuntimeContext,
-  agencyStore,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -143,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d2cd234066de7a6c514626e088cb5cd18d12547c420751e5406f2ab49bf1b053", import.meta.url);
+__registerModuleFingerprint("index.agency", "d5398accf9027e160d41585ae562be98e025fa6e0c7452c2a93340f3b532c713", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -175,35 +172,37 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
   __ctx.globals.markInitialized("index.agency");
 }
 __registerGlobalsInit("index.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) {
-  const __setupData = setupFunction();
+async function __transcribe_impl(__run, filepath, language = __UNSET, model = __UNSET) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
-  const __ctx = getRuntimeContext().ctx;
+  const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "transcribe", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
-    await __initializeGlobals(__ctx);
+  claimFrameForScope(__stack, "transcribe", "index.agency", __run.log);
+  if (!__run.globals.isInitialized("index.agency")) {
+    await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
   __stack.args["filepath"] = filepath;
   __stack.args["language"] = language === __UNSET ? `` : language;
   __stack.args["model"] = model === __UNSET ? `base.en` : model;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -222,14 +221,13 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
     }
   }
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-        await callHook({
+    }, "its body", async (__run2) => {
+      await runner.hook(0, __run2, async (__run3) => {
+        await callHook(__run3, {
           name: "onFunctionStart",
           data: {
             functionName: "transcribe",
@@ -242,9 +240,9 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
           }
         });
       });
-      await runner.step(1, async (runner2) => {
+      await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __call(transcribeImpl, {
+        runner2.halt(await __call(__run3, transcribeImpl, {
           type: "positional",
           args: [__stack.args.filepath, __stack.args.language, __stack.args.model]
         }));
@@ -262,7 +260,7 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "transcribe");
+      return AbortedResult.fromError(__run.log, __error, __stack, "transcribe");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -270,22 +268,22 @@ async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function transcribe threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "transcribe"
       });
     }
     return runtimeFailure(__error, {
-      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      checkpoint: __run.ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
       functionName: "transcribe",
       args: __stack.args
     });
   } finally {
-    __stateStack()?.pop();
+    __run.stack.pop();
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "transcribe",

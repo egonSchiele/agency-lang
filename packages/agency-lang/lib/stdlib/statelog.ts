@@ -1,4 +1,4 @@
-import { agencyStore } from "../runtime/asyncContext.js";
+import { currentRunOrNone } from "../runtime/asyncContext.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
@@ -18,20 +18,20 @@ type PreparedEvalEvent = {
 /**
  * std::statelog TS impls. Called from the agency-side wrappers in
  * stdlib/statelog.agency, which pass through the user's value
- * argument. Each function reads the active AgencyStore from
- * AsyncLocalStorage and emits the corresponding wire event.
+ * argument. Each function reads the current run on its
+ * first line and emits the corresponding wire event.
  *
  * No-op when called outside an Agency execution frame (e.g. a tool
  * function invoked directly from a test). This is the lenient pattern
  * used by the generated-code accessors in lib/runtime/asyncContext.ts.
  */
 function prepareEvalEvent(value: unknown): PreparedEvalEvent | null {
-  const frame = agencyStore.getStore();
+  const frame = currentRunOrNone();
   if (!frame) return null;
   const safeValue = serializeEvalValue(value);
   const threadId = frame.threads.activeId() ?? null;
   return {
-    client: frame.ctx.statelogClient,
+    client: frame.log,
     payload: { value: safeValue, threadId },
   };
 }
@@ -53,11 +53,11 @@ export async function _setAgentName(name: string): Promise<void> {
   if (problem !== null) {
     throw new Error(`setAgentName: ${problem}`);
   }
-  const frame = agencyStore.getStore();
+  const frame = currentRunOrNone();
   if (!frame) {
     return;
   }
-  await frame.ctx.statelogClient.agentName({ name: String(name) });
+  await frame.log.agentName({ name: String(name) });
 }
 
 export async function _evalValue(value: unknown): Promise<void> {

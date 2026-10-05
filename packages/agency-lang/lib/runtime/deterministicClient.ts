@@ -1,6 +1,5 @@
 import type { PromptResult, StreamChunk, Result } from "smoltalk";
 import { ToolCall } from "smoltalk";
-import { agencyStore } from "./asyncContext.js";
 import { questionCallId, unprefixedQuestionName } from "./decision/collector.js";
 import type {
   AudioInput,
@@ -218,16 +217,15 @@ export class DeterministicClient implements LLMClient {
   }
 
   /**
-   * Picks the mock queue for the currently-executing module. The module
-   * id comes from the ALS frame's callsite (seeded by `Runner.runInScope`
-   * for every step body); outside any frame — or when no scope matches —
-   * the "*" queue applies.
+   * Picks the mock queue for the module making the call. The runtime puts
+   * that module's id on the request config (it is the callsite of the step
+   * the call runs in); when the config has none, or no scope matches, the
+   * "*" queue applies.
    */
-  private resolveQueue(): { scope: string; queue: MockQueue } {
+  private resolveQueue(moduleId: string | undefined): { scope: string; queue: MockQueue } {
     if (!this.scoped) {
       return { scope: FALLBACK_SCOPE, queue: this.queues[FALLBACK_SCOPE] };
     }
-    const moduleId = agencyStore.getStore()?.callsite?.moduleId;
     if (moduleId !== undefined) {
       if (this.queues[moduleId]) {
         return { scope: moduleId, queue: this.queues[moduleId] };
@@ -245,13 +243,13 @@ export class DeterministicClient implements LLMClient {
       return { scope: FALLBACK_SCOPE, queue: this.queues[FALLBACK_SCOPE] };
     }
     throw new Error(
-      `DeterministicClient: no llmMocks queue matches module ${moduleId ?? "(no execution frame)"}. ` +
+      `DeterministicClient: no llmMocks queue matches module ${moduleId ?? "(the call names no module)"}. ` +
         `Available scopes: ${Object.keys(this.queues).join(", ")}. Add a "*" queue as a fallback.`,
     );
   }
 
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
-    const { scope, queue } = this.resolveQueue();
+    const { scope, queue } = this.resolveQueue(config.moduleId);
     // NOTE: increment-then-check is intentional. callIndex tracks the
     // 1-based index of the *current* call so error messages say
     // "call #N" where N matches what a user would expect when reading
@@ -363,7 +361,7 @@ export class DeterministicClient implements LLMClient {
     throwIfAborted(signal);
     const answers: Record<string, DecisionAnswer> = {};
     for (const call of splitMergedQuestions(questions)) {
-      const mock = this.nextDecideMock(call.questions);
+      const mock = this.nextDecideMock(call.questions, config.moduleId);
       for (const name of Object.keys(mock)) {
         answers[call.prefix + name] = mock[name];
       }
@@ -382,8 +380,9 @@ export class DeterministicClient implements LLMClient {
   /** The next mock as one llm() call's answers, checked against its questions. */
   private nextDecideMock(
     questions: Record<string, DecisionQuestion>,
+    moduleId: string | undefined,
   ): Record<string, DecisionAnswer> {
-    const { scope, queue } = this.resolveQueue();
+    const { scope, queue } = this.resolveQueue(moduleId);
     queue.callIndex++;
     const where = this.scoped ? ` in scope "${scope}"` : "";
     if (queue.callIndex > queue.mocks.length) {

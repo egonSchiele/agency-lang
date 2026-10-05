@@ -75,11 +75,14 @@
  * is shown only the second interrupt, and on resume both raises return its
  * answer.
  *
- * The handle from `agency.current()` raises every interrupt on the one run
- * it captured, so every raise through a handle has the same key. A handle
- * therefore raises one interrupt, and refuses a second. See `current` in
- * agency.ts. Splitting interrupts across `s.step(...)` calls is the only
- * safe pattern.
+ * So TypeScript code raises one interrupt per run, and `interruptFor`
+ * refuses a second. That covers `agency.interrupt()` called twice in one
+ * step, and the handle from `agency.current()`, which raises every
+ * interrupt on the one run it captured. Splitting interrupts across
+ * `s.step(...)` calls is the only safe pattern.
+ *
+ * Agency code is not limited this way. Each `interrupt` statement has its
+ * own key, and a fork or a round of tool calls raises many at once.
  *
  * # Halting and HaltSignal
  *
@@ -100,7 +103,7 @@
  * `s.step(...)`) intentionally have no runner in the ALS frame and
  * will throw — wrap the interrupt in `s.step(async () => { ... })`.
  */
-import { currentRun, detachedRun, withRun, type Run } from "./asyncContext.js";
+import { currentRun, type Run } from "./asyncContext.js";
 import { HaltSignal } from "./haltSignal.js";
 import {
   interruptWithHandlers,
@@ -163,6 +166,23 @@ export async function interruptFor<T = unknown>(
     );
   }
 
+  // One raise from TypeScript per run. Every raise on a run is stored under
+  // the key below, so a second raise would share it with the first, whether
+  // it comes after the first or at the same time. On resume it would be
+  // handed the other one's answer, with nobody asked about it. This check
+  // comes before the lookup for that reason.
+  if (rt.state.raisedFromTypeScript) {
+    throw new Error(
+      "This TypeScript code has already raised an interrupt in this step, and it can raise one. " +
+        "A second raise would be stored under the same key as the first, and on " +
+        "resume it would get the first one's answer without anyone being asked. " +
+        "Raise each interrupt in its own step: use agency.withResumableScope, " +
+        "give each s.step(...) one interrupt, and take agency.current() on " +
+        "the first line of that step.",
+    );
+  }
+  rt.state.raisedFromTypeScript = true;
+
   const key = `__interrupt_${callsite.stepPath}`;
 
   // Resume path: if we already persisted an interrupt id at this
@@ -179,15 +199,10 @@ export async function interruptFor<T = unknown>(
   const effect = opts.effect ?? "unknown";
   const data = opts.data;
   const origin = callsite.moduleId;
-  // `agency.interrupt()` can be called several times at once from one step,
-  // and a handler can answer them all. Each raise gets its own copy of the
-  // run, so none is counted against another by the wrong-run check.
-  const handlerResult = await withRun(detachedRun(rt, {}), (raiseRun) =>
-    interruptWithHandlers(raiseRun, effect, opts.message, data, origin, {
-      expectsValue: opts.expectsValue,
-      stack,
-    }),
-  );
+  const handlerResult = await interruptWithHandlers(rt, effect, opts.message, data, origin, {
+    expectsValue: opts.expectsValue,
+    stack,
+  });
 
   if (isRejected(handlerResult)) return handlerResult;
   if (isApproved(handlerResult)) return handlerResult;

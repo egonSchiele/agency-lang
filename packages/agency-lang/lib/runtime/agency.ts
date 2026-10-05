@@ -453,8 +453,6 @@ export type RunHandle = {
 
 const current = (): RunHandle => {
   const run = currentRun();
-  // Whether this handle has raised an interrupt yet. It may raise one.
-  let hasRaised = false;
   return {
     // Each call gets its own copy of the run, so two calls made at once
     // through one handle are not counted against each other.
@@ -462,25 +460,8 @@ const current = (): RunHandle => {
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, { type: "positional", args })),
     callWith: (fn, descriptor) =>
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, descriptor)),
-    // Every raise through this handle is stored under one key: the step the
-    // run was captured in. A second raise would share that key with the
-    // first, whether it comes after the first or at the same time. On resume
-    // it would be handed the other one's answer, with nobody asked about it.
-    // So a handle raises one interrupt, and a second raise is refused.
-    interrupt: async (opts) => {
-      if (hasRaised) {
-        throw new Error(
-          "This handle has already raised an interrupt, and a handle can raise one. " +
-            "A second raise would be stored under the same key as the first, and on " +
-            "resume it would get the first one's answer without anyone being asked. " +
-            "Raise each interrupt in its own step: use agency.withResumableScope, " +
-            "give each s.step(...) one interrupt, and take agency.current() on " +
-            "the first line of that step.",
-        );
-      }
-      hasRaised = true;
-      return interruptFor(run, opts);
-    },
+    // One raise per handle: `interruptFor` refuses a second raise on a run.
+    interrupt: (opts) => interruptFor(run, opts),
     addCost: (amount) => addCostTo(run, amount),
     addTokens: (amount) => addTokensTo(run, amount),
     ctx: run.ctx,

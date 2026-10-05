@@ -106,7 +106,7 @@ export async function fakeRepl(onSubmit, lines: string[]) {
 | `run.addCost(amount)`, `run.addTokens(amount)` | Charge this run |
 | `run.ctx`, `run.stack`, `run.threads` | The run's context, branch stack, and thread store |
 
-A handle raises one interrupt. A second `run.interrupt` call on the same handle throws, whether it comes after the first or at the same time. To ask twice, use `agency.withResumableScope`, give each `s.step(...)` one interrupt, and take `agency.current()` on the first line of that step.
+A helper raises one interrupt per call. A second `run.interrupt` on the same handle throws, whether it comes after the first or at the same time. So does a second `agency.interrupt()`. To ask twice, use `agency.withResumableScope`, give each `s.step(...)` one interrupt, and take `agency.current()` on the first line of that step. Agency code has no such limit.
 
 `run.call` is how a helper reaches the rest of `agency.*` after an `await`. It calls the function with the run current again, so the function's own first line can use `agency.*`:
 

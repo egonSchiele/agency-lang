@@ -134,11 +134,17 @@ export type Run = {
  * How many things a run has started and is waiting for, and the name of
  * the latest. A run is usable when the count is 0.
  */
-export type RunState = { waiting: number; waitingFor: string };
+export type RunState = {
+  waiting: number;
+  waitingFor: string;
+  /** True once TypeScript code has raised an interrupt on this run. A run
+   *  takes one such raise. See lib/runtime/agencyInterrupt.ts. */
+  raisedFromTypeScript: boolean;
+};
 
 /** The state of a run that is waiting for nothing. */
 export function freshState(): RunState {
-  return { waiting: 0, waitingFor: "" };
+  return { waiting: 0, waitingFor: "", raisedFromTypeScript: false };
 }
 
 /**

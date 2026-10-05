@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { withCallDepth } from "./callDepth.js";
 import { CallDepthExceededError, AgencyAbort, readCause } from "./errors.js";
-import { runInTestContext, WrongRunError, type Run } from "./asyncContext.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 /** Run `fn` inside an execution context whose maxCallDepth is `limit`. The
@@ -75,15 +75,6 @@ describe("call-depth guard", () => {
         ),
       );
     await expect(withLimit(3, run)).resolves.toHaveLength(10);
-  });
-
-  test("throws when there is no frame to keep the depth on", () => {
-    // The depth lives on the frame. With no frame every call would count as
-    // the first, and the limit would never trip. A run handed in from an
-    // earlier frame is refused, because no frame is current.
-    const ctx = makeMockCtx();
-    const stale = runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) => run);
-    expect(() => withCallDepth(stale, "solo", async () => "ok")).toThrow(WrongRunError);
   });
 
   test("a frame that carries no call depth starts at the root", async () => {

@@ -8,7 +8,7 @@ import type {
 } from "smoltalk";
 import { nanoid } from "nanoid";
 import * as path from "node:path";
-import { agencyStore, currentRun } from "../runtime/asyncContext.js";
+import { currentRun, currentRunOrNone } from "../runtime/asyncContext.js";
 import type { Clock } from "../runtime/clock.js";
 import { wholePath, stat as statUnder } from "./contained.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
@@ -257,7 +257,7 @@ export function _audioAttachment(
  *  attachment is dropped with a statelog error — never a throw (a tool
  *  must not crash because its host context changed). */
 export function _attachToReply(attachment: unknown): void {
-  const frame = agencyStore.getStore();
+  const frame = currentRunOrNone();
   if (!frame?.stack) {
     return;
   }
@@ -294,7 +294,7 @@ export function _handBack(message: string): void {
  *  inside a parallel or async branch of the body would be the branch's
  *  own), or null with a statelog error when there is none. */
 function toolInvocationStack(functionName: string, dropped: string): StateStack | null {
-  const frame = agencyStore.getStore();
+  const frame = currentRunOrNone();
   if (!frame?.stack) {
     return null;
   }
@@ -312,7 +312,7 @@ function toolInvocationStack(functionName: string, dropped: string): StateStack 
 /** True while a tool invocation is on the stack. attachToReply is a
  *  no-op outside one, and viewFile must not report success there. */
 export function _insideToolCall(): boolean {
-  const frame = agencyStore.getStore();
+  const frame = currentRunOrNone();
   return frame?.ctx?.isInsideToolCall() === true;
 }
 

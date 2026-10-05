@@ -3,7 +3,7 @@ import { isAbortError, readCause, RunControlSignal } from "./errors.js";
 import { truncate } from "./truncate.js";
 import { isAborted, type AbortLog } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
-import { agencyStore } from "./asyncContext.js";
+import { currentRunOrNone } from "./asyncContext.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
  *  `guardTrip`-cause path (a trip that surfaced as an aborted leaf op)
@@ -169,10 +169,13 @@ function coerceData(data: unknown): Record<string, any> {
 function warnDroppedData(data: unknown): void {
   const kind = Array.isArray(data) ? "an array" : `a ${typeof data}`;
   const message = `failure() data must be an object; dropped ${kind}`;
-  const ctx = agencyStore.getStore()?.ctx;
+  // `failure()` is public and takes no run. A helper that calls it before
+  // its first await gets the warning in its own run's log. Anywhere else no
+  // run is current and only the console line is written.
   // Fire-and-forget, like failurePropagation's logWarn. The console line
   // carries no payload: the dropped value may hold anything.
-  void ctx?.statelogClient?.warn?.({ warnType: "failureData", message, error: data });
+  // run-read-ok: with no run current, the log line is skipped and the console line is still written.
+  void currentRunOrNone()?.log?.warn?.({ warnType: "failureData", message, error: data });
   console.warn(message);
 }
 

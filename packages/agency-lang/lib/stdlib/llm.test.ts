@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { _setLlmOptions, _listHostedModels, _hostedModelInfo, _modelSupportsInput } from "./llm.js";
 import { withRun } from "../runtime/asyncContext.js";
-import { callHelper } from "../runtime/__tests__/testHelpers.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 // Deterministic smoltalk catalog so the shim's mapping/filtering is tested
 // against a small fixture, not smoltalk's baked (external, version-churning)
@@ -47,7 +47,7 @@ vi.mock("smoltalk", () => ({
 // `{ other: {} }` stand-in stack is enough to exercise the merge.
 function withStack<T>(stack: any, fn: () => T): T {
   const ctx = { getSmoltalkConfig: (config: unknown) => config };
-  return withRun({ stack, ctx } as any, fn);
+  return withRun({ stack, ctx } as any, asRootRun(fn));
 }
 
 describe("_setLlmOptions", () => {

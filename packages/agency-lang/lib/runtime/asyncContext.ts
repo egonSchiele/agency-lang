@@ -1,52 +1,35 @@
 /**
- * AsyncLocalStorage-based runtime context for stdlib functions.
+ * The run: the one value that carries a running program's state.
  *
- * Replaces the "context-injected builtin" pattern (`__internal_foo` names
- * that get the codegen-rewrite treatment to prepend `__ctx, __stateStack,
- * __threads` as the first three args). Stdlib functions that need access
- * to `ctx`/`stack`/`threads` call `getRuntimeContext()` to read them from
- * an ALS store seeded at three well-defined points:
+ * A `Run` holds the context, the branch's state stack, thread store and
+ * globals, and the values that follow a path of calls. It is passed as an
+ * ordinary argument. Every generated function takes one as its first
+ * parameter, `__run`, and every runtime function that needs one takes it
+ * from its caller. Nothing here uses `AsyncLocalStorage` or any other Node
+ * module, so this file runs wherever JavaScript runs.
  *
- *  1. `runNode` (lib/runtime/node.ts) — wraps every fresh agent run in
- *     the top-level `agencyStore.run(...)` frame.
- *  2. `Runner.runInScope` (lib/runtime/runner.ts) — every callback-taking
- *     method (step, hook, pipe, fork) re-enters `agencyStore.run(...)`
- *     so the scope-local `stack` (and per-fork branch stack) is visible
- *     to stdlib helpers running inside that step.
- *  3. `runBatch`'s `runInBranchAlsFrame` (lib/runtime/runBatch.ts) —
- *     each branch body sees its own branch stack (and thus its own
- *     abort signal) before invoking the child body.
+ * A step, a call, a handler, or a fork branch gets its own run, made from
+ * the outer one by `withChildRun`. Three places make a run from nothing:
  *
- * Note: subprocess bootstrap deliberately does NOT install its own ALS
- * frame. Each child process re-enters runNode (which installs the
- * frame) on its own, so threading a frame across the IPC boundary
- * would be redundant.
+ *  1. `runNode` (lib/runtime/node.ts), for a fresh agent run.
+ *  2. `runInBootstrapFrame`, for code that runs outside any node: global
+ *     initialisation, top-level callback registration, and the first part
+ *     of a resume or rewind. Its thread store is a `BootstrapThreadStore`,
+ *     which throws on every user-facing operation.
+ *  3. `runInTestContext`, for a test.
  *
- * # Frame kinds
+ * # Functions that do not take a run
  *
- * Frames installed by the runtime fall into two categories:
- *
- *  - **Node frames** — installed by `Runner.runInScope` and the wraps
- *    around `graph.run` inside `runNode`. The `threads` slot is the
- *    real per-run `ThreadStore` (or the per-fork branch's store) that
- *    survives across pushes/pops, gets serialized into checkpoints, and
- *    is what user code sees when it uses `systemMessage`/`userMessage`/
- *    `thread { ... }`.
- *
- *  - **Bootstrap frames** — installed by `runInBootstrapFrame(...)` for
- *    code that runs *outside* any agent node: module-level global init,
- *    top-level callback registration, and the small slice of resume/
- *    rewind logic that runs before `setupNode` reconstitutes the real
- *    ThreadStore. Bootstrap frames have a `BootstrapThreadStore` in the
- *    `threads` slot, which throws on every user-facing operation. The
- *    contract is: thread builtins do not work in bootstrap scope; if a
- *    user reaches for them there, they get a loud error instead of a
- *    silent write into a discarded store.
+ * A hand-written helper, a callback from TypeScript, and a handler given
+ * to `agency.withHandler` keep their own signatures. The runtime calls
+ * them through `callPlain`, which sets one module variable for the
+ * synchronous part of the call. `currentRun()` reads that variable, so it
+ * is right until the function's first `await` and throws after it.
+ * `scripts/lint-run-reads.mjs` reports code in lib/ that could read it
+ * later.
  *
  * See docs/dev/runtime/async-context.md for the full picture.
  */
-import { AsyncLocalStorage } from "node:async_hooks";
-import process from "node:process";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GlobalStore } from "./state/globalStore.js";
@@ -69,14 +52,11 @@ export type Run = {
   stack: StateStack;
   threads: ThreadStore;
   /**
-   * Per-scope GlobalStore. Today pointer-shares the `RuntimeContext`'s
-   * canonical store at every frame builder, so behavior matches the
-   * pre-ALS code that emitted `__ctx.globals.…` directly. The slot
-   * exists separately from `ctx.globals` to allow per-branch
-   * snapshotting (Stage 2): when `runInBranchAlsFrame` clones the
-   * parent's store, the branch's frame holds the clone and the
-   * generated `__globals()!` accessor sees the branch-local view
-   * without disturbing the parent's globals.
+   * The globals this run reads and writes. Outside a fork branch it is
+   * the same object as `ctx.globals`. It is a separate field so a branch
+   * can hold a clone: `runBatch` clones the parent's store for each
+   * branch, and generated code reads `__run.globals`, so a branch sees
+   * its own copy without disturbing the parent's.
    */
   globals: GlobalStore;
   /**
@@ -95,10 +75,10 @@ export type Run = {
    * (`checkpoint()`) read this slot instead of receiving the location
    * as a trailing positional arg from generated code.
    *
-   * Optional because not every ALS frame has one: the top-level
+   * Optional because not every run has one: the top-level
    * `runNode` frame and `runInBootstrapFrame` deliberately omit it
    * (any checkpoint created in bootstrap scope gets the empty
-   * `""::""::""` fallback, matching pre-ALS behaviour).
+   * `""::""::""` fallback, as it always has).
    */
   callsite?: CallsiteLocation;
   /**
@@ -183,7 +163,7 @@ export class RunInUseError extends Error {
  *
  * Every run has the same type, so the type checker cannot tell the right
  * run from the wrong one. This catches the mistake where it happens, and it
- * keeps working after `AsyncLocalStorage` is gone.
+ * does not depend on any hidden state.
  */
 export function assertUsable(run: Run, what: string): Run {
   if (run.state.waiting > 0) {
@@ -285,76 +265,6 @@ export function lineageOf(outer: Run | undefined): Lineage {
   return { callDepth: null, handlerChainDepth: 0, executingHandlers: [], activeCallbacks: [] };
 }
 
-export const agencyStore = new AsyncLocalStorage<Run>();
-
-/**
- * The run that is current where a new root frame is about to be built, or
- * `undefined` when there is none. A run started from inside another run (a
- * nested `runNode`, or a test context inside a test context) takes its
- * lineage from this one, so the recursion limits keep counting across the
- * nesting. This is the only place that reads the outer run for that purpose.
- */
-export function outerRunOrNone(): Run | undefined {
-  return agencyStore.getStore();
-}
-
-/**
- * Thrown when a function was handed a run that is not the one
- * `AsyncLocalStorage` holds at that moment.
- */
-export class WrongRunError extends Error {
-  constructor(caller: string, found: Run | undefined) {
-    super(
-      `${caller} was handed a run that is not the current one. ` +
-        (found
-          ? "The run it was handed belongs to a different step, branch, or call."
-          : "No run is current here at all."),
-    );
-    this.name = "WrongRunError";
-  }
-}
-
-/**
- * Check that `run` is the frame `AsyncLocalStorage` holds right now, and
- * return it.
- *
- * This is the check that makes passing the run explicitly safe to do. While
- * `AsyncLocalStorage` is still in place, every function that takes a run
- * compares it with the frame main would have read. The existing test suites
- * then test, at each such place, that the code was handed the right run.
- * Phase 3 of the explicit-run plan deletes this function along with
- * `agencyStore`.
- */
-export function sameRun(run: Run, caller: string): Run {
-  const current = agencyStore.getStore();
-  if (current !== run) {
-    throw new WrongRunError(caller, current);
-  }
-  return run;
-}
-
-/**
- * The current run, read from `AsyncLocalStorage`, for a function that has
- * not been given a run parameter yet.
- *
- * Every call to this is a place still to be changed: the function should
- * take the run from its caller. The explicit-run work removes these one by
- * one, and Phase 3 cannot start while any remain. `caller` names the
- * function, for the error and for counting what is left.
- */
-export function ambientRun(caller: string): Run {
-  return requireFrame(caller);
-}
-
-/**
- * Run `fn` under `run`: install it as the current frame and hand it to `fn`.
- * Every place that makes a child run goes through here, so the run a body
- * is handed and the frame `AsyncLocalStorage` holds are the same object.
- */
-export function withRun<T>(run: Run, fn: (run: Run) => T): T {
-  return agencyStore.run(run, () => callPlain(run, fn, [run]));
-}
-
 /**
  * The run that a plain function was called under. It is set for the
  * synchronous part of one call and put back afterwards.
@@ -391,6 +301,15 @@ export function callPlain<A extends unknown[], T>(
 }
 
 /**
+ * Run `fn` under `run`: hand it the run, and make the run readable with
+ * `currentRun()` for the synchronous part of the call. Every place that
+ * makes a child run goes through here.
+ */
+export function withRun<T>(run: Run, fn: (run: Run) => T): T {
+  return callPlain(run, fn, [run]);
+}
+
+/**
  * The run this function was called under. Call it on the function's first
  * line, before any `await`, and keep the result:
  *
@@ -404,54 +323,45 @@ export function callPlain<A extends unknown[], T>(
  */
 export function currentRun(): Run {
   const run = plainCallRun;
-  const frame = agencyStore.getStore();
   if (run === undefined) {
-    if (frame) {
-      throw new Error(
-        "The current run was read after an await. " +
-          "Take it on the function's first line and keep it: " +
-          "`const run = agency.current()` in your own helper, " +
-          "or `const run = currentRun()` inside the runtime.",
-      );
-    }
     throw new Error(
-      "The current run was read outside an Agency run. " +
-        "This usually means a helper was called from code that Agency did not call. " +
+      "No run is current here. There are two ways this happens.\n" +
+        "1. The run was read after an await. It is only current until a function's " +
+        "first await. Take it on the first line and keep it: " +
+        "`const run = agency.current()` in your own helper, " +
+        "or `const run = currentRun()` inside the runtime.\n" +
+        "2. The code was not called by Agency at all. " +
         "In a test, wrap the call in runInTestContext().",
     );
-  }
-  if (frame !== run) {
-    throw new WrongRunError("currentRun()", frame);
   }
   return run;
 }
 
 /**
- * The current frame, for code that tracks a lineage value. It throws when
- * there is no frame. Reading "no frame" as an empty lineage would let lost
- * context turn a limit off without anyone noticing.
+ * The run of the plain call in progress, or `undefined` when there is none.
+ *
+ * Like `currentRun()` it is only right until a function's first `await`.
+ * Unlike it, this does not throw afterwards. It returns `undefined`, which
+ * looks the same as "not inside a run". So use it only where a missing run
+ * has a harmless answer, such as a default or a skipped log line, and call
+ * it on the function's first line. Anything that tracks a limit, a guard,
+ * or a handler must use `currentRun()` or take a run.
+ *
+ * A root run reads it too. A run started from inside another run (a nested
+ * `runNode`, or a test context inside a test context) takes its lineage
+ * from the outer one, so the recursion limits keep counting across the
+ * nesting. That works when the inner run is started before an `await`.
  */
-export function requireFrame(caller: string): Run {
-  const frame = agencyStore.getStore();
-  if (!frame) {
-    throw new Error(
-      `${caller} ran outside an Agency execution frame. ` +
-        "It keeps a value on the frame, so it needs one. " +
-        "In a test, wrap the call in runInTestContext().",
-    );
-  }
-  return frame;
+export function currentRunOrNone(): Run | undefined {
+  return plainCallRun;
 }
 
 /**
- * Push a new ALS frame copying the current ctx/stack/threads but
- * overriding `callsite`. For TS helpers that want to attach a
- * per-internal-substep checkpoint location to nested `checkpoint()`
- * calls. Throws if called outside any agency frame (no inheritable
- * base).
+ * Run `fn` under a child of `run` whose `callsite` is `loc`. For TS helpers
+ * that want to attach a per-internal-substep checkpoint location to nested
+ * `checkpoint()` calls.
  */
 export function withCallsite<T>(run: Run, loc: CallsiteLocation, fn: (run: Run) => T): T {
-  sameRun(run, "withCallsite()");
   return withChildRun(run, { callsite: loc }, "its callsite scope", fn);
 }
 
@@ -495,82 +405,9 @@ export function getRuntimeContext(): Run {
 }
 
 /**
- * Generated-code accessor for the current per-scope ThreadStore. Replaces
- * the codegen-emitted `__threads` local that the pre-ALS pipeline used to
- * declare in every function/node body's setup block. Every call site that
- * used to reference the `__threads` local now invokes this helper, which
- * reads through `agencyStore` — the same path that stdlib helpers take.
- *
- * Returns the store from the active ALS frame when one is present:
- * Runner step bodies (set up by `Runner.runInScope`), node/function setup
- * code that runs inside `runNode` (top-level frame), and bootstrap scopes
- * (where the store is a `BootstrapThreadStore` sentinel that loudly
- * throws on user-facing operations).
- *
- * Returns `undefined` when no frame is installed. This matches the
- * lenient pre-migration behavior at sites like `blockSetup`, which
- * checked `typeof __threads !== "undefined"` so a block invoked outside
- * any node body (e.g. as a tool by an LLM) still bootstrapped a fresh
- * `ThreadStore` via `setupFunction`'s fallback. Code that needs the
- * stricter throw-on-missing behavior should call `getRuntimeContext()`
- * directly.
- */
-export function __threads(): ThreadStore | undefined {
-  return agencyStore.getStore()?.threads;
-}
-
-/**
- * Generated-code accessor for the current StateStack. Mirrors
- * `__threads()` — reads from the active `agencyStore` frame. Returns
- * `undefined` when no frame is installed; the call sites that may run
- * without one (notably the `finally` block in `classMethod.mustache`
- * that pops the per-scope frame when a function is called as a tool
- * outside any Agency execution frame) defend with `?.pop()` /
- * `?.method(...)`. Code that needs the strict-throw behavior should
- * call `getRuntimeContext().stack` directly.
- */
-export function __stateStack(): StateStack | undefined {
-  return agencyStore.getStore()?.stack;
-}
-
-/**
- * Generated-code accessor for the current RuntimeContext. Mirrors
- * `__threads()` — reads from the active `agencyStore` frame. Returns
- * `undefined` when no frame is installed. Sites where dereferencing
- * `undefined` would produce an opaque `TypeError` should use
- * `getRuntimeContext().ctx` instead so the missing-frame case throws
- * the dedicated error with a pointer to `runInTestContext`.
- */
-export function __ctx(): RuntimeContext<any> | undefined {
-  return agencyStore.getStore()?.ctx;
-}
-
-/**
- * Generated-code accessor for the current per-scope GlobalStore. Mirrors
- * `__threads()` / `__stateStack()` / `__ctx()`. Returns the GlobalStore
- * from the active ALS frame when one is present (every Runner step body,
- * node/function setup code, `runInBranchAlsFrame` body, and
- * `runInBootstrapFrame` body all seed this slot). Returns `undefined`
- * when no frame is installed.
- *
- * Generated code typically dereferences this with `__globals()!.…`
- * because every code-emission site that uses it runs inside an Agency
- * execution frame by construction. The pre-ALS counterpart was
- * `__ctx.globals.…` against the setupEnv-emitted local.
- *
- * The slot is distinct from `ctx.globals` so that Stage 2 can clone the
- * parent's store at fork-time into the branch's ALS frame without
- * mutating the canonical `RuntimeContext.globals` reference.
- */
-export function __globals(): GlobalStore | undefined {
-  return agencyStore.getStore()?.globals;
-}
-
-/**
- * Convenience wrapper for tests that construct a RuntimeContext manually
- * and need to invoke stdlib helpers that read from ALS. Mirrors
- * `agencyStore.run(...)` but with explicit named parameters so test
- * bodies don't have to import `agencyStore` directly.
+ * For tests that construct a RuntimeContext by hand. It makes a root run
+ * from the three values and calls `fn` with it. The run is also readable
+ * with `currentRun()` until `fn`'s first `await`.
  */
 export function runInTestContext<T>(
   ctx: RuntimeContext<any>,
@@ -586,14 +423,15 @@ export function runInTestContext<T>(
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
       state: freshState(),
-      ...lineageOf(outerRunOrNone()),
+      // run-read-ok: a root run. With no run current it starts a new lineage.
+      ...lineageOf(currentRunOrNone()),
     },
     fn,
   );
 }
 
 /**
- * Wrap `fn` in an ALS frame suitable for code that runs *outside* any
+ * Run `fn` under a run suitable for code that runs *outside* any
  * agent node body — module-level global-init, top-level callback
  * registration, and the resume/rewind prelude. The `threads` slot is a
  * `BootstrapThreadStore` sentinel: any attempt to use a message-thread
@@ -608,7 +446,7 @@ export function runInTestContext<T>(
  * `__initializeGlobals` always expected. At the resume / rewind
  * `graph.run` call sites it's the restored stack carrying the
  * checkpoint frames; that's also fine because `Runner.runInScope` on
- * the first step re-enters ALS with the per-node ThreadStore.
+ * the first step makes a child run with the per-node ThreadStore.
  *
  * Declared `async` so synchronous throws inside `fn` (including the
  * very common case of the `BootstrapThreadStore` sentinel throwing)
@@ -626,13 +464,14 @@ export async function runInBootstrapFrame<T>(
       threads: new BootstrapThreadStore(),
       // Seed the canonical store. Bootstrap frames are never inside a
       // fork branch (init / top-level callback registration / lifecycle
-      // hooks all run outside any per-branch ALS frame), so pointer-
+      // hooks all run outside any branch), so pointer-
       // sharing is exactly right: writes done by `__initializeGlobals`
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
       state: freshState(),
-      ...lineageOf(outerRunOrNone()),
+      // run-read-ok: a root run. With no run current it starts a new lineage.
+      ...lineageOf(currentRunOrNone()),
     },
     fn,
   );

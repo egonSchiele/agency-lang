@@ -29,7 +29,7 @@ import {
   loadLocalProviderDetailed,
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { currentRunOrNone } from "../runtime/asyncContext.js";
 import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
@@ -1273,7 +1273,8 @@ function requireSupport(): void {
  *  saying where the provider package came from. The plain CLI has no runtime
  *  frame, so there is no run logger there and nothing is emitted. */
 export async function _registerLocalProvider(): Promise<void> {
-  const log = agencyStore.getStore()?.log; // read before the first await
+  // run-read-ok: the log line is optional. A caller that has already awaited, or the plain CLI, emits nothing.
+  const log = currentRunOrNone()?.log;
   requireSupport();
   const { entryPath, source } = (await loadLocalProviderDetailed()).choice;
   void log?.localModelLoaded({ entryPath, entrySource: source });

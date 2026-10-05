@@ -7,7 +7,7 @@ import { type ResultFailure } from "../../runtime/result.js";
 import { safeStatelogValue } from "../../runtime/runner.js";
 import { makeRedactReplacer } from "../../runtime/redactForStatelog.js";
 import { _s3Get, _s3GetBinary, _s3Put, _s3PutBinary, _createBucket, _s3PresignGet } from "./s3.js";
-import { callHelper, testRun } from "../../runtime/__tests__/testHelpers.js";
+import { asRootRun, callHelper, testRun } from "../../runtime/__tests__/testHelpers.js";
 
 // The presign path bypasses sendAwsRequest, so nothing structural forces it
 // through the final hostname defense. This partial mock lets one test inject a
@@ -39,7 +39,7 @@ function makeCtx() {
 async function withCtx<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = makeCtx();
   const execCtx = await ctx.createExecutionContext({ runId: "aws-s3-test" });
-  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
+  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), asRootRun(fn));
 }
 
 function mockFetch(

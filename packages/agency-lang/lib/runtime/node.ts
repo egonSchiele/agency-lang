@@ -2,12 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
 import {
-  outerRunOrNone,
+  currentRunOrNone,
   freshState,
   lineageOf,
   logOf,
   runInBootstrapFrame,
-  sameRun,
   withRun,
   type Run,
 } from "./asyncContext.js";
@@ -55,7 +54,7 @@ export function setupNode(args: { state: GraphState }): {
   const { state } = args;
   // The run the graph was started under: the frame installed by `runNode`,
   // `respondToInterrupts`, or `rewindFrom` around `graph.run`.
-  const run = sameRun(state.run, "A node body");
+  const run = state.run;
   const ctx = run.ctx;
 
   const stack = ctx.stateStack.getNewState();
@@ -106,7 +105,7 @@ export function setupFunction(run: Run): {
   // would corrupt the parent's stack and break per-branch isolation
   // (interrupts, abort signals, restore on resume). The pre-migration
   // code preserved this with `state.stateStack ?? state.ctx.stateStack`.
-  const { stack: stateStack, threads } = sameRun(run, "A function body");
+  const { stack: stateStack, threads } = run;
   const stack = stateStack.getNewState();
   return { stateStack, stack, step: stack.step, self: stack.locals, threads };
 }
@@ -308,7 +307,8 @@ async function runExportedFunctionCore({
         globals: execCtx.globals,
         log: logOf(execCtx, execCtx.globals),
         state: freshState(),
-        ...lineageOf(outerRunOrNone()),
+        // run-read-ok: a root run. With no run current it starts a new lineage.
+        ...lineageOf(currentRunOrNone()),
       },
       async (run) => {
         // The store was made before the run existed. From here its thread
@@ -466,7 +466,8 @@ async function runNodeCore({
               globals: execCtx.globals,
               log: logOf(execCtx, execCtx.globals),
               state: freshState(),
-              ...lineageOf(outerRunOrNone()),
+              // run-read-ok: a root run. With no run current it starts a new lineage.
+              ...lineageOf(currentRunOrNone()),
             },
             (run) =>
               execCtx.graph.run(
@@ -522,7 +523,8 @@ async function runNodeCore({
                 globals: execCtx.globals,
                 log: logOf(execCtx, execCtx.globals),
                 state: freshState(),
-                ...lineageOf(outerRunOrNone()),
+                // run-read-ok: a root run. With no run current it starts a new lineage.
+                ...lineageOf(currentRunOrNone()),
               },
               (run) =>
                 callHook(run, {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  agencyStore,
   callPlain,
+  currentRunOrNone,
   freshState,
   logOf,
   getRuntimeContext,
@@ -11,7 +11,6 @@ import {
   withCallsite,
   withPushedHandler,
   lineageOf,
-  WrongRunError,
 } from "./asyncContext.js";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -37,9 +36,9 @@ function makeStore() {
   };
 }
 
-describe("agencyStore", () => {
+describe("the current run", () => {
   it("throws when called outside a frame", () => {
-    expect(() => getRuntimeContext()).toThrow(/outside an Agency run/);
+    expect(() => getRuntimeContext()).toThrow(/No run is current here/);
   });
 
   it("returns the run inside withRun", () => {
@@ -69,12 +68,12 @@ describe("agencyStore", () => {
       expect(() => getRuntimeContext()).toThrow(/read after an await/);
       await new Promise((r) => setTimeout(r, 1));
       expect(() => getRuntimeContext()).toThrow(/read after an await/);
-      // The frame itself still follows the async flow.
-      expect(agencyStore.getStore()).toBe(seed);
+      // Nothing carries the run across the await.
+      expect(currentRunOrNone()).toBeUndefined();
     });
   });
 
-  it("the frame propagates across setImmediate, and the run is not readable there", async () => {
+  it("the run is not readable in a setImmediate callback", async () => {
     const seed = makeStore();
     await withRun(seed, async () => {
       const seen = await new Promise<{ frame: unknown; error: unknown }>((resolve) =>
@@ -85,23 +84,23 @@ describe("agencyStore", () => {
           } catch (e) {
             error = e;
           }
-          resolve({ frame: agencyStore.getStore(), error });
+          resolve({ frame: currentRunOrNone(), error });
         }),
       );
-      expect(seen.frame).toBe(seed);
+      expect(seen.frame).toBeUndefined();
       expect(String(seen.error)).toMatch(/read after an await/);
     });
   });
 
-  it("the frame propagates across Promise.all branches", async () => {
+  it("the run is not readable in a promise continuation", async () => {
     const seed = makeStore();
     await withRun(seed, async () => {
       const results = await Promise.all([
-        Promise.resolve().then(() => agencyStore.getStore()?.ctx),
-        Promise.resolve().then(() => agencyStore.getStore()?.ctx),
+        Promise.resolve().then(() => currentRunOrNone()),
+        Promise.resolve().then(() => currentRunOrNone()),
       ]);
-      expect(results[0]).toBe(seed.ctx);
-      expect(results[1]).toBe(seed.ctx);
+      expect(results[0]).toBeUndefined();
+      expect(results[1]).toBeUndefined();
     });
   });
 
@@ -162,8 +161,6 @@ describe("agencyStore", () => {
       withRun(a, async (run) => {
         await new Promise((r) => setTimeout(r, 5));
         sawA.push(callPlain(run, getRuntimeContext, []).ctx);
-        // The other branch's run is not this branch's frame.
-        expect(() => callPlain(b, getRuntimeContext, [])).toThrow(WrongRunError);
       }),
       withRun(b, async (run) => {
         await new Promise((r) => setTimeout(r, 2));
@@ -205,7 +202,7 @@ describe("withCallsite", () => {
   it("installs callsite on the active frame", () => {
     const seed = makeStore();
     runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
-      expect(agencyStore.getStore()?.callsite).toBeUndefined();
+      expect(getRuntimeContext().callsite).toBeUndefined();
       withCallsite(run, { moduleId: "m", scopeName: "s", stepPath: "1.2" }, () => {
         expect(getRuntimeContext().callsite).toEqual({
           moduleId: "m",
@@ -213,7 +210,7 @@ describe("withCallsite", () => {
           stepPath: "1.2",
         });
       });
-      expect(agencyStore.getStore()?.callsite).toBeUndefined();
+      expect(getRuntimeContext().callsite).toBeUndefined();
     });
   });
 
@@ -227,15 +224,6 @@ describe("withCallsite", () => {
         expect(getRuntimeContext().callsite?.scopeName).toBe("outer");
       });
     });
-  });
-
-  it("throws outside an agency frame", () => {
-    // A run from a frame that has already ended is refused: no run is current.
-    const seed = makeStore();
-    const stale = runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => run);
-    expect(() =>
-      withCallsite(stale, { moduleId: "", scopeName: "", stepPath: "" }, () => 1),
-    ).toThrow(WrongRunError);
   });
 
   it("preserves ctx/stack/threads from the parent frame", () => {

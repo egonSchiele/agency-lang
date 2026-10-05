@@ -34,7 +34,6 @@
 import type { z } from "zod";
 import type { SmolConfig, UserContentInput } from "smoltalk";
 import type { LlmBaseUrls } from "./llmConfig.js";
-import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
 import type { RetryConfig } from "./llmRetry.js";
 import type { MessageThread } from "./state/messageThread.js";

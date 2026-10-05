@@ -1,4 +1,4 @@
-import { sameRun, withChildRun, type Run } from "./asyncContext.js";
+import { withChildRun, type Run } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 
 /**
@@ -79,7 +79,7 @@ function collectRecentFrames(parent: CallFrame | null, name: string): string[] {
  * (so a deep recursion pays a single `agencyStore` lookup, not one per frame).
  */
 export function withCallDepth<T>(run: Run, name: string, fn: (run: Run) => T): T {
-  const frame = sameRun(run, "withCallDepth()");
+  const frame = run;
   const parent = frame.callDepth;
   const limit = parent ? parent.limit : (frame.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
   const depth = (parent?.depth ?? 0) + 1;

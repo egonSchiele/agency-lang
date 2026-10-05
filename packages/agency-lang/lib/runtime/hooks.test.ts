@@ -2,6 +2,7 @@ import { describe, it as baseIt, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { callHook, invokeCallbacks, isInsideCallback, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { currentRun } from "./asyncContext.js";
 import { inFrameOf, testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
@@ -310,7 +311,7 @@ describe("isInsideCallback", () => {
     let seen = false;
     const ctx = fakeCtx();
     ctx.callbacks.onNodeStart = async () => {
-      seen = isInsideCallback(testRun());
+      seen = isInsideCallback(currentRun());
     };
     await inFrameOf(ctx, ctx.stateStack, async (run) => {
       expect(isInsideCallback(run)).toBe(false);

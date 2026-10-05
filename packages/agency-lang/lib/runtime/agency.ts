@@ -18,9 +18,8 @@
  *  - Thread-related operations live under `agency.thread.*` to keep
  *    the top-level surface lean; e.g. `agency.thread.user("hi")` and
  *    `agency.thread.current()`.
- *  - Codegen-emitted internals (`getRuntimeContext`, `agencyStore`,
- *    `__threads`, `__stateStack`, `__call`, `__callMethod`,
- *    `runInTestContext`) keep their existing names and are still
+ *  - Codegen-emitted internals (`currentRun`, `withChildRun`,
+ *    `__call`, `__callMethod`, `runInTestContext`) are still
  *    exported from `agency-lang/runtime` because generated code
  *    imports them directly. TS helper authors should prefer
  *    `agency.*`.
@@ -28,7 +27,7 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 import {
-  agencyStore,
+  currentRunOrNone,
   callPlain,
   currentRun,
   detachedRun,
@@ -79,24 +78,27 @@ import {
 // ---- Context reads -----------------------------------------------------
 
 /** Read the active `RuntimeContext`. Throws when called outside any
- *  `agencyStore.run(...)` frame (i.e. from non-Agency code). Tests
+ *  run (i.e. from non-Agency code, or after an await). Tests
  *  that need a frame can use `agency.withTestContext({ctx,stack,threads}, fn)`. */
 const ctx = (): RuntimeContext<any> => currentRun().ctx;
 
-/** Lax variant of `agency.ctx()`. Returns `undefined` outside any frame. */
-const ctxMaybe = (): RuntimeContext<any> | undefined => agencyStore.getStore()?.ctx;
+/** Lax variant of `agency.ctx()`. Returns `undefined` when no run is
+ *  current. That is the case outside any run, and also after the calling
+ *  function's first `await`: the two look the same from here. Call it on
+ *  the function's first line. */
+const ctxMaybe = (): RuntimeContext<any> | undefined => currentRunOrNone()?.ctx;
 
 /** Per-call-site source location seeded by `Runner.runInScope` for
  *  every step body. Returns `undefined` outside any frame or in
  *  frames where no callsite was installed (bootstrap scope). */
-const callsite = (): CallsiteLocation | undefined => agencyStore.getStore()?.callsite;
+const callsite = (): CallsiteLocation | undefined => currentRunOrNone()?.callsite;
 
 /** Read a module-scoped global. Same semantics as the Agency-level
  *  `globals.get(moduleId, name)`. `moduleId` defaults to `""`
  *  (the bare/anonymous module).
  *
- *  Reads from the active ALS frame's `globals` slot — the same source
- *  generated user code reads via `__globals()`. Inside a `fork` /
+ *  Reads the current run's `globals`, the same store generated user
+ *  code reads as `__run.globals`. Inside a `fork` /
  *  `parallel` / `race` branch this is the branch's per-branch
  *  snapshot, NOT the parent's canonical `ctx.globals`. Outside any
  *  branch (top-level node bodies, function calls) the frame's slot
@@ -128,8 +130,9 @@ const threadAssistant = (content: string): void => {
 /** Return the full `ThreadStore`. Throws when called outside any frame. */
 const threadStore = (): ThreadStore => currentRun().threads;
 
-/** Lax variant of `agency.thread.store()`. Returns `undefined` outside any frame. */
-const threadStoreMaybe = (): ThreadStore | undefined => agencyStore.getStore()?.threads;
+/** Lax variant of `agency.thread.store()`. Returns `undefined` when no run
+ *  is current, which includes after the calling function's first `await`. */
+const threadStoreMaybe = (): ThreadStore | undefined => currentRunOrNone()?.threads;
 
 /** Run `fn` with `threadId` pushed as the active thread; pop the
  *  active stack (including on throw) when `fn` returns. Accepts a
@@ -195,9 +198,9 @@ const threadsList = (): ThreadInfoTS[] => {
   const store = threadStoreMaybe();
   if (!store) {
     throw new Error(
-      "agency.threads.list() called outside an Agency frame. " +
-        "It must run inside `agencyStore.run(...)` / a node body — " +
-        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+      "agency.threads.list() called with no current run. " +
+        "Call it from a helper that Agency code called, before the helper's first await. " +
+        "In a test, wrap the call with `agency.withTestContext({ctx,stack,threads}, ...)`.",
     );
   }
   const activeId = store.activeId();
@@ -227,9 +230,9 @@ const threadsGet = (id: string, offset = 0, limit = 50): smoltalk.MessageJSON[] 
   const store = threadStoreMaybe();
   if (!store) {
     throw new Error(
-      "agency.threads.get() called outside an Agency frame. " +
-        "It must run inside `agencyStore.run(...)` / a node body — " +
-        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+      "agency.threads.get() called with no current run. " +
+        "Call it from a helper that Agency code called, before the helper's first await. " +
+        "In a test, wrap the call with `agency.withTestContext({ctx,stack,threads}, ...)`.",
     );
   }
   const rawId = fromSlug(id);
@@ -249,7 +252,7 @@ const threadsCurrent = (): string | undefined => {
 // ---- Checkpoints -------------------------------------------------------
 
 /** Capture a checkpoint of the current execution state. The recorded
- *  location is read from the active ALS callsite slot. */
+ *  location is read from the current run's callsite. */
 const checkpoint = (): Promise<number> => _checkpoint();
 
 /** Look up a previously-created checkpoint by id. Throws if missing. */
@@ -261,7 +264,7 @@ const restore = (idOrCp: number | Checkpoint, opts: RestoreOptions = {}): void =
   _restore(idOrCp, opts);
 
 /** Run `fn` with a custom `callsite` (`{moduleId, scopeName, stepPath}`)
- *  installed on the active ALS frame; restore the prior callsite when
+ *  on a child of the current run. The outer callsite is back when
  *  `fn` returns. The callsite is the source location used to attribute
  *  any `checkpoint()` made inside `fn` — `Runner.runInScope` seeds it
  *  automatically for every Agency step, but TS helpers that subdivide
@@ -295,8 +298,8 @@ const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> =>
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`
  *  for the duration of `fn`; pop in finally.
  *
- *  Pushes onto `currentRun().stack` — the ALS-resolved
- *  per-branch stack — NOT `ctx().stateStack` (which is the top-level
+ *  Pushes onto `currentRun().stack`, the branch's own
+ *  stack — NOT `ctx().stateStack` (which is the top-level
  *  stack). Inside a fork/race branch the two stacks differ; pushing
  *  on the wrong one would leak the guard into sibling branches. */
 const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<T> => {
@@ -310,7 +313,7 @@ const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<
 };
 
 /** Install a `TimeGuard(maxMs)` on the active branch's stack for the
- *  duration of `fn`; pop in finally. Same ALS-stack semantics as
+ *  duration of `fn`; pop in finally. Same stack as
  *  `withCostGuard`. */
 const withTimeGuard = async <T>(maxMs: number, fn: () => Promise<T>): Promise<T> => {
   const run = currentRun();
@@ -404,7 +407,7 @@ const memoryForget = (query: string): Promise<void> => _forget(query);
 
 /**
  * @internal
- * Install an ALS frame from explicit `{ctx, stack, threads}` for
+ * Build a run from explicit `{ctx, stack, threads}` for
  * tests that exercise stdlib helpers directly. Mirrors
  * `runInTestContext` with an object-arg signature so test bodies
  * compose with the rest of the namespace. Not intended for

@@ -13,7 +13,7 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
-import { __ctx, currentRun, type Run } from "../runtime/asyncContext.js";
+import { currentRunOrNone, currentRun, type Run } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
@@ -58,11 +58,11 @@ let bridgeActiveScreen: Screen | null = null;
 // don't clobber each other's pending promises / exit signals /
 // transcripts.
 //
-// `fallbackUiState` is used when no ALS frame is active, which only
-// happens for the unit-level tests in `ui.test.ts` that drive the
-// helpers directly without `runInTestContext`. Production code always
-// runs inside an Agency execution frame so `__ctx()` returns the
-// per-run RuntimeContext and the WeakMap branch wins.
+// `fallbackUiState` is used when no run is current, which only happens
+// for the unit-level tests in `ui.test.ts` that drive the helpers
+// directly without `runInTestContext`. Production code calls these
+// helpers from Agency code, so the run's RuntimeContext is found and the
+// WeakMap branch wins.
 // ---------------------------------------------------------------------------
 
 type ChoiceItem = { key: string; label: string };
@@ -102,8 +102,11 @@ function makeUiContextState(): UiContextState {
 const uiStateByCtx = new WeakMap<object, UiContextState>();
 const fallbackUiState: UiContextState = makeUiContextState();
 
+/** The UI state of the run this helper was called under. Only right until
+ *  the helper's first `await`: call it on the first line and keep the
+ *  result. */
 function getUiState(): UiContextState {
-  return uiStateFor(__ctx());
+  return uiStateFor(currentRunOrNone()?.ctx);
 }
 
 /** The UI state of one run's context. A helper that works across an
@@ -273,23 +276,20 @@ type ConsoleSinks = {
   debug: typeof console.debug;
 };
 
-// `savedConsoleSinks` is process-wide because `console.*` itself is a
-// process-wide singleton — we can only save/restore the originals
-// once. The actual capture *target* (the transcript array we push
-// rows into) lives in the per-context `UiContextState` so concurrent
-// REPLs each write into their own transcript. The installed
-// overrides route to `getUiState().captureTarget`, so dispatch
-// follows the active ALS frame automatically.
+// `console.*` is one object for the whole process, and a `console.log`
+// call says nothing about which run made it. So captured output goes to
+// the transcript of the REPL that installed its capture most recently.
+// With one REPL in the process, which is the usual case, that is its own
+// transcript. With two REPLs open at once in one process, the newer one
+// gets the output of both until it closes.
 //
-// Install / uninstall is reference-counted because multiple concurrent
-// contexts may each call `repl()` (and therefore _installConsoleCapture)
-// on the same process. Without a refcount, the first uninstall would
-// restore `console.*` to its originals and any still-active context
-// would silently lose its capture (the overrides are gone but its
-// `captureTarget` is still set). The counter is process-wide for the
-// same reason `savedConsoleSinks` is.
+// `captureTargets` holds the transcript of every REPL that is capturing,
+// oldest first. Each run's `UiContextState` remembers its own entry, so
+// closing a REPL removes the right one. The original sinks are saved when
+// the first REPL installs and restored when the last one uninstalls: an
+// earlier uninstall must not blank a REPL that is still open.
 let savedConsoleSinks: ConsoleSinks | null = null;
-let captureInstallCount = 0;
+let captureTargets: string[][] = [];
 
 function formatConsoleArgs(args: unknown[]): string {
   return args
@@ -331,7 +331,7 @@ export function truncateForTui(text: string): string {
 }
 
 function pushCaptured(prefix: string, text: string): void {
-  const target = getUiState().captureTarget;
+  const target = captureTargets[captureTargets.length - 1];
   if (!target) return;
   // Split on newlines so multi-line writes become one transcript row
   // per line. Trailing empty strings from a final `\n` are dropped so
@@ -348,14 +348,12 @@ function pushCaptured(prefix: string, text: string): void {
 }
 
 export function _installConsoleCapture(messages: string[]): void {
-  // The capture target is per-context — set it whether or not we're
-  // the first installer. (Re-install in a nested REPL inside the same
-  // ALS frame is a no-op; a nested REPL in a *different* ALS frame
-  // gets its own slot.) The console overrides themselves are a
-  // process singleton, installed once and routed to whichever
-  // context is currently active.
-  getUiState().captureTarget = messages;
-  captureInstallCount += 1;
+  // A REPL that installs twice replaces its own entry. Any other REPL
+  // adds one, and becomes the newest.
+  const ui = getUiState();
+  captureTargets = captureTargets.filter((target) => target !== ui.captureTarget);
+  captureTargets.push(messages);
+  ui.captureTarget = messages;
   if (savedConsoleSinks) return;
   savedConsoleSinks = {
     log: console.log,
@@ -388,14 +386,14 @@ export function _uninstallConsoleCapture(): void {
 }
 
 function uninstallConsoleCapture(ui: UiContextState): void {
-  // Clear the per-context target first so a stale ALS frame can't keep
-  // routing captured writes into a buffer the caller has dropped.
+  // Drop this REPL's transcript first, so nothing more is routed into a
+  // buffer the caller has let go of.
+  captureTargets = captureTargets.filter((target) => target !== ui.captureTarget);
   ui.captureTarget = null;
-  if (captureInstallCount > 0) captureInstallCount -= 1;
-  // Keep the overrides installed while any other context is still
-  // capturing. Restoring the originals here would silently blank that
-  // other context's transcript.
-  if (captureInstallCount > 0) return;
+  // Keep the overrides installed while any other REPL is still capturing.
+  // Restoring the originals here would silently blank that REPL's
+  // transcript.
+  if (captureTargets.length > 0) return;
   if (!savedConsoleSinks) return;
   console.log = savedConsoleSinks.log;
   console.warn = savedConsoleSinks.warn;

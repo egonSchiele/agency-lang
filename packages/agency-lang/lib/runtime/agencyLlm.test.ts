@@ -10,7 +10,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
 import { runPrompt } from "./prompt.js";
 import { toSmolConfig } from "./llmClient.js";
-import { callHelper } from "./__tests__/testHelpers.js";
+import { asRootRun, callHelper } from "./__tests__/testHelpers.js";
 
 function makeCtx(
   smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
@@ -32,7 +32,7 @@ function inFrame<T>(
   threads: ThreadStore,
   fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  return runInTestContext(ctx, ctx.stateStack, threads, fn);
+  return runInTestContext(ctx, ctx.stateStack, threads, asRootRun(fn));
 }
 
 /** Custom LLM client that records every PromptConfig it sees. Used to
@@ -268,11 +268,11 @@ describe("agency.llm — v1 surface lock", () => {
 
 describe("agency.llm — frame requirement", () => {
   it("throws when called outside any agency frame", async () => {
-    // Without `inFrame(...)`, there is no agencyStore frame installed,
+    // Without `inFrame(...)`, no run is current,
     // so getRuntimeContext() inside the helper throws. Pin this so a
     // future "auto-wrap in a bootstrap frame" change is a conscious
     // decision, not silent drift.
-    await expect(agency.llm("hi")).rejects.toThrow(/outside an Agency run/);
+    await expect(agency.llm("hi")).rejects.toThrow(/No run is current here/);
   });
 });
 

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as smoltalk from "smoltalk";
 import type { DecideResult } from "smoltalk";
-import { agencyStore, runInTestContext } from "../runtime/asyncContext.js";
+import { runInTestContext, withRun } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -244,15 +244,14 @@ describe("_endTurn and _handBack", () => {
       errors.push(event);
     }) as typeof execCtx.statelogClient.error;
     const toolStack = execCtx.stateStack;
-    await runInTestContext(execCtx, toolStack, new ThreadStore(), () => {
+    await runInTestContext(execCtx, toolStack, new ThreadStore(), (run) => {
       if (!insideTool) {
         return body();
       }
       // The tool loop records the invocation's stack on the frame; the
       // code may run on another stack, as a parallel branch of the body does.
       const branch = new StateStack();
-      const frame = agencyStore.getStore();
-      return agencyStore.run({ ...frame!, stack: branch, toolInvocationStack: toolStack }, body);
+      return withRun({ ...run, stack: branch, toolInvocationStack: toolStack }, body);
     });
     return { stack: toolStack, errors };
   }

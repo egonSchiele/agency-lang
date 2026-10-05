@@ -1,4 +1,4 @@
-// `_say`, `_record` read ctx/stack from AsyncLocalStorage (see
+// `_say`, `_record` read ctx/stack from the current run (see
 // `lib/runtime/asyncContext.ts`) so each one tears down its in-flight
 // work on abort: the `say` subprocess gets SIGTERM, and the `rec`
 // subprocess gets SIGTERM with stdin restored.

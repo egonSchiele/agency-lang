@@ -1,4 +1,4 @@
-import { sameRun, withChildRun, type Run } from "./asyncContext.js";
+import { withChildRun, type Run } from "./asyncContext.js";
 import type { HandlerEntry } from "./types.js";
 
 /**
@@ -42,7 +42,7 @@ export function runAsHandler<T>(
   entry: HandlerEntry,
   fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  const frame = sameRun(run, "runAsHandler()");
+  const frame = run;
   return withChildRun(
     frame,
     { executingHandlers: [...frame.executingHandlers, entry] },
@@ -53,7 +53,7 @@ export function runAsHandler<T>(
 
 /** The entries executing in this lineage, outermost first. */
 export function executingHandlers(run: Run): HandlerEntry[] {
-  return sameRun(run, "executingHandlers()").executingHandlers;
+  return run.executingHandlers;
 }
 
 /** True when any handler body is executing in this lineage. */

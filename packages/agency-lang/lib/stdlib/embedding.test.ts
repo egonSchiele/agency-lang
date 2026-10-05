@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { _embedTexts, _cosineSimilarity } from "./embedding.js";
-import { withRun } from "../runtime/asyncContext.js";
+import { withRun, type Run } from "../runtime/asyncContext.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { CostGuard } from "../runtime/guard.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
@@ -8,7 +8,7 @@ import type { EmbedConfig, EmbedResult } from "../runtime/llmClient.js";
 import type { Result } from "smoltalk";
 import { vi } from "vitest";
 import { _resolveLocalEmbeddingModel } from "./localModels.js";
-import { callHelper } from "../runtime/__tests__/testHelpers.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 vi.mock("./localModels.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./localModels.js")>();
@@ -63,12 +63,17 @@ function frame(stack: StateStack, client: unknown, events: unknown[] = []) {
   } as any;
 }
 
+/** Run `fn` under `run`, as the test's root run, so `callHelper` finds it. */
+function underRun<T>(run: Run, fn: (run: Run) => T): T {
+  return withRun(run, asRootRun(fn));
+}
+
 describe("_embedTexts", () => {
   it("returns one vector per input and bills the branch", async () => {
     const stack = new StateStack();
     const { client } = fakeClient();
     const events: unknown[] = [];
-    const r = await withRun(frame(stack, client, events), () =>
+    const r = await underRun(frame(stack, client, events), () =>
       callHelper(_embedTexts, ["ab", "abcd"], "", "", 0, "", ""),
     );
     expect(r.success).toBe(true);
@@ -89,7 +94,7 @@ describe("_embedTexts", () => {
   it("forwards only the options the caller set", async () => {
     const stack = new StateStack();
     const { client, calls } = fakeClient();
-    await withRun(frame(stack, client), () =>
+    await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "", "ollama", 0, "", "http://localhost:11434"),
     );
     expect(calls[0].config).toEqual({
@@ -107,7 +112,7 @@ describe("_embedTexts", () => {
   it("forwards model and dimensions when set", async () => {
     const stack = new StateStack();
     const { client, calls } = fakeClient();
-    await withRun(frame(stack, client), () =>
+    await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "text-embedding-3-large", "", 256, "", ""),
     );
     expect(calls[0].config).toEqual({ model: "text-embedding-3-large", dimensions: 256 });
@@ -117,11 +122,11 @@ describe("_embedTexts", () => {
     vi.mocked(_resolveLocalEmbeddingModel).mockClear();
     const stack = new StateStack();
     const { client, calls } = fakeClient();
-    await withRun(frame(stack, client), () =>
+    await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "nomic-embed-text", "llama-cpp", 0, "", ""),
     );
     expect(calls[0].config).toEqual({ model: "/models/nomic.Q4_K_M.gguf", provider: "llama-cpp" });
-    await withRun(frame(stack, client), () =>
+    await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "text-embedding-3-small", "openai", 0, "", ""),
     );
     expect(calls[1].config?.model).toBe("text-embedding-3-small");
@@ -132,7 +137,7 @@ describe("_embedTexts", () => {
     vi.mocked(_resolveLocalEmbeddingModel).mockRejectedValueOnce(new Error("Unknown local model"));
     const stack = new StateStack();
     const { client, calls } = fakeClient();
-    const r = await withRun(frame(stack, client), () =>
+    const r = await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "nope", "llama-cpp", 0, "", ""),
     );
     expect(r.success).toBe(false);
@@ -142,10 +147,10 @@ describe("_embedTexts", () => {
   it("refuses an empty list and a blank input before dispatch", async () => {
     const stack = new StateStack();
     const { client, calls } = fakeClient();
-    const none = await withRun(frame(stack, client), () =>
+    const none = await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, [], "", "", 0, "", ""),
     );
-    const blank = await withRun(frame(stack, client), () =>
+    const blank = await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["ok", "   "], "", "", 0, "", ""),
     );
     expect(none.success).toBe(false);
@@ -158,7 +163,7 @@ describe("_embedTexts", () => {
   it("passes a provider failure through without billing", async () => {
     const stack = new StateStack();
     const { client } = fakeClient(() => ({ success: false, error: "no key" }));
-    const r = await withRun(frame(stack, client), () =>
+    const r = await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["x"], "", "", 0, "", ""),
     );
     expect(r.success).toBe(false);
@@ -181,7 +186,7 @@ describe("_embedTexts", () => {
         },
       },
     }));
-    const r = await withRun(frame(stack, client), () =>
+    const r = await underRun(frame(stack, client), () =>
       callHelper(_embedTexts, ["a", "b"], "", "", 0, "", ""),
     );
     expect(r.success).toBe(false);
@@ -200,7 +205,7 @@ describe("_embedTexts", () => {
         costEstimate: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
       },
     }));
-    await withRun(frame(stack, client), () => callHelper(_embedTexts, ["x"], "", "", 0, "", ""));
+    await underRun(frame(stack, client), () => callHelper(_embedTexts, ["x"], "", "", 0, "", ""));
     expect(stack.localTokens).toBe(7);
   });
 
@@ -208,7 +213,7 @@ describe("_embedTexts", () => {
     const stack = new StateStack();
     stack.guards.push(new CostGuard(FAKE_COST / 2));
     const { client } = fakeClient();
-    await withRun(frame(stack, client), async () => {
+    await underRun(frame(stack, client), async () => {
       await expect(callHelper(_embedTexts, ["x"], "", "", 0, "", "")).rejects.toBeTruthy();
     });
   });

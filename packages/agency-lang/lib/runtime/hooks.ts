@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { assertUsable, callPlain, sameRun, withChildRun, type Run } from "./asyncContext.js";
+import { assertUsable, callPlain, withChildRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -142,7 +142,7 @@ export type AgencyCallbacks = {
  *  defers an external pause here, because a checkpoint taken inside a
  *  callback dispatch is not a place a resume can re-enter. */
 export function isInsideCallback(run: Run): boolean {
-  return sameRun(run, "isInsideCallback()").activeCallbacks.length > 0;
+  return run.activeCallbacks.length > 0;
 }
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
@@ -196,7 +196,7 @@ async function fireWithGuard(
   const key = fn as object;
   // Recursion guard scoped to the current frame. See the comment above
   // `isInsideCallback` for why the list lives on the frame.
-  const frame = assertUsable(sameRun(run, "fireWithGuard()"), "fire a callback");
+  const frame = assertUsable(run, "fire a callback");
   if (frame.activeCallbacks.includes(key)) return;
   // A new list per fire, holding the inherited entries plus our own key, so
   // a deeper fire can re-enter without changing the outer list.

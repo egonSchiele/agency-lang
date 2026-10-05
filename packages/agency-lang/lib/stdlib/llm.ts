@@ -1,5 +1,5 @@
 import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
-import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRunOrNone, getRuntimeContext } from "../runtime/asyncContext.js";
 import { modelProviderOverride } from "../runtime/llmConfig.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { LOCAL_PROVIDERS, mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
@@ -189,13 +189,14 @@ export function _hostedSearchTools(model: string, provider: string = ""): string
  *  provider from the model. Only a call with no model override falls back
  *  to the ambient pair (branch `setLlmOptions`, then the baked agency.json
  *  defaults); an empty provider there again means the catalog. Reads
- *  `agencyStore` directly rather than `getRuntimeContext()`, which throws
- *  outside an execution frame; no frame just means no defaults. */
+ *  the run with `currentRunOrNone()` rather than `getRuntimeContext()`,
+ *  which throws outside a run; no run just means no defaults. Its callers
+ *  call it before their first await. */
 function resolveLlmRoute(model: string, provider: string): { model: string; provider: string } {
   if (model !== "") {
     return { model, provider };
   }
-  const store = agencyStore.getStore();
+  const store = currentRunOrNone();
   const branch = (store?.stack?.other.llmDefaults ?? {}) as { model?: string; provider?: string };
   const baked = (store?.ctx?.smoltalkDefaults ?? {}) as { model?: string; provider?: string };
   return {

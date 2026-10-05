@@ -11,7 +11,7 @@ import { _generateImage, _generateImageLocal, _imageSources, _imageDestination }
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
 import type { LocalImageInputs } from "./localImageInputs.js";
-import { callHelper } from "../runtime/__tests__/testHelpers.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 /** The input images of a call with none. */
 const NO_INPUTS: LocalImageInputs = { files: [], settings: {} };
@@ -61,7 +61,10 @@ async function withClient(
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await withRun(store, () => fn({ stack, imageGeneration, meter }));
+  await withRun(
+    store,
+    asRootRun(() => fn({ stack, imageGeneration, meter })),
+  );
 }
 
 const okResult = (overrides: any = {}) => ({

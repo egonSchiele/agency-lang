@@ -1,7 +1,7 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
 import type { GlobalStore } from "./state/globalStore.js";
-import { assertUsable, sameRun, withChildRun, type Run } from "./asyncContext.js";
+import { assertUsable, withChildRun, type Run } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
@@ -183,7 +183,6 @@ export class Runner {
    *  makes no child, and `fn` runs under `run` itself. */
   private runInScope<T>(run: Run, fn: (run: Run) => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
-      sameRun(run, "A Runner step");
       assertUsable(run, "run a step");
       return withChildRun(
         run,
@@ -1335,10 +1334,9 @@ export class Runner {
         // round and cannot be cut short when that arm ends its own span.
         runRound: (report, work) =>
           this.ctx.statelogClient.runInBranchContext(blockSpanStack, async (spans) => {
-            // The round logs under the block's spans, on its own stack. It
-            // is sent from inside whichever arm triggered it, so it redacts
-            // with that arm's tags, as it does on main.
-            const log = this.ctx.statelogClient.forSpans(spans);
+            // The round logs under the block's spans, on its own stack, and
+            // redacts with the block's own tags.
+            const log = this.ctx.statelogClient.forBranch(run.globals, spans);
             const spanId = log.startSpan("decisionBatch");
             const startedAt = performance.now();
             try {

@@ -8,7 +8,7 @@ import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
 import { runInTestContext, type Run } from "../asyncContext.js";
-import { testRun } from "../__tests__/testHelpers.js";
+import { asRootRun, testRun } from "../__tests__/testHelpers.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
@@ -66,7 +66,7 @@ const it = (name: string, fn: () => unknown, timeout?: number) =>
     name,
     () => {
       const ctx = makeEmbedCtx();
-      return runInTestContext(ctx, ctx.stateStack, new ThreadStore(), fn);
+      return runInTestContext(ctx, ctx.stateStack, new ThreadStore(), asRootRun(fn));
     },
     timeout,
   );
@@ -140,8 +140,8 @@ describe("MemoryManager", () => {
     // The provider charged us even though it returned no vectors: usage is
     // accounted (guards + meter), then the structural no-vector error is thrown.
     await expect(
-      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () =>
-        (manager as any)._embed(testRun(), "hello"),
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) =>
+        (manager as any)._embed(run, "hello"),
       ),
     ).rejects.toThrow(/no vectors/);
     expect(ctx.stateStack.localCost).toBeCloseTo(0.5);
@@ -184,9 +184,9 @@ describe("MemoryManager", () => {
     const ctx = makeEmbedCtx();
     ctx.stateStack.guards.push(new CostGuard(0.1));
     let caught: unknown;
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => {
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
       try {
-        await (manager as any)._embed(testRun(), "hello");
+        await (manager as any)._embed(run, "hello");
       } catch (err) {
         caught = err;
       }
@@ -713,11 +713,11 @@ describe("MemoryManager", () => {
         llmClient: client,
       });
       const before = env.stack.localCost;
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         // `remember` calls `_text` once for the extraction prompt and
         // returns early when the parse yields no entities — no embed
         // call follows, so this isolates the text-cost charge.
-        await manager.remember(testRun(), "nothing notable");
+        await manager.remember(run, "nothing notable");
       });
       expect(env.stack.localCost).toBeCloseTo(before + 0.05, 10);
     });
@@ -743,8 +743,8 @@ describe("MemoryManager", () => {
         llmClient: client,
       });
       const before = env.stack.localCost;
-      await agency.withTestContext(env, async () => {
-        await manager.remember(testRun(), "Maggie weaves baskets");
+      await agency.withTestContext(env, async (run) => {
+        await manager.remember(run, "Maggie weaves baskets");
       });
       expect(env.stack.localCost).toBeCloseTo(before + 0.05 + 0.01, 10);
     });
@@ -761,7 +761,7 @@ describe("MemoryManager", () => {
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      const run = agency.withTestContext(charged, () => testRun());
+      const run = agency.withTestContext(charged, (chargedRun) => chargedRun);
       await agency.withTestContext(other, async () => {
         await expect(manager.remember(run, "anything")).resolves.toBeUndefined();
       });
@@ -778,12 +778,12 @@ describe("MemoryManager", () => {
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         // $0.50 budget, memory's _text call charges $1.00 →
         // `enforceGuards()` inside `agency.addCost` throws.
         await expect(
           agency.withCostGuard(0.5, async () => {
-            await manager.remember(testRun(), "anything");
+            await manager.remember(run, "anything");
           }),
         ).rejects.toThrow(/cost/i);
       });
@@ -817,10 +817,10 @@ describe("MemoryManager", () => {
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
-      await agency.withTestContext(env, async () => {
+      await agency.withTestContext(env, async (run) => {
         await expect(
           agency.withCostGuard(0.5, async () => {
-            await manager.remember(testRun(), "Maggie weaves baskets");
+            await manager.remember(run, "Maggie weaves baskets");
           }),
         ).rejects.toThrow(/cost/i);
       });

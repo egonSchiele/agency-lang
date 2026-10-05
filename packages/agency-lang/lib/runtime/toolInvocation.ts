@@ -5,7 +5,7 @@
  * to call them.
  */
 import type { FuncParam } from "./agencyFunction.js";
-import { sameRun, withChildRun, type Run } from "./asyncContext.js";
+import { withChildRun, type Run } from "./asyncContext.js";
 import { isSuccess } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { MessageThread } from "./state/messageThread.js";
@@ -56,7 +56,6 @@ export function runAsToolInvocation<T>(
   branchStack: StateStack,
   invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
-  sameRun(run, "runAsToolInvocation()");
   return withChildRun(run, { toolInvocationStack: branchStack }, "a tool call", invoke);
 }
 
@@ -77,7 +76,6 @@ export async function invokeOnFreshThreadStore<T>(
   run: Run,
   invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
-  sameRun(run, "invokeOnFreshThreadStore()");
   const freshThreads = new ThreadStore();
   freshThreads.setStatelogClient(run.log);
   return withChildRun(run, { threads: freshThreads }, "a tool call", invoke);
@@ -100,7 +98,6 @@ export async function invokeOnThread<T>(
   // the thread. Re-entered when a resume re-runs the dispatch.
   thread.enterHandoffScope(scopeKey);
   try {
-    sameRun(run, "invokeOnThread()");
     const view = run.threads.viewWithActive(thread, run.log);
     return await withChildRun(run, { threads: view }, "a handoff", invoke);
   } finally {

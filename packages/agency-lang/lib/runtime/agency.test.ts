@@ -3,14 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { agency } from "./agency.js";
-import { agencyStore, freshState, lineageOf, withRun } from "./asyncContext.js";
+import { currentRunOrNone, freshState, lineageOf, withRun } from "./asyncContext.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { RestoreSignal } from "./errors.js";
 import { CostGuard, TimeGuard } from "./guard.js";
 import { _resetStoreRegistry } from "./memory/index.js";
-import { callHelper, makeMockCtx } from "./__tests__/testHelpers.js";
+import { asRootRun, callHelper, makeMockCtx } from "./__tests__/testHelpers.js";
 
 function setup() {
   const ctx = new RuntimeContext({
@@ -32,7 +32,7 @@ describe("agency.ctx / agency.ctxMaybe", () => {
   });
 
   it("ctx throws when called outside any frame", () => {
-    expect(() => agency.ctx()).toThrow(/outside an Agency run/);
+    expect(() => agency.ctx()).toThrow(/No run is current here/);
   });
 
   it("ctxMaybe returns undefined outside any frame", () => {
@@ -193,11 +193,11 @@ describe("agency.thread (subnamespace)", () => {
 
 describe("agency.threads (registry subnamespace)", () => {
   it("list throws outside a frame (silent [] would mask misuse)", () => {
-    expect(() => agency.threads.list()).toThrow(/outside an Agency frame/);
+    expect(() => agency.threads.list()).toThrow(/called with no current run/);
   });
 
   it("get throws outside a frame", () => {
-    expect(() => agency.threads.get("t0")).toThrow(/outside an Agency frame/);
+    expect(() => agency.threads.get("t0")).toThrow(/called with no current run/);
   });
 
   it("current returns undefined outside a frame", () => {
@@ -443,7 +443,7 @@ describe("agency.withTestContext", () => {
       expect(agency.thread.storeMaybe()).toBe(env.threads);
     });
     expect(agency.ctxMaybe()).toBeUndefined();
-    expect(agencyStore.getStore()).toBeUndefined();
+    expect(currentRunOrNone()).toBeUndefined();
   });
 });
 
@@ -481,9 +481,9 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      () => {
+      asRootRun(() => {
         expect(callHelper(agency.memory.enabled)).toBe(false);
-      },
+      }),
     );
   });
 
@@ -492,10 +492,10 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      async () => {
+      asRootRun(async () => {
         await callHelper(agency.memory.enable, { dir: tmpRoot });
         expect(callHelper(agency.memory.enabled)).toBe(true);
-      },
+      }),
     );
   });
 
@@ -504,12 +504,12 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      async () => {
+      asRootRun(async () => {
         await callHelper(agency.memory.enable, { dir: tmpRoot });
         expect(callHelper(agency.memory.enabled)).toBe(true);
         callHelper(agency.memory.disable);
         expect(callHelper(agency.memory.enabled)).toBe(false);
-      },
+      }),
     );
   });
 
@@ -518,11 +518,11 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      async () => {
+      asRootRun(async () => {
         await callHelper(agency.memory.enable, { dir: tmpRoot });
         await callHelper(agency.memory.setId, "alice");
         expect(execCtx.stateStack.other.memoryId).toBe("alice");
-      },
+      }),
     );
   });
 
@@ -531,7 +531,7 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      async () => {
+      asRootRun(async () => {
         await callHelper(agency.memory.enable, { dir: tmpRoot });
         await callHelper(agency.memory.setId, "alice");
         // remember + forget rely on LLM calls so we skip them here;
@@ -539,7 +539,7 @@ describe("agency.memory.*", () => {
         // string (empty when there is nothing to recall).
         const r = await callHelper(agency.memory.recall, "anything");
         expect(typeof r).toBe("string");
-      },
+      }),
     );
   });
 
@@ -548,10 +548,10 @@ describe("agency.memory.*", () => {
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
-      async () => {
+      asRootRun(async () => {
         // No enableMemory call → forget should resolve to undefined.
         await expect(callHelper(agency.memory.forget, "anything")).resolves.toBeUndefined();
-      },
+      }),
     );
   });
 });

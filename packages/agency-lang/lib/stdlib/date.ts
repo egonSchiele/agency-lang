@@ -1,4 +1,4 @@
-import { __ctx } from "../runtime/asyncContext.js";
+import { currentRunOrNone } from "../runtime/asyncContext.js";
 import { realClock } from "../runtime/clock.js";
 
 const DAYS_OF_WEEK = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -13,7 +13,7 @@ function getLocalTimezone(): string {
 // must meter against wall time. Frameless (outside an Agency run) it falls back
 // to realClock.wallTime() === Date.now(), so nothing changes off-frame.
 function wallClockNow(): number {
-  return (__ctx()?.clock ?? realClock).wallTime();
+  return (currentRunOrNone()?.ctx.clock ?? realClock).wallTime();
 }
 
 function resolveTz(timezone?: string): string {

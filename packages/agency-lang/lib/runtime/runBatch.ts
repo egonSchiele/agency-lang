@@ -60,7 +60,7 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
-import { freshState, lineageOf, sameRun, withRun, type Run } from "./asyncContext.js";
+import { freshState, lineageOf, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext, StatelogClient } from "../statelogClient.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
@@ -456,8 +456,6 @@ function runInBranchAlsFrame<T>(
   spans: SpanContext[],
   fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  sameRun(parent, "runBatch()");
-
   // Build the per-branch globals + threads. Two independent dials:
   //   - `shareGlobals=false` (default): clone parent's GlobalStore,
   //     restore from `branch.globalsJSON` if present (resume after

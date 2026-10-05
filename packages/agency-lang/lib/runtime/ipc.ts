@@ -13,7 +13,7 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
-import { detachedRun, currentRun, sameRun, withRun, type Run } from "./asyncContext.js";
+import { detachedRun, currentRun, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
@@ -909,7 +909,7 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // This listener runs in the frame that was current when the subprocess
     // was started, which is the stored branch run. `sameRun` checks that
     // while `AsyncLocalStorage` is still in place.
-    const stored = sameRun(s.branchRun, "handleInterruptMessage()");
+    const stored = s.branchRun;
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
       (spans: SpanContext[]) =>

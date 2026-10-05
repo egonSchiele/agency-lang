@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { _imageAttachment, _fileAttachment, _attachToReply } from "./thread.js";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { withRun } from "../runtime/asyncContext.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 
 describe("_imageAttachment", () => {
@@ -100,7 +100,7 @@ describe("_attachToReply", () => {
 
   it("queues onto the frame's stack.other when inside a tool call", () => {
     const frame = frameWith(1);
-    agencyStore.run(frame, () => {
+    withRun(frame, () => {
       _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
     });
     const queued = frame.stack.drainPendingReplyAttachments();
@@ -112,7 +112,7 @@ describe("_attachToReply", () => {
 
   it("drops with a statelog error outside a tool call (never throws)", () => {
     const frame = frameWith(0);
-    agencyStore.run(frame, () => {
+    withRun(frame, () => {
       _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
     });
     expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);

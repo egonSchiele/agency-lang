@@ -16,9 +16,9 @@ describe("executing handlers", () => {
   });
 
   it("records the executing entry", async () => {
-    await runAsHandler(testRun(), entryA, async () => {
-      expect(executingHandlers(testRun())).toEqual([entryA]);
-      expect(insideHandlerFunction(testRun())).toBe(true);
+    await runAsHandler(testRun(), entryA, async (handlerRun) => {
+      expect(executingHandlers(handlerRun)).toEqual([entryA]);
+      expect(insideHandlerFunction(handlerRun)).toBe(true);
     });
   });
 
@@ -37,11 +37,11 @@ describe("executing handlers", () => {
   });
 
   it("stacks nested handler executions innermost-last", async () => {
-    await runAsHandler(testRun(), entryA, async () => {
-      await runAsHandler(testRun(), entryB, async () => {
-        expect(executingHandlers(testRun())).toEqual([entryA, entryB]);
+    await runAsHandler(testRun(), entryA, async (runA) => {
+      await runAsHandler(runA, entryB, async (runB) => {
+        expect(executingHandlers(runB)).toEqual([entryA, entryB]);
       });
-      expect(executingHandlers(testRun())).toEqual([entryA]);
+      expect(executingHandlers(runA)).toEqual([entryA]);
     });
   });
 

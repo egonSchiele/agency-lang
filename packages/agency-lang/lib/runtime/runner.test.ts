@@ -4,7 +4,14 @@ import { makeRedactReplacer } from "./redactForStatelog.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
+import {
+  currentRun,
+  freshState,
+  getRuntimeContext,
+  runInTestContext,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import { TimeGuard } from "./guard.js";
 import { AgencyCancelledError, PauseSignal, readCause } from "./errors.js";
 import { callHook, isInsideCallback } from "./hooks.js";
@@ -16,6 +23,7 @@ import { ABANDONED_TURN_TEXT } from "./threadRepair.js";
 import type { MessageThread } from "./state/messageThread.js";
 import {
   adoptCtx,
+  asRootRun,
   makeMockCtx as makeBareMockCtx,
   testRun,
   withTestFrame,
@@ -904,13 +912,13 @@ describe("Runner", () => {
         threads: new ThreadStore(),
       });
       const paths: string[] = [];
-      await runner.step(0, testRun(), async () => {
+      await runner.step(0, testRun(), async (_runner, stepRun) => {
         paths.push(getRuntimeContext().callsite!.stepPath);
-        await runner.ifElse(0, testRun(), [
+        await runner.ifElse(0, stepRun, [
           {
             condition: () => true,
-            body: async (r) => {
-              await r.step(0, testRun(), async () => {
+            body: async (r, branchRun) => {
+              await r.step(0, branchRun, async () => {
                 paths.push(getRuntimeContext().callsite!.stepPath);
               });
             },
@@ -963,13 +971,18 @@ describe("Runner", () => {
 
     it("keeps the handler chain depth and the active callbacks", async () => {
       const callback = {};
-      const outer = getRuntimeContext();
+      const outer: Run = {
+        ...testRun(),
+        state: freshState(),
+        handlerChainDepth: 3,
+        activeCallbacks: [callback],
+      };
       let seenDepth = -1;
       let inside = false;
-      await agencyStore.run({ ...outer, handlerChainDepth: 3, activeCallbacks: [callback] }, () =>
-        makeRunner().step(0, testRun(), async () => {
-          seenDepth = getRuntimeContext().handlerChainDepth;
-          inside = isInsideCallback(testRun());
+      await withRun(outer, (run) =>
+        makeRunner().step(0, run, async (_runner, stepRun) => {
+          seenDepth = stepRun.handlerChainDepth;
+          inside = isInsideCallback(stepRun);
         }),
       );
       expect(seenDepth).toBe(3);
@@ -992,7 +1005,7 @@ describe("match exit propagation", () => {
   // The runner is built before the test's frame exists, so the frame is
   // built from the runner's ctx.
   const it = (name: string, fn: () => unknown) =>
-    baseIt(name, () => runInTestContext(ctx, ctx.stateStack, ctx.threads, fn));
+    baseIt(name, () => runInTestContext(ctx, ctx.stateStack, ctx.threads, asRootRun(fn)));
 
   const frameLocals = () => frame.locals;
 
@@ -1428,7 +1441,7 @@ describe("Runner — external pause", () => {
     const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     ctx.callbacks.onNodeStart = async () => {
-      await runner.step(0, testRun(), async () => {
+      await runner.step(0, currentRun(), async () => {
         ran = true;
       });
     };

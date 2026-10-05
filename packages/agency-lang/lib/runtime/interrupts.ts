@@ -4,11 +4,9 @@ import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import {
-  agencyStore,
   assertUsable,
   callPlain,
   runInBootstrapFrame,
-  sameRun,
   withChildRun,
   type Run,
 } from "./asyncContext.js";
@@ -251,7 +249,7 @@ async function runHandlerChain(
   // inherited parent depth, so fan-out breadth never accumulates; only a
   // handler whose body re-enters the chain nests inside the `run(...)` scope
   // below and climbs the depth.
-  const frame = sameRun(outerRun, "runHandlerChain()");
+  const frame = outerRun;
   const ctx = frame.ctx;
   if ((ctx.handlers ?? []).length > 0 && !stack) {
     throw new Error(
@@ -635,7 +633,6 @@ export async function interruptWithHandlers<T = any>(
     stack?: StateStack;
   },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
-  sameRun(run, "interruptWithHandlers()");
   assertUsable(run, "raise an interrupt");
   const stack = opts?.stack ?? run.stack;
   const interruptObj: InterruptInfo = { effect, message, data, origin };

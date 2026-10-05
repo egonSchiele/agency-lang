@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
 import { flushPendingStatelogPosts } from "./statelogSender.js";
+import { GlobalStore } from "./runtime/state/globalStore.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -494,7 +495,7 @@ describe("StatelogClient", () => {
     });
   });
 
-  describe("branch span isolation (AsyncLocalStorage)", () => {
+  describe("branch span isolation", () => {
     it("snapshotStack copies the active stack and decouples it from later pushes", () => {
       const client = fileClient(newLogFile("snapshot"));
       const a = client.startSpan("agentRun")!;
@@ -508,17 +509,17 @@ describe("StatelogClient", () => {
       client.endSpan(a);
     });
 
-    it("spans pushed inside runInBranchContext are invisible outside it", async () => {
+    it("spans pushed through a branch logger are invisible outside it", async () => {
       const client = fileClient(newLogFile("branch-iso"));
       const outer = client.startSpan("agentRun")!;
       const parent = client.snapshotStack();
-      let innerIdInsideBranch: string | undefined;
-      let currentInsideBranch: string | undefined;
-      await client.runInBranchContext(parent, async () => {
-        innerIdInsideBranch = client.startSpan("nodeExecution");
-        currentInsideBranch = client.currentSpan?.spanId;
-        // Inside the branch, currentSpan is the branch-local push.
-        expect(currentInsideBranch).toBe(innerIdInsideBranch);
+      await client.runInBranchContext(parent, async (spans) => {
+        const branch = client.forBranch(new GlobalStore(), spans);
+        const inner = branch.startSpan("nodeExecution");
+        // Through the branch's logger, currentSpan is the branch-local push.
+        expect(branch.currentSpan?.spanId).toBe(inner);
+        // The client itself still logs with the root stack.
+        expect(client.currentSpan?.spanId).toBe(outer);
       });
       // Back outside the branch, the outer stack must be unaffected.
       expect(client.currentSpan?.spanId).toBe(outer);
@@ -530,26 +531,29 @@ describe("StatelogClient", () => {
       const outer = client.startSpan("agentRun")!;
       const parent = client.snapshotStack();
 
-      // Two branches run concurrently. Each pushes a different span and
-      // yields control multiple times via `await`. If the two branches
-      // shared a stack, they would observe each other's pushes.
-      const branch0 = client.runInBranchContext(parent, async () => {
-        const id = client.startSpan("nodeExecution")!;
+      // Two branches run concurrently, each with its own logger. Each
+      // pushes a different span and yields control multiple times via
+      // `await`. If the two loggers shared a stack, they would observe
+      // each other's pushes.
+      const branch0 = client.runInBranchContext(parent, async (spans) => {
+        const branch = client.forBranch(new GlobalStore(), spans);
+        const id = branch.startSpan("nodeExecution")!;
         await new Promise((r) => setImmediate(r));
-        const top0 = client.currentSpan?.spanId;
+        const top0 = branch.currentSpan?.spanId;
         await new Promise((r) => setImmediate(r));
-        const top1 = client.currentSpan?.spanId;
-        client.endSpan(id);
-        return { id, top0, top1, parentSpan: id && client.currentSpan?.spanId };
+        const top1 = branch.currentSpan?.spanId;
+        branch.endSpan(id);
+        return { id, top0, top1, afterEnd: branch.currentSpan?.spanId };
       });
-      const branch1 = client.runInBranchContext(parent, async () => {
-        const id = client.startSpan("llmCall")!;
+      const branch1 = client.runInBranchContext(parent, async (spans) => {
+        const branch = client.forBranch(new GlobalStore(), spans);
+        const id = branch.startSpan("llmCall")!;
         await new Promise((r) => setImmediate(r));
-        const top0 = client.currentSpan?.spanId;
+        const top0 = branch.currentSpan?.spanId;
         await new Promise((r) => setImmediate(r));
-        const top1 = client.currentSpan?.spanId;
-        client.endSpan(id);
-        return { id, top0, top1 };
+        const top1 = branch.currentSpan?.spanId;
+        branch.endSpan(id);
+        return { id, top0, top1, afterEnd: branch.currentSpan?.spanId };
       });
 
       const [b0, b1] = await Promise.all([branch0, branch1]);
@@ -560,43 +564,47 @@ describe("StatelogClient", () => {
       expect(b1.top0).toBe(b1.id);
       expect(b1.top1).toBe(b1.id);
       expect(b0.id).not.toBe(b1.id);
+      // Each branch's stack was seeded from the parent's.
+      expect(b0.afterEnd).toBe(outer);
+      expect(b1.afterEnd).toBe(outer);
 
       // The outer stack still has only the agentRun span.
       expect(client.currentSpan?.spanId).toBe(outer);
       client.endSpan(outer);
     });
 
-    it("events emitted inside a branch attribute to the branch's span", async () => {
+    it("events emitted through a branch logger attribute to the branch's span", async () => {
       const file = newLogFile("branch-attribution");
       const client = fileClient(file);
       const outer = client.startSpan("agentRun")!;
       const parent = client.snapshotStack();
-      await client.runInBranchContext(parent, async () => {
-        const inner = client.startSpan("nodeExecution")!;
-        await client.debug("inside-branch", {});
-        client.endSpan(inner);
+      let inner: string | undefined;
+      await client.runInBranchContext(parent, async (spans) => {
+        const branch = client.forBranch(new GlobalStore(), spans);
+        inner = branch.startSpan("nodeExecution")!;
+        await branch.debug("inside-branch", {});
+        branch.endSpan(inner);
       });
       client.endSpan(outer);
       const events = readEvents(file);
       expect(events).toHaveLength(1);
-      // The debug event must be attributed to the branch's nodeExecution
-      // span (not to the outer agentRun span).
+      // The debug event is attributed to the branch's nodeExecution span,
+      // which nests under the outer agentRun span.
       expect(events[0].parent_span_id).toBe(outer);
-      // And its span_id must be the branch-local span — which means the
-      // branch saw a fresh push.
-      expect(events[0].span_id).toBeTruthy();
-      expect(events[0].span_id).not.toBe(outer);
+      expect(events[0].span_id).toBe(inner);
     });
 
     it("a branch ending a span it never opened is a no-op on the parent stack", async () => {
       const client = fileClient(newLogFile("branch-no-parent-pop"));
       const outer = client.startSpan("agentRun")!;
       const parent = client.snapshotStack();
-      await client.runInBranchContext(parent, async () => {
-        // Try to pop the parent's outer span from inside the branch. The
-        // branch's snapshot includes `outer`, but ending it pops only the
+      await client.runInBranchContext(parent, async (spans) => {
+        const branch = client.forBranch(new GlobalStore(), spans);
+        // Try to pop the parent's outer span through the branch's logger.
+        // The branch's stack includes `outer`, but ending it pops only the
         // branch's *local* copy — it must not pop the real outer stack.
-        client.endSpan(outer);
+        branch.endSpan(outer);
+        expect(branch.currentSpan).toBeUndefined();
       });
       // The parent's outer span is still active.
       expect(client.currentSpan?.spanId).toBe(outer);

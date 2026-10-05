@@ -22,7 +22,6 @@ export type { CallsiteLocation } from "./asyncContext.js";
  * `agency-lang/runtime`.
  */
 export {
-  agencyStore,
   getRuntimeContext,
   currentRun,
   callPlain,
@@ -34,12 +33,6 @@ export {
   assertUsable,
   RunInUseError,
   freshState,
-  sameRun,
-  WrongRunError,
-  __threads,
-  __stateStack,
-  __ctx,
-  __globals,
   type Run,
 } from "./asyncContext.js";
 export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TimeGuard } from "./guard.js";
-import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
+import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { DecisionCollector } from "./decision/collector.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
@@ -971,8 +971,8 @@ describe("runBatch and the decision scope", () => {
         decisionCollector: collector,
         children: ["k0", "k1"].map((key) => ({
           key,
-          invoke: async () => {
-            const scope = agencyStore.getStore()?.decisions;
+          invoke: async (branchRun) => {
+            const scope = branchRun.decisions;
             seen.push({
               key: scope?.armKey ?? "none",
               sameCollector: scope?.collector === collector,
@@ -1021,8 +1021,8 @@ describe("runBatch and the decision scope", () => {
                 children: [
                   {
                     key: "tool",
-                    invoke: async () => {
-                      innerKey = agencyStore.getStore()?.decisions?.armKey ?? "none";
+                    invoke: async (toolRun) => {
+                      innerKey = toolRun.decisions?.armKey ?? "none";
                       return 1;
                     },
                   },

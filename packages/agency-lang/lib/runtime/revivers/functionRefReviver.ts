@@ -2,7 +2,7 @@ import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
-import { agencyStore, currentRun, type Run } from "../asyncContext.js";
+import { currentRun, currentRunOrNone, type Run } from "../asyncContext.js";
 import type { StatelogClient } from "../../statelogClient.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
@@ -148,10 +148,11 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // time; the invoke-time emit inside the stub still fires on top of
     // this if something actually calls it.
     // revive() runs inside JSON.parse, which has no caller to take a logger
-    // from. This read stays on the current frame until the reviver is handed
-    // one some other way.
+    // from. It logs to the run that is current, when the restore is still
+    // in its synchronous part. Otherwise this emit is skipped, and the one
+    // inside the stub is the only report.
     emitFunctionRefMissError(
-      agencyStore.getStore()?.log,
+      currentRunOrNone()?.log,
       name,
       `FunctionRefReviver: function "${name}" from module "${module}" not ` +
         `found in registry; revived to a stub that will throw if invoked. ` +

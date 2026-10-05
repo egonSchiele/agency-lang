@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
 import { runInTestContext } from "../../runtime/asyncContext.js";
-import { testRun } from "../../runtime/__tests__/testHelpers.js";
+import { asRootRun, testRun } from "../../runtime/__tests__/testHelpers.js";
 import {
   createAwsRequestTarget,
   sendAwsRequest,
@@ -28,7 +28,7 @@ function makeCtx() {
 async function withCtx<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = makeCtx();
   const execCtx = await ctx.createExecutionContext({ runId: "aws-client-test" });
-  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
+  return runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), asRootRun(fn));
 }
 
 const partition: AwsPartition = { region: "us-east-1", dnsSuffix: "amazonaws.com" };

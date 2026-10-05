@@ -16,7 +16,7 @@ import {
 } from "./speech.js";
 import { assertFfmpegAvailable, transcode } from "./ffmpeg.js";
 import type * as ffmpegModule from "./ffmpeg.js";
-import { callHelper } from "../runtime/__tests__/testHelpers.js";
+import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 // No ffmpeg here: speech.ffmpeg.test.ts runs the real one.
 vi.mock("./ffmpeg.js", async (importOriginal) => ({
@@ -80,7 +80,10 @@ async function withClient(
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await withRun(store, () => fn({ stack, transcription, speechSynthesis, meter, controller }));
+  await withRun(
+    store,
+    asRootRun(() => fn({ stack, transcription, speechSynthesis, meter, controller })),
+  );
 }
 
 const trOk = (overrides: any = {}) => ({

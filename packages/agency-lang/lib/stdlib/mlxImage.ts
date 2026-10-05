@@ -1,6 +1,7 @@
 import { registerImageProvider, success, failure } from "smoltalk";
 import type { ImageConfig, ImageGenResult, ImageInput } from "../runtime/llmClient.js";
-import { mlxBaseUrl } from "./mlxServerModels.js";
+import { _resolveModel, _mlxServedName, _catalogKind, type ResolvedModel } from "./localModels.js";
+import { postLocalJson, type LocalRequestOptions } from "./localRequest.js";
 
 /** smoltalk's `image()` has no provider for the server `agency local serve`
  *  runs, so Agency registers one under the name `mlx`: the provider whose
@@ -107,82 +108,172 @@ const MIME: Record<string, string> = {
  *  them. */
 export const LOCAL_IMAGE_FORMATS = Object.keys(MIME);
 
-type Reply = {
-  error?: { message?: unknown };
-  output_format?: unknown;
-  data?: { b64_json?: unknown; seed?: unknown }[];
+/** One request to the image server, before it is a request body. The
+ *  stdlib builds it from an `ImageConfig`, and `generateImage` in
+ *  `agency-lang/local` from its options.
+ *
+ *  size      "WxH", or "" to let the server choose. Absent: not sent
+ *  format    "png", "jpeg", or "webp". Absent: not sent
+ *  settings  the other request fields. Only the names in `SETTINGS` are
+ *            sent */
+export type LocalImageRequest = {
+  model: string;
+  prompt: string;
+  size: string | undefined;
+  format: string | undefined;
+  settings: Record<string, unknown>;
 };
+
+/** The body of a request to the image server. The one place a body is
+ *  built, so the stdlib and `agency-lang/local` cannot send different
+ *  ones. */
+export function localImageBody(request: LocalImageRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: request.model,
+    prompt: request.prompt,
+    n: 1,
+    response_format: "b64_json",
+  };
+  if (request.size !== undefined) {
+    body.size = request.size;
+  }
+  if (request.format !== undefined) {
+    body.output_format = request.format;
+  }
+  for (const key of SETTINGS) {
+    const value = request.settings[key];
+    if (value !== undefined) {
+      body[key] = value;
+    }
+  }
+  return body;
+}
+
+type ReplyImage = { b64_json?: unknown; seed?: unknown };
+
+/** The images of a reply, each with its seed when the server sent one. */
+function imagesOf(reply: Record<string, unknown>): LocalGeneratedImage[] {
+  const format = typeof reply.output_format === "string" ? reply.output_format : "png";
+  const items = Array.isArray(reply.data) ? (reply.data as ReplyImage[]) : [];
+  return items
+    .filter((item) => typeof item.b64_json === "string")
+    .map((item) => {
+      const image: LocalGeneratedImage = {
+        data: new Uint8Array(Buffer.from(item.b64_json as string, "base64")),
+        mimeType: MIME[format] ?? "image/png",
+      };
+      if (typeof item.seed === "number") {
+        image.seed = item.seed;
+      }
+      return image;
+    });
+}
+
+/** Posts one request body to the image server and returns the images it
+ *  made: one, since every body asks for one. `options` carries the
+ *  server's address and the caller's signal; the stdlib passes neither. */
+export async function postLocalImage(
+  body: Record<string, unknown>,
+  timeoutMs: number,
+  options: LocalRequestOptions = {},
+): Promise<{ images: LocalGeneratedImage[] } | { error: string }> {
+  const out = await postLocalJson("/images/generations", body, timeoutMs, "image", options);
+  if ("error" in out) {
+    return out;
+  }
+  return { images: imagesOf(out.reply) };
+}
 
 async function mlxImage(input: ImageInput, config: ImageConfig) {
   const normalized = typeof input === "string" ? { prompt: input } : input;
   if ((normalized.images?.length ?? 0) > 0 || normalized.mask !== undefined) {
     return failure("The mlx image provider does not edit images.");
   }
-  const body: Record<string, unknown> = {
+  const body = localImageBody({
     model: config.model,
     prompt: normalized.prompt,
-    n: 1,
-    response_format: "b64_json",
-  };
-  if (config.size !== undefined) {
-    body.size = config.size;
-  }
-  if (config.outputFormat !== undefined) {
-    body.output_format = config.outputFormat;
-  }
-  for (const key of SETTINGS) {
-    const value = config.metadata?.[key];
-    if (value !== undefined) {
-      body[key] = value;
-    }
-  }
-  let res: Response;
-  try {
-    res = await fetch(`${mlxBaseUrl()}/images/generations`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(
-        localImageTimeoutMs(body.steps, config.size, config.metadata?.references),
-      ),
-    });
-  } catch (err) {
-    const cause = (err as { cause?: { code?: string } }).cause?.code;
-    return failure(`${(err as Error).message}${cause === undefined ? "" : ` (${cause})`}`);
-  }
-  let reply: Reply;
-  try {
-    reply = (await res.json()) as Reply;
-  } catch {
-    return failure(`The image server answered ${res.status} with a body that is not JSON.`);
-  }
-  if (!res.ok) {
-    const message = reply.error?.message;
-    return failure(
-      typeof message === "string" ? message : `The image server answered ${res.status}.`,
-    );
-  }
-  const format = typeof reply.output_format === "string" ? reply.output_format : "png";
-  const images: LocalGeneratedImage[] = [];
-  for (const item of reply.data ?? []) {
-    if (typeof item.b64_json !== "string") {
-      continue;
-    }
-    const image: LocalGeneratedImage = {
-      data: new Uint8Array(Buffer.from(item.b64_json, "base64")),
-      mimeType: MIME[format] ?? "image/png",
-    };
-    if (typeof item.seed === "number") {
-      image.seed = item.seed;
-    }
-    images.push(image);
+    size: config.size,
+    format: config.outputFormat,
+    settings: config.metadata ?? {},
+  });
+  const out = await postLocalImage(
+    body,
+    localImageTimeoutMs(body.steps, config.size, config.metadata?.references),
+  );
+  if ("error" in out) {
+    return failure(out.error);
   }
   const result: ImageGenResult = {
-    images,
+    images: out.images,
     model: config.model,
     costEstimate: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
   };
   return success(result);
+}
+
+/** The checks `generateImageLocal` makes before any request: a prompt, a
+ *  format the server writes, and a model that is an image model. Returns
+ *  the name to send the server, or a failure message. */
+export function checkLocalImageArgs(
+  prompt: string,
+  model: string,
+  format: string,
+): { servedName: string } | { error: string } {
+  if (prompt.trim() === "") {
+    return { error: "prompt cannot be empty." };
+  }
+  if (!LOCAL_IMAGE_FORMATS.includes(format)) {
+    const others = LOCAL_IMAGE_FORMATS.slice(0, -1).join(", ");
+    const last = LOCAL_IMAGE_FORMATS[LOCAL_IMAGE_FORMATS.length - 1];
+    return { error: `format "${format}" is not supported. Use ${others}, or ${last}.` };
+  }
+  if (model === "") {
+    return { error: "model cannot be empty." };
+  }
+  let resolved: ResolvedModel;
+  try {
+    resolved = _resolveModel(model);
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+  if (_catalogKind(model) === "controlnet") {
+    return {
+      error:
+        `"${model}" is a ControlNet, not an image model. Pass it as the controlnet ` +
+        "argument, with a controlImage, and name an SDXL image model as the model.",
+    };
+  }
+  if (resolved.backend !== "diffusers") {
+    const what = resolved.backend === "mlx" ? "an MLX model" : "a GGUF model";
+    return {
+      error:
+        `"${model}" is ${what}. Local image models are diffusers models served by ` +
+        "agency local serve --image, such as z-image-turbo.",
+    };
+  }
+  return { servedName: _mlxServedName(resolved) };
+}
+
+/** The settings a call gives, as the request fields the server takes. A
+ *  null setting, or an empty negative prompt, is left out so the server
+ *  uses the model card's value. */
+export function localImageSettings(
+  steps: number | null,
+  guidance: number | null,
+  seed: number | null,
+  negativePrompt: string,
+  lora: string,
+  loraScale: number | null,
+): Record<string, unknown> {
+  const given: [string, unknown][] = [
+    ["steps", steps],
+    ["guidance", guidance],
+    ["seed", seed],
+    ["negative_prompt", negativePrompt === "" ? null : negativePrompt],
+    ["lora", lora === "" ? null : lora],
+    ["lora_scale", loraScale],
+  ];
+  return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
 
 let registered = false;

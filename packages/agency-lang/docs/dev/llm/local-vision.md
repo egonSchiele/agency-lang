@@ -252,8 +252,13 @@ approval, in `vision.ts`.
 planted while the prompt was pending is refused, and reads through
 `readBytes` in `contained.ts`.
 
-`vision.ts` is one HTTP call, `visionRequest`, behind five thin exports,
-each one call to `visionCall` with a row of `VISION_TASKS`. The row says
+`vision.ts` is one HTTP call behind five thin exports, each one call to
+`visionCall` with a row of `VISION_TASKS`. The call is in three parts,
+which the functions in `agency-lang/local` use too: `checkVisionModel`
+checks the model, `postVisionRequest` posts an image that has already
+been read, and `visionAnswer` takes the answer out of the reply.
+`visionRequest` is the stdlib's use of them: it checks the model, reads
+the approved file, and posts. See `docs/dev/llm/local-typescript-api.md`. The row says
 the route, the reply field that holds the answer, whether each item gets
 an `id`, and how the serve log counts it. An embeddings reply is logged
 by its size and never parsed: the log keeps the first megabyte of a

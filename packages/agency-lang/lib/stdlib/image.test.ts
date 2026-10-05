@@ -10,7 +10,8 @@ import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "./image.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
-import type { LocalImageInputs } from "./localImageInputs.js";
+import { _localImageInputs, type LocalImageInputs } from "./localImageInputs.js";
+import { generateImage } from "../local/calls.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 /** The input images of a call with none. */
@@ -738,6 +739,165 @@ describe("_generateImageLocal", () => {
       );
       expect(Object.keys(requests[0])).not.toContain("lora");
       expect(Object.keys(requests[0])).not.toContain("lora_scale");
+    });
+  });
+});
+
+describe("generateImage from agency-lang/local, beside generateImageLocal", () => {
+  beforeAll(() => registerMlxImageProvider());
+  // A stand-in for `agency local serve --image` that records each body.
+  let server: http.Server;
+  let baseUrl = "";
+  let requests: Record<string, unknown>[] = [];
+  const savedBaseUrl = process.env.MLX_BASE_URL;
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "generate-twin-")));
+  const photo = path.join(dir, "photo.png");
+  fs.writeFileSync(photo, PNG);
+
+  beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      let text = "";
+      req.on("data", (chunk) => (text += chunk));
+      req.on("end", () => {
+        requests.push({ path: req.url, ...JSON.parse(text) });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            output_format: "png",
+            data: [{ b64_json: PNG.toString("base64"), seed: 42 }],
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
+    process.env.MLX_BASE_URL = baseUrl;
+  });
+
+  afterAll(async () => {
+    process.env.MLX_BASE_URL = savedBaseUrl;
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const realImage: ImageImpl = (input, config) => smoltalk.image(input, config);
+
+  it("sends the body the stdlib sends for a call with no size and no settings", async () => {
+    requests = [];
+    await withClient(realImage, async () => {
+      await callHelper(
+        _generateImageLocal,
+        "a lighthouse",
+        "z-image-turbo",
+        "",
+        null,
+        null,
+        null,
+        "",
+        "png",
+        "",
+        null,
+        NO_INPUTS,
+      );
+    });
+    const made = await generateImage({ baseUrl, model: "z-image-turbo", prompt: "a lighthouse" });
+    expect(made).toEqual({
+      success: true,
+      value: { bytes: new Uint8Array(PNG), mimeType: "image/png", seed: 42 },
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+  });
+
+  it("sends the body the stdlib sends for a call with every setting", async () => {
+    requests = [];
+    await withClient(realImage, async () => {
+      await callHelper(
+        _generateImageLocal,
+        "a cat",
+        "chroma1-hd",
+        "512x512",
+        30,
+        4.5,
+        7,
+        "blurry",
+        "webp",
+        "my-style",
+        0.8,
+        NO_INPUTS,
+      );
+    });
+    await generateImage({
+      baseUrl,
+      model: "chroma1-hd",
+      prompt: "a cat",
+      size: "512x512",
+      steps: 30,
+      guidance: 4.5,
+      seed: 7,
+      negativePrompt: "blurry",
+      format: "webp",
+      lora: "my-style",
+      loraScale: 0.8,
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+  });
+
+  it("sends the same body for a start image given by path, by bytes, and through the stdlib", async () => {
+    requests = [];
+    const inputs = _localImageInputs("", "", null, false, [], photo, 0.4, "");
+    await withClient(realImage, async () => {
+      await callHelper(
+        _generateImageLocal,
+        "a cat",
+        "z-image-turbo",
+        "",
+        null,
+        null,
+        null,
+        "",
+        "png",
+        "",
+        null,
+        inputs,
+      );
+    });
+    const shared = { baseUrl, model: "z-image-turbo", prompt: "a cat", strength: 0.4 };
+    await generateImage({ ...shared, startImage: photo });
+    await generateImage({ ...shared, startImage: new Uint8Array(PNG) });
+    expect(requests).toHaveLength(3);
+    expect(requests[0].start_image).toBe(PNG.toString("base64"));
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[2]).toEqual(requests[0]);
+  });
+
+  it("refuses a mask with no start image under its own name, before any request", async () => {
+    requests = [];
+    const made = await generateImage({
+      baseUrl,
+      model: "z-image-turbo",
+      prompt: "a cat",
+      mask: new Uint8Array(PNG),
+    });
+    expect(made).toEqual({
+      success: false,
+      error: "generateImage failed: mask goes with startImage, and this call has none.",
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it("says how to start the server when nothing answers", async () => {
+    const made = await generateImage({
+      baseUrl: "http://127.0.0.1:9/v1",
+      model: "z-image-turbo",
+      prompt: "a cat",
+    });
+    expect(made).toEqual({
+      success: false,
+      error:
+        "generateImage failed: no local model server answered at http://127.0.0.1:9/v1. Start one with:\n  agency local serve --image z-image-turbo",
     });
   });
 });

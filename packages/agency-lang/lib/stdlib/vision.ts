@@ -1,6 +1,12 @@
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { _resolveModel, _mlxServedName, _localModelKindOf } from "./localModels.js";
-import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
+import { mlxBaseUrl } from "./mlxServerModels.js";
+import {
+  postLocalJson,
+  explainNoServer,
+  type LocalReply,
+  type LocalRequestOptions,
+} from "./localRequest.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { _realTarget } from "./contained.js";
 import * as path from "node:path";
@@ -91,14 +97,14 @@ export const VISION_TASKS = {
   },
 } satisfies Record<string, VisionTaskRow>;
 
-type VisionTask = keyof typeof VISION_TASKS;
+export type VisionTask = keyof typeof VISION_TASKS;
 
 /** A detector on a large page can take a minute on the CPU, and a request
  *  may wait behind one already running. */
 const REQUEST_TIMEOUT_MS = 5 * 60_000;
 
 /** The model to send: the served name, or the reason it cannot be sent. */
-function checkVisionModel(model: string): { servedName: string } | { error: string } {
+export function checkVisionModel(model: string): { servedName: string } | { error: string } {
   if (model === "") {
     return { error: "model cannot be empty." };
   }
@@ -133,14 +139,42 @@ function approvedBase64(
   }
 }
 
-/** Posts one request and returns the reply's JSON, or a failure worded
- *  for the caller to prefix. */
+/** Posts one request for an image already read, and returns the reply's
+ *  JSON or a failure worded for the caller to prefix. `model` is the name
+ *  the caller gave, for the message that says how to start a server, and
+ *  `servedName` the one `checkVisionModel` returned for it. */
+export async function postVisionRequest(
+  task: VisionTask,
+  model: string,
+  servedName: string,
+  imageBase64: string,
+  fields: Record<string, unknown>,
+  options: LocalRequestOptions = {},
+): Promise<LocalReply> {
+  const out = await postLocalJson(
+    VISION_TASKS[task].route,
+    { model: servedName, image: imageBase64, ...fields },
+    REQUEST_TIMEOUT_MS,
+    "vision",
+    options,
+  );
+  if ("error" in out) {
+    return {
+      error: explainNoServer(out.error, mlxBaseUrl(options.baseUrl), `agency local serve ${model}`),
+    };
+  }
+  return out;
+}
+
+/** The stdlib's request: the model is checked first, so a wrong model is
+ *  refused before a large file is read, then the approved file is read
+ *  and sent. */
 async function visionRequest(
   task: VisionTask,
   spelling: string,
   model: string,
   fields: Record<string, unknown>,
-): Promise<{ reply: Record<string, unknown> } | { error: string }> {
+): Promise<LocalReply> {
   const checked = checkVisionModel(model);
   if ("error" in checked) {
     return checked;
@@ -149,43 +183,23 @@ async function visionRequest(
   if ("error" in image) {
     return image;
   }
-  let res: Response;
-  try {
-    res = await fetch(`${mlxBaseUrl()}${VISION_TASKS[task].route}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: checked.servedName, image: image.base64, ...fields }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (err) {
-    const message = (err as Error).message;
-    const cause = (err as { cause?: { code?: string } }).cause?.code;
-    const full = `${message}${cause === undefined ? "" : ` (${cause})`}`;
-    if (isNoServerError(full)) {
-      return {
-        error: `no local model server answered at ${mlxBaseUrl()}. Start one with:\n  agency local serve ${model}`,
-      };
-    }
-    return { error: full };
+  return postVisionRequest(task, model, checked.servedName, image.base64, fields);
+}
+
+/** The answer in a reply: its `replyField`, with each item given its
+ *  index as `id` when the task's row says so. */
+export function visionAnswer(task: VisionTask, reply: Record<string, unknown>): unknown {
+  const row = VISION_TASKS[task];
+  const answer = reply[row.replyField];
+  if (!row.numbered) {
+    return answer;
   }
-  let reply: Record<string, unknown>;
-  try {
-    reply = (await res.json()) as Record<string, unknown>;
-  } catch {
-    return { error: `The vision server answered ${res.status} with a body that is not JSON.` };
-  }
-  if (!res.ok) {
-    const message = (reply.error as { message?: unknown } | undefined)?.message;
-    return {
-      error: typeof message === "string" ? message : `The vision server answered ${res.status}.`,
-    };
-  }
-  return { reply };
+  const items = Array.isArray(answer) ? answer : [];
+  return items.map((item, id) => ({ id, ...item }));
 }
 
 /** One call to the vision server, as a `Result` whose failure starts with
- *  `name`. The answer is the reply's `replyField`, with each item given its
- *  index as `id` when the task's row says so. */
+ *  `name`. */
 async function visionCall(
   name: string,
   task: VisionTask,
@@ -197,13 +211,7 @@ async function visionCall(
   if ("error" in out) {
     return failure(`${name} failed: ${out.error}`);
   }
-  const row = VISION_TASKS[task];
-  const answer = out.reply[row.replyField];
-  if (!row.numbered) {
-    return success(answer);
-  }
-  const items = Array.isArray(answer) ? answer : [];
-  return success(items.map((item, id) => ({ id, ...item })));
+  return success(visionAnswer(task, out.reply));
 }
 
 /** The file a vision function reads: its real spelling, and the folder and

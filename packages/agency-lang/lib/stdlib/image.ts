@@ -7,9 +7,9 @@ import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
 // One image type surface — imported from llmClient.ts, not smoltalk directly.
 import type { ImageConfig, ImageGenResult, ImageInput, ImageRef } from "../runtime/llmClient.js";
-import { _resolveModel, _mlxServedName, _catalogKind, type ResolvedModel } from "./localModels.js";
-import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
-import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
+import { mlxBaseUrl } from "./mlxServerModels.js";
+import { checkLocalImageArgs, localImageSettings, type LocalGeneratedImage } from "./mlxImage.js";
+import { explainNoServer } from "./localRequest.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
@@ -17,6 +17,7 @@ import {
   IMAGE_MIME_TYPES,
   LOCAL_IMAGE_FIELDS,
   checkedImageFile,
+  fieldValue,
   isRemoteSource,
   referenceCount,
   type LocalImageInputs,
@@ -197,49 +198,6 @@ export async function _generateImage(
   });
 }
 
-/** The checks `generateImageLocal` makes before any request: a prompt, a
- *  format the server writes, and a model that is an image model. Returns
- *  the name to send the server, or a failure message. */
-function checkLocalImageArgs(
-  prompt: string,
-  model: string,
-  format: string,
-): { servedName: string } | { error: string } {
-  if (prompt.trim() === "") {
-    return { error: "prompt cannot be empty." };
-  }
-  if (!LOCAL_IMAGE_FORMATS.includes(format)) {
-    const others = LOCAL_IMAGE_FORMATS.slice(0, -1).join(", ");
-    const last = LOCAL_IMAGE_FORMATS[LOCAL_IMAGE_FORMATS.length - 1];
-    return { error: `format "${format}" is not supported. Use ${others}, or ${last}.` };
-  }
-  if (model === "") {
-    return { error: "model cannot be empty." };
-  }
-  let resolved: ResolvedModel;
-  try {
-    resolved = _resolveModel(model);
-  } catch (err) {
-    return { error: (err as Error).message };
-  }
-  if (_catalogKind(model) === "controlnet") {
-    return {
-      error:
-        `"${model}" is a ControlNet, not an image model. Pass it as the controlnet ` +
-        "argument, with a controlImage, and name an SDXL image model as the model.",
-    };
-  }
-  if (resolved.backend !== "diffusers") {
-    const what = resolved.backend === "mlx" ? "an MLX model" : "a GGUF model";
-    return {
-      error:
-        `"${model}" is ${what}. Local image models are diffusers models served by ` +
-        "agency local serve --image, such as z-image-turbo.",
-    };
-  }
-  return { servedName: _mlxServedName(resolved) };
-}
-
 /** The request fields that carry a call's input images, with each file's
  *  bytes as base64: one string when the field takes one image, a list
  *  otherwise. The files are read here, after the Agency side raised
@@ -259,33 +217,8 @@ function imageFields(inputs: LocalImageInputs): Record<string, unknown> {
     ];
   }
   return Object.fromEntries(
-    Object.entries(encoded).map(([field, images]) => [
-      field,
-      LOCAL_IMAGE_FIELDS[field].maxCount === 1 ? images[0] : images,
-    ]),
+    Object.entries(encoded).map(([field, images]) => [field, fieldValue(field, images)]),
   );
-}
-
-/** The settings a call gives, as the request fields the server takes. A
- *  null setting, or an empty negative prompt, is left out so the server
- *  uses the model card's value. */
-function localImageSettings(
-  steps: number | null,
-  guidance: number | null,
-  seed: number | null,
-  negativePrompt: string,
-  lora: string,
-  loraScale: number | null,
-): Record<string, unknown> {
-  const given: [string, unknown][] = [
-    ["steps", steps],
-    ["guidance", guidance],
-    ["seed", seed],
-    ["negative_prompt", negativePrompt === "" ? null : negativePrompt],
-    ["lora", lora === "" ? null : lora],
-    ["lora_scale", loraScale],
-  ];
-  return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
 
 /** Backs `std::image.generateImageLocal`: one image from the model that
@@ -330,12 +263,7 @@ export async function _generateImageLocal(
   };
   const out = await generateOne(run, prompt, prompt, config, checked.servedName);
   if ("error" in out) {
-    if (isNoServerError(out.error)) {
-      return fail(
-        `no local model server answered at ${mlxBaseUrl()}. Start one with:\n  agency local serve --image ${model}`,
-      );
-    }
-    return fail(out.error);
+    return fail(explainNoServer(out.error, mlxBaseUrl(), `agency local serve --image ${model}`));
   }
   const image = out.image as LocalGeneratedImage;
   return success({

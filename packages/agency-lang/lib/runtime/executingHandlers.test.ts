@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 import type { HandlerEntry } from "./types.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 const entryA: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
 const entryB: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };

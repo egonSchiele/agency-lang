@@ -1,7 +1,11 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it as baseIt, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { callHook, invokeCallbacks, isInsideCallback, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function ctxWithStack(
   stack: State[],

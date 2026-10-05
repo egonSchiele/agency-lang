@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "nodeName": "viaCall",
+      "description": "A handler function calls a function that raises. The handler is not asked about that interrupt, and the outer handler approves it. Anything but \"done a\" means the inner handler was asked and rejected.",
+      "input": "",
+      "expectedOutput": "\"done a\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "viaFork",
+      "description": "A handler function starts a fork whose branches raise. The handler is not asked about the branches' interrupts, and the outer handler approves them.",
+      "input": "",
+      "expectedOutput": "[\"done a\",\"done b\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "viaTool",
+      "description": "A handler function makes an llm() call and the model calls a tool that raises. The handler is not asked about the tool's interrupt, and the outer handler approves it, so the tool gets past its interrupt.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "record", "args": { "name": "a" } } },
+        { "return": "finished" }
+      ]
+    }
+  ]
+}

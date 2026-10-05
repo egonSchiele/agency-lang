@@ -1,8 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { interruptWithHandlers, mergeChainOutcomes, pass } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 describe("mergeFor — the table is total", () => {
   it("an unregistered effect keeps the historical overwrite, including a valueless outer clobbering an inner value", () => {

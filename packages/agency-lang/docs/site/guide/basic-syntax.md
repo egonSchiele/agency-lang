@@ -208,9 +208,7 @@ You can also write a module-level doc comment using the `@module` tag. This docu
 */
 ```
 
-> Note: comments must be on their own line, they cannot be at the end of a line containing code.
-
-Not allowed:
+A single-line comment can also go at the end of a line of code:
 
 ```ts
 const x = 5 // this is a comment

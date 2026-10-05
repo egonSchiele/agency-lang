@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it as baseIt } from "vitest";
 import http from "http";
 import { AddressInfo } from "net";
 import { startMcpHttpServer } from "./httpTransport.js";
@@ -7,6 +7,10 @@ import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
+import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeHandler() {
   const registry: Record<string, AgencyFunction> = {};

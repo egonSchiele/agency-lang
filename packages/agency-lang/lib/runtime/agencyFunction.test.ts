@@ -1,10 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { z } from "zod";
 import { AgencyFunction, UNSET } from "./agencyFunction.js";
 import { runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { CallDepthExceededError } from "./errors.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeNamedFunction(
   name: string,

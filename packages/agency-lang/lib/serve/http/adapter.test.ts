@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it as baseIt, vi } from "vitest";
 import http from "http";
 import { AddressInfo } from "net";
 import { createHttpHandler, startHttpServer } from "./adapter.js";
@@ -11,6 +11,10 @@ import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
 import { GuardExceededError } from "../../runtime/guard.js";
 import { CheckpointCodeChangedError } from "../../runtime/errors.js";
+import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 // A fully-formed interrupt, as the runtime produces one — every identity field
 // present. Resume validation now requires these, so tests build real interrupts

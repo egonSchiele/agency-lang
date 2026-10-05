@@ -1,5 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, requireFrame } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 
 /**
@@ -33,7 +32,7 @@ export const DEFAULT_MAX_CALL_DEPTH = 2048;
  *  entering a call is O(1) with a single small allocation — the frame names
  *  are only walked on the cold overflow path. `limit` is resolved once at the
  *  root of the lineage and carried down, so nested calls never re-read it. */
-type CallFrame = {
+export type CallFrame = {
   readonly name: string;
   readonly depth: number;
   readonly limit: number;
@@ -44,17 +43,17 @@ type CallFrame = {
  * Current call frame for the active async lineage.
  *
  * Depth is a property of the async call TREE, not a global count — storing it
- * in AsyncLocalStorage (rather than a counter on `ctx`) means concurrent
+ * on the frame (rather than a counter on `ctx`) means concurrent
  * siblings (a `parallel`/`fork` fan-out, or an LLM firing many tool calls in
  * one round) each inherit the SAME parent depth and independently descend one
  * level. Their breadth never accumulates, so a wide fan-out is not mistaken for
  * deep recursion; only a call whose own body calls further descends inside this
- * scope and climbs the depth. Mirrors `handlerChainDepthALS` in interrupts.ts.
+ * scope and climbs the depth. Mirrors `handlerChainDepth` in interrupts.ts.
  *
- * ALS is never serialized, so there is nothing to reset across checkpoints or
- * resumes — each frame unwinds automatically when its call returns or throws.
+ * The frame is never serialized, so there is nothing to reset across
+ * checkpoints or resumes — each link unwinds automatically when its call
+ * returns or throws. The value lives in the frame's `callDepth` field.
  */
-const callDepthALS = new AsyncLocalStorage<CallFrame>();
 
 /** How many of the most-recent frame names to surface in the overflow error. */
 const RECENT_FRAMES = 8;
@@ -80,13 +79,12 @@ function collectRecentFrames(parent: CallFrame | null, name: string): string[] {
  * (so a deep recursion pays a single `agencyStore` lookup, not one per frame).
  */
 export function withCallDepth<T>(name: string, fn: () => T): T {
-  const parent = callDepthALS.getStore();
-  const limit = parent
-    ? parent.limit
-    : (agencyStore.getStore()?.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
+  const frame = requireFrame("withCallDepth()");
+  const parent = frame.callDepth;
+  const limit = parent ? parent.limit : (frame.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
   const depth = (parent?.depth ?? 0) + 1;
   if (depth > limit) {
-    throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent ?? null, name));
+    throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent, name));
   }
-  return callDepthALS.run({ name, depth, limit, parent: parent ?? null }, fn);
+  return agencyStore.run({ ...frame, callDepth: { name, depth, limit, parent } }, fn);
 }

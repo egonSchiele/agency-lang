@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "nodeName": "viaFork",
+      "description": "A handler body starts a fork whose branches raise. The handler is asked about each, approves a and rejects b. A paused run means the handler was not asked.",
+      "input": "",
+      "expectedOutput": "[\"done a\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "viaTool",
+      "description": "A handler body makes an llm() call and the model calls a tool that raises. The handler is asked and rejects, so the tool never gets past its interrupt. true means the handler was not asked, or its reject was ignored.",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "record", "args": { "name": "b" } } },
+        { "return": "finished" }
+      ]
+    }
+  ]
+}

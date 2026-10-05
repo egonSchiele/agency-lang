@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { AgencyFunction } from "../agencyFunction.js";
 import { FunctionRefReviver } from "./functionRefReviver.js";
 import { nativeTypeReplacer, nativeTypeReviver, functionRefReviver } from "./index.js";
@@ -6,6 +6,10 @@ import { runInTestContext, getRuntimeContext } from "../asyncContext.js";
 import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
+import { withTestFrame } from "../__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeAgencyFunction(name: string, module: string): AgencyFunction {
   return new AgencyFunction({

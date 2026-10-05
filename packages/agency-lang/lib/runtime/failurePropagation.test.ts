@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { failure, propagateFailure, isFailure, isSuccess, success } from "./result.js";
 import { agencyStore } from "./asyncContext.js";
 import {
@@ -10,6 +10,10 @@ import {
   getFailurePropagationMode,
 } from "./failurePropagation.js";
 import type { FuncParam } from "./agencyFunction.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function param(name: string, opts: Partial<FuncParam> = {}): FuncParam {
   return { name, hasDefault: false, defaultValue: undefined, variadic: false, ...opts };

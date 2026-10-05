@@ -1,0 +1,87 @@
+// In the guide's words, the block after `handle` is the handler body and the
+// block after `with` is the handler function.
+//
+// Each node here raises an interrupt from INSIDE a handler function, by a
+// different route. The rule under test: a handler function is never asked
+// about an interrupt raised inside itself. The outer handler is asked.
+//
+// The inner handler function rejects every interrupt except the one that
+// starts it. So if it were asked about the interrupt it caused, that
+// interrupt would be rejected and the work would fail.
+const completed = []
+
+def trigger(): string {
+  raise("start")
+  return "ok"
+}
+
+def work(name: string): string {
+  raise("work ${name}")
+  return "done ${name}"
+}
+
+// The handler function calls a function that raises.
+node viaCall() {
+  let outcome: any = "not run"
+  handle {
+    handle {
+      trigger()
+    } with (e) {
+      if (e.message != "start") {
+        return reject()
+      }
+      outcome = work("a")
+      return approve()
+    }
+  } with (e) {
+    return approve()
+  }
+  return outcome
+}
+
+// The handler function starts a fork, and each branch raises.
+node viaFork() {
+  let outcome: any = "not run"
+  handle {
+    handle {
+      trigger()
+    } with (e) {
+      if (e.message != "start") {
+        return reject()
+      }
+      outcome = fork(["a", "b"]) as item {
+        return work(item)
+      }
+      return approve()
+    }
+  } with (e) {
+    return approve()
+  }
+  return outcome
+}
+
+// Like `work`, and it also records that it got past its interrupt.
+def record(name: string): string {
+  raise("work ${name}")
+  completed.push(name)
+  return "done ${name}"
+}
+
+// The handler function makes an llm() call, and the model calls a tool that
+// raises.
+node viaTool() {
+  handle {
+    handle {
+      trigger()
+    } with (e) {
+      if (e.message != "start") {
+        return reject()
+      }
+      llm("Call the record tool with the name a.", tools: [record])
+      return approve()
+    }
+  } with (e) {
+    return approve()
+  }
+  return completed.includes("a")
+}

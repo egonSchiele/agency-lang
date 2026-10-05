@@ -1,10 +1,9 @@
 import * as smoltalk from "smoltalk";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
-import { runInBootstrapFrame } from "./asyncContext.js";
+import { agencyStore, requireFrame, runInBootstrapFrame } from "./asyncContext.js";
 import { exitProcess } from "./exitProcess.js";
 import {
   resolveInvocation,
@@ -202,7 +201,7 @@ export type InterruptInfo = {
 };
 
 /** Maximum nested-dispatch depth for `runHandlerChain`. Each dispatch descends
- *  one level in `handlerChainDepthALS`; exceeding this limit throws
+ *  one level in the frame's `handlerChainDepth`; exceeding this limit throws
  *  `HandlerRecursionError`. Picked to be well above any plausible legitimate
  *  nesting (a handler that calls one nested handler-aware operation, that itself
  *  calls another, etc.) but small enough that a runaway recursion is caught
@@ -215,7 +214,7 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
 /** Current handler-chain nesting depth for the *active async lineage*.
  *
  *  Recursion depth is a property of the async call tree, NOT a global count.
- *  Storing it in AsyncLocalStorage (rather than a single counter on `ctx`) means
+ *  Storing it on the frame (rather than a single counter on `ctx`) means
  *  concurrent dispatches — e.g. an LLM firing 15 tool calls in one round, each of
  *  which interrupts while its siblings are still in flight — each inherit the
  *  SAME parent depth and independently descend one level. Their breadth never
@@ -223,10 +222,11 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
  *  handler whose own body raises another interrupt runs INSIDE this scope, so
  *  genuine self-re-entry still climbs the depth until it trips the guard.
  *
- *  ALS is never serialized, so there is nothing to reset across checkpoints or
- *  resumes — each scope unwinds automatically when its dispatch returns or
- *  throws. */
-const handlerChainDepthALS = new AsyncLocalStorage<number>();
+ *  The frame is never serialized, so there is nothing to reset across
+ *  checkpoints or resumes — each scope unwinds automatically when its dispatch
+ *  returns or throws. The value is the frame's `handlerChainDepth` field. It is
+ *  read with `requireFrame`, which throws when there is no frame: reading "no
+ *  frame" as depth 0 would let a lost frame turn this limit off. */
 
 /** Run all registered handlers for an interrupt (top of the stack first).
  * Emits handlerDecision/interruptResolved events along the way and returns
@@ -239,7 +239,7 @@ async function runHandlerChain(
   eligible?: (entry: HandlerEntry) => boolean,
 ): Promise<HandlerChainOutcome> {
   // Descend one level in the CURRENT async lineage (see
-  // `handlerChainDepthALS`). Concurrent sibling dispatches each read the same
+  // `handlerChainDepth`). Concurrent sibling dispatches each read the same
   // inherited parent depth, so fan-out breadth never accumulates; only a
   // handler whose body re-enters the chain nests inside the `run(...)` scope
   // below and climbs the depth.
@@ -254,11 +254,12 @@ async function runHandlerChain(
         "interruptWithHandlers or gatherChainOutcome.",
     );
   }
-  const depth = (handlerChainDepthALS.getStore() ?? 0) + 1;
+  const frame = requireFrame("runHandlerChain()");
+  const depth = frame.handlerChainDepth + 1;
   if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
-  return handlerChainDepthALS.run(depth, async () => {
+  return agencyStore.run({ ...frame, handlerChainDepth: depth }, async () => {
     // Approvals collect in chain-walk order (innermost handler first) and
     // are merged once at the end via the effect's merge (effectMerge.ts).
     // For effects with no specific merge the default reproduces the

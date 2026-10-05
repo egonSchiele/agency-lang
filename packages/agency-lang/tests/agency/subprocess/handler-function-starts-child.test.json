@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler function (the `with` part) that starts a subprocess is not asked about that subprocess's interrupt, and the outer handler decides it. child-ran means the outer handler approved. Any other value means the inner handler was asked and rejected.",
+      "input": "",
+      "expectedOutput": "\"child-ran\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

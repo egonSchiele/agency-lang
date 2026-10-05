@@ -1,5 +1,8 @@
 # Handoff: passing the run explicitly
 
+**For Phase 3, read `2026-10-04-explicit-run-PHASE-3-HANDOFF.md` first.** This
+document is the record of how Phases 1 and 2 were done.
+
 Written on 2026-10-04, at the end of Phase 1. It holds what the next session
 needs to do Phases 2 and 3. Paths are relative to `packages/agency-lang`
 unless they start with `/`.

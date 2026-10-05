@@ -129,6 +129,32 @@ redaction tags, with no error. Fix them or accept each one knowingly:
 - The eight `__internal_*` helpers in `stdlib/memory.ts`, which only one
   test uses.
 
+### 1a. Take the span methods off the bare client. BUILT.
+
+Added on 2026-10-05, at the owner's request.
+
+Commit `0e1b7b4cc` gave each fork branch its own span stack, because
+branches that shared one popped each other's spans. A run's logger,
+`run.log`, holds its branch's stack. The client itself,
+`ctx.statelogClient`, holds the root stack that every branch shares. So a
+`startSpan` on the bare client from inside a branch is that old bug again.
+
+Today a bound logger throws when its stack disagrees with
+`AsyncLocalStorage`. Step 2 deletes that check, and afterwards the mistake
+would give wrong span parents with no error. The type checker now catches
+it:
+
+- `RootLog` in `lib/statelogClient.ts` is the client without `startSpan`
+  and `endSpan`. `ctx.statelogClient` and `ctx.rootLog` have that type.
+- `ctx.rootLogWithSpans` is the whole client, for the code that owns the
+  root span stack: the `agentRun` span, the graph engine's span around
+  each node, the node boundary that closes an `abortUnwind` span, and the
+  two functions that make a run's logger (`logOf`, `branchLog`).
+
+Making the change turned up one real case: the eight `__internal_*`
+helpers in `lib/stdlib/memory.ts` handed the bare client to the memory
+manager, which opens spans on it. They now pass `logOf(ctx, ctx.globals)`.
+
 ### 2. Delete AsyncLocalStorage
 
 The plan's Task 15. Once step 1 is settled:

@@ -751,7 +751,7 @@ async function runResumeLoop(
           { data: {}, ctx: execCtx, isResume: true, run },
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-            statelogClient: execCtx.rootLog,
+            statelogClient: execCtx.rootLogWithSpans,
           },
         ),
       );
@@ -800,14 +800,14 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   });
   const execCtx = await args.ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
-  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
-    agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
     execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
     outcome = { status: "returned", value };
@@ -822,7 +822,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
     outcome = { status: "threw", error };
   } finally {
     if (agentRunSpanId !== undefined) {
-      execCtx.rootLog.endSpan(agentRunSpanId);
+      execCtx.rootLogWithSpans.endSpan(agentRunSpanId);
     }
   }
   const failed = outcome.status === "threw";
@@ -929,7 +929,7 @@ async function runResumeInvocation(
   const { ctx, resolved, checkpoint, metadata = {}, signals } = args;
   const execCtx = await ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
-  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     await restoreForResume(execCtx, {
@@ -941,7 +941,7 @@ async function runResumeInvocation(
     });
     args.afterRestore?.(execCtx);
 
-    agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
     execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await withExternalSignals(execCtx, signals, () =>
       runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
@@ -958,7 +958,7 @@ async function runResumeInvocation(
   } finally {
     // Guarded: a setup failure before the span was opened leaves it undefined.
     if (agentRunSpanId !== undefined) {
-      execCtx.rootLog.endSpan(agentRunSpanId); // end agentRun span
+      execCtx.rootLogWithSpans.endSpan(agentRunSpanId); // end agentRun span
     }
   }
   // Resume tears down with cleanup() (no memory-save/statelog-flush — that is

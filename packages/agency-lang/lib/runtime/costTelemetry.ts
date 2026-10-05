@@ -17,7 +17,7 @@
  */
 
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
-import type { StatelogClient } from "../statelogClient.js";
+import type { RootLog } from "../statelogClient.js";
 import type { NormalizedDelta } from "./invocationUsage.js";
 
 /** The UNTRUSTED wire shape a parent receives on `invocationUsage`. Every field
@@ -47,7 +47,7 @@ function canSend(): boolean {
   return isIpcMode() && typeof process.send === "function";
 }
 
-function trySend(msg: IpcUsageMessage, log: StatelogClient | undefined): void {
+function trySend(msg: IpcUsageMessage, log: RootLog | undefined): void {
   try {
     (process.send as (m: unknown) => boolean)(msg);
   } catch (err) {
@@ -107,7 +107,7 @@ function isNoOpDelta(delta: NormalizedDelta): boolean {
  *  `attributionLost`). Skips an all-zero delta. */
 export function sendInvocationUsageToParent(
   delta: NormalizedDelta,
-  log: StatelogClient | undefined,
+  log: RootLog | undefined,
 ): void {
   if (!canSend()) return;
   if (isNoOpDelta(delta)) return;
@@ -115,7 +115,7 @@ export function sendInvocationUsageToParent(
 }
 
 /** Relay the incompleteness marker to the parent, once. */
-export function sendInvocationUsageIncompleteToParent(log: StatelogClient | undefined): void {
+export function sendInvocationUsageIncompleteToParent(log: RootLog | undefined): void {
   if (!canSend()) return;
   trySend({ type: "invocationUsageIncomplete" }, log);
 }

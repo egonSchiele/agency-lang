@@ -442,7 +442,8 @@ function startInvoke<T>(
  *  store and span stack. A test's stub client has no `forBranch`, and is
  *  used as it is. */
 function branchLog(parent: Run, globals: GlobalStore, spans: SpanContext[]): StatelogClient {
-  const client = parent.ctx.statelogClient;
+  // The field, not `ctx.rootLogWithSpans`, for the reason given in `logOf`.
+  const client = parent.ctx.statelogClient as StatelogClient;
   return typeof client?.forBranch === "function" ? client.forBranch(globals, spans) : client;
 }
 

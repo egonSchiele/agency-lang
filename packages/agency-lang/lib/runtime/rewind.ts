@@ -57,7 +57,7 @@ export async function rewindFrom(args: {
             },
             {
               onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-              statelogClient: execCtx.rootLog,
+              statelogClient: execCtx.rootLogWithSpans,
             },
           ),
         );

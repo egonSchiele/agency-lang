@@ -1,4 +1,4 @@
-import { StatelogClient } from "../../statelogClient.js";
+import type { RootLog } from "../../statelogClient.js";
 import { MessageThread, MessageThreadJSON } from "./messageThread.js";
 
 export type ThreadStoreJSON = {
@@ -55,7 +55,7 @@ export class ThreadStore {
   /** The logger thread events go to: the logger of the run this store or
    *  view belongs to. It is per instance and not part of the shared
    *  registry, because each branch has its own logger. */
-  private statelogClient: StatelogClient | undefined = undefined;
+  private statelogClient: RootLog | undefined = undefined;
 
   constructor() {
     this.registry = {
@@ -99,7 +99,7 @@ export class ThreadStore {
   // `withDefaultActive(client)` instead so the initial default thread
   // is logged consistently with subsequent thread/subthread blocks.
   // The runtime passes the logger of the run the store belongs to.
-  setStatelogClient(client: StatelogClient): void {
+  setStatelogClient(client: RootLog): void {
     this.statelogClient = client;
   }
 
@@ -133,8 +133,8 @@ export class ThreadStore {
    * this store's logger.
    */
   forkBranchView(
-    log: StatelogClient | undefined = this.statelogClient,
-    creationLog: StatelogClient | undefined = log,
+    log: RootLog | undefined = this.statelogClient,
+    creationLog: RootLog | undefined = log,
   ): ThreadStore {
     const view = new ThreadStore();
     view.statelogClient = log;
@@ -175,7 +175,7 @@ export class ThreadStore {
    */
   restoreBranchView(
     activeStack: MessageThreadID[],
-    log: StatelogClient | undefined = this.statelogClient,
+    log: RootLog | undefined = this.statelogClient,
   ): ThreadStore {
     const view = new ThreadStore();
     (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
@@ -190,7 +190,7 @@ export class ThreadStore {
    * branch that shares its parent's threads (`runBatch` with
    * `shareThreads`) but logs under its own spans.
    */
-  sharedView(log: StatelogClient | undefined): ThreadStore {
+  sharedView(log: RootLog | undefined): ThreadStore {
     const view = new ThreadStore();
     (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
     view.statelogClient = log;
@@ -201,7 +201,7 @@ export class ThreadStore {
   // Create a store with a default active thread. If `client` is passed,
   // the default thread is logged as a normal threadCreated event so the
   // implicit root thread appears in the trace alongside user-created ones.
-  static withDefaultActive(client?: StatelogClient): ThreadStore {
+  static withDefaultActive(client?: RootLog): ThreadStore {
     const store = new ThreadStore();
     if (client) store.setStatelogClient(client);
     store.getOrCreateActive();
@@ -253,7 +253,7 @@ export class ThreadStore {
   createSubthreadOf(
     parentRegistryId: MessageThreadID,
     meta?: { label?: string | null; hidden?: boolean },
-    log: StatelogClient | undefined = this.statelogClient,
+    log: RootLog | undefined = this.statelogClient,
   ): MessageThreadID {
     const id = (this.registry.counter++).toString();
     const parentThread = this.registry.threads[parentRegistryId];
@@ -310,7 +310,7 @@ export class ThreadStore {
    *  so concurrent callers never push and pop on each other. */
   viewWithActive(
     thread: MessageThread,
-    log: StatelogClient | undefined = this.statelogClient,
+    log: RootLog | undefined = this.statelogClient,
   ): ThreadStore {
     const id = this.idOf(thread) ?? this.register(thread);
     return this.restoreBranchView([id], log);

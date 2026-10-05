@@ -9,7 +9,7 @@
  * no runtime imports: `ipcChildDebug` is handed the logger it posts to.
  */
 
-import type { StatelogClient } from "../statelogClient.js";
+import type { RootLog } from "../statelogClient.js";
 
 export type SubprocessRunInfo = {
   /** The parent's runId — the child adopts it instead of minting its own,
@@ -45,7 +45,7 @@ export function isIpcMode(): boolean {
  *     trace when observability is on, through the `log` the caller passes;
  *     no-ops when the caller has none, never throws;
  *   - stderr, gated on AGENCY_IPC_DEBUG=1, for local IPC debugging. */
-export function ipcChildDebug(line: string, client: StatelogClient | undefined): void {
+export function ipcChildDebug(line: string, client: RootLog | undefined): void {
   if (client) {
     try {
       // Fire-and-forget; a failed statelog post must never affect the run. The

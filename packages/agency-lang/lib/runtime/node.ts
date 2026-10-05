@@ -417,7 +417,7 @@ async function runNodeCore({
   // bootstrap/setup failure still yields an outcome-with-usage and still runs
   // cleanup. ===
   const agentStartTime = performance.now();
-  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     // Bootstrapped and capped inside initFreshExecCtx; see its comment for
@@ -443,7 +443,7 @@ async function runNodeCore({
         }),
       );
 
-      agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+      agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
       execCtx.rootLog.agentStart({ entryNode: nodeName, args: data, input });
 
       let isResume = false;
@@ -480,7 +480,7 @@ async function runNodeCore({
                 },
                 {
                   onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                  statelogClient: execCtx.rootLog,
+                  statelogClient: execCtx.rootLogWithSpans,
                 },
               ),
           );
@@ -573,7 +573,7 @@ async function runNodeCore({
   } finally {
     // Guarded: a setup failure before the span was opened leaves it undefined.
     if (agentRunSpanId !== undefined) {
-      execCtx.rootLog.endSpan(agentRunSpanId); // end agentRun span
+      execCtx.rootLogWithSpans.endSpan(agentRunSpanId); // end agentRun span
     }
   }
   return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));

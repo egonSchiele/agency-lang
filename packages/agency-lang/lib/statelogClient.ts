@@ -1718,3 +1718,14 @@ export function getStatelogClient(config: {
   const client = new StatelogClient(statelogConfig);
   return client;
 }
+
+/**
+ * The logging client without `startSpan` and `endSpan`. This is the type of
+ * `ctx.statelogClient` and `ctx.rootLog`.
+ *
+ * A span opened on the client itself goes on the root span stack, which
+ * every fork branch shares. Two branches doing that at once would pop each
+ * other's spans. A run's own logger, `run.log`, is bound to its branch's
+ * span stack and keeps the span methods.
+ */
+export type RootLog = Omit<StatelogClient, "startSpan" | "endSpan">;

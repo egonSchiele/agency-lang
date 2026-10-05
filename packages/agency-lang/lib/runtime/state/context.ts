@@ -3,7 +3,7 @@ import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { LogLevel } from "../../logger.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
-import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
+import { StatelogClient, StatelogConfig, type RootLog } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
@@ -148,17 +148,33 @@ export class RuntimeContext<T> {
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
-  statelogClient: StatelogClient;
+  //
+  // Its type has no `startSpan` or `endSpan`. A span opened on the client
+  // itself goes on the root span stack, which every branch shares, so two
+  // fork branches doing it would pop each other's spans. Code inside a run
+  // opens spans through `run.log`, which has the branch's own stack.
+  statelogClient: RootLog;
 
   /**
    * The logger for posts made outside any run: the run's start and end
-   * events, the span around the whole run, and errors reported after the
-   * run's frame has ended. It is the client itself, so it nests under the
-   * root span stack and redacts with the top-level globals. Code inside a
-   * run logs through `run.log`.
+   * events and errors reported after the run's frame has ended. It is the
+   * client itself, so it nests under the root span stack and redacts with
+   * the top-level globals. Code inside a run logs through `run.log`.
    */
-  get rootLog(): StatelogClient {
+  get rootLog(): RootLog {
     return this.statelogClient;
+  }
+
+  /**
+   * The client itself with its span methods, for the code that owns the
+   * root span stack: the `agentRun` span around a whole run, the graph
+   * engine's span around each node, the node boundary that closes an
+   * `abortUnwind` span after the run's own logger is gone, and the code
+   * that makes a run's logger out of the client. All of it runs at the root
+   * of a run, outside every fork branch.
+   */
+  get rootLogWithSpans(): StatelogClient {
+    return this.statelogClient as StatelogClient;
   }
   smoltalkDefaults: Partial<SmolConfig>;
   /** Max characters of a single tool result fed back to the LLM (the

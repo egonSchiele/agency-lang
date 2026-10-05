@@ -162,4 +162,25 @@ describe("the wrong-run check", () => {
       expect(calls).toEqual([]);
     });
   });
+
+  // Generated code is compiled without a type check, so a call that leaves
+  // the run out is only found when it runs.
+  describe("a call that left the run out", () => {
+    it("says a run was expected, and what it got", async () => {
+      const runner = new Runner(makeMockCtx(), new State({ args: {}, locals: {}, step: 0 }), {
+        moduleId: "test.agency",
+        scopeName: "main",
+        stack: new StateStack(),
+        threads: new ThreadStore(),
+      });
+      const body = async () => {};
+      // `runner.step(0, body)`: the body is where the run should be.
+      await expect(runner.step(0, body as any, body)).rejects.toThrow(
+        "Expected a run as the first argument, to run a step, and got a function.",
+      );
+      await expect(
+        __call(undefined as any, body, { type: "positional", args: [] }),
+      ).rejects.toThrow("Expected a run as the first argument, to make a call, and got undefined");
+    });
+  });
 });

@@ -156,6 +156,14 @@ export class RunInUseError extends Error {
   }
 }
 
+/** A short name for a value that was passed where a run was expected. */
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "function") return "a function";
+  if (typeof value === "object") return "an object that is not a run";
+  return `${typeof value} ${JSON.stringify(value)}`;
+}
+
 /**
  * Check that `run` is not waiting for something it started. The operations
  * that start work for Agency code or a helper call this: a call, a Runner
@@ -166,6 +174,17 @@ export class RunInUseError extends Error {
  * does not depend on any hidden state.
  */
 export function assertUsable(run: Run, what: string): Run {
+  // Generated code is not type-checked when it is compiled, so a call that
+  // left the run out arrives here with something else in its place. Say so,
+  // where the alternative is "cannot read properties of undefined".
+  const given: unknown = run;
+  if (given === null || typeof given !== "object" || !("state" in given)) {
+    throw new Error(
+      `Expected a run as the first argument, to ${what}, and got ${describeValue(given)}. ` +
+        "Every runtime function that starts work takes the run it is called under first. " +
+        "In generated code that is `__run`.",
+    );
+  }
   if (run.state.waiting > 0) {
     throw new RunInUseError(what, run);
   }

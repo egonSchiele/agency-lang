@@ -18,7 +18,8 @@ node oneAfterTheOther() {
   return { result: result, askedAbout: askedAbout }
 }
 
-// The helper raises both at the same time, and the handler answers both.
+// The helper raises both at the same time. The handle refuses the second
+// here too, so the handler is asked about the first only.
 node bothAtOnce() {
   const askedAbout = []
   let result: any = null
@@ -28,5 +29,5 @@ node bothAtOnce() {
     askedAbout.push(intr.effect)
     return approve()
   }
-  return { result: result, askedAbout: askedAbout.sort() }
+  return { result: result, askedAbout: askedAbout }
 }

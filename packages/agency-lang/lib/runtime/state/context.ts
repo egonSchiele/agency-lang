@@ -25,6 +25,7 @@ import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
+import { callPlain } from "../asyncContext.js";
 import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
@@ -677,12 +678,16 @@ export class RuntimeContext<T> {
    *  blocks capture it in Runner.handle; TS callers capture at call
    *  time in withPushedHandler. See HandlerEntry. */
   pushHandler(fn: HandlerFn, liveGuardIds: string[]): void {
-    this.handlers.push({ fn, liveGuardIds });
+    // A handler from TypeScript takes only the interrupt. The chain calls
+    // every handler with the run first, so wrap it once here. `callPlain`
+    // makes the run readable on the handler's first line.
+    this.pushRunHandler((run, interrupt) => callPlain(run, fn, [interrupt]), liveGuardIds);
   }
-  /** Register a handler function the compiler wrote. It is called with the
-   *  run it runs under, then the interrupt. */
+  /** Register a handler function in the shape the chain calls: the run it
+   *  runs under, then the interrupt. Handler functions the compiler wrote
+   *  already have this shape. */
   pushRunHandler(fn: RunHandlerFn, liveGuardIds: string[]): void {
-    this.handlers.push({ fn, liveGuardIds, takesRun: true });
+    this.handlers.push({ fn, liveGuardIds });
   }
   popHandler(): void {
     this.handlers.pop();

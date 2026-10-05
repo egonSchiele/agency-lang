@@ -40,7 +40,7 @@ import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { getRuntimeContext, type Run } from "../runtime/asyncContext.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
 
 const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
@@ -56,20 +56,14 @@ const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAME
  *   - Otherwise — push onto the caller's stack frame, which auto-cleans up
  *     when the caller's frame pops.
  *
- * NOTE on the AgencyFunction wrapping: this function needs access to the
- * runtime state (to walk the stateStack and find the caller's frame), and
- * the only way a TS-implemented stdlib export receives that state is by
- * being wrapped as an AgencyFunction. `__call`'s plain-function branch
- * silently drops the state argument; the AgencyFunction branch routes
- * through `invoke()`, which passes state as the last positional arg to the
- * underlying TS function. See `_run` in `lib/runtime/ipc.ts` for the
- * established pattern.
+ * NOTE on the AgencyFunction wrapping: this function needs the run, to
+ * walk the state stack and find the caller's frame. It is wrapped as an
+ * AgencyFunction because `invoke()` passes every body the run as its first
+ * argument.
  */
-// Exported as `_callbackImpl` so unit tests can call it directly without
-// going through the AgencyFunction wrapper / `invoke()` indirection.
-// Direct JS callers must wrap their invocation in `runInTestContext` so
-// `getRuntimeContext()` finds an active ALS frame.
-export function _callbackImpl(name: string, fn: unknown): void {
+// Exported as `_callbackImpl` so unit tests can call it directly, with a run
+// from `runInTestContext`.
+export function _callbackImpl(run: Run, name: string, fn: unknown): void {
   if (!VALID_CALLBACK_NAME_SET.has(name)) {
     throw new Error(`Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`);
   }
@@ -78,7 +72,7 @@ export function _callbackImpl(name: string, fn: unknown): void {
       `callback('${name}', fn): fn must be a function, got ${fn === null ? "null" : typeof fn}`,
     );
   }
-  const { ctx } = getRuntimeContext();
+  const { ctx } = run;
   // Top-level: we're inside __initializeGlobals. The only frame on the stack
   // is `callback`'s own (or none, defensively). There is no caller frame
   // that survives past init, so route to ctx.topLevelCallbacks.

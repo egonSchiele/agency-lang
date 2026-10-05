@@ -10,17 +10,19 @@ import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
 
+/** Build an AgencyFunction from `fn`. By default `fn` takes only the
+ *  function's own arguments, and the run every body is handed is dropped.
+ *  Pass `fnTakesRun` when `fn` wants the run as its first argument. */
 function makeNamedFunction(
   name: string,
   fn: (...args: any[]) => any,
   params: { name: string }[] = [],
-  takesRun = false,
+  fnTakesRun = false,
 ) {
   return new AgencyFunction({
     name,
     module: "test.agency",
-    fn,
-    takesRun,
+    fn: fnTakesRun ? fn : (_run: unknown, ...args: any[]) => fn(...args),
     params: params.map((p) => ({
       name: p.name,
       hasDefault: false,
@@ -38,7 +40,8 @@ function makeFunction(
   return new AgencyFunction({
     name: "testFn",
     module: "test.agency",
-    fn: fn ?? (async (...args: unknown[]) => args),
+    // `fn` takes only the function's own arguments. The run is dropped.
+    fn: (_run: unknown, ...args: any[]) => (fn ?? (async (...own: unknown[]) => own))(...args),
     params: params.map((p) => ({
       name: p.name,
       hasDefault: p.hasDefault ?? false,
@@ -359,7 +362,7 @@ describe("partial()", () => {
       {
         name: "foo",
         module: "test.agency",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "rest", hasDefault: false, defaultValue: undefined, variadic: true },
@@ -383,7 +386,7 @@ describe("partial()", () => {
       {
         name: "foo",
         module: "test.agency",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "rest", hasDefault: false, defaultValue: undefined, variadic: true },
@@ -406,7 +409,7 @@ describe("partial()", () => {
       {
         name: "add3",
         module: "test",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -427,7 +430,7 @@ describe("partial()", () => {
       {
         name: "combine",
         module: "test",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -449,7 +452,7 @@ describe("partial()", () => {
       {
         name: "combine",
         module: "test",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -470,7 +473,7 @@ describe("partial()", () => {
       {
         name: "add3",
         module: "test",
-        fn: impl,
+        fn: (_run: unknown, ...args: any[]) => (impl as (...own: any[]) => any)(...args),
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -613,7 +616,7 @@ describe("describe()", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -646,7 +649,7 @@ describe("withParamSchema()", () => {
       {
         name: "runTool",
         module: "test",
-        fn: (a: number, b: unknown) => [a, b],
+        fn: (_run: unknown, a: number, b: unknown) => [a, b],
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -767,7 +770,7 @@ describe("rename()", () => {
     const fn = new AgencyFunction({
       name: "read",
       module: "test.agency",
-      fn: async (...args: unknown[]) => args,
+      fn: async (_run: unknown, ...args: unknown[]) => args,
       params: [{ name: "filename", hasDefault: false, defaultValue: undefined, variadic: false }],
       toolDefinition: { name: "read", description: "Read a file", schema: null },
     });
@@ -797,7 +800,7 @@ describe("rename()", () => {
     const fn = new AgencyFunction({
       name: "read",
       module: "test.agency",
-      fn: async (...args: unknown[]) => args,
+      fn: async (_run: unknown, ...args: unknown[]) => args,
       params: [
         { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
         { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -835,12 +838,13 @@ describe("preapprove verdict shape", () => {
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
       fn.invoke(run, { type: "positional", args: [] }),
     );
+    // A stored handler is called with the run first, then the interrupt.
     // Ordinary interrupt: auto-approved.
-    expect((await handler({ effect: "std::bash" })).type).toBe("approve");
+    expect((await handler(testRun(), { effect: "std::bash" })).type).toBe("approve");
     // A guard trip: pass — a bare approve would be approve({}), which
     // grants no budget and the trip machinery treats as a runtime
     // error. Budget questions belong to outer handlers or the user.
-    expect((await handler({ effect: "std::guard" })).type).toBe("pass");
+    expect((await handler(testRun(), { effect: "std::guard" })).type).toBe("pass");
   });
 
   it("registers with an explicit empty liveGuardIds (above any guard)", async () => {

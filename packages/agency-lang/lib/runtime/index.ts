@@ -138,8 +138,15 @@ export type { Guard, GuardJSON } from "./guard.js";
 export { CostGuard, TimeGuard, guardFromJSON } from "./guard.js";
 export type { RestoreOptions } from "./errors.js";
 
-export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
-export { _run } from "./ipc.js";
+export {
+  checkpoint,
+  checkpointFor,
+  getCheckpoint,
+  getCheckpointFor,
+  restore,
+  restoreFor,
+} from "./checkpoint.js";
+export { _run, _runFor } from "./ipc.js";
 
 export { registerModuleFingerprint, getModuleFingerprint } from "./moduleFingerprintRegistry.js";
 export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";

@@ -247,9 +247,8 @@ function makeLazyCallbackRef(
   return new AgencyFunction({
     name,
     module,
-    // It is built during a restore, long before it is called, so it takes
+    // It is built during a restore, long before it is called, so it uses
     // the run of whoever calls it and passes that on.
-    takesRun: true,
     fn: async (run: Run, ...args: unknown[]) => {
       const real = reviver.registry ? lookupInRegistry(reviver.registry, name, module) : undefined;
       if (!real) {
@@ -291,10 +290,8 @@ function makeUnresolvedFunctionStub(
     name,
     module,
     registeredName: typeof value.registeredName === "string" ? value.registeredName : name,
-    fn: () => {
-      // A function that does not take the run is called through `callPlain`,
-      // so the run is readable here on the first line.
-      const log = currentRun().log;
+    fn: (run: Run) => {
+      const log = run.log;
       const msg =
         `Function "${name}" from module "${module}" crossed a serialization ` +
         `boundary into a process that never loaded its module, and was ` +

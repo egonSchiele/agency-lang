@@ -313,13 +313,8 @@ async function runHandlerChain(
         ctx.enterToolCall();
         let result: any;
         try {
-          // A handler function the compiler wrote takes the run it is
-          // called under. One registered from TypeScript takes only the
-          // interrupt.
           result = await runAsHandler(run, entry, (handlerRun) =>
-            entry.takesRun
-              ? (entry.fn as RunHandlerFn)(handlerRun, interruptObj)
-              : callPlain(handlerRun, entry.fn as HandlerFn, [interruptObj]),
+            entry.fn(handlerRun, interruptObj),
           );
         } finally {
           try {

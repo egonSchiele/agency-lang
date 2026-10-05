@@ -251,7 +251,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -278,7 +278,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -316,7 +316,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -348,7 +348,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -378,7 +378,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -410,7 +410,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "noTool",
         module: "test",
-        fn: (a: number) => a,
+        fn: (_run: unknown, a: number) => a,
         params: [{ name: "a", hasDefault: false, defaultValue: undefined, variadic: false }],
         toolDefinition: null,
       },
@@ -435,7 +435,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "noTool",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -464,7 +464,7 @@ describe("FunctionRefReviver with bound functions", () => {
       {
         name: "add",
         module: "test",
-        fn: (a: number, b: number) => a + b,
+        fn: (_run: unknown, a: number, b: number) => a + b,
         params: [
           { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
           { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -551,7 +551,7 @@ describe("lazy callback refs (#544)", () => {
     reviver.registry["agency_abc:__cb_main_0"] = new AgencyFunction({
       name: "__cb_main_0",
       module: "agency_abc",
-      fn: async (data: unknown) => {
+      fn: async (_run: unknown, data: unknown) => {
         received = data;
       },
       params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
@@ -615,7 +615,7 @@ describe("renamed functions round-trip (#652)", () => {
       {
         name: "search",
         module: "stdlib/wikipedia.agency",
-        fn: (query: string) => `results for ${query}`,
+        fn: (_run: unknown, query: string) => `results for ${query}`,
         params: [{ name: "query", hasDefault: false, defaultValue: undefined, variadic: false }],
         toolDefinition: { name: "search", description: "Search Wikipedia", schema: null },
       },

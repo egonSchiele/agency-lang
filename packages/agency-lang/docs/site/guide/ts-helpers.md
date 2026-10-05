@@ -15,19 +15,28 @@ import { agency } from "agency-lang/runtime";
 
 There are no individual named exports for the helpers — `agency.<method>` is the canonical surface. Types (`ResumableScope`, `ResumableScopeOpts`, `LlmOpts`, `CallsiteLocation`) and a small set of low-level primitives (the `Interrupt` shape, the `RuntimeContext` class) remain accessible as named exports for cases where you need to write a type annotation.
 
-## When a TS helper "participates" in a run
+## Using `agency.*` in a function that awaits
 
-When Agency code calls a TypeScript function, the runtime makes the current run available to it. Every `agency.*` method reads that run.
+Call `agency.current()` on the first line of your function and keep what it returns. From then on, use that value and not `agency.*`.
 
 ```ts
 export async function chargeLater(amount: number): Promise<void> {
-  const run = agency.current(); // first line, before any await
+  const run = agency.current();
   await wait(50);
   run.addCost(amount);
 }
 ```
 
-There is one rule. **The run is only current until your function's first `await`.** After that, `agency.*` methods throw:
+This version is wrong:
+
+```ts
+export async function chargeLater(amount: number): Promise<void> {
+  await wait(50);
+  agency.addCost(amount); // throws
+}
+```
+
+It throws this error:
 
 ```
 No run is current here. There are two ways this happens.
@@ -35,11 +44,14 @@ No run is current here. There are two ways this happens.
 2. The code was not called by Agency at all. ...
 ```
 
-So a helper that awaits takes a handle with `agency.current()` on its first line, and uses the handle afterwards. See [The handle](#the-handle-agency-current).
+Here is why. When Agency calls your function, it records which agent run the call belongs to. It keeps that record only until your function pauses, and a function pauses at its first `await`. Every `agency.*` method looks the record up. So `agency.*` works before the first `await` and throws after it. The value that `agency.current()` returns holds on to the run for you, which is why it keeps working. See [The handle](#the-handle-agency-current) for what you can do with it.
 
-A helper that never awaits, or that calls `agency.*` only before its first `await`, needs no handle.
+Two kinds of function do not need `agency.current()`:
 
-Most `agency.*` methods also throw when Agency did not call the code at all, such as at a script's top level or in a `setTimeout` callback. The lax methods, `agency.ctxMaybe()` and `agency.thread.storeMaybe()`, return `undefined` there. They also return `undefined` after an `await`, and cannot tell the two cases apart, so call them on the first line too.
+- a function with no `await` in it
+- a function that uses `agency.*` only before its first `await`
+
+`agency.*` also throws in code that Agency did not call, such as the top level of a script or a `setTimeout` callback.
 
 The one place this contract is relaxed is `agency.withTestContext({ctx, stack, threads}, fn)`, covered in [Testing TS helpers](#testing-ts-helpers).
 
@@ -94,7 +106,7 @@ export async function fakeRepl(onSubmit, lines: string[]) {
 | `run.addCost(amount)`, `run.addTokens(amount)` | Charge this run |
 | `run.ctx`, `run.stack`, `run.threads` | The run's context, branch stack, and thread store |
 
-A handle raises one interrupt at a time. Once a raise through it has been answered, a second raise throws. To ask twice, use `agency.withResumableScope`, give each `s.step(...)` one interrupt, and take `agency.current()` on the first line of that step.
+A handle raises one interrupt. A second `run.interrupt` call on the same handle throws, whether it comes after the first or at the same time. To ask twice, use `agency.withResumableScope`, give each `s.step(...)` one interrupt, and take `agency.current()` on the first line of that step.
 
 `run.call` is how a helper reaches the rest of `agency.*` after an `await`. It calls the function with the run current again, so the function's own first line can use `agency.*`:
 
@@ -140,6 +152,8 @@ console.log(`subprocess depth: ${ctx.subprocessDepth}`); // 0 = root process
 ```
 
 `ctx.subprocessDepth` is the current process's subprocess nesting depth (0 outside `std::agency run()` subprocesses). The `std::run` gate interrupt reports the prospective child depth as `depth` in its data, so handlers can reject by depth.
+
+`agency.ctxMaybe()` and `agency.thread.storeMaybe()` do not throw when there is no run. They return `undefined`. That happens in code Agency did not call, and also after your function's first `await`, and the two look the same. So call them on the first line too.
 
 ### `agency.callsite()`
 

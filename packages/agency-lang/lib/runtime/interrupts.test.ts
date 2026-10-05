@@ -43,7 +43,9 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     return ctx;
   };
 
@@ -194,7 +196,9 @@ describe("interruptWithHandlers expectsValue", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -377,7 +381,9 @@ describe("pass()", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The test's handlers take only the interrupt. `pushHandler` wraps each
+    // into the shape the chain calls, as it does for a handler from TypeScript.
+    handlers.forEach((fn: any) => ctx.pushHandler(fn, []));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";

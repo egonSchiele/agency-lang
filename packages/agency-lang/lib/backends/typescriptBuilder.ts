@@ -2496,7 +2496,6 @@ export class TypeScriptBuilder {
       params: ts.arr(paramNodes),
       toolDefinition: toolDef,
       exported: ts.bool(!!node.exported),
-      takesRun: ts.bool(true),
     };
     // Carry the markers so the tool loop and MCP adapter can read them off
     // the registered AgencyFunction. Emitted only when at least one is set.

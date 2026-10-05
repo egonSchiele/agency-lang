@@ -167,11 +167,16 @@ export function makeMockCtx(
     _toolCallDepth: 0,
     runId: null,
     traceConfig: {},
+    // As on the real context: a handler from TypeScript takes only the
+    // interrupt, and is wrapped into the shape the chain calls.
     pushHandler(fn: any, liveGuardIds: string[] = []) {
-      this.handlers.push({ fn, liveGuardIds });
+      this.handlers.push({
+        fn: (run: Run, interrupt: unknown) => callPlain(run, fn, [interrupt]),
+        liveGuardIds,
+      });
     },
     pushRunHandler(fn: any, liveGuardIds: string[] = []) {
-      this.handlers.push({ fn, liveGuardIds, takesRun: true });
+      this.handlers.push({ fn, liveGuardIds });
     },
     popHandler() {
       this.handlers.pop();

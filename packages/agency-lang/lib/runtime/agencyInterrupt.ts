@@ -70,11 +70,16 @@
  * second raise finds the same stored id and returns that same answer, so
  * no handler and no user is asked about the second interrupt.
  *
+ * Two raises made at the same time collide the same way. The second
+ * replaces the first one's stored id and the first one's pause, so the user
+ * is shown only the second interrupt, and on resume both raises return its
+ * answer.
+ *
  * The handle from `agency.current()` raises every interrupt on the one run
- * it captured, so every raise through a handle has the same key. The
- * handle refuses a raise that comes after an earlier one was answered. See
- * `current` in agency.ts. Splitting interrupts across `s.step(...)` calls
- * is the only safe pattern.
+ * it captured, so every raise through a handle has the same key. A handle
+ * therefore raises one interrupt, and refuses a second. See `current` in
+ * agency.ts. Splitting interrupts across `s.step(...)` calls is the only
+ * safe pattern.
  *
  * # Halting and HaltSignal
  *
@@ -174,8 +179,9 @@ export async function interruptFor<T = unknown>(
   const effect = opts.effect ?? "unknown";
   const data = opts.data;
   const origin = callsite.moduleId;
-  // A helper may raise several interrupts at once from one run. Each raise
-  // gets its own copy of the run, so none is counted against another.
+  // `agency.interrupt()` can be called several times at once from one step,
+  // and a handler can answer them all. Each raise gets its own copy of the
+  // run, so none is counted against another by the wrong-run check.
   const handlerResult = await withRun(detachedRun(rt, {}), (raiseRun) =>
     interruptWithHandlers(raiseRun, effect, opts.message, data, origin, {
       expectsValue: opts.expectsValue,

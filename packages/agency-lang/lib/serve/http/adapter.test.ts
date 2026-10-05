@@ -55,7 +55,7 @@ function makeExports(): {
     {
       name: "add",
       module: "test",
-      fn: async (a: number, b: number) => a + b,
+      fn: async (_run: unknown, a: number, b: number) => a + b,
       params: [
         { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
         { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },

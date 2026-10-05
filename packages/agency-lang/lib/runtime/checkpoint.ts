@@ -44,7 +44,17 @@ export function restore(
   checkpointIdOrCheckpoint: number | Checkpoint | Record<string, unknown>,
   options: RestoreOptions,
 ): void {
-  const { ctx } = currentRun();
+  restoreFor(currentRun(), checkpointIdOrCheckpoint, options);
+}
+
+/** `restore` for a run the caller already holds. Generated code wraps this
+ *  one as an AgencyFunction, whose body is handed the run first. */
+export function restoreFor(
+  run: Run,
+  checkpointIdOrCheckpoint: number | Checkpoint | Record<string, unknown>,
+  options: RestoreOptions,
+): void {
+  const { ctx } = run;
   let cp: Checkpoint;
   if (typeof checkpointIdOrCheckpoint === "number") {
     const found = ctx.checkpoints.get(checkpointIdOrCheckpoint);

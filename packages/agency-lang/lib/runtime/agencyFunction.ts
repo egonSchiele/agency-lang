@@ -82,20 +82,29 @@ export type ToolMarkers = {
   handoff?: boolean;
 };
 
+/**
+ * The body of an `AgencyFunction`. Its first parameter is the run it is
+ * called under, and the function's own arguments follow:
+ *
+ *   fn: (run, name: string, age: number) => `${name} is ${age}`
+ *
+ * This holds for every body, whether the compiler wrote it or a person did.
+ * A body that needs nothing from the run still declares the parameter, or
+ * declares none at all. A body that puts one of its own typed parameters
+ * first does not compile.
+ */
+export type AgencyFunctionBody = (run: Run, ...args: any[]) => any;
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
-  fn: (...args: any[]) => any;
+  fn: AgencyFunctionBody;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
   registeredName?: string;
-  /** True when `fn` takes the run it is called under as its first argument.
-   *  Every function the compiler writes does. A function built by hand does
-   *  not, and is called with its own arguments only. */
-  takesRun?: boolean;
 };
 
 export class AgencyFunction {
@@ -104,7 +113,7 @@ export class AgencyFunction {
   readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
-  private readonly _fn: (...args: any[]) => any;
+  private readonly _fn: AgencyFunctionBody;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
@@ -113,7 +122,6 @@ export class AgencyFunction {
   readonly exported: boolean;
   readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
-  private readonly _takesRun: boolean;
   /** The key this function's registered ancestor is stored under in the
    *  function registry. `.rename()` changes `name` but not this, and the
    *  other derivations carry it forward — `.partial()` and `.preapprove()`
@@ -132,7 +140,6 @@ export class AgencyFunction {
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
-    this._takesRun = opts.takesRun ?? false;
     this._unboundParams = opts.params.filter((p) => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter((p) => !p.variadic);
     this._hasVariadic =
@@ -174,7 +181,6 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
-      takesRun: this._takesRun,
     });
   }
 
@@ -225,9 +231,7 @@ export class AgencyFunction {
         }
       }
       // `_fn` may be imported TypeScript that built a Result by hand.
-      return normalizeForeignResult(
-        await (this._takesRun ? this._fn(run, ...args) : callPlain(run, this._fn, args)),
-      );
+      return normalizeForeignResult(await this._fn(run, ...args));
     });
   }
 
@@ -283,7 +287,6 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
-      takesRun: this._takesRun,
     });
   }
 
@@ -313,16 +316,8 @@ export class AgencyFunction {
     // liveGuardIds: [] is an explicit decision, not a default — this
     // handler conceptually registers above any guard (its body never
     // spends, so the hide-everything reading is also harmless).
-    const takesRun = this._takesRun;
-    const wrapped = takesRun
-      ? (run: Run, ...args: any[]) =>
-          withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), [])
-      : (...args: any[]) => {
-          // A function that does not take the run is called through
-          // `callPlain`, so the run is readable here on its first line.
-          const ctx = currentRun().ctx;
-          return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
-        };
+    const wrapped: AgencyFunctionBody = (run, ...args) =>
+      withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), []);
     return new AgencyFunction({
       name: this.name,
       module: this.module,
@@ -333,7 +328,6 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: true,
       registeredName: this.registeredName,
-      takesRun: this._takesRun,
     });
   }
 
@@ -390,7 +384,6 @@ export class AgencyFunction {
       // The registry never learns the new name, so serialization keeps the
       // registered name for revival (see FunctionRefReviver).
       registeredName: this.registeredName,
-      takesRun: this._takesRun,
     });
   }
 

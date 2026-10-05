@@ -6,11 +6,13 @@ import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
 
+/** `fn` takes only the function's own arguments. The run every body is
+ *  handed is dropped. */
 function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
   return new AgencyFunction({
     name,
     module: "test.agency",
-    fn,
+    fn: (_run: unknown, ...args: any[]) => fn(...args),
     params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }],
     toolDefinition: null,
   });

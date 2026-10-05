@@ -67,15 +67,15 @@ export type HandlerFn = (interrupt: {
  *  array indices and registration counts do not (see the resumable-
  *  guards plan, decision 14). */
 export type HandlerEntry = {
-  fn: HandlerFn | RunHandlerFn;
+  /** Called with the run it runs under, then the interrupt. A handler
+   *  registered from TypeScript takes only the interrupt, and
+   *  `RuntimeContext.pushHandler` wraps it into this shape. */
+  fn: RunHandlerFn;
   liveGuardIds: string[];
-  /** True for a handler function the compiler wrote, which takes the run it
-   *  is called under as its first argument. A handler registered from
-   *  TypeScript takes only the interrupt. */
-  takesRun?: boolean;
 };
 
-/** A handler function the compiler wrote: the run, then the interrupt. */
+/** A handler function as the handler chain calls it: the run, then the
+ *  interrupt. */
 export type RunHandlerFn = (run: Run, interrupt: Parameters<HandlerFn>[0]) => ReturnType<HandlerFn>;
 
 /* tokenstats

@@ -326,11 +326,13 @@ describe("checkResultMethodCall", () => {
 
 import { AgencyFunction } from "./agencyFunction.js";
 
+/** `fn` takes only the function's own arguments. The run every body is
+ *  handed is dropped. */
 function makeFn(params: Array<Partial<FuncParam> & { name: string }>, fn: (...args: any[]) => any) {
   return new AgencyFunction({
     name: "target",
     module: "test.agency",
-    fn,
+    fn: (_run: unknown, ...args: any[]) => fn(...args),
     params: params.map((p) => ({
       hasDefault: false,
       defaultValue: undefined,

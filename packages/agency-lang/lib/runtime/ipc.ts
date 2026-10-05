@@ -1504,10 +1504,36 @@ export async function _run(
   cwd?: string,
   maxDepth: number = DEFAULT_MAX_SUBPROCESS_DEPTH,
 ): Promise<any> {
-  // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
-  // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
-  // .invoke() still passes is now harmlessly ignored.
-  const store = currentRun();
+  return _runFor(
+    currentRun(),
+    compiled,
+    node,
+    args,
+    wallClock,
+    memory,
+    ipcPayload,
+    stdout,
+    configOverrides,
+    cwd,
+    maxDepth,
+  );
+}
+
+/** `_run` for a run the caller already holds. Generated code wraps this one
+ *  as an AgencyFunction, whose body is handed the run first. */
+export async function _runFor(
+  store: Run,
+  compiled: { moduleId: string; code: string },
+  node: string,
+  args: Record<string, any>,
+  wallClock: number,
+  memory: number,
+  ipcPayload: number,
+  stdout: number,
+  configOverrides?: Partial<AgencyConfig>,
+  cwd?: string,
+  maxDepth: number = DEFAULT_MAX_SUBPROCESS_DEPTH,
+): Promise<any> {
   const { ctx, stack: stateStack } = store;
 
   // Nested subprocesses are allowed: every run() is gated by a std::run

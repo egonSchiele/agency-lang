@@ -46,7 +46,12 @@ async function __greet_impl(__run: __Run, name: string, age: number) {
 3. **Every runner method that takes a body also takes the run it is called under.** `runner.step(id, __run, body)` checks that run, makes a child, and hands the child to the body.
 4. **`__call` and `AgencyFunction.invoke` take the run first.** `__call(__run, target, descriptor)` decides when it runs whether `target` takes a run. See "Functions that do not take a run" in the runtime doc.
 
-Rule 2 is a convention the code generator follows. Nothing checks it at compile time. A body that left out `__run` would pass the outer run to its first nested step, and the wrong-run check would throw there.
+Rule 2 is checked by a test, `lib/backends/generatedRunParameter.test.ts`. It reads every generated fixture in `tests/typescriptGenerator/` and fails when a body is handed to a call alongside `__run` and does not declare `__run` itself. A new language feature adds a fixture, so a body that forgets the parameter fails there.
+
+The check is a test and not a compiler pass, so compiling does not get slower. Here is what happens if a body without `__run` gets past it:
+
+- **The body starts work**, such as a nested step or a call. It hands over the outer run, which is waiting, and the wrong-run check throws `RunInUseError`.
+- **The body only reads**, such as `__run.globals` inside a fork block. It reads the outer function's globals and not the branch's, with no error. This is the case the test exists for.
 
 ## How generated code reads runtime values
 
@@ -100,6 +105,8 @@ Make the field required when a missing value would be wrong and not only absent.
 Three places build a run from nothing: `runNode` in `lib/runtime/node.ts`, and `runInBootstrapFrame` and `runInTestContext` in `lib/runtime/asyncContext.ts`. Every other run is a copy of an outer one, and a copy keeps the field without any change.
 
 ## Things that go wrong
+
+**"Expected a run as the first argument" from new generated code.** A call to a runtime function left the run out, so its next argument landed in the run's place. Generated code is compiled without a type check, which is why this is found when the code runs. Pass `ts.runtime.run` first.
 
 **`RunInUseError` in a test or in new generated code.** A body used an outer run. Find the nearest body around the failing call and use the run it was handed.
 

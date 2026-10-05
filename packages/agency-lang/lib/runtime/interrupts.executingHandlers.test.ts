@@ -69,10 +69,9 @@ describe("stack-carried handler execution mark", () => {
         return { type: "approve" as const, value: verdict };
       },
       liveGuardIds: [],
-      takesRun: true,
     };
     const outer: HandlerEntry = {
-      fn: async (intr: any) => {
+      fn: async (_run: unknown, intr: any) => {
         if (intr.effect === "inner::raise") outerHeard++;
         return { type: "approve" as const };
       },
@@ -97,7 +96,6 @@ describe("stack-carried handler execution mark", () => {
           return { type: "approve" as const };
         },
         liveGuardIds: [],
-        takesRun: true,
       },
     ];
     await inFrameOf(ctx, stack, (run) => interruptWithHandlers(run, "kickoff", "m", {}, "o"));

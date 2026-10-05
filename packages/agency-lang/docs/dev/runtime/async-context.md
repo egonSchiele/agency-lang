@@ -116,9 +116,27 @@ export function callPlain(run, fn, args, thisArg?) {
 }
 ```
 
-`plainCallRun` is one module variable. JavaScript runs one thing at a time, and a promise continuation never runs inside another call's synchronous part. So from the start of the call to the function's first `await`, the variable holds the run of that call.
+`plainCallRun` is one module variable. `currentRun()` returns it, and throws when it is empty. `currentRun()` does not know whether an `await` has happened. It only sees whether the variable is set, and the variable is set for a short time.
 
-`currentRun()` reads it:
+Here is one call, step by step:
+
+```ts
+export async function _save(path: string) {
+  const early = currentRun(); // 2
+  await mkdir(dirname(path)); // 3
+  const late = currentRun(); // 5: throws
+}
+```
+
+1. `callPlain` sets `plainCallRun` and calls `_save`.
+2. `_save` starts running. The variable is set, so `currentRun()` returns the run.
+3. `_save` reaches its first `await`. An `async` function returns to its caller at that point, with a promise for the rest of its work.
+4. Back in `callPlain`, the `finally` clears the variable.
+5. Later the `mkdir` finishes and JavaScript runs the rest of `_save`. Nothing set the variable for this part, so `currentRun()` finds it empty and throws.
+
+JavaScript runs one thing at a time, and the rest of a function never runs in the middle of another call's first part. So in step 2 the variable can only hold the run of this call, and in step 5 it is empty and does not hold some other call's run.
+
+A helper therefore reads the run on its first line:
 
 ```ts
 export async function _fetch(url: string) {
@@ -130,7 +148,7 @@ export async function _fetch(url: string) {
 
 Three rules follow.
 
-1. **Read the run on the first line and keep it.** After the first `await`, `currentRun()` throws. The error names both possible causes, because the function cannot tell them apart: the run was read after an `await`, or the code was not called by Agency at all.
+1. **Read the run on the first line and keep it.** After the first `await` the variable is empty, so `currentRun()` throws. The variable is also empty in code Agency did not call at all. `currentRun()` cannot tell those two apart, so its error names both.
 2. **Pass the run to every runtime function you call.** They all take one.
 3. **A helper that awaits and then calls a second helper uses `callPlain(run, second, args)`.** A bare call would leave the second helper with no run to read. User code does the same thing with `run.call(second, ...args)` on the handle from `agency.current()`.
 
@@ -140,9 +158,9 @@ The restore in `callPlain` is in a `finally`. If a throw skipped it, the next he
 
 `__call(run, target, descriptor)` looks at the value it was handed. An `AgencyFunction` gets the run as an argument. Anything else goes through `callPlain`.
 
-An `AgencyFunction` whose body was written by hand is the exception. Generated code passes `takesRun: true` to `AgencyFunction.create`. The functions built by hand, in `functionRefReviver.ts` and `lib/stdlib/agency.ts`, leave it off, and `invoke` calls them through `callPlain`.
+The body of an `AgencyFunction` always takes the run first, whether the compiler wrote it or a person did. The type `AgencyFunctionBody` says so, and a body whose first typed parameter is something else does not compile. The bodies written by hand are in `functionRefReviver.ts`, `lib/stdlib/agency.ts`, and the MCP tool adapter.
 
-A handler entry records the same flag. `Runner.handle` registers generated handler functions, which take the run. A handler given to `agency.withHandler` keeps the shape `(interrupt) => verdict`.
+A stored handler has one shape too: the run, then the interrupt. `Runner.handle` registers generated handler functions, which already have it. A handler given to `agency.withHandler` keeps the shape `(interrupt) => verdict` for its author, and `RuntimeContext.pushHandler` wraps it once when it is registered.
 
 ### The lenient read
 
@@ -223,10 +241,9 @@ Code inside that must use the run it was given.
 
 The operations that start work for Agency code or a helper call `assertUsable`: `__call`, `__callMethod`, `AgencyFunction.invoke`, the runner methods that take a body, the interrupt site, and callbacks. The runtime's own use of a run does not check. `runBatch` logs and fires hooks with the parent's run while its branches are running.
 
-Three cases are exempt:
+Two cases are exempt:
 
 - Two calls made at once through one handle. Each `run.call` gets a detached copy.
-- Several interrupts raised at once by one helper. Each raise gets a detached copy. A raise that comes after an earlier one was answered is different: the handle refuses it, because both would be stored under one key. See the header of `lib/runtime/agencyInterrupt.ts`.
 - The `async` keyword on a call, which Agency does not support. The code path still compiles and is not checked.
 
 Generated code has a second protection. Every body the runtime calls back declares a parameter named `__run`, which hides the outer one. Code inside a fork block cannot name the outer function's run.

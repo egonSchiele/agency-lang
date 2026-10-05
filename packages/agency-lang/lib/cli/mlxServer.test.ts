@@ -1,7 +1,10 @@
 import { MLX_VLM_RULES } from "./vlmChat.js";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
-import { defaultRoute, startFrontDoor, type FrontDoor } from "./mlxServer.js";
+import { servedModelFor, startFrontDoor, type DoorLogging, type FrontDoor } from "./mlxServer.js";
+import { createModelPool, type ModelPool } from "./modelPool.js";
+import type { RequestRules } from "./requestRules.js";
+import type { Child } from "./localServe.js";
 import { plainColor } from "../utils/termcolors.js";
 import { localBodyBytes } from "../stdlib/localImageInputs.js";
 import { visionBodyBytes } from "../stdlib/vision.js";
@@ -61,6 +64,60 @@ async function fakeServer(model: string): Promise<Fake> {
   return fake;
 }
 
+/** One process a test door forwards to, already listening on `port`. */
+type Route = {
+  model: string;
+  upstreamModel: string;
+  port: number;
+  label: string;
+  rules?: RequestRules | null;
+};
+
+/** A stand-in for a model process: it exits when it is told to stop. */
+function exitsWhenKilled(): Child {
+  const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+  return {
+    on: (_event, listener) => listeners.push(listener),
+    kill: () => listeners.forEach((listener) => listener(null, "SIGTERM")),
+  };
+}
+
+/** A pool whose models are all loaded, each on the port a test server is
+ *  already listening on. Nothing is spawned. */
+async function readyPool(routes: Route[]): Promise<ModelPool> {
+  const pool = createModelPool(
+    routes.map((route) => ({
+      model: route.model,
+      upstreamModel: route.upstreamModel,
+      label: route.label,
+      kind: "chat" as const,
+      rules: route.rules ?? null,
+    })),
+    {
+      now: Date.now,
+      spawn: async (plan) => ({
+        child: exitsWhenKilled(),
+        port: routes.find((route) => route.model === plan.model)!.port,
+      }),
+      waitUntilLoaded: async () => {},
+    },
+  );
+  for (const route of routes) {
+    await pool.load(route.model);
+  }
+  return pool;
+}
+
+/** A front door over `routes`, as a test wants one. */
+async function startDoor(
+  port: number,
+  routes: Route[],
+  logging?: DoorLogging,
+  maxTokens?: number,
+): Promise<FrontDoor> {
+  return startFrontDoor(port, await readyPool(routes), logging, maxTokens);
+}
+
 let a: Fake;
 let b: Fake;
 let door: FrontDoor;
@@ -68,7 +125,7 @@ let door: FrontDoor;
 beforeAll(async () => {
   a = await fakeServer("org/a");
   b = await fakeServer("org/b");
-  door = await startFrontDoor(0, [
+  door = await startDoor(0, [
     {
       model: "org/a",
       upstreamModel: "/models/mlx/org--a",
@@ -171,7 +228,7 @@ describe("front door", () => {
   });
 
   it("holds a request's reply length to the server's --max-tokens", async () => {
-    const capped = await startFrontDoor(
+    const capped = await startDoor(
       0,
       [{ model: "org/a", upstreamModel: "/models/mlx/org--a", port: a.port, label: "a" }],
       undefined,
@@ -205,7 +262,7 @@ describe("front door", () => {
 
   it("close() finishes while a reply is still streaming", async () => {
     const slow = await fakeServer("org/s");
-    const other = await startFrontDoor(0, [
+    const other = await startDoor(0, [
       { model: "org/s", upstreamModel: "/s", port: slow.port, label: "mlx_lm.server for org/s" },
     ]);
     const res = await fetch(`http://127.0.0.1:${other.port}/v1/chat/completions`, {
@@ -239,15 +296,9 @@ describe("front door", () => {
   });
 
   it("routes default_model to the one model served, and refuses it among several", async () => {
-    expect(
-      defaultRoute(
-        [{ model: "org/a", upstreamModel: "org/a", port: 1, label: "" }],
-        "default_model",
-      )?.model,
-    ).toBe("org/a");
-    expect(
-      defaultRoute([{ model: "org/a", upstreamModel: "org/a", port: 1, label: "" }], "org/b"),
-    ).toBeUndefined();
+    expect(servedModelFor(["org/a"], "default_model")).toBe("org/a");
+    expect(servedModelFor(["org/a"], "org/b")).toBeUndefined();
+    expect(servedModelFor(["org/a", "org/b"], "org/b")).toBe("org/b");
     // This door serves org/a and org/b, so the alias names neither.
     const res = await post("default_model");
     expect(res.status).toBe(404);
@@ -282,7 +333,7 @@ describe("front door", () => {
   it("answers 502 when the process is gone", async () => {
     const dead = await fakeServer("org/d");
     await new Promise<void>((r) => dead.server.close(() => r()));
-    const other = await startFrontDoor(0, [
+    const other = await startDoor(0, [
       {
         model: "org/d",
         upstreamModel: "/d",
@@ -359,7 +410,7 @@ describe("front door logging", () => {
     headers: Record<string, string> = {},
   ): Promise<string[]> {
     const lines: string[] = [];
-    const logged = await startFrontDoor(
+    const logged = await startDoor(
       0,
       [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
@@ -420,7 +471,7 @@ describe("front door logging", () => {
 
   it("logs the error body it sent for a body that is not JSON", async () => {
     const lines: string[] = [];
-    const logged = await startFrontDoor(
+    const logged = await startDoor(
       0,
       [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
@@ -442,7 +493,7 @@ describe("front door logging", () => {
 
   it("logs GET /v1/models", async () => {
     const lines: string[] = [];
-    const logged = await startFrontDoor(
+    const logged = await startDoor(
       0,
       [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
@@ -470,7 +521,7 @@ describe("front door request rules", () => {
   const lines: string[] = [];
   beforeAll(async () => {
     upstream = await fakeServer("vision");
-    guarded = await startFrontDoor(
+    guarded = await startDoor(
       0,
       [
         {
@@ -574,5 +625,134 @@ describe("front door request rules", () => {
     const response = await send({ messages: [], padding: "a".repeat(localBodyBytes()) });
     expect(response.status).toBe(413);
     expect(upstream.hits.length).toBe(before);
+  });
+});
+
+describe("front door over a pool", () => {
+  let upstream: Fake;
+  let pool: ModelPool;
+  let pooled: FrontDoor;
+
+  beforeAll(async () => {
+    upstream = await fakeServer("org/a");
+    pool = await readyPool([
+      {
+        model: "org/a",
+        upstreamModel: "/models/mlx/org--a",
+        port: upstream.port,
+        label: "mlx_lm.server for org/a",
+        rules: MLX_VLM_RULES,
+      },
+      // Nothing listens on port 1, so a request for this model is refused
+      // by the operating system.
+      { model: "org/dead", upstreamModel: "/models/dead", port: 1, label: "the dead server" },
+    ]);
+    pooled = await startFrontDoor(0, pool);
+  });
+
+  afterAll(async () => {
+    await pooled.close();
+    upstream.server.close();
+  });
+
+  const url = (path: string) => `http://127.0.0.1:${pooled.port}${path}`;
+  const inProgress = (model: string) =>
+    pool.status().find((row) => row.model === model)?.requestsInProgress;
+
+  function chat(model: string, extra: Record<string, unknown> = {}, headers = {}) {
+    return fetch(url("/v1/chat/completions"), {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ model, messages: [], ...extra }),
+    });
+  }
+
+  /** Waits until no request is in progress on `model`, or fails. */
+  async function expectIdle(model: string): Promise<void> {
+    await expect.poll(() => inProgress(model), { timeout: 2000 }).toBe(0);
+  }
+
+  it("reports each model's state on GET /v1/agency/status", async () => {
+    const res = await fetch(url("/v1/agency/status"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { models: Record<string, unknown>[] };
+    expect(body.models.map((row) => [row.model, row.state])).toEqual([
+      ["org/a", "ready"],
+      ["org/dead", "ready"],
+    ]);
+    expect(body.models[0]).toMatchObject({ error: null, requestsInProgress: 0 });
+  });
+
+  it("refuses the status route to a request made under another hostname", async () => {
+    const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
+      const req = http.request(
+        {
+          host: "127.0.0.1",
+          port: pooled.port,
+          path: "/v1/agency/status",
+          headers: { host: "evil.example" },
+        },
+        resolve,
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    res.resume();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("answers the status route to localhost as well as 127.0.0.1", async () => {
+    const res = await fetch(`http://localhost:${pooled.port}/v1/agency/status`).catch(() => null);
+    // A machine whose localhost is IPv6 only cannot reach the door at all.
+    if (res !== null) {
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("counts a request while it runs, and not after it ends", async () => {
+    const pending = chat("org/a", {}, { "x-slow": "1" });
+    await expect.poll(() => inProgress("org/a"), { timeout: 2000 }).toBe(1);
+    await (await pending).text();
+    await expectIdle("org/a");
+  });
+
+  it("stops counting a request whose client left mid-reply", async () => {
+    const controller = new AbortController();
+    const res = await fetch(url("/v1/chat/completions"), {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-slow": "1" },
+      body: JSON.stringify({ model: "org/a", messages: [] }),
+      signal: controller.signal,
+    });
+    expect(inProgress("org/a")).toBe(1);
+    controller.abort();
+    await res.text().catch(() => "");
+    await expectIdle("org/a");
+  });
+
+  it("stops counting a request whose process refused the connection", async () => {
+    const res = await chat("org/dead");
+    expect(res.status).toBe(502);
+    await expectIdle("org/dead");
+  });
+
+  it("never holds a model for a request the rules refuse", async () => {
+    const before = pool.status()[0].lastUsedAt;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const res = await chat("org/a", { max_tokens: 5, max_completion_tokens: 6 });
+    expect(res.status).toBe(400);
+    expect(pool.status()[0].lastUsedAt).toBe(before);
+  });
+
+  it("answers 503, with how to load it, for a model that was unloaded", async () => {
+    await pool.unload("org/dead");
+    const res = await chat("org/dead");
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toBe(
+      'org/dead was unloaded. Load it again with server.load("org/dead"), or restart the server.',
+    );
+    // It is still listed: a caller asks /v1/models what it may request.
+    const listed = (await (await fetch(url("/v1/models"))).json()) as { data: { id: string }[] };
+    expect(listed.data.map((row) => row.id)).toEqual(["org/a", "org/dead"]);
   });
 });

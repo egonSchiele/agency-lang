@@ -16,7 +16,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 | PR | What it ships | Tasks | Estimated size |
 |---|---|---|---|
 | 1 | `agency-lang/local`: `listModels`, the call functions, signals (built, #1172) | 1 to 6 | 1,900 lines |
-| 2 | One description per served model, the model pool, `serve`, `status`, `load`, `unload` | 9 to 13 | 1,400 to 1,800 |
+| 2 | One description per served model, the model pool, `serve`, `status`, `load`, `unload` (built) | 9 to 13 | 1,550 lines |
 | 3 | Processes that exit with the server, `--lazy`, `cancel`, and shutting down | 7 to 8, 14 to 21 | about 2,000 |
 
 The sizes count code, tests, and docs, and about half of each is tests.
@@ -824,6 +824,22 @@ describe `ServeTarget` as the one input, the pool, `acquire` and
 the status route. Add `serve` and the handle to
 `docs/dev/llm/local-typescript-api.md` and to the guide section. Update
 both docs' lines in `CLAUDE.md` and the `agency-llm-docs` skill.
+
+### What PR 2 left for PR 3
+
+PR 2 built only what it uses. These parts of Tasks 10 and 11 are PR 3's
+to add, each with the part that needs it:
+
+- `ModelPlan` has no `lazy`, `needBytes`, or `stopsOnClose` yet. Add each
+  with parts B and C.
+- `RefusalReason` is `not-loaded` and `load-failed`. Parts B and D add
+  `not-enough-memory` and `stopping`, with their rows in
+  `STATUS_FOR_REFUSAL`.
+- `adminRoutes` has GET routes only, and the host check. Part C adds the
+  first POST route, and with it the JSON content-type rule.
+- `pool.stopAll()` signals every process and does not wait, as `close`
+  did before. Part D makes it wait.
+- `PoolDeps` has no `log` or `availableMemory`. Part B adds them.
 
 ## PR 3: on-demand loading, cancelling, and shutting down
 

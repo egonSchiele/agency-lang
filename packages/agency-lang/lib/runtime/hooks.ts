@@ -280,8 +280,9 @@ export function hasCallbackConsumer<K extends keyof CallbackMap>(
  *      `Runner.runInScope` frame seeded by the generated node body.
  *  Those sites pass `ctx` defensively (predating the ALS migration)
  *  and could be tightened in a follow-up by dropping the param and
- *  making it required-via-ALS again. The slot stays optional so
- *  external callers that have a ctx but no ALS frame still work. */
+ *  making it required-via-ALS again. Every caller needs an ALS frame
+ *  whether or not it passes `ctx`: `fireWithGuard` keeps its recursion
+ *  guard on the frame and throws when there is none. */
 export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   ctx?: RuntimeContext<any>;
   name: K;

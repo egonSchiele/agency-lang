@@ -473,10 +473,10 @@ export type RunSession = {
   ctx: any;
   stateStack: any;
   /** The parent's full ALS store frame captured at run() time. Forwarded
-   * callbacks (handleCallbackMessage) fire from the event-loop message handler,
-   * OUTSIDE any agencyStore frame; re-establishing this frame lets an
-   * AgencyFunction callback body resolve __globals()/__threads() against the
-   * parent's real globals, exactly as an in-process callback would. */
+   * callbacks (handleCallbackMessage) fire from the child's message listener.
+   * Entering this frame there means an AgencyFunction callback body resolves
+   * __globals()/__threads() against the parent's real globals, exactly as an
+   * in-process callback would, whatever frame the listener itself runs in. */
   parentStore?: any;
   resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
@@ -874,6 +874,12 @@ function attachStdoutForwarder(
   });
 }
 
+// This runs in the child's message listener and enters no frame of its own.
+// `runHandlerChain` needs one, for the handler chain depth and the
+// executing-handler list. It gets the frame that was active when the child
+// was started, because AsyncLocalStorage carries that frame into the
+// listener. If that frame were ever missing, the chain would throw and the
+// catch below would reject the interrupt.
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   const { effect, message, data, origin, expectsValue } = msg.interrupt;
   try {
@@ -1120,8 +1126,8 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
 
   const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
   // Fire within the parent's captured ALS frame so an AgencyFunction callback
-  // body resolves __globals()/__threads() against the parent's real state (we
-  // run from the event-loop message handler, outside any agencyStore frame).
+  // body resolves __globals()/__threads() against the parent's real state,
+  // whatever frame the child's message listener itself runs in.
   // Firing is fire-and-forget, but NOT bare `void`: fireWithGuard re-throws
   // AgencyAbort (a cost-guard trip or cancellation raised inside a parent
   // callback), so invokeCallbacks can reject. A bare void would orphan that as

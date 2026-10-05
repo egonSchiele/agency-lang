@@ -562,6 +562,56 @@ Upstream error messages can contain an invalid image's entire data URI.
 Agency's front door still logs request status and timings, and redacts
 image data from verbose request and response logs.
 
+## Use local models from TypeScript
+
+A TypeScript program can call the same server with no Agency code. Import from `agency-lang/local`:
+
+```ts
+import { listModels, generateImage, tagImage } from "agency-lang/local";
+import { writeFileSync } from "node:fs";
+
+const generated = await generateImage({
+  model: "z-image-turbo",
+  prompt: "a lighthouse in a storm",
+  size: "1024x1024",
+});
+if (!generated.success) {
+  throw new Error(generated.error);
+}
+writeFileSync("lighthouse.png", generated.value.bytes);
+
+const tags = await tagImage({ model: "wd14-tagger", image: generated.value.bytes });
+if (tags.success) {
+  console.log(tags.value.map((tag) => tag.tag).join(", "));
+}
+```
+
+Start the server first, with both models: `agency local serve z-image-turbo wd14-tagger`.
+
+`generateImage` takes the settings `generateImageLocal` takes, and `detectObjects`, `tagImage`, `captionImage`, `embedImage`, and `findRegions` take the settings of their `std::vision` namesakes. Each sends the request the stdlib function sends. Four things differ:
+
+- **No approvals.** The stdlib functions ask before they read a file, because a model may have chosen the file. Your program chose it, so these functions read it directly.
+- **An image is a path or bytes.** Pass `image: "page.png"` or `image: someUint8Array`. An image already in memory does not need to be written to a file first.
+- **The server's address is an option.** Pass `baseUrl: "http://127.0.0.1:8081/v1"` to call a server on another port. Without it, the functions use `client.baseUrl.mlx` in `agency.json`, then `MLX_BASE_URL`, then port 8080.
+- **A call can be cancelled.** Pass `signal` from an `AbortController`. Aborting it ends the call with the failure `Cancelled`.
+
+```ts
+const cancelButton = new AbortController();
+const pending = generateImage({ model, prompt, signal: cancelButton.signal });
+cancelButton.abort();
+const result = await pending; // { success: false, error: "generateImage failed: Cancelled" }
+```
+
+`listModels()` returns the models downloaded to this machine. Each entry has the model's `name`, `kind`, `family`, `directory`, size, and the aliases that point at it:
+
+```ts
+const imageModels = listModels().filter((model) => model.kind === "image" && model.complete);
+```
+
+`agency-lang/local` is the supported way in. Files under `agency-lang/stdlib-lib/` are internal to Agency, and their names change between releases.
+
+There is no chat function here. A chat model served by `agency local serve` answers the OpenAI chat API at the same address, so any OpenAI client works.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

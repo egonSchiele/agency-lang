@@ -4,6 +4,10 @@ import * as fs from "node:fs";
 import { describe, it, expect, afterAll } from "vitest";
 import {
   _localImageInputs,
+  encodedImageInput,
+  fieldValue,
+  localImageMode,
+  type ModeControls,
   MAX_CONTROL_IMAGE_BYTES,
   MAX_INPUT_IMAGE_BYTES,
   referenceCount,
@@ -238,5 +242,96 @@ describe("_localImageInputs", () => {
     expect(() => inpaint(pose, photo)).toThrow(
       `generateImageLocal failed: ${photo} is 21,000,000 bytes; the most generateImageLocal sends is ${MAX_INPUT_IMAGE_BYTES.toLocaleString("en-US")}.`,
     );
+  });
+});
+
+describe("localImageMode", () => {
+  const NO_CONTROLS: ModeControls = {
+    controlnet: "",
+    controlScale: null,
+    invertControlImage: false,
+    strength: null,
+  };
+  const counts = (given: Record<string, number>) => ({
+    control_image: 0,
+    images: 0,
+    start_image: 0,
+    mask_image: 0,
+    ...given,
+  });
+
+  it("is in no mode for a call with no input image", () => {
+    expect(localImageMode(counts({}), NO_CONTROLS, "generateImage")).toEqual({
+      fields: [],
+      settings: {},
+      references: 0,
+    });
+  });
+
+  it("counts the images the model reads at every step: references, and not a start image", () => {
+    const references = localImageMode(counts({ images: 2 }), NO_CONTROLS, "generateImage");
+    expect(references).toEqual({ fields: ["images"], settings: {}, references: 2 });
+    const redraw = localImageMode(
+      counts({ start_image: 1, mask_image: 1 }),
+      { ...NO_CONTROLS, strength: 0.4 },
+      "generateImage",
+    );
+    expect(redraw).toEqual({
+      fields: ["start_image", "mask_image"],
+      settings: { strength: 0.4 },
+      references: 0,
+    });
+  });
+
+  it("starts each refusal with the name of the function that called it", () => {
+    expect(() => localImageMode(counts({ images: 5 }), NO_CONTROLS, "generateImage")).toThrow(
+      "generateImage failed: images takes at most 4 images. This call has 5.",
+    );
+    expect(() => localImageMode(counts({ mask_image: 1 }), NO_CONTROLS, "generateImage")).toThrow(
+      "generateImage failed: mask goes with startImage, and this call has none.",
+    );
+  });
+});
+
+describe("encodedImageInput", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "encoded-input-")));
+  const pose = path.join(dir, "pose.png");
+  fs.writeFileSync(pose, "png bytes");
+  fs.symlinkSync(pose, path.join(dir, "linked.png"));
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const expected = Buffer.from("png bytes").toString("base64");
+
+  it("encodes a path and the same picture's bytes alike", () => {
+    expect(encodedImageInput(pose, 100, "tagImage")).toBe(expected);
+    expect(encodedImageInput(new Uint8Array(Buffer.from("png bytes")), 100, "tagImage")).toBe(
+      expected,
+    );
+  });
+
+  it("refuses bytes over the cap, and names the cap", () => {
+    expect(() => encodedImageInput(new Uint8Array(1_001), 1_000, "tagImage")).toThrow(
+      "the image is 1,001 bytes; the most tagImage sends is 1,000.",
+    );
+  });
+
+  it("refuses a path that is a symlink, a missing file, and a file over the cap", () => {
+    expect(() => encodedImageInput(path.join(dir, "linked.png"), 100, "tagImage")).toThrow();
+    expect(() => encodedImageInput(path.join(dir, "absent.png"), 100, "tagImage")).toThrow(
+      /no such file/,
+    );
+    expect(() => encodedImageInput(pose, 4, "tagImage")).toThrow(/the most tagImage sends is 4/);
+  });
+
+  it("refuses a URL or a data URI", () => {
+    const message = "tagImage reads files on this machine only.";
+    expect(() => encodedImageInput("https://example.com/a.png", 100, "tagImage")).toThrow(message);
+    expect(() => encodedImageInput("data:image/png;base64,AAAA", 100, "tagImage")).toThrow(message);
+  });
+});
+
+describe("fieldValue", () => {
+  it("is one string for a field that takes one image, and a list for one that takes several", () => {
+    expect(fieldValue("start_image", ["a"])).toBe("a");
+    expect(fieldValue("images", ["a"])).toEqual(["a"]);
   });
 });

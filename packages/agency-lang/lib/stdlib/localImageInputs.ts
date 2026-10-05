@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { _realTarget, wholePath, stat as statUnder } from "./contained.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
+import { approvedFileBytes } from "./approvedPath.js";
 
 /** The images a `generateImageLocal` request can carry, one row per request
  *  field. `INPUT_IMAGES` in lib/cli/diffusersImageRules.py is the same
@@ -172,7 +173,9 @@ export type LocalImageInputs = {
   settings: Record<string, unknown>;
 };
 
-const CALLER = "generateImageLocal";
+/** The name that starts a refusal the stdlib function gets. `generateImage`
+ *  in `agency-lang/local` passes its own name to the same checks. */
+const STDLIB_CALLER = "generateImageLocal";
 
 /** The request fields that say how to apply a ControlNet. A null scale is
  *  left out, so the server uses its default. */
@@ -203,23 +206,23 @@ function orList(names: string[]): string {
   return `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`;
 }
 
-function refusal(message: string): Error {
-  return new Error(`${CALLER} failed: ${message}`);
+function refusal(caller: string, message: string): Error {
+  return new Error(`${caller} failed: ${message}`);
 }
 
 /** A local path checked for the row's byte cap, with what its interrupt
  *  shows. A URL or a data URI is refused: the image server never fetches
  *  anything, so every input is a file on this machine. */
-function localImageFile(spelling: string, field: string): LocalImageFile {
+function localImageFile(spelling: string, field: string, caller: string): LocalImageFile {
   const row = LOCAL_IMAGE_FIELDS[field];
   if (isRemoteSource(spelling)) {
-    throw new Error(`${CALLER} reads files on this machine only.`);
+    throw new Error(`${caller} reads files on this machine only.`);
   }
   let real: string;
   try {
-    real = checkedImageFile(spelling, row.maxBytes, CALLER);
+    real = checkedImageFile(spelling, row.maxBytes, caller);
   } catch (err) {
-    throw refusal((err as Error).message);
+    throw refusal(caller, (err as Error).message);
   }
   return {
     field,
@@ -230,18 +233,125 @@ function localImageFile(spelling: string, field: string): LocalImageFile {
   };
 }
 
+/** How many of the images in these request fields the model reads at
+ *  every step. `fieldOfEachImage` has one entry per image. */
+function readEachStepCount(fieldOfEachImage: string[]): number {
+  return fieldOfEachImage.filter((field) => LOCAL_IMAGE_FIELDS[field].readEachStep).length;
+}
+
 /** How many images of `inputs` the model reads at every step, which the
  *  provider's timeout budgets for. 0 for a call with none. */
 export function referenceCount(inputs: LocalImageInputs): number {
-  return inputs.files.filter((file) => LOCAL_IMAGE_FIELDS[file.field].readEachStep).length;
+  return readEachStepCount(inputs.files.map((file) => file.field));
+}
+
+/** How many images a call gave for each request field, by field name:
+ *  `{ control_image: 0, images: 2, start_image: 0, mask_image: 0 }`. */
+export type ImageCounts = Record<string, number>;
+
+/** The settings of a call that belong to one mode or another. */
+export type ModeControls = {
+  controlnet: string;
+  controlScale: number | null;
+  invertControlImage: boolean;
+  strength: number | null;
+};
+
+/** Which kind of request a call makes, decided from how many images it
+ *  gave and no file.
+ *
+ *  fields      the request fields in play, the one that sets the size
+ *              first. Empty for a call with no input image
+ *  settings    the other request fields of the mode, such as `controlnet`
+ *  references  how many images the model reads at every step, for the
+ *              timeout */
+export type LocalImageMode = {
+  fields: string[];
+  settings: Record<string, unknown>;
+  references: number;
+};
+
+/** The checks on a call's input images that need no file: whether the
+ *  inputs go together, whether the strength is in range, that the call is
+ *  in one mode, and that no field has too many images. Throws with the
+ *  message to fail with, which starts with `caller`. The messages match
+ *  the image server's, with the parameters' names for the request
+ *  fields'. */
+export function localImageMode(
+  counts: ImageCounts,
+  controls: ModeControls,
+  caller: string,
+): LocalImageMode {
+  const { controlnet, controlScale, invertControlImage, strength } = controls;
+  const has = (field: string) => (counts[field] ?? 0) > 0;
+  if ((controlnet !== "") !== has("control_image")) {
+    throw refusal(
+      caller,
+      "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
+    );
+  }
+  // The mask is checked first, as the server does, so a call with a mask
+  // and a strength but no start image hears about the mask.
+  if (has("mask_image") && !has("start_image")) {
+    throw refusal(caller, "mask goes with startImage, and this call has none.");
+  }
+  if (strength !== null && !has("start_image")) {
+    throw refusal(caller, "strength goes with startImage, and this call has none.");
+  }
+  // The server makes this check too, but after the file is approved and
+  // read. Written so that NaN is refused.
+  if (strength !== null && !(strength > 0 && strength <= 1)) {
+    throw refusal(
+      caller,
+      "strength must be a number above 0 and at most 1. Low keeps the start image close.",
+    );
+  }
+  // The other request fields of each image field's mode.
+  const settingsOf: Record<string, Record<string, unknown>> = {
+    control_image: controlSettings(controlnet, controlScale, invertControlImage),
+    images: {},
+    start_image: strengthSettings(strength),
+    mask_image: {},
+  };
+  const names = Object.keys(LOCAL_IMAGE_FIELDS);
+  // A field that goes with another, such as the mask, is not a choice of
+  // its own: it comes along with its partner.
+  const leads = names.filter((field) => LOCAL_IMAGE_FIELDS[field].goesWith === undefined);
+  const given = leads.filter(has);
+  if (given.length === 0) {
+    return { fields: [], settings: {}, references: 0 };
+  }
+  if (given.length > 1) {
+    const parameters = leads.map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
+    throw refusal(caller, `a call takes one of ${orList(parameters)}.`);
+  }
+  const fields = [
+    given[0],
+    ...names.filter((field) => LOCAL_IMAGE_FIELDS[field].goesWith === given[0] && has(field)),
+  ];
+  for (const field of fields) {
+    const row = LOCAL_IMAGE_FIELDS[field];
+    if (counts[field] > row.maxCount) {
+      throw refusal(
+        caller,
+        `${row.parameter} takes at most ${row.maxCount} images. This call has ${counts[field]}.`,
+      );
+    }
+  }
+  return {
+    fields,
+    settings: Object.assign({}, ...fields.map((field) => settingsOf[field])),
+    references: readEachStepCount(
+      fields.flatMap((field) => Array.from({ length: counts[field] }, () => field)),
+    ),
+  };
 }
 
 /** Backs the checks `generateImageLocal` makes before it asks anything:
  *  which input images the call has, whether they go together, whether
  *  there are too many, and whether each path is a local image file under
  *  its field's size cap. Returns the files to raise std::readImage for.
- *  Throws with the message to fail with. The messages match the image
- *  server's, with the parameters' names for the request fields'. */
+ *  Throws with the message to fail with. */
 export function _localImageInputs(
   controlnet: string,
   controlImage: string,
@@ -252,70 +362,57 @@ export function _localImageInputs(
   strength: number | null,
   mask: string,
 ): LocalImageInputs {
-  if ((controlnet === "") !== (controlImage === "")) {
-    throw refusal(
-      "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
-    );
-  }
-  // The mask is checked first, as the server does, so a call with a mask
-  // and a strength but no start image hears about the mask.
-  if (mask !== "" && startImage === "") {
-    throw refusal("mask goes with startImage, and this call has none.");
-  }
-  if (strength !== null && startImage === "") {
-    throw refusal("strength goes with startImage, and this call has none.");
-  }
-  // The server makes this check too, but after the file is approved and
-  // read. Written so that NaN is refused.
-  if (strength !== null && !(strength > 0 && strength <= 1)) {
-    throw refusal(
-      "strength must be a number above 0 and at most 1. Low keeps the start image close.",
-    );
-  }
   const paths: Record<string, string[]> = {
     control_image: controlImage === "" ? [] : [controlImage],
     images,
     start_image: startImage === "" ? [] : [startImage],
     mask_image: mask === "" ? [] : [mask],
   };
-  // The other request fields of each image field's mode.
-  const settingsOf: Record<string, Record<string, unknown>> = {
-    control_image: controlSettings(controlnet, controlScale, invertControlImage),
-    images: {},
-    start_image: strengthSettings(strength),
-    mask_image: {},
-  };
-  // A field that goes with another, such as the mask, is not a choice of
-  // its own: it comes along with its partner.
-  const leads = Object.keys(paths).filter(
-    (field) => LOCAL_IMAGE_FIELDS[field].goesWith === undefined,
+  const counts = Object.fromEntries(
+    Object.entries(paths).map(([field, given]) => [field, given.length]),
   );
-  const given = leads.filter((field) => paths[field].length > 0);
-  if (given.length === 0) {
-    return { files: [], settings: {} };
-  }
-  if (given.length > 1) {
-    const names = leads.map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
-    throw refusal(`a call takes one of ${orList(names)}.`);
-  }
-  const fields = [
-    given[0],
-    ...Object.keys(paths).filter(
-      (field) => LOCAL_IMAGE_FIELDS[field].goesWith === given[0] && paths[field].length > 0,
-    ),
-  ];
-  for (const field of fields) {
-    const row = LOCAL_IMAGE_FIELDS[field];
-    if (paths[field].length > row.maxCount) {
-      throw refusal(
-        `${row.parameter} takes at most ${row.maxCount} images. This call has ${paths[field].length}.`,
-      );
-    }
-  }
+  const mode = localImageMode(
+    counts,
+    { controlnet, controlScale, invertControlImage, strength },
+    STDLIB_CALLER,
+  );
   return {
-    files: fields.flatMap((field) =>
-      paths[field].map((spelling) => localImageFile(spelling, field)),
+    files: mode.fields.flatMap((field) =>
+      paths[field].map((spelling) => localImageFile(spelling, field, STDLIB_CALLER)),
     ),
-    settings: Object.assign({}, ...fields.map((field) => settingsOf[field])),
+    settings: mode.settings,
   };
+}
+
+/** The value a request field carries for its images, each already
+ *  base64: one string when the field takes one image, a list otherwise. */
+export function fieldValue(field: string, encoded: string[]): string | string[] {
+  return LOCAL_IMAGE_FIELDS[field].maxCount === 1 ? encoded[0] : encoded;
+}
+
+/** One input image as base64, from a path or from the image's bytes, at
+ *  most `maxBytes` either way. For the functions `agency-lang/local`
+ *  exports, which take both and raise no interrupt.
+ *
+ *  A path goes through the same checks a stdlib input does: a file on
+ *  this machine, an image extension, a regular file, no symlink, and a
+ *  read through the contained-files module. Throws with the reason. */
+export function encodedImageInput(
+  input: string | Uint8Array,
+  maxBytes: number,
+  caller: string,
+): string {
+  if (typeof input === "string") {
+    if (isRemoteSource(input)) {
+      throw new Error(`${caller} reads files on this machine only.`);
+    }
+    const real = checkedImageFile(input, maxBytes, caller);
+    return approvedFileBytes(real, maxBytes).toString("base64");
+  }
+  if (input.length > maxBytes) {
+    throw new Error(
+      `the image is ${input.length.toLocaleString("en-US")} bytes; the most ${caller} sends is ${maxBytes.toLocaleString("en-US")}.`,
+    );
+  }
+  return Buffer.from(input).toString("base64");
 }

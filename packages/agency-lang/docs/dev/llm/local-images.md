@@ -12,7 +12,8 @@ preserve when changing them.
 | `stdlib/image.agency` | Public functions and approval interrupts |
 | `lib/stdlib/image.ts` | Input validation, approved file reads, dispatch, and usage accounting |
 | `lib/stdlib/localImageInputs.ts` | The stdlib's copy of the input image table, the checks made before approval, and the body limit |
-| `lib/stdlib/mlxImage.ts` | The local image provider and request timeouts |
+| `lib/stdlib/mlxImage.ts` | The local image provider, the request's checks and body, and request timeouts |
+| `lib/stdlib/localRequest.ts` | `postLocalJson`, the one function that posts to the local server |
 | `lib/cli/diffusersImageServer.py` | Model loading and image generation |
 | `lib/cli/diffusersImageRules.py` | Supported families, the input image table, request validation, size arithmetic, and adapter bookkeeping |
 | `lib/cli/localServerCommon.py` | Shared HTTP helpers and image byte validation |
@@ -489,7 +490,9 @@ function's own effect.
 
 A call with input images keeps this order:
 
-1. `_localImageInputs` makes every check that can fail. It refuses a
+1. `_localImageInputs` makes every check that can fail. The checks that
+   need no file are in `localImageMode`, which `generateImage` in
+   `agency-lang/local` runs too. Together they refuse a
    `controlnet` without a `controlImage` and the reverse, a `strength`
    without a `startImage`, a `strength` that is not above 0 and at most
    1, input images of two modes, more images than the field's `maxCount`, a URL or data URI,
@@ -613,6 +616,10 @@ endpoint, including its diffusers processes.
 The provider sends no API key and reports zero cost. It does not retry
 failed requests. It reads generation options from `config.metadata` and
 returns the server's seed with the image.
+
+`localImageBody` is the only place a request body is built, and
+`postLocalImage` posts it. `generateImage` in `agency-lang/local` calls
+both directly, with no run. See `docs/dev/llm/local-typescript-api.md`.
 
 Both public image functions dispatch through `generateOne` in
 `lib/stdlib/image.ts`. This shares usage accounting, the `imageGeneration`

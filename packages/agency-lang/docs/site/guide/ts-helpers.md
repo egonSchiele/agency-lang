@@ -17,11 +17,31 @@ There are no individual named exports for the helpers — `agency.<method>` is t
 
 ## When a TS helper "participates" in a run
 
-Every method on `agency.*` reads its dependencies from an [AsyncLocalStorage](https://nodejs.org/api/async_context.html) frame the runtime installs around each Agency execution step. When you call a TS function from Agency code, that frame is already in place — your helper sees the same `ctx`, `stack`, and `ThreadStore` the surrounding Agency function saw.
+When Agency code calls a TypeScript function, the runtime makes the current run available to it. Every `agency.*` method reads that run.
 
-The corollary: most `agency.*` methods **throw if called outside an Agency frame**. Calling `agency.thread.current()` from a script's top level, or from a setTimeout callback that escaped the run, raises a clear error pointing at the cause. For the lax-read methods (`agency.ctxMaybe()`, `agency.thread.storeMaybe()`), the throw is replaced with `undefined`.
+```ts
+export async function chargeLater(amount: number): Promise<void> {
+  const run = agency.current(); // first line, before any await
+  await wait(50);
+  run.addCost(amount);
+}
+```
 
-The one place this contract is relaxed is `agency.withTestContext({ctx, stack, threads}, fn)` — covered in [Testing TS helpers](#testing-ts-helpers).
+There is one rule. **The run is only current until your function's first `await`.** After that, `agency.*` methods throw:
+
+```
+No run is current here. There are two ways this happens.
+1. The run was read after an await. ...
+2. The code was not called by Agency at all. ...
+```
+
+So a helper that awaits takes a handle with `agency.current()` on its first line, and uses the handle afterwards. See [The handle](#the-handle-agency-current).
+
+A helper that never awaits, or that calls `agency.*` only before its first `await`, needs no handle.
+
+Most `agency.*` methods also throw when Agency did not call the code at all, such as at a script's top level or in a `setTimeout` callback. The lax methods, `agency.ctxMaybe()` and `agency.thread.storeMaybe()`, return `undefined` there. They also return `undefined` after an `await`, and cannot tell the two cases apart, so call them on the first line too.
+
+The one place this contract is relaxed is `agency.withTestContext({ctx, stack, threads}, fn)`, covered in [Testing TS helpers](#testing-ts-helpers).
 
 ## Setup
 
@@ -47,7 +67,53 @@ node main(name: string) {
 }
 ```
 
-The compiled `main.js` calls `greetingPrompt(name)` from inside an active Runner step; the ALS frame is already installed, so `agency.thread.current()` resolves.
+`greetingPrompt` does not await anything, so `agency.thread.current()` finds the run.
+
+---
+
+## The handle: `agency.current()` {#the-handle-agency-current}
+
+`agency.current()` returns a handle on the run your helper was called under. Take it on the first line. The handle keeps working after an `await`.
+
+```ts
+import { agency } from "agency-lang/runtime";
+
+export async function fakeRepl(onSubmit, lines: string[]) {
+  const run = agency.current();
+  for (const line of lines) {
+    await run.call(onSubmit, line);
+  }
+}
+```
+
+| On the handle | What it does |
+| --- | --- |
+| `run.call(fn, ...args)` | Call an Agency function or a plain function under this run |
+| `run.callWith(fn, descriptor)` | The same, with named arguments or a trailing block |
+| `run.interrupt(opts)` | `agency.interrupt`, raised from this run |
+| `run.addCost(amount)`, `run.addTokens(amount)` | Charge this run |
+| `run.ctx`, `run.stack`, `run.threads` | The run's context, branch stack, and thread store |
+
+`run.call` is how a helper reaches the rest of `agency.*` after an `await`. It calls the function with the run current again, so the function's own first line can use `agency.*`:
+
+```ts
+export async function twoPrompts(question: string) {
+  const run = agency.current();
+  const brief = await agency.llm("Be brief: " + question);
+  const longer = await run.call(() => agency.llm("Now elaborate: " + question));
+  return { brief, longer };
+}
+```
+
+The first `agency.llm` is before any `await`, so it works directly. The second is after one, so it goes through `run.call`.
+
+Two calls can be in flight through one handle at once:
+
+```ts
+const [first, second] = await Promise.all([run.call(a), run.call(b)]);
+```
+
+A handle stays usable after your helper returns. By then the run may have moved on, so work that outlives its helper should not expect to raise interrupts or see new thread messages.
 
 ---
 
@@ -55,7 +121,8 @@ The compiled `main.js` calls `greetingPrompt(name)` from inside an active Runner
 
 | Method | Returns | Throws? |
 | --- | --- | --- |
-| `agency.ctx()` | active `RuntimeContext` | yes, outside a frame |
+| `agency.current()` | a handle on the current run | yes, with no current run |
+| `agency.ctx()` | active `RuntimeContext` | yes, with no current run |
 | `agency.ctxMaybe()` | `RuntimeContext \| undefined` | no |
 | `agency.callsite()` | `CallsiteLocation \| undefined` | no |
 | `agency.global<T>(name, moduleId?)` | the named module global | yes |
@@ -262,11 +329,14 @@ Install a `CostGuard` / `TimeGuard` on the active branch's stack for the duratio
 These install the exact same runtime guards the Agency `guard(...) { }` construct does, and their trips are just as resumable. One difference: they are invisible to the static `raises` analysis. The construct marks its containing function as raising `std::guard`; a guard installed from TypeScript cannot, the same way any interrupt raised from TypeScript is invisible to `raises`. The runtime is the backstop, as everywhere at the TS boundary.
 
 ```ts
+const run = agency.current();
 await agency.withCostGuard(0.05, async () => {
   await agency.llm("Be brief: " + question);
-  await agency.llm("Now elaborate slightly: " + question);
+  await run.call(() => agency.llm("Now elaborate slightly: " + question));
 });
 ```
+
+The callback is not handed a handle of its own. Its first `agency.*` call works directly, and a call after an `await` goes through a handle taken earlier.
 
 ### `agency.withLock(name, fn, opts?)`
 
@@ -295,22 +365,25 @@ Locks are non-reentrant for the same `ownerId`. They are released in `finally`, 
 Add USD spend to the active branch and bill all guards. Use this when a TS helper wraps its own paid call site (a custom LLM client, a third-party API) and wants the cost to participate in `agency.withCostGuard` / cost reporting the same way `agency.llm` does.
 
 ```ts
+const run = agency.current();
 const { tokens, cost } = await myCustomLLM(prompt);
-agency.addCost(cost);
+run.addCost(cost);
 ```
+
+`agency.addCost(cost)` would throw here, because the paid call was awaited first.
 
 ### Respecting cancellation (the abort signal)
 
 When a [time guard](/guide/guards#timeout) trips, a `race` loses, or the run is cancelled (`ctx.cancel()` / the REPL's Esc), the runtime fires an `AbortSignal`. In-flight `agency.llm`, `fetch`, `sleep`, and `input` calls already observe it and unwind on their own. **A TS helper (or JS-bodied tool) that runs its own long loop or I/O must observe it too** — otherwise it runs to completion after a trip, the "JS-bodied work can't be aborted mid-execution" limitation described in [Guards](/guide/guards#limitations-v1).
 
-There is no `agency.*` shortcut for this; read the composed signal from the low-level `getRuntimeContext()` export:
+Read the signal from the handle:
 
 ```ts
-import { getRuntimeContext } from "agency-lang/runtime";
+import { agency } from "agency-lang/runtime";
 
 export async function fetchAll(urls: string[]): Promise<string[]> {
-  const { ctx, stack } = getRuntimeContext();
-  const signal = ctx.getAbortSignal(stack);
+  const run = agency.current();
+  const signal = run.ctx.getAbortSignal(run.stack);
 
   // Pass it straight into anything AbortSignal-aware:
   return Promise.all(
@@ -322,8 +395,8 @@ export async function fetchAll(urls: string[]): Promise<string[]> {
 For a compute loop with no natural `AbortSignal` sink, poll `signal.aborted` and bail cooperatively:
 
 ```ts
-const { ctx, stack } = getRuntimeContext();
-const signal = ctx.getAbortSignal(stack);
+const run = agency.current();
+const signal = run.ctx.getAbortSignal(run.stack);
 for (const item of items) {
   if (signal.aborted) throw new Error("aborted"); // or return a partial result
   heavyWork(item);
@@ -332,7 +405,7 @@ for (const item of items) {
 
 Notes:
 
-- **Use `getRuntimeContext().stack`, not `ctx.stateStack`.** `ctx.getAbortSignal(stack)` composes the run-level cancel signal with the guard/race signals installed on the *active branch* stack. Inside a `fork`/`race` branch those two stacks differ — the same reason `agency.withCostGuard` / `agency.withTimeGuard` install on `getRuntimeContext().stack`. Passing the branch stack ensures a branch-local time guard is honored.
+- **Use `run.stack`, not `ctx.stateStack`.** `ctx.getAbortSignal(stack)` composes the run-level cancel signal with the guard and race signals installed on the branch's stack. Inside a `fork` or `race` branch those two stacks differ. Passing the branch stack means a time guard on that branch is honored.
 - The signal fires for **every** cancellation source — time-guard trip, race loss, `cancel()`, Esc. (Cost guards are the exception: they enforce at LLM-call boundaries and do **not** fire this signal.) Treat "aborted" as "stop and unwind."
 - This is a **cooperative** hook. A synchronous CPU-bound loop that never checks `signal.aborted` still runs to completion; the runtime cannot preempt it.
 
@@ -506,7 +579,7 @@ Pick whichever reads better for the task. Agency wins when the workflow uses nam
 
 ## Testing TS helpers
 
-`agency.withTestContext({ctx, stack, threads}, fn)` installs an ALS frame from explicit dependencies so unit tests can exercise TS helpers directly:
+`agency.withTestContext({ctx, stack, threads}, fn)` builds a run from explicit dependencies so unit tests can exercise TS helpers directly. `fn` is handed the run, and the run is current until `fn`'s first `await`:
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -537,6 +610,7 @@ describe("greetingPrompt", () => {
 
 ## Anti-patterns
 
+- **Calling `agency.*` after an `await`.** It throws. Take `agency.current()` on the first line and use the handle.
 - **Calling thread builtins from module-init scope.** Module top-level code runs inside a bootstrap frame whose `ThreadStore` is a sentinel — every method throws. If you have setup work that needs the thread, defer it into the first node body.
 - **Non-determinism inside `s.step` bodies.** `Math.random`, `Date.now`, reading mutable module-level state — all break the resume contract. Capture those values into a `s.step(() => Date.now())` so the captured value is cached and re-used on resume.
 - **Mutating module-level state from inside steps without `s.setLocal`.** Frame-locals are serialized into the checkpoint and restored on resume. Module-level mutations are not. Use `s.setLocal` for anything that needs to survive resume.
@@ -549,6 +623,7 @@ describe("greetingPrompt", () => {
 ## Reference: namespace at a glance
 
 ```ts
+agency.current()                          // a handle on the current run
 agency.ctx()                              // active RuntimeContext
 agency.ctxMaybe()                         // RuntimeContext | undefined
 agency.callsite()                         // CallsiteLocation | undefined
@@ -578,12 +653,14 @@ agency.withResumableScope(opts, body)     // Temporal-style resumable scope
 agency.withTestContext({ctx,stack,threads}, fn)  // (test only)
 ```
 
-Cancellation is the one hook without an `agency.*` shortcut — read the composed abort signal via the low-level export:
+On the handle from `agency.current()`:
 
 ```ts
-import { getRuntimeContext } from "agency-lang/runtime";
-const { ctx, stack } = getRuntimeContext();
-const signal = ctx.getAbortSignal(stack);   // fires on time-guard trip, race loss, cancel/Esc
+run.call(fn, ...args)                     // call under this run, also after an await
+run.callWith(fn, descriptor)              // the same, with named args or a block
+run.interrupt(opts)                       // raise an interrupt
+run.addCost(amount) / run.addTokens(n)    // charge this run
+run.ctx.getAbortSignal(run.stack)         // fires on time-guard trip, race loss, cancel/Esc
 ```
 
 For the broader interop story (cancelling agents, importing Agency code from TS, gotchas around serializability), see [TypeScript Interoperability](/guide/ts-interop).

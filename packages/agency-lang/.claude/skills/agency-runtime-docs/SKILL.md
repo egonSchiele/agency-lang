@@ -22,7 +22,8 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
-- `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
+- `docs/dev/runtime/async-context.md` — The `Run` value that carries runtime state as an ordinary argument: what it holds, where runs come from, `callPlain` and `currentRun()` for functions that take no run, the lenient read, the lint check, the wrong-run check, logging, and stored callbacks.
+- `docs/dev/runtime/running-without-node.md` — The goals for running Agency outside Node, the rule about branching between targets, and the decision to pass the run explicitly in place of `AsyncLocalStorage`, with what it cost and what was set aside.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
 - `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.

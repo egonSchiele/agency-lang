@@ -911,6 +911,106 @@ The task list below is kept as it was written.
 
 ### Phase 3: remove `AsyncLocalStorage`.
 
+#### Phase 3 is built
+
+Branch `explicit-run-phase-3`, stacked on `explicit-run-phase-2`. Built on
+2026-10-05.
+
+What the phase did, in the order it was built:
+
+1. **`run.interrupt` on the handle, and the missing tests**, written as
+   predictions and run before anything was deleted.
+2. **The span methods came off the bare logging client's type**
+   (`RootLog`), so a span opened on the shared root stack from inside a
+   branch is a compile error. This was added to the phase at the owner's
+   request. See step 1a of the Phase 3 handoff.
+3. **The lint check** (Task 16), `scripts/lint-run-reads.mjs`, run by
+   `pnpm run lint:structure`. It replaces `scripts/audit-run-reads.mjs`,
+   which audited `AsyncLocalStorage` reads and now finds none.
+4. **`AsyncLocalStorage` was deleted** (Task 15): `agencyStore`, `sameRun`
+   and its 17 call sites, `WrongRunError`, `requireFrame`, `ambientRun`,
+   the four `__threads()`-style accessors, and the logging client's
+   `spanStorage`. `withRun(run, fn)` is `callPlain(run, fn, [run])`.
+5. **The reads with no caller** became `currentRunOrNone()`, the lenient
+   read of the module variable. `docs/dev/runtime/async-context.md` lists
+   every one with what a missing run means for it.
+6. **Console capture** follows Decision 9.
+7. **The unit tests** moved off the hidden frame.
+8. **The docs** (Task 18).
+
+Where the build differs from the task list below:
+
+1. **No generator change and no fixture rebuild.** Task 15 says to remove
+   the two frames generated code installs. Phase 2 had already replaced
+   them with `__withChildRun` and `__detachedRun`, which never named
+   `AsyncLocalStorage`.
+2. **`testRun()` stayed.** The handoff said it could not survive. It now
+   returns the test's root run from a test-only variable that
+   `inTestFrame`, `inFrameOf`, `withTestFrame`, and `asRootRun` set. A
+   nested use of the root run fails with `RunInUseError`, so the tests
+   that nested were changed to pass the inner run.
+3. **The lenient reads stayed lenient.** After a helper's first `await`
+   they return the same answer as outside a run. This is the fault the
+   plan holds against PR #1167, kept here for a named list of reads that
+   each have a harmless answer. The lint check reports any of them in
+   `lib/` that could run after an `await`, and reports none.
+4. **A batched round of decision calls redacts with the block's tags.**
+   It used the tags of whichever arm triggered the round, which it found
+   through the hidden frame. The round's log post carries a fork id, a
+   reason, group sizes, and a duration.
+5. **Of the eight tests in Task 17**, four were written and four already
+   existed: the fork-global test and the wrong-run tests (found by the
+   handoff), two runs paused and resumed together
+   (`tests/agency-js/concurrent-interrupt-isolation`), and memory spending
+   against a cost guard (`lib/runtime/memory/manager.test.ts`).
+6. **Rule 2 has no compile-time check.** The plan says the code generator
+   fails the compile when a body handed to the runtime has no `__run`.
+   That was never built, in Phase 2 or here.
+
+Two logging losses, both silent:
+
+- `_registerLocalProvider` logs `localModelLoaded` only when it is called
+  before an `await`. The memory manager and the `--local` flag call it
+  after one, so those paths no longer log the event.
+- The function-ref reviver's miss is logged at revive time only when the
+  restore is still in its synchronous part. The stub still reports when
+  something calls it.
+
+Not done: the callbacks of `agency.withHandler`, `withCostGuard`,
+`withTimeGuard`, `withLock`, and `thread.with` are still not handed a
+handle. The guide shows the pattern that works: take `agency.current()`
+first, and use `run.call` after an `await`.
+
+Not swept: about 190 comments in `lib/`, and about fifteen developer docs
+outside the ones Task 18 names, still describe frames found through
+`AsyncLocalStorage`. Most were already out of date after Phase 2.
+
+The browser bundle check passes with smoltalk left out of the bundle and
+fails with it in. See "How it was checked" in
+`docs/dev/runtime/running-without-node.md`.
+
+Size, in changed lines (added plus removed), against the Phase 2 branch:
+
+| | Lines |
+| --- | --- |
+| Generated | 3 |
+| Runtime source | about 720 |
+| Standard library helpers | about 140 |
+| Lint script added, audit script removed | about 690 |
+| Hand-written tests | about 930 |
+| Plans and docs | about 1,200 |
+| **Total** | **about 3,700** |
+
+The handoff estimated 2,000 to 3,000. The three phases together are about
+24,800 changed lines, of which about 10,400 are generated.
+
+Verified locally: `typecheck`, `lint:structure`, `fmt:ts`, the unit suite
+(15,250 tests), the Agency-js suite (191), and the `ts-helpers`,
+`handlers`, `handler-lineage`, `fork`, `subprocess`, `guards`, `threads`,
+`memory`, `substeps`, `blocks`, and `agents` folders of the Agency suite.
+
+The task list below is kept as it was written.
+
 - [ ] **Task 15. Delete it.** Remove `agencyStore`, the `agencyStore.run`
       half of each installer, `sameRun`, the stored-callback comparisons,
       and the two frames generated code installs. Nothing imports

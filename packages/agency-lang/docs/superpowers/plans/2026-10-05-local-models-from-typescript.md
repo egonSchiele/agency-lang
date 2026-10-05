@@ -1366,7 +1366,8 @@ Update the spec to match before starting the PR each one belongs to.
 2. **The public result type is defined by the entry point** (PR 1). It
    is `{ success: true, value } | { success: false, error }`, not the
    runtime's or smoltalk's. Done in the spec, along with a `seed` that
-   may be null and the optional models folder `listModels` takes.
+   may be null, and `listModels` described as the downloaded models
+   only.
 3. **Processes that exit with the server ship first in their PR, not last** (PR 3, part A),
    and the watcher runs only when `AGENCY_EXIT_WITH_PARENT=1`.
 4. **The pipe test does not start the real image server script** (PR 3, part A).

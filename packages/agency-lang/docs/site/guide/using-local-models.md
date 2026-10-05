@@ -602,7 +602,7 @@ cancelButton.abort();
 const result = await pending; // { success: false, error: "generateImage failed: Cancelled" }
 ```
 
-`listModels()` returns the models on this machine, the same list `agency local list` prints. Each entry has the model's `name`, `kind`, `family`, `directory`, size, and the aliases that point at it:
+`listModels()` returns the models downloaded to this machine. Each entry has the model's `name`, `kind`, `family`, `directory`, size, and the aliases that point at it:
 
 ```ts
 const imageModels = listModels().filter((model) => model.kind === "image" && model.complete);

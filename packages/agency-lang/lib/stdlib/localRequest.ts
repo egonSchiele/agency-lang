@@ -1,9 +1,8 @@
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 
-/** The one function that posts a request to the server `agency local
- *  serve` runs. The image provider and the vision helpers both go through
- *  it, and so do the functions `agency-lang/local` exports, which is how a
- *  plain TypeScript program gets the same request the stdlib sends. */
+/** Posting a request to the server `agency local serve` runs. Every
+ *  caller goes through `postLocalJson`: the image provider, the vision
+ *  helpers, and the functions `agency-lang/local` exports. */
 
 /** Where to send one request, and how its caller cancels it.
  *

@@ -173,9 +173,8 @@ export type LocalImageInputs = {
   settings: Record<string, unknown>;
 };
 
-/** The stdlib function these checks were written for. Its name starts
- *  every refusal it gets. `generateImage` in `agency-lang/local` passes its
- *  own name to the same checks. */
+/** The name that starts a refusal the stdlib function gets. `generateImage`
+ *  in `agency-lang/local` passes its own name to the same checks. */
 const STDLIB_CALLER = "generateImageLocal";
 
 /** The request fields that say how to apply a ControlNet. A null scale is
@@ -285,7 +284,7 @@ export function localImageMode(
 ): LocalImageMode {
   const { controlnet, controlScale, invertControlImage, strength } = controls;
   const has = (field: string) => (counts[field] ?? 0) > 0;
-  if ((controlnet === "") === has("control_image")) {
+  if ((controlnet !== "") !== has("control_image")) {
     throw refusal(
       caller,
       "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",

@@ -15,7 +15,7 @@ import {
   type Backend,
 } from "../stdlib/modelBackend.js";
 
-/** One model on this machine, as `agency local list` prints it.
+/** One model downloaded to this machine.
  *
  *  name       the name `serve` and the call functions take
  *  aliases    every alias in `agency.json` that points at this model
@@ -65,11 +65,15 @@ function familyOf(directory: string): string | null {
 }
 
 /** Whether an alias's target is this model: a served URI that names its
- *  backend and repo, or a path that is its file or folder. */
+ *  backend and repo, or a path that is its file or folder. A URI pinned to
+ *  a revision, `mlx:org/repo@abc123`, matches only the download at that
+ *  revision. The pin may be the start of the commit, as it may anywhere
+ *  else a revision is written. */
 function aliasPointsAt(target: string, model: DownloadedModel, directory: string): boolean {
   if (isServedUri(target)) {
-    const { backend, repo } = parseServedUri(target);
-    return backend === model.backend && repo === model.name;
+    const { backend, repo, revision } = parseServedUri(target);
+    const sameRevision = revision === undefined || (model.revision ?? "").startsWith(revision);
+    return backend === model.backend && repo === model.name && sameRevision;
   }
   const resolved = path.resolve(target);
   return [model.path, directory].includes(resolved) || modelDirectory(resolved) === directory;
@@ -88,19 +92,17 @@ function aliasesOf(
     }));
 }
 
-/** Every model downloaded to this machine, the same list `agency local
- *  list` prints.
+/** Every model downloaded to this machine. `agency local list` prints
+ *  these and also the catalog's models that are not downloaded, which this
+ *  leaves out.
  *
  *  Some entries are listed but cannot be served: a GGUF file (the backend
  *  `llama-cpp`), a ControlNet (the kind `controlnet`), and a download that
  *  is not complete. `serve` and the call functions take the `name` of
- *  every other entry.
- *
- *  `cacheDir` is the models folder to read. Leave it out to read the one
- *  Agency is configured with. */
-export function listModels(cacheDir: string = ""): LocalModel[] {
+ *  every other entry. */
+export function listModels(): LocalModel[] {
   const aliases = readModelAliases();
-  return _listDownloadedModels(cacheDir).map((model) => {
+  return _listDownloadedModels().map((model) => {
     const directory = modelDirectory(model.path);
     return {
       name: model.name,

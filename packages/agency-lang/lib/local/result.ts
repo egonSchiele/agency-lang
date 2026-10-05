@@ -8,11 +8,7 @@
  *  } else {
  *    console.error(tags.error);
  *  }
- *  ```
- *
- *  It is a plain type of its own. The Agency runtime and smoltalk each
- *  have a result type with more in it, and neither is part of this entry
- *  point. */
+ *  ``` */
 export type Result<T> = { success: true; value: T } | { success: false; error: string };
 
 export function success<T>(value: T): Result<T> {

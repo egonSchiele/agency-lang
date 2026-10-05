@@ -113,6 +113,17 @@ describe("listModels", () => {
     ]);
   });
 
+  it("matches an alias pinned to a revision only against the download at that revision", () => {
+    mlxModel("org/chat");
+    setAliases({
+      current: "mlx:org/chat@abc",
+      older: "mlx:org/chat@fff999",
+    });
+    expect(listModels().find((model) => model.name === "org/chat")?.aliases).toEqual([
+      { name: "current", description: "" },
+    ]);
+  });
+
   it("gives every complete MLX or diffusers model a name that resolves", () => {
     mlxModel("org/chat");
     diffusersModel("org/image");

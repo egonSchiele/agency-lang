@@ -1,8 +1,8 @@
 # Local models from TypeScript: `agency-lang/local`
 
 `agency-lang/local` is the entry point for a TypeScript program that uses
-local models and has no Agency code. It lists the models on the machine
-and calls the server `agency local serve` runs:
+local models and has no Agency code. It lists the models downloaded to
+the machine and calls the server `agency local serve` runs:
 
 ```ts
 import { listModels, generateImage, tagImage } from "agency-lang/local";
@@ -17,17 +17,13 @@ if (generated.success) {
 }
 ```
 
-The spec is `docs/superpowers/specs/2026-10-05-local-models-from-typescript.md`
-and the plan is `docs/superpowers/plans/2026-10-05-local-models-from-typescript.md`.
-This doc covers the first part, which has shipped: listing and calling.
-Starting a server from TypeScript, on-demand loading, and cancelling a
-model's work come in later parts of that plan.
+The spec is `docs/superpowers/specs/2026-10-05-local-models-from-typescript.md`.
 
 ## Source files
 
 | File | Responsibility |
 |---|---|
-| `lib/local/public.ts` | What the entry point exports, and nothing else |
+| `lib/local/public.ts` | What the entry point exports |
 | `lib/local/result.ts` | The `Result` type every call returns |
 | `lib/local/models.ts` | `listModels` |
 | `lib/local/calls.ts` | `generateImage` and the five vision functions |
@@ -37,26 +33,15 @@ model's work come in later parts of that plan.
 | `lib/stdlib/localImageInputs.ts` | Which input images go together, and an input as base64 |
 
 The `./local` entry in `package.json` points at `lib/local/public.ts`.
-
-## Why it exists
-
-Before this entry point, a TypeScript app that wanted a local image did
-two things it should not have had to do.
-
-1. It wrote an `.agency` file whose nodes each wrapped one stdlib call
-   and approved the interrupt that call raised.
-2. It imported `agency-lang/stdlib-lib/localModels.js` and called
-   `_listDownloadedModels`. The `./stdlib-lib/*` export exists so that
-   the stdlib's own compiled files can import their TypeScript helpers.
-   No release promises those files or names to anyone else.
+The `./stdlib-lib/*` export is for the stdlib's own compiled files. Its
+file and function names are not a public API.
 
 ## One request, two callers
 
 Each call function is the twin of a stdlib function: `generateImage` of
 `generateImageLocal` in `std::image`, and `tagImage` of `tagImage` in
-`std::vision`. A twin must send the same request. To make that hold,
-each stdlib helper is split into the part only the stdlib needs and the
-part both share.
+`std::vision`. A twin must send the same request, so both go through the
+same functions:
 
 | Step | Stdlib | `agency-lang/local` |
 |---|---|---|
@@ -68,19 +53,15 @@ part both share.
 | Post a vision request | `postVisionRequest` | `postVisionRequest` |
 | Shape a vision answer | `visionAnswer` | `visionAnswer` |
 
-The stdlib's image request goes through smoltalk, because that is where
-usage accounting, the `imageGeneration` statelog event, and guards are
+The stdlib's image request goes through smoltalk, where usage
+accounting, the `imageGeneration` statelog event, and guards are
 applied. All of that needs a run. A plain TypeScript caller has no run,
 so `generateImage` calls `postLocalImage` directly.
 
-Both posts end in `postLocalJson` in `lib/stdlib/localRequest.ts`. It
-holds the one copy of the fetch, the timeout, and the wording of each
-failure. The image provider and the vision helper each used to have
-their own copy.
-
-Tests hold the twins together. `lib/local/calls.test.ts` and
-`lib/stdlib/image.test.ts` run a stdlib function and its twin against a
-fake server and compare the two request bodies.
+When you change a request, change the shared function. Tests in
+`lib/local/calls.test.ts` and `lib/stdlib/image.test.ts` run each stdlib
+function and its twin against a fake server and compare the two request
+bodies.
 
 ## What a twin does differently
 
@@ -99,7 +80,7 @@ field's size cap only. The server decides whether they are an image.
 none, it uses `mlxBaseUrl()`, which reads `client.baseUrl.mlx` and then
 `MLX_BASE_URL`.
 
-The stdlib functions take no address, and that is deliberate.
+Do not add an address parameter to the stdlib functions.
 `generateImageLocal` promises that the picture never leaves the machine.
 Every Agency function is a tool a model can call, so an address
 parameter would let a model send the picture to any host. The address
@@ -107,19 +88,15 @@ stays in `agency.json` and the environment, which the person running the
 program controls.
 
 **It takes a signal.** Aborting it ends the call with the failure
-`Cancelled`. `postLocalJson` joins the caller's signal with its own
-timeout. It checks whether the caller aborted in two places: when the
-fetch fails, and when reading the reply's body fails. An abort can land
-in either, and without the second check an abort during the body reads
-as "a body that is not JSON".
+`Cancelled`. `postLocalJson` checks whether the caller aborted in two
+places: when the fetch fails, and when reading the reply's body fails.
+An abort during the body would otherwise be reported as "a body that is
+not JSON".
 
-## Failure messages name the function called
-
-The checks in `localImageInputs.ts` were written for `generateImageLocal`
-and started every refusal with that name. `localImageMode` and
-`encodedImageInput` now take the caller's name, so a refusal from the
-public function reads `generateImage failed: mask goes with startImage,
-and this call has none.`
+**Its failures carry its own name.** `localImageMode` and
+`encodedImageInput` take the caller's name, so the same refusal reads
+`generateImage failed: ...` from the public function and
+`generateImageLocal failed: ...` from the stdlib.
 
 ## The result type
 
@@ -129,11 +106,9 @@ Every call returns `Result<T>` from `lib/local/result.ts`:
 type Result<T> = { success: true; value: T } | { success: false; error: string };
 ```
 
-It is a type of its own. The image provider uses smoltalk's result and
-the vision helpers use the runtime's untyped `ResultValue`, which carries
-fields for Agency's failure handling. Neither is exported here. The
-shared request functions return `{ error }` or a value, and `calls.ts`
-turns that into a `Result`.
+The runtime's `ResultValue` and smoltalk's result are not exported from
+this entry point. The shared request functions return `{ error }` or a
+value, and `calls.ts` turns that into a `Result`.
 
 ## Defaults stated twice
 
@@ -144,26 +119,27 @@ again in `VISION_DEFAULTS`. A test in `lib/local/calls.test.ts` reads
 `vision.agency` and compares each default with the text of the matching
 signature. Change a default in both places.
 
-`generateImage` has no such table. Every setting it leaves out is left
-out of the request, and the server uses the model's own value.
+`generateImage` has no such table. A setting it leaves out is left out
+of the request, and the server uses the model's own value.
 
 ## `listModels`
 
-`listModels` returns what `agency local list` prints, as data. It wraps
-`_listDownloadedModels`, `readModelAliases`, and `hubSnapshotDir`.
+`listModels` returns every downloaded model. `agency local list` prints
+these and also the catalog's models that are not downloaded, which
+`listModels` leaves out.
 
 - `directory` is the folder holding the model's files. For a Hugging
   Face cache folder, it is the snapshot folder.
 - `family` is `_class_name` in `model_index.json`, or the first entry of
-  `architectures` in `config.json`. An app that keeps its own table of
-  what each image family can do keys it on this.
+  `architectures` in `config.json`.
 - `aliases` lists every alias in `agency.json` that points at the model,
-  by URI or by path.
+  by URI or by path. An alias pinned to a revision, such as
+  `mlx:org/repo@abc123`, is listed only under the download at that
+  revision.
 
 Three kinds of entry are listed and cannot be served: a GGUF file, a
-ControlNet, and a download that is not complete. `serve` and the call
-functions take the `name` of every other entry. A test checks that each
-of those names resolves with `_resolveModel`.
+ControlNet, and a download that is not complete. The call functions take
+the `name` of every other entry.
 
 ## Checking against a real model
 

@@ -113,13 +113,16 @@ type LocalModel = {
 function listModels(): LocalModel[];
 ```
 
-`listModels` returns what `agency local list` prints, as data.
-It takes an optional models folder, `listModels(cacheDir)`, and reads the
-configured one without it. Three kinds of entry are listed and cannot be
-served: a GGUF file, a ControlNet, and a download that is not complete.
+`listModels` returns every model downloaded to this machine, as data.
+`agency local list` prints these and also the catalog's models that are
+not downloaded, which `listModels` leaves out. Three kinds of entry are
+listed and cannot be served: a GGUF file, a ControlNet, and a download
+that is not complete.
 
 - `name` is the name `serve` and the call functions accept.
 - `aliases` holds every alias in `agency.json` that points at this model.
+  An alias pinned to a revision is listed only under the download at
+  that revision.
 - `kind` is the kind recorded at download, or read from the files.
 - `family` is the class name in the model's `model_index.json`, or the
   first entry of `architectures` in its `config.json`. For example,

@@ -617,13 +617,9 @@ The provider sends no API key and reports zero cost. It does not retry
 failed requests. It reads generation options from `config.metadata` and
 returns the server's seed with the image.
 
-The provider is two functions that `agency-lang/local` also calls.
-`localImageBody` builds the request body, and is the only place one is
-built. `postLocalImage` posts it through `postLocalJson` and reads the
-images back. `checkLocalImageArgs` and `localImageSettings` live in
-`mlxImage.ts` for the same reason: the public entry point imports them
-without loading the usage accounting in `image.ts`. See
-`docs/dev/llm/local-typescript-api.md`.
+`localImageBody` is the only place a request body is built, and
+`postLocalImage` posts it. `generateImage` in `agency-lang/local` calls
+both directly, with no run. See `docs/dev/llm/local-typescript-api.md`.
 
 Both public image functions dispatch through `generateOne` in
 `lib/stdlib/image.ts`. This shares usage accounting, the `imageGeneration`

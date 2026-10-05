@@ -10,17 +10,19 @@ Read it first. Then read `docs/dev/llm/mlx-local-models.md`,
 This plan has been revised to answer it. Where the plan now departs from
 the spec, see "Departures from the spec" at the end.
 
-**Branches:** six PRs, each based on main. Start a PR after the one
+**Branches:** three PRs, each based on main. Start a PR after the one
 before it has merged. All paths are relative to `packages/agency-lang`.
 
-| PR | What it ships | Tasks |
-|---|---|---|
-| 1 | `agency-lang/local`: `listModels`, the call functions, signals (built) | 1 to 6 |
-| 2 | Model processes that exit when the server dies | 7 to 8 |
-| 3 | One description per served model, the model pool, `serve`, `status`, `load`, `unload` | 9 to 13 |
-| 4 | `--lazy`: on-demand loading and eviction | 14 to 17 |
-| 5 | `cancel` | 18 to 19 |
-| 6 | Shutting down | 20 to 21 |
+| PR | What it ships | Tasks | Estimated size |
+|---|---|---|---|
+| 1 | `agency-lang/local`: `listModels`, the call functions, signals (built, #1172) | 1 to 6 | 1,900 lines |
+| 2 | One description per served model, the model pool, `serve`, `status`, `load`, `unload` | 9 to 13 | 1,400 to 1,800 |
+| 3 | Processes that exit with the server, `--lazy`, `cancel`, and shutting down | 7 to 8, 14 to 21 | about 2,000 |
+
+The sizes count code, tests, and docs, and about half of each is tests.
+PR 3 comes after PR 2 because lazy loading, `cancel`, and the new
+`close` are all methods of the pool PR 2 adds. Task numbers are kept
+from the earlier six-PR split, so they are not in order.
 
 Every PR ends with the steps under "Finishing a PR".
 
@@ -483,104 +485,7 @@ Add to `exports` in `package.json`, after `./serve`:
 4. List the new dev doc in `CLAUDE.md` and in the `agency-llm-docs`
    skill.
 
-## PR 2: processes that exit with the server
-
-This PR fixes a problem that exists today and needs nothing from the
-later PRs. If the Node process is killed with SIGKILL, each Python
-process keeps its model in memory.
-
-### Task 7: the watcher
-
-**Files:** `lib/cli/localServerCommon.py`, each server script, create
-`lib/cli/mlxVlmServer.py`, `lib/cli/vlmChat.ts`, `lib/cli/localServe.ts`,
-`makefile`, a test file `lib/cli/exitWithParent.test.ts`.
-
-1. Add to `localServerCommon.py`:
-
-   ```python
-   EXIT_WITH_PARENT = "AGENCY_EXIT_WITH_PARENT"
-
-
-   def exit_when_parent_goes():
-       """When the process that started this server asked for it, exit
-       as soon as standard input closes, which happens when that process
-       exits for any reason. Does nothing otherwise, so a server started
-       by hand is left alone."""
-       if os.environ.get(EXIT_WITH_PARENT) != "1":
-           return
-
-       def wait():
-           sys.stdin.buffer.read()
-           os._exit(0)
-
-       threading.Thread(target=wait, daemon=True).start()
-   ```
-
-   The environment check matters. Without it, a script started as a
-   background job is stopped by SIGTTIN the moment the thread reads the
-   terminal. One started with `nohup`, under launchd, or with standard
-   input from `/dev/null` reads end-of-file at once and exits before it
-   has loaded anything.
-
-2. Call it first thing at startup in `mlxSpeechServer.py`,
-   `diffusersImageServer.py`, and `visionServer.py`, which already
-   import `localServerCommon`.
-
-3. `mlxChatServer.py` and `mlxEmbedServer.py` do not import
-   `localServerCommon` today. Add the two lines the other scripts have,
-   then the call:
-
-   ```python
-   sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-   from localServerCommon import exit_when_parent_goes  # noqa: E402
-   ```
-
-   Update the docstring of `localServerCommon.py`, which names only the
-   speech, image, and vision servers.
-
-4. Create `mlxVlmServer.py`. It calls `exit_when_parent_goes()` and then
-   `runpy.run_module("mlx_vlm.server", run_name="__main__")`. Add
-   `vlmServerScript()` next to the other `...ServerScript()` functions.
-   `vlmServeArgs` takes the script path and returns it in place of
-   `"-m", "mlx_vlm.server"`. The arguments after it stay the same.
-
-5. Copy `mlxVlmServer.py` in the `makefile`, next to the other scripts.
-
-6. `realSpawn` uses `stdio: ["pipe", "inherit", "inherit"]`, sets
-   `AGENCY_EXIT_WITH_PARENT: "1"` in the child's environment, and never
-   writes to the pipe.
-
-**Tests**, in TypeScript, started the way `visionServer.test.ts` starts
-`python3`, and skipped without it:
-
-1. Start `python3 -c` with a program that imports `localServerCommon`,
-   calls `exit_when_parent_goes()`, and sleeps for 30 seconds. Set the
-   environment variable. Close the child's standard input. It exits with
-   status 0 within two seconds.
-2. The same program without the variable, with standard input closed, is
-   still running after one second. Kill it.
-3. Each of the six server scripts contains a call to
-   `exit_when_parent_goes()`.
-4. `vlmServeArgs` starts with the path of `mlxVlmServer.py`, and that
-   file is valid Python 3. Add it to the "valid Python 3" test beside
-   the others.
-5. `realSpawn`'s options set the variable and a pipe for standard input.
-   Export a small `spawnOptions()` function so the test reads the
-   options without starting a process.
-
-The spec asks for a test that starts the real image server script. That
-script fails on its first model import in CI, which has no model
-libraries, so the test would pass for the wrong reason. The check
-against a real model at the end of this plan covers it.
-
-### Task 8: docs for PR 2
-
-Add "When the server dies first" to `docs/dev/llm/mlx-local-models.md`:
-the pipe, the environment variable and why the watcher is not always on,
-and the `mlx-vlm` script. Update that doc's line in `CLAUDE.md` and in
-the `agency-llm-docs` skill.
-
-## PR 3: one description per model, and the pool
+## PR 2: one description per model, and the pool
 
 This PR changes no behavior of `agency local serve`. It makes
 `ServeTarget` the one description of a model to serve, puts the model
@@ -885,7 +790,7 @@ are ready. Add:
    `kind: "chat", runtime: "mlx-vlm", flag: "--vlm"`. Nothing is turned
    into flags and parsed back.
 
-   `lazy` is accepted by the type and refused at run time until PR 4,
+   `lazy` is accepted by the type and refused at run time until PR 3,
    with the message `lazy is not supported by this version`.
 
 4. `serve` passes dependencies whose `spawn` pipes the child's output:
@@ -895,9 +800,10 @@ are ready. Add:
    the pipes are always read, or the child blocks when one fills. Set
    `PYTHONUNBUFFERED: "1"` in the child's environment. Python buffers in
    blocks when it is not writing to a terminal, and lines would arrive
-   late. Build both spawn variants from the `spawnOptions()` function of
-   Task 7, so both keep the standard-input pipe and the watcher
-   variable. Add `realDeps(overrides)` for this.
+   late. Export one function, `spawnOptions(output)`, that returns the
+   spawn options for `"inherit"` or `"pipe"`, and build both spawn
+   variants from it. Task 7 in PR 3 adds the standard-input pipe there,
+   so both variants get it. Add `realDeps(overrides)` for this.
 
 **Tests:**
 
@@ -910,7 +816,7 @@ are ready. Add:
 5. `unload` then `status` reports `stopped`.
 6. A line the fake child writes to stderr reaches `log`.
 
-### Task 13: docs for PR 3
+### Task 13: docs for PR 2
 
 Update the "front door" section of `docs/dev/llm/mlx-local-models.md` to
 describe `ServeTarget` as the one input, the pool, `acquire` and
@@ -919,7 +825,117 @@ the status route. Add `serve` and the handle to
 `docs/dev/llm/local-typescript-api.md` and to the guide section. Update
 both docs' lines in `CLAUDE.md` and the `agency-llm-docs` skill.
 
-## PR 4: `--lazy`
+## PR 3: on-demand loading, cancelling, and shutting down
+
+This PR has four parts, in the order to build them. Each part is one
+commit, so the PR can be reviewed a part at a time. Parts B, C, and D
+need the pool from PR 2. Part A needs nothing from it.
+
+| Part | What it ships | Tasks |
+|---|---|---|
+| A | Model processes that exit when the server dies | 7 to 8 |
+| B | `--lazy`: on-demand loading and eviction | 14 to 17 |
+| C | `cancel` | 18 to 19 |
+| D | `close` waits, and the shutdown route | 20 to 21 |
+
+### Part A: processes that exit with the server
+
+This part fixes a problem that exists today. If the Node process is
+killed with SIGKILL, each Python process keeps its model in memory.
+
+### Task 7: the watcher
+
+**Files:** `lib/cli/localServerCommon.py`, each server script, create
+`lib/cli/mlxVlmServer.py`, `lib/cli/vlmChat.ts`, `lib/cli/localServe.ts`,
+`makefile`, a test file `lib/cli/exitWithParent.test.ts`.
+
+1. Add to `localServerCommon.py`:
+
+   ```python
+   EXIT_WITH_PARENT = "AGENCY_EXIT_WITH_PARENT"
+
+
+   def exit_when_parent_goes():
+       """When the process that started this server asked for it, exit
+       as soon as standard input closes, which happens when that process
+       exits for any reason. Does nothing otherwise, so a server started
+       by hand is left alone."""
+       if os.environ.get(EXIT_WITH_PARENT) != "1":
+           return
+
+       def wait():
+           sys.stdin.buffer.read()
+           os._exit(0)
+
+       threading.Thread(target=wait, daemon=True).start()
+   ```
+
+   The environment check matters. Without it, a script started as a
+   background job is stopped by SIGTTIN the moment the thread reads the
+   terminal. One started with `nohup`, under launchd, or with standard
+   input from `/dev/null` reads end-of-file at once and exits before it
+   has loaded anything.
+
+2. Call it first thing at startup in `mlxSpeechServer.py`,
+   `diffusersImageServer.py`, and `visionServer.py`, which already
+   import `localServerCommon`.
+
+3. `mlxChatServer.py` and `mlxEmbedServer.py` do not import
+   `localServerCommon` today. Add the two lines the other scripts have,
+   then the call:
+
+   ```python
+   sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+   from localServerCommon import exit_when_parent_goes  # noqa: E402
+   ```
+
+   Update the docstring of `localServerCommon.py`, which names only the
+   speech, image, and vision servers.
+
+4. Create `mlxVlmServer.py`. It calls `exit_when_parent_goes()` and then
+   `runpy.run_module("mlx_vlm.server", run_name="__main__")`. Add
+   `vlmServerScript()` next to the other `...ServerScript()` functions.
+   `vlmServeArgs` takes the script path and returns it in place of
+   `"-m", "mlx_vlm.server"`. The arguments after it stay the same.
+
+5. Copy `mlxVlmServer.py` in the `makefile`, next to the other scripts.
+
+6. `spawnOptions` from Task 12 makes standard input a pipe for both of
+   its variants, and sets `AGENCY_EXIT_WITH_PARENT: "1"` in the child's
+   environment. So `realSpawn` uses `stdio: ["pipe", "inherit", "inherit"]`
+   and the variant `serve()` uses keeps `["pipe", "pipe", "pipe"]`.
+   Nothing writes to the pipe.
+
+**Tests**, in TypeScript, started the way `visionServer.test.ts` starts
+`python3`, and skipped without it:
+
+1. Start `python3 -c` with a program that imports `localServerCommon`,
+   calls `exit_when_parent_goes()`, and sleeps for 30 seconds. Set the
+   environment variable. Close the child's standard input. It exits with
+   status 0 within two seconds.
+2. The same program without the variable, with standard input closed, is
+   still running after one second. Kill it.
+3. Each of the six server scripts contains a call to
+   `exit_when_parent_goes()`.
+4. `vlmServeArgs` starts with the path of `mlxVlmServer.py`, and that
+   file is valid Python 3. Add it to the "valid Python 3" test beside
+   the others.
+5. `spawnOptions` returns the variable and a pipe for standard input,
+   for both variants.
+
+The spec asks for a test that starts the real image server script. That
+script fails on its first model import in CI, which has no model
+libraries, so the test would pass for the wrong reason. The check
+against a real model at the end of this plan covers it.
+
+### Task 8: docs for part A
+
+Add "When the server dies first" to `docs/dev/llm/mlx-local-models.md`:
+the pipe, the environment variable and why the watcher is not always on,
+and the `mlx-vlm` script. Update that doc's line in `CLAUDE.md` and in
+the `agency-llm-docs` skill.
+
+### Part B: `--lazy`
 
 ### Task 14: available memory
 
@@ -979,7 +995,7 @@ read logs before it falls back.
 1. `acquire` on a `stopped` or `failed` record whose plan is lazy puts a
    load on the queue and waits for it. On a `loading` record it waits
    for the load in progress. On a record that is not lazy and not
-   loaded, it throws `not-loaded` as in PR 3.
+   loaded, it throws `not-loaded` as in PR 2.
 
 2. Which model to stop is a pure function, tested on plain records:
 
@@ -1124,7 +1140,7 @@ beside it.
 8. `serve([{ model: "a", lazy: true, vlm: true }])` plans one model,
    lazy, with the `mlx-vlm` runtime.
 
-### Task 17: docs for PR 4
+### Task 17: docs for part B
 
 1. `docs/site/cli/local.md`: the flag, with the example from the spec.
 2. `docs/site/guide/using-local-models.md`: a section on serving several
@@ -1136,7 +1152,7 @@ beside it.
    the estimate and its table, how memory is read, and the
    `NAMING_FLAGS` row.
 
-## PR 5: `cancel`
+### Part C: `cancel`
 
 ### Task 18: cancel in the pool and the front door
 
@@ -1217,14 +1233,14 @@ tests beside each.
 8. The route refuses a POST with `content-type: text/plain`.
 9. The log line for a cancelled request shows 499.
 
-### Task 19: docs for PR 5
+### Task 19: docs for part C
 
 Add a "Cancelling" section to `docs/dev/llm/mlx-local-models.md` with the
 table, the `stopsOnClose` field, and why a cancelled entry is marked
 before its upstream is destroyed. Add the two examples from the spec to
 the guide.
 
-## PR 6: shutting down
+### Part D: shutting down
 
 ### Task 20: `close` waits
 
@@ -1262,7 +1278,7 @@ the guide.
 4. A request made during `close` gets the 503.
 5. The shutdown route calls the callback once.
 
-### Task 21: docs for PR 6
+### Task 21: docs for part D
 
 Add "Shutting down" to `docs/dev/llm/mlx-local-models.md`, covering the
 five steps of `close`, what the shutdown route does under the CLI and
@@ -1306,7 +1322,7 @@ The script calls `generateImage` and `tagImage` from `agency-lang/local`
 and writes the picture to the scratch folder. Write the script in this
 PR. It needs `make` first, since it imports the built package.
 
-After PR 2, three checks:
+After PR 3, part A, three checks:
 
 1. Start the server, send the Node process SIGKILL, and confirm with
    `ps` that no Python model process remains.
@@ -1315,7 +1331,7 @@ After PR 2, three checks:
    (`python lib/cli/visionServer.py ... &`) and confirm it keeps
    running.
 
-After PR 4:
+After PR 3, part B:
 
 ```
 agency local serve --lazy z-image-turbo --lazy flux2-klein-9b --lazy qwen3.8-27b
@@ -1328,17 +1344,17 @@ used longest ago. Then:
 1. Note the available memory the log reports just after a model is
    stopped. If it has not risen by about the model's size, the formula
    is reading memory that macOS has not yet handed back, and the plan
-   needs a short wait or a different reading before PR 4 merges.
+   needs a short wait or a different reading before PR 3 merges.
 2. Time a cold load of `z-image-turbo` and compare it with the 168
    seconds an 8-step request is given. If the load takes more than half
    of that, add a load allowance to `localImageTimeoutMs` and to the
    vision timeout.
 
-After PR 5: start a non-streamed chat request to a `--vlm` model that
+After PR 3, part C: start a non-streamed chat request to a `--vlm` model that
 asks for a long reply, call `POST /v1/agency/cancel`, and confirm with
 `ps` that the Python process was replaced.
 
-After PR 6: press Ctrl-C while a lazy model is loading, and confirm with
+After PR 3, part D: press Ctrl-C while a lazy model is loading, and confirm with
 `ps` that no Python model process remains.
 
 ## Departures from the spec
@@ -1351,18 +1367,18 @@ Update the spec to match before starting the PR each one belongs to.
    is `{ success: true, value } | { success: false, error }`, not the
    runtime's or smoltalk's. Done in the spec, along with a `seed` that
    may be null and the optional models folder `listModels` takes.
-3. **Processes that exit with the server ship second, not last** (PR 2),
+3. **Processes that exit with the server ship first in their PR, not last** (PR 3, part A),
    and the watcher runs only when `AGENCY_EXIT_WITH_PARENT=1`.
-4. **The pipe test does not start the real image server script** (PR 2).
+4. **The pipe test does not start the real image server script** (PR 3, part A).
    See Task 7.
-5. **The public `ServedModel` has `kind` and `vlm`** (PR 3). Without
+5. **The public `ServedModel` has `kind` and `vlm`** (PR 2). Without
    them `serve()` cannot serve a vision-language model, or a model whose
    files do not say its kind.
-6. **The admin routes check the `Host` header** (PR 3). The content-type
+6. **The admin routes check the `Host` header** (PR 2). The content-type
    rule stops a cross-site form post. It does not stop a page that
    reaches `127.0.0.1` under its own hostname.
 7. **`cancel` also answers requests that are waiting for a load**
-   (PR 5).
+   (PR 3, part C).
 8. **Over HTTP, a model that is not lazy stays unloaded until the server
    restarts.** The spec has no load route. The 503 message says so.
 

@@ -80,7 +80,9 @@ Three places build a run from nothing:
 2. **`runInBootstrapFrame(ctx, fn)`**, for code that runs outside any node. See the next section.
 3. **`runInTestContext(ctx, stack, threads, fn)`**, for a test.
 
-A root run takes its lineage from `currentRunOrNone()`. So a run started from inside another run keeps counting the outer run's call depth, as long as it is started before an `await`.
+A root run takes its lineage from `currentRunOrNone()`. `runNode` and `runExportedFunction` read it on their first line, before their own first `await`. So a run started from inside another run keeps counting the outer run's call depth, as long as the code that starts it does so before its own first `await`. `tests/agency-js/nested-run-keeps-call-depth` covers this.
+
+`runInBootstrapFrame` reads it when it is called, and every caller has awaited by then. A bootstrap run always starts a new lineage.
 
 ## Bootstrap runs
 
@@ -196,6 +198,10 @@ void currentRunOrNone()?.log?.warn?.(...);
 
 The check cannot follow a call through a callback parameter, a method chosen at run time, or a function stored in a table. Those still throw when they run.
 
+It finds the reader functions by name and by the path of `asyncContext.ts`. If it finds no call to any of them it fails, because it would otherwise pass for any code at all. Update `READER_FILE` and `READER_NAMES` in the script when those functions move.
+
+`scripts/lint-run-reads.test.ts` runs the check over the fixture projects in `tests/lint-run-reads/`, with `--project <dir>`. Add a case there when you teach the check something new.
+
 ## The wrong-run check
 
 Every run has the same type, so the type checker cannot tell the right run from the wrong one. The mistake it cannot see looks like this:
@@ -220,7 +226,7 @@ The operations that start work for Agency code or a helper call `assertUsable`: 
 Three cases are exempt:
 
 - Two calls made at once through one handle. Each `run.call` gets a detached copy.
-- Several interrupts raised at once by one helper. Each raise gets a detached copy.
+- Several interrupts raised at once by one helper. Each raise gets a detached copy. A raise that comes after an earlier one was answered is different: the handle refuses it, because both would be stored under one key. See the header of `lib/runtime/agencyInterrupt.ts`.
 - The `async` keyword on a call, which Agency does not support. The code path still compiles and is not checked.
 
 Generated code has a second protection. Every body the runtime calls back declares a parameter named `__run`, which hides the outer one. Code inside a fork block cannot name the outer function's run.

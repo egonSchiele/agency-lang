@@ -640,7 +640,10 @@ async function runBranches<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>>
       cached: recordOutcomes && branch.result !== undefined,
     };
   });
-  const parentSpanStack = ctx.statelogClient.snapshotStack();
+  // The caller's own span stack. Inside a fork branch that is the branch's
+  // stack, so a nested branch's spans sit under the nested fork's span. The
+  // client's own stack is the root one, which every branch shares.
+  const parentSpanStack = opts.run.log.snapshotStack();
 
   if (mode === "race") {
     return runRaceFirstTime(opts, tasks, parentSpanStack);
@@ -948,7 +951,10 @@ async function runRaceResume<T>(
   // rehydrate above) — same reasoning as startInvoke's arming.
   branch.stack.guards.forEach((g) => g.resume(branch.stack));
 
-  const parentSpanStack = ctx.statelogClient.snapshotStack();
+  // The caller's own span stack. Inside a fork branch that is the branch's
+  // stack, so a nested branch's spans sit under the nested fork's span. The
+  // client's own stack is the root one, which every branch shares.
+  const parentSpanStack = opts.run.log.snapshotStack();
   const startedAt = performance.now();
   hooks?.onBranchStart?.(child.key, winnerIndex);
   let value: T | Interrupt[];

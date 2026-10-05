@@ -906,12 +906,11 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // handler chain here; without a branch-local span stack their
     // handlerChain span pushes/pops would interleave on the shared stack
     // (same discipline runBatch applies to its children).
-    // This listener runs in the frame that was current when the subprocess
-    // was started, which is the stored branch run. `sameRun` checks that
-    // while `AsyncLocalStorage` is still in place.
+    // The chain runs under the stored branch run: the run of the call that
+    // started the subprocess. Its spans start from that branch's stack.
     const stored = s.branchRun;
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
-      s.ctx.statelogClient.snapshotStack(),
+      stored.log.snapshotStack(),
       (spans: SpanContext[]) =>
         // A copy with its own state: several interrupts from one child can be
         // answered at once, and none of them is counted against the stored run.

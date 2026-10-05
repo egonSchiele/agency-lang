@@ -62,16 +62,19 @@
  * call site. Code that needs multiple sequential interrupts should
  * split them across multiple `s.step(...)` calls.
  *
- * What happens if you violate this: two `agency.interrupt(...)` calls
- * sharing the same `stepPath` write to the same `frame.locals` key.
- * The second call overwrites the first's persisted id, so the resume
- * path will only ever look up a response for the second interrupt. The
- * first interrupt's response (if any) is silently dropped, and the
- * resume re-runs the first interrupt's handlers from scratch instead of
- * short-circuiting. There is no thrown error today; the symptom is
- * "handlers fire twice on resume / first interrupt never resolves".
- * Splitting interrupts across `s.step(...)` calls is the only safe
- * pattern.
+ * What happens if you violate this: two raises that share a `stepPath`
+ * share one `frame.locals` key. Take a helper that raises, is answered,
+ * and raises again. The first raise stores its interrupt id under the key
+ * and the run pauses. On resume the helper runs again from its first line.
+ * The first raise finds the stored id and returns the user's answer. The
+ * second raise finds the same stored id and returns that same answer, so
+ * no handler and no user is asked about the second interrupt.
+ *
+ * The handle from `agency.current()` raises every interrupt on the one run
+ * it captured, so every raise through a handle has the same key. The
+ * handle refuses a raise that comes after an earlier one was answered. See
+ * `current` in agency.ts. Splitting interrupts across `s.step(...)` calls
+ * is the only safe pattern.
  *
  * # Halting and HaltSignal
  *

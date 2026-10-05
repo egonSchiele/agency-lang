@@ -11,7 +11,10 @@ export async function messagesAfterWait() {
   try {
     agency.thread.user("pushed directly");
   } catch (error) {
-    direct = "threw";
+    // Only the missing-run error counts. Any other error is a different bug.
+    direct = String(error.message).includes("No run is current here")
+      ? "threw"
+      : `another error: ${error.message}`;
   }
 
   await run.call(() => agency.thread.user("pushed through the handle"));

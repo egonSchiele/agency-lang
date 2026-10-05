@@ -289,6 +289,10 @@ async function runExportedFunctionCore({
   // Inherit the subprocess run id (as runNodeCore does) so a served function
   // executed in subprocess mode joins the parent's trace instead of minting a
   // new one.
+  // Read before the first await. After it no run is current, and this run
+  // would start a new lineage even when it was started from inside another.
+  // run-read-ok: a root run. With no run current it starts a new lineage.
+  const lineage = lineageOf(currentRunOrNone());
   const resolved = resolveInvocation({
     kind: "fresh",
     options: invocation,
@@ -307,8 +311,7 @@ async function runExportedFunctionCore({
         globals: execCtx.globals,
         log: logOf(execCtx, execCtx.globals),
         state: freshState(),
-        // run-read-ok: a root run. With no run current it starts a new lineage.
-        ...lineageOf(currentRunOrNone()),
+        ...lineage,
       },
       async (run) => {
         // The store was made before the run existed. From here its thread
@@ -389,6 +392,10 @@ async function runNodeCore({
   invocation,
   input,
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  // Read before the first await. After it no run is current, and this run
+  // would start a new lineage even when it was started from inside another.
+  // run-read-ok: a root run. With no run current it starts a new lineage.
+  const lineage = lineageOf(currentRunOrNone());
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
   // trace; otherwise an injected traceId wins, then a harness-set
@@ -466,8 +473,7 @@ async function runNodeCore({
               globals: execCtx.globals,
               log: logOf(execCtx, execCtx.globals),
               state: freshState(),
-              // run-read-ok: a root run. With no run current it starts a new lineage.
-              ...lineageOf(currentRunOrNone()),
+              ...lineage,
             },
             (run) =>
               execCtx.graph.run(
@@ -523,8 +529,7 @@ async function runNodeCore({
                 globals: execCtx.globals,
                 log: logOf(execCtx, execCtx.globals),
                 state: freshState(),
-                // run-read-ok: a root run. With no run current it starts a new lineage.
-                ...lineageOf(currentRunOrNone()),
+                ...lineage,
               },
               (run) =>
                 callHook(run, {

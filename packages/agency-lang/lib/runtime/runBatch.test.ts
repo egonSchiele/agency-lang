@@ -424,6 +424,34 @@ describe("runBatch — mode 'all'", () => {
   });
 });
 
+describe("runBatch — span stacks", () => {
+  it("a branch's span stack starts from the caller's logger, not the client's root stack", async () => {
+    // Inside a fork branch the caller's logger holds the branch's stack. A
+    // fork started there must copy that one, so its spans sit under the
+    // enclosing branch's spans and not under the root's.
+    const { ctx } = makeCtx();
+    const seededWith: unknown[] = [];
+    ctx.statelogClient.snapshotStack = () => ["root span"];
+    ctx.statelogClient.runInBranchContext = (stack: unknown, fn: () => unknown) => {
+      seededWith.push(stack);
+      return fn();
+    };
+    const { parentStack, parentFrame } = makeParent();
+    await runInTestContext(ctx, parentStack, new ThreadStore(), (run) =>
+      runBatch<number>({
+        run: { ...run, log: { ...run.log, snapshotStack: () => ["branch span"] } as any },
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        children: [{ key: "c0", invoke: async () => 1 }],
+      }),
+    );
+    expect(seededWith).toEqual([["branch span"]]);
+  });
+});
+
 describe("runBatch — mode 'sequential'", () => {
   it("invokes children one after the previous, preserving order", async () => {
     const { ctx } = makeCtx();

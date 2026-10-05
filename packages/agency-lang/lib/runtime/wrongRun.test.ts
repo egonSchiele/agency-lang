@@ -2,7 +2,12 @@ import { describe, it as baseIt, expect } from "vitest";
 import { assertUsable, RunInUseError, detachedRun, withChildRun } from "./asyncContext.js";
 import { __call, __callMethod } from "./call.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
+import { callHook } from "./hooks.js";
+import { interruptWithHandlers } from "./interrupts.js";
+import { Runner } from "./runner.js";
+import { State, StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import { makeMockCtx, testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 const it = withTestFrame(baseIt);
 
@@ -109,6 +114,50 @@ describe("the wrong-run check", () => {
         await expect(save.invoke(parent, { type: "positional", args: [] })).rejects.toThrow(
           "Wrong run: cannot call save() with a run that is waiting for its step.",
         );
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it("a Runner step", async () => {
+      const parent = testRun();
+      const calls: string[] = [];
+      const runner = new Runner(makeMockCtx(), new State({ args: {}, locals: {}, step: 0 }), {
+        moduleId: "test.agency",
+        scopeName: "main",
+        stack: new StateStack(),
+        threads: new ThreadStore(),
+      });
+      await withChildRun(parent, {}, "its fork", async () => {
+        await expect(
+          runner.step(0, parent, async () => {
+            calls.push("ran");
+          }),
+        ).rejects.toThrow(RunInUseError);
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it("an interrupt", async () => {
+      const parent = testRun();
+      await withChildRun(parent, {}, "its step", async () => {
+        await expect(
+          interruptWithHandlers(parent, "test::save", "Save the file?", {}, "test.agency"),
+        ).rejects.toThrow("Wrong run: cannot raise an interrupt");
+      });
+    });
+
+    it("a callback", async () => {
+      const parent = testRun();
+      const calls: string[] = [];
+      parent.ctx.callbacks = {
+        onNodeStart: () => {
+          calls.push("ran");
+        },
+      };
+      await withChildRun(parent, {}, "its step", async () => {
+        await expect(
+          callHook(parent, { name: "onNodeStart", data: { nodeName: "main" } } as any),
+        ).rejects.toThrow("Wrong run: cannot fire a callback");
       });
       expect(calls).toEqual([]);
     });

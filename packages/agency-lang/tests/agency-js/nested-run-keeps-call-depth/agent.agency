@@ -1,0 +1,19 @@
+import { startInnerNode, callDepthNow } from "./helper.js"
+
+// A run started from inside another run keeps counting the outer run's call
+// depth. See test.js.
+def outerCall(): number {
+  return startInnerNode()
+}
+
+def innerCall(): number {
+  return callDepthNow()
+}
+
+export node inner() {
+  return innerCall()
+}
+
+node main() {
+  return outerCall()
+}

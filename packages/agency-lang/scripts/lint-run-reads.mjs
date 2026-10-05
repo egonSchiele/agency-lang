@@ -1,6 +1,7 @@
 // Fails when code in lib/ can read the current run after an `await`.
 //   node scripts/lint-run-reads.mjs          (run by `pnpm run lint:structure`)
 //   node scripts/lint-run-reads.mjs --list   (also print every function that reads on entry)
+//   node scripts/lint-run-reads.mjs --project <dir>   (check that project's lib/)
 //
 // `currentRun()` returns the run a plain function was called under. The
 // runtime sets it for the synchronous part of the call, so it is only right
@@ -32,7 +33,10 @@
 import ts from "typescript";
 import { join, relative, resolve } from "node:path";
 
-const root = resolve(".");
+// `--project <dir>` checks another project's lib/. The tests use it to run
+// the check over fixture projects.
+const projectFlag = process.argv.indexOf("--project");
+const root = resolve(projectFlag === -1 ? "." : process.argv[projectFlag + 1]);
 const listEntryReaders = process.argv.includes("--list");
 
 const config = ts.getParsedCommandLineOfConfigFile(
@@ -132,6 +136,22 @@ function hasOptOut(node) {
   return lines[line].includes(OPT_OUT) || (line > 0 && lines[line - 1].includes(OPT_OUT));
 }
 
+/** The function a name stands for: a function declaration, or a variable
+ *  whose value is a function literal. */
+function functionNamedBy(symbol) {
+  let named = symbol;
+  if (named && named.flags & ts.SymbolFlags.Alias) named = checker.getAliasedSymbol(named);
+  const found = named?.declarations?.find(
+    (candidate) =>
+      isFunctionLike(candidate) ||
+      (ts.isVariableDeclaration(candidate) &&
+        candidate.initializer &&
+        isFunctionLike(candidate.initializer)),
+  );
+  if (!found) return null;
+  return isFunctionLike(found) ? found : found.initializer;
+}
+
 /** The function a call names, when it resolves to one declaration in lib/. */
 function targetOf(call) {
   const expression = call.expression;
@@ -142,6 +162,13 @@ function targetOf(call) {
   for (const declaration of symbol.declarations ?? []) {
     if (!inScope(declaration.getSourceFile())) continue;
     if (isFunctionLike(declaration)) return declaration;
+    // `interrupt,` in an object literal: the property is the variable of the
+    // same name. `agency.interrupt(...)` is a call through one of these.
+    if (ts.isShorthandPropertyAssignment(declaration)) {
+      const found = functionNamedBy(checker.getShorthandAssignmentValueSymbol(declaration));
+      if (found) return found;
+      continue;
+    }
     const holdsValue =
       ts.isVariableDeclaration(declaration) ||
       ts.isPropertyAssignment(declaration) ||
@@ -150,16 +177,7 @@ function targetOf(call) {
     let value = declaration.initializer;
     // `llm: _llm` in an object literal: follow the name to its function.
     if (ts.isIdentifier(value)) {
-      let named = checker.getSymbolAtLocation(value);
-      if (named && named.flags & ts.SymbolFlags.Alias) named = checker.getAliasedSymbol(named);
-      const found = named?.declarations?.find(
-        (candidate) =>
-          isFunctionLike(candidate) ||
-          (ts.isVariableDeclaration(candidate) &&
-            candidate.initializer &&
-            isFunctionLike(candidate.initializer)),
-      );
-      if (found) value = isFunctionLike(found) ? found : found.initializer;
+      value = functionNamedBy(checker.getSymbolAtLocation(value)) ?? value;
     }
     if (isFunctionLike(value)) return value;
   }
@@ -317,6 +335,19 @@ for (const entry of facts) {
       });
     }
   }
+}
+
+// With no reader found, the passes above have nothing to follow and would
+// report a clean result for any code at all. That happens when the reader
+// functions are renamed or their file is moved.
+const readersCalled = facts.some((entry) => entry.calls.some(({ target }) => isReader(target)));
+if (!readersCalled) {
+  console.error(
+    `lint-run-reads: found no call to ${READER_NAMES.join(", ")} from ${READER_FILE}.\n` +
+      "The check follows calls to those functions, so with none it checks nothing.\n" +
+      "If they were renamed or moved, update READER_FILE and READER_NAMES in this script.",
+  );
+  process.exit(1);
 }
 
 if (listEntryReaders) {

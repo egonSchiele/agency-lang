@@ -453,6 +453,8 @@ export type RunHandle = {
 
 const current = (): RunHandle => {
   const run = currentRun();
+  // How many interrupts raised through this handle have been answered.
+  let answered = 0;
   return {
     // Each call gets its own copy of the run, so two calls made at once
     // through one handle are not counted against each other.
@@ -460,7 +462,26 @@ const current = (): RunHandle => {
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, { type: "positional", args })),
     callWith: (fn, descriptor) =>
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, descriptor)),
-    interrupt: (opts) => interruptFor(run, opts),
+    // Every raise through this handle is stored under one key, the step the
+    // run was captured in. A raise that follows an answered one would find
+    // the first one's stored answer on resume and return it, with nobody
+    // asked. So it is refused. Raises started together are still allowed:
+    // none of them has been answered when the others start.
+    interrupt: async (opts) => {
+      if (answered > 0) {
+        throw new Error(
+          "This handle has already raised an interrupt that was answered. " +
+            "A second raise would be stored under the same key, and on resume " +
+            "it would get the first one's answer without anyone being asked. " +
+            "Raise each interrupt in its own step: use agency.withResumableScope, " +
+            "give each s.step(...) one interrupt, and take agency.current() on " +
+            "the first line of that step.",
+        );
+      }
+      const response = await interruptFor(run, opts);
+      answered++;
+      return response;
+    },
     addCost: (amount) => addCostTo(run, amount),
     addTokens: (amount) => addTokensTo(run, amount),
     ctx: run.ctx,

@@ -1,0 +1,26 @@
+import { callBoth } from "./helper.js"
+
+def slow(name: string): string {
+  sleep(30)
+  raise("work ${name}")
+  return "slow ${name}"
+}
+
+def fast(name: string): string {
+  raise("work ${name}")
+  return "fast ${name}"
+}
+
+// The helper starts `slow` and `fast` together. Each raises an interrupt
+// while the other is still running, and the handler here answers both.
+node main() {
+  const askedAbout = []
+  let results: any = []
+  handle {
+    results = callBoth(slow, fast)
+  } with (intr) {
+    askedAbout.push(intr.message)
+    return approve()
+  }
+  return { results: results, askedAbout: askedAbout.sort() }
+}

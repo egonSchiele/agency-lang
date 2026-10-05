@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "approved",
+      "description": "A helper awaits a timer and then raises through the handle from agency.current(). The handle block around the call approves it.",
+      "input": "",
+      "expectedOutput": "{\"type\":\"approve\",\"value\":\"from-agency\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejected",
+      "description": "The same helper, and the handler rejects. The helper gets the rejection back.",
+      "input": "",
+      "expectedOutput": "{\"type\":\"reject\",\"value\":\"no\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "raisedInsideHandlerFunction",
+      "description": "A handler function calls a helper that waits and then raises. The handler function is not asked about that interrupt. The outer handler is asked about it first, and then about the interrupt the inner handler function was answering.",
+      "input": "",
+      "expectedOutput": "{\"seenByHelper\":{\"type\":\"approve\",\"value\":\"from-outer\"},\"outerAskedAbout\":[\"test::own\",\"unknown\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

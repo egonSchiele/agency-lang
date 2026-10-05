@@ -252,7 +252,9 @@ export function withChildRun<T>(
  * current now. A test's stub client has no `logFor`, and is used as it is.
  */
 export function logOf(ctx: RuntimeContext<any>, globals: GlobalStore): StatelogClient {
-  const client = ctx.statelogClient;
+  // Read the field, not `ctx.rootLogWithSpans`: a test may build its context
+  // from a plain object, which has the field and not the getter.
+  const client = ctx.statelogClient as StatelogClient;
   return typeof client?.logFor === "function" ? client.logFor(globals) : client;
 }
 
@@ -465,17 +467,16 @@ export async function withPushedHandler<T>(
   ctx: RuntimeContext<any>,
   handler: HandlerFn,
   fn: () => Promise<T>,
-  liveGuardIds?: string[],
+  liveGuardIds: string[],
 ): Promise<T> {
-  // TS-side registration captures the live guard set AT CALL TIME, with
-  // no memo: TS callers sit outside the checkpoint replay machinery and
-  // own their own re-execution semantics (unlike Agency handle blocks,
-  // which memoize in Runner.handle). An explicit `liveGuardIds` wins —
-  // preapprove() passes [] because its handler registers conceptually
-  // above any guard (and its body never spends).
-  const captured =
-    liveGuardIds ?? agencyStore.getStore()?.stack?.guards.map((g) => g.guardId) ?? [];
-  ctx.pushHandler(handler, captured);
+  // The caller names the guards that are live where the handler registers.
+  // TS-side registration captures them AT CALL TIME, with no memo: TS
+  // callers sit outside the checkpoint replay machinery and own their own
+  // re-execution semantics (unlike Agency handle blocks, which memoize in
+  // Runner.handle). `agency.withHandler` passes the guards on its run's
+  // stack. preapprove() passes [] because its handler registers
+  // conceptually above any guard (and its body never spends).
+  ctx.pushHandler(handler, liveGuardIds);
   try {
     return await fn();
   } finally {

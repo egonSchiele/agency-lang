@@ -92,7 +92,7 @@
  * `s.step(...)`) intentionally have no runner in the ALS frame and
  * will throw — wrap the interrupt in `s.step(async () => { ... })`.
  */
-import { getRuntimeContext, detachedRun, withRun } from "./asyncContext.js";
+import { currentRun, detachedRun, withRun, type Run } from "./asyncContext.js";
 import { HaltSignal } from "./haltSignal.js";
 import {
   interruptWithHandlers,
@@ -123,8 +123,16 @@ export type InterruptOpts<T = unknown> = {
   expectsValue?: boolean;
 };
 
-export async function interrupt<T = unknown>(opts: InterruptOpts<T>): Promise<InterruptResponse> {
-  const rt = getRuntimeContext();
+export function interrupt<T = unknown>(opts: InterruptOpts<T>): Promise<InterruptResponse> {
+  return interruptFor(currentRun(), opts);
+}
+
+/** `agency.interrupt` for a run the caller already holds. The handle from
+ *  `agency.current()` uses this, so a helper can raise after an `await`. */
+export async function interruptFor<T = unknown>(
+  rt: Run,
+  opts: InterruptOpts<T>,
+): Promise<InterruptResponse> {
   const { ctx, callsite, runner, stack } = rt;
   if (!runner) {
     throw new Error(

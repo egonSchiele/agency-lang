@@ -42,7 +42,8 @@ import {
 import { addCost, addCostTo, addTokens, addTokensTo } from "./cost.js";
 import { __call } from "./call.js";
 import type { CallType } from "./agencyFunction.js";
-import { interrupt, type InterruptOpts } from "./agencyInterrupt.js";
+import { interrupt, interruptFor, type InterruptOpts } from "./agencyInterrupt.js";
+import type { InterruptResponse } from "./interrupts.js";
 import { llm as _llm } from "./agencyLlm.js";
 import {
   checkpoint as _checkpoint,
@@ -285,8 +286,11 @@ const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
  *  finally. Thin wrapper over the shared `withPushedHandler` primitive
  *  in `asyncContext.ts` so user code and `AgencyFunction`'s preapprove
  *  factory go through the same encapsulated combinator. */
-const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> =>
-  withPushedHandler(ctx(), handler, fn);
+const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> => {
+  const run = currentRun();
+  const liveGuardIds = run.stack.guards.map((guard) => guard.guardId);
+  return withPushedHandler(run.ctx, handler, fn, liveGuardIds);
+};
 
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`
  *  for the duration of `fn`; pop in finally.
@@ -433,6 +437,8 @@ const withTestContext = <T>(
 export type RunHandle = {
   call: (fn: unknown, ...args: unknown[]) => Promise<unknown>;
   callWith: (fn: unknown, descriptor: CallType) => Promise<unknown>;
+  /** `agency.interrupt`, raised from this run. It works after an `await`. */
+  interrupt: <T = unknown>(opts: InterruptOpts<T>) => Promise<InterruptResponse>;
   /** `agency.addCost` and `agency.addTokens`, charged to this run. */
   addCost: (amount: number) => void;
   addTokens: (amount: number) => void;
@@ -451,6 +457,7 @@ const current = (): RunHandle => {
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, { type: "positional", args })),
     callWith: (fn, descriptor) =>
       withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, descriptor)),
+    interrupt: (opts) => interruptFor(run, opts),
     addCost: (amount) => addCostTo(run, amount),
     addTokens: (amount) => addTokensTo(run, amount),
     ctx: run.ctx,

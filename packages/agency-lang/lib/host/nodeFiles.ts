@@ -338,7 +338,7 @@ export function writeBytes(
     createViaSibling(root, resolved, data, fileMode, seams);
     return;
   }
-  const fd = openForAppend(root, resolved, fileMode);
+  const fd = appendDescriptor(root, resolved, fileMode);
   try {
     validateDescriptor(fd, root, resolved, seams, "write");
     fs.writeFileSync(fd, data);
@@ -347,8 +347,47 @@ export function writeBytes(
   }
 }
 
-function openForAppend(root: Root, resolved: string, fileMode: number): number {
+function appendDescriptor(root: Root, resolved: string, fileMode: number): number {
   return openOrCreate(root, resolved, fs.constants.O_WRONLY | fs.constants.O_APPEND, fileMode);
+}
+
+export type AppendableFile = {
+  /** Write all of `data` at the end of the file, looping over a short
+   *  write. The descriptor was opened for appending, so two handles on
+   *  one file never write over each other. */
+  append(data: Uint8Array): void;
+  close(): void;
+};
+
+/** Open a file for appends and keep it open, for a writer that adds a
+ *  line at a time, such as the trace writer. The open is the same as
+ *  `append` mode in `writeBytes`: no following of a final link, a real
+ *  parent for a new file, and the descriptor validated before it is
+ *  handed back. */
+export function openForAppend(
+  root: Root,
+  target: string,
+  options: WriteOptions = {},
+): AppendableFile {
+  const resolved = resolveUnder(root, target);
+  const fd = appendDescriptor(root, resolved, options.fileMode ?? DEFAULT_FILE_MODE);
+  try {
+    validateDescriptor(fd, root, resolved, options.seams ?? {}, "write");
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
+  }
+  return {
+    append(data) {
+      let written = 0;
+      while (written < data.length) {
+        written += fs.writeSync(fd, data, written, data.length - written);
+      }
+    },
+    close() {
+      fs.closeSync(fd);
+    },
+  };
 }
 
 /** Open an existing file with `flags`, or create a new one. A new file's
@@ -660,6 +699,7 @@ export const PRIMITIVES = [
   "writeText",
   "writeBytes",
   "openForWrite",
+  "openForAppend",
   "list",
   "stat",
   "mkdir",

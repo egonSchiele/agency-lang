@@ -95,6 +95,13 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
         close: async () => open.close(),
       };
     },
+    openForAppend: async (root, target, writeOptions) => {
+      const open = files.openForAppend(root, target, withSeams(writeOptions));
+      return {
+        append: async (data) => open.append(data),
+        close: async () => open.close(),
+      };
+    },
     mkdir: async (root, target) => files.mkdir(root, target),
     remove: async (root, target) => files.remove(root, target),
     copy: async (from, to) => files.copy(from, to),

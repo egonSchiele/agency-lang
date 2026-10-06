@@ -1,4 +1,5 @@
 import path from "path";
+import type { HostFiles } from "../../host/host.js";
 import { VERSION } from "../../stdlib/version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
@@ -134,17 +135,22 @@ export class TraceWriter {
     }
   }
 
+  /** `files` is the file part of the run's host, which the trace file is
+   *  written through. A host without `fileWrite` refuses the open here,
+   *  while the context is built. */
   static async create({
     runId,
     traceConfig,
+    files,
   }: {
     runId: string;
     traceConfig: TraceConfig;
+    files: HostFiles;
   }): Promise<TraceWriter | null> {
     const sinks: TraceSink[] = [];
     const filePath = resolveTraceFilePath(traceConfig, runId);
     if (filePath) {
-      sinks.push(new FileSink(filePath));
+      sinks.push(await FileSink.open(files, filePath));
     }
     if (traceConfig.traceCallback) {
       sinks.push(new CallbackSink(runId, traceConfig.traceCallback));

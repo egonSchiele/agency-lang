@@ -3,6 +3,7 @@ import { TraceWriter } from "./traceWriter.js";
 import { scanExistingTraceFile } from "./fileSink.js";
 import { CallbackSink } from "./sinks.js";
 import { FileSink } from "./fileSink.js";
+import { nodeHost } from "../../host/nodeHost.js";
 import type { TraceLine } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";
@@ -10,6 +11,7 @@ import * as path from "path";
 import * as os from "os";
 
 const RUN_ID = "test-run-id";
+const files = nodeHost().files;
 
 function readTrace(filePath: string) {
   return fs
@@ -57,7 +59,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes a header as the first line", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.close();
 
     const lines = readTrace(tracePath);
@@ -69,7 +71,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes chunks before their manifest", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -84,7 +86,7 @@ describe("TraceWriter", () => {
   });
 
   it("deduplicates identical globals across checkpoints", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
 
     await writer.writeCheckpoint(makeCheckpoint({ id: 0, stepPath: "0" }));
     await writer.writeCheckpoint(
@@ -109,7 +111,7 @@ describe("TraceWriter", () => {
   });
 
   it("manifest contains checkpoint metadata alongside hashed fields", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint({ label: "test-label", pinned: true }));
     await writer.close();
 
@@ -128,7 +130,7 @@ describe("TraceWriter", () => {
   });
 
   it("emits footer on close with correct counts", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -145,7 +147,10 @@ describe("TraceWriter", () => {
     const callbackSink = new CallbackSink("test-id", (event) => {
       callbackLines.push(event.line);
     });
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath), callbackSink]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      await FileSink.open(files, tracePath),
+      callbackSink,
+    ]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
 
@@ -173,7 +178,7 @@ describe("TraceWriter", () => {
   });
 
   it("writes static-state line", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeStaticState({ prompt: "hello", count: 42 });
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.close();
@@ -185,7 +190,7 @@ describe("TraceWriter", () => {
   });
 
   it("writeHeader is idempotent within a single writer", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeHeader();
     await writer.writeHeader();
     await writer.writeCheckpoint(makeCheckpoint()); // also calls writeHeader internally
@@ -211,24 +216,27 @@ describe("scanExistingTraceFile", () => {
   });
 
   it("returns empty result for a non-existent file", async () => {
-    const result = await scanExistingTraceFile(path.join(tmpDir, "missing.agencytrace"));
+    const result = await scanExistingTraceFile(
+      files,
+      await files.wholePath(path.join(tmpDir, "missing.agencytrace")),
+    );
     expect(result.hasHeader).toBe(false);
     expect(result.chunkHashes.size).toBe(0);
   });
 
   it("returns empty result for an empty file", async () => {
     fs.writeFileSync(tracePath, "");
-    const result = await scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(files, await files.wholePath(tracePath));
     expect(result.hasHeader).toBe(false);
     expect(result.chunkHashes.size).toBe(0);
   });
 
   it("detects an existing header and collects chunk hashes", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.pause();
 
-    const result = await scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(files, await files.wholePath(tracePath));
     expect(result.hasHeader).toBe(true);
     expect(result.chunkHashes.size).toBeGreaterThan(0);
 
@@ -240,7 +248,7 @@ describe("scanExistingTraceFile", () => {
 
   it("skips malformed lines without bailing on later valid ones", async () => {
     // Build: a header, a chunk, a malformed line, another chunk.
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.pause();
 
@@ -250,7 +258,7 @@ describe("scanExistingTraceFile", () => {
       JSON.stringify({ type: "chunk", hash: "abcd", data: { x: 1 } }) + "\n",
     );
 
-    const result = await scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(files, await files.wholePath(tracePath));
     expect(result.hasHeader).toBe(true);
     expect(result.chunkHashes.has("abcd")).toBe(true);
   });
@@ -272,6 +280,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
   it("first writer on an empty file emits a header and chunks normally", async () => {
     const w = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     expect(w).not.toBeNull();
@@ -286,6 +295,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
   it("second writer on a file that already has a header does not emit a duplicate header", async () => {
     const w1 = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     await w1!.writeCheckpoint(makeCheckpoint());
@@ -293,6 +303,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
 
     const w2 = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     await w2!.writeCheckpoint(makeCheckpoint({ id: 1, stepPath: "1" }));
@@ -305,6 +316,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
   it("second writer dedups chunks already on disk", async () => {
     const w1 = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     await w1!.writeCheckpoint(makeCheckpoint());
@@ -318,6 +330,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
     // should already be in the on-disk set, so no new chunks emitted.
     const w2 = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     await w2!.writeCheckpoint(makeCheckpoint());
@@ -336,6 +349,7 @@ describe("TraceWriter.create cross-segment dedup", () => {
 
     const w = await TraceWriter.create({
       runId: RUN_ID,
+      files,
       traceConfig: { traceFile: tracePath, program: "test.agency" },
     });
     await w!.writeCheckpoint(makeCheckpoint());

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TraceWriter } from "./traceWriter.js";
 import { FileSink } from "./fileSink.js";
+import { nodeHost } from "../../host/nodeHost.js";
 import { TraceReader } from "./traceReader.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";
@@ -8,6 +9,7 @@ import * as path from "path";
 import * as os from "os";
 
 const RUN_ID = "test-run-id";
+const files = nodeHost().files;
 
 describe("TraceReader", () => {
   let tmpDir: string;
@@ -23,7 +25,7 @@ describe("TraceReader", () => {
   });
 
   async function writeSimpleTrace(count: number) {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     for (let i = 0; i < count; i++) {
       await writer.writeCheckpoint(
         new Checkpoint({
@@ -69,7 +71,7 @@ describe("TraceReader", () => {
   });
 
   it("roundtrips complex checkpoint data", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
 
     const cp = new Checkpoint({
       id: 0,
@@ -223,7 +225,7 @@ describe("TraceReader", () => {
   });
 
   it("reads static-state line into staticState property", async () => {
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeHeader();
     await writer.writeStaticState({ prompt: "hello world", maxRetries: 3 });
     await writer.writeCheckpoint(

@@ -1,16 +1,6 @@
-import fs from "fs";
-import path from "path";
-
 export const head = (arr: any[]): any => arr[0];
 export const tail = (arr: any[]): any[] => arr.slice(1);
 export const empty = (arr: any[]): boolean => arr.length === 0;
-
-export function builtinRead(args: { filename: string; dirname: string }): string {
-  const filePath = path.resolve(args.dirname, args.filename);
-  const data = fs.readFileSync(filePath);
-  const contents = data.toString("utf8");
-  return contents;
-}
 
 export function builtinSleep(seconds: number): Promise<void> {
   return new Promise((resolve) => {

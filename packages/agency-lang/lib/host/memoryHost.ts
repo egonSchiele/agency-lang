@@ -389,6 +389,16 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       }
       return store.openForWrite(full);
     },
+    openForAppend: async (root, target, options) => {
+      const full = resolve(root, target);
+      if (!state.files[full]) {
+        store.write(full, new Uint8Array(0), options);
+      }
+      return {
+        append: async (data) => store.write(full, data, { mode: "append" }),
+        close: async () => {},
+      };
+    },
     mkdir: async (root, target) => {
       const full = resolve(root, target);
       state.dirs[full] = true;

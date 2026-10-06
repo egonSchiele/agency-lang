@@ -46,6 +46,7 @@
  *   contract — see `docs/dev/runtime/checkpointing.md` for which state IS
  *   in the contract.
  */
+import type { HostFiles } from "../../host/host.js";
 import { FileMemoryStore } from "./store.js";
 import type { LogLevel } from "../../logger.js";
 
@@ -53,14 +54,20 @@ const stores: Record<string, FileMemoryStore> = {};
 
 /**
  * Return the `FileMemoryStore` for `absDir`, creating it on first
- * call. The directory itself must already exist (callers route
- * through `MemoryFrame`'s constructor, which mkdir-p's before
- * reaching here).
+ * call over `files`, the file part of the host that enabled memory.
+ * The directory itself must already exist (callers route through
+ * `MemoryFrame`'s constructor, which mkdir-p's before reaching here).
+ * A later call with the same `absDir` gets the store the first call
+ * made, whatever host it passes.
  */
-export function getOrCreateStore(absDir: string, logLevel?: LogLevel): FileMemoryStore {
+export function getOrCreateStore(
+  files: HostFiles,
+  absDir: string,
+  logLevel?: LogLevel,
+): FileMemoryStore {
   const existing = stores[absDir];
   if (existing) return existing;
-  const store = new FileMemoryStore(absDir, logLevel);
+  const store = new FileMemoryStore(files, absDir, logLevel);
   stores[absDir] = store;
   return store;
 }

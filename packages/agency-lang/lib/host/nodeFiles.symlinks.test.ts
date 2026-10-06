@@ -10,6 +10,7 @@ import {
   writeText,
   writeBytes,
   openForWrite,
+  openForAppend,
   list,
   stat,
   mkdir,
@@ -101,6 +102,11 @@ const ADAPTERS: Record<Primitive, Run> = {
     file.writeAt(Buffer.from("payload"), 0);
     file.close();
   },
+  openForAppend: (r, t) => {
+    const file = openForAppend(r, t);
+    file.append(Buffer.from("payload"));
+    file.close();
+  },
   list: (r, t) => list(r, t),
   stat: (r, t) => stat(r, t),
   mkdir: (r, t) => mkdir(r, t),
@@ -143,6 +149,9 @@ function checkPositive(name: Primitive, fixture: Fixture, result: unknown): void
   if (name === "readStream") expect(result).toBeInstanceOf(fs.ReadStream);
   if (name === "writeText" || name === "writeBytes" || name === "openForWrite") {
     expect(fs.readFileSync(inside, "utf8")).toBe("payload");
+  }
+  if (name === "openForAppend") {
+    expect(fs.readFileSync(inside, "utf8")).toBe("insidepayload");
   }
   if (name === "list") expect(result).toEqual([]);
   if (name === "stat") expect((result as fs.Stats).isFile()).toBe(true);

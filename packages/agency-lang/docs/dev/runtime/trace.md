@@ -73,9 +73,9 @@ The trace file is JSONL. `TraceLine` in `lib/runtime/trace/types.ts` is the unio
 
 Chunks always appear before the manifests that reference them (streaming protocol).
 
-A sink is where lines go. `FileSink` appends to a file and `CallbackSink` hands each line to `traceConfig.traceCallback`. Both live in `lib/runtime/trace/sinks.ts`.
+A sink is where lines go. `FileSink` (`lib/runtime/trace/fileSink.ts`) appends to a file through the host's files: `FileSink.open(files, path)` holds the file open with `openForAppend`, and each line is one append. `CallbackSink` (`lib/runtime/trace/sinks.ts`) hands each line to `traceConfig.traceCallback`. A host without `fileWrite` refuses the open, so a trace file on such a host fails while the context is built.
 
-One run can produce several writers, one per execution context, because every `respondToInterrupts` builds a new one. `FileSink` therefore appends rather than truncates, and `TraceWriter.create` calls `scanExistingTraceFile` to learn what is already on disk. That scan seeds the new writer's hash set and its header flag, so the file keeps exactly one header and no duplicate chunks.
+One run can produce several writers, one per execution context, because every `respondToInterrupts` builds a new one. `FileSink` therefore appends rather than truncates, and `TraceWriter.create` asks each sink for `existing()`, which for a file is `scanExistingTraceFile`, to learn what is already on disk. That scan seeds the new writer's hash set and its header flag, so the file keeps exactly one header and no duplicate chunks. `runNode` empties the file at the start of a fresh run, through the same host.
 
 ### Reading
 
@@ -83,7 +83,7 @@ One run can produce several writers, one per execution context, because every `r
 
 ```typescript
 // Write
-const writer = new TraceWriter(runId, "my-agent.agency", [new FileSink(filePath)]);
+const writer = new TraceWriter(runId, "my-agent.agency", [await FileSink.open(host.files, filePath)]);
 await writer.writeCheckpoint(checkpoint);
 await writer.close();
 
@@ -95,7 +95,7 @@ reader.sources      // Record<string, string>, from a bundle
 reader.staticState  // Record<string, unknown> | null
 ```
 
-Prefer `TraceWriter.create({ runId, traceConfig })`, which picks the sinks and does the on-disk scan for you.
+Prefer `TraceWriter.create({ runId, traceConfig, files })`, which picks the sinks and does the on-disk scan for you.
 
 ## Key files
 
@@ -106,7 +106,8 @@ Prefer `TraceWriter.create({ runId, traceConfig })`, which picks the sinks and d
 | `lib/runtime/trace/types.ts` | `CheckpointJSON`, `CHECKPOINT_SCHEMA`, `TraceManifest`, `TraceHeader`, etc. |
 | `lib/runtime/trace/traceWriter.ts` | `TraceWriter` — streaming JSONL writer |
 | `lib/runtime/trace/traceReader.ts` | `TraceReader` — reads file, reconstructs `Checkpoint[]` |
-| `lib/runtime/trace/sinks.ts` | `TraceSink`, `FileSink`, `CallbackSink` |
+| `lib/runtime/trace/sinks.ts` | `TraceSink`, `CallbackSink` |
+| `lib/runtime/trace/fileSink.ts` | `FileSink` over the host's files, and `scanExistingTraceFile` |
 | `lib/runtime/trace/eventLog.ts` | Turns a trace into the JSON event log `agency trace log` prints |
 | `lib/runtime/debugger.ts` | `debugStep()` — the trace write path |
 | `lib/runtime/state/context.ts` | Owns `traceWriter` / `traceConfig`, builds the writer in `createExecutionContext` |

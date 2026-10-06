@@ -71,6 +71,12 @@ export type WritableFile = {
   close(): Promise<void>;
 };
 
+export type AppendableFile = {
+  /** Write all of `data` at the end of the file. */
+  append(data: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+};
+
 /** The files. Every function takes a `Root` an approval named, and a host
  *  built with a narrower root reaches less. The rule every host keeps: under
  *  an approval that names directory D, no byte is read from or written to
@@ -125,6 +131,9 @@ export type HostFiles = {
    *  between the read and the write. */
   updateText(root: Root, target: string, change: (current: string | null) => string): Promise<void>;
   openForWrite(root: Root, target: string, options?: WriteOptions): Promise<WritableFile>;
+  /** A file kept open for appends, for a writer that adds a line at a
+   *  time. Two handles on one file never write over each other. */
+  openForAppend(root: Root, target: string, options?: WriteOptions): Promise<AppendableFile>;
   mkdir(root: Root, target: string): Promise<void>;
   remove(root: Root, target: string): Promise<void>;
   copy(from: Located, to: Located): Promise<void>;
@@ -245,6 +254,7 @@ export const FILE_WRITE_FUNCTIONS: (keyof HostFiles)[] = [
   "writeBytes",
   "updateText",
   "openForWrite",
+  "openForAppend",
   "mkdir",
   "remove",
   "copy",

@@ -183,6 +183,19 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect(await host.files.readText(root, "o.bin")).toBe("HELLO wo");
       }));
 
+    it("openForAppend adds to the end, from two handles at once", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        const first = await host.files.openForAppend(root, "log.txt");
+        const second = await host.files.openForAppend(root, "log.txt");
+        await first.append(new TextEncoder().encode("one\n"));
+        await second.append(new TextEncoder().encode("two\n"));
+        await first.append(new TextEncoder().encode("three\n"));
+        await first.close();
+        await second.close();
+        expect(await host.files.readText(root, "log.txt")).toBe("one\ntwo\nthree\n");
+      }));
+
     it("withLock releases its entry when the last holder leaves", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);

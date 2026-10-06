@@ -4,10 +4,12 @@ import * as path from "path";
 import * as os from "os";
 import { TraceWriter } from "../runtime/trace/traceWriter.js";
 import { FileSink } from "../runtime/trace/fileSink.js";
+import { nodeHost } from "../host/nodeHost.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { traceLog } from "./events.js";
 
 const RUN_ID = "test-run-id";
+const files = nodeHost().files;
 
 describe("traceLog integration", () => {
   let tmpDir: string;
@@ -24,7 +26,7 @@ describe("traceLog integration", () => {
     const tracePath = path.join(tmpDir, "test.agencytrace");
     const outputPath = path.join(tmpDir, "events.json");
 
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
@@ -99,7 +101,7 @@ describe("traceLog integration", () => {
     const outputPath = path.join(tmpDir, "events.json");
 
     // TraceWriter writes header on construction; no checkpoints added
-    const writer = new TraceWriter(RUN_ID, "test.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "test.agency", [await FileSink.open(files, tracePath)]);
     await writer.close();
 
     traceLog(tracePath, outputPath);

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { FileSink, CallbackSink } from "./sinks.js";
+import { CallbackSink } from "./sinks.js";
+import { FileSink } from "./fileSink.js";
 import type { TraceLine } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";

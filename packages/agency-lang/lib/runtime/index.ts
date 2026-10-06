@@ -88,7 +88,8 @@ export { PendingPromiseStore } from "./state/pendingPromiseStore.js";
 export { TraceWriter } from "./trace/traceWriter.js";
 export { TraceReader } from "./trace/traceReader.js";
 export type { TraceSink } from "./trace/sinks.js";
-export { FileSink, CallbackSink } from "./trace/sinks.js";
+export { CallbackSink } from "./trace/sinks.js";
+export { FileSink } from "./trace/fileSink.js";
 export type { TraceLine, TraceEvent } from "./trace/types.js";
 
 export {

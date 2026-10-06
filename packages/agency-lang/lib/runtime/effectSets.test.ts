@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { builtinEffectSets, parseEffectSets } from "./effectSets.js";
+import { builtinEffectSets } from "./effectSets.js";
+import { parseEffectSets } from "./effectSetsParse.js";
 import { readFileSync } from "fs";
 import path from "path";
 import { getPackageRoot } from "../importPaths.js";

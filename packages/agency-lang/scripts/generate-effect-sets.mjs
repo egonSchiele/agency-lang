@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { parseEffectSets } from "../dist/lib/runtime/effectSets.js";
+import { parseEffectSets } from "../dist/lib/runtime/effectSetsParse.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = path.join(packageRoot, "stdlib", "effectSets.agency");

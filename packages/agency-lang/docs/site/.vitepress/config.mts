@@ -373,7 +373,6 @@ export default defineConfig({
               items: [{ text: "aws/s3", link: "/stdlib/aws/s3" }],
             },
             { text: "calendar", link: "/stdlib/calendar" },
-            { text: "effectSets", link: "/stdlib/effectSets" },
             { text: "clipboard", link: "/stdlib/clipboard" },
             { text: "concurrency", link: "/stdlib/concurrency" },
             {
@@ -415,6 +414,7 @@ export default defineConfig({
               ],
             },
             { text: "date", link: "/stdlib/date" },
+            { text: "effectSets", link: "/stdlib/effectSets" },
             { text: "embedding", link: "/stdlib/embedding" },
             { text: "fs", link: "/stdlib/fs" },
             { text: "github", link: "/stdlib/github" },

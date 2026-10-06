@@ -57,7 +57,7 @@ Here you can give it a path to a policy file, or use one of the built-in policie
 agency agent --policy approve-all
 ```
 
-You can also approve or reject a named capability set for one session. For example, `agency agent --approve GithubRead` lets the agent read pull requests and issues without asking, while every GitHub write still prompts. `agency effects` lists the sets you can name.
+You can also approve or reject a named effect set for one session. For example, `agency agent --approve GithubRead` lets the agent read pull requests and issues without asking, while every GitHub write still prompts. `agency effects` lists the sets you can name.
 
 ## The agent home directory
 

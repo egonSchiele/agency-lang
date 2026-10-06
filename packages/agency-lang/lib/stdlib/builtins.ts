@@ -1,7 +1,7 @@
 import { classifyIterable } from "../utils/iteration.js";
-import { decodeBase64Strict } from "./base64.js";
-import { fixedRoot, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
-export type { WriteMode } from "./contained.js";
+import { decodeBase64Strict, encodeBase64 } from "./base64.js";
+import type { WriteMode } from "../host/host.js";
+export type { WriteMode } from "../host/host.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -180,7 +180,9 @@ export async function _read(
   offset?: number,
   limit?: number,
 ): Promise<string> {
-  return sliceLines(readText(fixedRoot(rootDir), filename), offset, limit);
+  const host = currentHost();
+  const text = await host.files.readText(await host.files.fixedRoot(rootDir), filename);
+  return sliceLines(text, offset, limit);
 }
 
 /** The lines of `text` a read with `offset` and `limit` returns. Default:
@@ -209,7 +211,8 @@ export async function _write(
   content: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
-  writeBytes(fixedRoot(rootDir), filename, Buffer.from(content, "utf8"), { mode });
+  const host = currentHost();
+  await host.files.writeText(await host.files.fixedRoot(rootDir), filename, content, { mode });
   return true;
 }
 
@@ -219,6 +222,7 @@ export async function _writeBinary(
   base64: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
+  const host = currentHost();
   let bytes: Uint8Array;
   try {
     bytes = decodeBase64Strict(base64);
@@ -226,12 +230,13 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  writeBytes(fixedRoot(rootDir), filename, Buffer.from(bytes), { mode });
+  await host.files.writeBytes(await host.files.fixedRoot(rootDir), filename, bytes, { mode });
   return true;
 }
 
 export async function _readBinary(rootDir: string, filename: string): Promise<string> {
-  return readBytes(fixedRoot(rootDir), filename).toString("base64");
+  const host = currentHost();
+  return encodeBase64(await host.files.readBytes(await host.files.fixedRoot(rootDir), filename));
 }
 
 export function _mostCommon(items: any[]): any {

@@ -3,13 +3,16 @@ import os from "os";
 import path from "path";
 import process from "process";
 import { rejectDangerousPath } from "../fs.js";
+import { nodeHost } from "../../host/nodeHost.js";
+
+const host = nodeHost();
 
 const op = "test";
 const role = "target";
 
 async function isRejected(input: string): Promise<boolean> {
   try {
-    await rejectDangerousPath(input, op, role);
+    await rejectDangerousPath(host, input, op, role);
     return false;
   } catch {
     return true;
@@ -65,7 +68,7 @@ describe("rejectDangerousPath", () => {
   it("includes the operation and role in the error message", async () => {
     let msg = "";
     try {
-      await rejectDangerousPath("", "remove", "target");
+      await rejectDangerousPath(host, "", "remove", "target");
     } catch (e) {
       msg = (e as Error).message;
     }

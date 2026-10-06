@@ -1,4 +1,5 @@
-import { root, mkdir, readText, writeText } from "./contained.js";
+// The synchronous file operations of nodeHost, not host.files: local models are Node-only.
+import { root, mkdir, readText, writeText } from "../host/nodeFiles.js";
 
 /** downloads.json in the models cache dir: resolved model URI → the .gguf
  *  basename node-llama-cpp stored it under. Written on successful (verified)

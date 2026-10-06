@@ -20,7 +20,7 @@ a local read must not become an upload. For offline OCR on Linux or
 Windows, install `@agency-lang/tesseract-local`.
 */
 import { _recognizeTextLocal } from "agency-lang/stdlib-lib/ocr.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
 import { dirname, basename } from "std::path"
 import { image } from "std::thread"

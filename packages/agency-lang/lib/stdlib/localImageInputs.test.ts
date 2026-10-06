@@ -301,31 +301,39 @@ describe("encodedImageInput", () => {
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
   const expected = Buffer.from("png bytes").toString("base64");
 
-  it("encodes a path and the same picture's bytes alike", () => {
-    expect(encodedImageInput(pose, 100, "tagImage")).toBe(expected);
-    expect(encodedImageInput(new Uint8Array(Buffer.from("png bytes")), 100, "tagImage")).toBe(
+  it("encodes a path and the same picture's bytes alike", async () => {
+    expect(await encodedImageInput(pose, 100, "tagImage")).toBe(expected);
+    expect(await encodedImageInput(new Uint8Array(Buffer.from("png bytes")), 100, "tagImage")).toBe(
       expected,
     );
   });
 
-  it("refuses bytes over the cap, and names the cap", () => {
-    expect(() => encodedImageInput(new Uint8Array(1_001), 1_000, "tagImage")).toThrow(
+  it("refuses bytes over the cap, and names the cap", async () => {
+    await expect(encodedImageInput(new Uint8Array(1_001), 1_000, "tagImage")).rejects.toThrow(
       "the image is 1,001 bytes; the most tagImage sends is 1,000.",
     );
   });
 
-  it("refuses a path that is a symlink, a missing file, and a file over the cap", () => {
-    expect(() => encodedImageInput(path.join(dir, "linked.png"), 100, "tagImage")).toThrow();
-    expect(() => encodedImageInput(path.join(dir, "absent.png"), 100, "tagImage")).toThrow(
+  it("refuses a path that is a symlink, a missing file, and a file over the cap", async () => {
+    await expect(
+      encodedImageInput(path.join(dir, "linked.png"), 100, "tagImage"),
+    ).rejects.toThrow();
+    await expect(encodedImageInput(path.join(dir, "absent.png"), 100, "tagImage")).rejects.toThrow(
       /no such file/,
     );
-    expect(() => encodedImageInput(pose, 4, "tagImage")).toThrow(/the most tagImage sends is 4/);
+    await expect(encodedImageInput(pose, 4, "tagImage")).rejects.toThrow(
+      /the most tagImage sends is 4/,
+    );
   });
 
-  it("refuses a URL or a data URI", () => {
+  it("refuses a URL or a data URI", async () => {
     const message = "tagImage reads files on this machine only.";
-    expect(() => encodedImageInput("https://example.com/a.png", 100, "tagImage")).toThrow(message);
-    expect(() => encodedImageInput("data:image/png;base64,AAAA", 100, "tagImage")).toThrow(message);
+    await expect(encodedImageInput("https://example.com/a.png", 100, "tagImage")).rejects.toThrow(
+      message,
+    );
+    await expect(encodedImageInput("data:image/png;base64,AAAA", 100, "tagImage")).rejects.toThrow(
+      message,
+    );
   });
 });
 

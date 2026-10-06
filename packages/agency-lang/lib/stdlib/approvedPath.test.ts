@@ -3,7 +3,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
+import { nodeHost } from "../host/nodeHost.js";
 import { approvedFilePath, approvedFileBytes } from "./approvedPath.js";
+
+const host = nodeHost();
 
 describe("approvedFilePath", () => {
   let tmp: string;
@@ -16,35 +19,37 @@ describe("approvedFilePath", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("returns the resolved path of a regular file", () => {
+  it("returns the resolved path of a regular file", async () => {
     const file = path.join(tmp, "a.png");
     fs.writeFileSync(file, "x");
-    expect(approvedFilePath(file)).toBe(fs.realpathSync(file));
+    expect(await approvedFilePath(host, file)).toBe(fs.realpathSync(file));
   });
 
-  it("refuses a missing file", () => {
-    expect(() => approvedFilePath(path.join(tmp, "gone.png"))).toThrow(/no such file/);
+  it("refuses a missing file", async () => {
+    await expect(approvedFilePath(host, path.join(tmp, "gone.png"))).rejects.toThrow(
+      /no such file/,
+    );
   });
 
-  it("refuses a directory", () => {
-    expect(() => approvedFilePath(tmp)).toThrow(/not a regular file/);
+  it("refuses a directory", async () => {
+    await expect(approvedFilePath(host, tmp)).rejects.toThrow(/not a regular file/);
   });
 
-  it("refuses a symlink that replaced the file after approval", () => {
+  it("refuses a symlink that replaced the file after approval", async () => {
     const target = path.join(tmp, "elsewhere.png");
     fs.writeFileSync(target, "x");
     const file = path.join(tmp, "a.png");
     fs.symlinkSync(target, file);
-    expect(() => approvedFilePath(file)).toThrow();
+    await expect(approvedFilePath(host, file)).rejects.toThrow();
   });
 
-  it("refuses a directory in the spelling that became a symlink", () => {
+  it("refuses a directory in the spelling that became a symlink", async () => {
     const realDir = path.join(tmp, "real");
     fs.mkdirSync(realDir);
     fs.writeFileSync(path.join(realDir, "a.png"), "x");
     const linkDir = path.join(tmp, "link");
     fs.symlinkSync(realDir, linkDir);
-    expect(() => approvedFilePath(path.join(linkDir, "a.png"))).toThrow();
+    await expect(approvedFilePath(host, path.join(linkDir, "a.png"))).rejects.toThrow();
   });
 });
 
@@ -57,26 +62,28 @@ describe("approvedFileBytes", () => {
     safeDeleteDirectoryWithin(os.tmpdir(), tmp);
   });
 
-  it("returns the bytes of a regular file", () => {
+  it("returns the bytes of a regular file", async () => {
     const file = path.join(tmp, "a.png");
     fs.writeFileSync(file, "png bytes");
-    expect(approvedFileBytes(file, 100).toString()).toBe("png bytes");
+    expect(new TextDecoder().decode(await approvedFileBytes(host, file, 100))).toBe("png bytes");
   });
 
-  it("refuses a file over the limit before reading it", () => {
+  it("refuses a file over the limit before reading it", async () => {
     const file = path.join(tmp, "a.png");
     fs.writeFileSync(file, "0123456789");
-    expect(() => approvedFileBytes(file, 9)).toThrow(
+    await expect(approvedFileBytes(host, file, 9)).rejects.toThrow(
       `${file} is 10 bytes; the most this reads is 9.`,
     );
   });
 
-  it("refuses a symlink, a missing file, and a directory", () => {
+  it("refuses a symlink, a missing file, and a directory", async () => {
     const target = path.join(tmp, "elsewhere.png");
     fs.writeFileSync(target, "x");
     fs.symlinkSync(target, path.join(tmp, "link.png"));
-    expect(() => approvedFileBytes(path.join(tmp, "link.png"), 100)).toThrow();
-    expect(() => approvedFileBytes(path.join(tmp, "gone.png"), 100)).toThrow(/no such file/);
-    expect(() => approvedFileBytes(tmp, 100)).toThrow(/not a regular file/);
+    await expect(approvedFileBytes(host, path.join(tmp, "link.png"), 100)).rejects.toThrow();
+    await expect(approvedFileBytes(host, path.join(tmp, "gone.png"), 100)).rejects.toThrow(
+      /no such file/,
+    );
+    await expect(approvedFileBytes(host, tmp, 100)).rejects.toThrow(/not a regular file/);
   });
 });

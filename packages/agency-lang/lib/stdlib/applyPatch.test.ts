@@ -7,8 +7,8 @@ import { safeDeleteDirectoryWithin } from "../utils.js";
 const patchFor = (file: string) => `--- a/${file}\n+++ b/${file}\n@@ -1,1 +1,1 @@\n-old\n+new\n`;
 
 describe("applyPatch with an approved file list", () => {
-  it("names the real path of each touched file before the interrupt", () => {
-    const files = _patchFiles(patchFor("some/dir/x.txt"));
+  it("names the real path of each touched file before the interrupt", async () => {
+    const files = await _patchFiles(patchFor("some/dir/x.txt"));
     expect(files).toEqual([path.resolve(process.cwd(), "some/dir/x.txt")]);
   });
 
@@ -17,7 +17,7 @@ describe("applyPatch with an approved file list", () => {
     try {
       const rel = path.relative(process.cwd(), path.join(dir, "target.txt"));
       const patch = patchFor(rel);
-      const approved = _patchFiles(patch);
+      const approved = await _patchFiles(patch);
       fs.writeFileSync(path.join(dir, "elsewhere.txt"), "old\n");
       fs.symlinkSync(path.join(dir, "elsewhere.txt"), path.join(dir, "target.txt"));
       await expect(_applyPatch(patch, [], approved)).rejects.toThrow(/symlink/);

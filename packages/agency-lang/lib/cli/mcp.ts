@@ -91,14 +91,14 @@ export async function mcpRemove(
   return 1;
 }
 
-export function mcpList(target: ConfigTarget = currentProject()): number {
+export async function mcpList(target: ConfigTarget = currentProject()): Promise<number> {
   const { config, error } = readConfig(target);
   if (error !== undefined) {
     console.error(error);
     return 1;
   }
   const project: RawMcpServers = config.mcpServers ?? {};
-  const global = _readMcpServersFromFile(globalFile());
+  const global = await _readMcpServersFromFile(globalFile());
   const names = Array.from(new Set([...Object.keys(global), ...Object.keys(project)])).sort();
   if (names.length === 0) {
     console.log("No MCP servers configured. Add one with: agency mcp add <name> …");

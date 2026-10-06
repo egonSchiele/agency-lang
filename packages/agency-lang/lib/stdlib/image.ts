@@ -10,7 +10,9 @@ import { mlxBaseUrl } from "./mlxServerModels.js";
 import { checkLocalImageArgs, localImageSettings, type LocalGeneratedImage } from "./mlxImage.js";
 import { explainNoServer } from "./localRequest.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
+import type { Host } from "../host/host.js";
 import { approvedFileBytes } from "./approvedPath.js";
+import { encodeBase64 } from "./base64.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import {
   IMAGE_MIME_TYPES,
@@ -68,16 +70,18 @@ export function _imageDestination(
  *  approval, and sent as bytes, so the provider library never opens a
  *  path. `approvedFileBytes` refuses a symlink that appeared while the
  *  prompt was pending, and a file over the size cap. */
-function buildInput(prompt: string, images: ImageSource[]): ImageInput {
+async function buildInput(host: Host, prompt: string, images: ImageSource[]): Promise<ImageInput> {
   if (images.length === 0) return prompt;
-  const refs: ImageRef[] = images.map((image) => {
+  const refs: ImageRef[] = [];
+  for (const image of images) {
     if (!image.local) {
-      return classifySource(image.source, "", false) as ImageRef;
+      refs.push(classifySource(image.source, "", false) as ImageRef);
+      continue;
     }
     const mimeType = IMAGE_MIME_TYPES[path.extname(image.source).toLowerCase()];
-    const data = new Uint8Array(approvedFileBytes(image.source, MAX_IMAGE_BYTES));
-    return { kind: "bytes", data, mimeType };
-  });
+    const data = await approvedFileBytes(host, image.source, MAX_IMAGE_BYTES);
+    refs.push({ kind: "bytes", data, mimeType });
+  }
   return { prompt, images: refs };
 }
 
@@ -183,7 +187,7 @@ export async function _generateImage(
   });
   let input: ImageInput;
   try {
-    input = buildInput(prompt, images);
+    input = await buildInput(run.ctx.host, prompt, images);
   } catch (err) {
     return failure(`Image generation failed: ${(err as Error).message}`);
   }
@@ -203,7 +207,7 @@ export async function _generateImage(
  *  std::readImage for each, so the server never opens a path a request
  *  wrote. `approvedFileBytes` refuses a symlink that appeared while the
  *  prompt was pending, and a file over the field's size cap. */
-function imageFields(inputs: LocalImageInputs): Record<string, unknown> {
+async function imageFields(host: Host, inputs: LocalImageInputs): Promise<Record<string, unknown>> {
   const encoded: Record<string, string[]> = {};
   for (const file of inputs.files) {
     const row = LOCAL_IMAGE_FIELDS[file.field];
@@ -212,7 +216,7 @@ function imageFields(inputs: LocalImageInputs): Record<string, unknown> {
     }
     encoded[file.field] = [
       ...(encoded[file.field] ?? []),
-      approvedFileBytes(file.path, row.maxBytes).toString("base64"),
+      encodeBase64(await approvedFileBytes(host, file.path, row.maxBytes)),
     ];
   }
   return Object.fromEntries(
@@ -243,7 +247,7 @@ export async function _generateImageLocal(
   }
   let images: Record<string, unknown>;
   try {
-    images = imageFields(inputs);
+    images = await imageFields(run.ctx.host, inputs);
   } catch (err) {
     return fail((err as Error).message);
   }

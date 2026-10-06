@@ -17,6 +17,7 @@ import {
 import { assertFfmpegAvailable, transcode } from "./ffmpeg.js";
 import type * as ffmpegModule from "./ffmpeg.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
+import { nodeHost } from "../host/nodeHost.js";
 
 // No ffmpeg here: speech.ffmpeg.test.ts runs the real one.
 vi.mock("./ffmpeg.js", async (importOriginal) => ({
@@ -69,6 +70,7 @@ async function withClient(
   const controller = new AbortController();
   const store = {
     ctx: {
+      host: nodeHost(),
       llmClient: client,
       statelogClient: { transcription, speechSynthesis },
       invocationUsage: meter,
@@ -525,10 +527,11 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
 });
 
 describe("publishSpeechOutput", () => {
+  const host = nodeHost();
   it("publishes the exact bytes atomically", async () => {
     const out = path.join(root, "pub.mp3");
     const signal = new AbortController().signal;
-    await publishSpeechOutput(out, new Uint8Array([1, 2, 3]), signal);
+    await publishSpeechOutput(host, out, new Uint8Array([1, 2, 3]), signal);
     expect(new Uint8Array(await readFile(out))).toEqual(new Uint8Array([1, 2, 3]));
   });
 
@@ -536,7 +539,9 @@ describe("publishSpeechOutput", () => {
     const out = path.join(root, "taken.mp3");
     await writeFile(out, Buffer.from([42])); // simulate a racing writer
     const signal = new AbortController().signal;
-    await expect(publishSpeechOutput(out, new Uint8Array([1, 2, 3]), signal)).rejects.toThrow();
+    await expect(
+      publishSpeechOutput(host, out, new Uint8Array([1, 2, 3]), signal),
+    ).rejects.toThrow();
     // original content preserved, no staging left behind
     expect(new Uint8Array(await readFile(out))).toEqual(new Uint8Array([42]));
     const leftovers = (await import("fs/promises")).readdir(root);
@@ -548,7 +553,7 @@ describe("publishSpeechOutput", () => {
     const controller = new AbortController();
     controller.abort(new AgencyCancelledError("stop"));
     await expect(
-      publishSpeechOutput(out, new Uint8Array([1, 2, 3]), controller.signal),
+      publishSpeechOutput(host, out, new Uint8Array([1, 2, 3]), controller.signal),
     ).rejects.toThrow(/stop/);
     await expect(stat(out)).rejects.toThrow();
   });
@@ -561,7 +566,7 @@ describe("publishSpeechOutput", () => {
     await chmod(dir, 0o500); // read+execute, no write → open("wx") fails
     const signal = new AbortController().signal;
     await expect(
-      publishSpeechOutput(path.join(dir, "x.mp3"), new Uint8Array([1, 2, 3]), signal),
+      publishSpeechOutput(host, path.join(dir, "x.mp3"), new Uint8Array([1, 2, 3]), signal),
     ).rejects.toThrow();
     await chmod(dir, 0o700); // restore so afterEach can remove it
   });
@@ -808,7 +813,7 @@ describe("_speakLocal formats and speed", () => {
       await callHelper(_speakLocal, "Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1);
     });
     expect(transcode).toHaveBeenCalledTimes(1);
-    const [wav, format, speed] = vi.mocked(transcode).mock.calls[0];
+    const [, wav, format, speed] = vi.mocked(transcode).mock.calls[0];
     expect(isWav(wav)).toBe(true);
     expect([...wav.slice(44)]).toEqual([1, 0, 2, 0]);
     expect(format).toBe("mp3");
@@ -836,7 +841,7 @@ describe("_speakLocal formats and speed", () => {
       expect(path.extname(wavPath)).toBe(".wav");
       expect(isWav(new Uint8Array(await readFile(wavPath)))).toBe(true);
       expect(path.extname(m4aPath)).toBe(".m4a");
-      expect(vi.mocked(transcode).mock.calls.map((c) => c[1])).toEqual(["m4a"]);
+      expect(vi.mocked(transcode).mock.calls.map((c) => c[2])).toEqual(["m4a"]);
     } finally {
       await rm(wavPath, { force: true });
       await rm(m4aPath, { force: true });
@@ -869,11 +874,11 @@ describe("_speakLocal formats and speed", () => {
       );
     });
     const calls = vi.mocked(transcode).mock.calls;
-    expect(calls.map((c) => [c[1], c[2]])).toEqual([
+    expect(calls.map((c) => [c[2], c[3]])).toEqual([
       ["wav", 1.5],
       ["pcm", 0.5],
     ]);
-    expect(calls.every((c) => isWav(c[0]))).toBe(true);
+    expect(calls.every((c) => isWav(c[1]))).toBe(true);
     expect([...new Uint8Array(await readFile(path.join(root, "b.pcm")))]).toEqual(ENCODED);
   });
 

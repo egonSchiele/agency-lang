@@ -44,7 +44,7 @@ import {
   _threadIsNew,
   _threadHasSystemMessage,
  } from "agency-lang/stdlib-lib/thread.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
 import { dirname, basename } from "std::path"
 

@@ -1,11 +1,12 @@
 import process from "process";
-import { rootPath } from "../host/roots.js";
 import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import path from "path";
 import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str } from "tarsec";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentHost } from "../runtime/currentHost.js";
+import type { Host, Root, Entry } from "../host/host.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -13,16 +14,6 @@ import { abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
-import {
-  root,
-  fixedRoot,
-  resolveUnder,
-  list,
-  stat,
-  readText,
-  type Root,
-  type Entry,
-} from "./contained.js";
 import {
   type GitignoreFile,
   isIgnored,
@@ -78,10 +69,10 @@ function rejectCorruptedCwd(cwd: string): void {
   );
 }
 
-async function resolveSpawnCwd(cwd: string, allowedPaths: string[]): Promise<string> {
+async function resolveSpawnCwd(host: Host, cwd: string, allowedPaths: string[]): Promise<string> {
   if (!cwd) return "";
   rejectCorruptedCwd(cwd);
-  const resolved = await resolveDir(cwd, allowedPaths);
+  const resolved = await resolveDir(host, cwd, allowedPaths);
   let stat;
   try {
     stat = await fs.stat(resolved);
@@ -150,7 +141,7 @@ async function execImpl(
   // place. Relative `cwd: "./sub"` stays anchored to `process.cwd()` (the
   // existing semantics) because we pass `base: "cwd"`. Empty `cwd` is the
   // "no override" sentinel — the child inherits the parent's cwd.
-  const cwdResolved = await resolveSpawnCwd(cwd, options?.allowedPaths ?? []);
+  const cwdResolved = await resolveSpawnCwd(ctx.host, cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
@@ -222,7 +213,7 @@ async function bashImpl(
     }
   }
   // See `execImpl` for the cwd-resolution rationale.
-  const cwdResolved = await resolveSpawnCwd(cwd, options?.allowedPaths ?? []);
+  const cwdResolved = await resolveSpawnCwd(ctx.host, cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn(
     "sh",
@@ -277,24 +268,28 @@ const DEFAULT_LS_MAX_RESULTS = 1000;
  *  against the path being walked, `target` under the root, so
  *  `allowedPaths: ["/tmp/file"]` still admits exactly that file. */
 async function approvedRoot(
+  host: Host,
   rootDir: string,
   target: string,
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
-  const approved = fixedRoot(rootDir);
-  await assertContained(path.join(rootPath(approved), target), allowedPaths ?? [], process.cwd());
+  const approved = await host.files.fixedRoot(rootDir);
+  const walked = await host.files.resolvePath(approved, target);
+  await assertContained(host, walked, allowedPaths ?? [], process.cwd());
   return approved;
 }
 
 /** The root of a probe. stat and exists raise no interrupt, so there is
  *  no approved spelling to hold fixed: the caller's spelling resolves. */
 async function probeRoot(
+  host: Host,
   rootDir: string,
   target: string,
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
-  const probed = root(rootDir);
-  await assertContained(path.join(rootPath(probed), target), allowedPaths ?? [], process.cwd());
+  const probed = await host.files.root(rootDir);
+  const walked = await host.files.resolvePath(probed, target);
+  await assertContained(host, walked, allowedPaths ?? [], process.cwd());
   return probed;
 }
 
@@ -323,17 +318,18 @@ export async function _ls(
   maxResults: number = DEFAULT_LS_MAX_RESULTS,
   allowedPaths?: string[],
 ): Promise<LsEntry[]> {
-  const approved = await approvedRoot(rootDir, dir, allowedPaths);
+  const host = currentHost();
+  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
   // Coerce the cap so a non-finite value (e.g. NaN) can't silently
   // disable the bound and reintroduce unbounded recursion. `0` (and any
   // value <= 0) is a valid request that yields an empty result.
   const cap = Number.isFinite(maxResults) ? maxResults : DEFAULT_LS_MAX_RESULTS;
   const out: LsEntry[] = [];
 
-  function walk(rel: string, isRoot: boolean): boolean {
+  async function walk(rel: string, isRoot: boolean): Promise<boolean> {
     let entries: Entry[];
     try {
-      entries = list(approved, rel);
+      entries = await host.files.list(approved, rel);
     } catch (err) {
       if (isRoot) throw err;
       return true;
@@ -350,12 +346,12 @@ export async function _ls(
         type: entry.type,
         size: entry.size,
       });
-      if (recursive && entry.type === "dir" && !walk(entryRel, false)) return false;
+      if (recursive && entry.type === "dir" && !(await walk(entryRel, false))) return false;
     }
     return true;
   }
 
-  walk(dir, true);
+  await walk(dir, true);
   return out;
 }
 
@@ -379,17 +375,21 @@ type WalkOptions = {
   respectGitignore?: boolean;
 };
 
+/** A root and where it sits, for a walk that spells every entry in full
+ *  for the gitignore rules. */
+type WalkRoot = { host: Host; approved: Root; base: string };
+
 /** The .gitignore in `rel` under the root, read through a validated
  *  descriptor, so a linked .gitignore below the root is ignored like any
  *  other link. Null when there is none. */
-function gitignoreUnder(approved: Root, rel: string): GitignoreFile | null {
+async function gitignoreUnder(walkRoot: WalkRoot, rel: string): Promise<GitignoreFile | null> {
   let text: string;
   try {
-    text = readText(approved, path.join(rel, ".gitignore"));
+    text = await walkRoot.host.files.readText(walkRoot.approved, path.join(rel, ".gitignore"));
   } catch {
     return null;
   }
-  return parseGitignore(path.join(rootPath(approved), rel), text);
+  return parseGitignore(path.join(walkRoot.base, rel), text);
 }
 
 /** The in-tree directories strictly above `dir`, outermost first: for
@@ -404,62 +404,72 @@ function prefixesAbove(dir: string): string[] {
  *  since no approval names them. Files between the root and `dir` are
  *  read under the root. The nearest `.git` entry marks the repository
  *  root, and with no repository anywhere above `dir` nothing applies. */
-async function ancestorIgnoreFiles(approved: Root, dir: string): Promise<GitignoreFile[]> {
-  if (stat(approved, path.join(dir, ".git")) !== null) return [];
+async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
+  const { host, approved } = walkRoot;
+  if ((await host.files.stat(approved, path.join(dir, ".git"))) !== null) return [];
   const prefixes = prefixesAbove(dir);
-  const inTree = (from: number) =>
-    prefixes
-      .slice(from)
-      .map((prefix) => gitignoreUnder(approved, prefix))
-      .filter((file): file is GitignoreFile => file !== null);
+  const inTree = async (from: number) => {
+    const files: GitignoreFile[] = [];
+    for (const prefix of prefixes.slice(from)) {
+      const file = await gitignoreUnder(walkRoot, prefix);
+      if (file !== null) {
+        files.push(file);
+      }
+    }
+    return files;
+  };
   for (let i = prefixes.length - 1; i >= 0; i--) {
-    if (stat(approved, path.join(prefixes[i], ".git")) !== null) return inTree(i);
+    if ((await host.files.stat(approved, path.join(prefixes[i], ".git"))) !== null) {
+      return inTree(i);
+    }
   }
-  const above = await repositoryAncestors(rootPath(approved));
+  const above = await repositoryAncestors(walkRoot.base);
   if (above === null) return [];
   const aboveFiles: GitignoreFile[] = [];
   for (const ancestor of above) {
     const file = await readGitignore(ancestor);
     if (file) aboveFiles.push(file);
   }
-  return [...aboveFiles, ...inTree(0)];
+  return [...aboveFiles, ...(await inTree(0))];
 }
 
 /** Walk `dir` under the approved root. A `dir` that is itself a symlink
  *  below the root is refused before the walk starts; a missing `dir`
  *  yields nothing. */
 async function walkDir(
+  host: Host,
   approved: Root,
   dir: string,
   visit: Visitor,
   options: WalkOptions = {},
 ): Promise<void> {
-  resolveUnder(approved, dir);
+  await host.files.resolvePath(approved, dir);
+  const walkRoot: WalkRoot = { host, approved, base: await host.files.resolvePath(approved, ".") };
   // The .gitignore files on the path from the root to the directory being
   // read, outermost first: a deeper file's rules refine a shallower one's.
   async function walk(rel: string, ignoreFiles: GitignoreFile[]): Promise<boolean> {
     let entries: Entry[];
     try {
-      entries = list(approved, rel);
+      entries = await host.files.list(approved, rel);
     } catch {
       return true;
     }
     let scoped = ignoreFiles;
     if (options.respectGitignore) {
-      const here = gitignoreUnder(approved, rel);
+      const here = await gitignoreUnder(walkRoot, rel);
       if (here) scoped = [...ignoreFiles, here];
     }
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
       const entryRel = joinRel(rel, entry.name);
-      const full = path.join(rootPath(approved), entryRel);
+      const full = path.join(walkRoot.base, entryRel);
       if (options.respectGitignore && isIgnored(full, entry.type === "dir", scoped)) continue;
       if (!(await visit(entryRel, entry))) return false;
       if (entry.type === "dir" && !(await walk(entryRel, scoped))) return false;
     }
     return true;
   }
-  await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(approved, dir) : []);
+  await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(walkRoot, dir) : []);
 }
 
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
@@ -475,18 +485,20 @@ export async function _grep(
   allowedPaths?: string[],
   respectGitignore: boolean = true,
 ): Promise<GrepResults> {
-  const approved = await approvedRoot(rootDir, dir, allowedPaths);
+  const host = currentHost();
+  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
   await walkDir(
+    host,
     approved,
     dir,
     async (rel, entry) => {
       if (entry.type !== "file") return true;
       let text: string;
       try {
-        text = readText(approved, rel);
+        text = await host.files.readText(approved, rel);
       } catch {
         return true;
       }
@@ -541,12 +553,13 @@ export async function _glob(
   maxResults: number,
   allowedPaths?: string[],
 ): Promise<string[]> {
+  const host = currentHost();
   if (maxResults <= 0) return [];
-  const approved = await approvedRoot(rootDir, dir, allowedPaths);
+  const approved = await approvedRoot(host, rootDir, dir, allowedPaths);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  await walkDir(approved, dir, async (rel) => {
+  await walkDir(host, approved, dir, async (rel) => {
     const relToDir = relativeTo(dir, rel);
     if (re.test(relToDir)) {
       results.push(relToDir);
@@ -626,15 +639,13 @@ export async function _stat(
   target: string,
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const approved = await probeRoot(rootDir, target, allowedPaths);
-  const info = stat(approved, target);
+  const host = currentHost();
+  const approved = await probeRoot(host, rootDir, target, allowedPaths);
+  const info = await host.files.stat(approved, target);
   if (info === null) {
     return { exists: false, type: "missing", size: 0, modifiedMs: 0 };
   }
-  let type: StatInfo["type"] = "other";
-  if (info.isDirectory()) type = "dir";
-  else if (info.isFile()) type = "file";
-  return { exists: true, type, size: info.size, modifiedMs: info.mtimeMs };
+  return { exists: true, type: info.kind, size: info.size, modifiedMs: info.modifiedMs };
 }
 
 export async function _exists(
@@ -642,8 +653,9 @@ export async function _exists(
   target: string,
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const approved = await probeRoot(rootDir, target, allowedPaths);
-  return stat(approved, target) !== null;
+  const host = currentHost();
+  const approved = await probeRoot(host, rootDir, target, allowedPaths);
+  return (await host.files.stat(approved, target)) !== null;
 }
 
 export async function _which(command: string): Promise<string> {

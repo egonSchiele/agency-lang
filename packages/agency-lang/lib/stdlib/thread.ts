@@ -10,7 +10,7 @@ import { nanoid } from "nanoid";
 import * as path from "node:path";
 import { currentRun, currentRunOrNone } from "../runtime/asyncContext.js";
 import type { Clock } from "../runtime/clock.js";
-import { wholePath, stat as statUnder } from "./contained.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
@@ -318,8 +318,9 @@ export function _insideToolCall(): boolean {
 
 /** Backs `std::thread.viewFile`. Runs before the interrupt, so it may
  *  only look at the name and the stat, never the bytes. `realPath` was
- *  already resolved through contained.ts by the wrapper. */
-export function _viewFilePrecheck(realPath: string): { kind: "image" | "pdf" } {
+ *  already resolved through the host's files by the wrapper. */
+export async function _viewFilePrecheck(realPath: string): Promise<{ kind: "image" | "pdf" }> {
+  const host = currentHost();
   const ext = path.extname(realPath).toLowerCase();
   const mime = MIME_TYPES[ext];
   if (mime === undefined) {
@@ -327,12 +328,12 @@ export function _viewFilePrecheck(realPath: string): { kind: "image" | "pdf" } {
     const what = ext === "" ? "file without an extension" : ext;
     throw new Error(`viewFile cannot show a ${what}. Accepted: ${accepted}.`);
   }
-  const located = wholePath(realPath);
-  const info = statUnder(located.root, located.target);
+  const located = await host.files.wholePath(realPath);
+  const info = await host.files.stat(located.root, located.target);
   if (info === null) {
     throw new Error(`viewFile: file not found: ${realPath}`);
   }
-  if (!info.isFile()) {
+  if (info.kind !== "file") {
     throw new Error(`viewFile: not a regular file: ${realPath}`);
   }
   if (info.size > MAX_REPLY_ATTACHMENT_BYTES) {

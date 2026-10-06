@@ -1,14 +1,12 @@
 import path from "path";
-import { rootPath } from "../host/roots.js";
-import process from "process";
+import type { Host } from "../host/host.js";
 import { expandPath } from "./expandPath.js";
-import { root } from "./contained.js";
 import { isContained } from "./isContained.js";
 
 /**
  * The allow-list a program sets on itself: assert that `target` resolves
  * inside at least one of `allowedRoots`. Both sides are realpathed by
- * `root()`, so a target that reaches an allowed root only through a
+ * the host, so a target that reaches an allowed root only through a
  * symlink is judged by where it lands.
  *
  * Empty `allowedRoots` means no restriction, kept on purpose so adding
@@ -21,18 +19,25 @@ import { isContained } from "./isContained.js";
  * `allowedPaths: ["~/proj"]` matches paths under the home directory.
  */
 export async function assertContained(
+  host: Host,
   target: string,
   allowedRoots: string[],
-  baseDir: string = process.cwd(),
+  baseDir: string = host.system.cwd(),
 ): Promise<void> {
-  if (allowedRoots.length === 0) return;
+  if (allowedRoots.length === 0) {
+    return;
+  }
   if (target.trim() === "") {
     throw new Error("assertContained: target must not be empty");
   }
-  const realTarget = realOrLexical(path.resolve(baseDir, expandPath(target)));
-  const realRoots = allowedRoots
-    .filter((entry) => entry.trim() !== "")
-    .map((entry) => rootPath(root(path.resolve(baseDir, expandPath(entry)))));
+  const realTarget = await realOrLexical(host, path.resolve(baseDir, expandPath(target)));
+  const realRoots: string[] = [];
+  for (const entry of allowedRoots) {
+    if (entry.trim() === "") {
+      continue;
+    }
+    realRoots.push(await host.files.realDir(path.resolve(baseDir, expandPath(entry))));
+  }
   if (realRoots.length === 0) {
     throw new Error(
       `assertContained: allowedPaths was set (${JSON.stringify(allowedRoots)}) but contained no usable entries; refusing to fall back to unrestricted access.`,
@@ -49,14 +54,14 @@ export async function assertContained(
 /** A dangling link or a loop in the target's spelling is judged where it
  *  sits: its nearest resolvable ancestor is realpathed and the rest kept
  *  as written. The operation that follows refuses or hides it anyway. */
-function realOrLexical(p: string): string {
+async function realOrLexical(host: Host, p: string): Promise<string> {
   try {
-    return rootPath(root(p));
+    return await host.files.realDir(p);
   } catch {
     const parent = path.dirname(p);
     if (parent === p) {
       return p;
     }
-    return path.join(realOrLexical(parent), path.basename(p));
+    return path.join(await realOrLexical(host, parent), path.basename(p));
   }
 }

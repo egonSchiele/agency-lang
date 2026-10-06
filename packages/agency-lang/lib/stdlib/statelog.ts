@@ -3,6 +3,7 @@ import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
 import { resolveDir } from "./resolveDir.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { agentNameProblem } from "../statelog/agentName.js";
 
 type EvalPayload = {
@@ -102,6 +103,9 @@ export async function _finalEvalOutput(
   ).finalEvalOutput();
 }
 
+/** Called on the first line of each function above, before any await, so
+ *  the host it reads is the current run's. */
 function resolveStatelogPath(statelogPath: string, allowedPaths: string[]): Promise<string> {
-  return resolveDir(statelogPath, allowedPaths);
+  const host = currentHost();
+  return resolveDir(host, statelogPath, allowedPaths);
 }

@@ -8,7 +8,9 @@ import {
   type LocalRequestOptions,
 } from "./localRequest.js";
 import { approvedFileBytes } from "./approvedPath.js";
-import { _realTarget } from "./contained.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { encodeBase64 } from "./base64.js";
 import * as path from "node:path";
 
 /** The TypeScript half of `std::vision`: one HTTP call behind three thin
@@ -128,12 +130,13 @@ export function checkVisionModel(model: string): { servedName: string } | { erro
 /** A file's bytes as base64, read after the user approved it, or why it
  *  could not be read. `approvedFileBytes` refuses a symlink planted while
  *  the prompt was pending, and a file over `maxBytes`. */
-function approvedBase64(
+async function approvedBase64(
+  host: Host,
   spelling: string,
   maxBytes: number,
-): { base64: string } | { error: string } {
+): Promise<{ base64: string } | { error: string }> {
   try {
-    return { base64: approvedFileBytes(spelling, maxBytes).toString("base64") };
+    return { base64: encodeBase64(await approvedFileBytes(host, spelling, maxBytes)) };
   } catch (err) {
     return { error: (err as Error).message };
   }
@@ -175,11 +178,12 @@ async function visionRequest(
   model: string,
   fields: Record<string, unknown>,
 ): Promise<LocalReply> {
+  const host = currentHost();
   const checked = checkVisionModel(model);
   if ("error" in checked) {
     return checked;
   }
-  const image = approvedBase64(spelling, MAX_IMAGE_BYTES);
+  const image = await approvedBase64(host, spelling, MAX_IMAGE_BYTES);
   if ("error" in image) {
     return image;
   }
@@ -220,8 +224,9 @@ export type VisionFile = { image: string; dir: string; filename: string };
 
 /** Resolves the image a vision function was given. Throws for a path that
  *  cannot be resolved, so the function fails before it asks anything. */
-export function _visionFile(spelling: string): VisionFile {
-  const image = _realTarget(spelling);
+export async function _visionFile(spelling: string): Promise<VisionFile> {
+  const host = currentHost();
+  const image = await host.files.realPath(spelling);
   return { image, dir: path.dirname(image), filename: path.basename(image) };
 }
 

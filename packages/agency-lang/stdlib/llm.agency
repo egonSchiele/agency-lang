@@ -6,7 +6,7 @@ import {
   _loadModelData,
   _modelSupportsInput,
 } from "agency-lang/stdlib-lib/llm.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { env } from "std::system"
 import { dirname, basename } from "std::path"
 

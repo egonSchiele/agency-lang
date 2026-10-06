@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // exercised without a real network fetch. The pure functions under test
 // (selectHostedModels/formatHostedCatalog) take explicit args and don't touch
 // the mocked natives, so this mock doesn't affect them.
-vi.mock("../stdlib/llm.js", () => ({
+vi.mock("../stdlib/llm.js", async (importActual) => ({
+  ...(await importActual<typeof import("../stdlib/llm.js")>()),
   _listHostedModels: () => [],
   _fetchModelData: vi.fn(),
   _loadModelData: vi.fn(),
@@ -16,8 +17,7 @@ import {
   modelsRefresh,
   modelsList,
 } from "./hostedModels.js";
-import { _fetchModelData, _loadModelData } from "../stdlib/llm.js";
-import { wholePath } from "../stdlib/contained.js";
+import { _fetchModelData, _loadModelData, whole } from "../stdlib/llm.js";
 import type { HostedModelInfo } from "../stdlib/llm.js";
 
 const catalog: HostedModelInfo[] = [
@@ -73,7 +73,7 @@ describe("agency models list with files", () => {
   beforeEach(() => {
     process.exitCode = 0;
     vi.mocked(_loadModelData).mockReset();
-    vi.mocked(_loadModelData).mockReturnValue({ ok: true, count: 1, error: "" });
+    vi.mocked(_loadModelData).mockResolvedValue({ ok: true, count: 1, error: "" });
   });
   afterEach(() => {
     process.exitCode = 0;
@@ -83,15 +83,15 @@ describe("agency models list with files", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     await modelsList({}, ["a.json", "b.json"]);
     expect(vi.mocked(_loadModelData).mock.calls.map((c) => c[0])).toEqual(["a.json", "b.json"]);
-    // The CLI has no approval step, so it must pass wholePath; the default
-    // fixedPath would refuse a path spelled through a linked directory.
-    expect(vi.mocked(_loadModelData).mock.calls.every((c) => c[1] === wholePath)).toBe(true);
+    // The CLI has no approval step, so it must pass `whole`; the default
+    // `fixed` would refuse a path spelled through a linked directory.
+    expect(vi.mocked(_loadModelData).mock.calls.every((c) => c[1] === whole)).toBe(true);
     expect(log).toHaveBeenCalled(); // the table is printed after loading
     log.mockRestore();
   });
 
   it("errors and exits non-zero WITHOUT listing if a file fails to load", async () => {
-    vi.mocked(_loadModelData).mockReturnValue({ ok: false, count: 0, error: "bad file" });
+    vi.mocked(_loadModelData).mockResolvedValue({ ok: false, count: 0, error: "bad file" });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await modelsList({}, ["nope.json"]);

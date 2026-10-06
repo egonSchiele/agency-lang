@@ -1,3 +1,4 @@
+// The synchronous file operations of nodeHost, not host.files: local models are Node-only.
 import {
   root,
   wholePath,
@@ -7,7 +8,7 @@ import {
   readText,
   writeText,
   type Root,
-} from "./contained.js";
+} from "../host/nodeFiles.js";
 import { isContained } from "./isContained.js";
 import * as os from "node:os";
 import * as path from "node:path";

@@ -61,7 +61,8 @@ export const NODE_ONLY = {
  *  part of the compiler that uses Node (the files under
  *  lib/runtime/template, lib/runtime/toolBlockDiagnostics.ts,
  *  lib/stdlib/template.ts, and lib/debugger/debuggerState.ts, which
- *  imports all of lib/index.ts). Sorted. */
+ *  imports all of lib/index.ts), or that pull in lib/eval/statelogParser.ts,
+ *  which reads a statelog file with fs (lib/stdlib/statelog.ts). Sorted. */
 export const WAITING = [
   "lib/config/config.ts",
   "lib/debugger/debuggerState.ts",
@@ -91,16 +92,13 @@ export const WAITING = [
   "lib/runtime/trace/traceWriter.ts",
   "lib/statelogClient.ts",
   "lib/stdlib/abortable.ts",
-  "lib/stdlib/agentSessions.ts",
   "lib/stdlib/appleNotes.ts",
   "lib/stdlib/args.ts",
   "lib/stdlib/assertContained.ts",
   "lib/stdlib/aws/s3.ts",
   "lib/stdlib/aws/uri.ts",
   "lib/stdlib/base64.ts",
-  "lib/stdlib/builtins.ts",
   "lib/stdlib/clipboard.ts",
-  "lib/stdlib/contained.ts",
   "lib/stdlib/expandPath.ts",
   "lib/stdlib/ffmpeg.ts",
   "lib/stdlib/fs.ts",

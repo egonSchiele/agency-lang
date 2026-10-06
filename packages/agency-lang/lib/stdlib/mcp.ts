@@ -1,4 +1,5 @@
-import { wholePath, readText, writeText, mkdir } from "./contained.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { isPlainObject } from "../config/paths.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
@@ -181,11 +182,11 @@ export async function _validateMcpServers(servers: RawMcpServers): Promise<Resul
 /** Read a config file's top-level object. `null` when absent. failure() when it
  *  exists but is unreadable / not valid JSON / not a JSON object — so the
  *  add/remove writers never clobber a file they could not fully parse. */
-function readConfigObject(file: string): ResultValue {
+async function readConfigObject(host: Host, file: string): Promise<ResultValue> {
   let text: string;
   try {
-    const located = wholePath(file);
-    text = readText(located.root, located.target);
+    const located = await host.files.wholePath(file);
+    text = await host.files.readText(located.root, located.target);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return success(null);
@@ -208,16 +209,21 @@ function readConfigObject(file: string): ResultValue {
   return success(parsed);
 }
 
-function writeConfigObject(file: string, data: Record<string, unknown>): void {
-  const located = wholePath(file);
-  mkdir(located.root, ".");
-  writeText(located.root, located.target, JSON.stringify(data, null, 2) + "\n");
+async function writeConfigObject(
+  host: Host,
+  file: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const located = await host.files.wholePath(file);
+  await host.files.mkdir(located.root, ".");
+  await host.files.writeText(located.root, located.target, JSON.stringify(data, null, 2) + "\n");
 }
 
 /** The mcpServers map from a config file. Lenient: a missing or unparseable
  *  file reads as no servers (used by `list`, which must never crash). */
-export function _readMcpServersFromFile(file: string): RawMcpServers {
-  const read = readConfigObject(file);
+export async function _readMcpServersFromFile(file: string): Promise<RawMcpServers> {
+  const host = currentHost();
+  const read = await readConfigObject(host, file);
   if (isFailure(read) || read.value === null) {
     return {};
   }
@@ -232,18 +238,19 @@ export async function _addMcpServer(
   config: RawMcpServerConfig,
   file: string,
 ): Promise<ResultValue> {
+  const host = currentHost();
   const valid = await _validateMcpServers({ [name]: config });
   if (isFailure(valid)) {
     return valid;
   }
-  const read = readConfigObject(file);
+  const read = await readConfigObject(host, file);
   if (isFailure(read)) {
     return read;
   }
   const raw = (read.value ?? {}) as Record<string, unknown>;
   raw.mcpServers = _mergeMcpServers(serversOf(raw), { [name]: config });
   try {
-    writeConfigObject(file, raw);
+    await writeConfigObject(host, file, raw);
   } catch (error) {
     return failure(
       `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
@@ -255,7 +262,8 @@ export async function _addMcpServer(
 /** Remove one server from `file`. success(true) if it existed and was removed,
  *  success(false) if it was not present, failure() if the file is unparseable. */
 export async function _removeMcpServer(name: string, file: string): Promise<ResultValue> {
-  const read = readConfigObject(file);
+  const host = currentHost();
+  const read = await readConfigObject(host, file);
   if (isFailure(read)) {
     return read;
   }
@@ -275,7 +283,7 @@ export async function _removeMcpServer(name: string, file: string): Promise<Resu
   }
   raw.mcpServers = next;
   try {
-    writeConfigObject(file, raw);
+    await writeConfigObject(host, file, raw);
   } catch (error) {
     return failure(
       `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,

@@ -24,7 +24,9 @@ import { getAllImports } from "@/analysis/imports.js";
 import { importKind } from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
-import { root, readText } from "@/stdlib/contained.js";
+// The synchronous file operations of nodeHost, not host.files: the compiler
+// has no run to take a host from.
+import { root, readText } from "@/host/nodeFiles.js";
 import type { AgencyProgram } from "@/types.js";
 
 declare const validatedClosureBrand: unique symbol;

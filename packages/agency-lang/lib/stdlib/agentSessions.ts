@@ -1,7 +1,7 @@
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
-import * as path from "path";
-import { root, list, stat, mkdir, readText, writeText, type Root } from "./contained.js";
+import type { Host, Root } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { __call } from "../runtime/call.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
@@ -41,10 +41,10 @@ function metaFile(id: string): string {
 
 /** The parsed JSON of `name` under `dir`, or null when it is missing or
  *  malformed. */
-function readJson(dir: Root, name: string): unknown {
+async function readJson(host: Host, dir: Root, name: string): Promise<unknown> {
   try {
-    if (stat(dir, name) === null) return null;
-    return JSON.parse(readText(dir, name));
+    if ((await host.files.stat(dir, name)) === null) return null;
+    return JSON.parse(await host.files.readText(dir, name));
   } catch {
     return null;
   }
@@ -68,13 +68,14 @@ function isRecord(value: unknown): value is SessionRecord {
 
 /** Every session in `dir`, most recently active first. A malformed
  *  record file is skipped. */
-export function _listSessions(dir: string): SessionRecord[] {
-  const sessions = root(dir);
-  if (stat(sessions, ".") === null) return [];
+export async function _listSessions(dir: string): Promise<SessionRecord[]> {
+  const host = currentHost();
+  const sessions = await host.files.root(dir);
+  if ((await host.files.stat(sessions, ".")) === null) return [];
   const records: SessionRecord[] = [];
-  for (const entry of list(sessions, ".")) {
+  for (const entry of await host.files.list(sessions, ".")) {
     if (entry.type !== "file" || !entry.name.endsWith(META_SUFFIX)) continue;
-    const parsed = readJson(sessions, entry.name);
+    const parsed = await readJson(host, sessions, entry.name);
     if (isRecord(parsed)) records.push(parsed);
   }
   records.sort((a, b) => b.lastActive - a.lastActive);
@@ -83,14 +84,28 @@ export function _listSessions(dir: string): SessionRecord[] {
 
 /** Write the checkpoint, then the record. Returns "" on success, else the
  *  error message. */
-export function _saveSession(dir: string, record: SessionRecord, checkpoint: unknown): string {
+export async function _saveSession(
+  dir: string,
+  record: SessionRecord,
+  checkpoint: unknown,
+): Promise<string> {
+  const host = currentHost();
+  return saveSession(host, dir, record, checkpoint);
+}
+
+async function saveSession(
+  host: Host,
+  dir: string,
+  record: SessionRecord,
+  checkpoint: unknown,
+): Promise<string> {
   try {
-    const sessions = root(dir);
-    mkdir(sessions, ".");
+    const sessions = await host.files.root(dir);
+    await host.files.mkdir(sessions, ".");
     // writeText renames a finished sibling over the target, so a crash
     // mid-write never leaves a half-written file.
-    writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
-    writeText(sessions, metaFile(record.id), JSON.stringify(record));
+    await host.files.writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
+    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
     return "";
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
@@ -98,8 +113,9 @@ export function _saveSession(dir: string, record: SessionRecord, checkpoint: unk
 }
 
 /** The parsed checkpoint, or null when the file is missing or malformed. */
-export function _readCheckpointFile(dir: string, id: string): unknown {
-  return readJson(root(dir), checkpointFile(id));
+export async function _readCheckpointFile(dir: string, id: string): Promise<unknown> {
+  const host = currentHost();
+  return readJson(host, await host.files.root(dir), checkpointFile(id));
 }
 
 export type TranscriptMessage = { role: "user" | "assistant"; content: string };
@@ -179,7 +195,7 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
   const target = (await call(run, hooks.afterTurn, line)) as SaveTarget;
   if (target) {
     const cp = getCheckpointFor(run, await checkpointFor(run));
-    const error = _saveSession(target.dir, target.record, cp);
+    const error = await saveSession(run.ctx.host, target.dir, target.record, cp);
     if (error) {
       run.ctx.host.terminal.writeOut(`Could not save this session: ${error}\n`);
     }

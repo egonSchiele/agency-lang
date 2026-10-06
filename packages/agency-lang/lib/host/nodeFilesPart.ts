@@ -73,13 +73,17 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
       files.writeBytes(root, target, Buffer.from(bytes), withSeams(writeOptions)),
     // Synchronous reads and writes with nothing between them, which is how
     // this host meets the rule that no other call on the file runs in the
-    // middle of an update.
+    // middle of an update. The read refuses a link at the final name the
+    // way every read does; only a missing file reads as null.
     updateText: async (root, target, change) => {
       let current: string | null;
-      if (files.stat(root, target) === null) {
-        current = null;
-      } else {
+      try {
         current = files.readText(root, target, seams);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+        current = null;
       }
       files.writeText(root, target, change(current), { seams });
     },

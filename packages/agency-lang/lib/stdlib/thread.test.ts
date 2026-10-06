@@ -23,37 +23,37 @@ describe("_viewFilePrecheck", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("classifies png as image and pdf as pdf", () => {
+  it("classifies png as image and pdf as pdf", async () => {
     const png = path.join(tmp, "a.png");
     const pdf = path.join(tmp, "b.pdf");
     fs.writeFileSync(png, "x");
     fs.writeFileSync(pdf, "x");
-    expect(_viewFilePrecheck(png)).toEqual({ kind: "image" });
-    expect(_viewFilePrecheck(pdf)).toEqual({ kind: "pdf" });
+    expect(await _viewFilePrecheck(png)).toEqual({ kind: "image" });
+    expect(await _viewFilePrecheck(pdf)).toEqual({ kind: "pdf" });
   });
 
-  it("refuses an extension the reply pipeline cannot send", () => {
+  it("refuses an extension the reply pipeline cannot send", async () => {
     const txt = path.join(tmp, "notes.txt");
     fs.writeFileSync(txt, "x");
-    expect(() => _viewFilePrecheck(txt)).toThrow(/\.txt.*\.png/);
+    await expect(_viewFilePrecheck(txt)).rejects.toThrow(/\.txt.*\.png/);
   });
 
-  it("refuses a missing file", () => {
-    expect(() => _viewFilePrecheck(path.join(tmp, "gone.png"))).toThrow(/not found/);
+  it("refuses a missing file", async () => {
+    await expect(_viewFilePrecheck(path.join(tmp, "gone.png"))).rejects.toThrow(/not found/);
   });
 
-  it("refuses a directory named like an image", () => {
+  it("refuses a directory named like an image", async () => {
     const dir = path.join(tmp, "folder.png");
     fs.mkdirSync(dir);
-    expect(() => _viewFilePrecheck(dir)).toThrow(/not a regular file/);
+    await expect(_viewFilePrecheck(dir)).rejects.toThrow(/not a regular file/);
   });
 
-  it("refuses a file over the size cap", () => {
+  it("refuses a file over the size cap", async () => {
     const big = path.join(tmp, "big.png");
     const fd = fs.openSync(big, "w");
     fs.ftruncateSync(fd, MAX_REPLY_ATTACHMENT_BYTES + 1);
     fs.closeSync(fd);
-    expect(() => _viewFilePrecheck(big)).toThrow(/attachment limit/);
+    await expect(_viewFilePrecheck(big)).rejects.toThrow(/attachment limit/);
   });
 });
 

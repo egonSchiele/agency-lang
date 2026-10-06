@@ -40,7 +40,7 @@ const readRaw = () => JSON.parse(fs.readFileSync(file, "utf-8"));
 describe("_addMcpServer", () => {
   it("creates the file and writes the server", async () => {
     expect(isSuccess(await _addMcpServer("fs", { command: "npx" }, file))).toBe(true);
-    expect(_readMcpServersFromFile(file)).toEqual({ fs: { command: "npx" } });
+    expect(await _readMcpServersFromFile(file)).toEqual({ fs: { command: "npx" } });
   });
 
   it("preserves other top-level keys", async () => {
@@ -91,7 +91,7 @@ describe("_removeMcpServer", () => {
     expect(isSuccess(miss) && miss.value).toBe(false);
     const hit = await _removeMcpServer("a", file);
     expect(isSuccess(hit) && hit.value).toBe(true);
-    expect(_readMcpServersFromFile(file)).toEqual({});
+    expect(await _readMcpServersFromFile(file)).toEqual({});
   });
 
   it("does not treat prototype members (toString) as present", async () => {
@@ -108,12 +108,12 @@ describe("_removeMcpServer", () => {
 });
 
 describe("_readMcpServersFromFile (lenient)", () => {
-  it("returns {} for absent, malformed, or array-root files", () => {
-    expect(_readMcpServersFromFile(file)).toEqual({});
+  it("returns {} for absent, malformed, or array-root files", async () => {
+    expect(await _readMcpServersFromFile(file)).toEqual({});
     fs.writeFileSync(file, "nope");
-    expect(_readMcpServersFromFile(file)).toEqual({});
+    expect(await _readMcpServersFromFile(file)).toEqual({});
     fs.writeFileSync(file, "[]");
-    expect(_readMcpServersFromFile(file)).toEqual({});
+    expect(await _readMcpServersFromFile(file)).toEqual({});
   });
 });
 

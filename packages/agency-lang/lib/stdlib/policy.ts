@@ -1,6 +1,6 @@
 import { checkPolicy, validatePolicy } from "@/runtime/policy.js";
 import { currentRun } from "@/runtime/asyncContext.js";
-import { wholePath, writeText } from "./contained.js";
+import { currentHost } from "@/runtime/currentHost.js";
 import { assertContained } from "./assertContained.js";
 export { validatePolicy as _validatePolicy, escapeGlob as _escapeGlob } from "@/runtime/policy.js";
 
@@ -40,11 +40,12 @@ export {
 } from "@/runtime/builtinPolicies.js";
 
 export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {
+  const host = currentHost();
   const result = validatePolicy(policy);
   if (!result.success) throw new Error(`Invalid policy: ${result.error}`);
-  await assertContained(filePath, allowedPaths ?? []);
-  const located = wholePath(filePath);
-  writeText(located.root, located.target, JSON.stringify(policy, null, 2) + "\n", {
+  await assertContained(host, filePath, allowedPaths ?? []);
+  const located = await host.files.wholePath(filePath);
+  await host.files.writeText(located.root, located.target, JSON.stringify(policy, null, 2) + "\n", {
     fileMode: 0o600,
   });
 }

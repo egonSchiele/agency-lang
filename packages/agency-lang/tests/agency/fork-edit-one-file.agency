@@ -1,0 +1,22 @@
+import { write, read } from "std::index"
+import { remove, edit } from "std::fs"
+
+// Two branches of a fork edit different lines of one file. `edit` reads
+// the file and writes it back through the host's updateText, which lets
+// nothing else touch the file in between, so neither branch's change is
+// lost to the other's write.
+node main(): boolean {
+  const name = "fork-edit-tmp.txt"
+  write(name, "alpha\nbeta\ngamma\n", __dirname) with approve
+  const lines = ["alpha", "gamma"]
+  fork(lines) as line {
+    edit(name, [{ oldText: line, newText: line + "!", replaceAll: false }], __dirname) with approve
+    return line
+  }
+  const back = read(name, __dirname) with approve
+  remove(__dirname + "/" + name) with approve
+  if (back is success(content)) {
+    return content == "alpha!\nbeta\ngamma!\n"
+  }
+  return false
+}

@@ -1,28 +1,25 @@
-import os from "os";
-import { rootPath } from "../host/roots.js";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
+import type { Host, Located } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
-import {
-  root,
-  fixedRoot,
-  fixedPath,
-  wholePath,
-  readText,
-  writeText,
-  mkdir,
-  remove,
-  copy,
-  move,
-  type Located,
-  _realTarget,
-} from "./contained.js";
 
 export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
 export { resolveRedirectTarget as _resolveRedirectTarget } from "./prepareContainedPath.js";
-export { _realDir, _realTarget } from "./contained.js";
+
+/** The real spelling of a directory, for an interrupt payload. */
+export async function _realDir(dir: string): Promise<string> {
+  const host = currentHost();
+  return host.files.realDir(dir);
+}
+
+/** The real spelling of a whole path, for an interrupt payload. */
+export async function _realTarget(p: string): Promise<string> {
+  const host = currentHost();
+  return host.files.realPath(p);
+}
 
 export type MultiEdit = {
   oldText: string;
@@ -89,8 +86,9 @@ export async function _previewEdit(
   filename: string,
   edits: MultiEdit[],
 ): Promise<{ before: string; after: string }> {
+  const host = currentHost();
   try {
-    const before = readText(fixedRoot(rootDir), filename);
+    const before = await host.files.readText(await host.files.fixedRoot(rootDir), filename);
     const { contents } = applyEdits(before, edits, filename);
     return { before, after: contents };
   } catch {
@@ -103,10 +101,17 @@ export async function _multiedit(
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const sandbox = fixedRoot(rootDir);
-  const original = readText(sandbox, filename);
-  const { contents, replacements } = applyEdits(original, edits, filename);
-  writeText(sandbox, filename, contents);
+  const host = currentHost();
+  const sandbox = await host.files.fixedRoot(rootDir);
+  let replacements = 0;
+  await host.files.updateText(sandbox, filename, (original) => {
+    if (original === null) {
+      throw new Error(`multiedit: no such file: ${filename}`);
+    }
+    const applied = applyEdits(original, edits, filename);
+    replacements = applied.replacements;
+    return applied.contents;
+  });
   return { replacements, path: filename, edits: edits.length };
 }
 
@@ -118,8 +123,13 @@ export type PatchResult = {
 /** The real whole path of every file a patch touches, in patch order, for
  *  the `std::applyPatch` payload. Paths in the patch text are relative to
  *  the process cwd. */
-export function _patchFiles(patch: string): string[] {
-  return parseUnifiedDiff(patch).map((f) => _realTarget(f.path));
+export async function _patchFiles(patch: string): Promise<string[]> {
+  const host = currentHost();
+  const files: string[] = [];
+  for (const f of parseUnifiedDiff(patch)) {
+    files.push(await host.files.realPath(f.path));
+  }
+  return files;
 }
 
 /** Apply a parsed patch. `approved` is the file list the approver saw, from
@@ -131,6 +141,7 @@ export async function _applyPatch(
   allowedPaths?: string[],
   approved?: string[],
 ): Promise<PatchResult> {
+  const host = currentHost();
   const files = parseUnifiedDiff(patch);
   if (approved !== undefined && approved.length !== files.length) {
     throw new Error(
@@ -142,14 +153,23 @@ export async function _applyPatch(
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     const spelled = approved === undefined ? f.path : approved[i];
-    await assertContained(spelled, allowedPaths ?? [], process.cwd());
-    const located = approved === undefined ? wholePath(spelled) : fixedPath(spelled);
-    const original = f.isNew ? "" : readText(located.root, located.target);
-    const updated = applyHunks(original, f.hunks, f.path);
-    mkdir(located.root, ".");
-    writeText(located.root, located.target, updated, {
-      mode: f.isNew ? "create-only" : "overwrite",
-    });
+    await assertContained(host, spelled, allowedPaths ?? [], process.cwd());
+    const located =
+      approved === undefined
+        ? await host.files.wholePath(spelled)
+        : await host.files.fixedPath(spelled);
+    await host.files.mkdir(located.root, ".");
+    if (f.isNew) {
+      const updated = applyHunks("", f.hunks, f.path);
+      await host.files.writeText(located.root, located.target, updated, { mode: "create-only" });
+    } else {
+      await host.files.updateText(located.root, located.target, (original) => {
+        if (original === null) {
+          throw new Error(`applyPatch: no such file: ${f.path}`);
+        }
+        return applyHunks(original, f.hunks, f.path);
+      });
+    }
     touched.push(f.path);
   }
 
@@ -259,34 +279,49 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
 /** A whole path the interrupt named, in the real spelling the approver
  *  saw, checked against the program's own allow-list and split into its
  *  parent and final name without following anything. */
-async function locateWhole(p: string, allowedPaths: string[] | undefined): Promise<Located> {
-  await assertContained(p, allowedPaths ?? [], process.cwd());
-  return fixedPath(p);
+async function locateWhole(
+  host: Host,
+  p: string,
+  allowedPaths: string[] | undefined,
+): Promise<Located> {
+  await assertContained(host, p, allowedPaths ?? [], process.cwd());
+  return host.files.fixedPath(p);
 }
 
 export async function _mkdir(dir: string, allowedPaths?: string[]): Promise<void> {
-  const located = await locateWhole(dir, allowedPaths);
-  mkdir(located.root, located.target);
+  const host = currentHost();
+  const located = await locateWhole(host, dir, allowedPaths);
+  await host.files.mkdir(located.root, located.target);
 }
 
 export async function _copy(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
-  copy(await locateWhole(src, allowedPaths), await locateWhole(dest, allowedPaths));
+  const host = currentHost();
+  const from = await locateWhole(host, src, allowedPaths);
+  const to = await locateWhole(host, dest, allowedPaths);
+  await host.files.copy(from, to);
 }
 
 export async function _move(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
-  const from = await locateWhole(src, allowedPaths);
-  const to = await locateWhole(dest, allowedPaths);
-  await rejectDangerousPath(src, "move", "source");
-  move(from, to);
+  const host = currentHost();
+  const from = await locateWhole(host, src, allowedPaths);
+  const to = await locateWhole(host, dest, allowedPaths);
+  await rejectDangerousPath(host, src, "move", "source");
+  await host.files.move(from, to);
 }
 
 export async function _remove(target: string, allowedPaths?: string[]): Promise<void> {
-  const located = await locateWhole(target, allowedPaths);
-  await rejectDangerousPath(target, "remove", "target");
-  remove(located.root, located.target);
+  const host = currentHost();
+  const located = await locateWhole(host, target, allowedPaths);
+  await rejectDangerousPath(host, target, "remove", "target");
+  await host.files.remove(located.root, located.target);
 }
 
-export async function rejectDangerousPath(p: string, op: string, role: string): Promise<void> {
+export async function rejectDangerousPath(
+  host: Host,
+  p: string,
+  op: string,
+  role: string,
+): Promise<void> {
   const trimmed = p.trim();
   if (trimmed === "") {
     throw new Error(`${op}: ${role} must not be empty`);
@@ -294,9 +329,9 @@ export async function rejectDangerousPath(p: string, op: string, role: string): 
   // Expand `~` first so the home / top-level checks below are
   // performed against the actual target, not the literal `~/foo`.
   const lexical = path.resolve(process.cwd(), expandPath(trimmed));
-  const real = rootPath(root(lexical));
-  const homeReal = rootPath(root(os.homedir()));
-  const cwdReal = rootPath(root(process.cwd()));
+  const real = await host.files.realDir(lexical);
+  const homeReal = await host.files.realDir(host.system.homeDir());
+  const cwdReal = await host.files.realDir(host.system.cwd());
 
   const candidates = [lexical, real].filter((c, i, all) => all.indexOf(c) === i);
   for (const candidate of candidates) {

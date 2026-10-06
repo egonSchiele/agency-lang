@@ -59,14 +59,14 @@ model is one file with that information inside it, so it never matches.
 
 A Hugging Face cache snapshot, `hf/hub/models--org--repo/snapshots/<sha>/`,
 holds no real files. Every entry is a symlink into `blobs/`, and
-`contained.ts` drops symlinked entries. So `modelDirEntries` in
+`nodeFiles.ts` drops symlinked entries. So `modelDirEntries` in
 `lib/stdlib/modelBackend.ts` is the one place in the stdlib that follows
 links: `readdirSync` plus `statSync`, reading names and sizes and nothing
 else. `isModelDir` and the size sum in `_modelFilesOnDisk` both go through
 it, so a snapshot alias works as is and reports its real size.
 `modelBackend.ts` is on the `FS_IMPORTERS` allow-list in `eslint.config.js`
 for this. Everything else, including `remove -f`, stays behind
-`contained.ts` and refuses to follow a link.
+`nodeFiles.ts` and refuses to follow a link.
 
 `_resolveModel(value)` turns a name, alias, URI, or path into
 `{ backend, target }`. `_resolveModelName` returns only the target and stays
@@ -109,7 +109,7 @@ Agency reads three shapes of downloaded model, all through
 snapshot to load: `refs/main` if it names one, else a lone snapshot, else an
 error listing them, because guessing a revision is worse than asking. A
 `refs/main` that names a snapshot which is missing or incomplete is an error
-too, for the same reason. The ref is read through `contained.ts`, not the raw
+too, for the same reason. The ref is read through `nodeFiles.ts`, not the raw
 `fs` this file is allowed to use for names and sizes, so a ref that is a
 symlink is refused instead of pointing Agency at a file outside the cache.
 `_resolveModel` runs every value and every alias target through it, so a repo
@@ -586,7 +586,7 @@ Two files split the work:
   abandoned so a dead connection cannot hang a download.
 - `lib/stdlib/hubDownload.ts` plans the chunks (64 MiB each), runs a pool
   of `client.mlx.downloadConcurrency` workers over them, writes each
-  piece at its offset through `openForWrite` from `contained.ts`, and
+  piece at its offset through `openForWrite` from `nodeFiles.ts`, and
   keeps the record current. A chunk gets several attempts with growing
   waits. An expired CDN URL is resolved again and does not count as an
   attempt.

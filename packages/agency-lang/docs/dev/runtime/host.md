@@ -84,7 +84,9 @@ Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, cloc
 
 ### The file part
 
-`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises, and every file operation the stdlib performs on a path a program chose goes through it. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+
+A stdlib helper reaches the file part the way it reaches every other part: through `run.ctx.host` when it was handed the run, through `currentHost()` on its first line when Agency calls it as a plain function, and as an argument when it is a helper below those. A helper that reads a path for a program outside the host, such as the ffmpeg command or a Python script, gets the string from `resolvePath`; nothing outside `lib/host` reads a `Root`. The files with no run to take a host from, the compiler and the local-model code among them, call the synchronous module directly and say so at the import.
 
 Three functions exist only on the host:
 

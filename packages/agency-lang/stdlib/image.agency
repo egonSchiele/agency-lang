@@ -1,6 +1,6 @@
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "agency-lang/stdlib-lib/image.js"
 import { _cropImage, _imageSize, _pasteImages } from "agency-lang/stdlib-lib/imageTools.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _localImageInputs } from "agency-lang/stdlib-lib/localImageInputs.js"
 import { dirname, basename } from "std::path"
 

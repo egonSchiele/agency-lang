@@ -18,6 +18,30 @@ export { color } from "../utils/termcolors.js";
 export { nanoid } from "nanoid";
 export * as smoltalk from "smoltalk";
 export type { InvocationOptions } from "./invocationOptions.js";
+// The host: what a run takes from its platform. An app builds one and
+// passes it through InvocationOptions. See docs/dev/runtime/host.md.
+export {
+  CAPABILITIES,
+  NEEDS,
+  PLATFORM_CAPABILITIES,
+  UnsupportedOnHostError,
+  makeHost,
+  requireCapabilities,
+} from "../host/host.js";
+export type {
+  Capability,
+  Host,
+  HostEnv,
+  HostParts,
+  HostRandom,
+  HostSettings,
+  HostSystem,
+  HostTerminal,
+  OperatingSystem,
+  Platform,
+} from "../host/host.js";
+export { nodeHost } from "../host/nodeHost.js";
+export type { NodeHostOptions } from "../host/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";
 export type { InterruptOpts, ResumableScope, ResumableScopeOpts } from "./agency.js";

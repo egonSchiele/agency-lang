@@ -108,6 +108,9 @@
     "./stdlib/*": "./stdlib/*"
   },
   "imports": {
+    "#default-host": {
+      "default": "./dist/lib/host/default.node.js"
+    },
     "#sha256": {
       "browser": "./dist/lib/utils/sha256.portable.js",
       "default": "./dist/lib/utils/sha256.node.js"

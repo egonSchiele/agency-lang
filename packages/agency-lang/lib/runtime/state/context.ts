@@ -8,7 +8,9 @@ import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
-import { Clock, realClock, FakeClock } from "../clock.js";
+import type { Clock } from "../clock.js";
+import { defaultHost } from "#default-host";
+import { withClock, type Host } from "../../host/host.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -72,15 +74,6 @@ function reviveNative<T>(data: T): T {
   return JSON.parse(JSON.stringify(data, nativeTypeReplacer), nativeTypeReviver);
 }
 
-/** The default clock for a run: a FakeClock only when a test opts in via the
- *  AGENCY_FAKE_CLOCK env var, otherwise the real clock. The env var is set by
- *  the test runner per test case (see lib/cli/util.ts). */
-function defaultClock(): Clock {
-  // Require exactly "1", not any truthy string. AGENCY_FAKE_CLOCK=0 must
-  // disable, not enable — a non-empty "0" is truthy and would surprise.
-  return process.env.AGENCY_FAKE_CLOCK === "1" ? new FakeClock() : realClock;
-}
-
 export type PendingArgOverrides = {
   moduleId: string | null;
   scopeName: string | null;
@@ -98,8 +91,11 @@ export class RuntimeContext<T> {
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   handlers: HandlerEntry[];
-  /** The time source for guards. Real by default; a FakeClock only when a
-   *  test opts in. NOT serialized — reconstructed per run, like handlers.
+  /** The platform this run is on: files, the terminal, environment
+   *  variables, the clock, and the rest. See docs/dev/runtime/host.md. The
+   *  default host of the platform when the caller passed none; a run can
+   *  carry its own through `InvocationOptions.host`. NOT serialized —
+   *  reconstructed per run, like handlers.
    *
    *  DRIFT WARNING: this and the other non-serialized runtime fields
    *  (handlers, callbacks, checkpoints, locks, …) are set by the constructor
@@ -108,7 +104,12 @@ export class RuntimeContext<T> {
    *  here but forgotten there is silently `undefined` at run time with no
    *  compile error — that is the bug the `clock` copy fixed. If you add a
    *  non-serialized field, copy it in `createExecutionContext` too. */
-  clock: Clock;
+  host: Host;
+  /** The time source for guards: the host's clock. Real by default; a
+   *  FakeClock only when a test opts in. */
+  get clock(): Clock {
+    return this.host.clock;
+  }
   locks: Record<string, Promise<void>>;
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
@@ -306,8 +307,12 @@ export class RuntimeContext<T> {
      *  test/runtime constructors keep working; defaults to "info" to
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
-    /** Test-only override. Omitted in production, where defaultClock()
-     *  (the env var or the realClock default) applies. */
+    /** The host to run on. Omitted in production, where the platform's
+     *  default host applies. */
+    host?: Host;
+    /** Test-only override of the host's clock. Omitted in production,
+     *  where the default host decides (the AGENCY_FAKE_CLOCK env var or the
+     *  real clock). */
     clock?: Clock;
   }) {
     // One runtime merge, applied for BOTH transports so a subprocess launched
@@ -317,7 +322,8 @@ export class RuntimeContext<T> {
     // also layers nested `log`/`trace` objects rather than clobbering them.
     args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());
     args = applyRuntimeConfigOverridesToContextArgs(args, getRuntimeConfigOverrides());
-    this.clock = args.clock ?? defaultClock();
+    const host = args.host ?? defaultHost();
+    this.host = args.clock ? withClock(host, args.clock) : host;
     const statelogConfig = {
       ...args.statelogConfig,
       // Explicit > env > minted. The env var lets a harness give an entire
@@ -480,10 +486,11 @@ export class RuntimeContext<T> {
     execCtx.invocationUsage = new InvocationUsageMeter();
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the
-    // constructor, so carry the clock over from the global context. Without
+    // constructor, so carry the host over from the global context. Without
     // this the run would meter against `undefined` and the fake-clock seam
     // (_advanceTime) would never see the FakeClock the constructor installed.
-    execCtx.clock = this.clock;
+    // A host given for this one invocation wins over the global one.
+    execCtx.host = invocation.host ?? this.host;
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];

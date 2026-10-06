@@ -19,12 +19,12 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-Everything else is open. Start with PR B.
+PR B is open. Start with PR C once it has merged.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
 | #1175, #1176, #1177 | Programs stop importing the compiler; `std::capabilities` becomes `std::effectSets`; hashing through `#sha256` | 1, 16, 11 | merged |
-| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | next |
+| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open |
 | C | `contained.ts` moves into the host and goes async, `updateText` and `withLock`, `memoryHost`, the effect sets data file, the trace sinks | 5, 6b, 6c, 6, 7 | |
 | D | Subprocesses, network, portable paths, `Buffer` | 8, 9, 10, 12 | |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
@@ -85,6 +85,36 @@ does.
    (`lib/agents/agency-agent/lib/capabilities.agency`, persisted under a
    `"capabilities"` key in `settings.json`). The owner has not asked for
    them to be renamed.
+
+### What PR B learned
+
+1. **`terminal.print` takes the values, and `settings.log` takes the
+   level.** `print(obj)` prints what `console.log` prints, and the logger
+   sends `info` to standard output and `warn` to standard error; a
+   string-only `writeOut` or a level-less `log` would have changed both on
+   Node. The spec's types are updated.
+2. **`Host` has a `name`, and `HostSystem` has `isMainModule`.** The error
+   message names the host, and the header's `process.argv[1] ===
+   fileURLToPath(import.meta.url)` check needed a home.
+3. **A helper with no run calls `currentHost()`** from
+   `lib/runtime/currentHost.ts` on its first line. With no run current it
+   is the default host, so a unit test that calls the helper directly sees
+   `process.env` as before.
+4. **The lint rule's reach check runs the esbuild command**, because the
+   JavaScript API cannot parse its own metafile with the version in the
+   repo. Listed files are passed as `--external:<absolute path>`, which
+   esbuild accepts, so the walk stops at them.
+5. **The exceptions file is `.mjs`**, because the root `.gitignore`
+   ignores `**/*.js`.
+6. **The old stdlib `fs` block stays beside the new one.** ESLint keeps
+   only the later block for a file both match, so a waiting stdlib file
+   would lose the `fs` ban if the old block were folded away.
+7. **Files still waiting after PR B** use `fs`, `path`, `Buffer`,
+   `child_process`, or `crypto`, which later PRs cover; `process.cwd` and
+   `process.platform` reads in file-handling code move with `contained.ts`
+   in PR C. `exitProcess.ts` and `subprocessRunInfo.ts` wait for PR D.
+   `termcolors.ts`, `args.ts`, and `layout/render.ts` read the terminal's
+   size and colour support and need a decision in PR E.
 
 Every PR ends with the steps under "Finishing a PR".
 

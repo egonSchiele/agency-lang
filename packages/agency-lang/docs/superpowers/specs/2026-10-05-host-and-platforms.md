@@ -87,6 +87,7 @@ that reads a file compiles for the browser without complaint.
 
 ```ts
 export type Host = {
+  name: string;
   capabilities: Capability[];
   files: HostFiles;
   network: HostNetwork;
@@ -430,14 +431,18 @@ host without `env` still runs a program that calls a connector.
 
 ```ts
 export type HostTerminal = {
-  readLine(prompt: string): Promise<string>;
+  print(values: unknown[]): void;
   writeOut(text: string): void;
   writeErr(text: string): void;
+  readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   isInteractive(): boolean;
 };
 ```
 
-`print` writes through `writeOut`. `input` and the interactive interrupt
+`print` goes through `print`, which takes the values and formats them
+itself; `nodeHost` hands them to `console.log`, so an object prints the
+way Node prints it, which the stdlib's tests compare. `readLine` gives
+up the read when `signal` aborts. `input` and the interactive interrupt
 prompts read through `readLine`. `browserHost` takes these four functions
 from the app that embeds it.
 
@@ -462,6 +467,7 @@ export type HostSystem = {
   args(): string[];
   processId(): number;
   moduleDir(moduleUrl: string): string;
+  isMainModule(moduleUrl: string): boolean;
   exit(code: number): never;
 };
 ```
@@ -478,7 +484,9 @@ That type is renamed to `OperatingSystem`, so "platform" means one thing.
 `browserHost` returns `"unknown"`.
 
 `moduleDir` turns a module's `import.meta.url` into its directory. The
-generated header needs that value for `RuntimeContext`.
+generated header needs that value for `RuntimeContext`. `isMainModule`
+says whether that module is the one the process was started with; the
+header runs `main` only then, and a browser answers false.
 
 `exit` on `browserHost` throws `UnsupportedOnHostError`. `system` is not
 a capability part, so this is the one refusal a host writes itself.
@@ -488,7 +496,7 @@ a capability part, so this is the one refusal a host writes itself.
 ```ts
 export type HostSettings = {
   read(name: string): string | null;
-  log(text: string): void;
+  log(level: LogLevel, text: string): void;
 };
 ```
 

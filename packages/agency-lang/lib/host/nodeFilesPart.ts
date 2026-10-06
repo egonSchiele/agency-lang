@@ -52,7 +52,9 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
         return await work();
       } finally {
         release();
-        if (locks[key] === queued) delete locks[key];
+        if (locks[key] === queued) {
+          delete locks[key];
+        }
       }
     },
     readText: async (root, target) => files.readText(root, target, seams),

@@ -1,31 +1,22 @@
 import { describe, it, expect } from "vitest";
 import {
   CAPABILITIES,
-  NEEDS,
+  FILE_WRITE_FUNCTIONS,
+  PART_CAPABILITY,
   PLATFORM_CAPABILITIES,
+  functionCapability,
   UnsupportedOnHostError,
   makeHost,
   requireCapabilities,
   withClock,
   type Capability,
+  type CapabilityPart,
   type Host,
-  type HostFunctionName,
 } from "./host.js";
 import { nodeHost } from "./nodeHost.js";
 import { FakeClock } from "../runtime/clock.js";
 
-/** The parts of a host that have a capability, by name, as a real host
- *  built with every capability exposes them. */
-function capabilityParts(host: Host): Record<string, Record<string, unknown>> {
-  const parts: Record<string, Record<string, unknown>> = {};
-  for (const name of Object.keys(NEEDS)) {
-    const part = name.split(".")[0];
-    parts[part] = host[part as keyof Host] as Record<string, unknown>;
-  }
-  return parts;
-}
-
-function call(host: Host, functionName: HostFunctionName): unknown {
+function call(host: Host, functionName: string): unknown {
   const [part, fn] = functionName.split(".");
   const implementation = (host[part as keyof Host] as Record<string, (...a: unknown[]) => unknown>)[
     fn
@@ -33,20 +24,28 @@ function call(host: Host, functionName: HostFunctionName): unknown {
   return implementation("x", "y");
 }
 
-describe("NEEDS", () => {
-  it("names a known capability in every entry", () => {
-    for (const capability of Object.values(NEEDS)) {
-      expect(CAPABILITIES).toContain(capability);
+/** Every function of every capability part, as a real nodeHost has them. */
+function capabilityFunctions(): string[] {
+  const host = nodeHost();
+  return (Object.keys(PART_CAPABILITY) as CapabilityPart[]).flatMap((part) =>
+    Object.keys(host[part]).map((fn) => `${part}.${fn}`),
+  );
+}
+
+describe("FILE_WRITE_FUNCTIONS", () => {
+  it("names functions the files part has", () => {
+    const files = nodeHost().files as unknown as Record<string, unknown>;
+    for (const fn of FILE_WRITE_FUNCTIONS) {
+      expect(typeof files[fn]).toBe("function");
     }
   });
+});
 
-  it("has an entry for every function in every capability part of nodeHost", () => {
-    // The type is gone when the test runs, so walk a real host instead.
-    const parts = capabilityParts(nodeHost());
-    const found = Object.entries(parts).flatMap(([part, functions]) =>
-      Object.keys(functions).map((fn) => `${part}.${fn}`),
-    );
-    expect(found.sort()).toEqual(Object.keys(NEEDS).sort());
+describe("PART_CAPABILITY", () => {
+  it("names a known capability for every part", () => {
+    for (const capability of Object.values(PART_CAPABILITY)) {
+      expect(CAPABILITIES).toContain(capability);
+    }
   });
 });
 
@@ -66,10 +65,11 @@ describe("PLATFORM_CAPABILITIES", () => {
 });
 
 describe("makeHost", () => {
-  // Driven by the table: one case per entry in NEEDS, not one per function
-  // written by hand, so a function added to a part cannot be forgotten.
-  for (const functionName of Object.keys(NEEDS) as HostFunctionName[]) {
-    const capability = NEEDS[functionName];
+  // One case per function of a real host, found by walking its parts, so a
+  // function added to a part is covered without a line here.
+  for (const functionName of capabilityFunctions()) {
+    const [part, fn] = functionName.split(".");
+    const capability = functionCapability(part as CapabilityPart, fn);
     it(`${functionName} throws on a host without ${capability}`, () => {
       const without = CAPABILITIES.filter((c) => c !== capability);
       const host = nodeHost({ capabilities: without });
@@ -90,21 +90,27 @@ describe("makeHost", () => {
     });
   }
 
-  it("throws at build time when a granted function is missing from the parts", () => {
+  it("refuses a function name it has never heard of, on a part it lacks", () => {
+    const host = nodeHost({ capabilities: [] });
+    expect(() => call(host, "terminal.somethingNew")).toThrow(
+      "terminal.somethingNew needs the terminal capability, which the node host does not have.",
+    );
+  });
+
+  it("throws at build time when a granted part is missing", () => {
     const full = nodeHost();
     expect(() =>
       makeHost({
         name: "partial",
         capabilities: ["env"],
         parts: {
-          env: { get: () => null } as never,
           system: full.system,
           settings: full.settings,
           clock: full.clock,
           random: full.random,
         },
       }),
-    ).toThrow("The partial host grants env but its parts have no env.set function.");
+    ).toThrow("The partial host grants env but its parts have no env.");
   });
 
   it("does not need the parts of a capability it does not grant", () => {

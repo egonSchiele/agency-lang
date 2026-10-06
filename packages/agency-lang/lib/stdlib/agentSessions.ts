@@ -180,7 +180,9 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
   if (target) {
     const cp = getCheckpointFor(run, await checkpointFor(run));
     const error = _saveSession(target.dir, target.record, cp);
-    if (error) run.ctx.host.terminal.writeOut(`Could not save this session: ${error}\n`);
+    if (error) {
+      run.ctx.host.terminal.writeOut(`Could not save this session: ${error}\n`);
+    }
   }
   return reply;
 }

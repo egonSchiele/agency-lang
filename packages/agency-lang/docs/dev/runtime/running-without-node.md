@@ -150,6 +150,6 @@ The `--external:smoltalk` flag matters. The context module imports the thread st
 
 - The runtime imports Node modules in many other files. Each needs the sorting described under [The rule](#the-rule).
 - smoltalk, the library every model call goes through, imports `fs`, `path`, and `url`. The thread store imports smoltalk, so almost every runtime module reaches them.
-- The host exists and the generated header reaches Node only through it, but most of the runtime and the stdlib still read `process`, `fs`, and `path` directly. `eslint.node-exceptions.mjs` lists those files; the list shrinks as each one moves to the host.
+- The generated header reaches Node only through the host, but most of the runtime and the stdlib still read `process`, `fs`, and `path` directly. `eslint.node-exceptions.mjs` lists those files.
 - The last two places under [Where the targets may differ](#where-the-targets-may-differ) are not built.
 - The callbacks given to `agency.withHandler`, `withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with` are not handed a handle. Such a callback can call `agency.*` on its first line and not after an `await`.

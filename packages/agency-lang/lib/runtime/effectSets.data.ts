@@ -3,23 +3,16 @@
 import type { EffectSetInfo } from "./effectSets.js";
 
 export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
-  "FileRead": {
-    "name": "FileRead",
-    "doc": "Read-only filesystem access: reading files and listing/searching paths.",
-    "members": [
-      "std::read",
-      "std::readBinary",
-      "std::ls",
-      "std::glob",
-      "std::grep",
-      "std::vision"
-    ],
-    "composedOf": []
+  FileRead: {
+    name: "FileRead",
+    doc: "Read-only filesystem access: reading files and listing/searching paths.",
+    members: ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep", "std::vision"],
+    composedOf: [],
   },
-  "FileWrite": {
-    "name": "FileWrite",
-    "doc": "Filesystem mutation: creating, editing, moving, copying, and deleting.",
-    "members": [
+  FileWrite: {
+    name: "FileWrite",
+    doc: "Filesystem mutation: creating, editing, moving, copying, and deleting.",
+    members: [
       "std::write",
       "std::writeBinary",
       "std::edit",
@@ -29,14 +22,14 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
       "std::copy",
       "std::remove",
       "std::cropImage",
-      "std::pasteImages"
+      "std::pasteImages",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "FileSystem": {
-    "name": "FileSystem",
-    "doc": "All filesystem access — reads and writes.",
-    "members": [
+  FileSystem: {
+    name: "FileSystem",
+    doc: "All filesystem access — reads and writes.",
+    members: [
       "std::read",
       "std::readBinary",
       "std::ls",
@@ -52,27 +45,20 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
       "std::copy",
       "std::remove",
       "std::cropImage",
-      "std::pasteImages"
+      "std::pasteImages",
     ],
-    "composedOf": [
-      "FileRead",
-      "FileWrite"
-    ]
+    composedOf: ["FileRead", "FileWrite"],
   },
-  "Shell": {
-    "name": "Shell",
-    "doc": "Arbitrary command / process execution. The sharpest edge — grant with care.",
-    "members": [
-      "std::bash",
-      "std::exec",
-      "std::run"
-    ],
-    "composedOf": []
+  Shell: {
+    name: "Shell",
+    doc: "Arbitrary command / process execution. The sharpest edge — grant with care.",
+    members: ["std::bash", "std::exec", "std::run"],
+    composedOf: [],
   },
-  "Network": {
-    "name": "Network",
-    "doc": "Anything that talks to the outside world over the network.",
-    "members": [
+  Network: {
+    name: "Network",
+    doc: "Anything that talks to the outside world over the network.",
+    members: [
       "std::http::fetch",
       "std::http::fetchJSON",
       "std::http::fetchMarkdown",
@@ -116,27 +102,27 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
       "std::github::issueComment",
       "std::github::issueUpdate",
       "std::github::issueLabel",
-      "std::uploadImage"
+      "std::uploadImage",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "AwsS3": {
-    "name": "AwsS3",
-    "doc": "Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally.",
-    "members": [
+  AwsS3: {
+    name: "AwsS3",
+    doc: "Amazon S3 access: reading and writing objects, creating buckets, and minting presigned download URLs. Presigning is deliberately NOT in Network — it sends nothing; it mints a bearer capability locally.",
+    members: [
       "std::aws::s3::get",
       "std::aws::s3::getBinary",
       "std::aws::s3::put",
       "std::aws::s3::putBinary",
       "std::aws::s3::createBucket",
-      "std::aws::s3::presignGet"
+      "std::aws::s3::presignGet",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "GithubRead": {
-    "name": "GithubRead",
-    "doc": "Read-only GitHub access: pull requests, issues, and their comments.",
-    "members": [
+  GithubRead: {
+    name: "GithubRead",
+    doc: "Read-only GitHub access: pull requests, issues, and their comments.",
+    members: [
       "std::github::prList",
       "std::github::prGet",
       "std::github::prDiff",
@@ -147,52 +133,45 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
       "std::github::issueList",
       "std::github::issueGet",
       "std::github::issueCommentList",
-      "std::github::issueSearch"
+      "std::github::issueSearch",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "GithubReview": {
-    "name": "GithubReview",
-    "doc": "Posting comments and reviews on GitHub pull requests.",
-    "members": [
-      "std::github::prReviewComment",
-      "std::github::prReview",
-      "std::github::prApprove"
-    ],
-    "composedOf": []
+  GithubReview: {
+    name: "GithubReview",
+    doc: "Posting comments and reviews on GitHub pull requests.",
+    members: ["std::github::prReviewComment", "std::github::prReview", "std::github::prApprove"],
+    composedOf: [],
   },
-  "GithubIssueWrite": {
-    "name": "GithubIssueWrite",
-    "doc": "Creating and editing GitHub issues.",
-    "members": [
+  GithubIssueWrite: {
+    name: "GithubIssueWrite",
+    doc: "Creating and editing GitHub issues.",
+    members: [
       "std::github::issueCreate",
       "std::github::issueComment",
       "std::github::issueUpdate",
-      "std::github::issueLabel"
+      "std::github::issueLabel",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "GithubWrite": {
-    "name": "GithubWrite",
-    "doc": "All GitHub mutations.",
-    "members": [
+  GithubWrite: {
+    name: "GithubWrite",
+    doc: "All GitHub mutations.",
+    members: [
       "std::github::prReviewComment",
       "std::github::prReview",
       "std::github::prApprove",
       "std::github::issueCreate",
       "std::github::issueComment",
       "std::github::issueUpdate",
-      "std::github::issueLabel"
+      "std::github::issueLabel",
     ],
-    "composedOf": [
-      "GithubReview",
-      "GithubIssueWrite"
-    ]
+    composedOf: ["GithubReview", "GithubIssueWrite"],
   },
-  "Github": {
-    "name": "Github",
-    "doc": "All GitHub access.",
-    "members": [
+  Github: {
+    name: "Github",
+    doc: "All GitHub access.",
+    members: [
       "std::github::prList",
       "std::github::prGet",
       "std::github::prDiff",
@@ -210,111 +189,81 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
       "std::github::issueCreate",
       "std::github::issueComment",
       "std::github::issueUpdate",
-      "std::github::issueLabel"
+      "std::github::issueLabel",
     ],
-    "composedOf": [
-      "GithubRead",
-      "GithubWrite"
-    ]
+    composedOf: ["GithubRead", "GithubWrite"],
   },
-  "DataFinance": {
-    "name": "DataFinance",
-    "doc": "The std::data/finance connectors (macro + filings). Each also raises\nstd::http::fetchJSON, which is covered by the broader Network set. GDELT\n(news) lives in std::data/news and is not part of this set.",
-    "members": [
-      "std::fred",
-      "std::edgar",
-      "std::dbnomics"
-    ],
-    "composedOf": []
+  DataFinance: {
+    name: "DataFinance",
+    doc: "The std::data/finance connectors (macro + filings). Each also raises\nstd::http::fetchJSON, which is covered by the broader Network set. GDELT\n(news) lives in std::data/news and is not part of this set.",
+    members: ["std::fred", "std::edgar", "std::dbnomics"],
+    composedOf: [],
   },
-  "Messaging": {
-    "name": "Messaging",
-    "doc": "Sending messages to people: email, SMS, and iMessage.",
-    "members": [
-      "std::sendEmail",
-      "std::sendSms",
-      "std::sendIMessage"
-    ],
-    "composedOf": []
+  Messaging: {
+    name: "Messaging",
+    doc: "Sending messages to people: email, SMS, and iMessage.",
+    members: ["std::sendEmail", "std::sendSms", "std::sendIMessage"],
+    composedOf: [],
   },
-  "Secrets": {
-    "name": "Secrets",
-    "doc": "Reading and writing credentials in the system keyring.",
-    "members": [
-      "std::getSecret",
-      "std::setSecret",
-      "std::deleteSecret"
-    ],
-    "composedOf": []
+  Secrets: {
+    name: "Secrets",
+    doc: "Reading and writing credentials in the system keyring.",
+    members: ["std::getSecret", "std::setSecret", "std::deleteSecret"],
+    composedOf: [],
   },
-  "Auth": {
-    "name": "Auth",
-    "doc": "OAuth-style authorization flows: granting, fetching, and revoking access.",
-    "members": [
-      "std::authorize",
-      "std::getAccessToken",
-      "std::revokeAuth"
-    ],
-    "composedOf": []
+  Auth: {
+    name: "Auth",
+    doc: "OAuth-style authorization flows: granting, fetching, and revoking access.",
+    members: ["std::authorize", "std::getAccessToken", "std::revokeAuth"],
+    composedOf: [],
   },
-  "Calendar": {
-    "name": "Calendar",
-    "doc": "Calendar access: listing and mutating events (incl. calendar authorization).",
-    "members": [
+  Calendar: {
+    name: "Calendar",
+    doc: "Calendar access: listing and mutating events (incl. calendar authorization).",
+    members: [
       "std::listEvents",
       "std::createEvent",
       "std::updateEvent",
       "std::deleteEvent",
-      "std::authorizeCalendar"
+      "std::authorizeCalendar",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "Memory": {
-    "name": "Memory",
-    "doc": "Agent long-term memory: recall, remember, forget, and enable/disable.",
-    "members": [
+  Memory: {
+    name: "Memory",
+    doc: "Agent long-term memory: recall, remember, forget, and enable/disable.",
+    members: [
       "std::memory::recall",
       "std::memory::remember",
       "std::memory::forget",
       "std::memory::enableMemory",
-      "std::memory::disableMemory"
+      "std::memory::disableMemory",
     ],
-    "composedOf": []
+    composedOf: [],
   },
-  "NotesRead": {
-    "name": "NotesRead",
-    "doc": "Read-only Notes access: reading, searching, and listing.",
-    "members": [
-      "std::notes::read",
-      "std::notes::search",
-      "std::notes::list"
-    ],
-    "composedOf": []
+  NotesRead: {
+    name: "NotesRead",
+    doc: "Read-only Notes access: reading, searching, and listing.",
+    members: ["std::notes::read", "std::notes::search", "std::notes::list"],
+    composedOf: [],
   },
-  "NotesWrite": {
-    "name": "NotesWrite",
-    "doc": "Notes mutation: creating, appending, and deleting.",
-    "members": [
-      "std::notes::create",
-      "std::notes::append",
-      "std::notes::delete"
-    ],
-    "composedOf": []
+  NotesWrite: {
+    name: "NotesWrite",
+    doc: "Notes mutation: creating, appending, and deleting.",
+    members: ["std::notes::create", "std::notes::append", "std::notes::delete"],
+    composedOf: [],
   },
-  "Notes": {
-    "name": "Notes",
-    "doc": "All Notes access, reads and writes.",
-    "members": [
+  Notes: {
+    name: "Notes",
+    doc: "All Notes access, reads and writes.",
+    members: [
       "std::notes::read",
       "std::notes::search",
       "std::notes::list",
       "std::notes::create",
       "std::notes::append",
-      "std::notes::delete"
+      "std::notes::delete",
     ],
-    "composedOf": [
-      "NotesRead",
-      "NotesWrite"
-    ]
-  }
+    composedOf: ["NotesRead", "NotesWrite"],
+  },
 };

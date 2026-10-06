@@ -149,7 +149,9 @@ export const AGENCY_INSTALL_DIR_PLACEHOLDER = "<agency>";
 /** Replace `<agency>` with the resolved install directory, escaped so a
  *  path containing glob or brace characters stays literal. */
 export function substituteInstallDir(pattern: string, installDir: string | null): string {
-  if (installDir === null || !pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) return pattern;
+  if (installDir === null || !pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) {
+    return pattern;
+  }
   return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeGlob(installDir));
 }
 
@@ -162,7 +164,9 @@ export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
 
 /** Replace `<agent-home>` with the resolved home, escaped the same way. */
 export function substituteAgentHome(pattern: string, agentHome: string): string {
-  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) {
+    return pattern;
+  }
   return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeGlob(agentHome));
 }
 

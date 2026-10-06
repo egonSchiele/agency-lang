@@ -106,7 +106,9 @@ export function memoryHost(options: MemoryHostOptions = {}): MemoryHost {
 function normalize(p: string): string {
   const parts: string[] = [];
   for (const segment of p.split("/")) {
-    if (segment === "" || segment === ".") continue;
+    if (segment === "" || segment === ".") {
+      continue;
+    }
     if (segment === "..") {
       parts.pop();
       continue;
@@ -175,7 +177,9 @@ function memoryStore(state: MemoryHostState) {
     state.files[full] ? "file" : state.dirs[full] ? "dir" : null;
   const readOrThrow = (full: string): Uint8Array => {
     const bytes = state.files[full];
-    if (!bytes) throw new Error(`ENOENT: no such file or directory, open '${full}'`);
+    if (!bytes) {
+      throw new Error(`ENOENT: no such file or directory, open '${full}'`);
+    }
     return bytes;
   };
   const write = (full: string, bytes: Uint8Array, options: WriteOptions = {}): void => {
@@ -199,10 +203,14 @@ function memoryStore(state: MemoryHostState) {
   };
   const removeTree = (full: string): void => {
     for (const name of Object.keys(state.files)) {
-      if (isUnder(name, full)) delete state.files[name];
+      if (isUnder(name, full)) {
+        delete state.files[name];
+      }
     }
     for (const name of Object.keys(state.dirs)) {
-      if (name !== "/" && isUnder(name, full)) delete state.dirs[name];
+      if (name !== "/" && isUnder(name, full)) {
+        delete state.dirs[name];
+      }
     }
   };
   const copyTree = (source: string, destination: string): void => {
@@ -224,7 +232,9 @@ function memoryStore(state: MemoryHostState) {
     }
   };
   const listDir = (full: string): Entry[] => {
-    if (!state.dirs[full]) throw new Error(`ENOENT: no such file or directory, scandir '${full}'`);
+    if (!state.dirs[full]) {
+      throw new Error(`ENOENT: no such file or directory, scandir '${full}'`);
+    }
     const entries: Entry[] = [];
     const prefix = full === "/" ? "/" : full + "/";
     for (const [name, bytes] of Object.entries(state.files)) {
@@ -268,9 +278,13 @@ function locateIn(
   filename: string,
   operation: "read" | "write",
 ): { dir: string; filename: string } {
-  if (dir.trim() === "") throw new Error(`${operation} refused: dir must not be empty.`);
+  if (dir.trim() === "") {
+    throw new Error(`${operation} refused: dir must not be empty.`);
+  }
   const base = absolute(cwd, dir);
-  if (!state.dirs[base]) throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
+  if (!state.dirs[base]) {
+    throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
+  }
   let full: string;
   try {
     full = store.resolve(makeRoot(base), filename);
@@ -327,7 +341,9 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
         return await work();
       } finally {
         release();
-        if (locks[key] === queued) delete locks[key];
+        if (locks[key] === queued) {
+          delete locks[key];
+        }
       }
     },
     readText: async (root, target) =>
@@ -343,7 +359,9 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     stat: async (root, target) => {
       const full = resolve(root, target);
       const kind = store.kindOf(full);
-      if (kind === null) return null;
+      if (kind === null) {
+        return null;
+      }
       return { kind, size: state.files[full]?.length ?? 0, modifiedMs: state.clock.wallTime() };
     },
     writeText: async (root, target, content, options) =>
@@ -359,7 +377,9 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
     },
     openForWrite: async (root, target, options) => {
       const full = resolve(root, target);
-      if (!state.files[full]) store.write(full, new Uint8Array(0), options);
+      if (!state.files[full]) {
+        store.write(full, new Uint8Array(0), options);
+      }
       return store.openForWrite(full);
     },
     mkdir: async (root, target) => {
@@ -428,7 +448,9 @@ function memoryTerminal(state: MemoryHostState): HostTerminal {
     },
     readLine: async () => {
       const line = state.inputLines.shift();
-      if (line === undefined) throw new Error("readLine: the memory host has no more input lines.");
+      if (line === undefined) {
+        throw new Error("readLine: the memory host has no more input lines.");
+      }
       return line;
     },
     isInteractive: () => false,
@@ -457,7 +479,9 @@ function memoryRandom(): HostRandom {
     id: () => `id-${++counter}`,
     bytes: (length) => {
       const out = new Uint8Array(length);
-      for (let i = 0; i < length; i++) out[i] = (++counter * 31) % 256;
+      for (let i = 0; i < length; i++) {
+        out[i] = (++counter * 31) % 256;
+      }
       return out;
     },
   };

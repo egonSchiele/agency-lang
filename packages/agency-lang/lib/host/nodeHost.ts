@@ -142,7 +142,9 @@ let cachedOperatingSystem: OperatingSystem | null = null;
  * Anything not darwin, win32, or linux is "unknown".
  */
 function operatingSystem(): OperatingSystem {
-  if (cachedOperatingSystem !== null) return cachedOperatingSystem;
+  if (cachedOperatingSystem !== null) {
+    return cachedOperatingSystem;
+  }
   const p = process.platform;
   if (p === "darwin") {
     cachedOperatingSystem = "macos";

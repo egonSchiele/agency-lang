@@ -36,8 +36,9 @@ function stdlibHelpers() {
   const walk = (current) => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
         found.push(path.relative(packageRoot, full));
       }
     }
@@ -112,9 +113,13 @@ for (const file of reached) {
   // The entry point is per platform: lib/runtime/index.ts is Node's and
   // may import Node-only files, because lib/runtime/browser.ts stands in
   // for it in a browser bundle with portable exports.
-  if (file === "lib/runtime/index.ts") continue;
+  if (file === "lib/runtime/index.ts") {
+    continue;
+  }
   for (const entry of meta.inputs[file].imports) {
-    if (!entry.external) continue;
+    if (!entry.external) {
+      continue;
+    }
     const target = resolveImport(file, entry.path);
     if (target && nodeOnly.includes(target)) {
       problems.push(

@@ -3,7 +3,7 @@
 // The lint rule in eslint.config.js bans Node modules and Node globals in
 // every file a browser bundle of the runtime would contain. These two lists
 // are the exceptions. Together they only ever get shorter: a file leaves
-// WAITING when a PR moves its Node use into the host, and nothing joins
+// WAITING when its Node use moves into the host, and nothing joins
 // NODE_ONLY without a reason beside it. The spec is
 // docs/superpowers/specs/2026-10-05-host-and-platforms.md.
 //
@@ -57,8 +57,8 @@ export const NODE_ONLY = {
     "Node crypto; the browser condition of #sha256 picks sha256.portable.ts",
 };
 
-/** Waiting for a later PR to move its Node use into the host, or to stop
- *  pulling in a part of the compiler that uses Node (the files under
+/** Files whose Node use has not moved into the host yet, or that pull in a
+ *  part of the compiler that uses Node (the files under
  *  lib/runtime/template, lib/runtime/toolBlockDiagnostics.ts,
  *  lib/stdlib/template.ts, and lib/debugger/debuggerState.ts, which
  *  imports all of lib/index.ts). Sorted. */

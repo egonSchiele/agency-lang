@@ -192,9 +192,8 @@ export type HostRandom = {
 };
 
 /** The parts a host is built from. `files`, `env`, and `terminal` are
- *  capabilities, so a host may leave them out; `makeHost` then supplies functions that
- *  refuse. The other parts are required. Later PRs add `network` and
- *  `subprocess`. */
+ *  capabilities, so a host may leave them out; `makeHost` then supplies
+ *  parts that refuse. The other parts are required. */
 export type HostParts = {
   files?: HostFiles;
   env?: HostEnv;
@@ -219,41 +218,38 @@ export type Host = {
   random: HostRandom;
 };
 
-/** The one table that says which capability each host function needs. It
- *  has an entry for every function in every capability part, and a test
- *  checks that against a real host. `makeHost` reads it to decide which
- *  functions to take from the parts and which to replace with a refusal. */
-export const NEEDS = {
-  "files.root": "fileRead",
-  "files.wholePath": "fileRead",
-  "files.fixedPath": "fileRead",
-  "files.realPath": "fileRead",
-  "files.resolvePath": "fileRead",
-  "files.locate": "fileRead",
-  "files.withLock": "fileRead",
-  "files.readText": "fileRead",
-  "files.readBytes": "fileRead",
-  "files.readChunks": "fileRead",
-  "files.list": "fileRead",
-  "files.stat": "fileRead",
-  "files.writeText": "fileWrite",
-  "files.writeBytes": "fileWrite",
-  "files.updateText": "fileWrite",
-  "files.openForWrite": "fileWrite",
-  "files.mkdir": "fileWrite",
-  "files.remove": "fileWrite",
-  "files.copy": "fileWrite",
-  "files.move": "fileWrite",
-  "env.get": "env",
-  "env.set": "env",
-  "terminal.print": "terminal",
-  "terminal.writeOut": "terminal",
-  "terminal.writeErr": "terminal",
-  "terminal.readLine": "terminal",
-  "terminal.isInteractive": "terminal",
+/** The capability each capability part needs. A part not listed here
+ *  (`system`, `settings`, `clock`, `random`) is on every host. `files`
+ *  needs two: `fileRead` for the part, and `fileWrite` for the functions
+ *  in FILE_WRITE_FUNCTIONS. */
+export const PART_CAPABILITY = {
+  files: "fileRead",
+  env: "env",
+  terminal: "terminal",
 } as const satisfies Record<string, Capability>;
 
-export type HostFunctionName = keyof typeof NEEDS;
+export type CapabilityPart = keyof typeof PART_CAPABILITY;
+
+/** The functions of the files part that write, move, or delete. They need
+ *  `fileWrite`; the rest of the part needs `fileRead`. */
+export const FILE_WRITE_FUNCTIONS: (keyof HostFiles)[] = [
+  "writeText",
+  "writeBytes",
+  "updateText",
+  "openForWrite",
+  "mkdir",
+  "remove",
+  "copy",
+  "move",
+];
+
+/** The capability one function of a capability part needs. */
+export function functionCapability(part: CapabilityPart, fn: string): Capability {
+  if (part === "files" && FILE_WRITE_FUNCTIONS.includes(fn as keyof HostFiles)) {
+    return "fileWrite";
+  }
+  return PART_CAPABILITY[part];
+}
 
 /** Thrown when code asks a host for something it cannot do. Agency turns an
  *  error thrown inside a function into a failure result, so a program sees
@@ -281,18 +277,18 @@ export type MakeHostArgs = {
   name: string;
   capabilities: Capability[];
   parts: HostParts;
-  /** Called with the function's name and its capability before any
-   *  capability function runs. The test runner uses it to record which
-   *  capabilities a test used. */
-  onUse?: (functionName: HostFunctionName, capability: Capability) => void;
+  /** Called with the function's name, as "part.function", and its
+   *  capability before any capability function runs. The test runner uses
+   *  it to record which capabilities a test used. */
+  onUse?: (functionName: string, capability: Capability) => void;
 };
 
 /**
- * Build a host from its parts. For each function in `NEEDS`:
+ * Build a host from its parts. For each capability part:
  *
- * - when its capability is granted, the function comes from `parts`, and
- *   a missing one is an error here, not later;
- * - when it is not, the host gets a function that throws
+ * - when its capability is granted, the part comes from `parts`, and a
+ *   missing part is an error here, not later;
+ * - when it is not, the host gets a part whose every function throws
  *   `UnsupportedOnHostError`.
  *
  * So no host writes a refusal, and a host with fewer capabilities is the
@@ -306,29 +302,18 @@ export function makeHost(args: MakeHostArgs): Host {
     }
   }
   const given = parts as unknown as Record<string, Record<string, unknown> | undefined>;
-  const built: Record<string, Record<string, unknown>> = {};
-  for (const functionName of Object.keys(NEEDS) as HostFunctionName[]) {
-    const capability = NEEDS[functionName];
-    const [part, fn] = functionName.split(".");
-    built[part] ??= {};
+  const built: Record<string, object> = {};
+  for (const part of Object.keys(PART_CAPABILITY) as CapabilityPart[]) {
+    const capability = PART_CAPABILITY[part];
     if (!capabilities.includes(capability)) {
-      built[part][fn] = () => {
-        throw new UnsupportedOnHostError({ capability, hostName: name, functionName });
-      };
+      built[part] = refusedPart(part, capability, name);
       continue;
     }
-    const implementation = given[part]?.[fn];
-    if (typeof implementation !== "function") {
-      throw new Error(
-        `The ${name} host grants ${capability} but its parts have no ${functionName} function.`,
-      );
+    const implementation = given[part];
+    if (implementation === undefined) {
+      throw new Error(`The ${name} host grants ${capability} but its parts have no ${part}.`);
     }
-    built[part][fn] = onUse
-      ? (...callArgs: unknown[]) => {
-          onUse(functionName, capability);
-          return implementation(...callArgs);
-        }
-      : implementation;
+    built[part] = wrapPart(part, implementation, capabilities, name, onUse);
   }
   return {
     name,
@@ -341,6 +326,65 @@ export function makeHost(args: MakeHostArgs): Host {
     clock: parts.clock,
     random: parts.random,
   };
+}
+
+/** A part whose every function throws, for a capability the host lacks.
+ *  A Proxy, so the host need not know the part's function names: any
+ *  name a caller asks for refuses with that name in the message. */
+function refusedPart(part: string, capability: Capability, hostName: string): object {
+  return new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        if (typeof property !== "string") {
+          return undefined;
+        }
+        return () => {
+          throw new UnsupportedOnHostError({
+            capability,
+            hostName,
+            functionName: `${part}.${property}`,
+          });
+        };
+      },
+    },
+  );
+}
+
+/** The part with each function wrapped: a function whose own capability
+ *  (`fileWrite`, for a write on the files part) is not granted refuses,
+ *  and the rest call `onUse` first when there is one. */
+function wrapPart(
+  part: CapabilityPart,
+  implementation: Record<string, unknown>,
+  capabilities: Capability[],
+  hostName: string,
+  onUse: MakeHostArgs["onUse"],
+): object {
+  const wrapped: Record<string, unknown> = {};
+  for (const [fn, value] of Object.entries(implementation)) {
+    if (typeof value !== "function") {
+      wrapped[fn] = value;
+      continue;
+    }
+    const capability = functionCapability(part, fn);
+    const functionName = `${part}.${fn}`;
+    if (!capabilities.includes(capability)) {
+      wrapped[fn] = () => {
+        throw new UnsupportedOnHostError({ capability, hostName, functionName });
+      };
+      continue;
+    }
+    if (!onUse) {
+      wrapped[fn] = value;
+      continue;
+    }
+    wrapped[fn] = (...callArgs: unknown[]) => {
+      onUse(functionName, capability);
+      return value(...callArgs);
+    };
+  }
+  return wrapped;
 }
 
 /** Throw `UnsupportedOnHostError` for the first capability in `needed` that

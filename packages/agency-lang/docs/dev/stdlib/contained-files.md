@@ -2,7 +2,7 @@
 
 Suppose an agent asks to read files in `~/project` and you approve. Inside `~/project` there is a symlink named `secrets` that points at `~/.ssh`. If `read("secrets/id_rsa", "~/project")` follows the link, it reads your SSH key under an approval that named `~/project`. The same hole exists for a linked directory, and for every operation that lists, probes, creates, copies, moves, or deletes.
 
-`lib/host/nodeFiles.ts` closes it in one place. It is the file part of `nodeHost` (see `docs/dev/runtime/host.md`), and every file operation the standard library performs on a path an Agency program chose goes through it, and a lint rule keeps it that way. Containment is not something a call site opts into. `lib/stdlib/contained.ts` re-exports the same functions for the callers that have not yet moved to `run.ctx.host.files`, which is the same operations as promises.
+`lib/host/nodeFiles.ts` closes it in one place. It is the file part of `nodeHost` (see `docs/dev/runtime/host.md`), and every file operation the standard library performs on a path an Agency program chose goes through it, and a lint rule keeps it that way. Containment is not something a call site opts into. `run.ctx.host.files` is the same operations as promises; `lib/stdlib/contained.ts` re-exports the synchronous ones for the callers that still use them.
 
 ## The property
 
@@ -100,7 +100,7 @@ The read and write seams run a directory swap between the open and the validatio
 
 ## Where the pieces are
 
-- `lib/host/nodeFiles.ts`: the module. `lib/host/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root` and `fixedRoot`; a `.real` read outside `lib/host` fails the lint. `lib/host/nodeFilesPart.ts` wraps each operation in a promise for the host, adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate` (the body of the old `prepareContainedPath`). `lib/stdlib/contained.ts` re-exports the synchronous module for callers that have not moved yet.
+- `lib/host/nodeFiles.ts`: the module. `lib/host/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root`; a `.real` read outside `lib/host` fails the lint. `lib/host/nodeFilesPart.ts` wraps each operation in a promise for the host and adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate` (what `prepareContainedPath` calls). `lib/stdlib/contained.ts` re-exports the synchronous module for the callers that still use it.
 - `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, now built on `root` and `resolveUnder`. `resolveRedirectTarget` for `safeBash` uses `root` to find where a redirect lands.
 - `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, now built on `root`.
 - `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `localModels.ts`, `localModelManifest.ts`, `cli.ts`, `agentSessions.ts`, `oauth.ts`: the migrated callers.

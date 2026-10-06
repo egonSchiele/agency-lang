@@ -1,4 +1,5 @@
 import os from "os";
+import { rootPath } from "../host/roots.js";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
@@ -293,9 +294,9 @@ export async function rejectDangerousPath(p: string, op: string, role: string): 
   // Expand `~` first so the home / top-level checks below are
   // performed against the actual target, not the literal `~/foo`.
   const lexical = path.resolve(process.cwd(), expandPath(trimmed));
-  const real = root(lexical).real;
-  const homeReal = root(os.homedir()).real;
-  const cwdReal = root(process.cwd()).real;
+  const real = rootPath(root(lexical));
+  const homeReal = rootPath(root(os.homedir()));
+  const cwdReal = rootPath(root(process.cwd()));
 
   const candidates = [lexical, real].filter((c, i, all) => all.indexOf(c) === i);
   for (const candidate of candidates) {

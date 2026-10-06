@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import * as contained from "./contained.js";
+import * as contained from "./nodeFiles.js";
 import {
   root,
   fixedRoot,
@@ -25,7 +25,7 @@ import {
   PRIMITIVES,
   HELPERS,
   type WriteMode,
-} from "./contained.js";
+} from "./nodeFiles.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function makeDir(prefix: string): string {

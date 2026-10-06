@@ -18,7 +18,7 @@ import {
   move,
   PRIMITIVES,
   type Root,
-} from "./contained.js";
+} from "./nodeFiles.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 /**

@@ -1,0 +1,102 @@
+// The file part of nodeHost: the contained operations in nodeFiles.ts,
+// each wrapped in a promise. One operation still runs in one piece, with
+// the same checks, and takes the same time. Node-only.
+
+import fs from "fs";
+import type { FileStat, HostFiles, WriteOptions } from "./host.js";
+import * as files from "./nodeFiles.js";
+import type { Seams } from "./nodeFiles.js";
+
+export type NodeFilesOptions = {
+  /** Test-only hook that runs between the open and the validation of a
+   *  descriptor, where a concurrent swap would land. The symlink tests
+   *  build their host with it. */
+  seams?: Seams;
+};
+
+function fileStat(info: fs.Stats): FileStat {
+  const kind = info.isFile() ? "file" : info.isDirectory() ? "dir" : "other";
+  return { kind, size: info.size, modifiedMs: info.mtimeMs };
+}
+
+export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
+  const seams = options.seams ?? {};
+  const withSeams = (writeOptions: WriteOptions | undefined): files.WriteOptions => ({
+    ...writeOptions,
+    seams,
+  });
+  // One lock per path. A caller that holds it waits for the one before.
+  const locks: Record<string, Promise<void>> = {};
+
+  return {
+    root: async (dir) => files.root(dir),
+    wholePath: async (p) => files.wholePath(p),
+    fixedPath: async (p) => files.fixedPath(p),
+    realPath: async (p) => files._realTarget(p),
+    resolvePath: async (root, target) => files.resolveUnder(root, target),
+    locate: async (dir, filename, operation) => files.locateSync(dir, filename, operation),
+    withLock: async (root, target, work) => {
+      const key = files.resolveUnder(root, target);
+      const previous = locks[key] ?? Promise.resolve();
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      locks[key] = previous.then(() => held);
+      await previous;
+      try {
+        return await work();
+      } finally {
+        release();
+        if (locks[key] === held) delete locks[key];
+      }
+    },
+    readText: async (root, target) => files.readText(root, target, seams),
+    readBytes: async (root, target) => new Uint8Array(files.readBytes(root, target, seams)),
+    readChunks: (root, target) => readChunks(root, target, seams),
+    list: async (root, target) => files.list(root, target),
+    stat: async (root, target) => {
+      const info = files.stat(root, target);
+      return info === null ? null : fileStat(info);
+    },
+    writeText: async (root, target, content, writeOptions) =>
+      files.writeText(root, target, content, withSeams(writeOptions)),
+    writeBytes: async (root, target, bytes, writeOptions) =>
+      files.writeBytes(root, target, Buffer.from(bytes), withSeams(writeOptions)),
+    // Synchronous reads and writes with nothing between them, which is how
+    // this host meets the rule that no other call on the file runs in the
+    // middle of an update.
+    updateText: async (root, target, change) => {
+      let current: string | null;
+      if (files.stat(root, target) === null) {
+        current = null;
+      } else {
+        current = files.readText(root, target, seams);
+      }
+      files.writeText(root, target, change(current), { seams });
+    },
+    openForWrite: async (root, target, writeOptions) => {
+      const open = files.openForWrite(root, target, withSeams(writeOptions));
+      return {
+        writeAt: async (data, position) => open.writeAt(data, position),
+        truncate: async (size) => open.truncate(size),
+        close: async () => open.close(),
+      };
+    },
+    mkdir: async (root, target) => files.mkdir(root, target),
+    remove: async (root, target) => files.remove(root, target),
+    copy: async (from, to) => files.copy(from, to),
+    move: async (from, to) => files.move(from, to),
+  };
+}
+
+async function* readChunks(
+  root: files.Root,
+  target: string,
+  seams: Seams,
+): AsyncIterable<Uint8Array> {
+  const stream = files.readStream(root, target, seams);
+  for await (const chunk of stream) {
+    yield typeof chunk === "string" ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
+  }
+}

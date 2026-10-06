@@ -18,7 +18,10 @@
 export const NODE_ONLY = {
   "lib/host/default.node.ts":
     "builds the default host for Node; the browser condition of #default-host picks default.browser.ts instead",
+  "lib/host/nodeFiles.ts": "the contained file operations of nodeHost, over fs",
+  "lib/host/nodeFilesPart.ts": "the file part of nodeHost, over nodeFiles.ts",
   "lib/host/nodeHost.ts": "the host for Node, built from Node modules on purpose",
+  "lib/host/roots.ts": "makes a Root by walking the disk; the inside of a Root lives here",
   "lib/runtime/cliEntry.ts": "starts a program from the command line",
   "lib/runtime/cliInterruptResolution.ts":
     "the command line's endpoint for interrupts nothing handled",

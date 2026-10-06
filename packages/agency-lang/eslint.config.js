@@ -180,6 +180,12 @@ export default [
           message:
             "Exit through exitProcess() in lib/runtime/exitProcess.ts, which sends pending logs first. Use exitProcessNow() where the exit cannot wait, and say why.",
         },
+        {
+          // The inside of a Root belongs to lib/host (lib/host/roots.ts).
+          selector: "MemberExpression[property.name='real']",
+          message:
+            "Only files under lib/host read the inside of a Root. Ask the host for the operation you want, or for a path with rootPath() from lib/host/roots.ts.",
+        },
       ],
     },
   },

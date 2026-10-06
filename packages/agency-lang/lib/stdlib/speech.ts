@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { rootPath } from "../host/roots.js";
 import { nanoid } from "nanoid";
 import os from "os";
 import path from "path";
@@ -81,7 +82,7 @@ async function speakImpl(
   if (platform === "macos") {
     const tmpDir = root(os.tmpdir());
     const tmpName = `agency-speak-${nanoid()}.txt`;
-    const tmpFile = path.join(tmpDir.real, tmpName);
+    const tmpFile = path.join(rootPath(tmpDir), tmpName);
     // Only a file this call created is removed afterwards. A create that
     // fails because the name was taken must not delete someone else's file.
     let owned = false;
@@ -532,7 +533,7 @@ async function synthesizeToFile(run: Run, s: Synthesis): Promise<string> {
   } else {
     // The real spelling of the temp dir, so the no-follow check below sees
     // no link in it (/var is a link on macOS).
-    finalPath = path.join(root(os.tmpdir()).real, `agency-tts-${nanoid()}.${s.format}`);
+    finalPath = path.join(rootPath(root(os.tmpdir())), `agency-tts-${nanoid()}.${s.format}`);
   }
   // No-clobber preflight: new speech output never overwrites an existing file.
   if (await pathExists(finalPath)) {

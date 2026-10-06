@@ -70,7 +70,6 @@ export const WAITING = [
   "lib/runtime/checkpointChecksum.ts",
   "lib/runtime/costTelemetry.ts",
   "lib/runtime/deterministicClient.ts",
-  "lib/runtime/effectSets.ts",
   "lib/runtime/exitProcess.ts",
   "lib/runtime/memory/frame.ts",
   "lib/runtime/memory/store.ts",

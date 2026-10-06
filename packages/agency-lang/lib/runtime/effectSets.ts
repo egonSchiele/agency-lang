@@ -1,7 +1,5 @@
-import { readFileSync } from "fs";
-import path from "path";
 import { parseAgency } from "../parser.js";
-import { getPackageRoot } from "../importPaths.js";
+import { BUILTIN_EFFECT_SETS } from "./effectSets.data.js";
 import type { AgencyMultiLineComment, TypeAlias, UnionType, VariableType } from "../types.js";
 
 /** One built-in effect set from `stdlib/effectSets.agency`. */
@@ -16,25 +14,21 @@ export type EffectSetInfo = {
   composedOf: string[];
 };
 
-// Parsed once per process. Derived from a shipped file that cannot change
-// mid-process — the same footing as the always-scope registry
-// (alwaysScope.ts), not per-run mutable state.
-let cache: Record<string, EffectSetInfo> | null = null;
-
 /**
  * The built-in effect sets, keyed by name (null-prototype record —
- * callers look up CLI-supplied names). Parses `stdlib/effectSets.agency`
- * from the install on first use: the doc comments live only in the source,
- * so the source is the single definition discovery and flag expansion
- * share. Throws when the shipped file is missing or fails to parse — a
- * broken install should be loud, never an empty table.
+ * callers look up CLI-supplied names). They come from
+ * `effectSets.data.ts`, which `scripts/generate-effect-sets.mjs` writes
+ * from `stdlib/effectSets.agency` during `make`, so nothing is read from
+ * disk at run time. The doc comments live only in the source, so the
+ * source stays the single definition; the test in effectSets.test.ts
+ * fails when the data file is stale.
  */
 export function builtinEffectSets(): Record<string, EffectSetInfo> {
-  if (cache === null) {
-    const file = path.join(getPackageRoot(), "stdlib", "effectSets.agency");
-    cache = parseEffectSets(readFileSync(file, "utf-8"), file);
+  const sets: Record<string, EffectSetInfo> = Object.create(null);
+  for (const [name, info] of Object.entries(BUILTIN_EFFECT_SETS)) {
+    sets[name] = info;
   }
-  return cache;
+  return sets;
 }
 
 type RawSet = { name: string; doc: string; items: VariableType[] };

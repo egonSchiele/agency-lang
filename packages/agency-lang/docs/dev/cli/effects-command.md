@@ -4,9 +4,12 @@ User-facing behavior is documented in `docs/site/cli/effects.md`. This
 page covers the implementation choices a future change needs to know.
 
 - Sets come from `builtinEffectSets()` (`lib/runtime/effectSets.ts`) —
-  the parsed table over `stdlib/effectSets.agency` that flag expansion
-  also uses, so the command and the flags cannot disagree. That file
-  documents the doc-comment pairing and the once-per-process cache.
+  the table that flag expansion also uses, so the command and the flags
+  cannot disagree. The table is `lib/runtime/effectSets.data.ts`, which
+  `scripts/generate-effect-sets.mjs` writes from `stdlib/effectSets.agency`
+  during `make`, so the runtime reads nothing from disk for it; a test
+  fails when the data file is stale. `effectSets.ts` documents the
+  doc-comment pairing of the parse.
 - Policies come from `BUILTIN_POLICIES` / `builtinPolicy`
   (`lib/runtime/builtinPolicies.ts`), the definitions every `--policy`
   flag resolves. The policy detail view resolves against the process

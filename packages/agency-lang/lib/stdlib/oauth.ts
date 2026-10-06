@@ -1,5 +1,6 @@
 import http from "http";
 import crypto from "crypto";
+import { sha256Bytes } from "../utils/hash.js";
 import { root, stat, remove, mkdir, readText, writeText, type Root } from "./contained.js";
 import os from "os";
 import path from "path";
@@ -71,7 +72,7 @@ function generateCodeVerifier(): string {
 }
 
 function generateCodeChallenge(verifier: string): string {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
+  return Buffer.from(sha256Bytes(new TextEncoder().encode(verifier))).toString("base64url");
 }
 
 function escapeHtml(str: string): string {

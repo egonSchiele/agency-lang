@@ -1,4 +1,4 @@
-import { createHash, createHmac } from "crypto";
+import { sha256Hex, hmacSha256, toHex } from "../../utils/hash.js";
 import { awsUriEncode } from "./uri.js";
 import { type AwsRequestTarget } from "./client.js";
 
@@ -30,12 +30,8 @@ export type SignInput = {
   date?: Date;
 };
 
-function sha256Hex(data: string | Uint8Array): string {
-  return createHash("sha256").update(data).digest("hex");
-}
-
-function hmac(key: string | Buffer, data: string): Buffer {
-  return createHmac("sha256", key).update(data, "utf8").digest();
+function hmac(key: string | Uint8Array, data: string): Uint8Array {
+  return hmacSha256(key, data);
 }
 
 function amzDates(date: Date): { amzDate: string; dateStamp: string } {
@@ -57,7 +53,7 @@ function deriveSigningKey(
   dateStamp: string,
   region: string,
   service: string,
-): Buffer {
+): Uint8Array {
   const kDate = hmac("AWS4" + secret, dateStamp);
   const kRegion = hmac(kDate, region);
   const kService = hmac(kRegion, service);
@@ -113,7 +109,7 @@ export function signRequest(input: SignInput): Record<string, string> {
     input.region,
     input.service,
   );
-  const signature = hmac(signingKey, stringToSign).toString("hex");
+  const signature = toHex(hmac(signingKey, stringToSign));
 
   const authorization =
     `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}, ` +
@@ -197,7 +193,7 @@ export function presignRequest(input: PresignInput): string {
     input.region,
     input.service,
   );
-  const signature = hmac(signingKey, stringToSign).toString("hex");
+  const signature = toHex(hmac(signingKey, stringToSign));
 
   return `${wireUrl}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }

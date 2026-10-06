@@ -114,7 +114,7 @@ const __dirname = __host.system.moduleDir(import.meta.url);
 const __globalCtx = new RuntimeContext({ ..., dirname: __dirname, host: __host });
 ```
 
-The header imports no Node module. Every environment variable it used to read through `process.env`, it now reads through `__host.settings.read`, and it starts `main` when `__host.system.isMainModule(import.meta.url)` says this module is the one the process was started with. `lib/backends/typescriptGenerator/header.test.ts` fails if a Node module comes back.
+The header imports no Node module. Agency code may still write `path.join(...)` and `os.homedir()`, which the old header made available by importing Node's modules; they now come from `agency-lang/runtime`, which re-exports Node's `path` and `os` on Node, and the browser entry point will export a portable `path` and a host-backed `os` in their place. Every environment variable it used to read through `process.env`, it now reads through `__host.settings.read`, and it starts `main` when `__host.system.isMainModule(import.meta.url)` says this module is the one the process was started with. `lib/backends/typescriptGenerator/header.test.ts` fails if a Node module comes back.
 
 A run can carry its own host through `InvocationOptions`:
 

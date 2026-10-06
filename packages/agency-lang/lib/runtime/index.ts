@@ -42,6 +42,12 @@ export type {
 } from "../host/host.js";
 export { nodeHost } from "../host/nodeHost.js";
 export { defaultHost } from "#default-host";
+// Agency code may call `path.join` and `os.homedir()` as free names; the
+// generated header used to import them from Node. They come from here
+// now, so the header imports no Node module. The browser entry point will
+// export a portable `path` and a host-backed `os` in their place.
+export { default as path } from "path";
+export { default as os } from "os";
 export type { NodeHostOptions } from "../host/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkPolicy } from "./policy.js";
+import { resolvePolicyDirs } from "./policyDirs.js";
+import { nodeHost } from "../host/nodeHost.js";
 import type { Policy } from "./policy.js";
 import { appendPolicyRules, missingPolicyRules } from "./policyUpdate.js";
 import { recommendedAutoApprovePolicy } from "./builtinPolicies.js";
@@ -78,7 +80,7 @@ describe("appendPolicyRules", () => {
       data: { dir: "/home", filename: "settings.json" },
       origin: "test",
     };
-    expect(checkPolicy(merged, asked).type).toBe("reject");
+    expect(checkPolicy(merged, asked, resolvePolicyDirs(nodeHost())).type).toBe("reject");
   });
 
   it("does not change the policy it was given", () => {

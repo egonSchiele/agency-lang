@@ -1,10 +1,6 @@
 import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd } from "agency-lang/stdlib/index.js";
 import { transcribe as transcribeImpl } from "./dist/src/transcribe.js";
-import { fileURLToPath } from "url";
-import __process from "process";
-import { readFileSync } from "fs";
 import { z } from "agency-lang/zod";
-import path from "path";
 import {
   RuntimeContext,
   Runner,
@@ -42,40 +38,39 @@ import {
   __call,
   withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
-  DeterministicClient as __DeterministicClient,
-  installFetchMock as __installFetchMock,
-  createLogger as __createLogger
+  createLogger as __createLogger,
+  defaultHost as __defaultHost
 } from "agency-lang/runtime";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const __cwd = __process.cwd();
+const __host = __defaultHost();
+const __dirname = __host.system.moduleDir(import.meta.url);
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "",
-    apiKey: __process.env["STATELOG_API_KEY"] || "",
+    apiKey: __host.settings.read("STATELOG_API_KEY") || "",
     projectId: "",
     debugMode: false,
     observability: false
   },
   smoltalkDefaults: {
     apiKey: {
-      openAi: __process.env["OPENAI_API_KEY"] || "",
-      google: __process.env["GEMINI_API_KEY"] || "",
-      anthropic: __process.env["ANTHROPIC_API_KEY"] || "",
-      openRouter: __process.env["OPENROUTER_API_KEY"] || "",
-      deepInfra: __process.env["DEEPINFRA_API_KEY"] || "",
-      liteLlm: __process.env["LITELLM_API_KEY"] || "",
-      openAiCompat: __process.env["OPENAI_COMPAT_API_KEY"] || ""
+      openAi: __host.settings.read("OPENAI_API_KEY") || "",
+      google: __host.settings.read("GEMINI_API_KEY") || "",
+      anthropic: __host.settings.read("ANTHROPIC_API_KEY") || "",
+      openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
+      deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
+      liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
     },
     baseUrl: {
-      liteLlm: __process.env["LITELLM_BASE_URL"] || "",
-      openAiCompat: __process.env["OPENAI_COMPAT_BASE_URL"] || ""
+      liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_BASE_URL") || ""
     },
     model: "gpt-5-mini",
     logLevel: "warn",
     provider: "openai-responses"
   },
   dirname: __dirname,
+  host: __host,
   logLevel: "info",
   traceConfig: {
     program: "index.agency"
@@ -112,14 +107,6 @@ const __setLLMClient = (client) => {
   __globalCtx.setLLMClient(client);
 };
 const __getCheckpoints = () => __globalCtx.checkpoints;
-if (__process.env.AGENCY_LLM_MOCKS) {
-  __globalCtx.setLLMClient(
-    new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
-  );
-}
-if (__process.env.AGENCY_FETCH_MOCKS_FILE) {
-  __installFetchMock(JSON.parse(readFileSync(__process.env.AGENCY_FETCH_MOCKS_FILE, "utf-8")));
-}
 const __toolRegistry = __functionRefReviver.registry ??= {};
 function __registerTool(value, _aliasName) {
   if (__AgencyFunction.isAgencyFunction(value)) {
@@ -140,7 +127,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d5398accf9027e160d41585ae562be98e025fa6e0c7452c2a93340f3b532c713", import.meta.url);
+__registerModuleFingerprint("index.agency", "03d506f456ad8a24757a64417fa0178eea75ae2a137ad37231dc45252887421f", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);

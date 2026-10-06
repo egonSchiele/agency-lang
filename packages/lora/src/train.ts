@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { fixedPath, resolveUnder, stat, remove } from "agency-lang/stdlib-lib/contained.js";
+import { fixedPath, resolveUnder, stat, remove } from "agency-lang/host-lib/nodeFiles.js";
 
 /** Runs the trainer, `trainer/train_lora_sdxl.py`, as a child process and
  *  turns its JSON lines into events and a result. This is the one place a

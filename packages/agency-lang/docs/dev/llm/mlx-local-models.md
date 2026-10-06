@@ -350,67 +350,63 @@ The front door watches for the client closing while its model loads, and
 releases the model without forwarding when it has. `res.destroyed` does
 not report a closed client until something is written to it.
 
-**When the server dies first.** If the Node process is killed with
-SIGKILL, it stops nothing, and each model process would keep its model
-in memory. So `spawnOptions` gives every model process a pipe as its
-standard input that Node never writes to, and sets
-`AGENCY_EXIT_WITH_PARENT=1`. `exit_when_parent_goes` in
-`localServerCommon.py`, which each server script calls first thing,
-starts a thread that reads standard input and calls `os._exit(0)` when
-the read returns, which is when the pipe closes, which is when Node has
-exited for any reason. The variable is the switch: a script started by
-hand as a background job would be stopped by SIGTTIN when the thread
-read the terminal, and one started with standard input from `/dev/null`
-would exit at once. `mlx_vlm.server` is an upstream module, so
-`mlxVlmServer.py` starts the thread and then runs it with `runpy`.
+**When the server dies first.** Every model process gets a pipe as its
+standard input that Node never writes to, and `AGENCY_EXIT_WITH_PARENT=1`.
+`exit_when_parent_goes` in `localServerCommon.py`, which each server
+script calls first, starts a thread that exits the process when the pipe
+closes, which is when Node has exited for any reason. The variable is the
+switch. Without it a script started by hand as a background job would be
+stopped by SIGTTIN when the thread read the terminal, and one with
+standard input from `/dev/null` would exit at once. `mlxVlmServer.py`
+wraps the upstream `mlx_vlm.server` for the same reason.
 
-**Cancelling.** `door.cancel(model)`, behind `server.cancel(model)` and
-`POST /v1/agency/cancel` with `{ "model": ... }`, ends every request in
-progress on one model. The door keeps an `InProgress` entry per request
-from the moment its model is known, so a request still waiting for a
-lazy load is cancelled too. Each entry is marked `cancelled` first, then
-answered with a 499 (or cut, if its reply had started), then its request
-to the process is destroyed. The order matters: destroying the upstream
-request raises `error` on it, and the handler in `forward` would answer
-the client a second time, which throws. The mark tells it not to.
+**Lazy models.** `--lazy` is a row of `NAMING_FLAGS` with `kind: null`,
+so the argument grouping, the targets, and the picker check treat it as
+naming a model. `joinLazyPairs` lets a kind flag and `--lazy` name the
+same model, as in `--vlm a --lazy a`, and compares planned names, so the
+two may spell it differently.
 
-Whether closing the connection stops the process's work is the
-`stopsOnClose` field of the runtime's row in `CHAT_RUNTIMES`, and
-`() => true` for every other kind. Its doc comment has the table. Only
-mlx-vlm with a non-streamed request is false. When any cancelled request
-had reached such a process, `cancel` unloads the model and, unless it is
-lazy, loads it again, so `cancel` on that case takes as long as a load.
+`acquire` on a lazy model that is not loaded queues a load. Before the
+spawn, `makeRoom` reads the available memory and stops idle lazy models,
+longest idle first (`evictionCandidate`, a pure function over the
+records), until the estimate fits with the reserve left free. With none
+left to stop it refuses with `not-enough-memory`, naming each loaded
+model and why it was kept. The estimate and the memory reading are in
+`availableMemory.ts`: size on disk, the draft, and the kind's headroom,
+against `vm_stat` on macOS or `MemAvailable` on Linux. A lazy model that
+dies is loaded again by its next request and does not resolve `failure`.
 
-**Shutting down.** `handle.close()` does five things: the door refuses
-every new request with a 503, the pool sends SIGTERM to every process at
-once (a process still loading included, which ends its load), the pool
-waits up to `STOP_GRACE_MS` for the exits, sends SIGKILL to any process
-still running and waits once more, and the door closes the port. The
-signal is sent before the wait is queued, because a load in progress
-holds the queue and the signal is what ends it. From the first step the
-pool refuses every `load` and `acquire` with the reason `stopping`.
-`close` is one promise however many times it is called: the shutdown
-route, Ctrl-C, and the caller may each ask.
+The front door watches for the client closing while its model loads and
+releases the model without forwarding. `res.destroyed` does not report a
+closed client until something is written to it.
 
-`POST /v1/agency/shutdown` answers 200 and then resolves
-`handle.shutdownRequested`, which `serveTargets` has already chained to
-`close`. Under `agency local serve`, `localServe` waits on that promise
-beside `failure`, and exits 0 on a shutdown and 1 on a failure. Under
-`serve()` from TypeScript, the server closes and the host program keeps
-running.
+**Cancelling.** `cancelOn` ends every `InProgress` entry of a model,
+including one still waiting for a load. Each entry is marked `cancelled`
+before its upstream request is destroyed, because destroying it raises
+`error`, and the handler in `forward` would otherwise answer the client a
+second time, which throws. `stopsOnClose` on the runtime's row in
+`CHAT_RUNTIMES` says whether closing the connection stops the process;
+its doc comment has the table by kind. When a cancelled request had
+reached a process that keeps running, the model is unloaded and, unless
+lazy, loaded again.
 
-**Routes the door answers itself** are rows of `adminRoutes` in
-`startFrontDoor`: `GET /v1/models`, `GET /v1/agency/status`, which
-returns `{ "models": [...] }` with each model's state, error, requests in
-progress, and last use, `POST /v1/agency/cancel`, and
-`POST /v1/agency/shutdown`. `adminRefusal`
-holds the two rules every `/v1/agency/` route shares. The `Host` header
-must be `127.0.0.1:<port>` or `localhost:<port>`, else 403: the door
-listens on 127.0.0.1 only, but a web page can reach that address under a
-hostname of its own, and the browser then treats the page and the server
-as one site, and such a request carries the page's hostname. A POST must
-carry `content-type: application/json`, else 415: a page cannot send that
-header across sites without a preflight request, which the door never
+**Shutting down.** `close` refuses new requests, signals every process at
+once, waits `STOP_GRACE_MS`, sends SIGKILL to the rest and waits for
+their exits, then closes the port. The signal goes out before the wait is
+queued, because a load in progress holds the queue and the signal is what
+ends it; the queued wait signals again, for a process whose spawn
+finished in between. `close` is one promise however many times it is
+called. `POST /v1/agency/shutdown` resolves `shutdownRequested`, which is
+chained to `close`; `localServe` waits on it beside `failure` and exits 0.
+
+**Routes the door answers itself** are rows of `adminRoutes`:
+`GET /v1/models`, `GET /v1/agency/status`, `POST /v1/agency/cancel`, and
+`POST /v1/agency/shutdown`. `adminRefusal` holds the two rules for the
+`/v1/agency/` routes. The `Host` header must be `127.0.0.1:<port>` or
+`localhost:<port>`: a web page can reach 127.0.0.1 under a hostname of
+its own, and then the browser treats the page and the server as one
+site. A POST must carry `content-type: application/json`, which a page
+cannot send across sites without a preflight request the door never
 answers.
 
 **The body limit.** The door reads each body with `parseJsonBody` from

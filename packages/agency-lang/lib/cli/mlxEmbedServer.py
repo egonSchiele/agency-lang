@@ -15,6 +15,8 @@ mlx-lm and are not supported here.
 
 import argparse
 import json
+import os
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 

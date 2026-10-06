@@ -284,9 +284,12 @@ function signalEverything(state: PoolState): Stopping[] {
   });
 }
 
-/** Waits for the signalled processes: a grace period, SIGKILL for the
- *  rest, and one more grace period. */
-async function waitForExits(state: PoolState, exits: Stopping[]): Promise<void> {
+/** Waits for the signalled processes: a grace period, then SIGKILL for
+ *  the rest and a wait for their exits, which a SIGKILL brings. Runs on
+ *  the queue, so a process spawned by a load that was in progress when
+ *  the first signal went out is signalled here too. */
+async function waitForExits(state: PoolState, signalled: Stopping[]): Promise<void> {
+  const exits = [...signalled, ...signalEverything(state)];
   const allExited = Promise.all(exits.map((exit) => exit.exited));
   if (await exitedWithin(state, allExited, STOP_GRACE_MS)) {
     return;
@@ -299,7 +302,7 @@ async function waitForExits(state: PoolState, exits: Stopping[]): Promise<void> 
       exit.process.child.kill("SIGKILL");
     }
   }
-  await exitedWithin(state, allExited, STOP_GRACE_MS);
+  await allExited;
 }
 
 /** A process exited. If it is still its record's process and the pool
@@ -331,12 +334,14 @@ async function stopRecord(state: PoolState, record: ModelRecord): Promise<void> 
     state.stopRequested.splice(index, 1);
   }
   const running = runningOf(record);
+  // Stopped before the signal, so no request is handed a process that is
+  // on its way out.
+  record.current = { state: "stopped" };
   if (running !== null) {
     const exited = exitOf(running.child, record.plan.label);
     kill(state, running);
     await exited;
   }
-  record.current = { state: "stopped" };
 }
 
 /** Runs on the queue, before a lazy model's spawn. Stops idle lazy
@@ -404,10 +409,11 @@ async function loadRecord(state: PoolState, record: ModelRecord): Promise<void> 
     }
     running = await spawnRecord(state, record);
     record.current = { state: "loading", running, loaded };
-    // An unload that arrived during the spawn: stop now, and the wait
-    // below ends when the process exits.
-    if (state.stopRequested.includes(record.plan.model)) {
+    // An unload or a shutdown that arrived during the spawn: stop now.
+    if (state.stopRequested.includes(record.plan.model) || state.stopping) {
+      const exited = exitOf(running.child, record.plan.label);
       kill(state, running);
+      throw new Error(`${await exited} before it was ready.`);
     }
     await state.deps.waitReady(record.plan, running, Promise.race(state.exits));
     record.current = { state: "ready", running };
@@ -418,9 +424,9 @@ async function loadRecord(state: PoolState, record: ModelRecord): Promise<void> 
       kill(state, running);
     }
     // A load that ended because the server is stopping is not a failure.
-    if (!state.stopping) {
-      record.current = { state: "failed", error: (err as Error).message };
-    }
+    record.current = state.stopping
+      ? { state: "stopped" }
+      : { state: "failed", error: (err as Error).message };
     settle?.reject(err as Error);
     throw err;
   }

@@ -460,7 +460,14 @@ export function startFrontDoor(
         refuse(adminBody.refusal.status, adminBody.refusal.message);
         return;
       }
-      const reply = await admin.handle(adminBody.body);
+      let reply: { status: number; body: unknown };
+      try {
+        reply = await admin.handle(adminBody.body);
+      } catch (err) {
+        // cancel restarts a process, and that can fail.
+        refuse(502, (err as Error).message);
+        return;
+      }
       json(res, reply.status, reply.body);
       record.finish(ownReply(reply.status, JSON.stringify(reply.body)));
       return;

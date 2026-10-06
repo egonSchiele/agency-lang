@@ -43,6 +43,7 @@ function planOf(model: string, extra: Partial<ModelPlan> = {}): ModelPlan {
     rules: null,
     lazy: false,
     needBytes: 10 * GIB,
+    stopsOnClose: () => true,
     ...extra,
   };
 }
@@ -585,6 +586,36 @@ describe("stopAll", () => {
     release();
     await stopping;
     expect(closed).toBe(true);
+  });
+
+  it("stops a process whose spawn finished after the shutdown began", async () => {
+    let release: () => void = () => {};
+    const children: FakeChild[] = [];
+    const pool = createModelPool([planOf("a")], {
+      now: Date.now,
+      allowOvercommit: false,
+      log: () => {},
+      availableMemory: async () => ROOMY,
+      wait: async () => {},
+      spawn: () =>
+        new Promise<Running>((resolve) => {
+          release = () => {
+            const child = fakeChild();
+            children.push(child);
+            resolve({ child, port: 9000 });
+          };
+        }),
+      waitReady: async () => {},
+    });
+    const loading = pool.load("a").catch((err: Error) => err.message);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The spawn is still in progress: the pool has no process to signal.
+    const stopping = pool.stopAll();
+    release();
+    await loading;
+    await stopping;
+    expect(children[0].kills).toBe(1);
+    expect(pool.status()[0].state).toBe("stopped");
   });
 
   it("ends a load in progress, and refuses loads and requests from then on", async () => {

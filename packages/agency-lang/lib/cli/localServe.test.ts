@@ -776,10 +776,14 @@ describe("runServe", () => {
     let told = false;
     return {
       on: (_ev, cb) => listeners.push(cb),
-      kill: () => {
+      kill: (signal?: NodeJS.Signals) => {
         if (!told) {
           told = true;
           killed += 1;
+        }
+        // SIGTERM is ignored. SIGKILL is not a request.
+        if (signal === "SIGKILL") {
+          listeners.forEach((cb) => cb(null, "SIGKILL"));
         }
       },
       exit: (code) => listeners.forEach((cb) => cb(code, null)),
@@ -1601,6 +1605,25 @@ describe("runServe", () => {
       } finally {
         await handle.close();
       }
+    });
+
+    it("keeps a draft written after the --lazy mention of a paired model", async () => {
+      // mlx-vlm takes no draft, so keeping it means refusing it. Dropping
+      // it would start the model without the draft and say nothing.
+      visionChatModel();
+      recordedModel("org/small", true);
+      await expect(
+        runServe(
+          [],
+          {
+            port: 0,
+            vlm: ["mlx:org/vlm"],
+            lazy: ["mlx:org/vlm"],
+            options: { "mlx:org/vlm": { draft: "mlx:org/small" } },
+          },
+          deps,
+        ),
+      ).rejects.toThrow("--draft is not supported by mlx_vlm.server for org/vlm.");
     });
 
     it("does not open the picker when only --lazy names a model", () => {

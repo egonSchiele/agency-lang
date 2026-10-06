@@ -1045,7 +1045,11 @@ function joinLazyPairs(planned: Planned[]): Planned[] {
     if (!isPair) {
       throw new Error(`${plan.name} is named twice.`);
     }
-    out[seen] = { ...kinded, lazy: true };
+    // A draft written after either mention belongs to the model.
+    if (kinded.draft !== undefined && lazyOnly.draft !== undefined) {
+      throw new Error(`${plan.name} has --draft twice. Write it once, after either mention.`);
+    }
+    out[seen] = { ...kinded, lazy: true, draft: kinded.draft ?? lazyOnly.draft };
   }
   return out;
 }

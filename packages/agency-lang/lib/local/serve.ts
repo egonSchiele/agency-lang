@@ -74,7 +74,8 @@ function targetOf(served: string | ServedModel): ServeTarget {
 }
 
 /** Start a local model server, as `agency local serve` does, and resolve
- *  once every model has loaded. Each model is a name or a `ServedModel`.
+ *  once every model that is not lazy has loaded. A lazy model loads on its
+ *  first request. Each model is a name or a `ServedModel`.
  *
  *  ```ts
  *  const server = await serve(["z-image-turbo", "wd14-tagger"]);

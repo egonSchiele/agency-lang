@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
+import { aliases } from "./vitest.aliases.js";
 
 export default defineConfig({
   test: {
@@ -36,11 +36,6 @@ export default defineConfig({
     testTimeout: 30_000,
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./lib"),
-      // package.json "imports" entries, which vitest does not read. Keep in
-      // step with that field.
-      "#sha256": path.resolve(__dirname, "./lib/utils/sha256.node.ts"),
-    },
+    alias: aliases,
   },
 });

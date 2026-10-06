@@ -17,6 +17,13 @@ function referenceHmac(key: Uint8Array | string, data: Uint8Array | string): str
 
 const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
 
+// Both files behind `#sha256` must match its declaration in
+// packageImports.d.ts. These lines fail to compile if one drifts.
+const portableMatchesDeclaration: typeof import("#sha256") = portable;
+const nodeMatchesDeclaration: typeof import("#sha256") = node;
+void portableMatchesDeclaration;
+void nodeMatchesDeclaration;
+
 const implementations = [
   { name: "portable", impl: portable },
   { name: "node", impl: node },

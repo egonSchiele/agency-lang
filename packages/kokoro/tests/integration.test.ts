@@ -25,6 +25,8 @@ function readWav(file: string): WavInfo {
   return { sampleRate, bitsPerSample, seconds: dataBytes / (sampleRate * (bitsPerSample / 8)) };
 }
 
+const host = defaultHost();
+
 describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () => {
   let workDir: string;
   const signal = new AbortController().signal;

@@ -310,6 +310,20 @@ When the pool will not hand out a model it throws a `PoolRefusal` with a
 reason, and `STATUS_FOR_REFUSAL` in the front door turns the reason into a
 status. A model that was unloaded gets a 503 that says how to load it.
 
+**When the server dies first.** If the Node process is killed with
+SIGKILL, it stops nothing, and each model process would keep its model
+in memory. So `spawnOptions` gives every model process a pipe as its
+standard input that Node never writes to, and sets
+`AGENCY_EXIT_WITH_PARENT=1`. `exit_when_parent_goes` in
+`localServerCommon.py`, which each server script calls first thing,
+starts a thread that reads standard input and calls `os._exit(0)` when
+the read returns, which is when the pipe closes, which is when Node has
+exited for any reason. The variable is the switch: a script started by
+hand as a background job would be stopped by SIGTTIN when the thread
+read the terminal, and one started with standard input from `/dev/null`
+would exit at once. `mlx_vlm.server` is an upstream module, so
+`mlxVlmServer.py` starts the thread and then runs it with `runpy`.
+
 **Routes the door answers itself** are rows of `adminRoutes` in
 `startFrontDoor`: `GET /v1/models`, and `GET /v1/agency/status`, which
 returns `{ "models": [...] }` with each model's state, error, requests in

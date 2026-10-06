@@ -485,7 +485,7 @@ print(json.dumps([asked, regions]))
   });
 
   it("ship next to localServe and are valid Python 3", () => {
-    for (const script of ["visionServer.py", "imageTools.py"]) {
+    for (const script of ["visionServer.py", "imageTools.py", "mlxVlmServer.py"]) {
       const file = path.join(cliDir, script);
       expect(fs.existsSync(file)).toBe(true);
       const run = spawnSync(

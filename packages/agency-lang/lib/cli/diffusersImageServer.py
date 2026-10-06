@@ -32,7 +32,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import client_gone, fail  # noqa: E402
+from localServerCommon import client_gone, exit_when_parent_goes, fail  # noqa: E402
 from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
     INPUT_IMAGES,
@@ -531,6 +531,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    exit_when_parent_goes()
     args = parse_args()
     check_diffusers_version()
     # Load and generate once before binding the port. `agency local serve`

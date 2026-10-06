@@ -21,6 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import mlx.core as mx
 from mlx_lm import load
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from localServerCommon import exit_when_parent_goes  # noqa: E402
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -145,6 +148,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    exit_when_parent_goes()
     args = parse_args()
     # Load before binding the port. `agency local serve` treats a refused
     # connection as "still loading" and any answer as "ready", so the port

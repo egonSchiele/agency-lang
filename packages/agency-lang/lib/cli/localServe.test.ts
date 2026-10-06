@@ -827,7 +827,8 @@ describe("runServe", () => {
     const vision = await runServe([], { port: 0, vlm: [model] }, deps);
     try {
       expect(vision.models).toEqual([model]);
-      expect(spawned[1].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+      expect(spawned[1][1]).toMatch(/mlxVlmServer.py$/);
+      expect(spawned[1].slice(2, 4)).toEqual(["--model", model]);
       expect(spawned[1]).not.toContain("--prefill-step-size");
       expect(log.join("\n")).toContain("(chat with images)");
     } finally {
@@ -1597,7 +1598,8 @@ describe("runServe", () => {
       const model = visionChatModel();
       const server = await serveWithDeps([{ model, vlm: true }], {}, deps);
       try {
-        expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+        expect(spawned[0].slice(2, 4)).toEqual(["--model", model]);
       } finally {
         await server.close();
       }
@@ -1857,12 +1859,15 @@ describe("targetsFromFlags", () => {
 
 describe("spawnOptions", () => {
   it("lets a process write to this terminal, or pipes its output unbuffered", () => {
-    expect(spawnOptions("inherit").stdio).toEqual(["inherit", "inherit", "inherit"]);
+    expect(spawnOptions("inherit").stdio).toEqual(["pipe", "inherit", "inherit"]);
     expect(spawnOptions("inherit").env.PYTHONUNBUFFERED).toBe(process.env.PYTHONUNBUFFERED);
     const piped = spawnOptions("pipe");
-    expect(piped.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    expect(piped.stdio).toEqual(["pipe", "pipe", "pipe"]);
     expect(piped.env.PYTHONUNBUFFERED).toBe("1");
     expect(piped.env.HF_HUB_OFFLINE).toBe("1");
+    // Both variants ask the server script to exit when this process does.
+    expect(piped.env.AGENCY_EXIT_WITH_PARENT).toBe("1");
+    expect(spawnOptions("inherit").env.AGENCY_EXIT_WITH_PARENT).toBe("1");
   });
 });
 

@@ -26,7 +26,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import client_gone, fail  # noqa: E402
+from localServerCommon import client_gone, exit_when_parent_goes, fail  # noqa: E402
 from mlxSpeechRules import (  # noqa: E402
     FAMILIES,
     FORMATS,
@@ -289,6 +289,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    exit_when_parent_goes()
     args = parse_args()
     check_mlx_audio_version()
     try:

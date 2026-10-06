@@ -533,6 +533,12 @@ export function imageServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "diffusersImageServer.py");
 }
 
+/** The script that runs mlx_vlm.server, shipped next to this file and
+ *  copied into dist like the others. */
+export function vlmServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxVlmServer.py");
+}
+
 /** The vision server shipped next to this file, copied into dist like the
  *  image one. */
 export function visionServerScript(): string {
@@ -1014,13 +1020,22 @@ export type ChildOutput = "inherit" | "pipe";
  *  told not to buffer, because Python writes in blocks when its output is
  *  not a terminal, and its lines would arrive late. */
 export function spawnOptions(output: ChildOutput): {
-  stdio: ["inherit" | "ignore", ChildOutput, ChildOutput];
+  stdio: ["pipe", ChildOutput, ChildOutput];
   env: Record<string, string | undefined>;
 } {
   const piped = output === "pipe" ? { PYTHONUNBUFFERED: "1" } : {};
   return {
-    stdio: [output === "pipe" ? "ignore" : "inherit", output, output],
-    env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1", ...piped },
+    // Standard input is a pipe this process never writes to. It closes
+    // when this process exits, however it exits, and the server script
+    // exits with it. See exit_when_parent_goes in localServerCommon.py.
+    stdio: ["pipe", output, output],
+    env: {
+      ...process.env,
+      HF_HUB_OFFLINE: "1",
+      HF_HUB_DISABLE_TELEMETRY: "1",
+      AGENCY_EXIT_WITH_PARENT: "1",
+      ...piped,
+    },
   };
 }
 
@@ -1620,7 +1635,8 @@ export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
   "mlx-vlm": {
     program: "mlx_vlm.server",
     modules: ["mlx_vlm"],
-    args: (launch) => vlmServeArgs(launch.modelDir, launch.port, launch.settings.maxTokens),
+    args: (launch) =>
+      vlmServeArgs(vlmServerScript(), launch.modelDir, launch.port, launch.settings.maxTokens),
     flags: [],
     bannerNote: "  (chat with images)",
     example: imageChatExample,

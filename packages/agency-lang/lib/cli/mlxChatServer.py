@@ -98,6 +98,7 @@ is not supported; the script always runs the HTTP server in its own process.
 import argparse
 import json
 import logging
+import os
 import re
 import select
 import socket
@@ -1456,7 +1457,11 @@ def split_own_flags(argv):
     return limits, rest
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from localServerCommon import exit_when_parent_goes  # noqa: E402
+
 if __name__ == "__main__":
+    exit_when_parent_goes()
     SERVER_LIMITS, rest = split_own_flags(sys.argv[1:])
     sys.argv = [sys.argv[0]] + rest
     server.run = run

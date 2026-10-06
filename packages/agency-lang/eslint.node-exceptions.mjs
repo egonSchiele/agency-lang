@@ -19,6 +19,8 @@ export const NODE_ONLY = {
   "lib/host/default.node.ts":
     "builds the default host for Node; the browser condition of #default-host picks default.browser.ts instead",
   "lib/host/nodeHost.ts": "the host for Node, built from Node modules on purpose",
+  "lib/runtime/agencyGlobals.node.ts":
+    "re-exports Node's path and os for Agency code; the browser entry point exports portable ones",
   "lib/runtime/cliEntry.ts": "starts a program from the command line",
   "lib/runtime/cliInterruptResolution.ts":
     "the command line's endpoint for interrupts nothing handled",

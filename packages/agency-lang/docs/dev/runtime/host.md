@@ -106,7 +106,7 @@ A refusal from `makeHost` throws when the function is called, before any promise
 
 ### The network part
 
-`HostNetwork` is the platform's own `fetch`, with the same arguments and the same `Response`, so a host can refuse it, limit it to a list of sites, or answer from scripted responses. `nodeHost` calls the global `fetch` at the time of each call, so a test that replaces the global is honoured. `memoryHost` refuses every request unless the test passed a `fetch`. Every `fetch` in the stdlib goes through `host.network.fetch`, and a helper reaches the network the way it reaches files: through the run it was handed, or `currentHost()` on its first line. The model client's own requests do not go through it.
+`HostNetwork` is the platform's own `fetch`, with the same arguments and the same `Response`, so a host can refuse it, limit it to a list of sites, or answer from scripted responses. `nodeHost` calls the global `fetch` at the time of each call, so a test that replaces the global is honoured. `memoryHost` refuses every request unless the test passed a `fetch`. Every `fetch` in the stdlib goes through `host.network.fetch`, and a helper reaches the network the way it reaches files: through the run it was handed, or `currentHost()` on its first line. The model client is the exception: smoltalk, and any `LLMClient` a caller supplies, makes its own requests, which the host neither sees nor refuses. `SimpleOpenAIClient`, the small client the runtime ships, is Agency's own code and does go through the network part of the host it was built under.
 
 ### The default host
 

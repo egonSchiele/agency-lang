@@ -372,7 +372,10 @@ Node and browsers both have. The stdlib called the global `fetch`; every
 such call goes through `host.network.fetch`, so a host can refuse it or
 limit it to a list of sites. The test runner's fetch mocks are a network
 part the default host builds from `AGENCY_FETCH_MOCKS_FILE`. The model
-client's own requests do not go through the host.
+client's own requests do not go through the host: smoltalk, and any
+`LLMClient` a caller supplies, fetch for themselves. `SimpleOpenAIClient`,
+the small client the runtime ships, is Agency's own code and uses the
+network part of the host it was built under.
 
 ### Subprocesses
 

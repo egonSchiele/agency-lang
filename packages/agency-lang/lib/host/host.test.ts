@@ -1,15 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   CAPABILITIES,
-<<<<<<< HEAD
   FILE_WRITE_FUNCTIONS,
   PART_CAPABILITY,
   PLATFORM_CAPABILITIES,
   functionCapability,
-=======
-  PART_CAPABILITY,
-  PLATFORM_CAPABILITIES,
->>>>>>> origin/main
   UnsupportedOnHostError,
   makeHost,
   requireCapabilities,
@@ -37,7 +32,6 @@ function capabilityFunctions(): string[] {
   );
 }
 
-<<<<<<< HEAD
 describe("FILE_WRITE_FUNCTIONS", () => {
   it("names functions the files part has", () => {
     const files = nodeHost().files as unknown as Record<string, unknown>;
@@ -47,8 +41,6 @@ describe("FILE_WRITE_FUNCTIONS", () => {
   });
 });
 
-=======
->>>>>>> origin/main
 describe("PART_CAPABILITY", () => {
   it("names a known capability for every part", () => {
     for (const capability of Object.values(PART_CAPABILITY)) {
@@ -76,12 +68,8 @@ describe("makeHost", () => {
   // One case per function of a real host, found by walking its parts, so a
   // function added to a part is covered without a line here.
   for (const functionName of capabilityFunctions()) {
-<<<<<<< HEAD
     const [part, fn] = functionName.split(".");
     const capability = functionCapability(part as CapabilityPart, fn);
-=======
-    const capability = PART_CAPABILITY[functionName.split(".")[0] as CapabilityPart];
->>>>>>> origin/main
     it(`${functionName} throws on a host without ${capability}`, () => {
       const without = CAPABILITIES.filter((c) => c !== capability);
       const host = nodeHost({ capabilities: without });

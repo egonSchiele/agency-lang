@@ -38,7 +38,6 @@ export const PLATFORM_CAPABILITIES: Record<Platform, Capability[]> = {
 /** The operating system a host runs on. `browserHost` reports `"unknown"`. */
 export type OperatingSystem = "macos" | "linux" | "windows" | "wsl" | "unknown";
 
-<<<<<<< HEAD
 /** A directory an approval named, realpathed once by the host that made
  *  it. Every file operation takes one; nothing takes a bare string root.
  *  Only files under lib/host read its inside (`rootPath` in roots.ts). */
@@ -124,8 +123,6 @@ export type HostFiles = {
   move(from: Located, to: Located): Promise<void>;
 };
 
-=======
->>>>>>> origin/main
 /** What the Agency functions `env` and `setEnv` read and write. This is a
  *  capability because it hands any variable to the program, and so to an
  *  agent. The runtime's own reads go through `settings` instead. */
@@ -194,18 +191,11 @@ export type HostRandom = {
   bytes(length: number): Uint8Array;
 };
 
-<<<<<<< HEAD
 /** The parts a host is built from. `files`, `env`, and `terminal` are
  *  capabilities, so a host may leave them out; `makeHost` then supplies
  *  parts that refuse. The other parts are required. */
 export type HostParts = {
   files?: HostFiles;
-=======
-/** The parts a host is built from. `env` and `terminal` are capabilities,
- *  so a host may leave them out; `makeHost` then supplies parts that
- *  refuse. The other parts are required. */
-export type HostParts = {
->>>>>>> origin/main
   env?: HostEnv;
   terminal?: HostTerminal;
   system: HostSystem;
@@ -219,10 +209,7 @@ export type Host = {
   name: string;
   /** What this host has. Only `requireCapabilities` reads it. */
   capabilities: Capability[];
-<<<<<<< HEAD
   files: HostFiles;
-=======
->>>>>>> origin/main
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -232,23 +219,17 @@ export type Host = {
 };
 
 /** The capability each capability part needs. A part not listed here
-<<<<<<< HEAD
  *  (`system`, `settings`, `clock`, `random`) is on every host. `files`
  *  needs two: `fileRead` for the part, and `fileWrite` for the functions
  *  in FILE_WRITE_FUNCTIONS. */
 export const PART_CAPABILITY = {
   files: "fileRead",
-=======
- *  (`system`, `settings`, `clock`, `random`) is on every host. */
-export const PART_CAPABILITY = {
->>>>>>> origin/main
   env: "env",
   terminal: "terminal",
 } as const satisfies Record<string, Capability>;
 
 export type CapabilityPart = keyof typeof PART_CAPABILITY;
 
-<<<<<<< HEAD
 /** The functions of the files part that write, move, or delete. They need
  *  `fileWrite`; the rest of the part needs `fileRead`. */
 export const FILE_WRITE_FUNCTIONS: (keyof HostFiles)[] = [
@@ -270,8 +251,6 @@ export function functionCapability(part: CapabilityPart, fn: string): Capability
   return PART_CAPABILITY[part];
 }
 
-=======
->>>>>>> origin/main
 /** Thrown when code asks a host for something it cannot do. Agency turns an
  *  error thrown inside a function into a failure result, so a program sees
  *  a failed call with this message. A refusing host never reports success
@@ -334,19 +313,12 @@ export function makeHost(args: MakeHostArgs): Host {
     if (implementation === undefined) {
       throw new Error(`The ${name} host grants ${capability} but its parts have no ${part}.`);
     }
-<<<<<<< HEAD
     built[part] = wrapPart(part, implementation, capabilities, name, onUse);
-=======
-    built[part] = onUse ? observedPart(part, capability, implementation, onUse) : implementation;
->>>>>>> origin/main
   }
   return {
     name,
     capabilities: [...capabilities],
-<<<<<<< HEAD
     files: built.files as HostFiles,
-=======
->>>>>>> origin/main
     env: built.env as HostEnv,
     terminal: built.terminal as HostTerminal,
     system: parts.system,
@@ -379,7 +351,6 @@ function refusedPart(part: string, capability: Capability, hostName: string): ob
   );
 }
 
-<<<<<<< HEAD
 /** The part with each function wrapped: a function whose own capability
  *  (`fileWrite`, for a write on the files part) is not granted refuses,
  *  and the rest call `onUse` first when there is one. */
@@ -389,14 +360,6 @@ function wrapPart(
   capabilities: Capability[],
   hostName: string,
   onUse: MakeHostArgs["onUse"],
-=======
-/** The part with every function wrapped to call `onUse` first. */
-function observedPart(
-  part: string,
-  capability: Capability,
-  implementation: Record<string, unknown>,
-  onUse: NonNullable<MakeHostArgs["onUse"]>,
->>>>>>> origin/main
 ): object {
   const wrapped: Record<string, unknown> = {};
   for (const [fn, value] of Object.entries(implementation)) {
@@ -404,7 +367,6 @@ function observedPart(
       wrapped[fn] = value;
       continue;
     }
-<<<<<<< HEAD
     const capability = functionCapability(part, fn);
     const functionName = `${part}.${fn}`;
     if (!capabilities.includes(capability)) {
@@ -419,10 +381,6 @@ function observedPart(
     }
     wrapped[fn] = (...callArgs: unknown[]) => {
       onUse(functionName, capability);
-=======
-    wrapped[fn] = (...callArgs: unknown[]) => {
-      onUse(`${part}.${fn}`, capability);
->>>>>>> origin/main
       return value(...callArgs);
     };
   }

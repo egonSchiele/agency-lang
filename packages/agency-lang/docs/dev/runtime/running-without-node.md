@@ -42,15 +42,36 @@ When you are deciding about a Node feature, go through these steps:
 
 ## Where the targets may differ
 
-The plan is for the targets to differ in three places and nowhere else. None of these is built yet.
+The plan is for the targets to differ in four places and nowhere else. The first is built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other three.
 
 | What differs | Where it lives |
 | --- | --- |
+| Hashing, where Node's OpenSSL is about nine times faster than JavaScript | One pair of files, `lib/utils/sha256.node.ts` and `sha256.portable.ts`, chosen by the `#sha256` entry in the `imports` field of `package.json` |
 | Platform calls, such as reading a file or an environment variable | One pair of files, `host.node.ts` and `host.browser.ts`, with the same exports |
 | Which runtime modules are included | One entry point for the browser beside `lib/runtime/index.ts` |
 | Which stdlib modules exist | One mark at the top of each Node-only module, which makes a browser build that imports it a compile error |
 
 Generated code has one shape for both targets. The runtime is built once.
+
+### How a pair of files is chosen
+
+The `imports` field of `package.json` maps a name that starts with `#` to a file per condition:
+
+```json
+"imports": {
+  "#sha256": {
+    "types": "./dist/lib/utils/sha256.node.d.ts",
+    "browser": "./dist/lib/utils/sha256.portable.js",
+    "default": "./dist/lib/utils/sha256.node.js"
+  }
+}
+```
+
+Node resolves `#sha256` to the `default` file. esbuild resolves it to the `browser` file when it bundles with `--platform=browser`. The code that imports the name, `lib/utils/hash.ts`, is the same on both platforms.
+
+Two other places have to know about each entry. `tsconfig.json` maps the name to the source file in `paths`, so a fresh checkout type-checks before `dist` exists. `vitest.aliases.ts` maps it for the test runner, which does not read `package.json`. When you add an entry, add it to both.
+
+Hashing is the only case so far where Node keeps a faster implementation. Rule 3 above asks for a measurement first: the portable SHA-256 takes 0.8 ms on a 240 KB file and 25 ms on 8 MB, against 0.086 ms and 2.6 ms for Node's.
 
 Other languages with several targets work the same way. TypeScript's compiler never calls `fs`. It calls a `System` object, and Node and the browser playground each supply one. Kotlin has `expect` and `actual`. Go picks whole files by name, such as `file_js.go`. Dart has conditional imports.
 

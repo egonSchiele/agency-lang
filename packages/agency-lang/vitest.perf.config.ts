@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
+import { aliases } from "./vitest.aliases.js";
 
 // The performance suite (mirrors vitest.integration.config.ts). Kept apart from
 // the default unit run because it is slow and must run serially — parallel tests
@@ -20,8 +20,6 @@ export default defineConfig({
     poolOptions: { threads: { singleThread: true } },
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./lib"),
-    },
+    alias: aliases,
   },
 });

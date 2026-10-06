@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
+import { aliases } from "./vitest.aliases.js";
 
 export default defineConfig({
   test: {
@@ -36,8 +36,6 @@ export default defineConfig({
     testTimeout: 30_000,
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./lib"),
-    },
+    alias: aliases,
   },
 });

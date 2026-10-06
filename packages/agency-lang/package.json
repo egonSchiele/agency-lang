@@ -107,6 +107,12 @@
     "./stdlib-lib/*": "./dist/lib/stdlib/*",
     "./stdlib/*": "./stdlib/*"
   },
+  "imports": {
+    "#sha256": {
+      "browser": "./dist/lib/utils/sha256.portable.js",
+      "default": "./dist/lib/utils/sha256.node.js"
+    }
+  },
   "type": "module",
   "engines": {
     "node": ">=22.13.0"

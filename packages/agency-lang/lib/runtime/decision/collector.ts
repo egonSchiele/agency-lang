@@ -6,7 +6,7 @@
  * slice of the answers, usage, and cost. See
  * docs/dev/llm/decision-models.md, "Batching inside parallel".
  */
-import { createHash } from "crypto";
+import { sha256Text } from "../../utils/hash.js";
 import { failure, success, type CostEstimate, type Result } from "smoltalk";
 import type {
   DecideConfig,
@@ -122,7 +122,7 @@ function groupKeyFor(request: DecisionRequest): string {
     questionCap: request.questionCap,
     state: request.state,
   };
-  return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
+  return sha256Text(JSON.stringify(identity));
 }
 
 export class DecisionCollector {

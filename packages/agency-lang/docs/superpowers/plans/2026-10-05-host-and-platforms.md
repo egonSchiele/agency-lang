@@ -166,16 +166,22 @@ does.
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
 
-**Whose code replaces Node's.** On each platform, use the platform's own
-API or a copy of Node's implementation before writing our own; our own
-code is for a synchronous primitive the platform only offers async, and
-it is tested against Node's output. Section 5 of the spec has the rule.
-Tasks 27, 28, and 29 follow it.
-
 Every PR ends with the steps under "Finishing a PR".
 
 **Every PR leaves behaviour on Node unchanged.** If a task seems to need
 a change in what a Node program does, stop and ask.
+
+**Use the platform's implementation wherever it makes sense.** When a
+task replaces something Node did, reach for the platform's own API
+first (WebCrypto, `btoa`, `fetch`), then for a copy of Node's
+implementation (`path-browserify` is Node's `path.js`), and write our
+own only when neither exists, which in practice means a synchronous
+primitive the platform offers only async. The platform's code has had
+more eyes and more years than ours, and it is usually faster: Node's
+SHA-256 is about nine times faster than the one in
+`sha256.portable.ts`. Code we do write is tested against Node's output
+on the same inputs. Section 5 of the spec has the same rule; Tasks 27,
+28, and 29 apply it.
 
 **Goal:** this program compiles for the browser, bundles with no Node
 import, and runs in a web view.

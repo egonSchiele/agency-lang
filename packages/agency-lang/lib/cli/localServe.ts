@@ -38,6 +38,7 @@ import {
 import type { ModelKind } from "../stdlib/modelKind.js";
 import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { createModelPool, type ModelPlan, type ModelStatus } from "./modelPool.js";
+import { availableMemory, estimatedNeed, type MemorySnapshot } from "./availableMemory.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
@@ -110,30 +111,38 @@ export function serveArgs(
  *  kind     the kind a flag gave it. Absent: read it from the model
  *  runtime  the chat runtime a flag gave it. Absent: the kind's default
  *  flag     the flag that named it, for messages. Absent for a plain
- *           argument */
+ *           argument
+ *  lazy     load it on its first request, and stop it when another lazy
+ *           model needs the memory. Absent: load it at startup and keep
+ *           it loaded */
 export type ServeTarget = {
   model: string;
   kind?: ServeKind;
   runtime?: ChatRuntime;
   flag?: string;
+  lazy?: boolean;
 } & ModelOptions;
 
 /** The per-model options and how each one is spelled. */
 const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
 
 /** The flags that name a model rather than set an option, so the model
- *  after them is a target too. */
+ *  after them is a target too.
+ *
+ *  kind  the kind the flag gives its model. Null: read it from the model */
 type NamingFlag = {
   flag: string;
-  key: "embedding" | "speech" | "image" | "vlm";
-  kind: ServeKind;
+  key: "embedding" | "speech" | "image" | "vlm" | "lazy";
+  kind: ServeKind | null;
   runtime: ChatRuntime | null;
+  lazy: boolean;
 };
 const NAMING_FLAGS: NamingFlag[] = [
-  { flag: "--embedding", key: "embedding", kind: "embedding", runtime: null },
-  { flag: "--speech", key: "speech", kind: "speech", runtime: null },
-  { flag: "--image", key: "image", kind: "image", runtime: null },
-  { flag: "--vlm", key: "vlm", kind: "chat", runtime: "mlx-vlm" },
+  { flag: "--embedding", key: "embedding", kind: "embedding", runtime: null, lazy: false },
+  { flag: "--speech", key: "speech", kind: "speech", runtime: null, lazy: false },
+  { flag: "--image", key: "image", kind: "image", runtime: null, lazy: false },
+  { flag: "--vlm", key: "vlm", kind: "chat", runtime: "mlx-vlm", lazy: false },
+  { flag: "--lazy", key: "lazy", kind: null, runtime: null, lazy: true },
 ];
 
 /** The flags on a command line that take a value, by spelling: "required"
@@ -943,6 +952,8 @@ export type ServeDeps = {
   fetch: typeof fetch;
   exec: Exec;
   totalmem: () => number;
+  /** The memory a lazy model may take now. */
+  availableMemory: () => Promise<MemorySnapshot>;
   log: (line: string) => void;
   freePort: () => Promise<number>;
   cacheDir: string;
@@ -1012,6 +1023,8 @@ export type ServeFlags = ServeSettings & {
   /** Models to serve with the image server on /v1/images/generations. */
   image?: string[];
   vlm?: string[];
+  /** Models to load on their first request. */
+  lazy?: string[];
 };
 
 /** The dependencies of a server started from TypeScript: everything it
@@ -1026,6 +1039,7 @@ function realDeps(): ServeDeps {
     fetch,
     exec: execSync,
     totalmem: os.totalmem,
+    availableMemory: () => availableMemory(console.log),
     log: console.log,
     freePort,
     cacheDir: defaultCacheDir(),
@@ -1044,6 +1058,9 @@ type Planned = {
   sizeBytes: number;
   kind: ServeKind;
   runtime: ChatRuntime | null;
+  lazy: boolean;
+  /** Whether a flag gave the kind, as against the model's own files. */
+  flagged: boolean;
   /** The chat model that drafts for this one, planned the same way. */
   draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
 };
@@ -1152,7 +1169,15 @@ function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planne
   if (kind === null) {
     throw new Error(unknownKindMessage(value));
   }
-  return { name, dir, sizeBytes, kind, runtime: kind === "chat" ? "mlx-lm" : null };
+  return {
+    name,
+    dir,
+    sizeBytes,
+    kind,
+    runtime: kind === "chat" ? "mlx-lm" : null,
+    lazy: false,
+    flagged: flagged !== undefined,
+  };
 }
 
 /** A required kind cannot override what the installed files say. */
@@ -1171,7 +1196,32 @@ function planRequired(value: string, cacheDir: string, kind: ServeKind): Planned
  *  unless the catalog says otherwise. One with a runtime must be a chat
  *  model that runtime has been tested with. */
 function planTarget(target: ServeTarget, cacheDir: string): Planned {
-  return withDraft(target.model, planUndrafted(target, cacheDir), target, cacheDir);
+  const planned = withDraft(target.model, planUndrafted(target, cacheDir), target, cacheDir);
+  return { ...planned, lazy: target.lazy === true };
+}
+
+/** One plan per model. A model may be named twice when one mention is
+ *  `--lazy` alone and the other gives its kind, as in `--vlm a --lazy a`;
+ *  the two are joined into one lazy plan. Names are compared after
+ *  planning, so the two mentions may spell the model differently. Any
+ *  other repeat is an error. */
+function joinLazyPairs(planned: Planned[]): Planned[] {
+  const out: Planned[] = [];
+  for (const plan of planned) {
+    const seen = out.findIndex((other) => other.name === plan.name);
+    if (seen === -1) {
+      out.push(plan);
+      continue;
+    }
+    const other = out[seen];
+    const [lazyOnly, kinded] = plan.lazy && !plan.flagged ? [plan, other] : [other, plan];
+    const isPair = lazyOnly.lazy && !lazyOnly.flagged && kinded.flagged && !kinded.lazy;
+    if (!isPair) {
+      throw new Error(`${plan.name} is named twice.`);
+    }
+    out[seen] = { ...kinded, lazy: true };
+  }
+  return out;
 }
 
 function planUndrafted(target: ServeTarget, cacheDir: string): Planned {
@@ -1202,9 +1252,15 @@ export function targetsFromFlags(values: string[], flags: ServeFlags): ServeTarg
   const plain = values.map((model) => ({ model, ...optionsOf(model) }));
   const flagged = NAMING_FLAGS.flatMap((row) =>
     (flags[row.key] ?? []).map((model) => {
-      const target: ServeTarget = { model, kind: row.kind, flag: row.flag, ...optionsOf(model) };
+      const target: ServeTarget = { model, flag: row.flag, ...optionsOf(model) };
+      if (row.kind !== null) {
+        target.kind = row.kind;
+      }
       if (row.runtime !== null) {
         target.runtime = row.runtime;
+      }
+      if (row.lazy) {
+        target.lazy = true;
       }
       return target;
     }),
@@ -1278,6 +1334,7 @@ export type BannerModel = {
   kind: ServeKind;
   dir?: string;
   runtime?: ChatRuntime | null;
+  lazy?: boolean;
 };
 
 /** The line of Agency code the banner suggests for each vision function,
@@ -1304,7 +1361,8 @@ export function servingBanner(port: number, models: BannerModel[]): string[] {
   const count = models.length;
   const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
   for (const model of models) {
-    lines.push(`  ${model.name}${chatSpecOf(model)?.bannerNote ?? BANNER_SUFFIX[model.kind]}`);
+    const note = chatSpecOf(model)?.bannerNote ?? BANNER_SUFFIX[model.kind];
+    lines.push(`  ${model.name}${note}${model.lazy === true ? "  (on demand)" : ""}`);
   }
   const first = (kind: ServeKind) => models.find((model) => model.kind === kind)?.name;
   for (const [runtime, spec] of Object.entries(CHAT_RUNTIMES)) {
@@ -1371,6 +1429,8 @@ function modelPlanOf(model: Planned): ModelPlan {
     label: labelOf(model),
     kind: model.kind,
     rules: chatSpecOf(model)?.rules ?? null,
+    lazy: model.lazy,
+    needBytes: estimatedNeed(model),
   };
 }
 
@@ -1381,7 +1441,7 @@ export async function serveTargets(
   deps: ServeDeps = realDeps(),
 ): Promise<ServeHandle> {
   const maxTokens = settings.maxTokens ?? 16384;
-  const planned = targets.map((target) => planTarget(target, deps.cacheDir));
+  const planned = joinLazyPairs(targets.map((target) => planTarget(target, deps.cacheDir)));
   const unused = flagsNobodyTakes(settings, planned);
   if (unused.length > 0) {
     const flag = unused[0].replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
@@ -1393,16 +1453,13 @@ export async function serveTargets(
     throw new Error("Name at least one model to serve.");
   }
   const names = planned.map((p) => p.name);
-  const repeated = names.find((n, i) => names.indexOf(n) !== i);
-  if (repeated !== undefined) {
-    throw new Error(`${repeated} is named twice.`);
-  }
   // A draft is loaded by the server of the model it drafts for, so the
-  // memory warning counts it with that model.
+  // memory warning counts it with that model. A lazy model is loaded on
+  // demand, so it is not counted: the warning is about what loads together.
   const warning = memoryWarning(
-    planned.flatMap((p) =>
-      p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes],
-    ),
+    planned
+      .filter((p) => !p.lazy)
+      .flatMap((p) => (p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes])),
     deps.totalmem(),
   );
   if (warning !== null) {
@@ -1437,6 +1494,9 @@ export async function serveTargets(
   const plannedByName = Object.fromEntries(planned.map((model) => [model.name, model]));
   const pool = createModelPool(planned.map(modelPlanOf), {
     now: Date.now,
+    availableMemory: deps.availableMemory,
+    allowOvercommit: deps.env.AGENCY_ALLOW_MEMORY_OVERCOMMIT === "1",
+    log: deps.log,
     spawn: async (plan) => {
       const model = plannedByName[plan.model];
       const port = await deps.freePort();
@@ -1463,7 +1523,7 @@ export async function serveTargets(
         label: plan.label,
       }),
   });
-  for (const model of planned) {
+  for (const model of planned.filter((p) => !p.lazy)) {
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {

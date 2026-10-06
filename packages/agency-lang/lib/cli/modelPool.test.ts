@@ -2,12 +2,16 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import type { Child } from "./localServe.js";
 import {
   createModelPool,
+  evictionCandidate,
   EXIT_GRACE_MS,
   PoolRefusal,
   type ModelPlan,
   type ModelPool,
+  type ModelRecord,
+  type PoolDeps,
   type Running,
 } from "./modelPool.js";
+import type { MemorySnapshot } from "./availableMemory.js";
 
 /** A model process that exits when it is told to stop, as a real one
  *  does, and can be made to die on its own. */
@@ -27,15 +31,23 @@ function fakeChild(): FakeChild {
   return child;
 }
 
-function planOf(model: string): ModelPlan {
+const GIB = 1024 ** 3;
+
+function planOf(model: string, extra: Partial<ModelPlan> = {}): ModelPlan {
   return {
     model,
     upstreamModel: `/models/${model}`,
     label: `the server for ${model}`,
     kind: "chat",
     rules: null,
+    lazy: false,
+    needBytes: 10 * GIB,
+    ...extra,
   };
 }
+
+/** A machine with plenty of memory, for the tests that are not about it. */
+const ROOMY: MemorySnapshot = { available: 1000 * GIB, total: 1000 * GIB };
 
 describe("createModelPool", () => {
   let children: FakeChild[];
@@ -51,7 +63,18 @@ describe("createModelPool", () => {
     clock = 1000;
     loads = {};
     pool = createModelPool([planOf("a"), planOf("b")], {
+      ...poolDeps(),
+      availableMemory: async () => ROOMY,
+    });
+  });
+
+  /** The dependencies every pool in this file shares: processes that are
+   *  recorded, and loads a test settles by hand. */
+  function poolDeps(): Omit<PoolDeps, "availableMemory"> {
+    return {
       now: () => clock,
+      allowOvercommit: false,
+      log: () => {},
       spawn: async (): Promise<Running> => {
         const child = fakeChild();
         children.push(child);
@@ -64,8 +87,8 @@ describe("createModelPool", () => {
           }),
           gone.then((why) => Promise.reject(new Error(`${why} before it was ready.`))),
         ]),
-    });
-  });
+    };
+  }
 
   afterEach(() => {
     vi.useRealTimers();
@@ -202,7 +225,8 @@ describe("createModelPool", () => {
   it("stops a load that was unloaded while it was spawning", async () => {
     let release: () => void = () => {};
     const slowPool = createModelPool([planOf("a")], {
-      now: () => clock,
+      ...poolDeps(),
+      availableMemory: async () => ROOMY,
       spawn: () =>
         new Promise<Running>((resolve) => {
           release = () => {
@@ -301,5 +325,179 @@ describe("createModelPool", () => {
   it("refuses a model it was never given", async () => {
     await expect(pool.load("c")).rejects.toThrow("c is not served. Served: a, b.");
     await expect(pool.unload("c")).rejects.toThrow("c is not served. Served: a, b.");
+  });
+});
+
+describe("evictionCandidate", () => {
+  function record(model: string, extra: Partial<ModelRecord> & { lazy?: boolean }): ModelRecord {
+    const { lazy, ...rest } = extra;
+    const child: Child = { on: () => undefined, kill: () => undefined };
+    return {
+      plan: planOf(model, { lazy: lazy ?? true }),
+      current: { state: "ready", running: { child, port: 1 } },
+      requestsInProgress: 0,
+      lastUsedAt: 100,
+      ...rest,
+    };
+  }
+
+  it("picks the loaded lazy model that has been idle longest", () => {
+    const older = record("older", { lastUsedAt: 50 });
+    const newer = record("newer", { lastUsedAt: 200 });
+    expect(evictionCandidate([newer, older])).toBe(older);
+  });
+
+  it("skips a model with a request in progress", () => {
+    const busy = record("busy", { lastUsedAt: 1, requestsInProgress: 1 });
+    const idle = record("idle", { lastUsedAt: 900 });
+    expect(evictionCandidate([busy, idle])).toBe(idle);
+  });
+
+  it("skips a model that is not lazy", () => {
+    const pinned = record("pinned", { lastUsedAt: 1, lazy: false });
+    expect(evictionCandidate([pinned])).toBeUndefined();
+  });
+
+  it("skips a model that is loading, stopped, or failed", () => {
+    const stopped = record("stopped", { current: { state: "stopped" } });
+    const failed = record("failed", { current: { state: "failed", error: "x" } });
+    const loading = record("loading", {
+      current: { state: "loading", running: null, loaded: Promise.resolve() },
+    });
+    expect(evictionCandidate([stopped, failed, loading])).toBeUndefined();
+  });
+});
+
+describe("a lazy model", () => {
+  let children: FakeChild[];
+  let readings: MemorySnapshot[];
+  let logged: string[];
+  let clock: number;
+  let overcommit: boolean;
+
+  beforeEach(() => {
+    children = [];
+    readings = [];
+    logged = [];
+    clock = 1000;
+    overcommit = false;
+  });
+
+  /** A pool whose loads finish at once, over a machine whose memory
+   *  readings come from `readings`, the last one repeating. */
+  function lazyPool(plans: ModelPlan[]): ModelPool {
+    return createModelPool(plans, {
+      now: () => clock,
+      log: (line) => logged.push(line),
+      get allowOvercommit() {
+        return overcommit;
+      },
+      availableMemory: async () => {
+        const next = readings.length > 1 ? readings.shift() : readings[0];
+        return next ?? ROOMY;
+      },
+      spawn: async () => {
+        const child = fakeChild();
+        children.push(child);
+        return { child, port: 9000 + children.length };
+      },
+      waitReady: async () => {},
+    });
+  }
+
+  const stateOf = (pool: ModelPool, model: string) =>
+    pool.status().find((row) => row.model === model)?.state;
+
+  it("spawns nothing until a request asks for it, then loads and holds it", async () => {
+    const pool = lazyPool([planOf("a", { lazy: true })]);
+    expect(children).toHaveLength(0);
+    const held = await pool.acquire("a");
+    expect(children).toHaveLength(1);
+    expect(held.port).toBe(9001);
+    expect(stateOf(pool, "a")).toBe("ready");
+  });
+
+  it("spawns one process for two requests that arrive during the load", async () => {
+    const pool = lazyPool([planOf("a", { lazy: true })]);
+    const [first, second] = await Promise.all([pool.acquire("a"), pool.acquire("a")]);
+    expect(children).toHaveLength(1);
+    expect(first.port).toBe(second.port);
+    expect(pool.status()[0].requestsInProgress).toBe(2);
+  });
+
+  it("stops the lazy model idle longest when the new one does not fit, then loads", async () => {
+    const pool = lazyPool([
+      planOf("old", { lazy: true }),
+      planOf("recent", { lazy: true }),
+      planOf("wanted", { lazy: true }),
+    ]);
+    (await pool.acquire("old")).release();
+    clock = 2000;
+    (await pool.acquire("recent")).release();
+    // Short until one model is stopped, then roomy.
+    readings = [{ available: 5 * GIB, total: 64 * GIB }, ROOMY];
+    await pool.acquire("wanted");
+    expect(stateOf(pool, "old")).toBe("stopped");
+    expect(stateOf(pool, "recent")).toBe("ready");
+    expect(stateOf(pool, "wanted")).toBe("ready");
+    expect(children[0].kills).toBe(1);
+    expect(logged.join("\n")).toContain("Stopping old to make room for wanted");
+  });
+
+  it("never stops a model with a request in progress, nor one that is not lazy", async () => {
+    const pool = lazyPool([
+      planOf("pinned", { lazy: false }),
+      planOf("busy", { lazy: true }),
+      planOf("wanted", { lazy: true }),
+    ]);
+    await pool.load("pinned");
+    const held = await pool.acquire("busy");
+    readings = [{ available: 5 * GIB, total: 64 * GIB }];
+    const refused = await pool.acquire("wanted").catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(PoolRefusal);
+    expect((refused as PoolRefusal).reason).toBe("not-enough-memory");
+    expect((refused as PoolRefusal).message).toBe(
+      "Not enough memory to load wanted (needs about 10.74 GB, 5.37 GB available).\n" +
+        "Loaded now: pinned (not lazy), busy (busy).",
+    );
+    expect(children).toHaveLength(2);
+    expect(children.every((child) => child.kills === 0)).toBe(true);
+    held.release();
+  });
+
+  it("loads anyway when overcommit is allowed, and says so", async () => {
+    overcommit = true;
+    const pool = lazyPool([planOf("wanted", { lazy: true })]);
+    readings = [{ available: 5 * GIB, total: 64 * GIB }];
+    await pool.acquire("wanted");
+    expect(children).toHaveLength(1);
+    expect(logged.join("\n")).toContain("Loading anyway: AGENCY_ALLOW_MEMORY_OVERCOMMIT is set.");
+  });
+
+  it("is loaded again by the next request after its process dies, and the server goes on", async () => {
+    const pool = lazyPool([planOf("a", { lazy: true })]);
+    let reported = false;
+    void pool.failure.then(() => {
+      reported = true;
+    });
+    (await pool.acquire("a")).release();
+    children[0].die(137);
+    // The exit reaches the pool on the next turn of the event loop.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stateOf(pool, "a")).toBe("failed");
+    await new Promise((resolve) => setTimeout(resolve, EXIT_GRACE_MS + 20));
+    expect(reported).toBe(false);
+    await pool.acquire("a");
+    expect(children).toHaveLength(2);
+    expect(stateOf(pool, "a")).toBe("ready");
+  });
+
+  it("stamps a model warmed with load, so it is not the first to be stopped", async () => {
+    const pool = lazyPool([planOf("warmed", { lazy: true }), planOf("used", { lazy: true })]);
+    clock = 5000;
+    await pool.load("warmed");
+    clock = 1000;
+    (await pool.acquire("used")).release();
+    expect(pool.status().map((row) => row.lastUsedAt)).toEqual([5000, 1000]);
   });
 });

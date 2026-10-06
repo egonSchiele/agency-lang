@@ -250,6 +250,7 @@ function recorder(
 const STATUS_FOR_REFUSAL: Record<RefusalReason, number> = {
   "not-loaded": 503,
   "load-failed": 502,
+  "not-enough-memory": 503,
 };
 
 const FORBIDDEN_HOST = 403;
@@ -349,6 +350,12 @@ export function startFrontDoor(
       refuse(prepared.refusal.status, prepared.refusal.message);
       return;
     }
+    // The client may leave while its model loads. `res.destroyed` does not
+    // say so until something is written, so watch the close instead.
+    let clientGone = false;
+    res.once("close", () => {
+      clientGone = true;
+    });
     let held: Held;
     try {
       held = await pool.acquire(plan.model);
@@ -359,8 +366,7 @@ export function startFrontDoor(
       refuse(STATUS_FOR_REFUSAL[err.reason], err.message);
       return;
     }
-    // The client may have left while the model was loading.
-    if (res.destroyed) {
+    if (clientGone) {
       held.release();
       return;
     }

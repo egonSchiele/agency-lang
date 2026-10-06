@@ -1989,6 +1989,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       collectRepeats,
       [],
     )
+    .option(
+      "--lazy <model>",
+      "Serve this model on demand: load it on its first request, and stop it when another lazy model needs the memory (repeatable)",
+      collectRepeats,
+      [],
+    )
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
     .option(

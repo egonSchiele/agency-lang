@@ -794,6 +794,7 @@ describe("runServe", () => {
       fetch: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
       exec: () => ({ status: 0 }),
       totalmem: () => 1e9,
+      availableMemory: async () => ({ available: 1e12, total: 1e12 }),
       log: (line) => log.push(line),
       freePort: async () => next++,
       cacheDir,
@@ -1527,6 +1528,91 @@ describe("runServe", () => {
     };
   }
 
+  describe("--lazy", () => {
+    it("spawns only the models that are not lazy before the door opens", async () => {
+      recordedModel("org/a", true);
+      recordedModel("org/b", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/b"] }, deps);
+      try {
+        expect(spawned).toHaveLength(1);
+        expect(handle.models).toEqual(["org/a", "org/b"]);
+        expect(handle.status().map((row) => row.state)).toEqual(["ready", "stopped"]);
+        expect(log.join("\n")).toContain("  org/b  (on demand)");
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("opens the door at once when every model is lazy, and loads one on its first request", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe([], { port: 0, lazy: ["mlx:org/a"] }, deps);
+      try {
+        expect(spawned).toEqual([]);
+        // The fake process answers nothing, so the forwarded request fails;
+        // what matters is that the request made the model load.
+        await fetch(`${handle.url}/chat/completions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: "org/a", messages: [] }),
+        });
+        expect(spawned).toHaveLength(1);
+        expect(handle.status()[0].state).toBe("ready");
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("attaches a draft written after --lazy to that model", () => {
+      expect(groupServeArgv(["--lazy", "b", "--draft", "c"], SERVE_FLAGS)).toEqual([
+        { model: "b", draft: "c" },
+      ]);
+      expect(targetsFromFlags([], { lazy: ["b"], options: { b: { draft: "c" } } })).toEqual([
+        { model: "b", flag: "--lazy", lazy: true, draft: "c" },
+      ]);
+    });
+
+    it("refuses a model named plainly and with --lazy", async () => {
+      recordedModel("org/a", true);
+      await expect(runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/a"] }, deps)).rejects.toThrow(
+        "org/a is named twice.",
+      );
+    });
+
+    it("joins --vlm and --lazy for one model into one lazy plan", async () => {
+      visionChatModel();
+      const handle = await runServe(
+        [],
+        { port: 0, vlm: ["mlx:org/vlm"], lazy: ["mlx:org/vlm"] },
+        deps,
+      );
+      try {
+        expect(handle.models).toEqual(["org/vlm"]);
+        expect(spawned).toEqual([]);
+        await handle.load("org/vlm");
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("does not open the picker when only --lazy names a model", () => {
+      // The picker check reads NAMING_FLAGS, so --lazy counts as naming.
+      expect(targetsFromFlags([], { lazy: ["a"] })).toHaveLength(1);
+    });
+
+    it("leaves lazy models out of the memory warning", async () => {
+      recordedModel("org/a", true);
+      recordedModel("org/b", true);
+      // Each fixture model records 600 MB; the machine has 1 GB.
+      const handle = await runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/b"] }, deps);
+      try {
+        expect(log.join("\n")).not.toContain("Warning: these models total");
+      } finally {
+        await handle.close();
+      }
+    });
+  });
+
   it("reports the port the operating system chose, and the matching address", async () => {
     recordedModel("org/a", true);
     const handle = await runServe(["mlx:org/a"], { port: 0 }, deps);
@@ -1627,12 +1713,17 @@ describe("runServe", () => {
       }
     });
 
-    it("refuses lazy until it is supported, before anything is started", async () => {
-      recordedModel("org/a", true);
-      await expect(serveWithDeps([{ model: "mlx:org/a", lazy: true }], {}, deps)).rejects.toThrow(
-        "lazy is not supported by this version.",
-      );
-      expect(spawned).toEqual([]);
+    it("serves a lazy model with its runtime, and spawns nothing for it until a request", async () => {
+      const model = visionChatModel();
+      const server = await serveWithDeps([{ model, lazy: true, vlm: true }], {}, deps);
+      try {
+        expect(spawned).toEqual([]);
+        expect(server.status()).toMatchObject([{ model, state: "stopped" }]);
+        await server.load(model);
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+      } finally {
+        await server.close();
+      }
     });
 
     it("sends what the server would print to log", async () => {

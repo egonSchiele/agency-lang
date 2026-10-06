@@ -310,6 +310,46 @@ When the pool will not hand out a model it throws a `PoolRefusal` with a
 reason, and `STATUS_FOR_REFUSAL` in the front door turns the reason into a
 status. A model that was unloaded gets a 503 that says how to load it.
 
+**Lazy models.** `--lazy <model>` is a row of `NAMING_FLAGS` with
+`kind: null` and `lazy: true`, so `groupServeArgv`, `targetsFromFlags`,
+and the picker check in `localServe` all treat it as naming a model with
+no code of their own. `ServeTarget.lazy` carries it to the plan.
+`joinLazyPairs` lets one model be named by a kind flag and by `--lazy`,
+as in `--vlm a --lazy a`, and joins the two plans after planning, so the
+two mentions may spell the model differently. Any other repeat is "named
+twice".
+
+A lazy model's plan has `lazy: true`, and `acquire` on one that is
+`stopped` or `failed` puts a load on the queue and waits for it. Before
+the spawn, `makeRoom` runs:
+
+1. Read `deps.availableMemory()`.
+2. Return if `fits(needBytes, memory)`: the estimate plus the reserve is
+   available. `estimatedNeed` in `availableMemory.ts` is the size on disk,
+   the draft's size, and the kind's row in `LOAD_HEADROOM_BYTES`. The
+   reserve is the smaller of 2 GiB and 5% of the machine's memory.
+3. Otherwise stop `evictionCandidate(records)`, the loaded lazy model with
+   no request in progress and the smallest `lastUsedAt`, and go to 1.
+4. With no candidate, throw `not-enough-memory`, whose message names each
+   loaded model and why it was kept (busy, or not lazy). With
+   `AGENCY_ALLOW_MEMORY_OVERCOMMIT=1` it logs the same message and loads
+   anyway.
+
+`evictionCandidate` is a pure function over the records, so the rule is
+tested without a process. `availableMemory` runs `vm_stat` on macOS and
+adds the free, inactive, and speculative pages; on Linux it reads
+`MemAvailable` from `/proc/meminfo`; on an error it logs and falls back to
+`os.freemem()`, which reads low.
+
+A lazy model whose process dies is marked `failed` and loaded again by
+its next request. Its death does not resolve `failure`, since the server
+goes on. The memory warning at startup counts only the models that are
+not lazy, because those are the ones that load together.
+
+The front door watches for the client closing while its model loads, and
+releases the model without forwarding when it has. `res.destroyed` does
+not report a closed client until something is written to it.
+
 **When the server dies first.** If the Node process is killed with
 SIGKILL, it stops nothing, and each model process would keep its model
 in memory. So `spawnOptions` gives every model process a pipe as its

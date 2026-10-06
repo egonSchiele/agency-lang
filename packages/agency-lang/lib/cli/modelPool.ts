@@ -1,5 +1,7 @@
 import type { Child, ServeKind } from "./localServe.js";
 import type { RequestRules } from "./requestRules.js";
+import { fits, memoryReserve, type MemorySnapshot } from "./availableMemory.js";
+import { formatGB } from "../stdlib/localModels.js";
 
 /** The model processes behind `agency local serve`. The pool owns one
  *  record per served model. It is the only code that starts or stops a
@@ -15,13 +17,19 @@ import type { RequestRules } from "./requestRules.js";
  *                 loads whatever model a request names
  *  label          how its process is named in a message, such as
  *                 "mlx_lm.server for org/a"
- *  rules          the request rules of its chat runtime, or null */
+ *  rules          the request rules of its chat runtime, or null
+ *  lazy           loaded on its first request, and stopped when another
+ *                 lazy model needs the memory. A model that is not lazy
+ *                 loads at startup and is never stopped to make room
+ *  needBytes      the memory loading it is expected to take */
 export type ModelPlan = {
   model: string;
   upstreamModel: string;
   label: string;
   kind: ServeKind;
   rules: RequestRules | null;
+  lazy: boolean;
+  needBytes: number;
 };
 
 /** A model process and the port it listens on. */
@@ -64,10 +72,12 @@ export type Held = { plan: ModelPlan; port: number; release: () => void };
 
 /** Why the pool will not hand out a model.
  *
- *  not-loaded   the model was unloaded, and nothing will load it again
- *               until `load` is called
- *  load-failed  the load a request was waiting on failed */
-export type RefusalReason = "not-loaded" | "load-failed";
+ *  not-loaded         the model was unloaded, and nothing will load it
+ *                     again until `load` is called
+ *  load-failed        the load a request was waiting on failed
+ *  not-enough-memory  a lazy model does not fit, and no loaded lazy model
+ *                     is idle to be stopped for it */
+export type RefusalReason = "not-loaded" | "load-failed" | "not-enough-memory";
 
 export class PoolRefusal extends Error {
   reason: RefusalReason;
@@ -91,6 +101,10 @@ export type PoolDeps = {
    *  when `gone` resolves, which says a process exited. */
   waitReady: (plan: ModelPlan, running: Running, gone: Promise<string>) => Promise<void>;
   now: () => number;
+  availableMemory: () => Promise<MemorySnapshot>;
+  /** Load a lazy model even when the estimate says it does not fit. */
+  allowOvercommit: boolean;
+  log: (line: string) => void;
 };
 
 export type ModelPool = {
@@ -98,8 +112,9 @@ export type ModelPool = {
   models: () => string[];
   status: () => ModelStatus[];
   plan: (model: string) => ModelPlan | undefined;
-  /** Holds a loaded model for one request, waiting for a load in progress.
-   *  Rejects with a `PoolRefusal` for a model that is not loaded. */
+  /** Holds a loaded model for one request, waiting for a load in progress
+   *  and starting one for a lazy model that is not loaded. Rejects with a
+   *  `PoolRefusal` for any other model that is not loaded. */
   acquire: (model: string) => Promise<Held>;
   /** Starts a model's process and resolves when the model is ready. Does
    *  nothing for a model that is ready already. */
@@ -121,6 +136,36 @@ function exitOf(child: Child, label: string): Promise<string> {
       resolve(`${label} ${how}`);
     });
   });
+}
+
+/** The loaded lazy model that has been idle longest, or undefined when
+ *  every loaded model is busy or is not lazy. A model that is not lazy is
+ *  never stopped to make room. */
+export function evictionCandidate(records: ModelRecord[]): ModelRecord | undefined {
+  const idle = records.filter(
+    (record) =>
+      record.plan.lazy && record.current.state === "ready" && record.requestsInProgress === 0,
+  );
+  return idle.sort((a, b) => (a.lastUsedAt ?? 0) - (b.lastUsedAt ?? 0))[0];
+}
+
+/** Why a loaded model was not stopped to make room: it is busy, or it is
+ *  not lazy. */
+function keptBecause(record: ModelRecord): string {
+  return record.requestsInProgress > 0 ? "busy" : "not lazy";
+}
+
+function notEnoughMemoryMessage(
+  plan: ModelPlan,
+  memory: MemorySnapshot,
+  loaded: ModelRecord[],
+): string {
+  const kept = loaded.map((record) => `${record.plan.model} (${keptBecause(record)})`);
+  const now = kept.length === 0 ? "nothing" : kept.join(", ");
+  return (
+    `Not enough memory to load ${plan.model} (needs about ${formatGB(plan.needBytes)}, ` +
+    `${formatGB(memory.available)} available).\nLoaded now: ${now}.`
+  );
 }
 
 function notLoadedMessage(model: string): string {
@@ -225,7 +270,9 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     }
     const wasReady = record.current.state === "ready";
     record.current = { state: "failed", error: `${why}.` };
-    if (!wasReady) {
+    // A lazy model is loaded again by its next request, so its death is
+    // not the end of the server.
+    if (!wasReady || record.plan.lazy) {
       return;
     }
     setTimeout(() => {
@@ -233,6 +280,33 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
         reportFailure(`${why}.`);
       }
     }, EXIT_GRACE_MS);
+  }
+
+  /** Runs on the queue, before a lazy model's spawn. Stops idle lazy
+   *  models, longest idle first, until the model fits with the reserve
+   *  left free. With nothing left to stop, refuses. */
+  async function makeRoom(record: ModelRecord): Promise<void> {
+    for (;;) {
+      const memory = await deps.availableMemory();
+      if (fits(record.plan.needBytes, memory)) {
+        return;
+      }
+      const candidate = evictionCandidate(Object.values(records));
+      if (candidate === undefined) {
+        const loaded = Object.values(records).filter((other) => other.current.state === "ready");
+        const message = notEnoughMemoryMessage(record.plan, memory, loaded);
+        if (deps.allowOvercommit) {
+          deps.log(`${message}\nLoading anyway: AGENCY_ALLOW_MEMORY_OVERCOMMIT is set.`);
+          return;
+        }
+        throw new PoolRefusal("not-enough-memory", message);
+      }
+      deps.log(
+        `Stopping ${candidate.plan.model} to make room for ${record.plan.model} ` +
+          `(${formatGB(memory.available)} available, ${formatGB(memoryReserve(memory))} kept free).`,
+      );
+      await stopRecord(candidate);
+    }
   }
 
   /** Runs on the queue. */
@@ -254,6 +328,9 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     record.current = { state: "loading", running: null, loaded };
     let running: Running | null = null;
     try {
+      if (record.plan.lazy) {
+        await makeRoom(record);
+      }
       running = await deps.spawn(record.plan);
       const started = running;
       record.current = { state: "loading", running: started, loaded };
@@ -300,6 +377,17 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
 
   async function acquire(model: string): Promise<Held> {
     const record = recordOf(model);
+    const needsLoad = record.current.state === "stopped" || record.current.state === "failed";
+    if (record.plan.lazy && needsLoad) {
+      try {
+        await onQueue(() => loadRecord(record));
+      } catch (err) {
+        if (err instanceof PoolRefusal) {
+          throw err;
+        }
+        throw new PoolRefusal("load-failed", (err as Error).message);
+      }
+    }
     if (record.current.state === "loading") {
       try {
         await record.current.loaded;

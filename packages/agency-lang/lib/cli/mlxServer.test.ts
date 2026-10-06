@@ -92,6 +92,8 @@ async function readyPool(routes: Route[]): Promise<ModelPool> {
       label: route.label,
       kind: "chat" as const,
       rules: route.rules ?? null,
+      lazy: false,
+      needBytes: 0,
     })),
     {
       now: Date.now,
@@ -100,6 +102,9 @@ async function readyPool(routes: Route[]): Promise<ModelPool> {
         port: routes.find((route) => route.model === plan.model)!.port,
       }),
       waitReady: async () => {},
+      availableMemory: async () => ({ available: 1e12, total: 1e12 }),
+      allowOvercommit: false,
+      log: () => {},
     },
   );
   for (const route of routes) {
@@ -754,5 +759,59 @@ describe("front door over a pool", () => {
     // It is still listed: a caller asks /v1/models what it may request.
     const listed = (await (await fetch(url("/v1/models"))).json()) as { data: { id: string }[] };
     expect(listed.data.map((row) => row.id)).toEqual(["org/a", "org/dead"]);
+  });
+});
+
+describe("front door over a lazy model", () => {
+  it("does not forward a request whose client left while the model was loading", async () => {
+    const upstream = await fakeServer("org/lazy");
+    let finishLoad: () => void = () => {};
+    const pool = createModelPool(
+      [
+        {
+          model: "org/lazy",
+          upstreamModel: "/models/lazy",
+          label: "the server for org/lazy",
+          kind: "chat",
+          rules: null,
+          lazy: true,
+          needBytes: 0,
+        },
+      ],
+      {
+        now: Date.now,
+        spawn: async () => ({ child: exitsWhenKilled(), port: upstream.port }),
+        waitReady: () =>
+          new Promise<void>((resolve) => {
+            finishLoad = resolve;
+          }),
+        availableMemory: async () => ({ available: 1e12, total: 1e12 }),
+        allowOvercommit: false,
+        log: () => {},
+      },
+    );
+    const lazyDoor = await startFrontDoor(0, pool);
+    try {
+      const controller = new AbortController();
+      const pending = fetch(`http://127.0.0.1:${lazyDoor.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "org/lazy", messages: [] }),
+        signal: controller.signal,
+      }).catch(() => null);
+      await expect.poll(() => pool.status()[0].state).toBe("loading");
+      controller.abort();
+      await pending;
+      // The door hears the socket close a moment after the client does.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      finishLoad();
+      await expect.poll(() => pool.status()[0].state).toBe("ready");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(upstream.hits).toHaveLength(0);
+      expect(pool.status()[0].requestsInProgress).toBe(0);
+    } finally {
+      await lazyDoor.close();
+      upstream.server.close();
+    }
   });
 });

@@ -3,7 +3,7 @@
  * a tool call before it runs, and the text each refusal sends the model.
  * See docs/dev/agents/tool-loop-guards.md.
  */
-import { createHash } from "crypto";
+import { sha256Text } from "../utils/hash.js";
 import type * as smoltalk from "smoltalk";
 import type { AgencyFunction, FuncParam } from "./agencyFunction.js";
 import { tooManyHandoffsMessage } from "./handoff.js";
@@ -72,7 +72,7 @@ function canonicalJson(value: unknown): string {
  *  the serialized frame. Hashing is linear in the size, which the loop
  *  already pays to stringify the result for the model. */
 function digest(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
+  return sha256Text(text);
 }
 
 /** The key is stored on the checkpoint, and checkpoints are kept as JSON

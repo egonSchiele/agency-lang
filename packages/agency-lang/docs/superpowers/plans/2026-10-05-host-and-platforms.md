@@ -118,18 +118,19 @@ These facts shape the tasks. Check each one still holds before starting.
 1. **The generated header is one template.** It is
    `lib/templates/backends/typescriptGenerator/imports.mustache`. Edit
    the `.mustache` file and run `pnpm run templates`. Do not edit
-   `imports.ts`.
-2. **The header imports four names from `"agency-lang"`**: `goToNode`,
-   `color`, `nanoid`, and `smoltalk`. `lib/runtime/index.ts` exports none
-   of them. `goToNode` is defined in `lib/simplemachine/graph.ts`.
-   Generated code uses `goToNode`, `nanoid`, and `smoltalk`. No template
-   or builder code uses `color`, although an Agency program may.
-3. **`_callback` lives in `lib/stdlib/agency.ts`**, at about line 66,
-   beside code that imports the parser and the type checker.
-   `stdlib/index.agency` imports it.
-4. **`_notify` lives in `lib/stdlib/builtins.ts`**, at about line 280.
-   It is the only reason that file imports `child_process`.
-   `stdlib/system.agency` imports it.
+   `imports.ts`. Since #1175 it imports `goToNode`, `color`, `nanoid`,
+   and `smoltalk` from `"agency-lang/runtime"`, and
+   `lib/backends/typescriptGenerator/header.test.ts` fails if it ever
+   imports from `"agency-lang"` again. It still imports `fs`, `path`,
+   `os`, `url`, and `process`, which stage 4 removes.
+2. **The prelude's backing files no longer reach the compiler or
+   `child_process`.** `_callback` is in `lib/stdlib/callback.ts` and
+   `_notify` in `lib/stdlib/notify.ts`, since #1175.
+3. **Hashing goes through `lib/utils/hash.ts`**, since #1177. See "What
+   the first three PRs learned" for the `#sha256` mechanism.
+4. **`std::effectSets` is the module of effect sets**, since #1176.
+   `lib/runtime/effectSets.ts` still reads `stdlib/effectSets.agency` at
+   run time, which stage 6b changes.
 5. **`RuntimeContext` already takes a `clock`.** The constructor is in
    `lib/runtime/state/context.ts`. `defaultClock()` in that file reads
    the `AGENCY_FAKE_CLOCK` environment variable.

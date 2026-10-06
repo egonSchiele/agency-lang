@@ -23,10 +23,13 @@
     // "moduleDetection": "auto",                        /* Control what method is used to detect module-format JS files. */
     /* Modules */
     "module": "nodenext" /* Specify what module code is generated. */,
-    // "rootDir": "./",                                  /* Specify the root folder within your source files. */
+    "rootDir": "./" /* Required to resolve the "imports" field of package.json. Matches the layout dist/ already has. */,
     "moduleResolution": "nodenext" /* Specify how TypeScript looks up a file from a given module specifier. */,
     "paths": {
-      "@/*": ["./lib/*"]
+      "@/*": ["./lib/*"],
+      // Source-tree targets for the "imports" entries in package.json, so a
+      // fresh checkout type-checks before dist/ exists. Keep in step.
+      "#sha256": ["./lib/utils/sha256.node.ts"]
     } /* Specify a set of entries that re-map imports to additional lookup locations. */,
     "declaration": true,
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */

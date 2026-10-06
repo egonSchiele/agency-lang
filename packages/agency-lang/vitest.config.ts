@@ -38,6 +38,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./lib"),
+      // package.json "imports" entries, which vitest does not read. Keep in
+      // step with that field.
+      "#sha256": path.resolve(__dirname, "./lib/utils/sha256.node.ts"),
     },
   },
 });

@@ -1,4 +1,5 @@
 import picomatch from "picomatch";
+import { defaultHost } from "#default-host";
 import { realpathSync } from "fs";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
@@ -176,7 +177,7 @@ export function expandAgentHomeDir(
 /** The real spelling of the agent home, the spelling file effects put in
  *  their payloads. A home that does not exist yet keeps a lexical tail. */
 function canonicalAgentHome(): string {
-  const home = agentHomeDir();
+  const home = agentHomeDir(defaultHost());
   try {
     return root(home).real;
   } catch {

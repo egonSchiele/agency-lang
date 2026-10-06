@@ -17,6 +17,7 @@ import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import { DeterministicClient } from "../deterministicClient.js";
 import { mergeLlmConfig } from "../llmConfig.js";
 import { MemoryManager } from "../memory/manager.js";
 import { MemoryFrame } from "../memory/frame.js";
@@ -47,11 +48,11 @@ import { PendingPromiseStore } from "./pendingPromiseStore.js";
  * agency.json's coverage.outDir; defaults to ".coverage" otherwise.
  */
 let _processCoverageCollector: CoverageCollector | null = null;
-function getProcessCoverageCollector(): CoverageCollector {
+function getProcessCoverageCollector(host: Host): CoverageCollector {
   if (_processCoverageCollector) return _processCoverageCollector;
   const collector = new CoverageCollector();
   _processCoverageCollector = collector;
-  const outDir = process.env.AGENCY_COVERAGE_OUTDIR ?? ".coverage";
+  const outDir = host.settings.read("AGENCY_COVERAGE_OUTDIR") ?? ".coverage";
   process.on("exit", () => {
     // process.on("exit") handlers are sync-only and any throw is unhelpful at
     // shutdown — log a warning and move on so coverage failures never make
@@ -330,7 +331,7 @@ export class RuntimeContext<T> {
       // process tree one trace id, including descendants started without
       // IPC (a bash `agency run ...`), so a shared statelog stays
       // single-trace for the eval extractor.
-      traceId: args.statelogConfig.traceId || process.env[TRACE_ID_ENV] || nanoid(),
+      traceId: args.statelogConfig.traceId || this.host.settings.read(TRACE_ID_ENV) || nanoid(),
     };
 
     this.statelogConfig = statelogConfig;
@@ -386,10 +387,18 @@ export class RuntimeContext<T> {
     this.maxToolSchemaChars = args.maxToolSchemaChars;
     this.providerModules = args.providerModules ?? [];
     this._llmClient = new SmoltalkClient();
+    // The deterministic client when AGENCY_LLM_MOCKS is set. The test runner
+    // (lib/cli/util.ts) sets the variable to a JSON string when
+    // AGENCY_USE_TEST_LLM_PROVIDER=1. Read here, through the host, so every
+    // compiled module gets it without a block in its generated header.
+    const llmMocks = this.host.settings.read("AGENCY_LLM_MOCKS");
+    if (llmMocks) {
+      this._llmClient = new DeterministicClient(JSON.parse(llmMocks));
+    }
     this.abortController = new AbortController();
 
-    if (process.env.AGENCY_COVERAGE) {
-      this.coverageCollector = getProcessCoverageCollector();
+    if (this.host.settings.read("AGENCY_COVERAGE")) {
+      this.coverageCollector = getProcessCoverageCollector(this.host);
     }
 
     // JSON-derived memory config is kept as an immutable seed; the

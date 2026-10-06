@@ -1,11 +1,10 @@
-import * as readline from "readline";
-import process from "process";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
 import { fixedRoot, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
 export type { WriteMode } from "./contained.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { FakeClock } from "../runtime/clock.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -14,11 +13,11 @@ import { abortableSleep } from "./abortable.js";
 import { acceptsFailures } from "../runtime/failurePropagation.js";
 
 export function _print(...messages: any[]): void {
-  console.log(...messages);
+  currentHost().terminal.print(messages);
 }
 
 export function _printJSON(obj: any): void {
-  console.log(JSON.stringify(obj, null, 2));
+  currentHost().terminal.print([JSON.stringify(obj, null, 2)]);
 }
 
 /**
@@ -46,12 +45,13 @@ export function _parseJSON(text: string): any {
  * (still called by `CONTEXT_INJECTED_BUILTINS`-rewritten call sites
  * during the ALS migration) and the new `_input` (ALS-reading). Both
  * paths must take the same code path so subtle differences cannot
- * sneak in while the registry is still populated. Cancellation:
- * Readline holds stdin exclusively, so a blocked `input("?")` after
- * Ctrl-C or a race-loser abort would otherwise sit there forever; on
- * abort we close the readline interface and reject with
- * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
- * actually propagates.
+ * sneak in while the registry is still populated. The line is read
+ * through the host's terminal, which on Node holds stdin exclusively
+ * while it waits, so a blocked `input("?")` after Ctrl-C or a
+ * race-loser abort would otherwise sit there forever; the host is
+ * handed the abort signal and gives up the read when it fires, and this
+ * function then rejects with `AgencyCancelledError`, which `__tryCall`
+ * re-throws so cancellation actually propagates.
  */
 function inputImpl(ctx: RuntimeContext<any>, stack: StateStack, prompt: string): Promise<string> {
   // Waiting on a human must not count against a time budget. Pause every
@@ -84,47 +84,14 @@ function inputImpl(ctx: RuntimeContext<any>, stack: StateStack, prompt: string):
     resumeGuards();
     return Promise.reject(new AgencyCancelledError("input cancelled"));
   }
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise<string>((resolve, reject) => {
-    const onAbort = () => {
-      try {
-        rl.close();
-      } catch {}
-      reject(new AgencyCancelledError("input cancelled"));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    const ask = () => {
-      const askedAt = Date.now();
-      rl.question(prompt, (answer: string) => {
-        // A blank line that lands faster than a human could react to the
-        // prompt was buffered while the program was busy — an Enter pressed
-        // to check on a slow run, not an answer — and would otherwise become
-        // an accidental (empty) submission. Discard it and re-ask; the next
-        // buffered line (real type-ahead) is delivered normally. Deliberate
-        // blank answers arrive after human-scale delay and are kept. Only
-        // interactive stdin is filtered: piped input legitimately arrives
-        // instantly. Real wall clock on purpose — this measures I/O latency,
-        // and fake-clock tests use inputOverride, never this path.
-        if (answer === "" && process.stdin.isTTY && Date.now() - askedAt < BUFFERED_BLANK_LINE_MS) {
-          ask();
-          return;
-        }
-        signal.removeEventListener("abort", onAbort);
-        rl.close();
-        resolve(answer);
-      });
-    };
-    ask();
-  }).finally(resumeGuards);
+  return ctx.host.terminal
+    .readLine(prompt, signal)
+    .catch((error: unknown) => {
+      if (signal.aborted) throw new AgencyCancelledError("input cancelled");
+      throw error;
+    })
+    .finally(resumeGuards);
 }
-
-/** A blank line answered within this window of the prompt attaching cannot be
- *  a human reacting to the prompt (buffered lines arrive in ~1ms; human
- *  reaction to a newly-visible prompt is 150ms+). */
-const BUFFERED_BLANK_LINE_MS = 25;
 
 /** Deprecated context-injected wrapper kept in place during the ALS
  *  migration so the registry/codegen path keeps working until the

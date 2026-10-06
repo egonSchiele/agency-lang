@@ -41,6 +41,7 @@ export type {
   Platform,
 } from "../host/host.js";
 export { nodeHost } from "../host/nodeHost.js";
+export { defaultHost } from "#default-host";
 export type { NodeHostOptions } from "../host/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";

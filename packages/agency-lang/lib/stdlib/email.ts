@@ -1,4 +1,6 @@
 import { checkRecipients } from "./messaging.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { encodeBase64Text } from "./base64.js";
 
 const RESEND_URL = "https://api.resend.com/emails";
 const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
@@ -47,9 +49,10 @@ export async function _sendWithResend(
   params: EmailParams,
   options?: ResendOptions,
 ): Promise<EmailResult> {
+  const { settings } = currentHost();
   validateRecipients(params, options);
 
-  const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
+  const apiKey = options?.apiKey || settings.read("RESEND_API_KEY");
   if (!apiKey) {
     throw new Error("Missing Resend API key. Set RESEND_API_KEY env var or pass apiKey option.");
   }
@@ -96,9 +99,10 @@ export async function _sendWithSendGrid(
   params: EmailParams,
   options?: SendGridOptions,
 ): Promise<EmailResult> {
+  const { settings } = currentHost();
   validateRecipients(params, options);
 
-  const apiKey = options?.apiKey || process.env.SENDGRID_API_KEY;
+  const apiKey = options?.apiKey || settings.read("SENDGRID_API_KEY");
   if (!apiKey) {
     throw new Error(
       "Missing SendGrid API key. Set SENDGRID_API_KEY env var or pass apiKey option.",
@@ -163,14 +167,15 @@ export async function _sendWithMailgun(
   params: EmailParams,
   options?: MailgunOptions,
 ): Promise<EmailResult> {
+  const { settings } = currentHost();
   validateRecipients(params, options);
 
-  const apiKey = options?.apiKey || process.env.MAILGUN_API_KEY;
+  const apiKey = options?.apiKey || settings.read("MAILGUN_API_KEY");
   if (!apiKey) {
     throw new Error("Missing Mailgun API key. Set MAILGUN_API_KEY env var or pass apiKey option.");
   }
 
-  const domain = options?.domain || process.env.MAILGUN_DOMAIN;
+  const domain = options?.domain || settings.read("MAILGUN_DOMAIN");
   if (!domain) {
     throw new Error("Missing Mailgun domain. Set MAILGUN_DOMAIN env var or pass domain option.");
   }
@@ -178,7 +183,7 @@ export async function _sendWithMailgun(
     throw new Error("Invalid Mailgun domain: must not contain path separators.");
   }
 
-  const region = options?.region || process.env.MAILGUN_REGION || "us";
+  const region = options?.region || settings.read("MAILGUN_REGION") || "us";
   const baseUrl = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
 
   const formData = new URLSearchParams();
@@ -192,7 +197,7 @@ export async function _sendWithMailgun(
   if (params.bcc) formData.set("bcc", toArray(params.bcc).join(","));
   if (params.replyTo) formData.set("h:Reply-To", params.replyTo);
 
-  const credentials = Buffer.from(`api:${apiKey}`).toString("base64");
+  const credentials = encodeBase64Text(`api:${apiKey}`);
 
   const response = await fetch(`${baseUrl}/v3/${domain}/messages`, {
     method: "POST",

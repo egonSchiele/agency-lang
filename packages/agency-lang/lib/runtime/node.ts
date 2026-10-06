@@ -149,7 +149,7 @@ async function initFreshExecCtx(
 
   // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
-  installRootBudget(execCtx.stateStack, execCtx.clock, execCtx.budget);
+  installRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
@@ -404,7 +404,7 @@ async function runNodeCore({
     kind: "fresh",
     options: invocation,
     inheritedRunId: getSubprocessRunInfo().runId,
-    environmentTraceId: process.env[TRACE_ID_ENV],
+    environmentTraceId: ctx.host.settings.read(TRACE_ID_ENV) ?? undefined,
   });
 
   // runNode is the entry point for a fresh agent run (resumes go through

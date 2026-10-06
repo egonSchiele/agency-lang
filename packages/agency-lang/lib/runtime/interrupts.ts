@@ -788,7 +788,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   const resolved = resolveInvocation({
     kind: "fresh",
     inheritedRunId: getSubprocessRunInfo().runId,
-    environmentTraceId: process.env[TRACE_ID_ENV],
+    environmentTraceId: args.ctx.host.settings.read(TRACE_ID_ENV) ?? undefined,
   });
   const execCtx = await args.ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();

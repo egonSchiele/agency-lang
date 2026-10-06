@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { nodeHost } from "@/host/nodeHost.js";
 import {
   makeRunPolicyHandler,
   terminalPrompt,
@@ -209,7 +210,7 @@ describe("installRunPolicyHandler", () => {
   it("pushes a handler when AGENCY_RUN_POLICY is set (root process)", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
       expect(pushed).toHaveLength(1);
     });
   });
@@ -217,7 +218,7 @@ describe("installRunPolicyHandler", () => {
   it("is a no-op when AGENCY_RUN_POLICY is unset", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
       expect(pushed).toHaveLength(0);
     });
   });
@@ -227,7 +228,7 @@ describe("installRunPolicyHandler", () => {
     // subprocess forwards its interrupts up, so it must NOT install its own.
     await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h) });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
       expect(pushed).toHaveLength(0);
     });
   });
@@ -236,7 +237,7 @@ describe("installRunPolicyHandler", () => {
 describe("installRunPolicyHandler with an explicit policy", () => {
   const grab = () => {
     const pushed: unknown[] = [];
-    return { pushed, execCtx: { pushHandler: (h: unknown) => pushed.push(h) } };
+    return { pushed, execCtx: { pushHandler: (h: unknown) => pushed.push(h), host: nodeHost() } };
   };
 
   it("installs the explicit policy with no env policy set", async () => {

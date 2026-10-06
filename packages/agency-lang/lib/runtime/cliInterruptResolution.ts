@@ -14,6 +14,7 @@ import { hasInterrupts, reportUnhandledInterrupts } from "./interrupts.js";
 import type { RunNodeCoreResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { hasRunPolicyMechanism } from "./runPolicyHandler.js";
+import { defaultHost } from "#default-host";
 import { AGENCY_RUN_POLICY_INTERACTIVE, AGENCY_RUN_POLICY_INTERACTIVE_ON } from "@/constants.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
@@ -38,7 +39,7 @@ export async function resolveCliInterrupts(
   if (!hasInterrupts(result.data)) {
     return result;
   }
-  if (isIpcMode() || !hasRunPolicyMechanism()) {
+  if (isIpcMode() || !hasRunPolicyMechanism(defaultHost().settings)) {
     await reportUnhandledInterrupts(result);
     return result;
   }

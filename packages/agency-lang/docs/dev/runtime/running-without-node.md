@@ -42,14 +42,14 @@ When you are deciding about a Node feature, go through these steps:
 
 ## Where the targets may differ
 
-The plan is for the targets to differ in four places and nowhere else. The first is built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other three.
+The plan is for the targets to differ in four places and nowhere else. The first two are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other two.
 
 | What differs | Where it lives |
 | --- | --- |
 | Hashing, where Node's OpenSSL is about nine times faster than JavaScript | One pair of files, `lib/utils/sha256.node.ts` and `sha256.portable.ts`, chosen by the `#sha256` entry in the `imports` field of `package.json` |
-| Platform calls, such as reading a file or an environment variable | One pair of files, `host.node.ts` and `host.browser.ts`, with the same exports |
+| Platform calls, such as reading a file or an environment variable | The host, `lib/host/`. One pair of files, `default.node.ts` and `default.browser.ts`, chosen by the `#default-host` entry, each of which builds the host of its platform. See [host.md](host.md) |
 | Which runtime modules are included | One entry point for the browser beside `lib/runtime/index.ts` |
-| Which stdlib modules exist | One mark at the top of each Node-only module, which makes a browser build that imports it a compile error |
+| Which stdlib modules exist | The `@capabilities` tag on each effect, which makes a browser build of a program that raises a file effect a compile error |
 
 Generated code has one shape for both targets. The runtime is built once.
 
@@ -69,7 +69,7 @@ The `imports` field of `package.json` maps a name that starts with `#` to a file
 
 Node resolves `#sha256` to the `default` file. esbuild resolves it to the `browser` file when it bundles with `--platform=browser`. The code that imports the name, `lib/utils/hash.ts`, is the same on both platforms.
 
-Two other places have to know about each entry. `tsconfig.json` maps the name to the source file in `paths`, so a fresh checkout type-checks before `dist` exists. `vitest.aliases.ts` maps it for the test runner, which does not read `package.json`. When you add an entry, add it to both.
+Two other places have to know about each entry. `lib/utils/packageImports.d.ts` declares the name's type with an ambient `declare module`, so a fresh checkout type-checks before `dist` exists. `vitest.aliases.ts` maps it for the test runner, which does not read `package.json`. When you add an entry, add it to both. Do not add it to `paths` in `tsconfig.json`: the build runs `tsc-alias`, which rewrites every `paths` entry into a relative import and would undo the choice.
 
 Hashing is the only case so far where Node keeps a faster implementation. Rule 3 above asks for a measurement first: the portable SHA-256 takes 0.8 ms on a 240 KB file and 25 ms on 8 MB, against 0.086 ms and 2.6 ms for Node's.
 
@@ -150,5 +150,6 @@ The `--external:smoltalk` flag matters. The context module imports the thread st
 
 - The runtime imports Node modules in many other files. Each needs the sorting described under [The rule](#the-rule).
 - smoltalk, the library every model call goes through, imports `fs`, `path`, and `url`. The thread store imports smoltalk, so almost every runtime module reaches them.
-- None of the three places under [Where the targets may differ](#where-the-targets-may-differ) is built.
+- The host exists and the generated header reaches Node only through it, but most of the runtime and the stdlib still read `process`, `fs`, and `path` directly. `eslint.node-exceptions.mjs` lists those files; the list shrinks as each one moves to the host.
+- The last two places under [Where the targets may differ](#where-the-targets-may-differ) are not built.
 - The callbacks given to `agency.withHandler`, `withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with` are not handed a handle. Such a callback can call `agency.*` on its first line and not after an `await`.

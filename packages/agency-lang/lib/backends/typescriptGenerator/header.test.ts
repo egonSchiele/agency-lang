@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import { builtinModules } from "module";
 import path from "path";
 
 // The header is the import block at the top of every compiled program. What
@@ -27,6 +28,23 @@ describe("the generated header", () => {
   it("does not import from the package's main entry", () => {
     const modules = importedModules(header);
     expect(modules).not.toContain("agency-lang");
+  });
+
+  // A browser cannot resolve a Node module, so the header must not import
+  // one. It reaches the platform through the host instead
+  // (docs/dev/runtime/host.md).
+  it("does not import a Node module", () => {
+    const nodeModules = builtinModules.flatMap((name) => [name, `node:${name}`]);
+    for (const module of importedModules(header)) {
+      expect(nodeModules).not.toContain(module);
+    }
+  });
+
+  it("imports only the runtime and the bundled zod", () => {
+    expect([...new Set(importedModules(header))].sort()).toEqual([
+      "agency-lang/runtime",
+      "agency-lang/zod",
+    ]);
   });
 
   it("sees both import forms", () => {

@@ -1,6 +1,6 @@
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "../constants.js";
 import { CostGuard, TimeGuard } from "./guard.js";
-import type { Clock } from "./clock.js";
+import type { Host, HostSettings } from "../host/host.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import type { StateStack } from "./state/stateStack.js";
 
@@ -12,18 +12,21 @@ import type { StateStack } from "./state/stateStack.js";
  *  cap this dimension"; a value still passes through the disable rule at the
  *  call site (cost < 0 / time <= 0 install nothing). FAILS CLOSED on a
  *  malformed value. */
-function resolveRootLimits(contextBudget?: { maxCost?: number; maxTimeMs?: number }): {
+function resolveRootLimits(
+  settings: HostSettings,
+  contextBudget?: { maxCost?: number; maxTimeMs?: number },
+): {
   cost?: number;
   timeMs?: number;
 } {
-  const rawCost = process.env[AGENCY_MAX_COST];
+  const rawCost = settings.read(AGENCY_MAX_COST) ?? undefined;
   const cost =
     rawCost !== undefined
       ? parseBudgetValue(rawCost, AGENCY_MAX_COST)
       : contextBudget?.maxCost !== undefined
         ? finiteContextBudget(contextBudget.maxCost, "budget.maxCost")
         : undefined;
-  const rawTime = process.env[AGENCY_MAX_TIME];
+  const rawTime = settings.read(AGENCY_MAX_TIME) ?? undefined;
   const timeMs =
     rawTime !== undefined
       ? parseBudgetValue(rawTime, AGENCY_MAX_TIME)
@@ -52,14 +55,14 @@ function pushRootGuard(stack: StateStack, guard: CostGuard | TimeGuard): void {
  *  still pause it like any other time guard. */
 export function installRootBudget(
   stack: StateStack,
-  clock: Clock,
+  host: Host,
   contextBudget?: { maxCost?: number; maxTimeMs?: number },
 ): void {
   if (isIpcMode()) return;
-  const { cost, timeMs } = resolveRootLimits(contextBudget);
+  const { cost, timeMs } = resolveRootLimits(host.settings, contextBudget);
   if (cost !== undefined && cost >= 0) pushRootGuard(stack, new CostGuard(cost));
   if (timeMs !== undefined && timeMs > 0)
-    pushRootGuard(stack, new TimeGuard(timeMs, undefined, clock));
+    pushRootGuard(stack, new TimeGuard(timeMs, undefined, host.clock));
 }
 
 /** Re-assert the root budget on a RESUMED exec context. The root guard is
@@ -81,11 +84,12 @@ export function installRootBudget(
  *  root guard for gets a fresh guard. No-op in IPC. */
 export function reinstallRootBudget(
   stack: StateStack,
-  clock: Clock,
+  host: Host,
   contextBudget?: { maxCost?: number; maxTimeMs?: number },
 ): void {
   if (isIpcMode()) return;
-  const { cost, timeMs } = resolveRootLimits(contextBudget);
+  const { cost, timeMs } = resolveRootLimits(host.settings, contextBudget);
+  const clock = host.clock;
   const hostCost = cost !== undefined && cost >= 0 ? cost : undefined;
   const hostTimeMs = timeMs !== undefined && timeMs > 0 ? timeMs : undefined;
 

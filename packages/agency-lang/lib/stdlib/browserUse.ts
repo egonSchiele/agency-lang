@@ -92,7 +92,7 @@ async function browserUseImpl(
   task: string,
   options?: BrowserUseOptions,
 ): Promise<BrowserUseResult> {
-  const apiKey = options?.apiKey || process.env.BROWSER_USE_API_KEY;
+  const apiKey = options?.apiKey || ctx.host.settings.read("BROWSER_USE_API_KEY");
   if (!apiKey) {
     throw new Error(
       "Missing Browser Use API key. Set BROWSER_USE_API_KEY env var or pass apiKey option.",

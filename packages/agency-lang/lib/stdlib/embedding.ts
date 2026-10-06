@@ -1,4 +1,3 @@
-import { performance } from "node:perf_hooks";
 import { currentRun } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";

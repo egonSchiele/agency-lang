@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { nodeHost } from "../host/nodeHost.js";
 import { writeFileSync, mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
@@ -115,7 +116,7 @@ describe("resolveRunPolicy", () => {
       checkPolicy(p, {
         effect: "std::read",
         message: "read settings?",
-        data: { dir: agentHomeDir(), filename: "settings.json" },
+        data: { dir: agentHomeDir(nodeHost()), filename: "settings.json" },
         origin: "test",
       }),
     ).toEqual({ type: "reject" });

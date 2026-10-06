@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { PassThrough } from "node:stream";
 import { __internal_input } from "./builtins.js";
+import { nodeHost } from "../host/nodeHost.js";
 
-// inputImpl reads process.stdin/stdout at call time, so tests swap in a
-// PassThrough pair for the duration of each test. `isTTY` is set per-test:
+// inputImpl reads the line through the host's terminal, and nodeHost reads
+// process.stdin/stdout at call time, so tests swap in a PassThrough pair for
+// the duration of each test. `isTTY` is set per-test:
 // the buffered-blank-line filter must only ever run on interactive stdin.
 type FakeStream = PassThrough & { isTTY?: boolean };
 
@@ -27,6 +29,7 @@ function makeCtxStack() {
   const ctx = {
     inputOverride: undefined,
     getAbortSignal: () => controller.signal,
+    host: nodeHost(),
   } as any;
   const stack = { guards: [] } as any;
   return { ctx, stack };

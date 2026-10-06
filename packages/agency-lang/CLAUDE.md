@@ -244,6 +244,7 @@ Other process docs:
 
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
 - `docs/dev/runtime/async-context.md` — The `Run` value that carries runtime state as an ordinary argument: what it holds, where runs come from, `callPlain` and `currentRun()` for functions that take no run, the lenient read, the lint check, the wrong-run check, logging, and stored callbacks.
+- `docs/dev/runtime/host.md` — The host: what a run takes from its platform (the terminal, environment variables, the clock, random values, the working directory), the seven capabilities and the `NEEDS` table, `makeHost` and why no host writes a refusal, `nodeHost` and the default host behind `#default-host`, `ctx.host` and a host per run through `InvocationOptions`, `currentHost()` for a helper with no run, the lint rule with its two exception lists, and how to add a function to the host.
 - `docs/dev/runtime/running-without-node.md` — The goals for running Agency outside Node, the rule about branching between targets, and the decision to pass the run explicitly in place of `AsyncLocalStorage`, with what it cost and what was set aside.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.

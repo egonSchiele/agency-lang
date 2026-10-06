@@ -1,3 +1,4 @@
+import type { Host, HostSettings } from "../host/host.js";
 import type { Policy } from "./policy.js";
 import { checkPolicyExplicit, validatePolicy } from "./policy.js";
 import { approve, reject } from "./interruptResponse.js";
@@ -35,10 +36,11 @@ export function makeRunPolicyHandler(policy: Policy): HandlerFn {
   };
 }
 
-// Parse and validate the run policy from the environment. Returns null when
-// no policy was passed (the run was launched without any policy flag).
-function loadEnvPolicy(): Policy | null {
-  const raw = process.env[AGENCY_RUN_POLICY];
+// Parse and validate the run policy from the environment, read through the
+// host's settings. Returns null when no policy was passed (the run was
+// launched without any policy flag).
+function loadEnvPolicy(settings: HostSettings): Policy | null {
+  const raw = settings.read(AGENCY_RUN_POLICY);
   if (!raw) return null;
 
   let policy: unknown;
@@ -58,8 +60,8 @@ function loadEnvPolicy(): Policy | null {
 // --policy / --approve / --reject / --interactive flag all set AGENCY_RUN_POLICY).
 // The declarative environment boundary the CLI endpoint adapter checks before
 // falling back to reporting an unhandled interrupt.
-export function hasRunPolicyMechanism(): boolean {
-  return loadEnvPolicy() !== null;
+export function hasRunPolicyMechanism(settings: HostSettings): boolean {
+  return loadEnvPolicy(settings) !== null;
 }
 
 // Install the root policy handler on `execCtx` when the run carries a
@@ -75,11 +77,12 @@ export function hasRunPolicyMechanism(): boolean {
 export function installRunPolicyHandler(
   execCtx: {
     pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
+    host: Host;
   },
   policy?: Policy,
 ): void {
   if (isIpcMode()) return;
-  const effective = policy ?? loadEnvPolicy();
+  const effective = policy ?? loadEnvPolicy(execCtx.host.settings);
   if (!effective) return;
   // liveGuardIds: [] — explicit: the --policy handler registers at run
   // start, before any guard exists, and it is the outermost supervisory

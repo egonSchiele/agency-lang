@@ -27,7 +27,7 @@ PR B and PR C are merged. PR C2 is open as #1181.
 | B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | merged, #1179 |
 | C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | merged, #1180 |
 | C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | open, #1181 |
-| D | Network, `Buffer` | 9, 12 | open, stacked on C2 |
+| D | Network, `Buffer` | 9, 12 | open, #1182, stacked on C2 |
 | D2 | Subprocesses | 8 | next |
 | D3 | Portable paths | 10 | |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |

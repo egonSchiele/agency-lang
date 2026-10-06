@@ -144,6 +144,44 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect(order).toEqual(["first start", "first end", "second"]);
       }));
 
+    it("fixedPath and realPath spell a whole path the way a payload does", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.mkdir(root, "sub");
+        const whole = path.posix.join(dir, "sub", "note.txt");
+        const fixed = await host.files.fixedPath(whole);
+        expect(fixed.target).toBe("note.txt");
+        expect(await host.files.resolvePath(fixed.root, fixed.target)).toBe(whole);
+        expect(await host.files.realPath(whole)).toBe(whole);
+        expect(await host.files.realPath(path.posix.join(dir, "sub", "..", "other"))).toBe(
+          path.posix.join(dir, "other"),
+        );
+      }));
+
+    it("openForWrite writes at positions and truncates", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        const file = await host.files.openForWrite(root, "o.bin");
+        await file.writeAt(new TextEncoder().encode("hello world"), 0);
+        await file.writeAt(new TextEncoder().encode("HELLO"), 0);
+        await file.truncate(8);
+        await file.close();
+        expect(await host.files.readText(root, "o.bin")).toBe("HELLO wo");
+      }));
+
+    it("withLock releases its entry when the last holder leaves", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.withLock(root, "once", async () => {});
+        // A second lock on the same path must not wait on anything the
+        // first left behind, and must run at once.
+        let ran = false;
+        await host.files.withLock(root, "once", async () => {
+          ran = true;
+        });
+        expect(ran).toBe(true);
+      }));
+
     it("a host without fileWrite refuses a write and still reads", () =>
       withWorkspace(async ({ dir }) => {
         const readOnly =

@@ -8,8 +8,8 @@ page covers the implementation choices a future change needs to know.
   cannot disagree. The table is `lib/runtime/effectSets.data.ts`, which
   `scripts/generate-effect-sets.mjs` writes from `stdlib/effectSets.agency`
   during `make`, so the runtime reads nothing from disk for it; a test
-  fails when the data file is stale. `effectSets.ts` documents the
-  doc-comment pairing of the parse.
+  fails when the data file is stale. `effectSetsParse.ts` holds the
+  parse and documents its doc-comment pairing.
 - Policies come from `BUILTIN_POLICIES` / `builtinPolicy`
   (`lib/runtime/builtinPolicies.ts`), the definitions every `--policy`
   flag resolves. The policy detail view resolves against the process

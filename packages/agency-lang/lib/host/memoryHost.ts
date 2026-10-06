@@ -317,13 +317,17 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       const held = new Promise<void>((done) => {
         release = done;
       });
-      locks[key] = previous.then(() => held);
+      // The chain the next caller waits on. Kept so the last one out can
+      // tell it is last and drop the entry, or the object grows by one
+      // path forever on a long-lived host.
+      const queued = previous.then(() => held);
+      locks[key] = queued;
       await previous;
       try {
         return await work();
       } finally {
         release();
-        if (locks[key] === held) delete locks[key];
+        if (locks[key] === queued) delete locks[key];
       }
     },
     readText: async (root, target) =>

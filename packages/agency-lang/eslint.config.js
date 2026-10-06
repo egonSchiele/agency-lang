@@ -26,6 +26,15 @@ const NODE_MODULES = builtinModules
   .filter((name) => !name.startsWith("_") && !name.startsWith("node:"))
   .flatMap((name) => [name, `node:${name}`]);
 
+// The inside of a Root belongs to lib/host (lib/host/roots.ts). ESLint keeps
+// only the last no-restricted-syntax block for a file, so this rule is
+// repeated in every block that sets it.
+const ROOT_REAL_RULE = {
+  selector: "MemberExpression[property.name='real']",
+  message:
+    "Only files under lib/host read the inside of a Root. Ask the host for the operation you want, or for a path with rootPath() from lib/host/roots.ts.",
+};
+
 const NODE_GLOBALS = ["process", "Buffer", "__dirname", "__filename", "require", "setImmediate"];
 
 // The files a browser bundle of the runtime contains: the four directories
@@ -109,6 +118,7 @@ export default [
           message:
             "Dynamic imports are not allowed. Use static import statements.",
         },
+        ROOT_REAL_RULE,
       ],
 
       // Max nesting depth
@@ -180,12 +190,7 @@ export default [
           message:
             "Exit through exitProcess() in lib/runtime/exitProcess.ts, which sends pending logs first. Use exitProcessNow() where the exit cannot wait, and say why.",
         },
-        {
-          // The inside of a Root belongs to lib/host (lib/host/roots.ts).
-          selector: "MemberExpression[property.name='real']",
-          message:
-            "Only files under lib/host read the inside of a Root. Ask the host for the operation you want, or for a path with rootPath() from lib/host/roots.ts.",
-        },
+        ROOT_REAL_RULE,
       ],
     },
   },
@@ -215,6 +220,7 @@ export default [
           message:
             "Read token counts through lib/statelog/wireAccessors.ts (hasTokenUsage, tokensIn, tokensCached, tokensCacheWrite, contextTokens, tokensOut).",
         },
+        ROOT_REAL_RULE,
       ],
     },
   },
@@ -227,6 +233,20 @@ export default [
         {name:"../../tui/styleParser.js",importNames:["escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
         {name:"../../tui/index.js",importNames:["line","lines","text","escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
       ]}],
+    },
+  },
+  {
+    // lib/host owns the inside of a Root, so the rule above does not apply
+    // there; the dynamic-import ban stays.
+    files: ["lib/host/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression",
+          message: "Dynamic imports are not allowed. Use static import statements.",
+        },
+      ],
     },
   },
   // ----- Per-file overrides for existing code -----

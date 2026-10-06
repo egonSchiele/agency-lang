@@ -24,8 +24,7 @@ import { randomBytes } from "crypto";
 import { expandPath } from "../stdlib/expandPath.js";
 
 export type { Root } from "./roots.js";
-import { fixedRoot, type Root } from "./roots.js";
-export { fixedRoot };
+import type { Root } from "./roots.js";
 
 /** A whole path the approval named, as its real parent plus a final name
  *  that is never followed. */
@@ -124,6 +123,44 @@ function escapeError(target: string, realRoot: string, landed: string): Error {
     `refused: "${target}" is outside dir "${realRoot}" (it resolves to "${landed}"). ` +
       `To reach it, pass that directory in dir.`,
   );
+}
+
+/** The root an approval already named, spelled the way the approver saw
+ *  it. Where `root` resolves a caller's spelling before the interrupt,
+ *  this runs after it and follows nothing: every existing component must
+ *  be a real directory, and a symlink anywhere in the spelling is refused,
+ *  because a link planted at the approved path while the prompt was
+ *  pending would otherwise become the new root. Components that do not
+ *  exist yet are kept as written. */
+export function fixedRoot(real: string): Root {
+  if (real === undefined || real === null || real.trim() === "") {
+    throw new Error('dir must not be empty. Use "." for the current directory.');
+  }
+  const lexical = path.resolve(process.cwd(), expandPath(real));
+  const parsed = path.parse(lexical);
+  const segments = lexical
+    .slice(parsed.root.length)
+    .split(path.sep)
+    .filter((segment) => segment !== "");
+  let current = parsed.root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    let info: Stats;
+    try {
+      info = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return { real: lexical };
+      }
+      throw error;
+    }
+    if (info.isSymbolicLink()) {
+      throw new Error(
+        `refused: "${current}" is a symlink. The approved directory "${lexical}" must be spelled without links.`,
+      );
+    }
+  }
+  return { real: lexical };
 }
 
 /** The whole-path twin of `fixedRoot`: the real parent the approver saw,

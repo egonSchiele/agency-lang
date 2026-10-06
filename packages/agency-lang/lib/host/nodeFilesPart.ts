@@ -39,16 +39,20 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
       const key = files.resolveUnder(root, target);
       const previous = locks[key] ?? Promise.resolve();
       let release!: () => void;
-      const held = new Promise<void>((resolve) => {
-        release = resolve;
+      const held = new Promise<void>((done) => {
+        release = done;
       });
-      locks[key] = previous.then(() => held);
+      // The chain the next caller waits on. Kept so the last one out can
+      // tell it is last and drop the entry, or the object grows by one
+      // path forever on a long-lived host.
+      const queued = previous.then(() => held);
+      locks[key] = queued;
       await previous;
       try {
         return await work();
       } finally {
         release();
-        if (locks[key] === held) delete locks[key];
+        if (locks[key] === queued) delete locks[key];
       }
     },
     readText: async (root, target) => files.readText(root, target, seams),

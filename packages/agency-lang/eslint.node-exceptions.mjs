@@ -21,7 +21,6 @@ export const NODE_ONLY = {
   "lib/host/nodeFiles.ts": "the contained file operations of nodeHost, over fs",
   "lib/host/nodeFilesPart.ts": "the file part of nodeHost, over nodeFiles.ts",
   "lib/host/nodeHost.ts": "the host for Node, built from Node modules on purpose",
-  "lib/host/roots.ts": "makes a Root by walking the disk; the inside of a Root lives here",
   "lib/runtime/agencyGlobals.node.ts":
     "re-exports Node's path and os for Agency code; the browser entry point exports portable ones",
   "lib/runtime/cliEntry.ts": "starts a program from the command line",

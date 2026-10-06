@@ -125,7 +125,8 @@ compile-agency:
 # nothing from disk for them. Needs the parser in dist/, so it runs after
 # build; when the file changed, build again so dist/ carries the new data.
 effect-sets:
-	@before=$$(cat lib/runtime/effectSets.data.ts 2>/dev/null | cksum); \
+	@set -e; \
+	before=$$(cat lib/runtime/effectSets.data.ts 2>/dev/null | cksum); \
 	node ./scripts/generate-effect-sets.mjs; \
 	after=$$(cat lib/runtime/effectSets.data.ts | cksum); \
 	if [ "$$before" != "$$after" ]; then $(MAKE) build; fi

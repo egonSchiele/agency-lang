@@ -1498,7 +1498,7 @@ export async function serveTargets(
       );
       return { child: deps.spawn(python, args), port };
     },
-    waitUntilLoaded: (plan, running, gone) =>
+    waitReady: (plan, running, gone) =>
       waitUntilLoaded(running.port, plan.upstreamModel, {
         fetch: deps.fetch,
         gone,

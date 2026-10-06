@@ -89,7 +89,7 @@ export type PoolDeps = {
   spawn: (plan: ModelPlan) => Promise<Running>;
   /** Resolves when the process answers. Rejects if it answers wrongly, or
    *  when `gone` resolves, which says a process exited. */
-  waitUntilLoaded: (plan: ModelPlan, running: Running, gone: Promise<string>) => Promise<void>;
+  waitReady: (plan: ModelPlan, running: Running, gone: Promise<string>) => Promise<void>;
   now: () => number;
 };
 
@@ -186,6 +186,9 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
   /** The processes the pool itself told to stop. Their exits are not
    *  failures. */
   const stoppedByPool: Child[] = [];
+  /** The models an `unload` is waiting to stop. A load of one of them
+   *  gives up as early as it can, instead of finishing first. */
+  const stopRequested: string[] = [];
   let stopping = false;
   let reportFailure: (why: string) => void = () => {};
   const failure = new Promise<string>((resolve) => {
@@ -196,7 +199,8 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
   const onQueue = createQueue();
 
   function recordOf(model: string): ModelRecord {
-    const record = records[model];
+    // hasOwn, so a name such as "constructor" is not served either.
+    const record = Object.hasOwn(records, model) ? records[model] : undefined;
     if (record === undefined) {
       throw new Error(`${model} is not served. Served: ${plans.map((p) => p.model).join(", ")}.`);
     }
@@ -236,6 +240,11 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     if (record.current.state === "ready") {
       return;
     }
+    if (stopRequested.includes(record.plan.model)) {
+      const message = `${record.plan.label} was unloaded before it started.`;
+      record.current = { state: "failed", error: message };
+      throw new Error(message);
+    }
     let settle: { resolve: () => void; reject: (err: Error) => void } | undefined;
     const loaded = new Promise<void>((resolve, reject) => {
       settle = { resolve, reject };
@@ -254,7 +263,12 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
         exits = exits.filter((exit) => exit !== exited);
         onExit(record, started, why);
       });
-      await deps.waitUntilLoaded(record.plan, started, Promise.race(exits));
+      // An unload that arrived during the spawn: stop now, and the wait
+      // below ends when the process exits.
+      if (stopRequested.includes(record.plan.model)) {
+        kill(started);
+      }
+      await deps.waitReady(record.plan, started, Promise.race(exits));
       record.current = { state: "ready", running: started };
       record.lastUsedAt = deps.now();
       settle?.resolve();
@@ -271,6 +285,10 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
   /** Runs on the queue. Stops the record's process, if it has one, and
    *  waits for it to exit. */
   async function stopRecord(record: ModelRecord): Promise<void> {
+    const index = stopRequested.indexOf(record.plan.model);
+    if (index !== -1) {
+      stopRequested.splice(index, 1);
+    }
     const running = runningOf(record);
     if (running !== null) {
       const exited = exitOf(running.child, record.plan.label);
@@ -300,7 +318,9 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
   async function unload(model: string): Promise<void> {
     const record = recordOf(model);
     // A load in progress holds the queue until it ends, so end it now. Its
-    // wait rejects when the process exits.
+    // wait rejects when the process exits. A load that has not spawned yet
+    // sees the request and gives up when it does.
+    stopRequested.push(model);
     const running = record.current.state === "loading" ? record.current.running : null;
     if (running !== null) {
       kill(running);
@@ -322,7 +342,7 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
   return {
     models: () => plans.map((plan) => plan.model),
     status: () => Object.values(records).map(statusOf),
-    plan: (model) => records[model]?.plan,
+    plan: (model) => (Object.hasOwn(records, model) ? records[model].plan : undefined),
     acquire,
     load: async (model) => {
       const record = recordOf(model);

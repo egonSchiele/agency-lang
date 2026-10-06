@@ -270,8 +270,7 @@ see the non-streaming limitation under "Chat with pictures".
 
 **The model pool** (`lib/cli/modelPool.ts`) owns the model processes. It
 keeps one record per served model, and it is the only code that starts or
-stops a process or writes a record. The front door holds no list of its
-own. For each request it:
+stops a process or writes a record. For each request the front door:
 
 1. Looks up the model's `ModelPlan` with `pool.plan`.
 2. Applies the plan's request rules. A refused request never holds a
@@ -290,14 +289,16 @@ has:
 | `ready` | the process and its port |
 | `failed` | the error |
 
-Starting a model is two steps for a reason. `PoolDeps.spawn` returns as
-soon as the process exists, and the pool stores it before waiting for the
-model to load. So a model that is still loading has a process the pool
-can stop and can watch.
+Starting a model is two steps. `PoolDeps.spawn` returns as soon as the
+process exists, and the pool stores it before `PoolDeps.waitReady` waits
+for the model to load. So a model that is still loading has a process the
+pool can stop and can watch.
 
 `load` and `unload` run on one queue, one at a time. `unload` of a model
-that is loading also stops its process at once, which ends the load, and
-any request waiting on that load is refused.
+that is loading does not wait its turn: it stops the process at once,
+which ends the load, and any request waiting on that load is refused. An
+`unload` of a model whose load is queued but has not spawned yet makes
+that load give up when it starts.
 
 A process that exits on its own marks its record `failed`. If it had
 finished loading, the pool also resolves `failure`, which ends the

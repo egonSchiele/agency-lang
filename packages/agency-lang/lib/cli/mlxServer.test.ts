@@ -99,7 +99,7 @@ async function readyPool(routes: Route[]): Promise<ModelPool> {
         child: exitsWhenKilled(),
         port: routes.find((route) => route.model === plan.model)!.port,
       }),
-      waitUntilLoaded: async () => {},
+      waitReady: async () => {},
     },
   );
   for (const route of routes) {

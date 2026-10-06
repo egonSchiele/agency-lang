@@ -79,13 +79,20 @@ function targetOf(served: string | ServedModel): ServeTarget {
  *  const server = await serve(["z-image-turbo", "wd14-tagger"]);
  *  const made = await generateImage({ baseUrl: server.url, model: "z-image-turbo", prompt });
  *  await server.close();
- *  ```
- *
- *  `deps` replaces what the server touches outside itself, for tests. */
-export async function serve(
+ *  ``` */
+export function serve(
   models: (string | ServedModel)[],
   options: ServeOptions = {},
-  deps: ServeDeps = loggedDeps(options.log ?? (() => {})),
+): Promise<LocalServer> {
+  return serveWithDeps(models, options, loggedDeps(options.log ?? (() => {})));
+}
+
+/** `serve` with what the server touches outside itself replaced, for
+ *  tests. Not exported from `agency-lang/local`. */
+export async function serveWithDeps(
+  models: (string | ServedModel)[],
+  options: ServeOptions,
+  deps: ServeDeps,
 ): Promise<LocalServer> {
   const settings = { port: options.port, python: options.python };
   return serveTargets(models.map(targetOf), settings, deps);

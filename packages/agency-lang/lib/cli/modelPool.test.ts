@@ -57,7 +57,7 @@ describe("createModelPool", () => {
         children.push(child);
         return { child, port: nextPort++ };
       },
-      waitUntilLoaded: (plan, _running, gone) =>
+      waitReady: (plan, _running, gone) =>
         Promise.race([
           new Promise<void>((resolve, reject) => {
             loads[plan.model] = { finish: resolve, fail: (message) => reject(new Error(message)) };
@@ -188,6 +188,45 @@ describe("createModelPool", () => {
     expect(refused).toBeInstanceOf(PoolRefusal);
     expect((refused as PoolRefusal).reason).toBe("load-failed");
     expect(stateOf("a")).toBe("stopped");
+  });
+
+  it("gives up a load that was unloaded before it spawned", async () => {
+    const loading = pool.load("a").catch((err: Error) => err.message);
+    const unloading = pool.unload("a");
+    expect(await loading).toBe("the server for a was unloaded before it started.");
+    await unloading;
+    expect(children).toHaveLength(0);
+    expect(stateOf("a")).toBe("stopped");
+  });
+
+  it("stops a load that was unloaded while it was spawning", async () => {
+    let release: () => void = () => {};
+    const slowPool = createModelPool([planOf("a")], {
+      now: () => clock,
+      spawn: () =>
+        new Promise<Running>((resolve) => {
+          release = () => {
+            const child = fakeChild();
+            children.push(child);
+            resolve({ child, port: 9000 });
+          };
+        }),
+      waitReady: (_plan, _running, gone) =>
+        gone.then((why) => Promise.reject(new Error(`${why} before it was ready.`))),
+    });
+    const loading = slowPool.load("a").catch((err: Error) => err.message);
+    await settle();
+    const unloading = slowPool.unload("a");
+    release();
+    expect(await loading).toBe("the server for a was killed by SIGTERM before it was ready.");
+    await unloading;
+    expect(children[0].kills).toBe(1);
+    expect(slowPool.status()[0].state).toBe("stopped");
+  });
+
+  it("refuses a model named after an object property, like any other unknown name", async () => {
+    await expect(pool.load("constructor")).rejects.toThrow("constructor is not served.");
+    expect(pool.plan("toString")).toBeUndefined();
   });
 
   it("marks a model failed, with the reason, when its load fails", async () => {

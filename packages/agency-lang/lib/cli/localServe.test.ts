@@ -35,7 +35,7 @@ import {
   type PickDeps,
 } from "./localServe.js";
 import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
-import { serve } from "../local/serve.js";
+import { serveWithDeps } from "../local/serve.js";
 import { createProgram } from "../../scripts/agency.js";
 
 describe("serveArgs", () => {
@@ -1564,7 +1564,7 @@ describe("runServe", () => {
   describe("serve, from agency-lang/local", () => {
     it("serves a model named by a string, on a port of its own", async () => {
       recordedModel("org/a", true);
-      const server = await serve(["mlx:org/a"], { port: 0 }, deps);
+      const server = await serveWithDeps(["mlx:org/a"], { port: 0 }, deps);
       try {
         expect(server.models).toEqual(["org/a"]);
         expect(server.port).toBeGreaterThan(0);
@@ -1581,7 +1581,7 @@ describe("runServe", () => {
     it("gives a model its draft", async () => {
       recordedModel("org/big", true);
       const small = recordedModel("org/small", true);
-      const server = await serve(
+      const server = await serveWithDeps(
         [{ model: "mlx:org/big", draft: "mlx:org/small", draftTokens: 3 }],
         {},
         deps,
@@ -1595,7 +1595,7 @@ describe("runServe", () => {
 
     it("serves a chat model with mlx-vlm when vlm is set", async () => {
       const model = visionChatModel();
-      const server = await serve([{ model, vlm: true }], {}, deps);
+      const server = await serveWithDeps([{ model, vlm: true }], {}, deps);
       try {
         expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
       } finally {
@@ -1606,7 +1606,7 @@ describe("runServe", () => {
     it("serves a model as the kind it is given", async () => {
       // The files of this model say chat. The caller says embedding.
       recordedModel("org/emb", true);
-      const server = await serve([{ model: "mlx:org/emb", kind: "embedding" }], {}, deps);
+      const server = await serveWithDeps([{ model: "mlx:org/emb", kind: "embedding" }], {}, deps);
       try {
         expect(spawned[0][1]).toMatch(/mlxEmbedServer.py$/);
       } finally {
@@ -1616,7 +1616,7 @@ describe("runServe", () => {
 
     it("unloads a model on request, and says so in its status", async () => {
       recordedModel("org/a", true);
-      const server = await serve(["mlx:org/a"], {}, exitingDeps());
+      const server = await serveWithDeps(["mlx:org/a"], {}, exitingDeps());
       try {
         await server.unload("org/a");
         expect(server.status()).toMatchObject([{ model: "org/a", state: "stopped" }]);
@@ -1627,7 +1627,7 @@ describe("runServe", () => {
 
     it("refuses lazy until it is supported, before anything is started", async () => {
       recordedModel("org/a", true);
-      await expect(serve([{ model: "mlx:org/a", lazy: true }], {}, deps)).rejects.toThrow(
+      await expect(serveWithDeps([{ model: "mlx:org/a", lazy: true }], {}, deps)).rejects.toThrow(
         "lazy is not supported by this version.",
       );
       expect(spawned).toEqual([]);
@@ -1635,7 +1635,7 @@ describe("runServe", () => {
 
     it("sends what the server would print to log", async () => {
       recordedModel("org/a", true);
-      const server = await serve(["mlx:org/a"], {}, deps);
+      const server = await serveWithDeps(["mlx:org/a"], {}, deps);
       await server.close();
       expect(log.join("\n")).toContain("Serving 1 model on");
     });

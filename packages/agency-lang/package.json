@@ -34,7 +34,7 @@
     "debug": "node ./dist/scripts/agency.js debug",
     "bundle": "node ./dist/scripts/agency.js bundle",
     "circular-deps": "npx dpdm --circular lib/parser.ts",
-    "lint:structure": "eslint lib/ && node scripts/lint-run-reads.mjs",
+    "lint:structure": "eslint lib/ && node scripts/lint-run-reads.mjs && node scripts/lint-browser-reach.mjs",
     "lint:fix": "eslint lib/ --fix",
     "fmt:ts": "prettier --write \"**/*.ts\"",
     "fmt:ts:check": "prettier --check \"**/*.ts\""

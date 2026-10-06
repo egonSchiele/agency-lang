@@ -1,4 +1,6 @@
+import { builtinModules } from "module";
 import tseslint from "typescript-eslint";
+import { NODE_ONLY, WAITING } from "./eslint.node-exceptions.mjs";
 
 const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segment, paint, paintedLine), which escapes it. A raw line() lets statelog content be read as style tags.";
 
@@ -18,6 +20,47 @@ const FS_IMPORTERS = {
 };
 
 const FS_MODULES = ["fs", "fs/promises", "node:fs", "node:fs/promises"];
+
+// Every Node module, with and without the "node:" prefix.
+const NODE_MODULES = builtinModules
+  .filter((name) => !name.startsWith("_") && !name.startsWith("node:"))
+  .flatMap((name) => [name, `node:${name}`]);
+
+const NODE_GLOBALS = ["process", "Buffer", "__dirname", "__filename", "require", "setImmediate"];
+
+// The files a browser bundle of the runtime contains: the four directories
+// below and the files outside them that the runtime imports. The spec says
+// which (docs/superpowers/specs/2026-10-05-host-and-platforms.md, "The lint
+// rule"). scripts/lint-browser-reach.mjs fails when the bundle reaches a
+// file this list does not cover.
+export const BROWSER_FILES = [
+  "lib/runtime/**/*.ts",
+  "lib/stdlib/**/*.ts",
+  "lib/stdlib/**/*.mjs",
+  "lib/simplemachine/**/*.ts",
+  "lib/host/**/*.ts",
+  "lib/config/config.ts",
+  "lib/config/paths.ts",
+  "lib/constants.ts",
+  "lib/importPaths.ts",
+  "lib/logger.ts",
+  "lib/matchVal.ts",
+  "lib/statelogClient.ts",
+  "lib/statelogSender.ts",
+  "lib/types/function.ts",
+  "lib/utils/columnWidths.ts",
+  "lib/utils/diff.ts",
+  "lib/utils/hash.ts",
+  "lib/utils/iteration.ts",
+  "lib/utils/sha256.node.ts",
+  "lib/utils/sha256.portable.ts",
+  "lib/utils/termcolors.ts",
+];
+
+const NODE_IMPORT_MESSAGE =
+  "This file can end up in a browser bundle, so it may not import a Node module. Reach the platform through the host (docs/dev/runtime/host.md). A file that must stay on Node goes in eslint.node-exceptions.mjs with the reason.";
+const NODE_GLOBAL_MESSAGE =
+  "This file can end up in a browser bundle, so it may not use a Node global. Reach the platform through the host (docs/dev/runtime/host.md). A file that must stay on Node goes in eslint.node-exceptions.mjs with the reason.";
 
 export default [
   {
@@ -97,6 +140,25 @@ export default [
               "lib/stdlib reads and writes files through lib/stdlib/contained.ts. If this file truly needs fs, add it to FS_IMPORTERS in eslint.config.js with the reason.",
           })),
         },
+      ],
+    },
+  },
+  {
+    // Files the browser can reach may not use Node. ESLint keeps only the
+    // last block that sets a rule for a file, so this block repeats the fs
+    // ban above for the stdlib files it covers, with the same exceptions.
+    files: BROWSER_FILES,
+    ignores: ["**/*.test.ts", "lib/stdlib/__tests__/**", ...Object.keys(NODE_ONLY), ...WAITING],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: NODE_MODULES.map((name) => ({ name, message: NODE_IMPORT_MESSAGE })),
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...NODE_GLOBALS.map((name) => ({ name, message: NODE_GLOBAL_MESSAGE })),
       ],
     },
   },

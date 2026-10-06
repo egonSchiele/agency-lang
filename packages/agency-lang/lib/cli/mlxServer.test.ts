@@ -2,7 +2,7 @@ import { MLX_VLM_RULES } from "./vlmChat.js";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import { servedModelFor, startFrontDoor, type DoorLogging, type FrontDoor } from "./mlxServer.js";
-import { createModelPool, type ModelPool } from "./modelPool.js";
+import { createModelPool, type ModelPlan, type ModelPool } from "./modelPool.js";
 import type { RequestRules } from "./requestRules.js";
 import type { Child } from "./localServe.js";
 import { plainColor } from "../utils/termcolors.js";
@@ -94,6 +94,7 @@ async function readyPool(routes: Route[]): Promise<ModelPool> {
       rules: route.rules ?? null,
       lazy: false,
       needBytes: 0,
+      stopsOnClose: () => true,
     })),
     {
       now: Date.now,
@@ -776,6 +777,7 @@ describe("front door over a lazy model", () => {
           rules: null,
           lazy: true,
           needBytes: 0,
+          stopsOnClose: () => true,
         },
       ],
       {
@@ -813,5 +815,193 @@ describe("front door over a lazy model", () => {
       await lazyDoor.close();
       upstream.server.close();
     }
+  });
+});
+
+describe("cancel", () => {
+  // A stand-in for a model process whose reply never comes, as a long
+  // generation looks from outside. Each hit is answered only by cancel.
+  let hanging: http.Server;
+  let hangingPort = 0;
+  let hits = 0;
+  let spawned = 0;
+  let killed = 0;
+  let pool: ModelPool;
+  let cancelDoor: FrontDoor;
+  const lines: string[] = [];
+
+  function plan(model: string, extra: Partial<ModelPlan>): ModelPlan {
+    return {
+      model,
+      upstreamModel: `/models/${model}`,
+      label: `the server for ${model}`,
+      kind: "chat",
+      rules: null,
+      lazy: false,
+      needBytes: 0,
+      stopsOnClose: () => true,
+      ...extra,
+    };
+  }
+
+  beforeAll(async () => {
+    hanging = http.createServer((req) => {
+      req.resume();
+      hits += 1;
+    });
+    await new Promise<void>((resolve) => hanging.listen(0, "127.0.0.1", resolve));
+    hangingPort = (hanging.address() as { port: number }).port;
+    pool = createModelPool(
+      [
+        plan("org/image", { kind: "image" }),
+        plan("org/vlm", { stopsOnClose: (body) => body.stream === true }),
+        plan("org/lazy-vlm", { lazy: true, stopsOnClose: (body) => body.stream === true }),
+        plan("org/idle", {}),
+      ],
+      {
+        now: Date.now,
+        spawn: async () => {
+          spawned += 1;
+          const child = exitsWhenKilled();
+          const kill = child.kill;
+          child.kill = () => {
+            killed += 1;
+            kill();
+          };
+          return { child, port: hangingPort };
+        },
+        waitReady: async () => {},
+        availableMemory: async () => ({ available: 1e12, total: 1e12 }),
+        allowOvercommit: false,
+        log: () => {},
+      },
+    );
+    for (const model of ["org/image", "org/vlm", "org/idle"]) {
+      await pool.load(model);
+    }
+    cancelDoor = await startFrontDoor(0, pool, {
+      log: (line) => lines.push(line),
+      verbose: false,
+      color: plainColor,
+    });
+  });
+
+  afterAll(async () => {
+    await cancelDoor.close();
+    hanging.closeAllConnections();
+    hanging.close();
+  });
+
+  const url = (path: string) => `http://127.0.0.1:${cancelDoor.port}${path}`;
+  const inProgress = (model: string) =>
+    pool.status().find((row) => row.model === model)?.requestsInProgress;
+
+  /** Sends a chat request that the process will never answer, and resolves
+   *  once the process has it. The reply is wrapped, so awaiting this does
+   *  not wait for the reply. */
+  async function hangingRequest(
+    model: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<{ reply: Promise<Response> }> {
+    const before = hits;
+    const reply = fetch(url("/v1/chat/completions"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, messages: [], ...extra }),
+    });
+    await expect.poll(() => hits).toBe(before + 1);
+    return { reply };
+  }
+
+  function cancelRoute(body: unknown, contentType = "application/json") {
+    return fetch(url("/v1/agency/cancel"), {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  }
+
+  it("gives a waiting client a 499, cuts the request to the process, and keeps serving", async () => {
+    const { reply: pending } = await hangingRequest("org/image");
+    const spawnedBefore = spawned;
+    lines.length = 0;
+    const cancelled = await cancelRoute({ model: "org/image" });
+    expect(await cancelled.json()).toEqual({ cancelled: 1 });
+    const res = await pending;
+    expect(res.status).toBe(499);
+    expect(await res.json()).toEqual({ error: { message: "Cancelled" } });
+    await expect.poll(() => inProgress("org/image")).toBe(0);
+    // An image process stops on its own when the connection closes, so it
+    // is kept.
+    expect(spawned).toBe(spawnedBefore);
+    expect(killed).toBe(0);
+    expect(lines.some((line) => / 499 /.test(line))).toBe(true);
+    // The door is still up: the error handler for the cut request wrote
+    // nothing more to a client that was already answered.
+    const status = await fetch(url("/v1/agency/status"));
+    expect(status.status).toBe(200);
+  });
+
+  it("restarts an mlx-vlm process whose non-streamed request was cancelled", async () => {
+    const { reply: pending } = await hangingRequest("org/vlm");
+    const spawnedBefore = spawned;
+    const cancelled = await cancelRoute({ model: "org/vlm" });
+    expect(await cancelled.json()).toEqual({ cancelled: 1 });
+    expect((await pending).status).toBe(499);
+    // Stopped, and loaded again, because it is not lazy.
+    expect(killed).toBe(1);
+    expect(spawned).toBe(spawnedBefore + 1);
+    expect(pool.status().find((row) => row.model === "org/vlm")?.state).toBe("ready");
+  });
+
+  it("keeps an mlx-vlm process whose request was streamed", async () => {
+    const { reply: pending } = await hangingRequest("org/vlm", { stream: true });
+    const spawnedBefore = spawned;
+    const killedBefore = killed;
+    await cancelRoute({ model: "org/vlm" });
+    expect((await pending).status).toBe(499);
+    expect(killed).toBe(killedBefore);
+    expect(spawned).toBe(spawnedBefore);
+  });
+
+  it("answers a request waiting for a lazy load, and leaves the model stopped", async () => {
+    // Nothing has loaded org/lazy-vlm, so this request starts its load.
+    const pending = fetch(url("/v1/chat/completions"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "org/lazy-vlm", messages: [] }),
+    });
+    await expect
+      .poll(() => pool.status().find((row) => row.model === "org/lazy-vlm")?.state)
+      .toBe("ready");
+    // The request reached the process, and cancel cuts it. The process was
+    // started for it and would keep generating, so it is stopped, and
+    // not started again: a lazy model waits for its next request.
+    await expect.poll(() => hits).toBeGreaterThan(0);
+    const spawnedBefore = spawned;
+    await cancelRoute({ model: "org/lazy-vlm" });
+    expect((await pending).status).toBe(499);
+    expect(pool.status().find((row) => row.model === "org/lazy-vlm")?.state).toBe("stopped");
+    expect(spawned).toBe(spawnedBefore);
+  });
+
+  it("does nothing for a model with no request in progress", async () => {
+    const spawnedBefore = spawned;
+    const killedBefore = killed;
+    const cancelled = await cancelRoute({ model: "org/idle" });
+    expect(await cancelled.json()).toEqual({ cancelled: 0 });
+    expect(spawned).toBe(spawnedBefore);
+    expect(killed).toBe(killedBefore);
+  });
+
+  it("refuses a POST without the JSON content type, and a model it does not serve", async () => {
+    expect((await cancelRoute('{"model":"org/idle"}', "text/plain")).status).toBe(415);
+    expect((await cancelRoute({ model: "org/nope" })).status).toBe(404);
+  });
+
+  it("is on the handle too", async () => {
+    const { reply: pending } = await hangingRequest("org/image");
+    await cancelDoor.cancel("org/image");
+    expect((await pending).status).toBe(499);
   });
 });

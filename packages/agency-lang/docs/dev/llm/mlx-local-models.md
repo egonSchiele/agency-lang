@@ -364,14 +364,35 @@ read the terminal, and one started with standard input from `/dev/null`
 would exit at once. `mlx_vlm.server` is an upstream module, so
 `mlxVlmServer.py` starts the thread and then runs it with `runpy`.
 
+**Cancelling.** `door.cancel(model)`, behind `server.cancel(model)` and
+`POST /v1/agency/cancel` with `{ "model": ... }`, ends every request in
+progress on one model. The door keeps an `InProgress` entry per request
+from the moment its model is known, so a request still waiting for a
+lazy load is cancelled too. Each entry is marked `cancelled` first, then
+answered with a 499 (or cut, if its reply had started), then its request
+to the process is destroyed. The order matters: destroying the upstream
+request raises `error` on it, and the handler in `forward` would answer
+the client a second time, which throws. The mark tells it not to.
+
+Whether closing the connection stops the process's work is the
+`stopsOnClose` field of the runtime's row in `CHAT_RUNTIMES`, and
+`() => true` for every other kind. Its doc comment has the table. Only
+mlx-vlm with a non-streamed request is false. When any cancelled request
+had reached such a process, `cancel` unloads the model and, unless it is
+lazy, loads it again, so `cancel` on that case takes as long as a load.
+
 **Routes the door answers itself** are rows of `adminRoutes` in
-`startFrontDoor`: `GET /v1/models`, and `GET /v1/agency/status`, which
+`startFrontDoor`: `GET /v1/models`, `GET /v1/agency/status`, which
 returns `{ "models": [...] }` with each model's state, error, requests in
-progress, and last use. Routes under `/v1/agency/` are refused with a 403
-unless the `Host` header is `127.0.0.1:<port>` or `localhost:<port>`. The
-door listens on 127.0.0.1 only, but a web page can reach that address
-under a hostname of its own, and the browser then treats the page and the
-server as one site. Such a request carries the page's hostname in `Host`.
+progress, and last use, and `POST /v1/agency/cancel`. `adminRefusal`
+holds the two rules every `/v1/agency/` route shares. The `Host` header
+must be `127.0.0.1:<port>` or `localhost:<port>`, else 403: the door
+listens on 127.0.0.1 only, but a web page can reach that address under a
+hostname of its own, and the browser then treats the page and the server
+as one site, and such a request carries the page's hostname. A POST must
+carry `content-type: application/json`, else 415: a page cannot send that
+header across sites without a preflight request, which the door never
+answers.
 
 **The body limit.** The door reads each body with `parseJsonBody` from
 `lib/serve/util.ts`. For most routes the limit is its default, 10 MiB

@@ -795,6 +795,9 @@ export type ServeHandle = {
   load: (model: string) => Promise<void>;
   /** Stops a model's process. It stays stopped until `load`. */
   unload: (model: string) => Promise<void>;
+  /** Ends every request running on a model, and restarts the model's
+   *  process when that is the only way to stop its work. */
+  cancel: (model: string) => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -1220,6 +1223,7 @@ function modelPlanOf(model: Planned): ModelPlan {
     rules: chatSpecOf(model)?.rules ?? null,
     lazy: model.lazy,
     needBytes: estimatedNeed(model),
+    stopsOnClose: chatSpecOf(model)?.stopsOnClose ?? (() => true),
   };
 }
 
@@ -1351,6 +1355,9 @@ export async function serveTargets(
     status: pool.status,
     load: pool.load,
     unload: pool.unload,
+    cancel: async (model) => {
+      await door.cancel(model);
+    },
     close: async () => {
       pool.stopAll();
       await door.close();
@@ -1406,6 +1413,24 @@ export type ChatRuntimeSpec = {
   bannerNote: string;
   example: (name: string) => string[];
   rules: RequestRules | null;
+  /** Whether the runtime stops generating when the connection to it
+   *  closes, for a request with this body. What happens after a client
+   *  leaves, by kind of model:
+   *
+   *  image                          stops after the step in progress
+   *  speech                         stops at the next check for a closed
+   *                                 connection
+   *  vision                         a request waiting its turn is dropped;
+   *                                 one that started finishes in seconds
+   *  embedding                      finishes, in under a second
+   *  chat on mlx-lm                 stops; the server looks at the
+   *                                 connection on a clock
+   *  chat on mlx-vlm, streamed      stops
+   *  chat on mlx-vlm, not streamed  keeps generating until the reply is
+   *                                 complete
+   *
+   *  Only the last row is false, and `cancel` stops that process. */
+  stopsOnClose: (body: Record<string, unknown>) => boolean;
 };
 
 function runLocalExample(name: string): string[] {
@@ -1422,6 +1447,7 @@ export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
     bannerNote: "",
     example: runLocalExample,
     rules: null,
+    stopsOnClose: () => true,
   },
   "mlx-vlm": {
     program: "mlx_vlm.server",
@@ -1432,6 +1458,7 @@ export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
     bannerNote: "  (chat with images)",
     example: imageChatExample,
     rules: MLX_VLM_RULES,
+    stopsOnClose: (body) => body.stream === true,
   },
 };
 

@@ -675,6 +675,23 @@ Loaded now: z-image-turbo (busy), florence-2 (not lazy).
 
 A caller can wait and retry, or `unload` something itself.
 
+### Cancel a call, or everything on a model
+
+To cancel your own call, pass a `signal` and abort it. The call fails with `Cancelled`, and the server closes its connection to the model process. For an image model that stops the work after the step in progress.
+
+To stop whatever is running on a model, whoever started it:
+
+```ts
+await server.cancel("qwen3.5-9b");
+```
+
+```
+POST /v1/agency/cancel
+{ "model": "qwen3.5-9b" }
+```
+
+Every request in progress on that model fails with a 499. For most models the process is kept, because it stops on its own when the connection closes. A chat model served with `vlm: true` that was asked for a reply without streaming keeps generating after the connection closes, so for that one case the process is stopped and, unless the model is lazy, started again. That takes as long as loading the model.
+
 `agency-lang/local` is the supported way in. Files under `agency-lang/stdlib-lib/` are internal to Agency, and their names change between releases.
 
 There is no chat function here. A chat model served by `agency local serve` answers the OpenAI chat API at the same address, so any OpenAI client works.

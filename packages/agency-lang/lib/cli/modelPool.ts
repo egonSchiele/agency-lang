@@ -21,7 +21,9 @@ import { formatGB } from "../stdlib/localModels.js";
  *  lazy           loaded on its first request, and stopped when another
  *                 lazy model needs the memory. A model that is not lazy
  *                 loads at startup and is never stopped to make room
- *  needBytes      the memory loading it is expected to take */
+ *  needBytes      the memory loading it is expected to take
+ *  stopsOnClose   whether closing the connection to the process stops the
+ *                 request with this body. See `ChatRuntimeSpec` */
 export type ModelPlan = {
   model: string;
   upstreamModel: string;
@@ -30,6 +32,7 @@ export type ModelPlan = {
   rules: RequestRules | null;
   lazy: boolean;
   needBytes: number;
+  stopsOnClose: (body: Record<string, unknown>) => boolean;
 };
 
 /** A model process and the port it listens on. */

@@ -34,7 +34,33 @@ export function servedModelFor(models: string[], requested: string): string | un
   return requested === DEFAULT_MODEL_ALIAS && models.length === 1 ? models[0] : undefined;
 }
 
-export type FrontDoor = { port: number; close: () => Promise<void> };
+export type FrontDoor = {
+  port: number;
+  /** Ends every request in progress on a model, and restarts its process
+   *  when a cancelled request would otherwise keep running. Returns how
+   *  many requests were ended. */
+  cancel: (model: string) => Promise<number>;
+  close: () => Promise<void>;
+};
+
+/** One request from the moment its model is known until it ends.
+ *
+ *  upstream      the request to the model's process. Null while the
+ *                request waits for its model to load
+ *  stopsOnClose  whether closing `upstream` stops the process's work
+ *  cancelled     set by `cancel`, so the handlers in `forward` write
+ *                nothing more to a client that was already answered */
+type InProgress = {
+  res: http.ServerResponse;
+  upstream: http.ClientRequest | null;
+  stopsOnClose: boolean;
+  cancelled: boolean;
+};
+
+/** The status for a request its server ended on someone else's behalf.
+ *  nginx's code, since HTTP has none. */
+const CLIENT_CLOSED_REQUEST = 499;
+const UNSUPPORTED_MEDIA_TYPE = 415;
 
 /** The routes Agency adds to the server, beside the OpenAI ones. */
 const AGENCY_ROUTES = "/v1/agency/";
@@ -112,6 +138,7 @@ function forward(
   res: http.ServerResponse,
   held: Held,
   body: Buffer,
+  entry: InProgress,
   finish: Finish,
 ): void {
   const upstream = http.request(
@@ -145,10 +172,17 @@ function forward(
     },
   );
   upstream.on("error", (err) => {
+    // A cancelled request was answered by `cancel`, and destroying its
+    // upstream request is what raised this error.
+    if (entry.cancelled) {
+      finish(ownReply(CLIENT_CLOSED_REQUEST, JSON.stringify({ error: { message: "Cancelled" } })));
+      return;
+    }
     const message = `${held.plan.label}: ${err.message}`;
     error(res, 502, message);
     finish(ownReply(502, JSON.stringify({ error: { message } })));
   });
+  entry.upstream = upstream;
   // Close the upstream socket when the client leaves. Whether generation
   // stops depends on the runtime: mlx-vlm cancels streamed requests but
   // can finish a non-streaming request after the socket closes.
@@ -255,12 +289,52 @@ const STATUS_FOR_REFUSAL: Record<RefusalReason, number> = {
 
 const FORBIDDEN_HOST = 403;
 
-/** A route the door answers itself, about the server and not for a model. */
+/** A route the door answers itself, about the server and not for a model.
+ *  A POST route gets the request's JSON body. */
 type AdminRoute = {
-  method: "GET";
+  method: "GET" | "POST";
   path: string;
-  handle: () => { status: number; body: unknown };
+  handle: (body: Record<string, unknown>) => Promise<{ status: number; body: unknown }>;
 };
+
+/** Why a request to an admin route is refused, or null. The door listens
+ *  on 127.0.0.1 only, but a web page can reach that address under a
+ *  hostname of its own, and the browser then treats the page and the
+ *  server as one site; such a request carries the page's hostname in
+ *  `Host`. A page also cannot send `content-type: application/json`
+ *  across sites without a preflight request, which the door never
+ *  answers, so a POST must carry it. */
+function adminRefusal(
+  req: http.IncomingMessage,
+  port: number,
+): { status: number; message: string } | null {
+  if (!isLocalHost(req.headers.host, port)) {
+    return {
+      status: FORBIDDEN_HOST,
+      message: "This route answers requests made to 127.0.0.1 or localhost only.",
+    };
+  }
+  if (req.method === "POST" && !/^application\/json\b/.test(req.headers["content-type"] ?? "")) {
+    return {
+      status: UNSUPPORTED_MEDIA_TYPE,
+      message: "This route takes a JSON body, with content-type: application/json.",
+    };
+  }
+  return null;
+}
+
+/** Ends a request on `cancel`'s behalf: a 499 if nothing was sent yet,
+ *  otherwise the connection is cut. The request to the process is cut
+ *  either way. */
+function cancelRequest(entry: InProgress): void {
+  entry.cancelled = true;
+  if (entry.res.headersSent) {
+    entry.res.destroy();
+  } else {
+    error(entry.res, CLIENT_CLOSED_REQUEST, "Cancelled");
+  }
+  entry.upstream?.destroy();
+}
 
 /** Whether a request's `Host` header names this server on this machine.
  *  The door listens on 127.0.0.1 only, but a web page can reach that
@@ -283,11 +357,33 @@ export function startFrontDoor(
   maxTokens?: number,
 ): Promise<FrontDoor> {
   const served = pool.models();
+  /** The requests in progress, by model. */
+  const inProgress: Record<string, InProgress[]> = Object.fromEntries(
+    served.map((model) => [model, []]),
+  );
+
+  async function cancel(model: string): Promise<number> {
+    const entries = inProgress[model] ?? [];
+    const plan = pool.plan(model);
+    entries.forEach(cancelRequest);
+    // A request that was sent to the process and that closing does not
+    // stop keeps the process busy. The only way to stop it is to restart
+    // the process. A lazy model is loaded again by its next request.
+    const keepsRunning = entries.some((entry) => entry.upstream !== null && !entry.stopsOnClose);
+    if (keepsRunning && plan !== undefined) {
+      await pool.unload(model);
+      if (!plan.lazy) {
+        await pool.load(model);
+      }
+    }
+    return entries.length;
+  }
+
   const adminRoutes: AdminRoute[] = [
     {
       method: "GET",
       path: "/v1/models",
-      handle: () => ({
+      handle: async () => ({
         status: 200,
         body: { object: "list", data: served.map((id) => ({ id, object: "model" })) },
       }),
@@ -295,7 +391,18 @@ export function startFrontDoor(
     {
       method: "GET",
       path: "/v1/agency/status",
-      handle: () => ({ status: 200, body: { models: pool.status() } }),
+      handle: async () => ({ status: 200, body: { models: pool.status() } }),
+    },
+    {
+      method: "POST",
+      path: "/v1/agency/cancel",
+      handle: async (body) => {
+        const model = typeof body.model === "string" ? body.model : "";
+        if (pool.plan(model) === undefined) {
+          return { status: 404, body: { error: { message: notServedMessage(served, model, "") } } };
+        }
+        return { status: 200, body: { cancelled: await cancel(model) } };
+      },
     },
   ];
   const server = http.createServer(async (req, res) => {
@@ -307,11 +414,17 @@ export function startFrontDoor(
     const admin = adminRoutes.find((row) => row.method === req.method && row.path === req.url);
     if (admin !== undefined) {
       const boundPort = (server.address() as { port: number }).port;
-      if (admin.path.startsWith(AGENCY_ROUTES) && !isLocalHost(req.headers.host, boundPort)) {
-        refuse(FORBIDDEN_HOST, "This route answers requests made to 127.0.0.1 or localhost only.");
+      const refusal = admin.path.startsWith(AGENCY_ROUTES) ? adminRefusal(req, boundPort) : null;
+      if (refusal !== null) {
+        refuse(refusal.status, refusal.message);
         return;
       }
-      const reply = admin.handle();
+      const adminBody = admin.method === "POST" ? await readRequest(req, undefined) : { body: {} };
+      if ("refusal" in adminBody) {
+        refuse(adminBody.refusal.status, adminBody.refusal.message);
+        return;
+      }
+      const reply = await admin.handle(adminBody.body);
       json(res, reply.status, reply.body);
       record.finish(ownReply(reply.status, JSON.stringify(reply.body)));
       return;
@@ -356,18 +469,32 @@ export function startFrontDoor(
     res.once("close", () => {
       clientGone = true;
     });
+    const entry: InProgress = {
+      res,
+      upstream: null,
+      stopsOnClose: plan.stopsOnClose(prepared.body),
+      cancelled: false,
+    };
+    inProgress[plan.model].push(entry);
+    const done = (): void => {
+      inProgress[plan.model] = inProgress[plan.model].filter((other) => other !== entry);
+    };
     let held: Held;
     try {
       held = await pool.acquire(plan.model);
     } catch (err) {
+      done();
       if (!(err instanceof PoolRefusal)) {
         throw err;
       }
-      refuse(STATUS_FOR_REFUSAL[err.reason], err.message);
+      if (!entry.cancelled) {
+        refuse(STATUS_FOR_REFUSAL[err.reason], err.message);
+      }
       return;
     }
-    if (clientGone) {
+    if (clientGone || entry.cancelled) {
       held.release();
+      done();
       return;
     }
     forward(
@@ -377,8 +504,10 @@ export function startFrontDoor(
       Buffer.from(
         JSON.stringify({ ...capMaxTokens(prepared.body, maxTokens), model: plan.upstreamModel }),
       ),
+      entry,
       (reply) => {
         held.release();
+        done();
         record.finish(reply);
       },
     );
@@ -394,7 +523,7 @@ export function startFrontDoor(
     server.on("error", reject);
     server.listen(port, "127.0.0.1", () => {
       const bound = (server.address() as { port: number }).port;
-      resolve({ port: bound, close });
+      resolve({ port: bound, cancel, close });
     });
   });
 }

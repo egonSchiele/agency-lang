@@ -58,7 +58,7 @@ node rejectOutranksApprove(): string {
   return decide(sessionPolicy, "myapp::both")
 }
 
-// A capability-set name in --approve expands to its member effects;
+// An effect-set name in --approve expands to its member effects;
 // effects outside the set stay undecided.
 node setExpansion(): string[] {
   const { sessionPolicy } = getPolicyForAgent(STUB, "FileRead", "", false)

@@ -1,5 +1,5 @@
 import test { parseAwardType, buildAwardsBody, buildAwardPath, parseAwards, parseAwardDetail, usaspendingError, awardsFinalize, awardDetailFinalize, usaspendingAwards, usaspendingAward } from "std::data/usaspending"
-import { Network } from "std::capabilities"
+import { Network } from "std::effectSets"
 
 // --- pure-function wrappers ---
 

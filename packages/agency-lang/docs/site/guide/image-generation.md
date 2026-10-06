@@ -156,7 +156,7 @@ This rule approves uploads from `/Users/me/photos` to OpenAI. Save it as
 agency run --policy ./image-policy.json --interactive edit.agency
 ```
 
-Uploads belong to the `Network` capability set. Permission to read
+Uploads belong to the `Network` effect set. Permission to read
 images locally, through `std::readImage` or `FileRead`, does not grant
 permission to upload them.
 

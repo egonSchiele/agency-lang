@@ -26,7 +26,7 @@ agency agent --approve FileRead --reject Shell
 ```
 
 `--policy` picks the base policy (a built-in name or a policy-file
-path); `--approve` and `--reject` overlay effects or capability-set
+path); `--approve` and `--reject` overlay effects or effect-set
 names on top of it. None of these change your saved `policy.json`. See
 [the policy flags](/cli/policy#approving-and-rejecting-with-flags) for
 the details and [`agency effects`](/cli/effects) for the names they

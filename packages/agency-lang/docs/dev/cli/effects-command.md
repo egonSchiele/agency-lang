@@ -4,7 +4,7 @@ User-facing behavior is documented in `docs/site/cli/effects.md`. This
 page covers the implementation choices a future change needs to know.
 
 - Sets come from `builtinEffectSets()` (`lib/runtime/effectSets.ts`) —
-  the parsed table over `stdlib/capabilities.agency` that flag expansion
+  the parsed table over `stdlib/effectSets.agency` that flag expansion
   also uses, so the command and the flags cannot disagree. That file
   documents the doc-comment pairing and the once-per-process cache.
 - Policies come from `BUILTIN_POLICIES` / `builtinPolicy`

@@ -1,5 +1,5 @@
 import test { slugify, parseListName, buildBatchPath, buildIndustryPath, buildTagPath, buildListPath, buildMetaPath, parseCompanies, parseMeta, companiesFinalize, metaFinalize, ycError, ycBatch, ycList, ycMeta } from "std::data/tech/yc"
-import { Network } from "std::capabilities"
+import { Network } from "std::effectSets"
 
 // --- pure-function wrappers ---
 

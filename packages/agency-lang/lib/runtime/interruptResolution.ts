@@ -9,6 +9,8 @@ import type { Interrupt, InterruptResult } from "./interrupts.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
 import { checkPolicyExplicit } from "./policy.js";
+import { resolvePolicyDirs } from "./policyDirs.js";
+import { defaultHost } from "#default-host";
 import type { Policy } from "./policy.js";
 import { terminalPrompt, terminalValuePrompt } from "./interruptPrompts.js";
 import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
@@ -75,9 +77,12 @@ export function buildDecider(options: BuildDeciderOptions): DecideFn {
   const prompt = options.prompt ?? terminalPrompt;
   const valuePrompt = options.valuePrompt ?? terminalValuePrompt;
   const remembered: Record<string, "approve" | "reject"> = Object.create(null);
+  // Resolved once here, so no decision reads the disk.
+  const dirs = options.policy ? resolvePolicyDirs(defaultHost()) : null;
 
   return async (interrupt) => {
-    const decision = options.policy ? checkPolicyExplicit(options.policy, interrupt) : null;
+    const decision =
+      options.policy && dirs ? checkPolicyExplicit(options.policy, interrupt, dirs) : null;
     if (decision?.type === "approve") {
       return approve();
     }

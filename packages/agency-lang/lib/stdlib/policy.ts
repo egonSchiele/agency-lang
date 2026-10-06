@@ -1,11 +1,18 @@
-import { validatePolicy } from "@/runtime/policy.js";
+import { checkPolicy, validatePolicy } from "@/runtime/policy.js";
+import { currentRun } from "@/runtime/asyncContext.js";
 import { wholePath, writeText } from "./contained.js";
 import { assertContained } from "./assertContained.js";
-export {
-  checkPolicy as _checkPolicy,
-  validatePolicy as _validatePolicy,
-  escapeGlob as _escapeGlob,
-} from "@/runtime/policy.js";
+export { validatePolicy as _validatePolicy, escapeGlob as _escapeGlob } from "@/runtime/policy.js";
+
+/** `checkPolicy` from Agency: the `dir` patterns stand for the directories
+ *  the run resolved when its context was built. */
+export function _checkPolicy(
+  policy: Policy,
+  interrupt: { effect: string; message: string; data: any; origin: string },
+): ReturnType<typeof checkPolicy> {
+  const { ctx } = currentRun();
+  return checkPolicy(policy, interrupt, ctx.policyDirs);
+}
 export {
   alwaysScopeFor as _alwaysScopeFor,
   allAlwaysScopes as _allAlwaysScopes,

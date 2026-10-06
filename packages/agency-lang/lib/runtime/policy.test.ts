@@ -1,13 +1,21 @@
 import { escapeGlob } from "./index.js";
 import { describe, it, expect, vi } from "vitest";
+import { checkPolicy as checkPolicyWith, validatePolicy, type Policy } from "./policy.js";
 import {
-  checkPolicy,
   resolveDotDirPattern,
   expandAgencyInstallDir,
   expandAgentHomeDir,
-  validatePolicy,
-} from "./policy.js";
+  resolvePolicyDirs,
+} from "./policyDirs.js";
+import { nodeHost } from "../host/nodeHost.js";
 import { getStdlibDir } from "../importPaths.js";
+
+// The matcher takes the directories a run resolved when it started. These
+// tests resolve them per call, through a nodeHost, so a test that changes
+// the working directory or AGENCY_AGENT_HOME sees the change.
+function checkPolicy(policy: Policy, interrupt: Parameters<typeof checkPolicyWith>[1]) {
+  return checkPolicyWith(policy, interrupt, resolvePolicyDirs(nodeHost()));
+}
 import path from "path";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
 import os, { tmpdir } from "os";

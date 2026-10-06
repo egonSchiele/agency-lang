@@ -376,10 +376,13 @@ built-in but `approve-all`. They prompt.
 
 All three read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
 process cwd, `<agency>` to the directory the agency package is installed
-in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
+in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `substituteInstallDir`,
 `getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or
-`~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `expandAgentHomeDir`,
-`agentHomeDir` in `lib/runtime/agentHome.ts`), each at match time. An
+`~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `substituteAgentHome`,
+`agentHomeDir` in `lib/runtime/agentHome.ts`). The three directories are
+resolved once, when a run's context is built (`resolvePolicyDirs` in
+`lib/runtime/policyDirs.ts`, kept as `ctx.policyDirs`), and the matcher
+takes them as plain strings, so answering an interrupt reads no file. An
 empty `AGENCY_AGENT_HOME` counts as unset, and a relative one resolves
 against the cwd, the way the `--agent-home` flag does. The copy the
 agent saves to `~/.agency-agent/policy.json` therefore pins neither the

@@ -1,5 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { nodeHost } from "@/host/nodeHost.js";
+import { resolvePolicyDirs } from "@/runtime/policyDirs.js";
+
+const DIRS = resolvePolicyDirs(nodeHost());
+
+/** The host and the resolved policy directories a real execution context
+ *  carries, built from the process the way the default host builds them. */
+function hostAndDirs() {
+  const host = nodeHost();
+  return { host, policyDirs: resolvePolicyDirs(host) };
+}
 import {
   makeRunPolicyHandler,
   terminalPrompt,
@@ -24,19 +34,22 @@ const intr = (effect: string, data: any = {}) => ({
 
 describe("makeRunPolicyHandler", () => {
   it("approves an effect the policy approves", async () => {
-    const h = makeRunPolicyHandler({ "std::read": [{ action: "approve" }] });
+    const h = makeRunPolicyHandler({ "std::read": [{ action: "approve" }] }, DIRS);
     expect(await h(intr("std::read"))).toEqual({ type: "approve", value: undefined });
   });
 
   it("rejects an effect the policy rejects", async () => {
-    const h = makeRunPolicyHandler({ "std::write": [{ action: "reject" }] });
+    const h = makeRunPolicyHandler({ "std::write": [{ action: "reject" }] }, DIRS);
     expect((await h(intr("std::write")))!.type).toBe("reject");
   });
 
   it("a reject rule's rejectMessage becomes the rejection value", async () => {
-    const h = makeRunPolicyHandler({
-      "std::bash": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
-    });
+    const h = makeRunPolicyHandler(
+      {
+        "std::bash": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+      },
+      DIRS,
+    );
     expect(await h(intr("std::bash"))).toEqual({
       type: "reject",
       value: "Use safeBash instead",
@@ -44,17 +57,17 @@ describe("makeRunPolicyHandler", () => {
   });
 
   it("stays silent on an unmatched effect (the chain decides)", async () => {
-    const h = makeRunPolicyHandler({ "std::read": [{ action: "approve" }] });
+    const h = makeRunPolicyHandler({ "std::read": [{ action: "approve" }] }, DIRS);
     expect(await h(intr("myapp::foo"))).toBeUndefined();
   });
 
   it("returns propagate for an explicit propagate rule", async () => {
-    const h = makeRunPolicyHandler({ "std::write": [{ action: "propagate" }] });
+    const h = makeRunPolicyHandler({ "std::write": [{ action: "propagate" }] }, DIRS);
     expect((await h(intr("std::write")))!.type).toBe("propagate");
   });
 
   it("honors the '*' wildcard", async () => {
-    const h = makeRunPolicyHandler({ "*": [{ action: "approve" }] });
+    const h = makeRunPolicyHandler({ "*": [{ action: "approve" }] }, DIRS);
     expect((await h(intr("anything::at::all")))!.type).toBe("approve");
   });
 });
@@ -210,7 +223,7 @@ describe("installRunPolicyHandler", () => {
   it("pushes a handler when AGENCY_RUN_POLICY is set (root process)", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
       expect(pushed).toHaveLength(1);
     });
   });
@@ -218,7 +231,7 @@ describe("installRunPolicyHandler", () => {
   it("is a no-op when AGENCY_RUN_POLICY is unset", async () => {
     await withEnv({ [AGENCY_RUN_POLICY]: undefined, AGENCY_IPC: undefined }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
       expect(pushed).toHaveLength(0);
     });
   });
@@ -228,7 +241,7 @@ describe("installRunPolicyHandler", () => {
     // subprocess forwards its interrupts up, so it must NOT install its own.
     await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, () => {
       const pushed: unknown[] = [];
-      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), host: nodeHost() });
+      installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
       expect(pushed).toHaveLength(0);
     });
   });
@@ -237,7 +250,7 @@ describe("installRunPolicyHandler", () => {
 describe("installRunPolicyHandler with an explicit policy", () => {
   const grab = () => {
     const pushed: unknown[] = [];
-    return { pushed, execCtx: { pushHandler: (h: unknown) => pushed.push(h), host: nodeHost() } };
+    return { pushed, execCtx: { pushHandler: (h: unknown) => pushed.push(h), ...hostAndDirs() } };
   };
 
   it("installs the explicit policy with no env policy set", async () => {

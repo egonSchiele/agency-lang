@@ -1,5 +1,5 @@
 import type { Host, HostSettings } from "../host/host.js";
-import type { Policy } from "./policy.js";
+import type { Policy, PolicyDirs } from "./policy.js";
 import { checkPolicyExplicit, validatePolicy } from "./policy.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { HandlerFn } from "./types.js";
@@ -25,9 +25,9 @@ export type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts
 // the chain resolves by the program's own handlers; what nothing settles
 // surfaces to the user endpoint (resolveCliInterrupts) instead of being
 // decided here.
-export function makeRunPolicyHandler(policy: Policy): HandlerFn {
+export function makeRunPolicyHandler(policy: Policy, dirs: PolicyDirs): HandlerFn {
   return async (intr: Intr) => {
-    const decision = checkPolicyExplicit(policy, intr);
+    const decision = checkPolicyExplicit(policy, intr, dirs);
     if (decision === null) return undefined;
     if (decision.type === "approve") return approve();
     if (decision.type === "reject") return reject(decision.message);
@@ -78,6 +78,7 @@ export function installRunPolicyHandler(
   execCtx: {
     pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
     host: Host;
+    policyDirs: PolicyDirs;
   },
   policy?: Policy,
 ): void {
@@ -88,7 +89,7 @@ export function installRunPolicyHandler(
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
-  execCtx.pushHandler(makeRunPolicyHandler(effective), []);
+  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs), []);
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

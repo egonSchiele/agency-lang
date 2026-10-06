@@ -11,6 +11,8 @@ import type { AbortCause } from "../errors.js";
 import type { Clock } from "../clock.js";
 import { defaultHost } from "#default-host";
 import { withClock, type Host } from "../../host/host.js";
+import { resolvePolicyDirs } from "../policyDirs.js";
+import type { PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -106,6 +108,10 @@ export class RuntimeContext<T> {
    *  compile error — that is the bug the `clock` copy fixed. If you add a
    *  non-serialized field, copy it in `createExecutionContext` too. */
   host: Host;
+  /** The directories a policy's `dir` patterns stand for, resolved once
+   *  here so the matcher reads no file while an interrupt is answered.
+   *  NOT serialized; copied in `createExecutionContext` like `host`. */
+  policyDirs: PolicyDirs;
   /** The time source for guards: the host's clock. Real by default; a
    *  FakeClock only when a test opts in. */
   get clock(): Clock {
@@ -325,6 +331,7 @@ export class RuntimeContext<T> {
     args = applyRuntimeConfigOverridesToContextArgs(args, getRuntimeConfigOverrides());
     const host = args.host ?? defaultHost();
     this.host = args.clock ? withClock(host, args.clock) : host;
+    this.policyDirs = resolvePolicyDirs(this.host);
     const statelogConfig = {
       ...args.statelogConfig,
       // Explicit > env > minted. The env var lets a harness give an entire
@@ -500,6 +507,9 @@ export class RuntimeContext<T> {
     // (_advanceTime) would never see the FakeClock the constructor installed.
     // A host given for this one invocation wins over the global one.
     execCtx.host = invocation.host ?? this.host;
+    // Resolved again for this run: the agent home may have been created, or
+    // the variable that names it changed, since the global context was built.
+    execCtx.policyDirs = resolvePolicyDirs(execCtx.host);
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];

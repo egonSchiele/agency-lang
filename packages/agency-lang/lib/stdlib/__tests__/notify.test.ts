@@ -20,7 +20,7 @@ vi.mock("../utils.js", async (importOriginal) => ({
 }));
 
 import { execFile } from "child_process";
-import { _notify } from "../builtins.js";
+import { _notify } from "../notify.js";
 
 function osascriptArgs(): string[] {
   const calls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls;

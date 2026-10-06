@@ -1,7 +1,7 @@
 import * as smoltalk from "smoltalk";
 import type { PromptResult, ToolCallJSON } from "smoltalk";
 import { color } from "@/utils/termcolors.js";
-import { createLogger, type LogLevel } from "../logger.js";
+import { createLogger, type LogLevel, type LogSink } from "../logger.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeCoreResult } from "./types.js";
@@ -39,9 +39,13 @@ export function serializableExtra<T>(
 /** The `onInvalid` handler for {@link serializableExtra}: warns that a reply
  *  extra was left off the message, naming the field and the parse error, so a
  *  custom client returning a bad shape is not left silent. */
-function warnUnserializableReplyField(logLevel: LogLevel, field: string): (error: unknown) => void {
+function warnUnserializableReplyField(
+  logLevel: LogLevel,
+  sink: LogSink,
+  field: string,
+): (error: unknown) => void {
   return (error) =>
-    createLogger(logLevel).warn(
+    createLogger(logLevel, sink).warn(
       `[reply] the ${field} on this completion does not match smoltalk's schema, so it was left ` +
         `off the reply message (keeping it would break a later checkpoint restore). ` +
         `Check the LLM client. ${error}`,
@@ -59,8 +63,9 @@ export function buildReplyMessage(
   completion: PromptResult,
   toolCalls: ToolCallJSON[],
   logLevel: LogLevel,
+  sink: LogSink,
 ): smoltalk.AssistantMessage {
-  const warn = (field: string) => warnUnserializableReplyField(logLevel, field);
+  const warn = (field: string) => warnUnserializableReplyField(logLevel, sink, field);
   return smoltalk.assistantMessage(completion.output, {
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     thinkingBlocks: serializableExtra(

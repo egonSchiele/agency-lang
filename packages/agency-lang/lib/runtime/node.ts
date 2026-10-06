@@ -404,7 +404,9 @@ async function runNodeCore({
     kind: "fresh",
     options: invocation,
     inheritedRunId: getSubprocessRunInfo().runId,
-    environmentTraceId: ctx.host.settings.read(TRACE_ID_ENV) ?? undefined,
+    // The host for this run, when the options carry one, so a per-run host
+    // decides the trace id too.
+    environmentTraceId: (invocation?.host ?? ctx.host).settings.read(TRACE_ID_ENV) ?? undefined,
   });
 
   // runNode is the entry point for a fresh agent run (resumes go through

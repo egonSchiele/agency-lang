@@ -22,7 +22,7 @@ import {
   findCompactionSplitPoint,
 } from "./compaction.js";
 import { MEMORY_COMPACTION_DEFAULT_THRESHOLD } from "../../constants.js";
-import { createLogger, type Logger, type LogLevel } from "../../logger.js";
+import { createLogger, type Logger, type LogLevel, type LogSink } from "../../logger.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
@@ -146,6 +146,8 @@ export type MemoryManagerOptions = {
    *  creates one logger per instance via `createLogger(logLevel)`;
    *  every line is `[memory]`-prefixed so users can grep/filter. */
   logLevel?: LogLevel;
+  /** Where the logger writes: the settings part of the run's host. */
+  logSink?: LogSink;
 };
 
 const DEFAULT_RECALL_K = 10;
@@ -233,7 +235,7 @@ export class MemoryManager {
     // Default "info" so tests that don't pass a level don't get a
     // wall of debug output. Production reads `AgencyConfig.logLevel`
     // through `RuntimeContext.logLevel`.
-    this.logger = createLogger(options.logLevel ?? "info");
+    this.logger = createLogger(options.logLevel ?? "info", options.logSink);
   }
 
   /**

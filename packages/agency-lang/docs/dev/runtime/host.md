@@ -36,7 +36,7 @@ On Node both read `process.env`. The difference is who asks.
 - `env` is what the Agency functions `env` and `setEnv` in `std::system` use. It hands any variable to the program, and so to an agent. That is why it is a capability a host can refuse.
 - `settings` is how the runtime reads what it needs for itself: the test switches, the log level, and the API key a connector sends. A program that calls `search()` works on a host without `env`, because the connector reads `BRAVE_API_KEY` through `settings`.
 
-`settings.log` is where the runtime's logger writes. On Node it is the console, by level, so a warning from the runtime still lands in a `std::ui` REPL's transcript, which captures the console.
+`settings.log` is where the runtime's logger writes. A caller that has the run passes `run.ctx.host.settings` to `createLogger` as its sink, so a line written after an `await` still reaches that run's host; without a sink the logger falls back to the current run's host, and to the console when no run is current. On Node it is the console, by level, so a warning from the runtime still lands in a `std::ui` REPL's transcript, which captures the console.
 
 ### The terminal
 

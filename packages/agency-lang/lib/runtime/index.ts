@@ -22,7 +22,7 @@ export type { InvocationOptions } from "./invocationOptions.js";
 // passes it through InvocationOptions. See docs/dev/runtime/host.md.
 export {
   CAPABILITIES,
-  NEEDS,
+  PART_CAPABILITY,
   PLATFORM_CAPABILITIES,
   UnsupportedOnHostError,
   makeHost,

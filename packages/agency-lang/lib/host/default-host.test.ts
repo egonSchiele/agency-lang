@@ -7,8 +7,7 @@ import * as nodeDefault from "./default.node.js";
 // `#default-host` is resolved by the "imports" field of package.json. The
 // unit tests see it through a vitest alias, so they cannot tell whether that
 // field is right. This test bundles the built context.ts the way a program
-// on Node would and reads which host esbuild pulled in. The browser half of
-// this test arrives with default.browser.ts.
+// on Node would and reads which host esbuild pulled in.
 //
 // The field points at dist/, so this needs a build. CI runs `make ci` before
 // the tests. Locally, run `make` first.

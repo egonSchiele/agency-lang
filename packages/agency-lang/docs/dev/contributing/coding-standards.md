@@ -154,7 +154,7 @@ A whole path the interrupt named, such as the target of `remove`, goes through `
 
 **Rationale:** A symlink below an approved directory must never be followed, and that rule has to hold at every call site. One module enforces it, so a new function cannot forget.
 
-**Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason. The rule below bans every Node module in the same files, so this one only matters for a file that is still on the waiting list there.
+**Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason.
 
 ### Reach the platform through the host
 
@@ -170,7 +170,7 @@ const home = run.ctx.host.settings.read("HOME");
 run.ctx.host.terminal.print([result]);
 ```
 
-A file that cannot leave Node goes in `eslint.node-exceptions.mjs`. `NODE_ONLY` is for good, with the reason beside each file. `WAITING` is for a file whose Node use a later PR moves into the host; that list only gets shorter.
+A file that cannot leave Node goes in `eslint.node-exceptions.mjs`. `NODE_ONLY` is for good, with the reason beside each file. `WAITING` is for a file whose Node use has not moved into the host yet; that list only gets shorter.
 
 **Rationale:** The same compiled program runs on Node and in a browser. One `process.env` read in a file the browser bundle contains is a crash at load time there, and the bundle contains most of the runtime and the stdlib.
 

@@ -47,7 +47,9 @@ export function createLogger(level: LogLevel = "info", sink?: LogSink): Logger {
   const threshold = LEVEL_ORDER[level];
 
   function log(msgLevel: LogLevel, message: string): void {
-    if (LEVEL_ORDER[msgLevel] < threshold) return;
+    if (LEVEL_ORDER[msgLevel] < threshold) {
+      return;
+    }
     const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
     const formatted = `[${timestamp}] ${msgLevel.toUpperCase()} ${message}`;
     // run-read-ok: with no sink and no run current, the line goes to the console.

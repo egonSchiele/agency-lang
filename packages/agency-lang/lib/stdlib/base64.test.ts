@@ -20,7 +20,9 @@ describe("encodeBase64", () => {
       expect(encodeBase64Text(sample)).toBe(Buffer.from(sample).toString("base64"));
     }
     const bytes = new Uint8Array(1000);
-    for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 7919) % 256;
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = (i * 7919) % 256;
+    }
     expect(encodeBase64(bytes)).toBe(Buffer.from(bytes).toString("base64"));
     expect(decodeBase64Strict(encodeBase64(bytes))).toEqual(bytes);
   });

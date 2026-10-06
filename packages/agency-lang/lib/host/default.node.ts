@@ -21,11 +21,11 @@ let fetchMocksInstalled = false;
  *  size limit (ARG_MAX). Independent of AGENCY_LLM_MOCKS — a test may mock
  *  the network while using a real LLM, or vice versa. This runs when the
  *  first context is built, before any node runs, ahead of any http.ts /
- *  stdlib / interop fetch. For now it patches the global `fetch`, as the
- *  generated header did; a later PR answers from the host's network part
- *  instead. */
+ *  stdlib / interop fetch, by replacing the global `fetch`. */
 function installFetchMocksOnce(): void {
-  if (fetchMocksInstalled) return;
+  if (fetchMocksInstalled) {
+    return;
+  }
   fetchMocksInstalled = true;
   const mocksFile = process.env.AGENCY_FETCH_MOCKS_FILE;
   if (mocksFile) {

@@ -110,7 +110,15 @@ does.
 6. **The old stdlib `fs` block stays beside the new one.** ESLint keeps
    only the later block for a file both match, so a waiting stdlib file
    would lose the `fs` ban if the old block were folded away.
-7. **Files still waiting after PR B** use `fs`, `path`, `Buffer`,
+7. **Agency code uses `path` and `os` as free names** (`path.join(dir,
+   name)`, `os.homedir()`), which the old header supplied by importing
+   Node's modules; CI failed with "path is not defined" the first time the
+   header lost them. They now come from `agency-lang/runtime`, which
+   re-exports Node's modules from `lib/runtime/agencyGlobals.node.ts`.
+   Stage 15's `browser.ts` must export a portable `path` (Task 27) and a
+   host-backed `os` under the same names, and the reach lint lets
+   `lib/runtime/index.ts` alone import a Node-only file for this.
+8. **Files still waiting after PR B** use `fs`, `path`, `Buffer`,
    `child_process`, or `crypto`, which later PRs cover; `process.cwd` and
    `process.platform` reads in file-handling code move with `contained.ts`
    in PR C. `exitProcess.ts` and `subprocessRunInfo.ts` wait for PR D.

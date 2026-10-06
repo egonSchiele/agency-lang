@@ -16,8 +16,11 @@ import {
   freePort,
   formatElapsed,
   servingBanner,
-  type ServedModel,
+  type BannerModel,
   runServe,
+  targetsFromFlags,
+  spawnOptions,
+  loggedDeps,
   serveChoices,
   embedServeArgs,
   speechServeArgs,
@@ -32,6 +35,7 @@ import {
   type PickDeps,
 } from "./localServe.js";
 import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
+import { serveWithDeps } from "../local/serve.js";
 import { createProgram } from "../../scripts/agency.js";
 
 describe("serveArgs", () => {
@@ -653,7 +657,7 @@ describe("servingBanner", () => {
       );
       return dir;
     };
-    const tryLine = (model: ServedModel) => servingBanner(8080, [model]).slice(-2);
+    const tryLine = (model: BannerModel) => servingBanner(8080, [model]).slice(-2);
     expect(tryLine({ name: "org/dino", kind: "vision", dir: dirWith("Dinov2Model") })).toEqual([
       `    import { embedImage } from "std::vision"`,
       `    embedImage("drawing.png", "org/dino")`,
@@ -1222,7 +1226,8 @@ describe("runServe", () => {
     await expect(runServe(["mlx:org/a", "mlx:org/b"], { port: 0 }, failing)).rejects.toThrow(
       "mlx_lm.server for org/a exited with 9 before it was ready.",
     );
-    expect(killed).toBe(2);
+    // Only b is told to stop: a had already exited.
+    expect(killed).toBe(1);
   });
 
   it("does not report a child that exits just before close(), as on Ctrl-C", async () => {
@@ -1501,6 +1506,140 @@ describe("runServe", () => {
       "the speech server for org/tts exited with 1 before it was ready.",
     );
   });
+
+  /** Dependencies whose processes exit when they are told to stop, as
+   *  real ones do, so `unload` can wait for the exit. */
+  function exitingDeps(): ServeDeps {
+    return {
+      ...deps,
+      spawn: (python, args) => {
+        spawned.push([python, ...args]);
+        const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+        return {
+          on: (_ev, cb) => listeners.push(cb),
+          kill: () => {
+            killed += 1;
+            listeners.forEach((cb) => cb(null, "SIGTERM"));
+          },
+        };
+      },
+    };
+  }
+
+  it("reports the port the operating system chose, and the matching address", async () => {
+    recordedModel("org/a", true);
+    const handle = await runServe(["mlx:org/a"], { port: 0 }, deps);
+    try {
+      expect(handle.port).toBeGreaterThan(0);
+      expect(handle.url).toBe(`http://127.0.0.1:${handle.port}/v1`);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("reports each model's state, and unloads and loads one on request", async () => {
+    recordedModel("org/a", true);
+    recordedModel("org/b", true);
+    const handle = await runServe(["mlx:org/a", "mlx:org/b"], { port: 0 }, exitingDeps());
+    try {
+      const states = () => handle.status().map((row) => [row.model, row.state]);
+      expect(states()).toEqual([
+        ["org/a", "ready"],
+        ["org/b", "ready"],
+      ]);
+      await handle.unload("org/a");
+      expect(states()).toEqual([
+        ["org/a", "stopped"],
+        ["org/b", "ready"],
+      ]);
+      expect(killed).toBe(1);
+      await handle.load("org/a");
+      expect(states()[0]).toEqual(["org/a", "ready"]);
+      expect(spawned).toHaveLength(3);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  describe("serve, from agency-lang/local", () => {
+    it("serves a model named by a string, on a port of its own", async () => {
+      recordedModel("org/a", true);
+      const server = await serveWithDeps(["mlx:org/a"], { port: 0 }, deps);
+      try {
+        expect(server.models).toEqual(["org/a"]);
+        expect(server.port).toBeGreaterThan(0);
+        expect(server.url).toBe(`http://127.0.0.1:${server.port}/v1`);
+        const listed = (await (await fetch(`${server.url}/models`)).json()) as {
+          data: { id: string }[];
+        };
+        expect(listed.data.map((row) => row.id)).toEqual(["org/a"]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("gives a model its draft", async () => {
+      recordedModel("org/big", true);
+      const small = recordedModel("org/small", true);
+      const server = await serveWithDeps(
+        [{ model: "mlx:org/big", draft: "mlx:org/small", draftTokens: 3 }],
+        {},
+        deps,
+      );
+      try {
+        expect(spawned[0].slice(-4)).toEqual(["--draft-model", small, "--num-draft-tokens", "3"]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("serves a chat model with mlx-vlm when vlm is set", async () => {
+      const model = visionChatModel();
+      const server = await serveWithDeps([{ model, vlm: true }], {}, deps);
+      try {
+        expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("serves a model as the kind it is given", async () => {
+      // The files of this model say chat. The caller says embedding.
+      recordedModel("org/emb", true);
+      const server = await serveWithDeps([{ model: "mlx:org/emb", kind: "embedding" }], {}, deps);
+      try {
+        expect(spawned[0][1]).toMatch(/mlxEmbedServer.py$/);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("unloads a model on request, and says so in its status", async () => {
+      recordedModel("org/a", true);
+      const server = await serveWithDeps(["mlx:org/a"], {}, exitingDeps());
+      try {
+        await server.unload("org/a");
+        expect(server.status()).toMatchObject([{ model: "org/a", state: "stopped" }]);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("refuses lazy until it is supported, before anything is started", async () => {
+      recordedModel("org/a", true);
+      await expect(serveWithDeps([{ model: "mlx:org/a", lazy: true }], {}, deps)).rejects.toThrow(
+        "lazy is not supported by this version.",
+      );
+      expect(spawned).toEqual([]);
+    });
+
+    it("sends what the server would print to log", async () => {
+      recordedModel("org/a", true);
+      const server = await serveWithDeps(["mlx:org/a"], {}, deps);
+      await server.close();
+      expect(log.join("\n")).toContain("Serving 1 model on");
+    });
+  });
 });
 
 describe("serveChoices", () => {
@@ -1693,4 +1832,47 @@ it("shows text and image chat examples together", () => {
   expect(banner).toContain("agency run --local mlx:text");
   expect(banner).toContain("vision  (chat with images)");
   expect(banner).toContain('image("photo.png")');
+});
+
+describe("targetsFromFlags", () => {
+  it("makes one target per plain argument, with the options written after it", () => {
+    expect(
+      targetsFromFlags(["a", "b"], { options: { a: { draft: "d", draftTokens: 3 } } }),
+    ).toEqual([{ model: "a", draft: "d", draftTokens: 3 }, { model: "b" }]);
+  });
+
+  it("gives a flagged model its flag's kind, and the runtime when the flag has one", () => {
+    expect(targetsFromFlags([], { image: ["img"], vlm: ["see"], embedding: ["emb"] })).toEqual([
+      { model: "emb", kind: "embedding", flag: "--embedding" },
+      { model: "img", kind: "image", flag: "--image" },
+      { model: "see", kind: "chat", flag: "--vlm", runtime: "mlx-vlm" },
+    ]);
+  });
+
+  it("lists plain arguments before flagged ones", () => {
+    const targets = targetsFromFlags(["a"], { speech: ["tts"] });
+    expect(targets.map((target) => target.model)).toEqual(["a", "tts"]);
+  });
+});
+
+describe("spawnOptions", () => {
+  it("lets a process write to this terminal, or pipes its output unbuffered", () => {
+    expect(spawnOptions("inherit").stdio).toEqual(["inherit", "inherit", "inherit"]);
+    expect(spawnOptions("inherit").env.PYTHONUNBUFFERED).toBe(process.env.PYTHONUNBUFFERED);
+    const piped = spawnOptions("pipe");
+    expect(piped.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    expect(piped.env.PYTHONUNBUFFERED).toBe("1");
+    expect(piped.env.HF_HUB_OFFLINE).toBe("1");
+  });
+});
+
+describe("loggedDeps", () => {
+  it("hands each line a process writes, to either stream, to log", async () => {
+    const lines: string[] = [];
+    const script =
+      "process.stdout.write('loading 1/2\\rloading 2/2\\n'); process.stderr.write('oops\\n');";
+    const child = loggedDeps((line) => lines.push(line)).spawn(process.execPath, ["-e", script]);
+    await new Promise((resolve) => child.on("exit", resolve));
+    await expect.poll(() => [...lines].sort()).toEqual(["loading 1/2", "loading 2/2", "oops"]);
+  });
 });

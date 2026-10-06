@@ -122,8 +122,9 @@ it the revision from an `mlx:` pin and only a copy at that commit counts. A
 cache keeps every revision it has fetched and lists only the one `refs/main`
 names, so the pinned lookup checks the other snapshots in the folder as well.
 `serve` starts the process on whichever directory holds it but keeps naming it
-by the repo id, which is also what `run --local mlx:<repo>` sends — the front
-door's `Route` has held those two strings apart since it was written.
+by the repo id, which is also what `run --local mlx:<repo>` sends. A
+`ModelPlan` in `lib/cli/modelPool.ts` holds the two strings apart, as
+`upstreamModel` and `model`.
 
 Because the lookup is by repo id, a bare `org/repo` resolves too, whenever a
 model with that id is on disk. `_resolveModel` tries it last, after aliases and
@@ -200,11 +201,19 @@ terminal — either end not a TTY — it lists the same models and exits 1, so a
 script gets an answer rather than a prompt nobody can see. Only models under the models directory are offered. An alias pointing
 somewhere else still has to be named.
 
-`runServe` in `lib/cli/localServe.ts` does, in order: resolve each name
+`serveTargets` in `lib/cli/localServe.ts` does, in order: resolve each name
 (a GGUF model is an error), find the directory (an `mlx:` model needs a
 complete record under `<modelsDir>/mlx/`; `serve` never downloads), print
 the memory warning if the sizes exceed `os.totalmem()` and continue, choose
 a Python and check it, start one process per model, then open the front door.
+
+**One description per model.** `serveTargets` takes a list of
+`ServeTarget`: the model as the caller wrote it, the kind and chat runtime
+a flag gave it, and its draft. It takes nothing else about a model. Two
+callers build that list. `runServe` builds it from a parsed command line
+with `targetsFromFlags`, and `serve()` in `agency-lang/local` builds it
+from its `ServedModel` objects. To add a per-model setting, add a field to
+`ServeTarget` and set it in both.
 
 **One process per model.** `mlx_lm.server` holds one model per process and
 loads whatever model a request names. From `ModelProvider.load` in
@@ -258,6 +267,57 @@ This server is serving X and Y. It is not serving Z. Start it with: agency local
 through, so streaming works. A client that disconnects mid-reply destroys
 the upstream request. Cancellation of generation depends on the runtime;
 see the non-streaming limitation under "Chat with pictures".
+
+**The model pool** (`lib/cli/modelPool.ts`) owns the model processes. It
+keeps one record per served model, and it is the only code that starts or
+stops a process or writes a record. For each request the front door:
+
+1. Looks up the model's `ModelPlan` with `pool.plan`.
+2. Applies the plan's request rules. A refused request never holds a
+   model.
+3. Calls `pool.acquire(model)`, which waits for a load in progress and
+   returns the port with the model's count of requests already raised.
+4. Forwards, and calls `release` when the request ends, however it ends.
+
+A record's state is one of four shapes, each with the fields that state
+has:
+
+| State | Holds |
+|---|---|
+| `stopped` | nothing |
+| `loading` | the process once it is spawned, and a promise that settles when the load ends |
+| `ready` | the process and its port |
+| `failed` | the error |
+
+Starting a model is two steps. `PoolDeps.spawn` returns as soon as the
+process exists, and the pool stores it before `PoolDeps.waitReady` waits
+for the model to load. So a model that is still loading has a process the
+pool can stop and can watch.
+
+`load` and `unload` run on one queue, one at a time. `unload` of a model
+that is loading does not wait its turn: it stops the process at once,
+which ends the load, and any request waiting on that load is refused. An
+`unload` of a model whose load is queued but has not spawned yet makes
+that load give up when it starts.
+
+A process that exits on its own marks its record `failed`. If it had
+finished loading, the pool also resolves `failure`, which ends the
+`agency local serve` command. It waits `EXIT_GRACE_MS` first. A terminal
+Ctrl-C reaches the model processes before it reaches Node, so an exit can
+arrive just before the shutdown that explains it.
+
+When the pool will not hand out a model it throws a `PoolRefusal` with a
+reason, and `STATUS_FOR_REFUSAL` in the front door turns the reason into a
+status. A model that was unloaded gets a 503 that says how to load it.
+
+**Routes the door answers itself** are rows of `adminRoutes` in
+`startFrontDoor`: `GET /v1/models`, and `GET /v1/agency/status`, which
+returns `{ "models": [...] }` with each model's state, error, requests in
+progress, and last use. Routes under `/v1/agency/` are refused with a 403
+unless the `Host` header is `127.0.0.1:<port>` or `localhost:<port>`. The
+door listens on 127.0.0.1 only, but a web page can reach that address
+under a hostname of its own, and the browser then treats the page and the
+server as one site. Such a request carries the page's hostname in `Host`.
 
 **The body limit.** The door reads each body with `parseJsonBody` from
 `lib/serve/util.ts`. For most routes the limit is its default, 10 MiB

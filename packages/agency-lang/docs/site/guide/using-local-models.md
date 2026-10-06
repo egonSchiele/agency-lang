@@ -608,6 +608,48 @@ const result = await pending; // { success: false, error: "generateImage failed:
 const imageModels = listModels().filter((model) => model.kind === "image" && model.complete);
 ```
 
+### Start the server from your program
+
+`serve` starts the same server `agency local serve` does, and resolves once every model has loaded:
+
+```ts
+import { serve, generateImage } from "agency-lang/local";
+
+const server = await serve(["z-image-turbo", "wd14-tagger"], {
+  log: (line) => console.log(line),
+});
+const generated = await generateImage({
+  baseUrl: server.url,
+  model: "z-image-turbo",
+  prompt: "a lighthouse in a storm",
+});
+await server.close();
+```
+
+With no `port`, the server takes any free port, and `server.url` is its address. Pass it as `baseUrl` to each call. `log` receives what the command would print and what the model processes write. Without it, that output is discarded.
+
+A model can be an object when it needs a setting the command gives with a flag:
+
+```ts
+await serve([
+  { model: "qwen3.5-9b-mlx", vlm: true },                   // --vlm
+  { model: "/models/my-embedder", kind: "embedding" },      // --embedding
+  { model: "qwen3.5-9b-mlx", draft: "qwen3.5-0.8b-mlx" },   // --draft
+]);
+```
+
+The server it returns can stop and start one model while the others keep running:
+
+```ts
+await server.unload("z-image-turbo");   // frees its memory
+server.status();                         // [{ model: "z-image-turbo", state: "stopped", ... }, ...]
+await server.load("z-image-turbo");     // resolves when it is ready again
+```
+
+A request for an unloaded model fails with a message that says to load it. `server.failure` is a promise that resolves with a message if a model process dies.
+
+Any client can read the same status at `GET /v1/agency/status` on the server's address.
+
 `agency-lang/local` is the supported way in. Files under `agency-lang/stdlib-lib/` are internal to Agency, and their names change between releases.
 
 There is no chat function here. A chat model served by `agency local serve` answers the OpenAI chat API at the same address, so any OpenAI client works.

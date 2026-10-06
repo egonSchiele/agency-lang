@@ -2,19 +2,26 @@
 
 `agency-lang/local` is the entry point for a TypeScript program that uses
 local models and has no Agency code. It lists the models downloaded to
-the machine and calls the server `agency local serve` runs:
+the machine, starts the server `agency local serve` runs, and calls it:
 
 ```ts
-import { listModels, generateImage, tagImage } from "agency-lang/local";
+import { listModels, serve, generateImage, tagImage } from "agency-lang/local";
 
 const models = listModels();
+const server = await serve(["z-image-turbo", "wd14-tagger"]);
 const generated = await generateImage({
+  baseUrl: server.url,
   model: "z-image-turbo",
   prompt: "a lighthouse in a storm",
 });
 if (generated.success) {
-  const tags = await tagImage({ model: "wd14-tagger", image: generated.value.bytes });
+  const tags = await tagImage({
+    baseUrl: server.url,
+    model: "wd14-tagger",
+    image: generated.value.bytes,
+  });
 }
+await server.close();
 ```
 
 The spec is `docs/superpowers/specs/2026-10-05-local-models-from-typescript.md`.
@@ -27,6 +34,7 @@ The spec is `docs/superpowers/specs/2026-10-05-local-models-from-typescript.md`.
 | `lib/local/result.ts` | The `Result` type every call returns |
 | `lib/local/models.ts` | `listModels` |
 | `lib/local/calls.ts` | `generateImage` and the five vision functions |
+| `lib/local/serve.ts` | `serve`, and the public `ServedModel` and `ServeOptions` types |
 | `lib/stdlib/localRequest.ts` | `postLocalJson`, the one function that posts to the local server |
 | `lib/stdlib/mlxImage.ts` | The image request: its checks, its body, and its post |
 | `lib/stdlib/vision.ts` | The vision request: its model check, its post, and its answer |
@@ -140,6 +148,39 @@ these and also the catalog's models that are not downloaded, which
 Three kinds of entry are listed and cannot be served: a GGUF file, a
 ControlNet, and a download that is not complete. The call functions take
 the `name` of every other entry.
+
+## `serve`
+
+`serve(models, options)` is `serveTargets` from `lib/cli/localServe.ts`,
+the function behind `agency local serve`. It turns each `ServedModel`
+into a `ServeTarget` and adds nothing of its own, so the command and the
+function cannot serve a model differently. `docs/dev/llm/mlx-local-models.md`
+covers what `serveTargets` does.
+
+| `ServedModel` field | Command line |
+|---|---|
+| `model` | a plain argument |
+| `kind: "embedding"`, `"speech"`, `"image"` | `--embedding`, `--speech`, `--image` |
+| `vlm: true` | `--vlm` |
+| `draft`, `draftTokens` | `--draft`, `--draft-tokens` |
+| `lazy` | refused: not supported yet |
+
+The handle it resolves with is the command's own `ServeHandle`: `url`,
+`port`, `models`, `failure`, `status()`, `load(model)`, `unload(model)`,
+and `close()`. A model that is unloaded stays unloaded until `load`. A
+request for it gets a 503.
+
+Two things differ from the command:
+
+- **The port.** With no `port`, `serve` takes any free port, and
+  `server.url` says which. The command's default of 8080 is set in
+  `scripts/agency.ts`.
+- **Output.** `loggedDeps` sends everything to `options.log`: the lines
+  the command would print, and each line the model processes write. The
+  processes' output is piped and always read, because a process whose
+  pipe fills up stops. `PYTHONUNBUFFERED=1` is set for them, because
+  Python writes in blocks when its output is not a terminal. With no
+  `log`, the lines are discarded.
 
 ## Checking against a real model
 

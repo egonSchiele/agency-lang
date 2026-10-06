@@ -34,7 +34,8 @@ import {
   type ResolvedModel,
 } from "../stdlib/localModels.js";
 import type { ModelKind } from "../stdlib/modelKind.js";
-import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
+import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
+import { createModelPool, type ModelPlan, type ModelStatus } from "./modelPool.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
@@ -46,7 +47,7 @@ export type ServeKind = ModelKind;
  *  card's value. */
 const EMBED_MAX_LENGTH = 8192;
 
-export type ServeOptions = {
+export type ChatServeOptions = {
   port: number;
   maxTokens: number;
   python?: string;
@@ -99,9 +100,21 @@ export function serveArgs(
   return args;
 }
 
-/** One model from the `serve` command line with the options written after
- *  it. */
-export type ServeTarget = { model: string } & ModelOptions;
+/** One model to serve, and everything said about how to serve it. The
+ *  command line and `serve()` in `agency-lang/local` each build a list of
+ *  these, and `serveTargets` takes nothing else about a model.
+ *
+ *  model    the name, URI, or directory, as the caller wrote it
+ *  kind     the kind a flag gave it. Absent: read it from the model
+ *  runtime  the chat runtime a flag gave it. Absent: the kind's default
+ *  flag     the flag that named it, for messages. Absent for a plain
+ *           argument */
+export type ServeTarget = {
+  model: string;
+  kind?: ServeKind;
+  runtime?: ChatRuntime;
+  flag?: string;
+} & ModelOptions;
 
 /** The per-model options and how each one is spelled. */
 const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
@@ -439,7 +452,7 @@ function argsFor(
 }
 
 /** How a process is named in messages: which program, for which model. */
-function labelOf(model: ServedModel): string {
+function labelOf(model: BannerModel): string {
   const { kind, name } = model;
   const chat = chatSpecOf(model);
   if (chat !== null) {
@@ -938,9 +951,17 @@ export type ServeDeps = {
 
 export type ServeHandle = {
   port: number;
+  /** The server's address, for a client's base URL: `http://127.0.0.1:<port>/v1`. */
+  url: string;
   models: string[];
   /** Resolves with a message when a process dies after it was ready. */
   failure: Promise<string>;
+  /** Each model's state, the same list `GET /v1/agency/status` returns. */
+  status: () => ModelStatus[];
+  /** Starts a model's process and resolves when the model is ready. */
+  load: (model: string) => Promise<void>;
+  /** Stops a model's process. It stays stopped until `load`. */
+  unload: (model: string) => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -954,12 +975,12 @@ export type ModelOptions = {
   draftTokens?: number;
 };
 
-export type ServeFlags = ReplyLimits & {
+/** The settings of a server as a whole, as opposed to those of one model
+ *  it serves. */
+export type ServeSettings = ReplyLimits & {
+  /** The port to listen on. 0 asks the operating system for a free one. */
   port?: number;
   maxTokens?: number;
-  /** Per-model options, keyed by the model as it was named on the command
-   *  line. `groupServeArgv` builds this from the argv order. */
-  options?: Record<string, ModelOptions>;
   /** Tokens of prompt read per pass. Default from the machine's memory,
    *  see prefillStepSize. */
   prefillStep?: number;
@@ -968,6 +989,14 @@ export type ServeFlags = ReplyLimits & {
    *  spells this `--log-prompts`, since `--verbose` is already the whole
    *  CLI's own flag. */
   logPrompts?: boolean;
+};
+
+/** The `serve` command line as commander parsed it: the server's settings,
+ *  and the models each naming flag listed. */
+export type ServeFlags = ServeSettings & {
+  /** Per-model options, keyed by the model as it was named on the command
+   *  line. `groupServeArgv` builds this from the argv order. */
+  options?: Record<string, ModelOptions>;
   /** Models to serve with the embedding server rather than mlx_lm.server. */
   embedding?: string[];
   /** Models to serve with the speech server on /v1/audio/speech. */
@@ -977,11 +1006,61 @@ export type ServeFlags = ReplyLimits & {
   vlm?: string[];
 };
 
+/** Where a model process's output goes: to this terminal, or to a pipe
+ *  the caller reads. */
+export type ChildOutput = "inherit" | "pipe";
+
+/** The options every model process is started with. A piped process is
+ *  told not to buffer, because Python writes in blocks when its output is
+ *  not a terminal, and its lines would arrive late. */
+export function spawnOptions(output: ChildOutput): {
+  stdio: ["inherit" | "ignore", ChildOutput, ChildOutput];
+  env: Record<string, string | undefined>;
+} {
+  const piped = output === "pipe" ? { PYTHONUNBUFFERED: "1" } : {};
+  return {
+    stdio: [output === "pipe" ? "ignore" : "inherit", output, output],
+    env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1", ...piped },
+  };
+}
+
 function realSpawn(python: string, args: string[]): Child {
-  return spawn(python, args, {
-    stdio: "inherit",
-    env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1" },
+  return spawn(python, args, spawnOptions("inherit"));
+}
+
+/** Hands each line of a stream to `log`. A line ends at a newline or a
+ *  carriage return, since progress bars redraw with the second. */
+function logLines(stream: NodeJS.ReadableStream, log: (line: string) => void): void {
+  let pending = "";
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk: string) => {
+    const lines = (pending + chunk).split(/[\r\n]+/);
+    pending = lines.pop() ?? "";
+    lines.filter((line) => line !== "").forEach(log);
   });
+  stream.on("end", () => {
+    if (pending !== "") {
+      log(pending);
+    }
+  });
+}
+
+/** Starts a model process whose output goes to `log`, a line at a time.
+ *  The pipes are always read, whatever `log` does with the lines: a
+ *  process whose pipe fills up stops. */
+function pipedSpawn(log: (line: string) => void): ServeDeps["spawn"] {
+  return (python, args) => {
+    const child = spawn(python, args, spawnOptions("pipe"));
+    logLines(child.stdout!, log);
+    logLines(child.stderr!, log);
+    return child;
+  };
+}
+
+/** The dependencies of a server started from TypeScript: everything it
+ *  would print goes to `log`, the model processes' output included. */
+export function loggedDeps(log: (line: string) => void): ServeDeps {
+  return { ...realDeps(), log, spawn: pipedSpawn(log), useColor: false };
 }
 
 function realDeps(): ServeDeps {
@@ -1129,19 +1208,51 @@ function planRequired(value: string, cacheDir: string, kind: ServeKind): Planned
   return model;
 }
 
-function planFlag(value: string, cacheDir: string, flag: NamingFlag): Planned {
-  if (flag.runtime === null) {
-    return planModel(value, cacheDir, flag.kind);
+/** The plan for one target: what kind of model it is, where its files
+ *  are, and the draft model written after it. A target with no kind is
+ *  served as whatever it is. One with a kind is served as that kind,
+ *  unless the catalog says otherwise. One with a runtime must be a chat
+ *  model that runtime has been tested with. */
+function planTarget(target: ServeTarget, cacheDir: string): Planned {
+  return withDraft(target.model, planUndrafted(target, cacheDir), target, cacheDir);
+}
+
+function planUndrafted(target: ServeTarget, cacheDir: string): Planned {
+  const { model: value, kind, runtime } = target;
+  if (kind === undefined) {
+    return planModel(value, cacheDir);
   }
-  const model = planRequired(value, cacheDir, flag.kind);
+  if (runtime === undefined) {
+    return planModel(value, cacheDir, kind);
+  }
+  const model = planRequired(value, cacheDir, kind);
   const architecture = architectureOfModelDir(model.dir);
   if (!VLM_ARCHITECTURES.includes(architecture)) {
     throw new Error(
       `${model.dir} has the architecture ${architecture || "(missing)"}.\n` +
-        `agency local serve ${flag.flag} has been tested with: ${VLM_ARCHITECTURES.join(", ")}.`,
+        `agency local serve ${target.flag ?? "--vlm"} has been tested with: ${VLM_ARCHITECTURES.join(", ")}.`,
     );
   }
-  return { ...model, runtime: flag.runtime };
+  return { ...model, runtime };
+}
+
+/** The targets a parsed command line names: each plain argument, then each
+ *  model a naming flag listed, with that flag's kind and runtime and the
+ *  options written after the model. The one reader of `flags.options` and
+ *  of the per-flag lists. */
+export function targetsFromFlags(values: string[], flags: ServeFlags): ServeTarget[] {
+  const optionsOf = (model: string) => flags.options?.[model] ?? {};
+  const plain = values.map((model) => ({ model, ...optionsOf(model) }));
+  const flagged = NAMING_FLAGS.flatMap((row) =>
+    (flags[row.key] ?? []).map((model) => {
+      const target: ServeTarget = { model, kind: row.kind, flag: row.flag, ...optionsOf(model) };
+      if (row.runtime !== null) {
+        target.runtime = row.runtime;
+      }
+      return target;
+    }),
+  );
+  return [...plain, ...flagged];
 }
 
 /** The planned model with its draft attached, when its options name one.
@@ -1203,19 +1314,9 @@ function unknownKindMessage(value: string): string {
   ].join("\n");
 }
 
-/** Resolves with a description once the child exits. */
-function exitOf(child: Child, label: string): Promise<string> {
-  return new Promise((resolve) => {
-    child.on("exit", (code, signal) => {
-      const how = signal !== null ? `was killed by ${signal}` : `exited with ${code}`;
-      resolve(`${label} ${how}`);
-    });
-  });
-}
-
 /** A model in the banner. `dir` is where it was found, when there is one,
  *  so the banner can read which vision family it is. */
-export type ServedModel = {
+export type BannerModel = {
   name: string;
   kind: ServeKind;
   dir?: string;
@@ -1242,7 +1343,7 @@ const BANNER_SUFFIX: Record<ServeKind, string> = {
 
 /** What `serve` prints once every process is ready: the models, in plan
  *  order, and a sample command for the first model of each kind. */
-export function servingBanner(port: number, models: ServedModel[]): string[] {
+export function servingBanner(port: number, models: BannerModel[]): string[] {
   const count = models.length;
   const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
   for (const model of models) {
@@ -1296,27 +1397,35 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
   return lines;
 }
 
+/** Serves the models a parsed `agency local serve` command line names. */
 export async function runServe(
   values: string[],
   flags: ServeFlags,
   deps: ServeDeps = realDeps(),
 ): Promise<ServeHandle> {
-  const port = flags.port ?? 8080;
-  const maxTokens = flags.maxTokens ?? 16384;
-  // A model named on its own is served as whatever it is. One named with a
-  // flag is served as that kind, unless the catalog says otherwise. Either
-  // way it gets the options written after it.
-  const attachDraft = (value: string, model: Planned) =>
-    withDraft(value, model, flags.options?.[value], deps.cacheDir);
-  const planned = [
-    ...values.map((value) => attachDraft(value, planModel(value, deps.cacheDir))),
-    ...NAMING_FLAGS.flatMap((flag) =>
-      (flags[flag.key] ?? []).map((value) =>
-        attachDraft(value, planFlag(value, deps.cacheDir, flag)),
-      ),
-    ),
-  ];
-  const unused = flagsNobodyTakes(flags, planned);
+  return serveTargets(targetsFromFlags(values, flags), flags, deps);
+}
+
+/** What the pool needs to know about a planned model. */
+function modelPlanOf(model: Planned): ModelPlan {
+  return {
+    model: model.name,
+    upstreamModel: model.dir,
+    label: labelOf(model),
+    kind: model.kind,
+    rules: chatSpecOf(model)?.rules ?? null,
+  };
+}
+
+/** Resolve, check, start one process per model, and open the door. */
+export async function serveTargets(
+  targets: ServeTarget[],
+  settings: ServeSettings,
+  deps: ServeDeps = realDeps(),
+): Promise<ServeHandle> {
+  const maxTokens = settings.maxTokens ?? 16384;
+  const planned = targets.map((target) => planTarget(target, deps.cacheDir));
+  const unused = flagsNobodyTakes(settings, planned);
   if (unused.length > 0) {
     const flag = unused[0].replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
     throw new Error(
@@ -1343,7 +1452,7 @@ export async function runServe(
     deps.log(warning);
   }
   const python = choosePython(
-    flags.python,
+    settings.python,
     deps.configuredPython,
     deps.env.AGENCY_MLX_PYTHON,
     deps.home,
@@ -1357,103 +1466,87 @@ export async function runServe(
     throw new Error(pythonMissingMessage(python, deps.home, problem, modules));
   }
 
-  const children: Child[] = [];
-  const exits: Promise<string>[] = [];
-  let stopping = false;
-  const killAll = () => {
-    stopping = true;
-    for (const child of children) {
-      child.kill();
-    }
-  };
-  const routes: Route[] = [];
   const shared: ChatServerSettings = {
     maxTokens,
     promptCacheBytes: promptCacheBudget(deps.totalmem()),
-    prefillStepSize: flags.prefillStep ?? prefillStepSize(deps.totalmem()),
+    prefillStepSize: settings.prefillStep ?? prefillStepSize(deps.totalmem()),
     limits: {
-      reasoningBudget: flags.reasoningBudget,
-      hedgeLimit: flags.hedgeLimit,
-      repeatLimit: flags.repeatLimit,
-      limitAnswers: flags.limitAnswers,
+      reasoningBudget: settings.reasoningBudget,
+      hedgeLimit: settings.hedgeLimit,
+      repeatLimit: settings.repeatLimit,
+      limitAnswers: settings.limitAnswers,
     },
   };
-  for (const model of planned) {
-    const internalPort = await deps.freePort();
-    const settings = settingsFor(model, shared);
-    if (model.draft !== undefined) {
-      deps.log(
-        `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
+  const plannedByName = Object.fromEntries(planned.map((model) => [model.name, model]));
+  const pool = createModelPool(planned.map(modelPlanOf), {
+    now: Date.now,
+    spawn: async (plan) => {
+      const model = plannedByName[plan.model];
+      const port = await deps.freePort();
+      if (model.draft !== undefined) {
+        deps.log(
+          `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
+        );
+      }
+      const args = argsFor(
+        model,
+        port,
+        settingsFor(model, shared),
+        deps.cacheDir,
+        deps.adaptersDir,
+        deps.controlnetsDir,
       );
-    }
-    const args = argsFor(
-      model,
-      internalPort,
-      settings,
-      deps.cacheDir,
-      deps.adaptersDir,
-      deps.controlnetsDir,
-    );
-    const child = deps.spawn(python, args);
-    children.push(child);
-    const label = labelOf(model);
-    exits.push(exitOf(child, label));
+      return { child: deps.spawn(python, args), port };
+    },
+    waitReady: (plan, running, gone) =>
+      waitUntilLoaded(running.port, plan.upstreamModel, {
+        fetch: deps.fetch,
+        gone,
+        kind: plan.kind,
+        label: plan.label,
+      }),
+  });
+  for (const model of planned) {
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
-      // Any process started so far dying ends the wait, not only this one.
-      await waitUntilLoaded(internalPort, model.dir, {
-        fetch: deps.fetch,
-        gone: Promise.race(exits),
-        kind: model.kind,
-        label,
-      });
+      await pool.load(model.name);
     } catch (err) {
-      killAll();
+      pool.stopAll();
       throw err;
     }
     deps.log(`  ready in ${formatElapsed(Date.now() - started)}`);
-    routes.push({
-      model: model.name,
-      upstreamModel: model.dir,
-      port: internalPort,
-      label,
-      rules: chatSpecOf(model)?.rules ?? null,
-    });
   }
 
   let door: FrontDoor;
   try {
     door = await startFrontDoor(
-      port,
-      routes,
+      settings.port ?? 0,
+      pool,
       {
         log: deps.log,
-        verbose: flags.logPrompts === true,
+        verbose: settings.logPrompts === true,
         color: deps.useColor ? color : plainColor,
       },
       maxTokens,
     );
   } catch (err) {
-    killAll();
+    pool.stopAll();
     throw err;
   }
   for (const line of servingBanner(door.port, planned)) {
     deps.log(line);
   }
-  // A terminal Ctrl-C reaches the children before this process, so a
-  // child's exit can arrive before the signal handler runs. Wait a moment
-  // before calling it a failure.
-  const failure = Promise.race(exits).then(async (why) => {
-    await new Promise((r) => setTimeout(r, 250));
-    return stopping ? new Promise<string>(() => {}) : `${why}.`;
-  });
   return {
     port: door.port,
+    url: `http://127.0.0.1:${door.port}/v1`,
     models: names,
-    failure,
+    failure: pool.failure,
+    status: pool.status,
+    load: pool.load,
+    unload: pool.unload,
     close: async () => {
-      killAll();
+      pool.stopAll();
       await door.close();
     },
   };
@@ -1535,12 +1628,12 @@ export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
   },
 };
 
-function chatSpecOf(model: ServedModel): ChatRuntimeSpec | null {
+function chatSpecOf(model: BannerModel): ChatRuntimeSpec | null {
   return model.kind === "chat" ? CHAT_RUNTIMES[model.runtime ?? "mlx-lm"] : null;
 }
 
 /** Explicit shared flags must have at least one consumer. Drafts are per model. */
-function flagsNobodyTakes(flags: ServeFlags, models: Planned[]): ChatFlag[] {
+function flagsNobodyTakes(flags: ServeSettings, models: Planned[]): ChatFlag[] {
   const explicit: ChatFlag[] = [
     "reasoningBudget",
     "hedgeLimit",
@@ -1550,7 +1643,7 @@ function flagsNobodyTakes(flags: ServeFlags, models: Planned[]): ChatFlag[] {
   ];
   return explicit.filter(
     (flag) =>
-      flags[flag as keyof ServeFlags] !== undefined &&
+      flags[flag as keyof ServeSettings] !== undefined &&
       !models.some((model) => chatSpecOf(model)?.flags.includes(flag)),
   );
 }

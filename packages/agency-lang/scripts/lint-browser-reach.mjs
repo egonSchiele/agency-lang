@@ -109,6 +109,10 @@ for (const file of reached) {
       `${file} is in the browser bundle but BROWSER_FILES in eslint.config.js does not cover it.`,
     );
   }
+  // The entry point is per platform: lib/runtime/index.ts is Node's and
+  // may import Node-only files, because lib/runtime/browser.ts stands in
+  // for it in a browser bundle with portable exports.
+  if (file === "lib/runtime/index.ts") continue;
   for (const entry of meta.inputs[file].imports) {
     if (!entry.external) continue;
     const target = resolveImport(file, entry.path);

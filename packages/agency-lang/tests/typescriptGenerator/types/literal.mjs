@@ -34,6 +34,7 @@ import {
   functionRefReviver as __functionRefReviver,
   createLogger as __createLogger,
   defaultHost as __defaultHost,
+  path, os,
   runCliEntry,
 } from "agency-lang/runtime";
 

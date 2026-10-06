@@ -52,6 +52,11 @@ export { nodeHost } from "../host/nodeHost.js";
 export { memoryHost } from "../host/memoryHost.js";
 export type { MemoryHost, MemoryHostOptions, MemoryHostState } from "../host/memoryHost.js";
 export { defaultHost } from "#default-host";
+// Agency code may call `path.join` and `os.homedir()` as free names; the
+// generated header imports them from here, so it imports no Node module.
+// This entry point is Node's; the browser entry point exports a portable
+// `path` and a host-backed `os` in their place.
+export { path, os } from "./agencyGlobals.node.js";
 export type { NodeHostOptions } from "../host/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";

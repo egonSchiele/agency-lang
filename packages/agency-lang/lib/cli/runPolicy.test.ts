@@ -7,6 +7,7 @@ import { resolveRunPolicy } from "./runPolicy.js";
 import { readScopeRules } from "../runtime/builtinPolicies.js";
 import { checkPolicy } from "../runtime/policy.js";
 import { agentHomeDir } from "../runtime/agentHome.js";
+import { resolvePolicyDirs } from "../runtime/policyDirs.js";
 
 describe("resolveRunPolicy", () => {
   it("returns null when no policy flags are set", () => {
@@ -113,12 +114,16 @@ describe("resolveRunPolicy", () => {
     expect(p["std::read"][0]).toEqual({ action: "reject" });
     expect(p["std::read"].length).toBe(readScopeRules().length + 2);
     expect(
-      checkPolicy(p, {
-        effect: "std::read",
-        message: "read settings?",
-        data: { dir: agentHomeDir(nodeHost()), filename: "settings.json" },
-        origin: "test",
-      }),
+      checkPolicy(
+        p,
+        {
+          effect: "std::read",
+          message: "read settings?",
+          data: { dir: agentHomeDir(nodeHost()), filename: "settings.json" },
+          origin: "test",
+        },
+        resolvePolicyDirs(nodeHost()),
+      ),
     ).toEqual({ type: "reject" });
   });
 

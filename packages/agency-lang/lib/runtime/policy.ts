@@ -1,9 +1,5 @@
 import picomatch from "picomatch";
-import { realpathSync } from "fs";
 import { z } from "zod";
-import { getPackageRoot } from "../importPaths.js";
-import { agentHomeDir } from "./agentHome.js";
-import { root } from "../stdlib/contained.js";
 
 export const PolicyRuleSchema = z
   .object({
@@ -51,8 +47,9 @@ export function escapeGlob(s: string): string {
 export function checkPolicy(
   policy: Policy,
   interrupt: { effect: string; message: string; data: any; origin: string },
+  dirs: PolicyDirs,
 ): PolicyResult {
-  return checkPolicyExplicit(policy, interrupt) ?? { type: "propagate" };
+  return checkPolicyExplicit(policy, interrupt, dirs) ?? { type: "propagate" };
 }
 
 /** Like `checkPolicy`, but returns null when NO rule matched — callers that
@@ -63,12 +60,13 @@ export function checkPolicy(
 export function checkPolicyExplicit(
   policy: Policy,
   interrupt: { effect: string; message: string; data: any; origin: string },
+  dirs: PolicyDirs,
 ): PolicyResult | null {
   // Effect-specific rules take precedence over the wildcard.
   const rules = policy[interrupt.effect];
   if (rules) {
     for (const rule of rules) {
-      if (matchesRule(rule, interrupt)) {
+      if (matchesRule(rule, interrupt, dirs)) {
         return ruleResult(rule);
       }
     }
@@ -81,7 +79,7 @@ export function checkPolicyExplicit(
   const wildcard = policy["*"];
   if (wildcard) {
     for (const rule of wildcard) {
-      if (matchesRule(rule, interrupt)) {
+      if (matchesRule(rule, interrupt, dirs)) {
         return ruleResult(rule);
       }
     }
@@ -102,6 +100,21 @@ function stripDotSlash(s: string): string {
 // whose name contains glob characters (say `v*1`) would widen the rule to
 // its siblings — a safety boundary, so the substituted prefix must match
 // itself only. Glob syntax stays live only in the user-written suffix.
+/** The directories a `dir` pattern can stand for, resolved once when the
+ *  run's context is built (lib/runtime/policyDirs.ts). The matcher takes
+ *  them as plain strings and touches no file: it runs while an interrupt is
+ *  being answered, and a disk read does not belong on that path. */
+export type PolicyDirs = {
+  /** Where the agent was launched; what `.` means in a `dir` pattern. */
+  cwd: string;
+  /** What `<agent-home>` means. */
+  agentHome: string;
+  /** What `<agency>` means, or null when the install root cannot be found
+   *  (a bundled build with no package.json above it). The placeholder then
+   *  stays as written, so the rule never matches; nothing throws. */
+  agencyInstallDir: string | null;
+};
+
 // In a `dir` pattern, `.` also means "wherever the agent was launched".
 // Tools absolutize the dir they put in interrupt data, so a literal `.` in
 // a policy file could never match those; resolving it lets a static policy
@@ -111,24 +124,19 @@ function stripDotSlash(s: string): string {
 // same caveat as every dir glob: `**` does not descend into dot-led
 // subdirectories (picomatch's dot rule), though a launch directory whose
 // own path contains dot segments is fine — those sit in the literal prefix.
-// The cwd is realpathed so a symlinked launch directory (a linked
-// checkout, macOS /tmp) shares one path identity with interrupt payloads,
-// which the contained-filename wrappers now canonicalize the same way.
-// Exported for tests, which inject the cwd.
-export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
-  let realCwd: string;
-  try {
-    realCwd = realpathSync(cwd);
-  } catch {
-    // A cwd that cannot be resolved keeps its lexical spelling: matching
-    // stays exactly as before rather than failing every rule.
-    realCwd = cwd;
-  }
+// The launch path is data, not pattern: without escaping, a directory
+// whose name contains glob characters (say `v*1`) would widen the rule to
+// its siblings — a safety boundary, so the substituted prefix must match
+// itself only. Glob syntax stays live only in the user-written suffix.
+// `resolvedCwd` is the real path of the launch directory, so a symlinked one
+// (a linked checkout, macOS /tmp) shares one path identity with interrupt
+// payloads, which the contained-filename wrappers canonicalize the same way.
+export function substituteDot(pattern: string, resolvedCwd: string): string {
   // Callback, not a replacement string: a legal cwd containing `$&`/`$'`
   // would otherwise be interpreted as replacement-string syntax.
   return pattern.replace(
     /(^|\{|,)\.(?=$|\/|,|\})/g,
-    (_match, prefix) => prefix + escapeGlob(realCwd),
+    (_match, prefix) => prefix + escapeGlob(resolvedCwd),
   );
 }
 
@@ -138,22 +146,13 @@ export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd(
  *  path of one machine or one version. */
 export const AGENCY_INSTALL_DIR_PLACEHOLDER = "<agency>";
 
-// Expanded at match time, like `.`: a saved policy keeps saying "wherever
-// agency is installed now". A root that cannot be found (a bundled build with
-// no package.json above it) leaves the placeholder as written, so the rule
-// simply never matches; nothing throws. Exported for tests, which inject the root.
-export function expandAgencyInstallDir(
-  pattern: string,
-  root: () => string = getPackageRoot,
-): string {
-  if (!pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) return pattern;
-  let resolved: string;
-  try {
-    resolved = root();
-  } catch {
+/** Replace `<agency>` with the resolved install directory, escaped so a
+ *  path containing glob or brace characters stays literal. */
+export function substituteInstallDir(pattern: string, installDir: string | null): string {
+  if (installDir === null || !pattern.includes(AGENCY_INSTALL_DIR_PLACEHOLDER)) {
     return pattern;
   }
-  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeGlob(resolved));
+  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeGlob(installDir));
 }
 
 /** In a `dir` pattern, `<agent-home>` stands for the agent home directory
@@ -163,25 +162,12 @@ export function expandAgencyInstallDir(
  *  "wherever the agent home is now". */
 export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
 
-/** Expand `<agent-home>` at match time, like `<agency>`. The home is
- *  escaped so a path containing glob or brace characters stays literal. */
-export function expandAgentHomeDir(
-  pattern: string,
-  home: () => string = canonicalAgentHome,
-): string {
-  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
-  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeGlob(home()));
-}
-
-/** The real spelling of the agent home, the spelling file effects put in
- *  their payloads. A home that does not exist yet keeps a lexical tail. */
-function canonicalAgentHome(): string {
-  const home = agentHomeDir();
-  try {
-    return root(home).real;
-  } catch {
-    return home;
+/** Replace `<agent-home>` with the resolved home, escaped the same way. */
+export function substituteAgentHome(pattern: string, agentHome: string): string {
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) {
+    return pattern;
   }
+  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeGlob(agentHome));
 }
 
 function matchesGlob(value: string, pattern: string): boolean {
@@ -191,6 +177,7 @@ function matchesGlob(value: string, pattern: string): boolean {
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
+  dirs: PolicyDirs,
 ): boolean {
   if (!rule.match) return true; // catch-all
 
@@ -214,12 +201,15 @@ function matchesRule(
     const viaDot =
       !raw &&
       key === "dir" &&
-      matchesGlob(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
+      matchesGlob(stripDotSlash(value), stripDotSlash(substituteDot(pattern, dirs.cwd)));
     const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      matchesGlob(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+      matchesGlob(
+        stripDotSlash(value),
+        substituteAgentHome(substituteInstallDir(pattern, dirs.agencyInstallDir), dirs.agentHome),
+      );
     if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }

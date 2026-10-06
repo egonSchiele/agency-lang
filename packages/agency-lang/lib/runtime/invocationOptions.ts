@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
+import type { Host } from "../host/host.js";
 import { validatePolicy } from "./policy.js";
 import type { Policy } from "./policy.js";
 
@@ -25,6 +26,11 @@ export type InvocationOptions = {
    *  abstains on every effect. To restrict everything, say so:
    *  `{ "*": [{ action: "reject" }] }`. */
   policy?: Policy;
+  /** The host this run uses in place of the platform's default: a
+   *  `memoryHost` in a test, or a `browserHost` whose terminal is the
+   *  app's. A resume does not remember the host of the run it resumes, so
+   *  the caller passes it again. See docs/dev/runtime/host.md. */
+  host?: Host;
 };
 
 /**
@@ -81,6 +87,8 @@ export type ResolvedInvocation = {
   contextOverride?: PerInvocationContextOverride;
   /** The validated root policy for this invocation, when the caller sent one. */
   policy?: Policy;
+  /** The host for this invocation, when the caller sent one. */
+  host?: Host;
 };
 
 /**
@@ -178,9 +186,10 @@ function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLog
 export function resolveInvocation(request: InvocationRequest): ResolvedInvocation {
   const contextOverride = selectContextOverride(request.options?.config);
   const policy = validateInvocationPolicy(request.options?.policy);
+  const host = request.options?.host;
 
   if (request.kind === "resume") {
-    return { runId: request.runId, contextOverride, policy };
+    return { runId: request.runId, contextOverride, policy, host };
   }
 
   const runId =
@@ -191,7 +200,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
-  return { runId, contextOverride, policy };
+  return { runId, contextOverride, policy, host };
 }
 
 /**

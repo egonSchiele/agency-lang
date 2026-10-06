@@ -1,8 +1,7 @@
 import { readFile } from "fs/promises";
+import type { OperatingSystem } from "../host/host.js";
 
-export type Platform = "macos" | "linux" | "windows" | "wsl" | "unknown";
-
-let _cachedPlatform: Platform | null = null;
+let _cachedPlatform: OperatingSystem | null = null;
 
 /**
  * Detect the current OS platform. Result is cached since it can't change at runtime.
@@ -23,7 +22,7 @@ let _cachedPlatform: Platform | null = null;
  *   in WSL even though the user is on Windows.
  * - Anything not darwin, win32, or linux is treated as "unknown"
  */
-export async function detectPlatform(): Promise<Platform> {
+export async function detectPlatform(): Promise<OperatingSystem> {
   if (_cachedPlatform !== null) return _cachedPlatform;
 
   const p = process.platform;

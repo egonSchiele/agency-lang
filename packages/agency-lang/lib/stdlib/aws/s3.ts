@@ -175,9 +175,10 @@ export async function runS3Operation(
   region: string,
   operation: S3Operation,
 ): Promise<S3OperationResult> {
-  const credentials = resolveAwsCredentials();
+  const { settings } = run.ctx.host;
+  const credentials = resolveAwsCredentials(settings);
   if ("error" in credentials) return credentials;
-  const partition = resolveAwsPartition(resolveRegion(region));
+  const partition = resolveAwsPartition(resolveRegion(region, settings));
   if ("error" in partition) return partition;
   const bucket = validateBucket(operation.bucket);
   if ("error" in bucket) return bucket;

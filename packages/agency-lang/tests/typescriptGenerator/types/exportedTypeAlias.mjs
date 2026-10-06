@@ -1,9 +1,4 @@
-import { fileURLToPath } from "url";
-import __process from "process";
-import { readFileSync, writeFileSync } from "fs";
 import { z } from "agency-lang/zod";
-import path from "path";
-import os from "os";
 import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   goToNode, color, nanoid, smoltalk,
@@ -37,43 +32,46 @@ import {
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
-  DeterministicClient as __DeterministicClient,
-  installFetchMock as __installFetchMock,
   createLogger as __createLogger,
+  defaultHost as __defaultHost,
+  path, os,
   runCliEntry,
 } from "agency-lang/runtime";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const __cwd = __process.cwd();
+// The host is the platform: a Node process here, a browser elsewhere. The
+// default host of the platform this module was bundled for; a run can carry
+// its own through InvocationOptions.
+const __host = __defaultHost();
+const __dirname = __host.system.moduleDir(import.meta.url);
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "",
-    apiKey: __process.env["STATELOG_API_KEY"] || "",
+    apiKey: __host.settings.read("STATELOG_API_KEY") || "",
     projectId: "",
     debugMode: false,
     observability: false
   },
   smoltalkDefaults: {
     apiKey: {
-      openAi: __process.env["OPENAI_API_KEY"] || "",
-      google: __process.env["GEMINI_API_KEY"] || "",
-      anthropic: __process.env["ANTHROPIC_API_KEY"] || "",
-      openRouter: __process.env["OPENROUTER_API_KEY"] || "",
-      deepInfra: __process.env["DEEPINFRA_API_KEY"] || "",
-      liteLlm: __process.env["LITELLM_API_KEY"] || "",
-      openAiCompat: __process.env["OPENAI_COMPAT_API_KEY"] || ""
+      openAi: __host.settings.read("OPENAI_API_KEY") || "",
+      google: __host.settings.read("GEMINI_API_KEY") || "",
+      anthropic: __host.settings.read("ANTHROPIC_API_KEY") || "",
+      openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
+      deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
+      liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
     },
     baseUrl: {
-      liteLlm: __process.env["LITELLM_BASE_URL"] || "",
-      openAiCompat: __process.env["OPENAI_COMPAT_BASE_URL"] || ""
+      liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_BASE_URL") || ""
     },
     model: "gpt-5-mini",
     logLevel: "warn",
     provider: "openai-responses"
   },
   dirname: __dirname,
+  host: __host,
   logLevel: "info",
   traceConfig: {
     program: "exportedTypeAlias.agency"
@@ -123,28 +121,6 @@ export const __setTraceFile = (filePath: string) => {
 };
 export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
-
-// Auto-activate the deterministic LLM client when AGENCY_LLM_MOCKS is set.
-// The test runner (lib/cli/util.ts) populates this env var as a JSON string
-// when AGENCY_USE_TEST_LLM_PROVIDER=1. Both the agency evaluate template
-// and the agency-js test.js paths import this module, so this single block
-// covers both code paths.
-if (__process.env.AGENCY_LLM_MOCKS) {
-  __globalCtx.setLLMClient(
-    new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
-  );
-}
-
-// Auto-activate fetch mocking when AGENCY_FETCH_MOCKS_FILE points at a mocks
-// file. The runner writes resolved mocks (returnFile bodies already inlined) to
-// a temp file and passes its path — a file, not an inline env value, so a large
-// response body can't blow the exec arg/env size limit (ARG_MAX). Independent of
-// AGENCY_LLM_MOCKS — a test may mock the network while using a real LLM, or vice
-// versa. Installed before any node runs, ahead of any http.ts / stdlib / interop
-// fetch.
-if (__process.env.AGENCY_FETCH_MOCKS_FILE) {
-  __installFetchMock(JSON.parse(readFileSync(__process.env.AGENCY_FETCH_MOCKS_FILE, "utf-8")));
-}
 
 // Share a single registry object across every compiled module. With
 // composite "module:name" keys, all modules' helpers — plus
@@ -293,7 +269,7 @@ await callHook(__run, {
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-              const __log = __createLogger(__ctx.logLevel);
+              const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
               __run.log?.error?.({
@@ -326,7 +302,7 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
   });
 }
 export const __mainNodeParams = [];
-if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+if (__host.system.isMainModule(import.meta.url)) {
   try {
     const initialState = {
       messages: new ThreadStore(),

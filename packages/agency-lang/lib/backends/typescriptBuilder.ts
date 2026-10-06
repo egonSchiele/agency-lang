@@ -3173,7 +3173,7 @@ export class TypeScriptBuilder {
             `{
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-              const __log = __createLogger(__ctx.logLevel);
+              const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
               __log.error(\`Node ${nodeName} crashed: \${__errMsg}\`);
               if (__errStack) __log.error(__errStack);
               __run.log?.error?.({
@@ -4313,6 +4313,7 @@ export class TypeScriptBuilder {
       statelogConfig,
       smoltalkDefaults,
       dirname: ts.id("__dirname"),
+      host: ts.id("__host"),
     };
     if (this.agencyConfig.verbose) {
       runtimeCtxArgs.verbose = ts.raw("true");
@@ -4564,11 +4565,11 @@ export class TypeScriptBuilder {
       );
       result.push(
         ts.if(
-          ts.binOp(
-            $(ts.id("__process")).prop("argv").index(ts.num(1)).done(),
-            "===",
-            ts.call(ts.id("fileURLToPath"), [$(ts.id("import")).prop("meta").prop("url").done()]),
-          ),
+          $(ts.id("__host"))
+            .prop("system")
+            .prop("isMainModule")
+            .call([$(ts.id("import")).prop("meta").prop("url").done()])
+            .done(),
           ts.statements([
             ts.tryCatch(
               ts.statements([

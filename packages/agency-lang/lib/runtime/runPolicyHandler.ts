@@ -1,4 +1,5 @@
-import type { Policy } from "./policy.js";
+import type { Host, HostSettings } from "../host/host.js";
+import type { Policy, PolicyDirs } from "./policy.js";
 import { checkPolicyExplicit, validatePolicy } from "./policy.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { HandlerFn } from "./types.js";
@@ -24,9 +25,9 @@ export type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts
 // the chain resolves by the program's own handlers; what nothing settles
 // surfaces to the user endpoint (resolveCliInterrupts) instead of being
 // decided here.
-export function makeRunPolicyHandler(policy: Policy): HandlerFn {
+export function makeRunPolicyHandler(policy: Policy, dirs: PolicyDirs): HandlerFn {
   return async (intr: Intr) => {
-    const decision = checkPolicyExplicit(policy, intr);
+    const decision = checkPolicyExplicit(policy, intr, dirs);
     if (decision === null) return undefined;
     if (decision.type === "approve") return approve();
     if (decision.type === "reject") return reject(decision.message);
@@ -35,10 +36,11 @@ export function makeRunPolicyHandler(policy: Policy): HandlerFn {
   };
 }
 
-// Parse and validate the run policy from the environment. Returns null when
-// no policy was passed (the run was launched without any policy flag).
-function loadEnvPolicy(): Policy | null {
-  const raw = process.env[AGENCY_RUN_POLICY];
+// Parse and validate the run policy from the environment, read through the
+// host's settings. Returns null when no policy was passed (the run was
+// launched without any policy flag).
+function loadEnvPolicy(settings: HostSettings): Policy | null {
+  const raw = settings.read(AGENCY_RUN_POLICY);
   if (!raw) return null;
 
   let policy: unknown;
@@ -58,8 +60,8 @@ function loadEnvPolicy(): Policy | null {
 // --policy / --approve / --reject / --interactive flag all set AGENCY_RUN_POLICY).
 // The declarative environment boundary the CLI endpoint adapter checks before
 // falling back to reporting an unhandled interrupt.
-export function hasRunPolicyMechanism(): boolean {
-  return loadEnvPolicy() !== null;
+export function hasRunPolicyMechanism(settings: HostSettings): boolean {
+  return loadEnvPolicy(settings) !== null;
 }
 
 // Install the root policy handler on `execCtx` when the run carries a
@@ -75,17 +77,19 @@ export function hasRunPolicyMechanism(): boolean {
 export function installRunPolicyHandler(
   execCtx: {
     pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
+    host: Host;
+    policyDirs: PolicyDirs;
   },
   policy?: Policy,
 ): void {
   if (isIpcMode()) return;
-  const effective = policy ?? loadEnvPolicy();
+  const effective = policy ?? loadEnvPolicy(execCtx.host.settings);
   if (!effective) return;
   // liveGuardIds: [] — explicit: the --policy handler registers at run
   // start, before any guard exists, and it is the outermost supervisory
   // layer; a policy answering an interrupt is never metered or gated by
   // user guards.
-  execCtx.pushHandler(makeRunPolicyHandler(effective), []);
+  execCtx.pushHandler(makeRunPolicyHandler(effective, execCtx.policyDirs), []);
 }
 
 // The CLI-driven run's user endpoint (`resolveCliInterrupts`) lives in

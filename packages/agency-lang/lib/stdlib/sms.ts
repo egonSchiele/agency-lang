@@ -1,3 +1,4 @@
+import { currentHost } from "../runtime/currentHost.js";
 import { checkRecipients } from "./messaging.js";
 
 const TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts";
@@ -16,21 +17,22 @@ export type SmsOptions = {
 };
 
 export async function _sendSms(to: string, body: string, options?: SmsOptions): Promise<SmsResult> {
-  const accountSid = options?.accountSid || process.env.TWILIO_ACCOUNT_SID;
+  const { settings } = currentHost();
+  const accountSid = options?.accountSid || settings.read("TWILIO_ACCOUNT_SID");
   if (!accountSid) {
     throw new Error(
       "Missing Twilio Account SID. Set TWILIO_ACCOUNT_SID env var or pass accountSid option.",
     );
   }
 
-  const authToken = options?.authToken || process.env.TWILIO_AUTH_TOKEN;
+  const authToken = options?.authToken || settings.read("TWILIO_AUTH_TOKEN");
   if (!authToken) {
     throw new Error(
       "Missing Twilio Auth Token. Set TWILIO_AUTH_TOKEN env var or pass authToken option.",
     );
   }
 
-  const from = options?.from || process.env.TWILIO_FROM_NUMBER;
+  const from = options?.from || settings.read("TWILIO_FROM_NUMBER");
   if (!from) {
     throw new Error(
       "Missing Twilio phone number. Set TWILIO_FROM_NUMBER env var or pass from option.",

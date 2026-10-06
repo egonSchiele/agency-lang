@@ -8,13 +8,18 @@ import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
-import { Clock, realClock, FakeClock } from "../clock.js";
+import type { Clock } from "../clock.js";
+import { defaultHost } from "#default-host";
+import { withClock, type Host } from "../../host/host.js";
+import { resolvePolicyDirs } from "../policyDirs.js";
+import type { PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import { DeterministicClient } from "../deterministicClient.js";
 import { mergeLlmConfig } from "../llmConfig.js";
 import { MemoryManager } from "../memory/manager.js";
 import { MemoryFrame } from "../memory/frame.js";
@@ -45,11 +50,11 @@ import { PendingPromiseStore } from "./pendingPromiseStore.js";
  * agency.json's coverage.outDir; defaults to ".coverage" otherwise.
  */
 let _processCoverageCollector: CoverageCollector | null = null;
-function getProcessCoverageCollector(): CoverageCollector {
+function getProcessCoverageCollector(host: Host): CoverageCollector {
   if (_processCoverageCollector) return _processCoverageCollector;
   const collector = new CoverageCollector();
   _processCoverageCollector = collector;
-  const outDir = process.env.AGENCY_COVERAGE_OUTDIR ?? ".coverage";
+  const outDir = host.settings.read("AGENCY_COVERAGE_OUTDIR") ?? ".coverage";
   process.on("exit", () => {
     // process.on("exit") handlers are sync-only and any throw is unhelpful at
     // shutdown — log a warning and move on so coverage failures never make
@@ -72,15 +77,6 @@ function reviveNative<T>(data: T): T {
   return JSON.parse(JSON.stringify(data, nativeTypeReplacer), nativeTypeReviver);
 }
 
-/** The default clock for a run: a FakeClock only when a test opts in via the
- *  AGENCY_FAKE_CLOCK env var, otherwise the real clock. The env var is set by
- *  the test runner per test case (see lib/cli/util.ts). */
-function defaultClock(): Clock {
-  // Require exactly "1", not any truthy string. AGENCY_FAKE_CLOCK=0 must
-  // disable, not enable — a non-empty "0" is truthy and would surprise.
-  return process.env.AGENCY_FAKE_CLOCK === "1" ? new FakeClock() : realClock;
-}
-
 export type PendingArgOverrides = {
   moduleId: string | null;
   scopeName: string | null;
@@ -98,8 +94,11 @@ export class RuntimeContext<T> {
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   handlers: HandlerEntry[];
-  /** The time source for guards. Real by default; a FakeClock only when a
-   *  test opts in. NOT serialized — reconstructed per run, like handlers.
+  /** The platform this run is on: files, the terminal, environment
+   *  variables, the clock, and the rest. See docs/dev/runtime/host.md. The
+   *  default host of the platform when the caller passed none; a run can
+   *  carry its own through `InvocationOptions.host`. NOT serialized —
+   *  reconstructed per run, like handlers.
    *
    *  DRIFT WARNING: this and the other non-serialized runtime fields
    *  (handlers, callbacks, checkpoints, locks, …) are set by the constructor
@@ -108,7 +107,16 @@ export class RuntimeContext<T> {
    *  here but forgotten there is silently `undefined` at run time with no
    *  compile error — that is the bug the `clock` copy fixed. If you add a
    *  non-serialized field, copy it in `createExecutionContext` too. */
-  clock: Clock;
+  host: Host;
+  /** The directories a policy's `dir` patterns stand for, resolved once
+   *  here so the matcher reads no file while an interrupt is answered.
+   *  NOT serialized; copied in `createExecutionContext` like `host`. */
+  policyDirs: PolicyDirs;
+  /** The time source for guards: the host's clock. Real by default; a
+   *  FakeClock only when a test opts in. */
+  get clock(): Clock {
+    return this.host.clock;
+  }
   locks: Record<string, Promise<void>>;
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
@@ -306,8 +314,12 @@ export class RuntimeContext<T> {
      *  test/runtime constructors keep working; defaults to "info" to
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
-    /** Test-only override. Omitted in production, where defaultClock()
-     *  (the env var or the realClock default) applies. */
+    /** The host to run on. Omitted in production, where the platform's
+     *  default host applies. */
+    host?: Host;
+    /** Test-only override of the host's clock. Omitted in production,
+     *  where the default host decides (the AGENCY_FAKE_CLOCK env var or the
+     *  real clock). */
     clock?: Clock;
   }) {
     // One runtime merge, applied for BOTH transports so a subprocess launched
@@ -317,14 +329,16 @@ export class RuntimeContext<T> {
     // also layers nested `log`/`trace` objects rather than clobbering them.
     args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());
     args = applyRuntimeConfigOverridesToContextArgs(args, getRuntimeConfigOverrides());
-    this.clock = args.clock ?? defaultClock();
+    const host = args.host ?? defaultHost();
+    this.host = args.clock ? withClock(host, args.clock) : host;
+    this.policyDirs = resolvePolicyDirs(this.host);
     const statelogConfig = {
       ...args.statelogConfig,
       // Explicit > env > minted. The env var lets a harness give an entire
       // process tree one trace id, including descendants started without
       // IPC (a bash `agency run ...`), so a shared statelog stays
       // single-trace for the eval extractor.
-      traceId: args.statelogConfig.traceId || process.env[TRACE_ID_ENV] || nanoid(),
+      traceId: args.statelogConfig.traceId || this.host.settings.read(TRACE_ID_ENV) || nanoid(),
     };
 
     this.statelogConfig = statelogConfig;
@@ -380,10 +394,18 @@ export class RuntimeContext<T> {
     this.maxToolSchemaChars = args.maxToolSchemaChars;
     this.providerModules = args.providerModules ?? [];
     this._llmClient = new SmoltalkClient();
+    // The deterministic client when AGENCY_LLM_MOCKS is set. The test runner
+    // (lib/cli/util.ts) sets the variable to a JSON string when
+    // AGENCY_USE_TEST_LLM_PROVIDER=1. Read here, through the host, so every
+    // compiled module gets it without a block in its generated header.
+    const llmMocks = this.host.settings.read("AGENCY_LLM_MOCKS");
+    if (llmMocks) {
+      this._llmClient = new DeterministicClient(JSON.parse(llmMocks));
+    }
     this.abortController = new AbortController();
 
-    if (process.env.AGENCY_COVERAGE) {
-      this.coverageCollector = getProcessCoverageCollector();
+    if (this.host.settings.read("AGENCY_COVERAGE")) {
+      this.coverageCollector = getProcessCoverageCollector(this.host);
     }
 
     // JSON-derived memory config is kept as an immutable seed; the
@@ -480,10 +502,14 @@ export class RuntimeContext<T> {
     execCtx.invocationUsage = new InvocationUsageMeter();
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the
-    // constructor, so carry the clock over from the global context. Without
+    // constructor, so carry the host over from the global context. Without
     // this the run would meter against `undefined` and the fake-clock seam
     // (_advanceTime) would never see the FakeClock the constructor installed.
-    execCtx.clock = this.clock;
+    // A host given for this one invocation wins over the global one.
+    execCtx.host = invocation.host ?? this.host;
+    // Resolved again for this run: the agent home may have been created, or
+    // the variable that names it changed, since the global context was built.
+    execCtx.policyDirs = resolvePolicyDirs(execCtx.host);
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];
@@ -613,6 +639,7 @@ export class RuntimeContext<T> {
       // "debug" in agency.json surfaces every tier/extract/compact
       // step on stderr.
       logLevel: this.logLevel,
+      logSink: this.host.settings,
       memoryIdRef: {
         // memoryId is orthogonal to which frame is active — it lives
         // on `<stack>.other.memoryId` and persists across frame

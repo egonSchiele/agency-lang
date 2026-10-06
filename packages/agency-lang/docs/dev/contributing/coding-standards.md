@@ -155,3 +155,23 @@ A whole path the interrupt named, such as the target of `remove`, goes through `
 **Rationale:** A symlink below an approved directory must never be followed, and that rule has to hold at every call site. One module enforces it, so a new function cannot forget.
 
 **Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason.
+
+### Reach the platform through the host
+
+A file the browser can reach does not import a Node module or use a Node global (`process`, `Buffer`, `__dirname`, `__filename`, `require`, `setImmediate`). It reads the platform through the host on the run it was handed, `run.ctx.host`, which has the terminal, environment variables, the clock, and the other parts in [`docs/dev/runtime/host.md`](../runtime/host.md).
+
+```ts
+// Bad
+const home = process.env.HOME;
+console.log(result);
+
+// Good
+const home = run.ctx.host.settings.read("HOME");
+run.ctx.host.terminal.print([result]);
+```
+
+A file that cannot leave Node goes in `eslint.node-exceptions.mjs`. `NODE_ONLY` is for good, with the reason beside each file. `WAITING` is for a file whose Node use has not moved into the host yet; that list only gets shorter.
+
+**Rationale:** The same compiled program runs on Node and in a browser. One `process.env` read in a file the browser bundle contains is a crash at load time there, and the bundle contains most of the runtime and the stdlib.
+
+**Enforcement:** linted. `no-restricted-imports` and `no-restricted-globals` in `eslint.config.js` cover the files in `BROWSER_FILES`, except those on either list. `scripts/lint-browser-reach.mjs`, which `lint:structure` runs, bundles the runtime and the stdlib with esbuild and fails when the bundle reaches a file `BROWSER_FILES` does not cover, or when a reached file imports one on `NODE_ONLY`.

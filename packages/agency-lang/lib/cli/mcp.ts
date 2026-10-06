@@ -1,4 +1,5 @@
 import * as path from "path";
+import { nodeHost } from "@/host/nodeHost.js";
 import { isFailure } from "@/runtime/index.js";
 import { agentHomeDir } from "@/runtime/agentHome.js";
 import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/config/target.js";
@@ -15,7 +16,7 @@ import {
 
 export type McpScope = { global?: boolean };
 
-const globalFile = (): string => path.join(agentHomeDir(), "settings.json");
+const globalFile = (): string => path.join(agentHomeDir(nodeHost()), "settings.json");
 const currentProject = (): ConfigTarget => projectTarget(process.cwd());
 
 const scopeFile = (scope: McpScope, target: ConfigTarget): string =>

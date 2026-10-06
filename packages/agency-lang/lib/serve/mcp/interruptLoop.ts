@@ -1,4 +1,6 @@
 import { checkPolicy } from "../../runtime/policy.js";
+import { resolvePolicyDirs } from "../../runtime/policyDirs.js";
+import { defaultHost } from "#default-host";
 import { approve, reject } from "../../runtime/interrupts.js";
 import type { PolicyStore } from "../policyStore.js";
 
@@ -11,8 +13,9 @@ function applyPolicy(
   interrupts: Array<{ effect: string; message: string; data: any; origin: string }>,
   policy: Record<string, any>,
 ) {
+  const dirs = resolvePolicyDirs(defaultHost());
   return interrupts.map((interrupt) => {
-    const decision = checkPolicy(policy, interrupt);
+    const decision = checkPolicy(policy, interrupt, dirs);
     if (decision.type === "approve") {
       return approve();
     }

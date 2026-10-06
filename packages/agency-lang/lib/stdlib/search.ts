@@ -1,4 +1,5 @@
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
+import { currentHost } from "../runtime/currentHost.js";
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 
 export type SearchResult = {
@@ -17,8 +18,9 @@ export type SearchOptions = {
 };
 
 export async function _search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
+  const { settings } = currentHost();
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
-  const apiKey = options?.apiKey || process.env.BRAVE_API_KEY;
+  const apiKey = options?.apiKey || settings.read("BRAVE_API_KEY");
   if (!apiKey) {
     throw new Error(
       "Missing Brave Search API key. Set BRAVE_API_KEY env var or pass apiKey option.",
@@ -67,8 +69,9 @@ export async function _tavilySearch(
   query: string,
   options?: TavilySearchOptions,
 ): Promise<SearchResult[]> {
+  const { settings } = currentHost();
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
-  const apiKey = options?.apiKey || process.env.TAVILY_API_KEY;
+  const apiKey = options?.apiKey || settings.read("TAVILY_API_KEY");
   if (!apiKey) {
     throw new Error("Missing Tavily API key. Set TAVILY_API_KEY env var or pass apiKey option.");
   }

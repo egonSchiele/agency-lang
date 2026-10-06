@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
 import path from "path";

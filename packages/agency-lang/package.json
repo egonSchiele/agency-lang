@@ -34,7 +34,7 @@
     "debug": "node ./dist/scripts/agency.js debug",
     "bundle": "node ./dist/scripts/agency.js bundle",
     "circular-deps": "npx dpdm --circular lib/parser.ts",
-    "lint:structure": "eslint lib/ && node scripts/lint-run-reads.mjs",
+    "lint:structure": "eslint lib/ && node scripts/lint-run-reads.mjs && node scripts/lint-browser-reach.mjs",
     "lint:fix": "eslint lib/ --fix",
     "fmt:ts": "prettier --write \"**/*.ts\"",
     "fmt:ts:check": "prettier --check \"**/*.ts\""
@@ -108,6 +108,9 @@
     "./stdlib/*": "./stdlib/*"
   },
   "imports": {
+    "#default-host": {
+      "default": "./dist/lib/host/default.node.js"
+    },
     "#sha256": {
       "browser": "./dist/lib/utils/sha256.portable.js",
       "default": "./dist/lib/utils/sha256.node.js"

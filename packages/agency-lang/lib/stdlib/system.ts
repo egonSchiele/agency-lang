@@ -1,7 +1,7 @@
 import process from "process";
-import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { assertContained } from "./assertContained.js";
 import { fixedPath, resolveUnder } from "./contained.js";
 import { exitProcess } from "../runtime/exitProcess.js";
@@ -10,16 +10,17 @@ import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 export function _args(): string[] {
-  return process.argv.slice(2);
+  return currentHost().system.args().slice(2);
 }
 
 export function _cwd(): string {
-  return process.cwd();
+  return currentHost().system.cwd();
 }
 
+// Through `host.env`, not `host.settings`: this hands any variable to the
+// program, which is what the env capability can refuse.
 export function _env(name: string): string | null {
-  const v = process.env[name];
-  return v === undefined ? null : v;
+  return currentHost().env.get(name);
 }
 
 export async function _exit(code: number): Promise<void> {
@@ -27,7 +28,7 @@ export async function _exit(code: number): Promise<void> {
 }
 
 export function _isTTY(): boolean {
-  return process.stdin.isTTY === true;
+  return currentHost().terminal.isInteractive();
 }
 
 export async function _readStdin(): Promise<string> {
@@ -48,7 +49,7 @@ export function _setEnv(name: string, value: string): void {
   if (value.includes("\0")) {
     throw new Error("setEnv: value must not contain NUL bytes");
   }
-  process.env[name] = value;
+  currentHost().env.set(name, value);
 }
 
 /**
@@ -61,7 +62,7 @@ async function openUrlImpl(
   stack: StateStack,
   url: string,
 ): Promise<void> {
-  const platform = await detectPlatform();
+  const platform = ctx.host.system.operatingSystem();
   const signal = ctx.getAbortSignal(stack);
 
   if (platform === "macos") {
@@ -107,7 +108,7 @@ async function screenshotImpl(
   height: number,
   allowedPaths?: string[],
 ): Promise<void> {
-  const platform = await detectPlatform();
+  const platform = ctx.host.system.operatingSystem();
   // A whole path the interrupt named: the final name is never followed.
   await assertContained(filepath, allowedPaths ?? []);
   const located = fixedPath(filepath);

@@ -595,8 +595,10 @@ export const ts = {
     ]);
   },
 
+  /** A read of an environment variable through the header's host, `null`
+   *  when it is not set. */
   env(varName: string): TsRaw {
-    return ts.raw(`__process.env[${JSON.stringify(varName)}]`);
+    return ts.raw(`__host.settings.read(${JSON.stringify(varName)})`);
   },
 
   /**

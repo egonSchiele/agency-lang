@@ -1,4 +1,3 @@
-import { performance } from "node:perf_hooks";
 import * as path from "node:path";
 import * as smoltalk from "smoltalk";
 import { currentRun, type Run } from "../runtime/asyncContext.js";

@@ -21,3 +21,18 @@ export function decodeBase64Strict(base64: string): Uint8Array {
   }
   return new Uint8Array(Buffer.from(normalized, "base64"));
 }
+
+/** Standard base64 with padding, through the platform's own `btoa`, which
+ *  Node and browsers both have. `btoa` takes a string of byte values. */
+export function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/** `encodeBase64` of the UTF-8 bytes of `text`. */
+export function encodeBase64Text(text: string): string {
+  return encodeBase64(new TextEncoder().encode(text));
+}

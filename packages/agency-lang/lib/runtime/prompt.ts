@@ -1,6 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON, UserContentInput, redactAttachments } from "smoltalk";
-import { createLogger } from "../logger.js";
+import { createLogger, type Logger } from "../logger.js";
 import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
 import type { Run } from "./asyncContext.js";
 import {
@@ -175,6 +175,11 @@ export const _internal = {
  *  same idempotent pr.step as the completion, so resumed runs do not
  *  double-emit for replayed steps. Retries inside dispatchWithRetry
  *  share the one start. */
+/** The runtime's logger for a run: its level, writing to its host. */
+function ctxLogger(ctx: RuntimeContext<any>): Logger {
+  return createLogger(ctx.logLevel, ctx.host.settings);
+}
+
 function emitPromptStart({
   run,
   messages,
@@ -326,9 +331,7 @@ async function runPostTurnMemory(
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;
-    createLogger(run.ctx.logLevel).warn(
-      `[memory] post-turn hook failed: ${(err as Error).message}`,
-    );
+    ctxLogger(run.ctx).warn(`[memory] post-turn hook failed: ${(err as Error).message}`);
   }
 }
 
@@ -455,7 +458,8 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
-  messages.push(buildReplyMessage(completion, toolCalls, ctx.logLevel), callLabel);
+  const reply = buildReplyMessage(completion, toolCalls, ctx.logLevel, ctx.host.settings);
+  messages.push(reply, callLabel);
 
   updateTokenStats({
     globals: ctx.globals,
@@ -914,9 +918,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           // Guard trips are signals, not best-effort failures — let
           // them bubble to the surrounding `withCostGuard` scope.
           if (isGuardExceededError(err)) throw err;
-          createLogger(ctx.logLevel).warn(
-            `[memory] recall injection failed: ${(err as Error).message}`,
-          );
+          ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
         }
       }
       // The llmCall span is already open (before the loop). On error,

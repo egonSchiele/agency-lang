@@ -639,6 +639,7 @@ export class RuntimeContext<T> {
       // "debug" in agency.json surfaces every tier/extract/compact
       // step on stderr.
       logLevel: this.logLevel,
+      logSink: this.host.settings,
       memoryIdRef: {
         // memoryId is orthogonal to which frame is active — it lives
         // on `<stack>.other.memoryId` and persists across frame

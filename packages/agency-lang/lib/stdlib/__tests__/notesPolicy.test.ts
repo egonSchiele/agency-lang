@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { checkPolicyExplicit, type Policy } from "../../runtime/policy.js";
+import {
+  checkPolicyExplicit as checkWith,
+  type Policy,
+  type PolicyDirs,
+} from "../../runtime/policy.js";
+
+// These rules match on `folder`, never on `dir`, so the directories a run
+// resolves do not matter; a fixed set keeps the matcher happy.
+const DIRS: PolicyDirs = {
+  cwd: "/",
+  agentHome: "/home/agent/.agency-agent",
+  agencyInstallDir: null,
+};
+const checkPolicyExplicit = (policy: Policy, interrupt: Parameters<typeof checkWith>[1]) =>
+  checkWith(policy, interrupt, DIRS);
 
 // std::notes/apple passes "" for an omitted optional `folder`, never null.
 // These tests pin that design through the REAL policy evaluator

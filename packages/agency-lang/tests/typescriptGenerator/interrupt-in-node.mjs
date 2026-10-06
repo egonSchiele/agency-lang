@@ -483,7 +483,7 @@ await callHook(__run, {
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-              const __log = __createLogger(__ctx.logLevel);
+              const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
               __log.error(`Node foo2 crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
               __run.log?.error?.({
@@ -587,7 +587,7 @@ await callHook(__run, {
     {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-              const __log = __createLogger(__ctx.logLevel);
+              const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
               __log.error(`Node sayHi crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
               __run.log?.error?.({

@@ -43,7 +43,7 @@ describe("module fingerprint emission", () => {
     const withoutRegistration = code.replace(`${registration[0]}\n`, "");
     expect(registration[2]).toBe(sha256Text(withoutRegistration));
     expect(code.indexOf(registration[0])).toBeLessThan(
-      code.indexOf("if (__process.argv[1] === fileURLToPath(import.meta.url))"),
+      code.indexOf("if (__host.system.isMainModule(import.meta.url))"),
     );
   });
 
@@ -58,7 +58,7 @@ describe("module fingerprint emission", () => {
   });
 
   it("does not mistake user text for the generated CLI entry", () => {
-    const guardText = "if (__process.argv[1] === fileURLToPath(import.meta.url)) {";
+    const guardText = "if (__host.system.isMainModule(import.meta.url)) {";
     const code = generate(`// ${guardText}
 node main() {}`);
 
@@ -66,7 +66,7 @@ node main() {}`);
     const registration = code.match(REGISTRATION);
     expect(registration).not.toBeNull();
     expect(code.indexOf(registration![0])).toBeLessThan(
-      code.lastIndexOf("if (__process.argv[1] === fileURLToPath(import.meta.url))"),
+      code.lastIndexOf("if (__host.system.isMainModule(import.meta.url))"),
     );
   });
 

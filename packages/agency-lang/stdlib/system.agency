@@ -11,7 +11,7 @@ import {
   _setTitle,
   _urlHost,
  } from "agency-lang/stdlib-lib/system.js"
-import { _notify } from "agency-lang/stdlib-lib/builtins.js"
+import { _notify } from "agency-lang/stdlib-lib/notify.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module Talk to the host OS: read command-line args and environment

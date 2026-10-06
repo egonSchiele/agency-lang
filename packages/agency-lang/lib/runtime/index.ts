@@ -8,6 +8,15 @@ export type {
   NodeReturnValue,
 } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
+
+// The four names the generated header used to import from the package's main
+// entry. That entry also exports the compiler, so importing it pulled the
+// parser and type checker into every compiled program. Generated code imports
+// these from here instead.
+export { goToNode } from "../simplemachine/graph.js";
+export { color } from "../utils/termcolors.js";
+export { nanoid } from "nanoid";
+export * as smoltalk from "smoltalk";
 export type { InvocationOptions } from "./invocationOptions.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";

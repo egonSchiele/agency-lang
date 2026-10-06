@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState, claimFrameForScope } from "./stateStack.js";
-import { _callbackImpl } from "../../stdlib/agency.js";
+import { _callbackImpl } from "../../stdlib/callback.js";
 import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
 import { ThreadStore } from "./threadStore.js";

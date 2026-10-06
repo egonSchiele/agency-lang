@@ -7,12 +7,11 @@ export const template = `import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
 import { z } from "agency-lang/zod";
-import { goToNode, color, nanoid } from "agency-lang";
-import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
 import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
+  goToNode, color, nanoid, smoltalk,
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpointFor as __checkpoint_impl, getCheckpointFor as __getCheckpoint_impl, restoreFor as __restore_impl, _runFor as __runtime_run_impl,

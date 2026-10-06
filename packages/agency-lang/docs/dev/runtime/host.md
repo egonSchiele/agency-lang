@@ -23,7 +23,11 @@ export type Host = {
 
 The host has two kinds of part.
 
+<<<<<<< HEAD
 **A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs: `files` needs `fileRead`, and its writing functions (`FILE_WRITE_FUNCTIONS`) need `fileWrite` as well; `env` and `terminal` need their own names.
+=======
+**A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs; `env` and `terminal` are the capability parts here.
+>>>>>>> origin/main
 
 **Every host provides the other parts.** `system`, `settings`, `clock`, and `random` have no capability name. No platform lacks a clock, and nearly every function reads the time, so a capability for it would be on every effect.
 
@@ -58,7 +62,11 @@ For each capability part, `makeHost` takes the part from `parts` when its capabi
 env.get needs the env capability, which the node host does not have.
 ```
 
+<<<<<<< HEAD
 That part is a `Proxy`, so `makeHost` keeps no list of the part's function names: any name a caller asks for refuses, with that name in the message. A files part on a host with `fileRead` and no `fileWrite` is real, with its writing functions replaced by refusals.
+=======
+That part is a `Proxy`, so `makeHost` keeps no list of the part's function names: any name a caller asks for refuses, with that name in the message.
+>>>>>>> origin/main
 
 So no host writes a refusal, and a host with fewer capabilities is the same code with a shorter list:
 
@@ -78,6 +86,7 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 | Host | File | Capabilities | What it is built from |
 | --- | --- | --- | --- |
 | `nodeHost` | `lib/host/nodeHost.ts` | all seven | `process`, `os`, `readline`, `crypto`, the real clock |
+<<<<<<< HEAD
 | `memoryHost` | `lib/host/memoryHost.ts` | whatever the test asks for; all seven by default | an object of files, recorded output, scripted input lines, an object of variables, `FakeClock` |
 
 Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
@@ -97,6 +106,10 @@ Three functions exist only on the host:
 `lib/host/files.shared.test.ts` runs one battery against both hosts: every function, each write mode, a missing file, a path that escapes the root, two overlapping `updateText` calls, and two pieces of work under one lock. A host added later registers there.
 
 A refusal from `makeHost` throws when the function is called, before any promise exists. An `await` in an async caller turns that into a rejection, which is where every caller stands.
+=======
+
+Each host is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, onUse }`, all optional.
+>>>>>>> origin/main
 
 ### The default host
 

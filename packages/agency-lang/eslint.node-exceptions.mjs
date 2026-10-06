@@ -18,8 +18,11 @@
 export const NODE_ONLY = {
   "lib/host/default.node.ts":
     "builds the default host for Node; the browser condition of #default-host picks default.browser.ts instead",
+<<<<<<< HEAD
   "lib/host/nodeFiles.ts": "the contained file operations of nodeHost, over fs",
   "lib/host/nodeFilesPart.ts": "the file part of nodeHost, over nodeFiles.ts",
+=======
+>>>>>>> origin/main
   "lib/host/nodeHost.ts": "the host for Node, built from Node modules on purpose",
   "lib/runtime/agencyGlobals.node.ts":
     "re-exports Node's path and os for Agency code; the browser entry point exports portable ones",
@@ -32,7 +35,10 @@ export const NODE_ONLY = {
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
   "lib/runtime/providerModules.ts": "loads provider modules from disk",
   "lib/runtime/subprocess-bootstrap.ts": "the child end of ipc.ts",
+<<<<<<< HEAD
   "lib/runtime/trace/fileSink.ts": "the trace sink that writes a file; CallbackSink stays portable",
+=======
+>>>>>>> origin/main
   "lib/runtime/trace/traceReader.ts": "tooling: reads a trace file for the debugger",
   "lib/stdlib/agency.ts": "compiles and runs Agency code in a subprocess (std::agency)",
   "lib/stdlib/agencyEval.ts": "runs evals of agents from run directories on disk",
@@ -72,6 +78,10 @@ export const WAITING = [
   "lib/runtime/checkpointChecksum.ts",
   "lib/runtime/costTelemetry.ts",
   "lib/runtime/deterministicClient.ts",
+<<<<<<< HEAD
+=======
+  "lib/runtime/effectSets.ts",
+>>>>>>> origin/main
   "lib/runtime/exitProcess.ts",
   "lib/runtime/memory/frame.ts",
   "lib/runtime/memory/store.ts",
@@ -88,6 +98,10 @@ export const WAITING = [
   "lib/runtime/template/literals.ts",
   "lib/runtime/template/synthesizeType.ts",
   "lib/runtime/toolBlockDiagnostics.ts",
+<<<<<<< HEAD
+=======
+  "lib/runtime/trace/sinks.ts",
+>>>>>>> origin/main
   "lib/runtime/trace/traceWriter.ts",
   "lib/statelogClient.ts",
   "lib/stdlib/abortable.ts",

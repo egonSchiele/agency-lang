@@ -10,7 +10,10 @@ import readline from "readline";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
 import { consoleLogSink } from "../logger.js";
+<<<<<<< HEAD
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
+=======
+>>>>>>> origin/main
 import { realClock, type Clock } from "../runtime/clock.js";
 import {
   makeHost,
@@ -29,8 +32,11 @@ import {
 export type NodeHostOptions = {
   /** Defaults to every capability Node has, `PLATFORM_CAPABILITIES.node`. */
   capabilities?: Capability[];
+<<<<<<< HEAD
   /** Options for the file part; the symlink tests pass `seams`. */
   files?: NodeFilesOptions;
+=======
+>>>>>>> origin/main
   /** Defaults to the real clock. A test passes a `FakeClock`. */
   clock?: Clock;
   onUse?: MakeHostArgs["onUse"];
@@ -42,7 +48,10 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     capabilities: options.capabilities ?? PLATFORM_CAPABILITIES.node,
     onUse: options.onUse,
     parts: {
+<<<<<<< HEAD
       files: nodeFilesPart(options.files),
+=======
+>>>>>>> origin/main
       env: nodeEnv,
       terminal: nodeTerminal,
       system: nodeSystem,

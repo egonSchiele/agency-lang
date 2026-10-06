@@ -10,8 +10,11 @@ const HEADER_PATH = path.resolve(
   "lib/templates/backends/typescriptGenerator/imports.mustache",
 );
 
+// Both import forms: `import { x } from "m"` and the bare `import "m"`.
 function importedModules(source: string): string[] {
-  return [...source.matchAll(/^import[^;]*?from\s+"([^"]+)"/gms)].map((match) => match[1]);
+  const withBindings = [...source.matchAll(/^import[^;]*?from\s+"([^"]+)"/gms)];
+  const bare = [...source.matchAll(/^import\s+"([^"]+)"/gm)];
+  return [...withBindings, ...bare].map((match) => match[1]);
 }
 
 describe("the generated header", () => {
@@ -24,5 +27,10 @@ describe("the generated header", () => {
   it("does not import from the package's main entry", () => {
     const modules = importedModules(header);
     expect(modules).not.toContain("agency-lang");
+  });
+
+  it("sees both import forms", () => {
+    const modules = importedModules('import { a } from "one";\nimport "two";\n');
+    expect(modules).toEqual(["one", "two"]);
   });
 });

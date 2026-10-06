@@ -29,7 +29,7 @@ argument, the `AGENCY_KOKORO_MODELS_DIR` environment variable, or
 `~/.agency/models/kokoro/`.
 */
 
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _speak, _download, _modelStatus, _validateSpeakArgs, _voices } from "./dist/src/agency.js"
 
 effect kokoro::download { model: string, sizeBytes: number, source: string, dir: string }

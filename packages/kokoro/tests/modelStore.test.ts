@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { remove, root } from "agency-lang/stdlib-lib/contained.js";
+import { remove, root } from "agency-lang/host-lib/nodeFiles.js";
 import { downloadHubSnapshot } from "agency-lang/stdlib-lib/hubDownload.js";
 import { snapshotFor } from "../src/lockfile.js";
 import {

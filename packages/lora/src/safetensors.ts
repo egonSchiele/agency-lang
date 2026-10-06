@@ -1,4 +1,4 @@
-import { fixedPath, readStream, stat } from "agency-lang/stdlib-lib/contained.js";
+import { fixedPath, readStream, stat } from "agency-lang/host-lib/nodeFiles.js";
 
 /** A safetensors file starts with an 8-byte little-endian length, then
  *  that many bytes of JSON: one entry per tensor, plus `__metadata__`, a

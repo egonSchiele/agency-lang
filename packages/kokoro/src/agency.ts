@@ -71,7 +71,7 @@ export async function _speak(
     format,
     modelsDir: resolveModelsDir(modelsDir),
   };
-  return speakWith(request, ctx.getAbortSignal(stack));
+  return speakWith(ctx.host, request, ctx.getAbortSignal(stack));
 }
 
 export function _voices(): Voice[] {

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { root } from "agency-lang/stdlib-lib/contained.js";
+import { root } from "agency-lang/host-lib/nodeFiles.js";
+import type { Host } from "agency-lang/host-lib/host.js";
 import { outputPath, pathExists, publishSpeechOutput } from "agency-lang/stdlib-lib/speech.js";
 import type { AudioFormat } from "./audioFormat.js";
 import { encodeWithFfmpeg } from "./ffmpeg.js";
@@ -21,11 +22,16 @@ export type SpeakRequest = {
   modelsDir: string;
 };
 
-/** Writes speech for `request.text` to a new audio file and returns its
- *  path. Never downloads, and never overwrites a file. */
-export async function speakWith(request: SpeakRequest, signal: AbortSignal): Promise<string> {
-  const target = await outputTarget(request.outputFile, request.format, request.allowedPaths);
-  if (await pathExists(target)) {
+/** Writes speech for `request.text` to a new audio file through `host`,
+ *  the host of the run that asked, and returns its path. Never downloads,
+ *  and never overwrites a file. */
+export async function speakWith(
+  host: Host,
+  request: SpeakRequest,
+  signal: AbortSignal,
+): Promise<string> {
+  const target = await outputTarget(host, request.outputFile, request.format, request.allowedPaths);
+  if (await pathExists(host, target)) {
     throw new Error(`kokoro: output file already exists: ${target}`);
   }
   if (!modelStatus(request.model, request.modelsDir).installed) {
@@ -36,8 +42,9 @@ export async function speakWith(request: SpeakRequest, signal: AbortSignal): Pro
   }
   const audio = await synthesize(request, signal);
   const wav = encodeWav(audio, SAMPLE_RATE);
-  const bytes = request.format === "wav" ? wav : await encodeWithFfmpeg(wav, request.format, signal);
-  await publishSpeechOutput(target, bytes, signal);
+  const bytes =
+    request.format === "wav" ? wav : await encodeWithFfmpeg(wav, request.format, signal);
+  await publishSpeechOutput(host, target, bytes, signal);
   return target;
 }
 
@@ -45,6 +52,7 @@ export async function speakWith(request: SpeakRequest, signal: AbortSignal): Pro
  *  temp directory named for the format. The temp directory is spelled
  *  without symlinks, which the publish step refuses. */
 async function outputTarget(
+  host: Host,
   outputFile: string,
   format: AudioFormat,
   allowedPaths: string[],
@@ -52,5 +60,5 @@ async function outputTarget(
   if (outputFile === "") {
     return path.join(root(os.tmpdir()).real, `agency-kokoro-${randomUUID()}.${format}`);
   }
-  return outputPath(outputFile, allowedPaths);
+  return outputPath(host, outputFile, allowedPaths);
 }

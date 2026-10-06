@@ -4,10 +4,10 @@
 //  - readBinaryUnderEffectSet: `reader` propagates std::readBinary and declares
 //    `raises <FileRead>`, so this only type-checks if std::readBinary is a member
 //    of the FileRead effectSet — catching a stale `std::readImage` entry in
-//    stdlib/capabilities.agency.
+//    stdlib/effectSets.agency.
 // Each node writes its own probe file first so it is independent of the test's
 // working directory.
-import { FileRead } from "std::capabilities"
+import { FileRead } from "std::effectSets"
 
 node readBinaryApproved(): boolean {
   const w = write("rb-probe.txt", "hello", "/tmp") with approve

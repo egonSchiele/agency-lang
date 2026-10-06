@@ -28,7 +28,7 @@ give either flag more than once: `--approve std::read --approve std::write`
 means the same as `--approve std::read,std::write`. `agency agent` takes
 each flag once and refuses a repeat.
 Each entry is an effect name (`std::write`), or the name of a built-in
-capability set from [`std::capabilities`](/stdlib/capabilities), which
+effect set from [`std::effectSets`](/stdlib/effectSets), which
 stands for every effect in the set:
 
 ```bash

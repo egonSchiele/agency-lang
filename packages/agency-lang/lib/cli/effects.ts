@@ -8,7 +8,7 @@ type PolicyEntry = { name: string; description: string };
 
 /**
  * `agency effects [name]`: what the approval flags accept. With no
- * argument, list the built-in capability sets and policies. With a set
+ * argument, list the built-in effect sets and policies. With a set
  * name, describe the set; with an effect name (contains `::`), name the
  * sets that include it; with a built-in policy name, print its resolved
  * policy. Plain text, with `ttyColor` accents that noop when stdout is

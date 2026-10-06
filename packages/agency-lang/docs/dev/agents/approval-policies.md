@@ -23,8 +23,8 @@ surprised us more than once.
   resolved — the saved file, a built-in, or a `--policy` path — with
   reject rules ahead of approve rules, so under first-match-wins the
   flags outrank the base and a reject outranks an approve for the same
-  effect. A bare name that exactly matches a built-in capability set
-  from `std::capabilities` (e.g. `FileRead`) expands to the set's member
+  effect. A bare name that exactly matches a built-in effect set
+  from `std::effectSets` (e.g. `FileRead`) expands to the set's member
   effects; any other bare name stays a plain effect name, since bare
   effect declarations are legal and the bare `interrupt("msg")` form
   raises the effect named `unknown`. A user effect whose bare name
@@ -32,7 +32,7 @@ surprised us more than once.
   On the agent the overlay is session-only; the saved policy file is
   never written. Every command builds the overlay with
   `policyOverlayFromFlags` (`lib/runtime/policyFlags.ts`); the set table
-  is parsed from `stdlib/capabilities.agency`
+  is parsed from `stdlib/effectSets.agency`
   (`lib/runtime/effectSets.ts`).
 
 In a non-interactive run (`-p`), an effect no rule decides is

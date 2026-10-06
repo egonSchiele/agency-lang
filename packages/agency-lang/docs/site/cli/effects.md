@@ -1,6 +1,6 @@
 ---
 title: Effects
-description: Documents the `agency effects` command, which lists the built-in capability sets and policies that the --approve, --reject, and --policy flags accept.
+description: Documents the `agency effects` command, which lists the built-in effect sets and policies that the --approve, --reject, and --policy flags accept.
 ---
 
 # Effects
@@ -10,7 +10,7 @@ agency effects
 ```
 
 Lists the names you can pass to the approval flags: the built-in
-capability sets for [`--approve` and `--reject`](/cli/policy#approving-and-rejecting-with-flags),
+effect sets for [`--approve` and `--reject`](/cli/policy#approving-and-rejecting-with-flags),
 and the built-in policies for `--policy`.
 
 ```
@@ -31,8 +31,8 @@ Use a set or an effect name with --approve / --reject, a policy with --policy:
   agency agent --policy with-writes --reject Shell
 ```
 
-A capability set is a named group of related interrupt effects, declared
-in [`std::capabilities`](/stdlib/capabilities). Passing a set name to
+An effect set is a named group of related interrupt effects, declared
+in [`std::effectSets`](/stdlib/effectSets). Passing a set name to
 `--approve` or `--reject` is shorthand for naming every effect in the
 set.
 

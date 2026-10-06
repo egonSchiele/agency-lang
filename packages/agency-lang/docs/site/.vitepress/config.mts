@@ -373,7 +373,7 @@ export default defineConfig({
               items: [{ text: "aws/s3", link: "/stdlib/aws/s3" }],
             },
             { text: "calendar", link: "/stdlib/calendar" },
-            { text: "capabilities", link: "/stdlib/capabilities" },
+            { text: "effectSets", link: "/stdlib/effectSets" },
             { text: "clipboard", link: "/stdlib/clipboard" },
             { text: "concurrency", link: "/stdlib/concurrency" },
             {

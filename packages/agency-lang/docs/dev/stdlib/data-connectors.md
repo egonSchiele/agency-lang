@@ -156,7 +156,7 @@ connector correctly.
 - **Limits are clamped, not rejected.** Also pass the clamped value in the
   effect payload, so a handler judges the real request.
 - **Register the effect** in the `Network` effect set in
-  `stdlib/capabilities.agency` — only the semantic effect;
+  `stdlib/effectSets.agency` — only the semantic effect;
   `std::http::fetchJSON` is already there. If the connector belongs to a
   family with its own set (like `DataFinance`), add it there too. A cheap
   regression guard: a test node that `raises <Network>` and calls the

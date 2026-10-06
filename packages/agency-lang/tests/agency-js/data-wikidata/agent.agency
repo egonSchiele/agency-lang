@@ -1,5 +1,5 @@
 import test { buildSearchPath, buildEntityPath, buildQueryPath, parseSearch, parseClaimValue, parseClaims, parseEntity, parseBindings, wikidataError, searchFinalize, entityFinalize, queryFinalize, wikidataSearch, wikidataEntity, wikidataQuery } from "std::data/wikidata"
-import { Network } from "std::capabilities"
+import { Network } from "std::effectSets"
 
 // --- pure-function wrappers ---
 

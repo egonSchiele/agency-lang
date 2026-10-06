@@ -4,7 +4,7 @@ import { parseAgency } from "../parser.js";
 import { getPackageRoot } from "../importPaths.js";
 import type { AgencyMultiLineComment, TypeAlias, UnionType, VariableType } from "../types.js";
 
-/** One built-in capability set from `stdlib/capabilities.agency`. */
+/** One built-in effect set from `stdlib/effectSets.agency`. */
 export type EffectSetInfo = {
   name: string;
   /** The declaration's doc comment, whitespace-trimmed. */
@@ -22,8 +22,8 @@ export type EffectSetInfo = {
 let cache: Record<string, EffectSetInfo> | null = null;
 
 /**
- * The built-in capability sets, keyed by name (null-prototype record —
- * callers look up CLI-supplied names). Parses `stdlib/capabilities.agency`
+ * The built-in effect sets, keyed by name (null-prototype record —
+ * callers look up CLI-supplied names). Parses `stdlib/effectSets.agency`
  * from the install on first use: the doc comments live only in the source,
  * so the source is the single definition discovery and flag expansion
  * share. Throws when the shipped file is missing or fails to parse — a
@@ -31,7 +31,7 @@ let cache: Record<string, EffectSetInfo> | null = null;
  */
 export function builtinEffectSets(): Record<string, EffectSetInfo> {
   if (cache === null) {
-    const file = path.join(getPackageRoot(), "stdlib", "capabilities.agency");
+    const file = path.join(getPackageRoot(), "stdlib", "effectSets.agency");
     cache = parseEffectSets(readFileSync(file, "utf-8"), file);
   }
   return cache;
@@ -44,7 +44,7 @@ type RawSet = { name: string; doc: string; items: VariableType[] };
 export function parseEffectSets(source: string, origin: string): Record<string, EffectSetInfo> {
   const parsed = parseAgency(source);
   if (!parsed.success) {
-    throw new Error(`stdlib capabilities file failed to parse (${origin}): ${parsed.message}`);
+    throw new Error(`stdlib effect sets file failed to parse (${origin}): ${parsed.message}`);
   }
 
   // Doc comments are standalone nodes after a bare parse (attachment to

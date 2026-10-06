@@ -650,6 +650,60 @@ A request for an unloaded model fails with a message that says to load it. `serv
 
 Any client can read the same status at `GET /v1/agency/status` on the server's address.
 
+### Serve more models than fit in memory
+
+Mark a model `lazy` to load it on its first request, and to let the server stop it when another lazy model needs the memory:
+
+```ts
+const server = await serve([
+  "florence-2",                              // loads now, stays loaded
+  { model: "z-image-turbo", lazy: true },    // loads on its first request
+  { model: "flux2-klein-9b", lazy: true },
+]);
+```
+
+On the command line this is `agency local serve florence-2 --lazy z-image-turbo --lazy flux2-klein-9b`.
+
+The first request for a lazy model waits for the load, and that wait counts against the caller's timeout. An image request with eight steps is given about three minutes, and a cold load of a large image model can take a good part of that. When a request has a deadline, warm the model first with `server.load(model)`, which resolves when it is ready.
+
+When a lazy model does not fit, the server stops the lazy model that has been idle longest and has no request running, and tries again. If every loaded model is busy or is not lazy, the request fails with a 503 that says so:
+
+```
+Not enough memory to load flux2-klein-9b (needs about 22 GB, 9 GB available).
+Loaded now: z-image-turbo (busy), florence-2 (not lazy).
+```
+
+A caller can wait and retry, or `unload` something itself.
+
+### Cancel a call, or everything on a model
+
+To cancel your own call, pass a `signal` and abort it. The call fails with `Cancelled`, and the server closes its connection to the model process. For an image model that stops the work after the step in progress.
+
+To stop whatever is running on a model, whoever started it:
+
+```ts
+await server.cancel("qwen3.5-9b");
+```
+
+```
+POST /v1/agency/cancel
+{ "model": "qwen3.5-9b" }
+```
+
+Every request in progress on that model fails with a 499. For most models the process is kept, because it stops on its own when the connection closes. A chat model served with `vlm: true` that was asked for a reply without streaming keeps generating after the connection closes, so for that one case the process is stopped and, unless the model is lazy, started again. That takes as long as loading the model.
+
+### Stop the server
+
+```ts
+await server.close();
+```
+
+```
+POST /v1/agency/shutdown
+```
+
+`close` refuses new requests, tells every model process to stop, waits up to five seconds for them to exit, forces any that remain, and then closes the port. The shutdown route does the same; under `agency local serve` the command then exits, and under `serve()` your program keeps running. If the server's own process is killed outright, each model process notices and exits on its own.
+
 `agency-lang/local` is the supported way in. Files under `agency-lang/stdlib-lib/` are internal to Agency, and their names change between releases.
 
 There is no chat function here. A chat model served by `agency local serve` answers the OpenAI chat API at the same address, so any OpenAI client works.

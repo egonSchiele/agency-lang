@@ -310,14 +310,104 @@ When the pool will not hand out a model it throws a `PoolRefusal` with a
 reason, and `STATUS_FOR_REFUSAL` in the front door turns the reason into a
 status. A model that was unloaded gets a 503 that says how to load it.
 
-**Routes the door answers itself** are rows of `adminRoutes` in
-`startFrontDoor`: `GET /v1/models`, and `GET /v1/agency/status`, which
-returns `{ "models": [...] }` with each model's state, error, requests in
-progress, and last use. Routes under `/v1/agency/` are refused with a 403
-unless the `Host` header is `127.0.0.1:<port>` or `localhost:<port>`. The
-door listens on 127.0.0.1 only, but a web page can reach that address
-under a hostname of its own, and the browser then treats the page and the
-server as one site. Such a request carries the page's hostname in `Host`.
+**Lazy models.** `--lazy <model>` is a row of `NAMING_FLAGS` with
+`kind: null` and `lazy: true`, so `groupServeArgv`, `targetsFromFlags`,
+and the picker check in `localServe` all treat it as naming a model with
+no code of their own. `ServeTarget.lazy` carries it to the plan.
+`joinLazyPairs` lets one model be named by a kind flag and by `--lazy`,
+as in `--vlm a --lazy a`, and joins the two plans after planning, so the
+two mentions may spell the model differently. Any other repeat is "named
+twice".
+
+A lazy model's plan has `lazy: true`, and `acquire` on one that is
+`stopped` or `failed` puts a load on the queue and waits for it. Before
+the spawn, `makeRoom` runs:
+
+1. Read `deps.availableMemory()`.
+2. Return if `fits(needBytes, memory)`: the estimate plus the reserve is
+   available. `estimatedNeed` in `availableMemory.ts` is the size on disk,
+   the draft's size, and the kind's row in `LOAD_HEADROOM_BYTES`. The
+   reserve is the smaller of 2 GiB and 5% of the machine's memory.
+3. Otherwise stop `evictionCandidate(records)`, the loaded lazy model with
+   no request in progress and the smallest `lastUsedAt`, and go to 1.
+4. With no candidate, throw `not-enough-memory`, whose message names each
+   loaded model and why it was kept (busy, or not lazy). With
+   `AGENCY_ALLOW_MEMORY_OVERCOMMIT=1` it logs the same message and loads
+   anyway.
+
+`evictionCandidate` is a pure function over the records, so the rule is
+tested without a process. `availableMemory` runs `vm_stat` on macOS and
+adds the free, inactive, and speculative pages; on Linux it reads
+`MemAvailable` from `/proc/meminfo`; on an error it logs and falls back to
+`os.freemem()`, which reads low.
+
+A lazy model whose process dies is marked `failed` and loaded again by
+its next request. Its death does not resolve `failure`, since the server
+goes on. The memory warning at startup counts only the models that are
+not lazy, because those are the ones that load together.
+
+The front door watches for the client closing while its model loads, and
+releases the model without forwarding when it has. `res.destroyed` does
+not report a closed client until something is written to it.
+
+**When the server dies first.** Every model process gets a pipe as its
+standard input that Node never writes to, and `AGENCY_EXIT_WITH_PARENT=1`.
+`exit_when_parent_goes` in `localServerCommon.py`, which each server
+script calls first, starts a thread that exits the process when the pipe
+closes, which is when Node has exited for any reason. The variable is the
+switch. Without it a script started by hand as a background job would be
+stopped by SIGTTIN when the thread read the terminal, and one with
+standard input from `/dev/null` would exit at once. `mlxVlmServer.py`
+wraps the upstream `mlx_vlm.server` for the same reason.
+
+**Lazy models.** `--lazy` is a row of `NAMING_FLAGS` with `kind: null`,
+so the argument grouping, the targets, and the picker check treat it as
+naming a model. `joinLazyPairs` lets a kind flag and `--lazy` name the
+same model, as in `--vlm a --lazy a`, and compares planned names, so the
+two may spell it differently.
+
+`acquire` on a lazy model that is not loaded queues a load. Before the
+spawn, `makeRoom` reads the available memory and stops idle lazy models,
+longest idle first (`evictionCandidate`, a pure function over the
+records), until the estimate fits with the reserve left free. With none
+left to stop it refuses with `not-enough-memory`, naming each loaded
+model and why it was kept. The estimate and the memory reading are in
+`availableMemory.ts`: size on disk, the draft, and the kind's headroom,
+against `vm_stat` on macOS or `MemAvailable` on Linux. A lazy model that
+dies is loaded again by its next request and does not resolve `failure`.
+
+The front door watches for the client closing while its model loads and
+releases the model without forwarding. `res.destroyed` does not report a
+closed client until something is written to it.
+
+**Cancelling.** `cancelOn` ends every `InProgress` entry of a model,
+including one still waiting for a load. Each entry is marked `cancelled`
+before its upstream request is destroyed, because destroying it raises
+`error`, and the handler in `forward` would otherwise answer the client a
+second time, which throws. `stopsOnClose` on the runtime's row in
+`CHAT_RUNTIMES` says whether closing the connection stops the process;
+its doc comment has the table by kind. When a cancelled request had
+reached a process that keeps running, the model is unloaded and, unless
+lazy, loaded again.
+
+**Shutting down.** `close` refuses new requests, signals every process at
+once, waits `STOP_GRACE_MS`, sends SIGKILL to the rest and waits for
+their exits, then closes the port. The signal goes out before the wait is
+queued, because a load in progress holds the queue and the signal is what
+ends it; the queued wait signals again, for a process whose spawn
+finished in between. `close` is one promise however many times it is
+called. `POST /v1/agency/shutdown` resolves `shutdownRequested`, which is
+chained to `close`; `localServe` waits on it beside `failure` and exits 0.
+
+**Routes the door answers itself** are rows of `adminRoutes`:
+`GET /v1/models`, `GET /v1/agency/status`, `POST /v1/agency/cancel`, and
+`POST /v1/agency/shutdown`. `adminRefusal` holds the two rules for the
+`/v1/agency/` routes. The `Host` header must be `127.0.0.1:<port>` or
+`localhost:<port>`: a web page can reach 127.0.0.1 under a hostname of
+its own, and then the browser treats the page and the server as one
+site. A POST must carry `content-type: application/json`, which a page
+cannot send across sites without a preflight request the door never
+answers.
 
 **The body limit.** The door reads each body with `parseJsonBody` from
 `lib/serve/util.ts`. For most routes the limit is its default, 10 MiB

@@ -132,6 +132,20 @@ curl -s http://127.0.0.1:8080/v1/audio/speech -H 'content-type: application/json
 
 The catalog knows which models are which, so `agency local serve qwen3-tts-mlx` starts the speech server with no flag, and `--embedding qwen3-tts-mlx` is refused before anything loads, naming the command that works. Some models load a second repo by name: `agency local download orpheus-3b-mlx` fetches its audio decoder as well, which is what lets it start with no network.
 
+A model that does not fit in memory beside the others can be served on demand with `--lazy`:
+
+```bash
+agency local serve florence-2 --lazy z-image-turbo --lazy flux2-klein-9b
+```
+
+This serves three models. `florence-2` loads before the port opens and stays loaded, as every model does without the flag. The two image models load on the first request that names each of them, and that request waits for the load. When a lazy model does not fit, the server stops the lazy model that has been idle longest to make room. A model that is not lazy is never stopped for one that is. All three names appear in `GET /v1/models` as soon as the port opens, and `GET /v1/agency/status` says which are loaded.
+
+`--lazy` names a model, so a lazy model is not also written as a plain argument; `z-image-turbo --lazy z-image-turbo` is refused. To force a kind, give the kind flag as well: `--vlm qwen3.5-9b --lazy qwen3.5-9b`. A `--draft` written after `--lazy <model>` belongs to that model.
+
+The decision whether a model fits is an estimate: its size on disk, plus 4 GB for an image model or 1 GB for any other kind, against the memory available now less a small reserve. `AGENCY_ALLOW_MEMORY_OVERCOMMIT=1` loads a lazy model even when the estimate says no, for a machine where it is too cautious.
+
+Three routes under `/v1/agency/` are about the server itself. `GET /v1/agency/status` lists each model's state. `POST /v1/agency/cancel` with `{"model": "..."}` ends every request running on that model. `POST /v1/agency/shutdown` stops the server, which then exits as it does on Ctrl-C. The two POST routes take `content-type: application/json`, and all three answer requests made to `127.0.0.1` or `localhost` only.
+
 Image models run on diffusers rather than MLX. Any diffusers model is served as an image model, with or without `--image`:
 
 ```bash

@@ -39,7 +39,7 @@ import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import client_gone, fail  # noqa: E402
+from localServerCommon import client_gone, exit_when_parent_goes, fail  # noqa: E402
 from visionRules import (  # noqa: E402
     MAX_BODY_BYTES,
     ONNXRUNTIME_VERSION,
@@ -522,6 +522,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    exit_when_parent_goes()
     args = parse_args()
     # Load and run once before binding the port. `agency local serve`
     # treats a refused connection as "still loading" and any answer as

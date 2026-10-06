@@ -8,9 +8,8 @@ const prepare = (body: Record<string, unknown>, path = "/v1/chat/completions", m
 
 describe("vision chat", () => {
   it("binds to loopback and generates one request at a time", () => {
-    expect(vlmServeArgs("/models/qwen", 9001, 600)).toEqual([
-      "-m",
-      "mlx_vlm.server",
+    expect(vlmServeArgs("/pkg/lib/cli/mlxVlmServer.py", "/models/qwen", 9001, 600)).toEqual([
+      "/pkg/lib/cli/mlxVlmServer.py",
       "--model",
       "/models/qwen",
       "--host",

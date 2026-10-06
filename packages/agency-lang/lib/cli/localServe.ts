@@ -5,7 +5,27 @@ import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import { realSpawn, pipedSpawn } from "./modelProcess.js";
+import {
+  NAMING_FLAGS,
+  argvAfterServe,
+  groupServeArgv,
+  optionsByModel,
+  targetsFromFlags,
+  type ServeTarget,
+  type ValueFlags,
+} from "./serveArgv.js";
+export {
+  argvAfterServe,
+  groupServeArgv,
+  optionsByModel,
+  targetsFromFlags,
+  valueFlagsOf,
+  type ServeTarget,
+  type ValueFlags,
+} from "./serveArgv.js";
+export { spawnOptions, type ChildOutput } from "./modelProcess.js";
 import prompts from "prompts";
 import {
   isServedUri,
@@ -36,6 +56,7 @@ import {
 import type { ModelKind } from "../stdlib/modelKind.js";
 import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { createModelPool, type ModelPlan, type ModelStatus } from "./modelPool.js";
+import { availableMemory, estimatedNeed, type MemorySnapshot } from "./availableMemory.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
@@ -100,202 +121,6 @@ export function serveArgs(
   return args;
 }
 
-/** One model to serve, and everything said about how to serve it. The
- *  command line and `serve()` in `agency-lang/local` each build a list of
- *  these, and `serveTargets` takes nothing else about a model.
- *
- *  model    the name, URI, or directory, as the caller wrote it
- *  kind     the kind a flag gave it. Absent: read it from the model
- *  runtime  the chat runtime a flag gave it. Absent: the kind's default
- *  flag     the flag that named it, for messages. Absent for a plain
- *           argument */
-export type ServeTarget = {
-  model: string;
-  kind?: ServeKind;
-  runtime?: ChatRuntime;
-  flag?: string;
-} & ModelOptions;
-
-/** The per-model options and how each one is spelled. */
-const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
-
-/** The flags that name a model rather than set an option, so the model
- *  after them is a target too. */
-type NamingFlag = {
-  flag: string;
-  key: "embedding" | "speech" | "image" | "vlm";
-  kind: ServeKind;
-  runtime: ChatRuntime | null;
-};
-const NAMING_FLAGS: NamingFlag[] = [
-  { flag: "--embedding", key: "embedding", kind: "embedding", runtime: null },
-  { flag: "--speech", key: "speech", kind: "speech", runtime: null },
-  { flag: "--image", key: "image", kind: "image", runtime: null },
-  { flag: "--vlm", key: "vlm", kind: "chat", runtime: "mlx-vlm" },
-];
-
-/** The flags on a command line that take a value, by spelling: "required"
- *  when the next token is always the value, "optional" when it is the value
- *  only if it does not start with `-`. A flag not listed takes no value, as
- *  `--limit-answers` does. */
-export type ValueFlags = Record<string, "required" | "optional">;
-
-/** An option as commander declares it. Only the parts `valueFlagsOf` reads. */
-type DeclaredOption = { long?: string; short?: string; required: boolean; optional: boolean };
-
-/** A command as commander declares it, with the commands above it. */
-type DeclaredCommand = { options: readonly DeclaredOption[]; parent: DeclaredCommand | null };
-
-/** The flags that take a value on `command` and every command above it,
- *  since commander accepts an ancestor's flag after the subcommand too.
- *  Read from the declarations, so a new flag is known here the moment it
- *  is declared. */
-export function valueFlagsOf(command: DeclaredCommand): ValueFlags {
-  const out: ValueFlags = {};
-  for (let at: DeclaredCommand | null = command; at !== null; at = at.parent) {
-    for (const option of at.options) {
-      const arity = option.required ? "required" : option.optional ? "optional" : undefined;
-      if (arity === undefined) {
-        continue;
-      }
-      for (const spelling of [option.long, option.short]) {
-        if (spelling !== undefined) {
-          out[spelling] = arity;
-        }
-      }
-    }
-  }
-  return out;
-}
-
-/** One token of a command line read as a flag: its spelling, the value
- *  written into the token itself (`--draft=small`, `-p8080`), and how many
- *  tokens the flag and its value take up. */
-type ReadFlag = { flag: string; value: string | undefined; width: number };
-
-/** Splits a flag token into its spelling and the value written into it:
- *  `--draft=small` and `-p8080` carry one, `--draft` and `-p` do not. */
-function splitFlag(token: string): { flag: string; inline: string | undefined } {
-  if (token.startsWith("--")) {
-    const equals = token.indexOf("=");
-    return equals === -1
-      ? { flag: token, inline: undefined }
-      : { flag: token.slice(0, equals), inline: token.slice(equals + 1) };
-  }
-  return { flag: token.slice(0, 2), inline: token.length > 2 ? token.slice(2) : undefined };
-}
-
-/** Reads the flag at `argv[index]`, taking its value from the token itself
- *  or from the next one as `valueFlags` says. */
-function readFlag(argv: string[], index: number, valueFlags: ValueFlags): ReadFlag {
-  const { flag, inline } = splitFlag(argv[index]);
-  const arity = valueFlags[flag];
-  if (inline !== undefined || arity === undefined) {
-    return { flag, value: inline, width: 1 };
-  }
-  const next = argv[index + 1];
-  if (arity === "optional" && (next === undefined || next.startsWith("-"))) {
-    return { flag, value: undefined, width: 1 };
-  }
-  return { flag, value: next, width: 2 };
-}
-
-/** The tokens after `local serve` on the command line, or none when the
- *  command line is not `local serve`. Walks the operands the way commander
- *  does, stepping over flags and their values, so a flag whose value
- *  happens to be the word `serve` does not fool it. */
-export function argvAfterServe(argv: string[], valueFlags: ValueFlags): string[] {
-  const words = ["local", "serve"];
-  let matched = 0;
-  // argv[0] is node and argv[1] the script.
-  let index = 2;
-  while (index < argv.length && matched < words.length) {
-    const token = argv[index];
-    if (token.startsWith("-") && token.length > 1) {
-      index += readFlag(argv, index, valueFlags).width;
-      continue;
-    }
-    if (token !== words[matched]) {
-      return [];
-    }
-    matched += 1;
-    index += 1;
-  }
-  return matched === words.length ? argv.slice(index) : [];
-}
-
-/** Groups the arguments after `serve` into one entry per model, each with
- *  the per-model options that followed it. `agency local serve a --draft d
- *  b` drafts for `a` and not `b`. Any other flag belongs to the command as
- *  a whole and is left for the option parser; `valueFlags` says whether it
- *  takes the next token as its value, so `a --limit-answers b` is two
- *  models. A parser, so its order is its nature; it holds nothing but what
- *  it returns. */
-export function groupServeArgv(argv: string[], valueFlags: ValueFlags): ServeTarget[] {
-  const targets: ServeTarget[] = [];
-  let index = 0;
-  while (index < argv.length) {
-    const token = argv[index];
-    if (!token.startsWith("-") || token.length === 1) {
-      targets.push({ model: token });
-      index += 1;
-      continue;
-    }
-    const { flag, value, width } = readFlag(argv, index, valueFlags);
-    index += width;
-    if (NAMING_FLAGS.some((row) => row.flag === flag)) {
-      if (value !== undefined) {
-        targets.push({ model: value });
-      }
-    } else if (MODEL_OPTION_FLAGS.includes(flag)) {
-      setModelOption(targets[targets.length - 1], flag, value ?? "<value>");
-    }
-  }
-  for (const target of targets) {
-    if (target.draftTokens !== undefined && target.draft === undefined) {
-      throw new Error(
-        `--draft-tokens needs a --draft for ${target.model}: agency local serve ${target.model} --draft <model> --draft-tokens ${target.draftTokens}`,
-      );
-    }
-  }
-  return targets;
-}
-
-/** Sets one per-model option on the model it follows, refusing one written
- *  before any model or given twice for the same model. */
-function setModelOption(target: ServeTarget | undefined, flag: string, value: string): void {
-  if (target === undefined) {
-    throw new Error(
-      `${flag} goes after the chat model it is for: agency local serve <model> ${flag} ${value}`,
-    );
-  }
-  const key = flag === "--draft" ? "draft" : "draftTokens";
-  if (target[key] !== undefined) {
-    throw new Error(
-      `${target.model} has ${flag} twice. Write it once after the model: agency local serve ${target.model} ${flag} ${value}`,
-    );
-  }
-  if (key === "draft") {
-    target.draft = value;
-  } else {
-    target.draftTokens = Number(value);
-  }
-}
-
-/** The per-model options from grouped targets, keyed by model, for
- *  `ServeFlags.options`. */
-export function optionsByModel(targets: ServeTarget[]): Record<string, ModelOptions> {
-  const out: Record<string, ModelOptions> = {};
-  for (const target of targets) {
-    const { model, ...options } = target;
-    if (Object.keys(options).length > 0) {
-      out[model] = options;
-    }
-  }
-  return out;
-}
-
-/** What one chat server is started with, beyond its model and port. */
 export type ChatServerSettings = {
   maxTokens: number;
   promptCacheBytes: number;
@@ -531,6 +356,12 @@ const IMAGE_REQUIREMENTS = [
  *  speech one. */
 export function imageServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "diffusersImageServer.py");
+}
+
+/** The script that runs mlx_vlm.server, shipped next to this file and
+ *  copied into dist like the others. */
+export function vlmServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxVlmServer.py");
 }
 
 /** The vision server shipped next to this file, copied into dist like the
@@ -927,7 +758,8 @@ function realPickDeps(cacheDir: string): PickDeps {
 
 export type Child = {
   on: (ev: "exit", cb: (code: number | null, signal: NodeJS.Signals | null) => void) => unknown;
-  kill: () => unknown;
+  /** SIGTERM when no signal is given. */
+  kill: (signal?: NodeJS.Signals) => unknown;
 };
 
 export type ServeDeps = {
@@ -935,6 +767,10 @@ export type ServeDeps = {
   fetch: typeof fetch;
   exec: Exec;
   totalmem: () => number;
+  /** The memory a lazy model may take now. */
+  availableMemory: () => Promise<MemorySnapshot>;
+  /** Resolves after `ms`. Tests pass one that does not wait. */
+  wait: (ms: number) => Promise<void>;
   log: (line: string) => void;
   freePort: () => Promise<number>;
   cacheDir: string;
@@ -962,6 +798,14 @@ export type ServeHandle = {
   load: (model: string) => Promise<void>;
   /** Stops a model's process. It stays stopped until `load`. */
   unload: (model: string) => Promise<void>;
+  /** Ends every request running on a model, and restarts the model's
+   *  process when that is the only way to stop its work. */
+  cancel: (model: string) => Promise<void>;
+  /** Resolves when `POST /v1/agency/shutdown` is called. The server is
+   *  closing by then. */
+  shutdownRequested: Promise<void>;
+  /** Refuses new requests, stops every process and waits for it to exit,
+   *  then closes the port. Calling it again returns the same promise. */
   close: () => Promise<void>;
 };
 
@@ -1004,58 +848,9 @@ export type ServeFlags = ServeSettings & {
   /** Models to serve with the image server on /v1/images/generations. */
   image?: string[];
   vlm?: string[];
+  /** Models to load on their first request. */
+  lazy?: string[];
 };
-
-/** Where a model process's output goes: to this terminal, or to a pipe
- *  the caller reads. */
-export type ChildOutput = "inherit" | "pipe";
-
-/** The options every model process is started with. A piped process is
- *  told not to buffer, because Python writes in blocks when its output is
- *  not a terminal, and its lines would arrive late. */
-export function spawnOptions(output: ChildOutput): {
-  stdio: ["inherit" | "ignore", ChildOutput, ChildOutput];
-  env: Record<string, string | undefined>;
-} {
-  const piped = output === "pipe" ? { PYTHONUNBUFFERED: "1" } : {};
-  return {
-    stdio: [output === "pipe" ? "ignore" : "inherit", output, output],
-    env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1", ...piped },
-  };
-}
-
-function realSpawn(python: string, args: string[]): Child {
-  return spawn(python, args, spawnOptions("inherit"));
-}
-
-/** Hands each line of a stream to `log`. A line ends at a newline or a
- *  carriage return, since progress bars redraw with the second. */
-function logLines(stream: NodeJS.ReadableStream, log: (line: string) => void): void {
-  let pending = "";
-  stream.setEncoding("utf8");
-  stream.on("data", (chunk: string) => {
-    const lines = (pending + chunk).split(/[\r\n]+/);
-    pending = lines.pop() ?? "";
-    lines.filter((line) => line !== "").forEach(log);
-  });
-  stream.on("end", () => {
-    if (pending !== "") {
-      log(pending);
-    }
-  });
-}
-
-/** Starts a model process whose output goes to `log`, a line at a time.
- *  The pipes are always read, whatever `log` does with the lines: a
- *  process whose pipe fills up stops. */
-function pipedSpawn(log: (line: string) => void): ServeDeps["spawn"] {
-  return (python, args) => {
-    const child = spawn(python, args, spawnOptions("pipe"));
-    logLines(child.stdout!, log);
-    logLines(child.stderr!, log);
-    return child;
-  };
-}
 
 /** The dependencies of a server started from TypeScript: everything it
  *  would print goes to `log`, the model processes' output included. */
@@ -1069,6 +864,8 @@ function realDeps(): ServeDeps {
     fetch,
     exec: execSync,
     totalmem: os.totalmem,
+    availableMemory: () => availableMemory(console.log),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log: console.log,
     freePort,
     cacheDir: defaultCacheDir(),
@@ -1087,6 +884,9 @@ type Planned = {
   sizeBytes: number;
   kind: ServeKind;
   runtime: ChatRuntime | null;
+  lazy: boolean;
+  /** Whether a flag gave the kind, as against the model's own files. */
+  flagged: boolean;
   /** The chat model that drafts for this one, planned the same way. */
   draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
 };
@@ -1195,7 +995,15 @@ function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planne
   if (kind === null) {
     throw new Error(unknownKindMessage(value));
   }
-  return { name, dir, sizeBytes, kind, runtime: kind === "chat" ? "mlx-lm" : null };
+  return {
+    name,
+    dir,
+    sizeBytes,
+    kind,
+    runtime: kind === "chat" ? "mlx-lm" : null,
+    lazy: false,
+    flagged: flagged !== undefined,
+  };
 }
 
 /** A required kind cannot override what the installed files say. */
@@ -1214,7 +1022,36 @@ function planRequired(value: string, cacheDir: string, kind: ServeKind): Planned
  *  unless the catalog says otherwise. One with a runtime must be a chat
  *  model that runtime has been tested with. */
 function planTarget(target: ServeTarget, cacheDir: string): Planned {
-  return withDraft(target.model, planUndrafted(target, cacheDir), target, cacheDir);
+  const planned = withDraft(target.model, planUndrafted(target, cacheDir), target, cacheDir);
+  return { ...planned, lazy: target.lazy === true };
+}
+
+/** One plan per model. A model may be named twice when one mention is
+ *  `--lazy` alone and the other gives its kind, as in `--vlm a --lazy a`;
+ *  the two are joined into one lazy plan. Names are compared after
+ *  planning, so the two mentions may spell the model differently. Any
+ *  other repeat is an error. */
+function joinLazyPairs(planned: Planned[]): Planned[] {
+  const out: Planned[] = [];
+  for (const plan of planned) {
+    const seen = out.findIndex((other) => other.name === plan.name);
+    if (seen === -1) {
+      out.push(plan);
+      continue;
+    }
+    const other = out[seen];
+    const [lazyOnly, kinded] = plan.lazy && !plan.flagged ? [plan, other] : [other, plan];
+    const isPair = lazyOnly.lazy && !lazyOnly.flagged && kinded.flagged && !kinded.lazy;
+    if (!isPair) {
+      throw new Error(`${plan.name} is named twice.`);
+    }
+    // A draft written after either mention belongs to the model.
+    if (kinded.draft !== undefined && lazyOnly.draft !== undefined) {
+      throw new Error(`${plan.name} has --draft twice. Write it once, after either mention.`);
+    }
+    out[seen] = { ...kinded, lazy: true, draft: kinded.draft ?? lazyOnly.draft };
+  }
+  return out;
 }
 
 function planUndrafted(target: ServeTarget, cacheDir: string): Planned {
@@ -1234,25 +1071,6 @@ function planUndrafted(target: ServeTarget, cacheDir: string): Planned {
     );
   }
   return { ...model, runtime };
-}
-
-/** The targets a parsed command line names: each plain argument, then each
- *  model a naming flag listed, with that flag's kind and runtime and the
- *  options written after the model. The one reader of `flags.options` and
- *  of the per-flag lists. */
-export function targetsFromFlags(values: string[], flags: ServeFlags): ServeTarget[] {
-  const optionsOf = (model: string) => flags.options?.[model] ?? {};
-  const plain = values.map((model) => ({ model, ...optionsOf(model) }));
-  const flagged = NAMING_FLAGS.flatMap((row) =>
-    (flags[row.key] ?? []).map((model) => {
-      const target: ServeTarget = { model, kind: row.kind, flag: row.flag, ...optionsOf(model) };
-      if (row.runtime !== null) {
-        target.runtime = row.runtime;
-      }
-      return target;
-    }),
-  );
-  return [...plain, ...flagged];
 }
 
 /** The planned model with its draft attached, when its options name one.
@@ -1321,6 +1139,7 @@ export type BannerModel = {
   kind: ServeKind;
   dir?: string;
   runtime?: ChatRuntime | null;
+  lazy?: boolean;
 };
 
 /** The line of Agency code the banner suggests for each vision function,
@@ -1347,7 +1166,8 @@ export function servingBanner(port: number, models: BannerModel[]): string[] {
   const count = models.length;
   const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
   for (const model of models) {
-    lines.push(`  ${model.name}${chatSpecOf(model)?.bannerNote ?? BANNER_SUFFIX[model.kind]}`);
+    const note = chatSpecOf(model)?.bannerNote ?? BANNER_SUFFIX[model.kind];
+    lines.push(`  ${model.name}${note}${model.lazy === true ? "  (on demand)" : ""}`);
   }
   const first = (kind: ServeKind) => models.find((model) => model.kind === kind)?.name;
   for (const [runtime, spec] of Object.entries(CHAT_RUNTIMES)) {
@@ -1414,6 +1234,9 @@ function modelPlanOf(model: Planned): ModelPlan {
     label: labelOf(model),
     kind: model.kind,
     rules: chatSpecOf(model)?.rules ?? null,
+    lazy: model.lazy,
+    needBytes: estimatedNeed(model),
+    stopsOnClose: chatSpecOf(model)?.stopsOnClose ?? (() => true),
   };
 }
 
@@ -1424,7 +1247,7 @@ export async function serveTargets(
   deps: ServeDeps = realDeps(),
 ): Promise<ServeHandle> {
   const maxTokens = settings.maxTokens ?? 16384;
-  const planned = targets.map((target) => planTarget(target, deps.cacheDir));
+  const planned = joinLazyPairs(targets.map((target) => planTarget(target, deps.cacheDir)));
   const unused = flagsNobodyTakes(settings, planned);
   if (unused.length > 0) {
     const flag = unused[0].replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
@@ -1436,16 +1259,13 @@ export async function serveTargets(
     throw new Error("Name at least one model to serve.");
   }
   const names = planned.map((p) => p.name);
-  const repeated = names.find((n, i) => names.indexOf(n) !== i);
-  if (repeated !== undefined) {
-    throw new Error(`${repeated} is named twice.`);
-  }
   // A draft is loaded by the server of the model it drafts for, so the
-  // memory warning counts it with that model.
+  // memory warning counts it with that model. A lazy model is loaded on
+  // demand, so it is not counted: the warning is about what loads together.
   const warning = memoryWarning(
-    planned.flatMap((p) =>
-      p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes],
-    ),
+    planned
+      .filter((p) => !p.lazy)
+      .flatMap((p) => (p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes])),
     deps.totalmem(),
   );
   if (warning !== null) {
@@ -1480,6 +1300,10 @@ export async function serveTargets(
   const plannedByName = Object.fromEntries(planned.map((model) => [model.name, model]));
   const pool = createModelPool(planned.map(modelPlanOf), {
     now: Date.now,
+    availableMemory: deps.availableMemory,
+    allowOvercommit: deps.env.AGENCY_ALLOW_MEMORY_OVERCOMMIT === "1",
+    log: deps.log,
+    wait: deps.wait,
     spawn: async (plan) => {
       const model = plannedByName[plan.model];
       const port = await deps.freePort();
@@ -1506,18 +1330,22 @@ export async function serveTargets(
         label: plan.label,
       }),
   });
-  for (const model of planned) {
+  for (const model of planned.filter((p) => !p.lazy)) {
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
       await pool.load(model.name);
     } catch (err) {
-      pool.stopAll();
+      await pool.stopAll();
       throw err;
     }
     deps.log(`  ready in ${formatElapsed(Date.now() - started)}`);
   }
 
+  let requestShutdown: () => void = () => {};
+  const shutdownRequested = new Promise<void>((resolve) => {
+    requestShutdown = resolve;
+  });
   let door: FrontDoor;
   try {
     door = await startFrontDoor(
@@ -1529,11 +1357,26 @@ export async function serveTargets(
         color: deps.useColor ? color : plainColor,
       },
       maxTokens,
+      () => requestShutdown(),
     );
   } catch (err) {
-    pool.stopAll();
+    await pool.stopAll();
     throw err;
   }
+  // The same close, however many times it is asked for: the shutdown
+  // route, Ctrl-C, and the caller may each ask.
+  let closing: Promise<void> | null = null;
+  const close = (): Promise<void> => {
+    if (closing === null) {
+      closing = (async () => {
+        door.refuseNew();
+        await pool.stopAll();
+        await door.close();
+      })();
+    }
+    return closing;
+  };
+  void shutdownRequested.then(close);
   for (const line of servingBanner(door.port, planned)) {
     deps.log(line);
   }
@@ -1545,10 +1388,11 @@ export async function serveTargets(
     status: pool.status,
     load: pool.load,
     unload: pool.unload,
-    close: async () => {
-      pool.stopAll();
-      await door.close();
+    cancel: async (model) => {
+      await door.cancel(model);
     },
+    shutdownRequested,
+    close,
   };
 }
 
@@ -1582,10 +1426,15 @@ export async function localServe(
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  const why = await handle.failure;
-  console.error(why);
+  const ended = await Promise.race([
+    handle.failure.then((why) => ({ why })),
+    handle.shutdownRequested.then(() => ({ why: null })),
+  ]);
+  if (ended.why !== null) {
+    console.error(ended.why);
+  }
   await handle.close();
-  process.exit(1);
+  process.exit(ended.why === null ? 0 : 1);
 }
 
 export type ChatRuntime = "mlx-lm" | "mlx-vlm";
@@ -1600,6 +1449,24 @@ export type ChatRuntimeSpec = {
   bannerNote: string;
   example: (name: string) => string[];
   rules: RequestRules | null;
+  /** Whether the runtime stops generating when the connection to it
+   *  closes, for a request with this body. What happens after a client
+   *  leaves, by kind of model:
+   *
+   *  image                          stops after the step in progress
+   *  speech                         stops at the next check for a closed
+   *                                 connection
+   *  vision                         a request waiting its turn is dropped;
+   *                                 one that started finishes in seconds
+   *  embedding                      finishes, in under a second
+   *  chat on mlx-lm                 stops; the server looks at the
+   *                                 connection on a clock
+   *  chat on mlx-vlm, streamed      stops
+   *  chat on mlx-vlm, not streamed  keeps generating until the reply is
+   *                                 complete
+   *
+   *  Only the last row is false, and `cancel` stops that process. */
+  stopsOnClose: (body: Record<string, unknown>) => boolean;
 };
 
 function runLocalExample(name: string): string[] {
@@ -1616,15 +1483,18 @@ export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
     bannerNote: "",
     example: runLocalExample,
     rules: null,
+    stopsOnClose: () => true,
   },
   "mlx-vlm": {
     program: "mlx_vlm.server",
     modules: ["mlx_vlm"],
-    args: (launch) => vlmServeArgs(launch.modelDir, launch.port, launch.settings.maxTokens),
+    args: (launch) =>
+      vlmServeArgs(vlmServerScript(), launch.modelDir, launch.port, launch.settings.maxTokens),
     flags: [],
     bannerNote: "  (chat with images)",
     example: imageChatExample,
     rules: MLX_VLM_RULES,
+    stopsOnClose: (body) => body.stream === true,
   },
 };
 

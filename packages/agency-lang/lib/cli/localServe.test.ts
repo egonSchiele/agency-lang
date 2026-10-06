@@ -768,12 +768,23 @@ describe("runServe", () => {
     return model;
   }
 
+  /** A process that never exits on its own. `killed` counts the processes
+   *  told to stop, once each: one that ignores SIGTERM is sent SIGKILL
+   *  too, and that is not a second process. */
   function fakeChild(): Child & { exit: (code: number | null) => void } {
     const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+    let told = false;
     return {
       on: (_ev, cb) => listeners.push(cb),
-      kill: () => {
-        killed += 1;
+      kill: (signal?: NodeJS.Signals) => {
+        if (!told) {
+          told = true;
+          killed += 1;
+        }
+        // SIGTERM is ignored. SIGKILL is not a request.
+        if (signal === "SIGKILL") {
+          listeners.forEach((cb) => cb(null, "SIGKILL"));
+        }
       },
       exit: (code) => listeners.forEach((cb) => cb(code, null)),
     };
@@ -794,6 +805,8 @@ describe("runServe", () => {
       fetch: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
       exec: () => ({ status: 0 }),
       totalmem: () => 1e9,
+      availableMemory: async () => ({ available: 1e12, total: 1e12 }),
+      wait: async () => {},
       log: (line) => log.push(line),
       freePort: async () => next++,
       cacheDir,
@@ -827,7 +840,8 @@ describe("runServe", () => {
     const vision = await runServe([], { port: 0, vlm: [model] }, deps);
     try {
       expect(vision.models).toEqual([model]);
-      expect(spawned[1].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+      expect(spawned[1][1]).toMatch(/mlxVlmServer.py$/);
+      expect(spawned[1].slice(2, 4)).toEqual(["--model", model]);
       expect(spawned[1]).not.toContain("--prefill-step-size");
       expect(log.join("\n")).toContain("(chat with images)");
     } finally {
@@ -1526,6 +1540,170 @@ describe("runServe", () => {
     };
   }
 
+  describe("--lazy", () => {
+    it("spawns only the models that are not lazy before the door opens", async () => {
+      recordedModel("org/a", true);
+      recordedModel("org/b", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/b"] }, deps);
+      try {
+        expect(spawned).toHaveLength(1);
+        expect(handle.models).toEqual(["org/a", "org/b"]);
+        expect(handle.status().map((row) => row.state)).toEqual(["ready", "stopped"]);
+        expect(log.join("\n")).toContain("  org/b  (on demand)");
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("opens the door at once when every model is lazy, and loads one on its first request", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe([], { port: 0, lazy: ["mlx:org/a"] }, deps);
+      try {
+        expect(spawned).toEqual([]);
+        // The fake process answers nothing, so the forwarded request fails;
+        // what matters is that the request made the model load.
+        await fetch(`${handle.url}/chat/completions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: "org/a", messages: [] }),
+        });
+        expect(spawned).toHaveLength(1);
+        expect(handle.status()[0].state).toBe("ready");
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("attaches a draft written after --lazy to that model", () => {
+      expect(groupServeArgv(["--lazy", "b", "--draft", "c"], SERVE_FLAGS)).toEqual([
+        { model: "b", draft: "c" },
+      ]);
+      expect(targetsFromFlags([], { lazy: ["b"], options: { b: { draft: "c" } } })).toEqual([
+        { model: "b", flag: "--lazy", lazy: true, draft: "c" },
+      ]);
+    });
+
+    it("refuses a model named plainly and with --lazy", async () => {
+      recordedModel("org/a", true);
+      await expect(runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/a"] }, deps)).rejects.toThrow(
+        "org/a is named twice.",
+      );
+    });
+
+    it("joins --vlm and --lazy for one model into one lazy plan", async () => {
+      visionChatModel();
+      const handle = await runServe(
+        [],
+        { port: 0, vlm: ["mlx:org/vlm"], lazy: ["mlx:org/vlm"] },
+        deps,
+      );
+      try {
+        expect(handle.models).toEqual(["org/vlm"]);
+        expect(spawned).toEqual([]);
+        await handle.load("org/vlm");
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+      } finally {
+        await handle.close();
+      }
+    });
+
+    it("keeps a draft written after the --lazy mention of a paired model", async () => {
+      // mlx-vlm takes no draft, so keeping it means refusing it. Dropping
+      // it would start the model without the draft and say nothing.
+      visionChatModel();
+      recordedModel("org/small", true);
+      await expect(
+        runServe(
+          [],
+          {
+            port: 0,
+            vlm: ["mlx:org/vlm"],
+            lazy: ["mlx:org/vlm"],
+            options: { "mlx:org/vlm": { draft: "mlx:org/small" } },
+          },
+          deps,
+        ),
+      ).rejects.toThrow("--draft is not supported by mlx_vlm.server for org/vlm.");
+    });
+
+    it("does not open the picker when only --lazy names a model", () => {
+      // The picker check reads NAMING_FLAGS, so --lazy counts as naming.
+      expect(targetsFromFlags([], { lazy: ["a"] })).toHaveLength(1);
+    });
+
+    it("leaves lazy models out of the memory warning", async () => {
+      recordedModel("org/a", true);
+      recordedModel("org/b", true);
+      // Each fixture model records 600 MB; the machine has 1 GB.
+      const handle = await runServe(["mlx:org/a"], { port: 0, lazy: ["mlx:org/b"] }, deps);
+      try {
+        expect(log.join("\n")).not.toContain("Warning: these models total");
+      } finally {
+        await handle.close();
+      }
+    });
+  });
+
+  describe("close", () => {
+    it("waits for every process to exit, and refuses requests meanwhile", async () => {
+      recordedModel("org/a", true);
+      let release: () => void = () => {};
+      const handle = await runServe(
+        ["mlx:org/a"],
+        { port: 0 },
+        {
+          ...deps,
+          wait: () => new Promise(() => {}),
+          spawn: (python, args) => {
+            spawned.push([python, ...args]);
+            const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+            return {
+              on: (_ev, cb) => listeners.push(cb),
+              kill: () => {
+                killed += 1;
+                release = () => listeners.forEach((cb) => cb(null, "SIGTERM"));
+              },
+            };
+          },
+        },
+      );
+      let closed = false;
+      const closing = handle.close().then(() => {
+        closed = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(killed).toBe(1);
+      expect(closed).toBe(false);
+      const res = await fetch(`${handle.url}/models`);
+      expect(res.status).toBe(503);
+      release();
+      await closing;
+      expect(closed).toBe(true);
+    });
+
+    it("is one close however many times it is asked for", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0 }, exitingDeps());
+      await Promise.all([handle.close(), handle.close()]);
+      expect(killed).toBe(1);
+    });
+
+    it("closes on the shutdown route, and says a shutdown was requested", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0 }, exitingDeps());
+      const res = await fetch(`${handle.url}/agency/shutdown`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(res.status).toBe(200);
+      await handle.shutdownRequested;
+      await handle.close();
+      expect(killed).toBe(1);
+      expect(handle.status()[0].state).toBe("stopped");
+    });
+  });
+
   it("reports the port the operating system chose, and the matching address", async () => {
     recordedModel("org/a", true);
     const handle = await runServe(["mlx:org/a"], { port: 0 }, deps);
@@ -1597,7 +1775,8 @@ describe("runServe", () => {
       const model = visionChatModel();
       const server = await serveWithDeps([{ model, vlm: true }], {}, deps);
       try {
-        expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+        expect(spawned[0].slice(2, 4)).toEqual(["--model", model]);
       } finally {
         await server.close();
       }
@@ -1625,12 +1804,17 @@ describe("runServe", () => {
       }
     });
 
-    it("refuses lazy until it is supported, before anything is started", async () => {
-      recordedModel("org/a", true);
-      await expect(serveWithDeps([{ model: "mlx:org/a", lazy: true }], {}, deps)).rejects.toThrow(
-        "lazy is not supported by this version.",
-      );
-      expect(spawned).toEqual([]);
+    it("serves a lazy model with its runtime, and spawns nothing for it until a request", async () => {
+      const model = visionChatModel();
+      const server = await serveWithDeps([{ model, lazy: true, vlm: true }], {}, deps);
+      try {
+        expect(spawned).toEqual([]);
+        expect(server.status()).toMatchObject([{ model, state: "stopped" }]);
+        await server.load(model);
+        expect(spawned[0][1]).toMatch(/mlxVlmServer.py$/);
+      } finally {
+        await server.close();
+      }
     });
 
     it("sends what the server would print to log", async () => {
@@ -1857,12 +2041,15 @@ describe("targetsFromFlags", () => {
 
 describe("spawnOptions", () => {
   it("lets a process write to this terminal, or pipes its output unbuffered", () => {
-    expect(spawnOptions("inherit").stdio).toEqual(["inherit", "inherit", "inherit"]);
+    expect(spawnOptions("inherit").stdio).toEqual(["pipe", "inherit", "inherit"]);
     expect(spawnOptions("inherit").env.PYTHONUNBUFFERED).toBe(process.env.PYTHONUNBUFFERED);
     const piped = spawnOptions("pipe");
-    expect(piped.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    expect(piped.stdio).toEqual(["pipe", "pipe", "pipe"]);
     expect(piped.env.PYTHONUNBUFFERED).toBe("1");
     expect(piped.env.HF_HUB_OFFLINE).toBe("1");
+    // Both variants ask the server script to exit when this process does.
+    expect(piped.env.AGENCY_EXIT_WITH_PARENT).toBe("1");
+    expect(spawnOptions("inherit").env.AGENCY_EXIT_WITH_PARENT).toBe("1");
   });
 });
 

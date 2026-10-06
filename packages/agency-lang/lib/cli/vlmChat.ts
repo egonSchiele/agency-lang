@@ -4,10 +4,16 @@ import { anyPart, dataImagePart, type RequestRules } from "./requestRules.js";
 export const MLX_VLM_VERSION = "0.7.0";
 const VLM_CONCURRENT_REQUESTS = 1;
 
-export function vlmServeArgs(modelDir: string, internalPort: number, maxTokens: number): string[] {
+/** The argv for one mlx-vlm process, after the Python path. `script` is
+ *  `mlxVlmServer.py`, which runs `mlx_vlm.server` and takes its options. */
+export function vlmServeArgs(
+  script: string,
+  modelDir: string,
+  internalPort: number,
+  maxTokens: number,
+): string[] {
   return [
-    "-m",
-    "mlx_vlm.server",
+    script,
     "--model",
     modelDir,
     "--host",

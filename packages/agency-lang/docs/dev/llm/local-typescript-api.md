@@ -163,12 +163,15 @@ covers what `serveTargets` does.
 | `kind: "embedding"`, `"speech"`, `"image"` | `--embedding`, `--speech`, `--image` |
 | `vlm: true` | `--vlm` |
 | `draft`, `draftTokens` | `--draft`, `--draft-tokens` |
-| `lazy` | refused: not supported yet |
+| `lazy: true` | `--lazy` |
 
 The handle it resolves with is the command's own `ServeHandle`: `url`,
 `port`, `models`, `failure`, `status()`, `load(model)`, `unload(model)`,
-and `close()`. A model that is unloaded stays unloaded until `load`. A
-request for it gets a 503.
+`cancel(model)`, `shutdownRequested`, and `close()`. A model that is
+unloaded stays unloaded until `load`, and a request for it gets a 503. A
+lazy model is loaded again by its next request. The pool, lazy loading,
+`cancel`, and `close` are described in
+`docs/dev/llm/mlx-local-models.md`.
 
 Two things differ from the command:
 

@@ -1,13 +1,39 @@
-"""What every local model server script shares. Imported by the speech,
-image, and vision servers through sys.path, since they run as plain scripts. Nothing
-here may import a model library.
+"""What every local model server script shares. Imported by every server
+script through sys.path, since they run as plain scripts. Nothing here may
+import a model library.
 """
 
 import base64
 import binascii
+import os
 import select
 import socket
 import sys
+import threading
+
+# Set by `agency local serve` on every process it starts. See
+# exit_when_parent_goes.
+EXIT_WITH_PARENT = "AGENCY_EXIT_WITH_PARENT"
+
+
+def exit_when_parent_goes():
+    """When the process that started this server asked for it, exit as
+    soon as standard input closes, which happens when that process exits
+    for any reason, a SIGKILL included. The parent gives this process a
+    pipe as standard input and never writes to it.
+
+    Does nothing unless AGENCY_EXIT_WITH_PARENT is "1". A server started by
+    hand is left alone: one started as a background job would otherwise
+    be stopped by SIGTTIN when this thread read the terminal, and one
+    started with standard input from /dev/null would exit at once."""
+    if os.environ.get(EXIT_WITH_PARENT) != "1":
+        return
+
+    def wait():
+        sys.stdin.buffer.read()
+        os._exit(0)
+
+    threading.Thread(target=wait, daemon=True).start()
 
 
 def fail(message):

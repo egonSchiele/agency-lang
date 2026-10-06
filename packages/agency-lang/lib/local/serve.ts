@@ -11,7 +11,8 @@ import type { ModelKind } from "../stdlib/modelKind.js";
  *
  *  model        a name `listModels` returned, an alias, a URI, or a
  *               directory
- *  lazy         not supported yet
+ *  lazy         load it on its first request, and stop it when another
+ *               lazy model needs the memory, as `--lazy` does
  *  kind         serve it as this kind, as the command's `--embedding`,
  *               `--speech`, and `--image` flags do. Needed only when the
  *               model's files do not say what it is
@@ -52,10 +53,10 @@ function targetOf(served: string | ServedModel): ServeTarget {
   if (typeof served === "string") {
     return { model: served };
   }
-  if (served.lazy === true) {
-    throw new Error("lazy is not supported by this version.");
-  }
   const target: ServeTarget = { model: served.model };
+  if (served.lazy === true) {
+    target.lazy = true;
+  }
   if (served.vlm === true) {
     target.kind = "chat";
     target.runtime = "mlx-vlm";
@@ -73,7 +74,8 @@ function targetOf(served: string | ServedModel): ServeTarget {
 }
 
 /** Start a local model server, as `agency local serve` does, and resolve
- *  once every model has loaded. Each model is a name or a `ServedModel`.
+ *  once every model that is not lazy has loaded. A lazy model loads on its
+ *  first request. Each model is a name or a `ServedModel`.
  *
  *  ```ts
  *  const server = await serve(["z-image-turbo", "wd14-tagger"]);

@@ -30,17 +30,27 @@ export {
 } from "../host/host.js";
 export type {
   Capability,
+  Entry,
+  FileStat,
   Host,
   HostEnv,
+  HostFiles,
   HostParts,
   HostRandom,
   HostSettings,
   HostSystem,
   HostTerminal,
+  Located,
   OperatingSystem,
   Platform,
+  Root,
+  WritableFile,
+  WriteMode,
+  WriteOptions,
 } from "../host/host.js";
 export { nodeHost } from "../host/nodeHost.js";
+export { memoryHost } from "../host/memoryHost.js";
+export type { MemoryHost, MemoryHostOptions, MemoryHostState } from "../host/memoryHost.js";
 export { defaultHost } from "#default-host";
 export type { NodeHostOptions } from "../host/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";

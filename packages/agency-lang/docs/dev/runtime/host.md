@@ -21,7 +21,7 @@ export type Host = {
 };
 ```
 
-Later PRs add `files`, `network`, and `subprocess`.
+Later PRs add `network` and `subprocess`.
 
 The host has two kinds of part.
 
@@ -92,9 +92,23 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 | --- | --- | --- | --- |
 | `nodeHost` | `lib/host/nodeHost.ts` | all seven | `process`, `os`, `readline`, `crypto`, the real clock |
 | `browserHost` | not yet | `network`, `env`, `terminal`, `llm` | values and functions the app passes in |
-| `memoryHost` | not yet | whatever the test asks for | scripted answers, `FakeClock` |
+| `memoryHost` | `lib/host/memoryHost.ts` | whatever the test asks for; all seven by default | an object of files, recorded output, scripted input lines, an object of variables, `FakeClock` |
 
-Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, onUse }`, all optional.
+Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
+
+### The file part
+
+`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+
+Three functions exist only on the host:
+
+- `updateText(root, target, change)` reads a file, calls `change` with its text (`null` when the file does not exist), and writes the result, with nothing able to run between the read and the write. It replaces the read-then-write pattern that is safe while the file functions are synchronous and loses a write once they are not.
+- `withLock(root, target, work)` holds a lock on one path for the length of `work`. The lock belongs to the host, so it covers every run that shares it, which the per-run lock in `lock.md` does not.
+- `locate(dir, filename, operation)` is the old `prepareContainedPath`: the `dir` and `filename` an interrupt payload shows, found in one synchronous piece because it runs between a wrapper's call and its interrupt.
+
+`lib/host/files.shared.test.ts` runs one battery against both hosts: every function, each write mode, a missing file, a path that escapes the root, two overlapping `updateText` calls, and two pieces of work under one lock. A host added later registers there.
+
+A refusal from `makeHost` throws when the function is called, before any promise exists. An `await` in an async caller turns that into a rejection, which is where every caller stands.
 
 ### The default host
 

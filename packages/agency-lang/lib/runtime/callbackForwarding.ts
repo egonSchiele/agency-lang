@@ -23,6 +23,7 @@
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
 import type { StatelogClient } from "../statelogClient.js";
 import type { CallbackName } from "../types/function.js";
+import { utf8ByteLength } from "../stdlib/base64.js";
 
 export type IpcCallbackMessage = {
   type: "callback";
@@ -81,7 +82,7 @@ export function sendCallbackToParent(
     );
     return;
   }
-  if (Buffer.byteLength(serialized, "utf8") > maxBytes) {
+  if (utf8ByteLength(serialized) > maxBytes) {
     ipcChildDebug(`callback_dropped_oversize ${name}`, log);
     return;
   }

@@ -1,6 +1,6 @@
 import { failure, type ResultFailure } from "../../runtime/result.js";
 import { currentRun, type Run } from "../../runtime/asyncContext.js";
-import { decodeBase64Strict } from "../base64.js";
+import { decodeBase64Strict, encodeBase64 } from "../base64.js";
 import { objectSizeFailure } from "../objectBytes.js";
 import { awsUriEncode } from "./uri.js";
 import { resolveAwsCredentials, resolveRegion } from "./credentials.js";
@@ -201,7 +201,7 @@ export async function runS3Operation(
       if (operation.kind === "getText") {
         return new TextDecoder("utf-8").decode(response.bytes);
       }
-      const base64 = Buffer.from(response.bytes).toString("base64");
+      const base64 = encodeBase64(response.bytes);
       run.globals.markRedacted(base64, BINARY_MARKER);
       return base64;
     }

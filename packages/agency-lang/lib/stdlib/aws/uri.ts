@@ -6,7 +6,7 @@
  * becomes `%2F`. Bytes are the UTF-8 encoding of `value`, encoded once.
  */
 export function awsUriEncode(value: string, encodeSlash: boolean): string {
-  const bytes = Buffer.from(value, "utf8");
+  const bytes = new TextEncoder().encode(value);
   let out = "";
   for (const byte of bytes) {
     const isUnreserved =

@@ -28,6 +28,7 @@ import {
   DETERMINISTIC_TRANSCRIPT,
 } from "../constants.js";
 import { SPEECH_FORMAT_TO_MIME, type SpeakFormat } from "./audioFormats.js";
+import { decodeBase64Strict } from "../stdlib/base64.js";
 
 /** Optional delays so tests can exercise mid-request cancellation of the audio
  *  capabilities without touching the existing text/tool mock queues. */
@@ -427,7 +428,7 @@ export class DeterministicClient implements LLMClient {
     return {
       success: true,
       value: {
-        images: [{ data: new Uint8Array(Buffer.from(pngBase64, "base64")), mimeType: "image/png" }],
+        images: [{ data: decodeBase64Strict(pngBase64), mimeType: "image/png" }],
         model: "deterministic-image",
         costEstimate: {
           inputCost: 0,

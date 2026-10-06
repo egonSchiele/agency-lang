@@ -1,4 +1,5 @@
 import { currentHost } from "../runtime/currentHost.js";
+import { encodeBase64Text } from "./base64.js";
 import { checkRecipients } from "./messaging.js";
 
 const TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts";
@@ -58,7 +59,7 @@ export async function _sendSms(to: string, body: string, options?: SmsOptions): 
   formData.set("From", from);
   formData.set("Body", body);
 
-  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+  const credentials = encodeBase64Text(`${accountSid}:${authToken}`);
 
   const response = await host.network.fetch(
     `${TWILIO_BASE_URL}/${encodeURIComponent(accountSid)}/Messages.json`,

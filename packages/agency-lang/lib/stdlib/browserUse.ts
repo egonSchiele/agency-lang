@@ -1,6 +1,7 @@
 import { runHttp } from "./http.js";
 import { abortableSleep } from "./abortable.js";
 import { currentRun } from "../runtime/asyncContext.js";
+import type { Host } from "../host/host.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -37,6 +38,7 @@ function isTerminal(status: string): boolean {
 }
 
 async function pollSession(
+  host: Host,
   sessionId: string,
   apiKey: string,
   timeout: number,
@@ -49,7 +51,7 @@ async function pollSession(
   while (Date.now() - start < timeout) {
     const data = await runHttp(
       async () => {
-        const response = await fetch(url, {
+        const response = await host.network.fetch(url, {
           headers: {
             "X-Browser-Use-API-Key": apiKey,
           },
@@ -116,7 +118,7 @@ async function browserUseImpl(
   const sessionsUrl = `${BASE_URL}/sessions`;
   const session = await runHttp(
     async () => {
-      const response = await fetch(sessionsUrl, {
+      const response = await ctx.host.network.fetch(sessionsUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,7 +148,7 @@ async function browserUseImpl(
     };
   }
 
-  const result = await pollSession(sessionId, apiKey, timeout, signal);
+  const result = await pollSession(ctx.host, sessionId, apiKey, timeout, signal);
 
   return {
     output: result.output ?? "",

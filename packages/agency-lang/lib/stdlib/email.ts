@@ -49,7 +49,8 @@ export async function _sendWithResend(
   params: EmailParams,
   options?: ResendOptions,
 ): Promise<EmailResult> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || settings.read("RESEND_API_KEY");
@@ -69,7 +70,7 @@ export async function _sendWithResend(
   if (params.bcc) body.bcc = toArray(params.bcc);
   if (params.replyTo) body.reply_to = params.replyTo;
 
-  const response = await fetch(RESEND_URL, {
+  const response = await host.network.fetch(RESEND_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -99,7 +100,8 @@ export async function _sendWithSendGrid(
   params: EmailParams,
   options?: SendGridOptions,
 ): Promise<EmailResult> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || settings.read("SENDGRID_API_KEY");
@@ -135,7 +137,7 @@ export async function _sendWithSendGrid(
     body.reply_to = { email: params.replyTo };
   }
 
-  const response = await fetch(SENDGRID_URL, {
+  const response = await host.network.fetch(SENDGRID_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -167,7 +169,8 @@ export async function _sendWithMailgun(
   params: EmailParams,
   options?: MailgunOptions,
 ): Promise<EmailResult> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   validateRecipients(params, options);
 
   const apiKey = options?.apiKey || settings.read("MAILGUN_API_KEY");
@@ -199,7 +202,7 @@ export async function _sendWithMailgun(
 
   const credentials = encodeBase64Text(`api:${apiKey}`);
 
-  const response = await fetch(`${baseUrl}/v3/${domain}/messages`, {
+  const response = await host.network.fetch(`${baseUrl}/v3/${domain}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${credentials}`,

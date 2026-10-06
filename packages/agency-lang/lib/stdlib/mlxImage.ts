@@ -1,4 +1,6 @@
 import { registerImageProvider, success, failure } from "smoltalk";
+import type { HostNetwork } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import type { ImageConfig, ImageGenResult, ImageInput } from "../runtime/llmClient.js";
 import { _resolveModel, _mlxServedName, _catalogKind, type ResolvedModel } from "./localModels.js";
 import { postLocalJson, type LocalRequestOptions } from "./localRequest.js";
@@ -173,11 +175,19 @@ function imagesOf(reply: Record<string, unknown>): LocalGeneratedImage[] {
  *  made: one, since every body asks for one. `options` carries the
  *  server's address and the caller's signal; the stdlib passes neither. */
 export async function postLocalImage(
+  network: HostNetwork,
   body: Record<string, unknown>,
   timeoutMs: number,
   options: LocalRequestOptions = {},
 ): Promise<{ images: LocalGeneratedImage[] } | { error: string }> {
-  const out = await postLocalJson("/images/generations", body, timeoutMs, "image", options);
+  const out = await postLocalJson(
+    network,
+    "/images/generations",
+    body,
+    timeoutMs,
+    "image",
+    options,
+  );
   if ("error" in out) {
     return out;
   }
@@ -185,6 +195,7 @@ export async function postLocalImage(
 }
 
 async function mlxImage(input: ImageInput, config: ImageConfig) {
+  const { network } = currentHost();
   const normalized = typeof input === "string" ? { prompt: input } : input;
   if ((normalized.images?.length ?? 0) > 0 || normalized.mask !== undefined) {
     return failure("The mlx image provider does not edit images.");
@@ -197,6 +208,7 @@ async function mlxImage(input: ImageInput, config: ImageConfig) {
     settings: config.metadata ?? {},
   });
   const out = await postLocalImage(
+    network,
     body,
     localImageTimeoutMs(body.steps, config.size, config.metadata?.references),
   );

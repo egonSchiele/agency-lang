@@ -17,6 +17,7 @@ import {
   type Host,
   type HostEnv,
   type HostFiles,
+  type HostNetwork,
   type HostRandom,
   type HostSettings,
   type HostSystem,
@@ -55,6 +56,9 @@ export type MemoryHostOptions = {
   variables?: Record<string, string>;
   /** Lines `readLine` hands out. */
   inputLines?: string[];
+  /** What `network.fetch` answers with. Without one, every request is
+   *  refused with an error that names the URL. */
+  fetch?: HostNetwork["fetch"];
   cwd?: string;
   homeDir?: string;
   operatingSystem?: OperatingSystem;
@@ -88,6 +92,7 @@ export function memoryHost(options: MemoryHostOptions = {}): MemoryHost {
     onUse: options.onUse,
     parts: {
       files: memoryFiles(state, cwd),
+      network: memoryNetwork(options),
       env: memoryEnv(state),
       terminal: memoryTerminal(state),
       system: memorySystem(options, cwd),
@@ -431,6 +436,19 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
 // ---------------------------------------------------------------------------
 // The other parts
 // ---------------------------------------------------------------------------
+
+function memoryNetwork(options: MemoryHostOptions): HostNetwork {
+  return {
+    fetch: async (input, init) => {
+      if (options.fetch === undefined) {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        throw new Error(`The memory host has no network to reach ${url}.`);
+      }
+      return options.fetch(input, init);
+    },
+  };
+}
 
 function memoryEnv(state: MemoryHostState): HostEnv {
   return {

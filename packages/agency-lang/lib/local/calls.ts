@@ -20,6 +20,7 @@ import {
   type VisionTask,
 } from "../stdlib/vision.js";
 import { explainNoServer, type LocalRequestOptions } from "../stdlib/localRequest.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { mlxBaseUrl } from "../stdlib/mlxServerModels.js";
 import { success, failure, type Result } from "./result.js";
 
@@ -102,6 +103,7 @@ async function encodedFields(
 export async function generateImage(
   options: GenerateImageOptions,
 ): Promise<Result<GeneratedImage>> {
+  const { network } = currentHost();
   const fail = (message: string) => failure(`${GENERATE_IMAGE} failed: ${message}`);
   const format = options.format ?? "png";
   const checked = checkLocalImageArgs(options.prompt, options.model, format);
@@ -156,7 +158,7 @@ export async function generateImage(
     },
   });
   const timeoutMs = localImageTimeoutMs(options.steps, size, mode.references);
-  const out = await postLocalImage(body, timeoutMs, options);
+  const out = await postLocalImage(network, body, timeoutMs, options);
   if ("error" in out) {
     const serveCommand = `agency local serve --image ${options.model}`;
     return fail(explainNoServer(out.error, mlxBaseUrl(options.baseUrl), serveCommand));
@@ -203,6 +205,7 @@ async function visionCallWith<T>(
   options: VisionOptions,
   fields: Record<string, unknown>,
 ): Promise<Result<T>> {
+  const { network } = currentHost();
   const fail = (message: string) => failure(`${name} failed: ${message}`);
   const checked = checkVisionModel(options.model);
   if ("error" in checked) {
@@ -215,6 +218,7 @@ async function visionCallWith<T>(
     return fail((err as Error).message);
   }
   const out = await postVisionRequest(
+    network,
     task,
     options.model,
     checked.servedName,

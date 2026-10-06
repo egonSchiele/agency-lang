@@ -285,7 +285,7 @@ The post-merge workflow ([`.github/workflows/test-with-llm.yml`](../../.github/w
 
 ### Deterministic fetch mode
 
-Independently of the LLM deterministic mode, you can mock HTTP responses. A `fetchMocks` array in a `.test.json` (file-level and/or per test case), or a `fetchMocks.json` file in an agency-js test directory, replaces **every** `fetch` in the agent subprocess — agency `fetch()`/`fetchJSON()`/`fetchMarkdown()`, internal stdlib TS, and interop TS — with canned responses. Any fetch that matches no entry throws and fails the test, so tests never hit the real network.
+Independently of the LLM deterministic mode, you can mock HTTP responses. A `fetchMocks` array in a `.test.json` (file-level and/or per test case), or a `fetchMocks.json` file in an agency-js test directory, replaces the run's network — agency `fetch()`/`fetchJSON()`/`fetchMarkdown()` and every stdlib request, which go through `host.network.fetch` — with canned responses. Interop TypeScript that calls the global `fetch` itself is not mocked. Any fetch that matches no entry throws and fails the test, so tests never hit the real network.
 
 ```json
 {

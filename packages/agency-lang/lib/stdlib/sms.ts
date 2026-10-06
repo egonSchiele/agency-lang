@@ -17,7 +17,8 @@ export type SmsOptions = {
 };
 
 export async function _sendSms(to: string, body: string, options?: SmsOptions): Promise<SmsResult> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   const accountSid = options?.accountSid || settings.read("TWILIO_ACCOUNT_SID");
   if (!accountSid) {
     throw new Error(
@@ -59,7 +60,7 @@ export async function _sendSms(to: string, body: string, options?: SmsOptions): 
 
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
 
-  const response = await fetch(
+  const response = await host.network.fetch(
     `${TWILIO_BASE_URL}/${encodeURIComponent(accountSid)}/Messages.json`,
     {
       method: "POST",

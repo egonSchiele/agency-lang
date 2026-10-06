@@ -1,3 +1,4 @@
+import { currentHost } from "../runtime/currentHost.js";
 const WMO_DESCRIPTIONS: Record<number, string> = {
   0: "Clear sky",
   1: "Mainly clear",
@@ -37,8 +38,9 @@ export type GeoResult = {
 };
 
 export async function _geocode(location: string): Promise<GeoResult> {
+  const host = currentHost();
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`;
-  const response = await fetch(url);
+  const response = await host.network.fetch(url);
   if (!response.ok) {
     throw new Error(
       `Geocoding failed for "${location}": ${response.status} ${response.statusText}`,
@@ -84,6 +86,7 @@ export async function _weather(
   location: string,
   units: "metric" | "imperial",
 ): Promise<WeatherResult> {
+  const host = currentHost();
   const geo = await _geocode(location);
 
   const isImperial = units === "imperial";
@@ -101,7 +104,7 @@ export async function _weather(
     `&precipitation_unit=${precipUnit}` +
     `&timezone=auto`;
 
-  const response = await fetch(url);
+  const response = await host.network.fetch(url);
   if (!response.ok) {
     throw new Error(
       `Weather request failed for "${location}": ${response.status} ${response.statusText}`,

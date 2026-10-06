@@ -1,11 +1,13 @@
-// A test-only shim that replaces globalThis.fetch to serve canned HTTP
-// responses. Installed by the compiled agent module when AGENCY_FETCH_MOCKS_FILE
-// is set (see the imports template). Matches by URL (exact/glob/regex), optional
-// method, and optional request body; returns a real Response so every consumer
-// (http.ts's getReader path, email.ts's .json(), …) works off one shim.
+// A test-only `fetch` that serves canned HTTP responses. The default host
+// on Node builds its network part from it when AGENCY_FETCH_MOCKS_FILE is
+// set (lib/host/default.node.ts). Matches by URL (exact/glob/regex),
+// optional method, and optional request body; returns a real Response so
+// every consumer (http.ts's getReader path, email.ts's .json(), …) works
+// off one shim.
 //
 // This module has NO filesystem dependency: `returnFile` is resolved and
 // inlined into `return` by the CLI runner before it reaches here.
+import type { HostNetwork } from "../host/host.js";
 
 export type FetchMock = {
   url?: string;
@@ -146,16 +148,16 @@ function extractMethod(input: any, init: any): string {
   return String(raw ?? "GET").toUpperCase();
 }
 
-export function installFetchMock(mocks: FetchMock[]): () => void {
+/** The `fetch` of a host that answers from `mocks`, for the test runner. */
+export function fetchMock(mocks: FetchMock[]): HostNetwork["fetch"] {
   if (!Array.isArray(mocks)) {
     throw new Error(
-      "installFetchMock: expected an array of fetch mocks (AGENCY_FETCH_MOCKS_FILE must hold a JSON array).",
+      "fetchMock: expected an array of fetch mocks (AGENCY_FETCH_MOCKS_FILE must hold a JSON array).",
     );
   }
   const compiled = mocks.map(compileMock);
-  const real = globalThis.fetch;
 
-  const mockFetch = async (input: any, init?: any): Promise<Response> => {
+  return async (input: any, init?: any): Promise<Response> => {
     const signal = init?.signal;
     if (signal?.aborted) {
       throw signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
@@ -203,10 +205,5 @@ export function installFetchMock(mocks: FetchMock[]): () => void {
     throw new Error(
       `No fetchMock matched ${method} ${url}. Declared: [${declared}]. Add an entry to fetchMocks.`,
     );
-  };
-
-  globalThis.fetch = mockFetch as unknown as typeof fetch;
-  return () => {
-    globalThis.fetch = real;
   };
 }

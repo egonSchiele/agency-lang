@@ -30,6 +30,8 @@ export function nodeFilesPart(options: NodeFilesOptions = {}): HostFiles {
 
   return {
     root: async (dir) => files.root(dir),
+    fixedRoot: async (dir) => files.fixedRoot(dir),
+    realDir: async (dir) => files._realDir(dir),
     wholePath: async (p) => files.wholePath(p),
     fixedPath: async (p) => files.fixedPath(p),
     realPath: async (p) => files._realTarget(p),

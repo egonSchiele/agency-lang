@@ -22,6 +22,7 @@ import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
 import { expandPath } from "../stdlib/expandPath.js";
+import { isContained } from "../stdlib/isContained.js";
 
 export type { Root } from "./roots.js";
 import type { Root } from "./roots.js";
@@ -183,24 +184,6 @@ export function wholePath(p: string): Located {
   }
   const lexical = path.resolve(process.cwd(), expandPath(p));
   return { root: root(path.dirname(lexical)), target: path.basename(lexical) };
-}
-
-/** True when `target` is `root` or sits inside it. Uses `path.relative` so
- *  a root of `/` works. Case-insensitive on Windows. */
-export function isContained(target: string, root: string): boolean {
-  const t = process.platform === "win32" ? target.toLowerCase() : target;
-  const r = process.platform === "win32" ? root.toLowerCase() : root;
-  if (t === r) {
-    return true;
-  }
-  const rel = path.relative(r, t);
-  if (rel === "") {
-    return true;
-  }
-  if (path.isAbsolute(rel)) {
-    return false;
-  }
-  return rel.split(path.sep)[0] !== "..";
 }
 
 /** The `dir` and `filename` an interrupt payload shows for a single-file
@@ -692,7 +675,6 @@ export const HELPERS = [
   "resolveUnder",
   "wholePath",
   "fixedPath",
-  "isContained",
   "locateSync",
   "_realDir",
   "_realTarget",

@@ -110,6 +110,7 @@ export const WAITING = [
   "lib/stdlib/image.ts",
   "lib/stdlib/imageTools.ts",
   "lib/stdlib/imessage.ts",
+  "lib/stdlib/isContained.ts",
   "lib/stdlib/keyring.ts",
   "lib/stdlib/layout/render.ts",
   "lib/stdlib/mcpBridge.mjs",

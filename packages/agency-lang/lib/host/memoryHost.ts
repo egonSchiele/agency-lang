@@ -312,6 +312,13 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       }
       return makeRoot(absolute(cwd, dir));
     },
+    fixedRoot: async (dir) => {
+      if (dir.trim() === "") {
+        throw new Error('dir must not be empty. Use "." for the current directory.');
+      }
+      return makeRoot(absolute(cwd, dir));
+    },
+    realDir: async (dir) => absolute(cwd, dir),
     wholePath: async (p) => {
       const full = absolute(cwd, p);
       return { root: makeRoot(parentOf(full)), target: baseOf(full) };

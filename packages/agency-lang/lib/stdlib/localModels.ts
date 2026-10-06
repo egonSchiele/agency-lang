@@ -6,9 +6,9 @@ import {
   remove,
   readText,
   writeText,
-  isContained,
   type Root,
 } from "./contained.js";
+import { isContained } from "./isContained.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";

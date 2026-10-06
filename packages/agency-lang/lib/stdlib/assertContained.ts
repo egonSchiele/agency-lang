@@ -2,9 +2,8 @@ import path from "path";
 import { rootPath } from "../host/roots.js";
 import process from "process";
 import { expandPath } from "./expandPath.js";
-import { root, isContained } from "./contained.js";
-
-export { isContained };
+import { root } from "./contained.js";
+import { isContained } from "./isContained.js";
 
 /**
  * The allow-list a program sets on itself: assert that `target` resolves

@@ -80,6 +80,14 @@ export type WritableFile = {
 export type HostFiles = {
   /** The root for a directory a caller spelled, realpathed once. */
   root(dir: string): Promise<Root>;
+  /** The root an approval already named, spelled the way the approver saw
+   *  it: every existing component must be a real directory, so a link
+   *  planted at the approved path while the prompt was pending is
+   *  refused. */
+  fixedRoot(dir: string): Promise<Root>;
+  /** The real spelling of a directory, for an interrupt payload or a
+   *  comparison of paths. */
+  realDir(dir: string): Promise<string>;
   /** Split a whole path into its real parent and final name. */
   wholePath(path: string): Promise<Located>;
   /** The whole-path twin of `fixedRoot`: the real parent the approver saw,

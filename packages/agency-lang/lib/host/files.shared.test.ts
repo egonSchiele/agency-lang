@@ -158,6 +158,20 @@ function registerFileTests(name: string, open: () => Workspace): void {
         );
       }));
 
+    it("fixedRoot and realDir spell a directory the way a payload does", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.mkdir(root, "sub");
+        const sub = path.posix.join(dir, "sub");
+        const fixed = await host.files.fixedRoot(sub);
+        expect(await host.files.resolvePath(fixed, ".")).toBe(sub);
+        expect(await host.files.realDir(path.posix.join(dir, "sub", "..", "sub"))).toBe(sub);
+        // A directory that does not exist yet keeps its lexical spelling.
+        const missing = path.posix.join(dir, "later");
+        expect(await host.files.realDir(missing)).toBe(missing);
+        await expect(host.files.fixedRoot("")).rejects.toThrow("must not be empty");
+      }));
+
     it("openForWrite writes at positions and truncates", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);

@@ -76,7 +76,7 @@ export type TraceConfig = {
    * Within a single run, multiple per-execCtx writers (one per
    * `respondToInterrupts`) cooperate via the file itself: each new
    * writer scans the on-disk trace at construction (see
-   * `scanExistingTraceFile` in `traceWriter.ts`) to skip writing a
+   * `scanExistingTraceFile` in `fileSink.ts`) to skip writing a
    * duplicate header and to seed its CAS so chunks already on disk are
    * not re-emitted.
    *

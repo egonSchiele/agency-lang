@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createBundle, extractBundle } from "./bundle.js";
 import { TraceWriter } from "@/runtime/trace/traceWriter.js";
-import { FileSink } from "@/runtime/trace/sinks.js";
+import { FileSink } from "@/runtime/trace/fileSink.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import * as fs from "fs";

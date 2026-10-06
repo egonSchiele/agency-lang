@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { TraceWriter } from "../runtime/trace/traceWriter.js";
-import { FileSink } from "../runtime/trace/sinks.js";
+import { FileSink } from "../runtime/trace/fileSink.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { traceLog } from "./events.js";
 

@@ -1,6 +1,7 @@
 // Copied from packages/kokoro/src/ffmpeg.ts, with pcm and wav output and a
 // speed filter added.
 import { spawn, spawnSync } from "node:child_process";
+import { rootPath } from "../host/roots.js";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -100,7 +101,7 @@ export async function transcode(
 ): Promise<Uint8Array> {
   const tmp = root(os.tmpdir());
   const name = `agency-speech-encode-${randomUUID()}.${format}`;
-  const outputFile = path.join(tmp.real, name);
+  const outputFile = path.join(rootPath(tmp), name);
   try {
     await runFfmpeg(buildTranscodeArgs(format, speed, outputFile), wav, signal);
     return new Uint8Array(readBytes(tmp, name));

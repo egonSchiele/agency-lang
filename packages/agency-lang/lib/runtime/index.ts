@@ -22,6 +22,7 @@ export type { InvocationOptions } from "./invocationOptions.js";
 // passes it through InvocationOptions. See docs/dev/runtime/host.md.
 export {
   CAPABILITIES,
+  FILE_WRITE_FUNCTIONS,
   PART_CAPABILITY,
   PLATFORM_CAPABILITIES,
   UnsupportedOnHostError,
@@ -30,17 +31,27 @@ export {
 } from "../host/host.js";
 export type {
   Capability,
+  Entry,
+  FileStat,
   Host,
   HostEnv,
+  HostFiles,
   HostParts,
   HostRandom,
   HostSettings,
   HostSystem,
   HostTerminal,
+  Located,
   OperatingSystem,
   Platform,
+  Root,
+  WritableFile,
+  WriteMode,
+  WriteOptions,
 } from "../host/host.js";
 export { nodeHost } from "../host/nodeHost.js";
+export { memoryHost } from "../host/memoryHost.js";
+export type { MemoryHost, MemoryHostOptions, MemoryHostState } from "../host/memoryHost.js";
 export { defaultHost } from "#default-host";
 // Agency code may call `path.join` and `os.homedir()` as free names; the
 // generated header imports them from here, so it imports no Node module.
@@ -83,7 +94,8 @@ export { PendingPromiseStore } from "./state/pendingPromiseStore.js";
 export { TraceWriter } from "./trace/traceWriter.js";
 export { TraceReader } from "./trace/traceReader.js";
 export type { TraceSink } from "./trace/sinks.js";
-export { FileSink, CallbackSink } from "./trace/sinks.js";
+export { CallbackSink } from "./trace/sinks.js";
+export { FileSink } from "./trace/fileSink.js";
 export type { TraceLine, TraceEvent } from "./trace/types.js";
 
 export {

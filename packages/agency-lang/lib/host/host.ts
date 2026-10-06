@@ -38,6 +38,91 @@ export const PLATFORM_CAPABILITIES: Record<Platform, Capability[]> = {
 /** The operating system a host runs on. `browserHost` reports `"unknown"`. */
 export type OperatingSystem = "macos" | "linux" | "windows" | "wsl" | "unknown";
 
+/** A directory an approval named, realpathed once by the host that made
+ *  it. Every file operation takes one; nothing takes a bare string root.
+ *  Only files under lib/host read its inside (`rootPath` in roots.ts). */
+export type { Root } from "./roots.js";
+import type { Root } from "./roots.js";
+
+/** A whole path the approval named, as its real parent plus a final name
+ *  that is never followed. */
+export type Located = { root: Root; target: string };
+
+export type Entry = { name: string; type: "file" | "dir" | "other"; size: number };
+
+/** What `stat` says about a path. `null` from `stat` means nothing is
+ *  there. */
+export type FileStat = {
+  kind: "file" | "dir" | "other";
+  size: number;
+  /** Milliseconds since the Unix epoch. */
+  modifiedMs: number;
+};
+
+export const WRITE_MODES = ["overwrite", "append", "create-only"] as const;
+export type WriteMode = (typeof WRITE_MODES)[number];
+export type WriteOptions = { mode?: WriteMode; fileMode?: number };
+
+/** An open file for writes at positions, from `openForWrite`. */
+export type WritableFile = {
+  /** Write all of `data` at `position`, looping over a short write. */
+  writeAt(data: Uint8Array, position: number): Promise<void>;
+  truncate(size: number): Promise<void>;
+  close(): Promise<void>;
+};
+
+/** The files. Every function takes a `Root` an approval named, and a host
+ *  built with a narrower root reaches less. The rule every host keeps: under
+ *  an approval that names directory D, no byte is read from or written to
+ *  a path outside D, and a symlink below D is refused. Reading and
+ *  resolving need `fileRead`; writing, moving, and deleting need
+ *  `fileWrite`. See docs/dev/stdlib/contained-files.md. */
+export type HostFiles = {
+  /** The root for a directory a caller spelled, realpathed once. */
+  root(dir: string): Promise<Root>;
+  /** Split a whole path into its real parent and final name. */
+  wholePath(path: string): Promise<Located>;
+  /** The whole-path twin of `fixedRoot`: the real parent the approver saw,
+   *  checked to still be spelled without links, plus the final name. */
+  fixedPath(path: string): Promise<Located>;
+  /** The real spelling of a whole path, for an interrupt payload. */
+  realPath(path: string): Promise<string>;
+  /** `target` under `root`, validated: a path this host's subprocess part
+   *  understands, for a program such as ffmpeg or a module loader. */
+  resolvePath(root: Root, target: string): Promise<string>;
+  /** The `dir` and `filename` an interrupt payload shows for a single-file
+   *  operation. Runs its steps in one piece, with no await between them,
+   *  because it runs between a wrapper's call and its interrupt. */
+  locate(
+    dir: string,
+    filename: string,
+    operation: "read" | "write",
+  ): Promise<{ dir: string; filename: string }>;
+  /** Hold a lock on one path for the length of `work`. The lock belongs
+   *  to the host, so it covers every run that shares it. */
+  withLock<T>(root: Root, target: string, work: () => Promise<T>): Promise<T>;
+
+  readText(root: Root, target: string): Promise<string>;
+  readBytes(root: Root, target: string): Promise<Uint8Array>;
+  /** The file in pieces, for one too large to buffer. */
+  readChunks(root: Root, target: string): AsyncIterable<Uint8Array>;
+  /** One level of a directory. Symlinked entries are left out. */
+  list(root: Root, target: string): Promise<Entry[]>;
+  stat(root: Root, target: string): Promise<FileStat | null>;
+
+  writeText(root: Root, target: string, content: string, options?: WriteOptions): Promise<void>;
+  writeBytes(root: Root, target: string, bytes: Uint8Array, options?: WriteOptions): Promise<void>;
+  /** Read a file, call `change` with its text (`null` when it does not
+   *  exist), and write the result. No other call on the same file runs
+   *  between the read and the write. */
+  updateText(root: Root, target: string, change: (current: string | null) => string): Promise<void>;
+  openForWrite(root: Root, target: string, options?: WriteOptions): Promise<WritableFile>;
+  mkdir(root: Root, target: string): Promise<void>;
+  remove(root: Root, target: string): Promise<void>;
+  copy(from: Located, to: Located): Promise<void>;
+  move(from: Located, to: Located): Promise<void>;
+};
+
 /** What the Agency functions `env` and `setEnv` read and write. This is a
  *  capability because it hands any variable to the program, and so to an
  *  agent. The runtime's own reads go through `settings` instead. */
@@ -106,10 +191,11 @@ export type HostRandom = {
   bytes(length: number): Uint8Array;
 };
 
-/** The parts a host is built from. `env` and `terminal` are capabilities,
- *  so a host may leave them out; `makeHost` then supplies parts that
- *  refuse. The other parts are required. */
+/** The parts a host is built from. `files`, `env`, and `terminal` are
+ *  capabilities, so a host may leave them out; `makeHost` then supplies
+ *  parts that refuse. The other parts are required. */
 export type HostParts = {
+  files?: HostFiles;
   env?: HostEnv;
   terminal?: HostTerminal;
   system: HostSystem;
@@ -123,6 +209,7 @@ export type Host = {
   name: string;
   /** What this host has. Only `requireCapabilities` reads it. */
   capabilities: Capability[];
+  files: HostFiles;
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -132,13 +219,37 @@ export type Host = {
 };
 
 /** The capability each capability part needs. A part not listed here
- *  (`system`, `settings`, `clock`, `random`) is on every host. */
+ *  (`system`, `settings`, `clock`, `random`) is on every host. `files`
+ *  needs two: `fileRead` for the part, and `fileWrite` for the functions
+ *  in FILE_WRITE_FUNCTIONS. */
 export const PART_CAPABILITY = {
+  files: "fileRead",
   env: "env",
   terminal: "terminal",
 } as const satisfies Record<string, Capability>;
 
 export type CapabilityPart = keyof typeof PART_CAPABILITY;
+
+/** The functions of the files part that write, move, or delete. They need
+ *  `fileWrite`; the rest of the part needs `fileRead`. */
+export const FILE_WRITE_FUNCTIONS: (keyof HostFiles)[] = [
+  "writeText",
+  "writeBytes",
+  "updateText",
+  "openForWrite",
+  "mkdir",
+  "remove",
+  "copy",
+  "move",
+];
+
+/** The capability one function of a capability part needs. */
+export function functionCapability(part: CapabilityPart, fn: string): Capability {
+  if (part === "files" && FILE_WRITE_FUNCTIONS.includes(fn as keyof HostFiles)) {
+    return "fileWrite";
+  }
+  return PART_CAPABILITY[part];
+}
 
 /** Thrown when code asks a host for something it cannot do. Agency turns an
  *  error thrown inside a function into a failure result, so a program sees
@@ -202,11 +313,12 @@ export function makeHost(args: MakeHostArgs): Host {
     if (implementation === undefined) {
       throw new Error(`The ${name} host grants ${capability} but its parts have no ${part}.`);
     }
-    built[part] = onUse ? observedPart(part, capability, implementation, onUse) : implementation;
+    built[part] = wrapPart(part, implementation, capabilities, name, onUse);
   }
   return {
     name,
     capabilities: [...capabilities],
+    files: built.files as HostFiles,
     env: built.env as HostEnv,
     terminal: built.terminal as HostTerminal,
     system: parts.system,
@@ -239,12 +351,15 @@ function refusedPart(part: string, capability: Capability, hostName: string): ob
   );
 }
 
-/** The part with every function wrapped to call `onUse` first. */
-function observedPart(
-  part: string,
-  capability: Capability,
+/** The part with each function wrapped: a function whose own capability
+ *  (`fileWrite`, for a write on the files part) is not granted refuses,
+ *  and the rest call `onUse` first when there is one. */
+function wrapPart(
+  part: CapabilityPart,
   implementation: Record<string, unknown>,
-  onUse: NonNullable<MakeHostArgs["onUse"]>,
+  capabilities: Capability[],
+  hostName: string,
+  onUse: MakeHostArgs["onUse"],
 ): object {
   const wrapped: Record<string, unknown> = {};
   for (const [fn, value] of Object.entries(implementation)) {
@@ -252,8 +367,20 @@ function observedPart(
       wrapped[fn] = value;
       continue;
     }
+    const capability = functionCapability(part, fn);
+    const functionName = `${part}.${fn}`;
+    if (!capabilities.includes(capability)) {
+      wrapped[fn] = () => {
+        throw new UnsupportedOnHostError({ capability, hostName, functionName });
+      };
+      continue;
+    }
+    if (!onUse) {
+      wrapped[fn] = value;
+      continue;
+    }
     wrapped[fn] = (...callArgs: unknown[]) => {
-      onUse(`${part}.${fn}`, capability);
+      onUse(functionName, capability);
       return value(...callArgs);
     };
   }

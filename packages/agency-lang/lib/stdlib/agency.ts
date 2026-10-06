@@ -1,4 +1,5 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
+import { rootPath } from "../host/roots.js";
 import { resolve, sep, join, dirname } from "path";
 import {
   root,
@@ -142,7 +143,7 @@ export function _typecheck(
   // The draft is given a path inside dir, so its relative imports resolve
   // against dir's files (as typecheckFile's do), and its own text comes from
   // the override: nothing is written to dir.
-  const draftPath = join(root(dir).real, `agency_draft_${nanoid()}.agency`);
+  const draftPath = join(rootPath(root(dir)), `agency_draft_${nanoid()}.agency`);
   return typeCheckSource(source, draftPath, config, { [draftPath]: source });
 }
 

@@ -1,5 +1,6 @@
 import path from "path";
-import { root, resolveUnder, stat } from "./contained.js";
+import { rootPath } from "../host/roots.js";
+import { root, locateSync } from "./contained.js";
 import { resolveCwdPath } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
 
@@ -26,30 +27,7 @@ export async function prepareContainedPath(
   filename: string,
   operation: FileOperation,
 ): Promise<ContainedPath> {
-  if (dir.trim() === "") {
-    throw new Error(`${operation} refused: dir must not be empty.`);
-  }
-  const realRoot = root(dir);
-  if (stat(realRoot, ".") === null) {
-    throw new Error(`${operation} refused: dir "${dir}" does not exist.`);
-  }
-  let resolved: string;
-  try {
-    resolved = resolveUnder(realRoot, filename);
-  } catch (error) {
-    throw new Error(`${operation} ${teach(operation, (error as Error).message)}`);
-  }
-  return { dir: realRoot.real, filename: path.relative(realRoot.real, resolved) };
-}
-
-/** The escape message names the operation, so the model learns "to write
- *  somewhere else, pass that directory in dir" rather than a generic hint. */
-function teach(operation: FileOperation, message: string): string {
-  const preposition = operation === "write" ? "somewhere else" : "from somewhere else";
-  return message.replace(
-    "To reach it, pass that directory in dir.",
-    `To ${operation} ${preposition}, pass that directory in dir.`,
-  );
+  return locateSync(dir, filename, operation);
 }
 
 export type TildeMode = "expand" | "literal";
@@ -71,6 +49,6 @@ export async function resolveRedirectTarget(
   }
   const baseDir = resolveCwdPath(cwd);
   const expanded = tildeMode === "expand" ? expandPath(target) : target;
-  const resolved = root(path.resolve(baseDir, expanded)).real;
+  const resolved = rootPath(root(path.resolve(baseDir, expanded)));
   return { dir: path.dirname(resolved), filename: path.basename(resolved) };
 }

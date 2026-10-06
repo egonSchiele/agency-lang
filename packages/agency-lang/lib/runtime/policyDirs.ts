@@ -7,6 +7,7 @@
 // eslint.node-exceptions.mjs.
 
 import { realpathSync } from "fs";
+import { rootPath } from "../host/roots.js";
 import { defaultHost } from "#default-host";
 import { getPackageRoot } from "../importPaths.js";
 import type { Host } from "../host/host.js";
@@ -35,7 +36,7 @@ export function resolvePolicyDirs(host: Host): PolicyDirs {
 
 function realOrAsWritten(dir: string): string {
   try {
-    return root(dir).real;
+    return rootPath(root(dir));
   } catch {
     return dir;
   }

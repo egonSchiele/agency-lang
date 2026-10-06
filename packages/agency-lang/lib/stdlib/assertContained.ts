@@ -1,4 +1,5 @@
 import path from "path";
+import { rootPath } from "../host/roots.js";
 import process from "process";
 import { expandPath } from "./expandPath.js";
 import { root, isContained } from "./contained.js";
@@ -32,7 +33,7 @@ export async function assertContained(
   const realTarget = realOrLexical(path.resolve(baseDir, expandPath(target)));
   const realRoots = allowedRoots
     .filter((entry) => entry.trim() !== "")
-    .map((entry) => root(path.resolve(baseDir, expandPath(entry))).real);
+    .map((entry) => rootPath(root(path.resolve(baseDir, expandPath(entry)))));
   if (realRoots.length === 0) {
     throw new Error(
       `assertContained: allowedPaths was set (${JSON.stringify(allowedRoots)}) but contained no usable entries; refusing to fall back to unrestricted access.`,
@@ -51,7 +52,7 @@ export async function assertContained(
  *  as written. The operation that follows refuses or hides it anyway. */
 function realOrLexical(p: string): string {
   try {
-    return root(p).real;
+    return rootPath(root(p));
   } catch {
     const parent = path.dirname(p);
     if (parent === p) {

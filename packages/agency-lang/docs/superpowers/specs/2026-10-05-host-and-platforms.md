@@ -787,6 +787,16 @@ Two files that the prelude reaches also change:
 The rule in `running-without-node.md` says to remove these for both
 platforms. They do not go in the host.
 
+**Whose code replaces them.** On each platform, use the platform's own
+API, or a copy of Node's implementation, before writing our own. Hashing
+goes to OpenSSL on Node and to WebCrypto in the browser wherever the
+caller can await it. Paths use Node's `path` on Node and `path-browserify`,
+which is Node's `path.js`, in the browser; the containment checks are
+built on `path.relative` and `path.resolve`, and a difference there is
+how a containment bug happens. Base64 goes through `btoa` and `atob`.
+Code of our own is the last resort, for a synchronous primitive the
+platform only offers async, and it is tested against Node's output.
+
 | What | Used for | Replacement |
 | --- | --- | --- |
 | `path` | joining and splitting path text, in 45 files | one portable module with POSIX rules |
@@ -1195,6 +1205,12 @@ calls.
    flag is `net`, and its scope is a list of sites.
 
 ## Decisions
+
+- **`memoryHost` keeps its own containment.** Its path rules
+  (`normalize`, `isUnder`) are a second implementation of "nothing above
+  the root", with no symlinks to refuse. It serves tests today. Before it
+  becomes the file system of a playground that runs code the user does
+  not trust, it gets the review `contained.ts` got.
 
 - **The file functions are async.** Two designs would keep them
   synchronous. One loads every file into memory before the program starts

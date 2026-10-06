@@ -24,8 +24,9 @@ PR B is open. Start with PR C once it has merged.
 | PR | What it ships | Stages | State |
 |---|---|---|---|
 | #1175, #1176, #1177 | Programs stop importing the compiler; `std::capabilities` becomes `std::effectSets`; hashing through `#sha256` | 1, 16, 11 | merged |
-| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open |
-| C | `contained.ts` moves into the host and goes async, `updateText` and `withLock`, `memoryHost`, the effect sets data file, the trace sinks | 5, 6b, 6c, 6, 7 | |
+| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open, #1179 |
+| C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | open, stacked on B |
+| C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | next |
 | D | Subprocesses, network, portable paths, `Buffer` | 8, 9, 10, 12 | |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
 
@@ -109,17 +110,78 @@ does.
 6. **The old stdlib `fs` block stays beside the new one.** ESLint keeps
    only the later block for a file both match, so a waiting stdlib file
    would lose the `fs` ban if the old block were folded away.
-7. **Files still waiting after PR B** use `fs`, `path`, `Buffer`,
+7. **Agency code uses `path` and `os` as free names** (`path.join(dir,
+   name)`, `os.homedir()`), which the old header supplied by importing
+   Node's modules; CI failed with "path is not defined" the first time the
+   header lost them. They now come from `agency-lang/runtime`, which
+   re-exports Node's modules from `lib/runtime/agencyGlobals.node.ts`.
+   Stage 15's `browser.ts` must export a portable `path` (Task 27) and a
+   host-backed `os` under the same names, and the reach lint lets
+   `lib/runtime/index.ts` alone import a Node-only file for this.
+8. **Files still waiting after PR B** use `fs`, `path`, `Buffer`,
    `child_process`, or `crypto`, which later PRs cover; `process.cwd` and
    `process.platform` reads in file-handling code move with `contained.ts`
    in PR C. `exitProcess.ts` and `subprocessRunInfo.ts` wait for PR D.
    `termcolors.ts`, `args.ts`, and `layout/render.ts` read the terminal's
    size and colour support and need a decision in PR E.
 
+### What PR C learned
+
+1. **Task 16's count.** With the re-export in `lib/stdlib/contained.ts`
+   emptied, `tsc` names 33 files. They hold about 200 calls of the
+   contained functions. Nine of the files are Node-only (`localModels.ts`
+   33 calls, `agency.ts` 12, `hubDownload.ts` 10, `cli.ts` 6,
+   `mlxModelRecord.ts` 6, `modelVerify.ts` 5, `localModelManifest.ts` 5,
+   `modelBackend.ts` 4, `localImageInputs.ts` 2) and keep calling
+   `lib/host/nodeFiles.ts` synchronously, with the comment Task 17 asks
+   for. The other 24 hold about 120 calls. The files with the most calls
+   inside synchronous functions are `agentSessions.ts` (10 calls, 11 sync
+   functions), `builtins.ts` (8, 19), `template.ts` (2, 8),
+   `approvedPath.ts` (4, 3), and `assertContained.ts` (3, 1); `fs.ts`
+   (19), `speech.ts` (15), and `shell.ts` (13) are already mostly async.
+   That is PR C2 on its own.
+2. **`Root` stays `{ real: string }`, fenced by a lint rule.** A branded
+   type would have meant rewriting the 39 `.real` reads in the two test
+   files. Instead `lib/host/roots.ts` owns the type and `rootPath`, and
+   `no-restricted-syntax` in `eslint.config.js` refuses `.real` in the
+   runtime and the stdlib. The 21 readers outside `lib/host` call
+   `rootPath` for now; Task 17 step 6 moves them to `host.files.resolvePath`.
+3. **A refusal from `makeHost` throws when called**, before any promise
+   exists, for the file functions too. Every caller awaits inside an async
+   function, where that becomes a rejection. A test of a refused async
+   function uses `expect(() => ...).toThrow`.
+4. **`locate` is `locateSync` in `nodeFiles.ts`**, and
+   `prepareContainedPath` calls it. The async wrapper's `await` was always
+   a microtask; the comment there was about real I/O waits.
+5. **`stat` returns a plain `FileStat`** (`kind`, `size`, `modifiedMs`),
+   because Node's `Stats` is not a type a browser host can make. The
+   synchronous module still returns `Stats`; the part converts.
+6. **The effect sets data file is generated after the build**, because the
+   generator needs the parser in `dist/`. `make effect-sets` builds again
+   when the file changed, and a test fails when it is stale. The parse
+   moved to `effectSetsParse.ts` so `effectSets.ts` no longer pulls the
+   parser into every program.
+7. **`traceWriter.ts` still imports `fileSink.ts`.** `TraceWriter.create`
+   builds the `FileSink`; Task 20 moves that behind `host.files`, and until
+   then `traceWriter.ts` stays on the waiting list for that import and for
+   `path`.
+
 Every PR ends with the steps under "Finishing a PR".
 
 **Every PR leaves behaviour on Node unchanged.** If a task seems to need
 a change in what a Node program does, stop and ask.
+
+**Use the platform's implementation wherever it makes sense.** When a
+task replaces something Node did, reach for the platform's own API
+first (WebCrypto, `btoa`, `fetch`), then for a copy of Node's
+implementation (`path-browserify` is Node's `path.js`), and write our
+own only when neither exists, which in practice means a synchronous
+primitive the platform offers only async. The platform's code has had
+more eyes and more years than ours, and it is usually faster: Node's
+SHA-256 is about nine times faster than the one in
+`sha256.portable.ts`. Code we do write is tested against Node's output
+on the same inputs. Section 5 of the spec has the same rule; Tasks 27,
+28, and 29 apply it.
 
 **Goal:** this program compiles for the browser, bundles with no Node
 import, and runs in a web view.
@@ -711,9 +773,14 @@ One PR each, in this order.
 1. Count the code that depends on Windows path rules: uses of
    `path.win32`, `path.sep`, and checks of the operating system near a
    path call. Report the count before writing code.
-2. Write `lib/utils/portablePath.ts` with the functions the code uses,
-   under POSIX rules. Test it against Node's `path.posix` for the same
-   inputs.
+2. Do not write a path module. Add `path-browserify`, which is Node's
+   own `path.js`, pinned the way `docs/dev/contributing/supply-chain.md`
+   says, and choose it through a `#path` entry in the `imports` field
+   (`default` is Node's `path`), the same mechanism as `#sha256`. The
+   containment checks are built on `path.relative` and `path.resolve`,
+   and a difference between our module and Node's is how a containment
+   bug happens. Test that both files give the same answers on the
+   inputs `contained.ts`'s tests use.
 3. `path.resolve` and `path.relative` read the working directory. The
    two directories call them 36 and 8 times. The portable versions take
    the working directory as an argument, from `host.system.cwd()`.
@@ -722,7 +789,14 @@ One PR each, in this order.
 
 ### Task 28: hashing
 
-Done in #1177. Node keeps its own crypto through a `#sha256` entry in the
+Done in #1177, with one change still to make: `sha256.portable.ts` is
+hand-written SHA-256, and the browser has WebCrypto. Add async
+`sha256BytesAsync` and `hmacSha256Async` to `lib/utils/hash.ts`, over
+`crypto.subtle` on both platforms, and move the S3 request signer and the
+OAuth PKCE challenge to them; both callers are async already. The
+hand-written version then serves only the synchronous checkpoint
+checksum (Task 30), and it stays tested against Node's output. Done in
+#1177: Node keeps its own crypto through a `#sha256` entry in the
 `imports` field of `package.json`, with an ambient declaration in
 `lib/utils/packageImports.d.ts` and an alias in `vitest.aliases.ts`. PR B
 reuses all three for `#default-host`.
@@ -745,7 +819,9 @@ reuses all three for `#default-host`.
 ### Task 29: `Buffer`
 
 Replace the remaining `Buffer` uses in files the lint rule covers with
-`Uint8Array`, `TextEncoder`, `TextDecoder`, and `lib/stdlib/base64.ts`.
+`Uint8Array`, `TextEncoder`, `TextDecoder`, and `lib/stdlib/base64.ts`,
+whose encoder goes through `btoa`. Move `decodeBase64Strict` to `atob`
+too, keeping its validation.
 
 ### Task 30: the checkpoint checksum
 

@@ -1,4 +1,5 @@
 import process from "process";
+import { rootPath } from "../host/roots.js";
 import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
@@ -281,7 +282,7 @@ async function approvedRoot(
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
   const approved = fixedRoot(rootDir);
-  await assertContained(path.join(approved.real, target), allowedPaths ?? [], process.cwd());
+  await assertContained(path.join(rootPath(approved), target), allowedPaths ?? [], process.cwd());
   return approved;
 }
 
@@ -293,7 +294,7 @@ async function probeRoot(
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
   const probed = root(rootDir);
-  await assertContained(path.join(probed.real, target), allowedPaths ?? [], process.cwd());
+  await assertContained(path.join(rootPath(probed), target), allowedPaths ?? [], process.cwd());
   return probed;
 }
 
@@ -388,7 +389,7 @@ function gitignoreUnder(approved: Root, rel: string): GitignoreFile | null {
   } catch {
     return null;
   }
-  return parseGitignore(path.join(approved.real, rel), text);
+  return parseGitignore(path.join(rootPath(approved), rel), text);
 }
 
 /** The in-tree directories strictly above `dir`, outermost first: for
@@ -414,7 +415,7 @@ async function ancestorIgnoreFiles(approved: Root, dir: string): Promise<Gitigno
   for (let i = prefixes.length - 1; i >= 0; i--) {
     if (stat(approved, path.join(prefixes[i], ".git")) !== null) return inTree(i);
   }
-  const above = await repositoryAncestors(approved.real);
+  const above = await repositoryAncestors(rootPath(approved));
   if (above === null) return [];
   const aboveFiles: GitignoreFile[] = [];
   for (const ancestor of above) {
@@ -451,7 +452,7 @@ async function walkDir(
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
       const entryRel = joinRel(rel, entry.name);
-      const full = path.join(approved.real, entryRel);
+      const full = path.join(rootPath(approved), entryRel);
       if (options.respectGitignore && isIgnored(full, entry.type === "dir", scoped)) continue;
       if (!(await visit(entryRel, entry))) return false;
       if (entry.type === "dir" && !(await walk(entryRel, scoped))) return false;

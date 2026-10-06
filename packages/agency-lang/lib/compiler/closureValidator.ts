@@ -16,6 +16,7 @@
  * open it, so the mirror layout stays private to the compiler subsystem.
  */
 import * as fs from "fs";
+import { rootPath } from "../host/roots.js";
 import * as path from "path";
 import { nanoid } from "nanoid";
 import { parseAgency } from "@/parser.js";
@@ -181,7 +182,7 @@ class ClosureWalker {
     let source: string;
     try {
       const sandbox = root(this.root as string);
-      source = readText(sandbox, path.relative(sandbox.real, filePath));
+      source = readText(sandbox, path.relative(rootPath(sandbox), filePath));
     } catch (e) {
       this.violations.push(`${importedFrom}: '${filePath}' cannot be read: ${messageOf(e)}`);
       return;

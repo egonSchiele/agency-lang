@@ -5,6 +5,7 @@ node_modules/
 .agency-build/
 .agency-tmp/
 lib/templates/**/*.ts
+lib/runtime/effectSets.data.ts
 lib/vendor/
 tests/fixtures/
 tests/typescriptGenerator/

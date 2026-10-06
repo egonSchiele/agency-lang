@@ -3,6 +3,7 @@
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
 import os from "os";
+import { rootPath } from "../host/roots.js";
 import path from "path";
 import { randomBytes } from "crypto";
 import { sliceLines } from "./builtins.js";
@@ -26,7 +27,7 @@ function spillLocation(): Located {
 
 export function _spillDir(): string {
   const location = spillLocation();
-  return path.join(location.root.real, location.target);
+  return path.join(rootPath(location.root), location.target);
 }
 
 // A saved file's name: a timestamp, a random suffix, `.log`. The read
@@ -61,7 +62,7 @@ export async function _spillOutput(filename: string, text: string): Promise<stri
   const location = await spillDirReady();
   const file = path.join(location.target, filename);
   writeText(location.root, file, text, { mode: "create-only", fileMode: 0o600 });
-  return path.join(location.root.real, file);
+  return path.join(rootPath(location.root), file);
 }
 
 /** One saved file's text, read through a descriptor that is checked to sit

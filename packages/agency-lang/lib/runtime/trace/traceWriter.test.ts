@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { TraceWriter, scanExistingTraceFile } from "./traceWriter.js";
-import { FileSink, CallbackSink } from "./sinks.js";
+import { TraceWriter } from "./traceWriter.js";
+import { scanExistingTraceFile } from "./fileSink.js";
+import { CallbackSink } from "./sinks.js";
+import { FileSink } from "./fileSink.js";
 import type { TraceLine } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";

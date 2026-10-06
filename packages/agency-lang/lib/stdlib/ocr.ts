@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { rootPath } from "../host/roots.js";
 import { promisify } from "util";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -91,7 +92,7 @@ async function runVisionOnCopy(
 ): Promise<string> {
   const tmpDir = root(os.tmpdir());
   const tmpName = `agency-ocr-${nanoid()}${extension}`;
-  const tmpFile = path.join(tmpDir.real, tmpName);
+  const tmpFile = path.join(rootPath(tmpDir), tmpName);
   let owned = false;
   try {
     // Owner-only: the temp directory is shared and the image may be private.

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { builtinEffectSets, parseEffectSets } from "./effectSets.js";
+import { builtinEffectSets } from "./effectSets.js";
+import { parseEffectSets } from "./effectSetsParse.js";
+import { readFileSync } from "fs";
+import path from "path";
+import { getPackageRoot } from "../importPaths.js";
 
 // These parse the REAL shipped stdlib/effectSets.agency, so they double
 // as drift tests: an edit to that file the walker misreads fails here.
@@ -90,5 +94,13 @@ describe("parseEffectSets", () => {
     expect(() => parseEffectSets(`export effectSet A = <Missing>\n`, "test")).toThrow(
       "unknown set 'Missing'",
     );
+  });
+});
+
+describe("effectSets.data.ts", () => {
+  it("matches stdlib/effectSets.agency (run `make` when this fails)", () => {
+    const file = path.join(getPackageRoot(), "stdlib", "effectSets.agency");
+    const fresh = parseEffectSets(readFileSync(file, "utf-8"), file);
+    expect(builtinEffectSets()).toEqual(fresh);
   });
 });

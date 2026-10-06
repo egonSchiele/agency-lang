@@ -166,6 +166,12 @@ does.
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
 
+**Whose code replaces Node's.** On each platform, use the platform's own
+API or a copy of Node's implementation before writing our own; our own
+code is for a synchronous primitive the platform only offers async, and
+it is tested against Node's output. Section 5 of the spec has the rule.
+Tasks 27, 28, and 29 follow it.
+
 Every PR ends with the steps under "Finishing a PR".
 
 **Every PR leaves behaviour on Node unchanged.** If a task seems to need
@@ -761,9 +767,14 @@ One PR each, in this order.
 1. Count the code that depends on Windows path rules: uses of
    `path.win32`, `path.sep`, and checks of the operating system near a
    path call. Report the count before writing code.
-2. Write `lib/utils/portablePath.ts` with the functions the code uses,
-   under POSIX rules. Test it against Node's `path.posix` for the same
-   inputs.
+2. Do not write a path module. Add `path-browserify`, which is Node's
+   own `path.js`, pinned the way `docs/dev/contributing/supply-chain.md`
+   says, and choose it through a `#path` entry in the `imports` field
+   (`default` is Node's `path`), the same mechanism as `#sha256`. The
+   containment checks are built on `path.relative` and `path.resolve`,
+   and a difference between our module and Node's is how a containment
+   bug happens. Test that both files give the same answers on the
+   inputs `contained.ts`'s tests use.
 3. `path.resolve` and `path.relative` read the working directory. The
    two directories call them 36 and 8 times. The portable versions take
    the working directory as an argument, from `host.system.cwd()`.
@@ -772,7 +783,14 @@ One PR each, in this order.
 
 ### Task 28: hashing
 
-Done in #1177. Node keeps its own crypto through a `#sha256` entry in the
+Done in #1177, with one change still to make: `sha256.portable.ts` is
+hand-written SHA-256, and the browser has WebCrypto. Add async
+`sha256BytesAsync` and `hmacSha256Async` to `lib/utils/hash.ts`, over
+`crypto.subtle` on both platforms, and move the S3 request signer and the
+OAuth PKCE challenge to them; both callers are async already. The
+hand-written version then serves only the synchronous checkpoint
+checksum (Task 30), and it stays tested against Node's output. Done in
+#1177: Node keeps its own crypto through a `#sha256` entry in the
 `imports` field of `package.json`, with an ambient declaration in
 `lib/utils/packageImports.d.ts` and an alias in `vitest.aliases.ts`. PR B
 reuses all three for `#default-host`.
@@ -795,7 +813,9 @@ reuses all three for `#default-host`.
 ### Task 29: `Buffer`
 
 Replace the remaining `Buffer` uses in files the lint rule covers with
-`Uint8Array`, `TextEncoder`, `TextDecoder`, and `lib/stdlib/base64.ts`.
+`Uint8Array`, `TextEncoder`, `TextDecoder`, and `lib/stdlib/base64.ts`,
+whose encoder goes through `btoa`. Move `decodeBase64Strict` to `atob`
+too, keeping its validation.
 
 ### Task 30: the checkpoint checksum
 

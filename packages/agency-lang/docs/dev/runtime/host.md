@@ -92,6 +92,8 @@ Three functions exist only on the host:
 - `withLock(root, target, work)` holds a lock on one path for the length of `work`. The lock belongs to the host, so it covers every run that shares it, which the per-run lock in `lock.md` does not.
 - `locate(dir, filename, operation)` finds the `dir` and `filename` an interrupt payload shows, found in one synchronous piece because it runs between a wrapper's call and its interrupt.
 
+`memoryHost`'s path rules (`normalize`, `isUnder`) are a second implementation of "nothing above the root", with no symlinks to refuse. They serve tests. Before `memoryHost` holds files for code the user does not trust, they need the review `nodeFiles.ts` had.
+
 `lib/host/files.shared.test.ts` runs one battery against both hosts: every function, each write mode, a missing file, a path that escapes the root, two overlapping `updateText` calls, and two pieces of work under one lock. A host added later registers there.
 
 A refusal from `makeHost` throws when the function is called, before any promise exists. An `await` in an async caller turns that into a rejection, which is where every caller stands.

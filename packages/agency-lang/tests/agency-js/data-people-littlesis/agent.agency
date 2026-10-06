@@ -1,5 +1,5 @@
 import test { categoryIdToName, parseCategoryFilter, buildSearchPath, buildEntityPath, buildRelationshipsPath, buildConnectionsPath, parseEntity, parseEntities, parseRelationships, entityListFinalize, entityFinalize, relationshipsFinalize, littlesisError, littlesisSearch, littlesisRelationships } from "std::data/people/littlesis"
-import { Network } from "std::capabilities"
+import { Network } from "std::effectSets"
 
 // Compile-time capability assertion: littlesisSearch raises std::littlesis + std::http::fetchJSON,
 // so this compiles only if BOTH are covered by Network. Never called at runtime.

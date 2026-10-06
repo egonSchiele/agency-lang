@@ -1,6 +1,6 @@
 import test { parseStoryList, parseSort, takeFirst, buildStoryListPath, buildItemPath, buildUserPath, buildSearchPath, parseStory, parseItem, parseUser, parseAlgoliaHits, itemFinalize, userFinalize, searchFinalize, hnStories, hnItem, hnSearch } from "std::data/tech/hackernews"
 import { clampLimit, connectorError } from "std::data/connector"
-import { Network } from "std::capabilities"
+import { Network } from "std::effectSets"
 
 // --- pure-function wrappers ---
 

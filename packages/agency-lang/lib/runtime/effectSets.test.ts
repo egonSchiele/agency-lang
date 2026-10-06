@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { builtinEffectSets, parseEffectSets } from "./effectSets.js";
 
-// These parse the REAL shipped stdlib/capabilities.agency, so they double
+// These parse the REAL shipped stdlib/effectSets.agency, so they double
 // as drift tests: an edit to that file the walker misreads fails here.
 describe("builtinEffectSets", () => {
   const sets = builtinEffectSets();

@@ -92,7 +92,7 @@ Create, read, search, and edit notes in the macOS Notes app. macOS only.
   string matches no glob. A rule that matches on `account` never applies to
   them, so match on `folder` instead.
 
-  The `NotesRead`, `NotesWrite`, and `Notes` sets in `std::capabilities`
+  The `NotesRead`, `NotesWrite`, and `Notes` sets in `std::effectSets`
   cover the same split for constraining a whole node.
 
   ## Locked notes

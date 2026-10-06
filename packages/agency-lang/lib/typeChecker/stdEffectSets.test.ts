@@ -13,14 +13,14 @@ const hasEffectError = (errs: { message: string }[], effect: string) =>
 // the only real stdlib call these tests make — under a given raises clause.
 function nodeUsingRead(setExpr: string, importName: string): string {
   return (
-    `import { ${importName} } from "std::capabilities"\n` +
+    `import { ${importName} } from "std::effectSets"\n` +
     `node main(): string raises ${setExpr} {\n` +
     `  read("f.txt") with approve\n` +
     `  return "ok"\n}`
   );
 }
 
-describe("std::capabilities — sets containing filesystem read permit a real read()", () => {
+describe("std::effectSets — sets containing filesystem read permit a real read()", () => {
   // Validated against reality: the real `read` raises std::read, and these
   // sets must contain it. A broken/unresolved set would reject the call.
   it("FileRead permits read()", () => {
@@ -32,7 +32,7 @@ describe("std::capabilities — sets containing filesystem read permit a real re
   });
 });
 
-describe("std::capabilities — non-read sets reject read() and resolve to real members", () => {
+describe("std::effectSets — non-read sets reject read() and resolve to real members", () => {
   // For sets with no filesystem-read member, a real read() must be rejected.
   // Asserting the rejection message lists a REAL member proves the set
   // actually resolved to its declared contents — if it had silently failed
@@ -56,7 +56,7 @@ describe("std::capabilities — non-read sets reject read() and resolve to real 
   });
 });
 
-describe("std::capabilities — read-capable non-filesystem sets permit their own read effect but exclude std::read", () => {
+describe("std::effectSets — read-capable non-filesystem sets permit their own read effect but exclude std::read", () => {
   // These sets contain a read/query effect of their own. We positively
   // confirm membership of that READ effect (synthetic raise of a read effect
   // — no write/delete calls) AND that filesystem read is still excluded.
@@ -72,7 +72,7 @@ describe("std::capabilities — read-capable non-filesystem sets permit their ow
   cases.forEach(([set, readEffect]) => {
     it(`${set} permits ${readEffect} but not std::read`, () => {
       const src =
-        `import { ${set} } from "std::capabilities"\n` +
+        `import { ${set} } from "std::effectSets"\n` +
         `node main(): string raises <${set}> {\n` +
         `  raise ${readEffect}("m", {})\n` +
         `  read("f.txt") with approve\n` +

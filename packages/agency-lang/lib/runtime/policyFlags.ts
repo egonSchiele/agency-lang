@@ -20,7 +20,7 @@ export function joinEffectFlags(value: string, previous: string | undefined): st
   return previous === undefined || previous === "" ? value : `${previous},${value}`;
 }
 
-/** Expand any built-in capability-set names in a flag's effect list to
+/** Expand any built-in effect-set names in a flag's effect list to
  *  their member effects. A name with `::` is always a plain effect. A
  *  bare name that matches no set passes through as an effect name — bare
  *  effect declarations are legal, and the bare `interrupt("msg")` form
@@ -80,7 +80,7 @@ function withinOneEdit(a: string, b: string): boolean {
 
 /** Overlay blanket rules from `--approve` / `--reject` flag values onto a
  *  base policy. Returns a new policy; `base` is not mutated. A flag value
- *  holds effect names and capability-set names; sets expand to their
+ *  holds effect names and effect-set names; sets expand to their
  *  member effects (see expandSetNames).
  *
  *  Each affected effect's rule list is built in one construction so

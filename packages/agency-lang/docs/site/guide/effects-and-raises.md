@@ -119,10 +119,10 @@ def doStuff(): number raises FileRead {
 }
 ```
 
-`effectSet`s can be exported and imported like any type. Agency's standard library contains a few effect sets in [`std::capabilities`](/stdlib/capabilities). For example, if you want to make sure your code is only raising read interrupts from the standard library (no writes, no network), use `FileRead`:
+`effectSet`s can be exported and imported like any type. Agency's standard library contains a few effect sets in [`std::effectSets`](/stdlib/effectSets). For example, if you want to make sure your code is only raising read interrupts from the standard library (no writes, no network), use `FileRead`:
 
 ```ts
-import { FileRead } from "std::capabilities"
+import { FileRead } from "std::effectSets"
 node main() raises FileRead {
   // do stuff
 }

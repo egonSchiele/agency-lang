@@ -39,6 +39,12 @@ describe("memory registry", () => {
     }
   });
 
+  it("two hosts over the same directory get their own stores", () => {
+    const other = nodeHost().files;
+    expect(getOrCreateStore(files, tmpRoot)).not.toBe(getOrCreateStore(other, tmpRoot));
+    expect(getOrCreateStore(other, tmpRoot)).toBe(getOrCreateStore(other, tmpRoot));
+  });
+
   it("two execCtxs in the same process see the same underlying store", () => {
     // Simulates two execCtxs both calling getOrCreateStore with the
     // same absDir; the resulting stores must be reference-equal so

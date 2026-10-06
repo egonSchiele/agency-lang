@@ -528,7 +528,7 @@ export class RuntimeContext<T> {
     execCtx.traceWriter = await TraceWriter.create({
       runId,
       traceConfig: this.traceConfig,
-      files: this.host.files,
+      files: execCtx.host.files,
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;

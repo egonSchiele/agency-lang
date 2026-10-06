@@ -2,9 +2,6 @@ import * as readline from "readline";
 import process from "process";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { detectPlatform } from "./utils.js";
 import { fixedRoot, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
 export type { WriteMode } from "./contained.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
@@ -15,8 +12,6 @@ import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep } from "./abortable.js";
 import { acceptsFailures } from "../runtime/failurePropagation.js";
-
-const execFileAsync = promisify(execFile);
 
 export function _print(...messages: any[]): void {
   console.log(...messages);
@@ -270,43 +265,6 @@ export async function _writeBinary(
 
 export async function _readBinary(rootDir: string, filename: string): Promise<string> {
   return readBytes(fixedRoot(rootDir), filename).toString("base64");
-}
-
-/** argv item 1 is the message, item 2 is the title. See `_notify`. */
-const NOTIFY_SCRIPT = `on run argv
-  display notification (item 1 of argv) with title (item 2 of argv)
-end run`;
-
-export async function _notify(title: string, message: string): Promise<boolean> {
-  const platform = await detectPlatform();
-  if (platform === "macos") {
-    // The title and message arrive as argv rather than being spliced into the
-    // script source, so AppleScript never parses them as code. `notify` is
-    // reachable from model-authored text, and escaping only holds for as long
-    // as the escape function keeps up with every AppleScript metacharacter.
-    // No "-" before the arguments: osascript would pass it through as argv
-    // item 1 and shift every real argument by one.
-    await execFileAsync("osascript", ["-e", NOTIFY_SCRIPT, message, title]);
-  } else if (platform === "linux") {
-    await execFileAsync("notify-send", [title, message]);
-  } else if (platform === "wsl") {
-    console.error(
-      `notify is not yet supported in WSL. ` +
-        `WSL does not have reliable notification support.\n` +
-        `Title: ${title}\nMessage: ${message}`,
-    );
-  } else if (platform === "windows") {
-    console.error(
-      `notify is not yet supported on Windows. ` +
-        `Supported platforms: macOS, Linux.\n` +
-        `Title: ${title}\nMessage: ${message}`,
-    );
-  } else {
-    console.error(
-      `notify is not supported on platform: ${platform}\n` + `Title: ${title}\nMessage: ${message}`,
-    );
-  }
-  return true;
 }
 
 export function _mostCommon(items: any[]): any {

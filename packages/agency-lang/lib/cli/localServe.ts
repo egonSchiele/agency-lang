@@ -758,7 +758,8 @@ function realPickDeps(cacheDir: string): PickDeps {
 
 export type Child = {
   on: (ev: "exit", cb: (code: number | null, signal: NodeJS.Signals | null) => void) => unknown;
-  kill: () => unknown;
+  /** SIGTERM when no signal is given. */
+  kill: (signal?: NodeJS.Signals) => unknown;
 };
 
 export type ServeDeps = {
@@ -768,6 +769,8 @@ export type ServeDeps = {
   totalmem: () => number;
   /** The memory a lazy model may take now. */
   availableMemory: () => Promise<MemorySnapshot>;
+  /** Resolves after `ms`. Tests pass one that does not wait. */
+  wait: (ms: number) => Promise<void>;
   log: (line: string) => void;
   freePort: () => Promise<number>;
   cacheDir: string;
@@ -798,6 +801,11 @@ export type ServeHandle = {
   /** Ends every request running on a model, and restarts the model's
    *  process when that is the only way to stop its work. */
   cancel: (model: string) => Promise<void>;
+  /** Resolves when `POST /v1/agency/shutdown` is called. The server is
+   *  closing by then. */
+  shutdownRequested: Promise<void>;
+  /** Refuses new requests, stops every process and waits for it to exit,
+   *  then closes the port. Calling it again returns the same promise. */
   close: () => Promise<void>;
 };
 
@@ -857,6 +865,7 @@ function realDeps(): ServeDeps {
     exec: execSync,
     totalmem: os.totalmem,
     availableMemory: () => availableMemory(console.log),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log: console.log,
     freePort,
     cacheDir: defaultCacheDir(),
@@ -1290,6 +1299,7 @@ export async function serveTargets(
     availableMemory: deps.availableMemory,
     allowOvercommit: deps.env.AGENCY_ALLOW_MEMORY_OVERCOMMIT === "1",
     log: deps.log,
+    wait: deps.wait,
     spawn: async (plan) => {
       const model = plannedByName[plan.model];
       const port = await deps.freePort();
@@ -1322,12 +1332,16 @@ export async function serveTargets(
     try {
       await pool.load(model.name);
     } catch (err) {
-      pool.stopAll();
+      await pool.stopAll();
       throw err;
     }
     deps.log(`  ready in ${formatElapsed(Date.now() - started)}`);
   }
 
+  let requestShutdown: () => void = () => {};
+  const shutdownRequested = new Promise<void>((resolve) => {
+    requestShutdown = resolve;
+  });
   let door: FrontDoor;
   try {
     door = await startFrontDoor(
@@ -1339,11 +1353,26 @@ export async function serveTargets(
         color: deps.useColor ? color : plainColor,
       },
       maxTokens,
+      () => requestShutdown(),
     );
   } catch (err) {
-    pool.stopAll();
+    await pool.stopAll();
     throw err;
   }
+  // The same close, however many times it is asked for: the shutdown
+  // route, Ctrl-C, and the caller may each ask.
+  let closing: Promise<void> | null = null;
+  const close = (): Promise<void> => {
+    if (closing === null) {
+      closing = (async () => {
+        door.refuseNew();
+        await pool.stopAll();
+        await door.close();
+      })();
+    }
+    return closing;
+  };
+  void shutdownRequested.then(close);
   for (const line of servingBanner(door.port, planned)) {
     deps.log(line);
   }
@@ -1358,10 +1387,8 @@ export async function serveTargets(
     cancel: async (model) => {
       await door.cancel(model);
     },
-    close: async () => {
-      pool.stopAll();
-      await door.close();
-    },
+    shutdownRequested,
+    close,
   };
 }
 
@@ -1395,10 +1422,15 @@ export async function localServe(
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  const why = await handle.failure;
-  console.error(why);
+  const ended = await Promise.race([
+    handle.failure.then((why) => ({ why })),
+    handle.shutdownRequested.then(() => ({ why: null })),
+  ]);
+  if (ended.why !== null) {
+    console.error(ended.why);
+  }
   await handle.close();
-  process.exit(1);
+  process.exit(ended.why === null ? 0 : 1);
 }
 
 export type ChatRuntime = "mlx-lm" | "mlx-vlm";

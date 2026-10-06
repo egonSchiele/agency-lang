@@ -692,6 +692,18 @@ POST /v1/agency/cancel
 
 Every request in progress on that model fails with a 499. For most models the process is kept, because it stops on its own when the connection closes. A chat model served with `vlm: true` that was asked for a reply without streaming keeps generating after the connection closes, so for that one case the process is stopped and, unless the model is lazy, started again. That takes as long as loading the model.
 
+### Stop the server
+
+```ts
+await server.close();
+```
+
+```
+POST /v1/agency/shutdown
+```
+
+`close` refuses new requests, tells every model process to stop, waits up to five seconds for them to exit, forces any that remain, and then closes the port. The shutdown route does the same; under `agency local serve` the command then exits, and under `serve()` your program keeps running. If the server's own process is killed outright, each model process notices and exits on its own.
+
 `agency-lang/local` is the supported way in. Files under `agency-lang/stdlib-lib/` are internal to Agency, and their names change between releases.
 
 There is no chat function here. A chat model served by `agency local serve` answers the OpenAI chat API at the same address, so any OpenAI client works.

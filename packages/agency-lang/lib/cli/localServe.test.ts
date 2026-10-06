@@ -768,12 +768,19 @@ describe("runServe", () => {
     return model;
   }
 
+  /** A process that never exits on its own. `killed` counts the processes
+   *  told to stop, once each: one that ignores SIGTERM is sent SIGKILL
+   *  too, and that is not a second process. */
   function fakeChild(): Child & { exit: (code: number | null) => void } {
     const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+    let told = false;
     return {
       on: (_ev, cb) => listeners.push(cb),
       kill: () => {
-        killed += 1;
+        if (!told) {
+          told = true;
+          killed += 1;
+        }
       },
       exit: (code) => listeners.forEach((cb) => cb(code, null)),
     };
@@ -795,6 +802,7 @@ describe("runServe", () => {
       exec: () => ({ status: 0 }),
       totalmem: () => 1e9,
       availableMemory: async () => ({ available: 1e12, total: 1e12 }),
+      wait: async () => {},
       log: (line) => log.push(line),
       freePort: async () => next++,
       cacheDir,
@@ -1610,6 +1618,66 @@ describe("runServe", () => {
       } finally {
         await handle.close();
       }
+    });
+  });
+
+  describe("close", () => {
+    it("waits for every process to exit, and refuses requests meanwhile", async () => {
+      recordedModel("org/a", true);
+      let release: () => void = () => {};
+      const handle = await runServe(
+        ["mlx:org/a"],
+        { port: 0 },
+        {
+          ...deps,
+          wait: () => new Promise(() => {}),
+          spawn: (python, args) => {
+            spawned.push([python, ...args]);
+            const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+            return {
+              on: (_ev, cb) => listeners.push(cb),
+              kill: () => {
+                killed += 1;
+                release = () => listeners.forEach((cb) => cb(null, "SIGTERM"));
+              },
+            };
+          },
+        },
+      );
+      let closed = false;
+      const closing = handle.close().then(() => {
+        closed = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(killed).toBe(1);
+      expect(closed).toBe(false);
+      const res = await fetch(`${handle.url}/models`);
+      expect(res.status).toBe(503);
+      release();
+      await closing;
+      expect(closed).toBe(true);
+    });
+
+    it("is one close however many times it is asked for", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0 }, exitingDeps());
+      await Promise.all([handle.close(), handle.close()]);
+      expect(killed).toBe(1);
+    });
+
+    it("closes on the shutdown route, and says a shutdown was requested", async () => {
+      recordedModel("org/a", true);
+      const handle = await runServe(["mlx:org/a"], { port: 0 }, exitingDeps());
+      const res = await fetch(`${handle.url}/agency/shutdown`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(res.status).toBe(200);
+      await handle.shutdownRequested;
+      await handle.close();
+      expect(killed).toBe(1);
+      expect(handle.status()[0].state).toBe("stopped");
     });
   });
 

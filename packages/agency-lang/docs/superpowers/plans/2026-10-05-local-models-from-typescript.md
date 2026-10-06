@@ -17,7 +17,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 |---|---|---|---|
 | 1 | `agency-lang/local`: `listModels`, the call functions, signals (built, #1172) | 1 to 6 | 1,900 lines |
 | 2 | One description per served model, the model pool, `serve`, `status`, `load`, `unload` (built) | 9 to 13 | 1,550 lines |
-| 3 | Processes that exit with the server, `--lazy`, `cancel`, and shutting down | 7 to 8, 14 to 21 | about 2,000 |
+| 3 | Processes that exit with the server, `--lazy`, `cancel`, and shutting down (built) | 7 to 8, 14 to 21 | about 2,400 |
 
 The sizes count code, tests, and docs, and about half of each is tests.
 PR 3 comes after PR 2 because lazy loading, `cancel`, and the new

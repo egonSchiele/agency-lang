@@ -40,6 +40,8 @@ export type FrontDoor = {
    *  when a cancelled request would otherwise keep running. Returns how
    *  many requests were ended. */
   cancel: (model: string) => Promise<number>;
+  /** From now on, every request gets a 503. */
+  refuseNew: () => void;
   close: () => Promise<void>;
 };
 
@@ -61,6 +63,7 @@ type InProgress = {
  *  nginx's code, since HTTP has none. */
 const CLIENT_CLOSED_REQUEST = 499;
 const UNSUPPORTED_MEDIA_TYPE = 415;
+const SHUTTING_DOWN = 503;
 
 /** The routes Agency adds to the server, beside the OpenAI ones. */
 const AGENCY_ROUTES = "/v1/agency/";
@@ -285,6 +288,7 @@ const STATUS_FOR_REFUSAL: Record<RefusalReason, number> = {
   "not-loaded": 503,
   "load-failed": 502,
   "not-enough-memory": 503,
+  stopping: 503,
 };
 
 const FORBIDDEN_HOST = 403;
@@ -374,8 +378,18 @@ function adminRoutesFor(
   pool: ModelPool,
   served: string[],
   cancel: (model: string) => Promise<number>,
+  onShutdown: () => void,
 ): AdminRoute[] {
   return [
+    {
+      method: "POST",
+      path: "/v1/agency/shutdown",
+      handle: async () => {
+        // Answered first, then the server closes; the caller gets its 200.
+        setImmediate(onShutdown);
+        return { status: 200, body: { shuttingDown: true } };
+      },
+    },
     {
       method: "GET",
       path: "/v1/models",
@@ -413,6 +427,7 @@ export function startFrontDoor(
   pool: ModelPool,
   logging?: DoorLogging,
   maxTokens?: number,
+  onShutdown: () => void = () => {},
 ): Promise<FrontDoor> {
   const served = pool.models();
   /** The requests in progress, by model. */
@@ -420,13 +435,18 @@ export function startFrontDoor(
     served.map((model) => [model, []]),
   );
   const cancel = (model: string) => cancelOn(pool, inProgress, model);
-  const adminRoutes = adminRoutesFor(pool, served, cancel);
+  const adminRoutes = adminRoutesFor(pool, served, cancel, onShutdown);
+  let refusingNew = false;
   const server = http.createServer(async (req, res) => {
     const record = recorder(req, logging);
     const refuse = (status: number, message: string): void => {
       error(res, status, message);
       record.finish(ownReply(status, JSON.stringify({ error: { message } })));
     };
+    if (refusingNew) {
+      refuse(SHUTTING_DOWN, "This server is shutting down.");
+      return;
+    }
     const admin = adminRoutes.find((row) => row.method === req.method && row.path === req.url);
     if (admin !== undefined) {
       const boundPort = (server.address() as { port: number }).port;
@@ -539,7 +559,14 @@ export function startFrontDoor(
     server.on("error", reject);
     server.listen(port, "127.0.0.1", () => {
       const bound = (server.address() as { port: number }).port;
-      resolve({ port: bound, cancel, close });
+      resolve({
+        port: bound,
+        cancel,
+        refuseNew: () => {
+          refusingNew = true;
+        },
+        close,
+      });
     });
   });
 }

@@ -144,6 +144,8 @@ This serves three models. `florence-2` loads before the port opens and stays loa
 
 The decision whether a model fits is an estimate: its size on disk, plus 4 GB for an image model or 1 GB for any other kind, against the memory available now less a small reserve. `AGENCY_ALLOW_MEMORY_OVERCOMMIT=1` loads a lazy model even when the estimate says no, for a machine where it is too cautious.
 
+Three routes under `/v1/agency/` are about the server itself. `GET /v1/agency/status` lists each model's state. `POST /v1/agency/cancel` with `{"model": "..."}` ends every request running on that model. `POST /v1/agency/shutdown` stops the server, which then exits as it does on Ctrl-C. The two POST routes take `content-type: application/json`, and all three answer requests made to `127.0.0.1` or `localhost` only.
+
 Image models run on diffusers rather than MLX. Any diffusers model is served as an image model, with or without `--image`:
 
 ```bash

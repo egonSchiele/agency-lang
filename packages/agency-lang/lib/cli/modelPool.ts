@@ -79,8 +79,9 @@ export type Held = { plan: ModelPlan; port: number; release: () => void };
  *                     again until `load` is called
  *  load-failed        the load a request was waiting on failed
  *  not-enough-memory  a lazy model does not fit, and no loaded lazy model
- *                     is idle to be stopped for it */
-export type RefusalReason = "not-loaded" | "load-failed" | "not-enough-memory";
+ *                     is idle to be stopped for it
+ *  stopping           the server is shutting down */
+export type RefusalReason = "not-loaded" | "load-failed" | "not-enough-memory" | "stopping";
 
 export class PoolRefusal extends Error {
   reason: RefusalReason;
@@ -90,6 +91,10 @@ export class PoolRefusal extends Error {
     this.reason = reason;
   }
 }
+
+/** How long `stopAll` gives a process to exit after SIGTERM before it
+ *  sends SIGKILL, and then how long it waits for that. */
+export const STOP_GRACE_MS = 5000;
 
 /** How long after a process exits the pool waits before calling it a
  *  failure. A terminal Ctrl-C reaches the model processes before it
@@ -108,6 +113,8 @@ export type PoolDeps = {
   /** Load a lazy model even when the estimate says it does not fit. */
   allowOvercommit: boolean;
   log: (line: string) => void;
+  /** Resolves after `ms`. Tests pass one that does not wait. */
+  wait: (ms: number) => Promise<void>;
 };
 
 export type ModelPool = {
@@ -125,8 +132,10 @@ export type ModelPool = {
   /** Stops a model's process and resolves when it has exited. A load in
    *  progress is ended, and the requests waiting on it are refused. */
   unload: (model: string) => Promise<void>;
-  /** Signals every process to stop. Does not wait for them to exit. */
-  stopAll: () => void;
+  /** Refuses every later load and request, sends SIGTERM to every process,
+   *  waits up to `STOP_GRACE_MS` for them to exit, sends SIGKILL to those
+   *  still running, and waits for those exits. */
+  stopAll: () => Promise<void>;
   /** Resolves with a message when a process dies after it was ready. */
   failure: Promise<string>;
 };
@@ -248,6 +257,51 @@ function kill(state: PoolState, running: Running): void {
   running.child.kill();
 }
 
+/** Resolves true when `exited` settles within `ms`, false otherwise. */
+async function exitedWithin(
+  state: PoolState,
+  exited: Promise<unknown>,
+  ms: number,
+): Promise<boolean> {
+  return Promise.race([exited.then(() => true), state.deps.wait(ms).then(() => false)]);
+}
+
+type Stopping = { process: Running; exited: Promise<string> };
+
+/** Sends SIGTERM to every process, at once, and marks every record
+ *  stopped. A process that is still loading is included, so a load in
+ *  progress ends. */
+function signalEverything(state: PoolState): Stopping[] {
+  return Object.values(state.records).flatMap((record) => {
+    const process = runningOf(record);
+    record.current = { state: "stopped" };
+    if (process === null) {
+      return [];
+    }
+    const exited = exitOf(process.child, record.plan.label);
+    kill(state, process);
+    return [{ process, exited }];
+  });
+}
+
+/** Waits for the signalled processes: a grace period, SIGKILL for the
+ *  rest, and one more grace period. */
+async function waitForExits(state: PoolState, exits: Stopping[]): Promise<void> {
+  const allExited = Promise.all(exits.map((exit) => exit.exited));
+  if (await exitedWithin(state, allExited, STOP_GRACE_MS)) {
+    return;
+  }
+  const stubborn = await Promise.all(
+    exits.map(async (exit) => ((await exitedWithin(state, exit.exited, 0)) ? null : exit)),
+  );
+  for (const exit of stubborn) {
+    if (exit !== null) {
+      exit.process.child.kill("SIGKILL");
+    }
+  }
+  await exitedWithin(state, allExited, STOP_GRACE_MS);
+}
+
 /** A process exited. If it is still its record's process and the pool
  *  did not stop it, the record has failed. One that had finished loading
  *  is also reported through `failure`, after the grace period. */
@@ -363,7 +417,10 @@ async function loadRecord(state: PoolState, record: ModelRecord): Promise<void> 
     if (running !== null) {
       kill(state, running);
     }
-    record.current = { state: "failed", error: (err as Error).message };
+    // A load that ended because the server is stopping is not a failure.
+    if (!state.stopping) {
+      record.current = { state: "failed", error: (err as Error).message };
+    }
     settle?.reject(err as Error);
     throw err;
   }
@@ -402,8 +459,15 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     return record;
   }
 
+  function refuseIfStopping(): void {
+    if (state.stopping) {
+      throw new PoolRefusal("stopping", "This server is shutting down.");
+    }
+  }
+
   async function acquire(model: string): Promise<Held> {
     const record = recordOf(model);
+    refuseIfStopping();
     const needsLoad = record.current.state === "stopped" || record.current.state === "failed";
     if (record.plan.lazy && needsLoad) {
       try {
@@ -443,15 +507,12 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     return onQueue(() => stopRecord(state, record));
   }
 
-  function stopAll(): void {
+  function stopAll(): Promise<void> {
     state.stopping = true;
-    for (const record of Object.values(state.records)) {
-      const running = runningOf(record);
-      if (running !== null) {
-        kill(state, running);
-        record.current = { state: "stopped" };
-      }
-    }
+    // Signal now, not on the queue: a load in progress holds the queue,
+    // and the signal is what ends it.
+    const exits = signalEverything(state);
+    return onQueue(() => waitForExits(state, exits));
   }
 
   return {
@@ -461,6 +522,7 @@ export function createModelPool(plans: ModelPlan[], deps: PoolDeps): ModelPool {
     acquire,
     load: async (model) => {
       const record = recordOf(model);
+      refuseIfStopping();
       return onQueue(() => loadRecord(state, record));
     },
     unload,

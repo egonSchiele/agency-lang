@@ -106,6 +106,7 @@ async function readyPool(routes: Route[]): Promise<ModelPool> {
       availableMemory: async () => ({ available: 1e12, total: 1e12 }),
       allowOvercommit: false,
       log: () => {},
+      wait: async () => {},
     },
   );
   for (const route of routes) {
@@ -790,6 +791,7 @@ describe("front door over a lazy model", () => {
         availableMemory: async () => ({ available: 1e12, total: 1e12 }),
         allowOvercommit: false,
         log: () => {},
+        wait: async () => {},
       },
     );
     const lazyDoor = await startFrontDoor(0, pool);
@@ -874,6 +876,7 @@ describe("cancel", () => {
         availableMemory: async () => ({ available: 1e12, total: 1e12 }),
         allowOvercommit: false,
         log: () => {},
+        wait: async () => {},
       },
     );
     for (const model of ["org/image", "org/vlm", "org/idle"]) {
@@ -1003,5 +1006,61 @@ describe("cancel", () => {
     const { reply: pending } = await hangingRequest("org/image");
     await cancelDoor.cancel("org/image");
     expect((await pending).status).toBe(499);
+  });
+});
+
+describe("shutting down", () => {
+  it("answers 503 to every request after refuseNew", async () => {
+    const upstream = await fakeServer("org/a");
+    const pool = await readyPool([
+      {
+        model: "org/a",
+        upstreamModel: "/a",
+        port: upstream.port,
+        label: "mlx_lm.server for org/a",
+      },
+    ]);
+    const closing = await startFrontDoor(0, pool);
+    try {
+      closing.refuseNew();
+      const res = await fetch(`http://127.0.0.1:${closing.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "org/a", messages: [] }),
+      });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: { message: "This server is shutting down." } });
+      expect((await fetch(`http://127.0.0.1:${closing.port}/v1/models`)).status).toBe(503);
+      expect(upstream.hits).toHaveLength(0);
+    } finally {
+      await closing.close();
+      upstream.server.close();
+    }
+  });
+
+  it("answers the shutdown route, then calls back once", async () => {
+    const pool = await readyPool([]);
+    let calls = 0;
+    const shutting = await startFrontDoor(0, pool, undefined, undefined, () => {
+      calls += 1;
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${shutting.port}/v1/agency/shutdown`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(res.status).toBe(200);
+      await expect.poll(() => calls).toBe(1);
+      const again = await fetch(`http://127.0.0.1:${shutting.port}/v1/agency/shutdown`, {
+        method: "POST",
+        headers: { "content-type": "text/plain" },
+        body: "{}",
+      });
+      expect(again.status).toBe(415);
+      expect(calls).toBe(1);
+    } finally {
+      await shutting.close();
+    }
   });
 });

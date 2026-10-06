@@ -381,10 +381,29 @@ mlx-vlm with a non-streamed request is false. When any cancelled request
 had reached such a process, `cancel` unloads the model and, unless it is
 lazy, loads it again, so `cancel` on that case takes as long as a load.
 
+**Shutting down.** `handle.close()` does five things: the door refuses
+every new request with a 503, the pool sends SIGTERM to every process at
+once (a process still loading included, which ends its load), the pool
+waits up to `STOP_GRACE_MS` for the exits, sends SIGKILL to any process
+still running and waits once more, and the door closes the port. The
+signal is sent before the wait is queued, because a load in progress
+holds the queue and the signal is what ends it. From the first step the
+pool refuses every `load` and `acquire` with the reason `stopping`.
+`close` is one promise however many times it is called: the shutdown
+route, Ctrl-C, and the caller may each ask.
+
+`POST /v1/agency/shutdown` answers 200 and then resolves
+`handle.shutdownRequested`, which `serveTargets` has already chained to
+`close`. Under `agency local serve`, `localServe` waits on that promise
+beside `failure`, and exits 0 on a shutdown and 1 on a failure. Under
+`serve()` from TypeScript, the server closes and the host program keeps
+running.
+
 **Routes the door answers itself** are rows of `adminRoutes` in
 `startFrontDoor`: `GET /v1/models`, `GET /v1/agency/status`, which
 returns `{ "models": [...] }` with each model's state, error, requests in
-progress, and last use, and `POST /v1/agency/cancel`. `adminRefusal`
+progress, and last use, `POST /v1/agency/cancel`, and
+`POST /v1/agency/shutdown`. `adminRefusal`
 holds the two rules every `/v1/agency/` route shares. The `Host` header
 must be `127.0.0.1:<port>` or `localhost:<port>`, else 403: the door
 listens on 127.0.0.1 only, but a web page can reach that address under a

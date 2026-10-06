@@ -4,6 +4,7 @@ import {
   createModelPool,
   evictionCandidate,
   EXIT_GRACE_MS,
+  STOP_GRACE_MS,
   PoolRefusal,
   type ModelPlan,
   type ModelPool,
@@ -75,6 +76,7 @@ describe("createModelPool", () => {
       now: () => clock,
       allowOvercommit: false,
       log: () => {},
+      wait: async () => {},
       spawn: async (): Promise<Running> => {
         const child = fakeChild();
         children.push(child);
@@ -389,6 +391,7 @@ describe("a lazy model", () => {
     return createModelPool(plans, {
       now: () => clock,
       log: (line) => logged.push(line),
+      wait: async () => {},
       get allowOvercommit() {
         return overcommit;
       },
@@ -499,5 +502,111 @@ describe("a lazy model", () => {
     clock = 1000;
     (await pool.acquire("used")).release();
     expect(pool.status().map((row) => row.lastUsedAt)).toEqual([5000, 1000]);
+  });
+});
+
+describe("stopAll", () => {
+  /** A process that exits on SIGKILL only, and a record of the waits the
+   *  pool asked for. */
+  function stubbornChild(): FakeChild & { signals: string[] } {
+    const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+    const child: FakeChild & { signals: string[] } = {
+      kills: 0,
+      signals: [],
+      on: (_event, listener) => listeners.push(listener),
+      kill: (signal: NodeJS.Signals = "SIGTERM") => {
+        child.kills += 1;
+        child.signals.push(signal);
+        if (signal === "SIGKILL") {
+          listeners.forEach((listener) => listener(null, "SIGKILL"));
+        }
+      },
+      die: (code) => listeners.forEach((listener) => listener(code, null)),
+    };
+    return child;
+  }
+
+  it("sends SIGKILL to a process that ignores SIGTERM, after the grace period", async () => {
+    const waits: number[] = [];
+    const child = stubbornChild();
+    const pool = createModelPool([planOf("a")], {
+      now: Date.now,
+      allowOvercommit: false,
+      log: () => {},
+      availableMemory: async () => ROOMY,
+      wait: async (ms) => {
+        waits.push(ms);
+      },
+      spawn: async () => ({ child, port: 9000 }),
+      waitReady: async () => {},
+    });
+    await pool.load("a");
+    await pool.stopAll();
+    expect(child.signals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(waits[0]).toBe(STOP_GRACE_MS);
+    expect(pool.status()[0].state).toBe("stopped");
+  });
+
+  it("resolves only once every process has exited", async () => {
+    const children: FakeChild[] = [];
+    let release: () => void = () => {};
+    const pool = createModelPool([planOf("a"), planOf("b")], {
+      now: Date.now,
+      allowOvercommit: false,
+      log: () => {},
+      availableMemory: async () => ROOMY,
+      // The grace period never ends in this test, so SIGKILL is never sent.
+      wait: () => new Promise(() => {}),
+      spawn: async () => {
+        // Exits a moment after SIGTERM, when the test lets it.
+        const listeners: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = [];
+        const child: FakeChild = {
+          kills: 0,
+          on: (_event, listener) => listeners.push(listener),
+          kill: () => {
+            child.kills += 1;
+            release = () => listeners.forEach((listener) => listener(null, "SIGTERM"));
+          },
+          die: () => {},
+        };
+        children.push(child);
+        return { child, port: 9000 + children.length };
+      },
+      waitReady: async () => {},
+    });
+    await pool.load("a");
+    let closed = false;
+    const stopping = pool.stopAll().then(() => {
+      closed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(children[0].kills).toBe(1);
+    expect(closed).toBe(false);
+    release();
+    await stopping;
+    expect(closed).toBe(true);
+  });
+
+  it("ends a load in progress, and refuses loads and requests from then on", async () => {
+    const child = fakeChild();
+    const pool = createModelPool([planOf("a"), planOf("b")], {
+      now: Date.now,
+      allowOvercommit: false,
+      log: () => {},
+      availableMemory: async () => ROOMY,
+      wait: async () => {},
+      spawn: async () => ({ child, port: 9000 }),
+      waitReady: (_plan, _running, gone) =>
+        gone.then((why) => Promise.reject(new Error(`${why} before it was ready.`))),
+    });
+    const loading = pool.load("a").catch((err: Error) => err.message);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await pool.stopAll();
+    expect(child.kills).toBe(1);
+    expect(await loading).toBe("the server for a was killed by SIGTERM before it was ready.");
+    expect(pool.status()[0].state).toBe("stopped");
+    const refused = await pool.acquire("b").catch((err: unknown) => err);
+    expect((refused as PoolRefusal).reason).toBe("stopping");
+    await expect(pool.load("b")).rejects.toThrow("This server is shutting down.");
   });
 });

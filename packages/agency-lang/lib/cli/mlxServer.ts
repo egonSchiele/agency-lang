@@ -345,41 +345,37 @@ function isLocalHost(host: string | undefined, port: number): boolean {
   return host === `127.0.0.1:${port}` || host === `localhost:${port}`;
 }
 
-/** Listen on `port` (0 for any) and forward each request to the process of
- *  the model its body names. A request for a model that is not served gets
- *  a 404 and reaches no process. With `logging`, every request is printed
- *  as it ends. With `maxTokens`, a request asking for a longer reply is
- *  held to it. */
-export function startFrontDoor(
-  port: number,
+/** Ends every request in progress on a model, and restarts its process
+ *  when a cancelled request would otherwise keep it busy. Returns how many
+ *  requests were ended. */
+async function cancelOn(
   pool: ModelPool,
-  logging?: DoorLogging,
-  maxTokens?: number,
-): Promise<FrontDoor> {
-  const served = pool.models();
-  /** The requests in progress, by model. */
-  const inProgress: Record<string, InProgress[]> = Object.fromEntries(
-    served.map((model) => [model, []]),
-  );
-
-  async function cancel(model: string): Promise<number> {
-    const entries = inProgress[model] ?? [];
-    const plan = pool.plan(model);
-    entries.forEach(cancelRequest);
-    // A request that was sent to the process and that closing does not
-    // stop keeps the process busy. The only way to stop it is to restart
-    // the process. A lazy model is loaded again by its next request.
-    const keepsRunning = entries.some((entry) => entry.upstream !== null && !entry.stopsOnClose);
-    if (keepsRunning && plan !== undefined) {
-      await pool.unload(model);
-      if (!plan.lazy) {
-        await pool.load(model);
-      }
+  inProgress: Record<string, InProgress[]>,
+  model: string,
+): Promise<number> {
+  const entries = inProgress[model] ?? [];
+  const plan = pool.plan(model);
+  entries.forEach(cancelRequest);
+  // A request that was sent to the process and that closing does not
+  // stop keeps the process busy. The only way to stop it is to restart
+  // the process. A lazy model is loaded again by its next request.
+  const keepsRunning = entries.some((entry) => entry.upstream !== null && !entry.stopsOnClose);
+  if (keepsRunning && plan !== undefined) {
+    await pool.unload(model);
+    if (!plan.lazy) {
+      await pool.load(model);
     }
-    return entries.length;
   }
+  return entries.length;
+}
 
-  const adminRoutes: AdminRoute[] = [
+/** The routes the door answers itself. */
+function adminRoutesFor(
+  pool: ModelPool,
+  served: string[],
+  cancel: (model: string) => Promise<number>,
+): AdminRoute[] {
+  return [
     {
       method: "GET",
       path: "/v1/models",
@@ -405,6 +401,26 @@ export function startFrontDoor(
       },
     },
   ];
+}
+
+/** Listen on `port` (0 for any) and forward each request to the process of
+ *  the model its body names. A request for a model that is not served gets
+ *  a 404 and reaches no process. With `logging`, every request is printed
+ *  as it ends. With `maxTokens`, a request asking for a longer reply is
+ *  held to it. */
+export function startFrontDoor(
+  port: number,
+  pool: ModelPool,
+  logging?: DoorLogging,
+  maxTokens?: number,
+): Promise<FrontDoor> {
+  const served = pool.models();
+  /** The requests in progress, by model. */
+  const inProgress: Record<string, InProgress[]> = Object.fromEntries(
+    served.map((model) => [model, []]),
+  );
+  const cancel = (model: string) => cancelOn(pool, inProgress, model);
+  const adminRoutes = adminRoutesFor(pool, served, cancel);
   const server = http.createServer(async (req, res) => {
     const record = recorder(req, logging);
     const refuse = (status: number, message: string): void => {

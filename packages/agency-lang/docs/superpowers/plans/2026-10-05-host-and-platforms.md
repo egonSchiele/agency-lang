@@ -24,8 +24,9 @@ PR B is open. Start with PR C once it has merged.
 | PR | What it ships | Stages | State |
 |---|---|---|---|
 | #1175, #1176, #1177 | Programs stop importing the compiler; `std::capabilities` becomes `std::effectSets`; hashing through `#sha256` | 1, 16, 11 | merged |
-| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open |
-| C | `contained.ts` moves into the host and goes async, `updateText` and `withLock`, `memoryHost`, the effect sets data file, the trace sinks | 5, 6b, 6c, 6, 7 | |
+| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open, #1179 |
+| C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | open, stacked on B |
+| C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | next |
 | D | Subprocesses, network, portable paths, `Buffer` | 8, 9, 10, 12 | |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
 
@@ -115,6 +116,47 @@ does.
    in PR C. `exitProcess.ts` and `subprocessRunInfo.ts` wait for PR D.
    `termcolors.ts`, `args.ts`, and `layout/render.ts` read the terminal's
    size and colour support and need a decision in PR E.
+
+### What PR C learned
+
+1. **Task 16's count.** With the re-export in `lib/stdlib/contained.ts`
+   emptied, `tsc` names 33 files. They hold about 200 calls of the
+   contained functions. Nine of the files are Node-only (`localModels.ts`
+   33 calls, `agency.ts` 12, `hubDownload.ts` 10, `cli.ts` 6,
+   `mlxModelRecord.ts` 6, `modelVerify.ts` 5, `localModelManifest.ts` 5,
+   `modelBackend.ts` 4, `localImageInputs.ts` 2) and keep calling
+   `lib/host/nodeFiles.ts` synchronously, with the comment Task 17 asks
+   for. The other 24 hold about 120 calls. The files with the most calls
+   inside synchronous functions are `agentSessions.ts` (10 calls, 11 sync
+   functions), `builtins.ts` (8, 19), `template.ts` (2, 8),
+   `approvedPath.ts` (4, 3), and `assertContained.ts` (3, 1); `fs.ts`
+   (19), `speech.ts` (15), and `shell.ts` (13) are already mostly async.
+   That is PR C2 on its own.
+2. **`Root` stays `{ real: string }`, fenced by a lint rule.** A branded
+   type would have meant rewriting the 39 `.real` reads in the two test
+   files. Instead `lib/host/roots.ts` owns the type and `rootPath`, and
+   `no-restricted-syntax` in `eslint.config.js` refuses `.real` in the
+   runtime and the stdlib. The 21 readers outside `lib/host` call
+   `rootPath` for now; Task 17 step 6 moves them to `host.files.resolvePath`.
+3. **A refusal from `makeHost` throws when called**, before any promise
+   exists, for the file functions too. Every caller awaits inside an async
+   function, where that becomes a rejection. A test of a refused async
+   function uses `expect(() => ...).toThrow`.
+4. **`locate` is `locateSync` in `nodeFiles.ts`**, and
+   `prepareContainedPath` calls it. The async wrapper's `await` was always
+   a microtask; the comment there was about real I/O waits.
+5. **`stat` returns a plain `FileStat`** (`kind`, `size`, `modifiedMs`),
+   because Node's `Stats` is not a type a browser host can make. The
+   synchronous module still returns `Stats`; the part converts.
+6. **The effect sets data file is generated after the build**, because the
+   generator needs the parser in `dist/`. `make effect-sets` builds again
+   when the file changed, and a test fails when it is stale. The parse
+   moved to `effectSetsParse.ts` so `effectSets.ts` no longer pulls the
+   parser into every program.
+7. **`traceWriter.ts` still imports `fileSink.ts`.** `TraceWriter.create`
+   builds the `FileSink`; Task 20 moves that behind `host.files`, and until
+   then `traceWriter.ts` stays on the waiting list for that import and for
+   `path`.
 
 Every PR ends with the steps under "Finishing a PR".
 

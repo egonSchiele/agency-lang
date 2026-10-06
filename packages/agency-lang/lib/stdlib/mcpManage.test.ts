@@ -43,6 +43,21 @@ describe("_addMcpServer", () => {
     expect(await _readMcpServersFromFile(file)).toEqual({ fs: { command: "npx" } });
   });
 
+  it("keeps both of two adds that run at once", async () => {
+    await Promise.all([
+      _addMcpServer("a", { command: "a" }, file),
+      _addMcpServer("b", { command: "b" }, file),
+    ]);
+    expect(Object.keys(readRaw().mcpServers).sort()).toEqual(["a", "b"]);
+  });
+
+  it("removing from a file that does not exist creates nothing", async () => {
+    const missing = path.join(dir, "sub", "agency.json");
+    const result = await _removeMcpServer("a", missing);
+    expect(isSuccess(result) && result.value).toBe(false);
+    expect(fs.existsSync(path.join(dir, "sub"))).toBe(false);
+  });
+
   it("preserves other top-level keys", async () => {
     fs.writeFileSync(
       file,

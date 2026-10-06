@@ -3,9 +3,12 @@
 // async only, and several callers hash inside synchronous code, so the
 // functions here are synchronous. The algorithm follows FIPS 180-4.
 //
-// Node's `createHash` is faster on large inputs. Code that hashes files of
-// many megabytes, such as model verification, stays on Node and keeps using
-// it. Everything here hashes text and small byte strings.
+// This is about nine times slower than Node's `createHash`, which is OpenSSL
+// with hardware SHA instructions: around 0.8 ms for 240 KB and 25 ms for
+// 8 MB. Callers hash tool results, trace entries, request bodies, and
+// generated code, and the measured cost is acceptable there. The one
+// exception is model verification, which hashes files of many gigabytes
+// and keeps using Node's crypto.
 
 const BLOCK_BYTES = 64;
 const DIGEST_BYTES = 32;

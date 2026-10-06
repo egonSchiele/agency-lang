@@ -3,7 +3,8 @@ import { awsUriEncode } from "./uri.js";
 import { type AwsRequestTarget } from "./client.js";
 
 /**
- * AWS Signature Version 4 signing, using only Node's built-in crypto. The caller
+ * AWS Signature Version 4 signing, with no AWS SDK and no Node module. It
+ * hashes with lib/utils/hash.ts, so it runs anywhere JavaScript runs. The caller
  * supplies the canonical URI verbatim (already `awsUriEncode`d by the endpoint
  * builder) so the path that is signed is exactly the path that is fetched — no
  * re-derivation through URL normalization. Header signing (`signRequest`) signs

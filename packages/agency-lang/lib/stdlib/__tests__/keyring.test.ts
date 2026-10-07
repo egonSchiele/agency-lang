@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "../keyring.js";
 
 import { PROGRAM_OUTPUT_LIMIT } from "../abortable.js";
-import { exited, failed, programRun } from "./fakeSubprocess.js";
+import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fakeSubprocess.js";
 
 // The host's subprocess part, mocked: `mockRun` answers each program.
 const mockRun = vi.fn();
@@ -13,6 +13,7 @@ vi.mock("../../host/nodeSubprocess.js", () => ({
     start: vi.fn(),
   },
 }));
+vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
 /** The program and args of the `index`th run. */
 function call(index: number): [string, string[]] {
@@ -20,15 +21,14 @@ function call(index: number): [string, string[]] {
   return [program, args];
 }
 
-const originalPlatform = process.platform;
 afterAll(() => {
-  Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  testPlatform.os = "macos";
 });
 
 describe("keyring (macOS)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+    testPlatform.os = "macos";
     // Default: every program exits with 0
     mockRun.mockImplementation(async () => exited());
   });
@@ -164,9 +164,33 @@ describe("keyring (macOS)", () => {
   });
 });
 
+describe("keyring (WSL)", () => {
+  // WSL reports as "wsl", and secret-tool runs there as on any Linux.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testPlatform.os = "wsl";
+    mockRun.mockImplementation(async () => exited("stored-value\n"));
+  });
+
+  it("reads through secret-tool", async () => {
+    expect(await _getSecret("k", "svc")).toBe("stored-value");
+    const [cmd, args] = call(0);
+    expect(cmd).toBe("secret-tool");
+    expect(args).toEqual(["lookup", "service", "svc", "account", "k"]);
+  });
+
+  it("stores, deletes, and reports the keyring available", async () => {
+    await _setSecret("k", "v", "svc");
+    expect(call(0)[0]).toBe("secret-tool");
+    expect(mockRun.mock.calls[0][1]).toEqual({ input: "v" });
+    expect(await _deleteSecret("k", "svc")).toBe(true);
+    expect(await _isKeyringAvailable()).toBe(true);
+  });
+});
+
 describe("keyring (unsupported platform)", () => {
   beforeEach(() => {
-    Object.defineProperty(process, "platform", { value: "win32", writable: true });
+    testPlatform.os = "windows";
   });
 
   it("_setSecret throws on unsupported platform", async () => {

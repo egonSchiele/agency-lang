@@ -30,13 +30,14 @@ export async function assertContained(
   if (target.trim() === "") {
     throw new Error("assertContained: target must not be empty");
   }
-  const realTarget = await realOrLexical(host, path.resolve(baseDir, expandPath(target)));
+  const home = host.system.homeDir();
+  const realTarget = await realOrLexical(host, path.resolve(baseDir, expandPath(target, home)));
   const realRoots: string[] = [];
   for (const entry of allowedRoots) {
     if (entry.trim() === "") {
       continue;
     }
-    realRoots.push(await host.files.realDir(path.resolve(baseDir, expandPath(entry))));
+    realRoots.push(await host.files.realDir(path.resolve(baseDir, expandPath(entry, home))));
   }
   if (realRoots.length === 0) {
     throw new Error(

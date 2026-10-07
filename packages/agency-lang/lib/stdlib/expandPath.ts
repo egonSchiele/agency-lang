@@ -1,5 +1,4 @@
-import os from "node:os";
-import path from "node:path";
+import path from "#path";
 
 /**
  * Expand user-shorthand prefixes in a path string. Currently:
@@ -18,9 +17,10 @@ import path from "node:path";
  * `resolveUnder`, `wholePath`) or `resolveDir`, which call this helper
  * first. Do not re-implement the policy locally.
  *
- * Layering: `expandPath` is a pure string transform with no async, no
- * ALS access, and no base-directory awareness. Resolving against the
- * cwd and refusing symlinks live one layer up in `contained.ts`.
+ * Layering: `expandPath` is a pure string transform with no async and
+ * no base-directory awareness; the home directory is `homeDir`, which a
+ * caller takes from `host.system.homeDir()`. Resolving against the cwd
+ * and refusing symlinks live one layer up, in the file part of the host.
  * Keeping the layers split means `expandPath` is testable in isolation.
  *
  * Does NOT resolve to an absolute path. Callers pass the result to
@@ -30,7 +30,7 @@ import path from "node:path";
  * pass through (callers that disallow empty dir handle that
  * themselves with a clearer error).
  */
-export function expandPath(p: string): string {
+export function expandPath(p: string, homeDir: string): string {
   if (p === "" || p === undefined || p === null) return p;
   if (!p.startsWith("~")) return p;
 
@@ -43,10 +43,10 @@ export function expandPath(p: string): string {
     );
   }
 
-  const home = os.homedir();
+  const home = homeDir;
   if (!home) {
     throw new Error(
-      "expandPath: cannot expand `~` because os.homedir() returned no value (no HOME env var on POSIX, no USERPROFILE on Windows).",
+      "expandPath: cannot expand `~` because the host reports no home directory (no HOME env var on POSIX, no USERPROFILE on Windows).",
     );
   }
 

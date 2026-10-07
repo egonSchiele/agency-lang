@@ -3,7 +3,26 @@
 // lib/host/nodeSubprocess.ts with `vi.mock` and then reads what was run
 // and scripts what it answers through these.
 import { vi } from "vitest";
-import type { Command, RunResult } from "../../host/host.js";
+import type { Command, Host, OperatingSystem, RunResult } from "../../host/host.js";
+import { nodeHost } from "../../host/nodeHost.js";
+
+/** The operating system `hostOn` and `testDefaultHost` report. A test that
+ *  needs the macOS branch, or the refusal on another system, sets it. */
+export const testPlatform = { os: "macos" as OperatingSystem };
+
+/** A node host that reports `os` as its operating system. */
+export function hostOn(os: OperatingSystem): Host {
+  const real = nodeHost();
+  return { ...real, system: { ...real.system, operatingSystem: () => os } };
+}
+
+/** The platform's default host for a test file that mocks `#default-host`
+ *  with `vi.mock("#default-host", () => ({ defaultHost: testDefaultHost }))`:
+ *  a node host reporting `testPlatform.os`, so a helper that reads
+ *  `currentHost()` outside a run sees the operating system the test set. */
+export function testDefaultHost(): Host {
+  return hostOn(testPlatform.os);
+}
 
 type MockFn = ReturnType<typeof vi.fn>;
 

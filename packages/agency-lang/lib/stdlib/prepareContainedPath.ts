@@ -48,8 +48,8 @@ export async function resolveRedirectTarget(
   if (cwd.trim() === "") {
     throw new Error("redirect refused: cwd must not be empty.");
   }
-  const baseDir = resolveCwdPath(cwd);
-  const expanded = tildeMode === "expand" ? expandPath(target) : target;
+  const baseDir = resolveCwdPath(host, cwd);
+  const expanded = tildeMode === "expand" ? expandPath(target, host.system.homeDir()) : target;
   const resolved = await host.files.realDir(path.resolve(baseDir, expanded));
   return { dir: path.dirname(resolved), filename: path.basename(resolved) };
 }

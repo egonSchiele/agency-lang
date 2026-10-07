@@ -3,10 +3,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../../host/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
+vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
 import { nodeSubprocess } from "../../host/nodeSubprocess.js";
-import { nodeHost } from "../../host/nodeHost.js";
-import { exited, failed, programRun } from "./fakeSubprocess.js";
+import {
+  exited,
+  failed,
+  hostOn,
+  programRun,
+  testDefaultHost,
+  testPlatform,
+} from "./fakeSubprocess.js";
 import {
   runNotesScript,
   withTimeout,
@@ -26,7 +33,7 @@ import {
 type MockFn = ReturnType<typeof vi.fn>;
 
 const run = nodeSubprocess.run as unknown as MockFn;
-const host = nodeHost();
+const host = hostOn("macos");
 
 /** Make the mocked osascript fail with the given stderr, as osascript does. */
 function mockFailure(stderr: string): void {
@@ -38,24 +45,20 @@ function mockStdout(stdout: string): void {
   run.mockImplementationOnce(async () => exited(stdout));
 }
 
-// Every describe below needs the same two things: fresh mocks and a darwin
-// platform (runNotesScript refuses to run anywhere else). One test overrides
-// the platform to linux for itself; afterEach restores the real one.
-const originalPlatform = process.platform;
-
+// Every describe below needs the same two things: fresh mocks and a macOS
+// host (runNotesScript refuses to run anywhere else).
 beforeEach(() => {
   vi.clearAllMocks();
-  Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  testPlatform.os = "macos";
 });
 
 afterEach(() => {
-  Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  testPlatform.os = "macos";
 });
 
 describe("runNotesScript", () => {
-  it("rejects immediately on a non-darwin platform", async () => {
-    Object.defineProperty(process, "platform", { value: "linux", writable: true });
-    await expect(runNotesScript(host, "script", [])).rejects.toThrow(
+  it("rejects immediately on a host that is not macOS", async () => {
+    await expect(runNotesScript(hostOn("linux"), "script", [])).rejects.toThrow(
       "Apple Notes is only available on macOS",
     );
     expect(run).not.toHaveBeenCalled();

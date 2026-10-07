@@ -1,22 +1,21 @@
-import path from "node:path";
-import process from "node:process";
+import path from "#path";
 import type { Host } from "../host/host.js";
 import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
 
-/** Expand shorthands and resolve against the cwd, with no filesystem
- *  access. The host's `root` does the same as its first step. Use this
- *  only for a path that is about to be handed to `host.files` or checked
- *  by `assertContained`. */
-export function resolveCwdPath(target: string): string {
-  return path.resolve(process.cwd(), expandPath(target));
+/** Expand shorthands and resolve against the run's working directory,
+ *  with no filesystem access. The host's `root` does the same as its
+ *  first step. Use this only for a path that is about to be handed to
+ *  `host.files` or checked by `assertContained`. */
+export function resolveCwdPath(host: Host, target: string): string {
+  return path.resolve(host.system.cwd(), expandPath(target, host.system.homeDir()));
 }
 
 /**
  * Resolve a directory argument and apply the program's own allow-list:
  *
  *  1. Expand user shorthands (currently `~`) via `expandPath`.
- *  2. Resolve against `process.cwd()`. A relative path always means
+ *  2. Resolve against the run's working directory. A relative path always means
  *     "relative to where the program was run". Agency code that wants
  *     a path relative to its own file passes `__dirname`.
  *  3. Assert containment against `allowedPaths`, the guardrail a program
@@ -34,7 +33,7 @@ export async function resolveDir(
   dir: string,
   allowedPaths: string[] = [],
 ): Promise<string> {
-  const root = resolveCwdPath(dir);
-  await assertContained(host, root, allowedPaths, process.cwd());
+  const root = resolveCwdPath(host, dir);
+  await assertContained(host, root, allowedPaths, host.system.cwd());
   return root;
 }

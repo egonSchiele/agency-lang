@@ -5,7 +5,6 @@ import { encodeBase64Url } from "./base64.js";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { program } from "./abortable.js";
-import os from "os";
 import path from "#path";
 import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
 import { runHttp } from "./http.js";
@@ -15,8 +14,11 @@ import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 
-function getTokenDir(): string {
-  return process.env.AGENCY_OAUTH_TOKEN_DIR || path.join(os.homedir(), ".agency", "oauth");
+function getTokenDir(host: Host): string {
+  return (
+    host.settings.read("AGENCY_OAUTH_TOKEN_DIR") ||
+    path.join(host.system.homeDir(), ".agency", "oauth")
+  );
 }
 const DEFAULT_PORT = 8914;
 const EXPIRY_BUFFER_MS = 60000;
@@ -66,7 +68,7 @@ async function tokenLocation(host: Host, name: string): Promise<{ dir: Root; fil
       `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`,
     );
   }
-  return { dir: await host.files.root(getTokenDir()), file: `${name}.json` };
+  return { dir: await host.files.root(getTokenDir(host)), file: `${name}.json` };
 }
 
 function generateCodeVerifier(): string {
@@ -102,10 +104,11 @@ function parseExtraParams(str: string): Record<string, string> {
  *  A host with no subprocess part refuses when `run` is read, before any
  *  promise exists, so the call is made inside a promise chain. */
 function openBrowser(host: Host, url: string): void {
+  const os = host.system.operatingSystem();
   const command =
-    process.platform === "darwin"
+    os === "macos"
       ? program("open", [url])
-      : process.platform === "win32"
+      : os === "windows"
         ? program("cmd.exe", ["/c", "start", "", url])
         : program("xdg-open", [url]);
   Promise.resolve()

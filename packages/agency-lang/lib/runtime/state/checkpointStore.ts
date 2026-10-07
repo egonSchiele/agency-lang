@@ -1,5 +1,6 @@
 import { MessageJSON } from "smoltalk";
 import { signCheckpoint } from "../checkpointChecksum.js";
+import type { HostSettings } from "../../host/host.js";
 import { CheckpointError } from "../errors.js";
 import { collectModuleFingerprints } from "../referencedModules.js";
 import type { ModuleFingerprint } from "../moduleFingerprintRegistry.js";
@@ -210,11 +211,13 @@ export class Checkpoint implements SourceLocation {
     return json;
   }
 
-  clone(opts: Partial<CheckpointArgs> = {}): Checkpoint {
+  /** A copy with `opts` applied, re-signed under `settings` when this
+   *  checkpoint was signed, since `opts` may change signed fields
+   *  (typically `id`). */
+  clone(opts: Partial<CheckpointArgs>, settings: HostSettings): Checkpoint {
     const copy = Checkpoint.fromJSON({ ...this.toJSON(), ...opts })!;
-    // `opts` may have changed signed fields (typically `id`); re-sign.
     if (copy.signature !== undefined) {
-      signCheckpoint(copy);
+      signCheckpoint(copy, settings);
     }
     return copy;
   }
@@ -252,7 +255,7 @@ export class Checkpoint implements SourceLocation {
     const checkpoint = new Checkpoint(args);
     // Keep this the last statement: the signature must cover every field,
     // moduleFingerprints included.
-    signCheckpoint(checkpoint);
+    signCheckpoint(checkpoint, ctx.host.settings);
     return checkpoint;
   }
 
@@ -317,13 +320,17 @@ export class CheckpointStore {
     }
   }
 
-  cloneCheckpoint(_checkpoint: Checkpoint, opts: Partial<CheckpointArgs> = {}): number {
+  cloneCheckpoint(
+    _checkpoint: Checkpoint,
+    opts: Partial<CheckpointArgs>,
+    settings: HostSettings,
+  ): number {
     const checkpoint = Checkpoint.fromJSON(_checkpoint);
     if (!checkpoint) {
       throw new CheckpointError("Invalid checkpoint provided for cloning.");
     }
     const id = globalCheckpointCounter++;
-    const newCheckpoint = checkpoint.clone({ ...opts, id });
+    const newCheckpoint = checkpoint.clone({ ...opts, id }, settings);
     this.checkpoints[id] = newCheckpoint;
     return id;
   }
@@ -401,14 +408,15 @@ export class CheckpointStore {
     return this.create(stateStack, ctx, { ...opts, pinned: true });
   }
 
-  pin(id: number, label?: string): void {
+  /** Mark a checkpoint pinned, re-signing it under `settings` when it was
+   *  signed: `pinned` and `label` are signed fields. */
+  pin(id: number, label: string | undefined, settings: HostSettings): void {
     const cp = this.checkpoints[id];
     if (!cp) return;
     cp.pinned = true;
     if (label !== undefined) cp.label = label;
-    // pinned/label are signed fields; re-sign after the edit.
     if (cp.signature !== undefined) {
-      signCheckpoint(cp);
+      signCheckpoint(cp, settings);
     }
   }
 

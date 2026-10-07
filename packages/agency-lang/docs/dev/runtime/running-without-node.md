@@ -72,7 +72,7 @@ Node resolves `#sha256` to the `default` file. esbuild resolves it to the `brows
 
 Two other places have to know about each entry. `lib/utils/packageImports.d.ts` declares the name's type with an ambient `declare module`, so a fresh checkout type-checks before `dist` exists. `vitest.aliases.ts` maps it for the test runner, which does not read `package.json`. When you add an entry, add it to both. Do not add it to `paths` in `tsconfig.json`: the build runs `tsc-alias`, which rewrites every `paths` entry into a relative import and would undo the choice.
 
-Hashing is the only case so far where Node keeps a faster implementation. Rule 3 above asks for a measurement first: the portable SHA-256 takes 0.8 ms on a 240 KB file and 25 ms on 8 MB, against 0.086 ms and 2.6 ms for Node's.
+Hashing is the only case so far where Node keeps a faster implementation. Rule 3 above asks for a measurement first: the portable SHA-256 takes 0.8 ms on a 240 KB file and 25 ms on 8 MB, against 0.086 ms and 2.6 ms for Node's. The pair serves the callers that cannot await: `sha256Text` in the compiler and the checkpoint checksum. A caller that is async already, such as the S3 request signer and the OAuth PKCE challenge, uses `sha256BytesAsync` and `hmacSha256Async` in `lib/utils/hash.ts`, which run on WebCrypto (`crypto.subtle`) and are the same code on both platforms.
 
 ### Paths
 

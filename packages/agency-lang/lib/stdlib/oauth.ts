@@ -1,6 +1,6 @@
 import http from "http";
 import crypto from "crypto";
-import { sha256Bytes } from "../utils/hash.js";
+import { sha256BytesAsync } from "../utils/hash.js";
 import { encodeBase64Url } from "./base64.js";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -73,8 +73,8 @@ function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-function generateCodeChallenge(verifier: string): string {
-  return encodeBase64Url(sha256Bytes(new TextEncoder().encode(verifier)));
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  return encodeBase64Url(await sha256BytesAsync(verifier));
 }
 
 function escapeHtml(str: string): string {
@@ -305,7 +305,7 @@ async function authorizeImpl(
   const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
   const state = crypto.randomBytes(16).toString("hex");
   const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   const scopes = Array.isArray(config.scopes) ? config.scopes.join(" ") : config.scopes;
 

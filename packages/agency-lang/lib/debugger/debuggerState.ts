@@ -1,3 +1,4 @@
+import { defaultHost } from "#default-host";
 // lib/debugger/types.ts
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
@@ -97,12 +98,14 @@ export class DebuggerState {
     }
   }
 
+  // The debugger runs in the CLI's process, on the platform's default
+  // host; a re-signed checkpoint takes its key from there.
   pinCheckpoint(checkpointId: number, label?: string) {
-    this.checkpoints.pin(checkpointId, label);
+    this.checkpoints.pin(checkpointId, label, defaultHost().settings);
   }
 
   cloneCheckpoint(checkpoint: Checkpoint, opts: Partial<CheckpointArgs> = {}): number {
-    return this.checkpoints.cloneCheckpoint(checkpoint, opts);
+    return this.checkpoints.cloneCheckpoint(checkpoint, opts, defaultHost().settings);
   }
 
   createRollingCheckpoint(ctx: RuntimeContext<any>, opts: SourceLocationOpts): number {

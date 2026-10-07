@@ -70,7 +70,6 @@ export const WAITING = [
   "lib/debugger/debuggerState.ts",
   "lib/importPaths.ts",
   "lib/runtime/callbackForwarding.ts",
-  "lib/runtime/checkpointChecksum.ts",
   "lib/runtime/costTelemetry.ts",
   "lib/runtime/exitProcess.ts",
   "lib/runtime/memory/frame.ts",

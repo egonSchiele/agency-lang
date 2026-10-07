@@ -1,3 +1,4 @@
+import { defaultHost } from "#default-host";
 import { StateStack } from "../state/stateStack.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { CheckpointStore } from "../state/checkpointStore.js";
@@ -151,6 +152,7 @@ export function makeMockCtx(
   return {
     stateStack,
     globals,
+    host: defaultHost(),
     checkpoints: new CheckpointStore(),
     pendingPromises: new PendingPromiseStore(),
     debuggerState: opts.debuggerState ?? null,

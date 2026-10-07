@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultHost } from "#default-host";
 import { makeCheckpoint } from "./checkpointTestHelpers.js";
 import { applyLocalOverrides, applyRestoreOverrides } from "./resumeSetup.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -8,7 +9,7 @@ describe("resume setup", () => {
   it("applies local overrides without mutating the source checkpoint", () => {
     const source = makeCheckpoint({ mood: "sad", count: 1 });
 
-    const changed = applyLocalOverrides(source, { mood: "happy" });
+    const changed = applyLocalOverrides(source, { mood: "happy" }, defaultHost().settings);
 
     expect(StateStack.lastFrameJSON(changed.stack).locals).toEqual({ mood: "happy", count: 1 });
     expect(StateStack.lastFrameJSON(source.stack).locals).toEqual({ mood: "sad", count: 1 });
@@ -18,7 +19,9 @@ describe("resume setup", () => {
     const source = makeCheckpoint({ mood: "sad" });
     const overrides = JSON.parse('{"__proto__":{"polluted":true}}');
 
-    expect(() => applyLocalOverrides(source, overrides)).toThrow("invalid override name");
+    expect(() => applyLocalOverrides(source, overrides, defaultHost().settings)).toThrow(
+      "invalid override name",
+    );
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
 

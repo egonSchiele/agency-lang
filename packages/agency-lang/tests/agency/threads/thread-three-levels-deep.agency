@@ -1,7 +1,24 @@
 import { setLlmOptions } from "std::llm"
 
+// A `thread` block starts with an empty history, and a `subthread` block
+// starts with a copy of its parent's. Each block below is checked by the
+// questions it holds, which never vary. The model's answers are checked only
+// where it had the history to work from (res1, res5, res6). The other blocks
+// ask about "that" with nothing before it, so their answers are made up and
+// change from run to run.
+
+def questions(messages: any[]): string[] {
+  let asked: string[] = []
+  for (message in messages) {
+    if (message.role == "user") {
+      asked.push(message.content)
+    }
+  }
+  return asked
+}
+
 node main() {
-  // Pinned: the expectations below are this model's exact answers.
+  // Pinned: res5 and res6 below are this model's answers.
   setLlmOptions({ model: "gpt-4o-mini", provider: "openai" })
   const msgs = thread {
     const res1: number[] = llm("What is the first prime number > 100?")
@@ -28,12 +45,20 @@ node main() {
   }
 
   return {
-    msgs: msgs,
-    msgs2: msgs2,
-    msgs3: msgs3,
-    msgs4: msgs4,
-    msgs5: msgs5,
-    msgs6: msgs6,
-    msgs7: msgs7
+    msgs: questions(msgs),
+    msgs2: questions(msgs2),
+    msgs3: questions(msgs3),
+    msgs4: questions(msgs4),
+    msgs5: questions(msgs5),
+    msgs6: questions(msgs6),
+    msgs7: questions(msgs7),
+    // A subthread copies the parent's answer too, even a made-up one.
+    msgs3CopiesMsgs2: msgs3[1].content == msgs2[1].content,
+    msgs5CopiesMsgs: msgs5[1].content == msgs[1].content,
+    msgs6CopiesMsgs5: msgs6[3].content == msgs5[3].content,
+    // Answers that prove the history reached the model, not just the thread.
+    res1: res1,
+    res5: res5,
+    res6: res6
   }
 }

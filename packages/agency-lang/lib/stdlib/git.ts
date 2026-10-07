@@ -1,7 +1,6 @@
 import path from "#path";
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
-import process from "process";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { abortableSpawn } from "./abortable.js";
 import { assertContained } from "./assertContained.js";
@@ -48,7 +47,7 @@ export async function gitRunImpl(
   if (info.kind !== "dir") {
     throw new Error(`git: repo directory is not a directory: ${cwd}`);
   }
-  const env = scrubEnv(opts?.env ?? process.env);
+  const env = scrubEnv(opts?.env ?? host.env.all());
   // Bound stdout in abortableSpawn (UTF-8 bytes, kills the child once
   // exceeded) so an auto-approved read can't buffer unbounded memory.
   const res = await abortableSpawn(host, "git", [...GIT_HARDENING_FLAGS, ...args], {

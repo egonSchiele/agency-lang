@@ -6,8 +6,9 @@ import { spawnSync } from "node:child_process";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 import { _cropImage, _imageSize, _pasteImages, imageToolsScript } from "./imageTools.js";
 import { configuredPython } from "./localPython.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
-const rulesDir = path.dirname(imageToolsScript());
+const rulesDir = path.dirname(imageToolsScript(nodeHost()));
 
 /** Runs `code` with imageToolsRules.py importable, under the plain
  *  python3 CI has, and returns stdout. */
@@ -116,7 +117,7 @@ describe.skipIf(!hasPillow)("imageTools", () => {
   });
 
   it("ships next to the server scripts", () => {
-    expect(fs.existsSync(imageToolsScript())).toBe(true);
+    expect(fs.existsSync(imageToolsScript(nodeHost()))).toBe(true);
   });
 
   it("reads an image's size", async () => {

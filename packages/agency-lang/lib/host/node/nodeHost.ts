@@ -71,6 +71,17 @@ const nodeEnv: HostEnv = {
   set: (name, value) => {
     process.env[name] = value;
   },
+  // process.env can hold undefined for a variable deleted with `delete`;
+  // a child's environment cannot.
+  all: () => {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value;
+      }
+    }
+    return env;
+  },
 };
 
 const nodeSettings: HostSettings = {

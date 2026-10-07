@@ -14,6 +14,7 @@ import {
   type Host,
 } from "./host.js";
 import { nodeHost } from "./node/nodeHost.js";
+import { memoryHost } from "./memoryHost.js";
 import { FakeClock } from "../runtime/clock.js";
 
 function call(host: Host, functionName: string): unknown {
@@ -220,6 +221,20 @@ describe("nodeHost", () => {
     }
   });
 
+  it("hands out a copy of the whole environment with no unset entries", () => {
+    const host = nodeHost();
+    host.env.set("AGENCY_HOST_TEST_VALUE", "one");
+    try {
+      const all = host.env.all();
+      expect(all.AGENCY_HOST_TEST_VALUE).toBe("one");
+      expect(Object.values(all).every((value) => typeof value === "string")).toBe(true);
+      all.AGENCY_HOST_TEST_VALUE = "two";
+      expect(host.env.get("AGENCY_HOST_TEST_VALUE")).toBe("one");
+    } finally {
+      delete process.env.AGENCY_HOST_TEST_VALUE;
+    }
+  });
+
   it("answers the system questions from the process", () => {
     const host = nodeHost();
     expect(host.system.cwd()).toBe(process.cwd());
@@ -245,5 +260,17 @@ describe("nodeHost", () => {
     const controller = new AbortController();
     controller.abort(new Error("cancelled"));
     await expect(host.terminal.readLine("? ", controller.signal)).rejects.toThrow("cancelled");
+  });
+});
+
+describe("memoryHost", () => {
+  it("answers env.all from its variables, as a copy", () => {
+    const host = memoryHost({ variables: { A: "1", B: "2" } });
+    const all = host.env.all();
+    expect(all).toEqual({ A: "1", B: "2" });
+    all.C = "3";
+    expect(host.env.get("C")).toBeNull();
+    host.env.set("D", "4");
+    expect(host.env.all()).toEqual({ A: "1", B: "2", D: "4" });
   });
 });

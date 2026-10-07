@@ -487,6 +487,7 @@ function memoryEnv(state: MemoryHostState): HostEnv {
     set: (name, value) => {
       state.variables[name] = value;
     },
+    all: () => ({ ...state.variables }),
   };
 }
 

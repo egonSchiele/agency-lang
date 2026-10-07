@@ -38,7 +38,7 @@ The host has two kinds of part.
 
 On Node both read `process.env`. The difference is who asks.
 
-- `env` is what the Agency functions `env` and `setEnv` in `std::system` use. It hands any variable to the program, and so to an agent. That is why it is a capability a host can refuse.
+- `env` is what the Agency functions `env` and `setEnv` in `std::system` use. It hands any variable to the program, and so to an agent. That is why it is a capability a host can refuse. `env.all()` is the whole environment as a copy, for a helper that builds a child process's environment from it: `git` removes the variables git would read commands from, and the image tools add `HF_HUB_OFFLINE`.
 - `settings` is how the runtime reads what it needs for itself: the test switches, the log level, and the API key a connector sends. A program that calls `search()` works on a host without `env`, because the connector reads `BRAVE_API_KEY` through `settings`.
 
 `settings.log` is where the runtime's logger writes. A caller that has the run passes `run.ctx.host.settings` to `createLogger` as its sink, so a line written after an `await` still reaches that run's host; without a sink the logger falls back to the current run's host, and to the console when no run is current. On Node the sink is the console, by level, so a warning from the runtime lands in a `std::ui` REPL's transcript, which captures the console.

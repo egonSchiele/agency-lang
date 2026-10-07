@@ -146,6 +146,9 @@ export type HostFiles = {
 export type HostEnv = {
   get(name: string): string | null;
   set(name: string, value: string): void;
+  /** Every variable, for a child process's environment. A copy: writing
+   *  to it changes nothing. */
+  all(): Record<string, string>;
 };
 
 /** The terminal, for `print`, `input`, and the stdlib functions that write

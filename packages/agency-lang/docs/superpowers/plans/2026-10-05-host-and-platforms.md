@@ -19,7 +19,10 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PRs B, C, C2, D, D2, D3, D4, D5, and E1 are merged. PR E2 is open as #1189.
+PRs B, C, C2, D, D2, D3, D4, D5, E1, and E2 are merged. The rest of the
+work is three PRs, F1 to F3, grouped as the owner asked on 2026-10-07:
+the small-PR series took more review time than remained, so what is
+left ships as a few large PRs, each one topic, in dependency order.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -33,14 +36,72 @@ PRs B, C, C2, D, D2, D3, D4, D5, and E1 are merged. PR E2 is open as #1189.
 | D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
 | E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
-| E2 | Module fingerprints without `statSync` | 14 (Task 31) | open, #1189 |
-| E | The browser entry point and CI checks, the `@capabilities` tag, `--platform` | 15, 17, 18 | |
+| E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
+| F1 | `WAITING` emptied: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, and a `NODE_ONLY` reason for every file that stays | Task 35 | next |
+| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts`, the CI bundle check, the exceptions lists deleted, and the smoltalk decision | 15 | |
+| F3 | The `@capabilities` tag on every `std::` effect, checked against the code; `--platform` and the config field; the compile-time check; Node-only stdlib modules; refusing before the prompt | 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
-stages are listed, so a reviewer can read a PR commit by commit. If a
-stage turns out large enough to need its own review, open it as its own
-PR; the owner prefers several small PRs to one large one.
+stages are listed, so a reviewer can read a PR commit by commit.
+
+### The three remaining PRs
+
+**F1, empty `WAITING`.** 39 files. Every one either moves onto the host
+or goes on `NODE_ONLY` with its reason. In order, one commit each:
+
+1. The `lib/host/node/` rename (the owner's suggestion on #1188):
+   `nodeFiles.ts`, `nodeFilesPart.ts`, `nodeHost.ts`, `nodeSubprocess.ts`,
+   and `default.node.ts` move under `lib/host/node/`, so `NODE_ONLY` and
+   the reach lint's leaf list become one directory glob; the
+   `agency-lang/host-lib/*` export and the `#default-host` entry follow;
+   the siblings' imports (kokoro, lora, tesseract-local) follow; run
+   `make -j siblings`. `memoryHost.ts` stays at the top, it is portable.
+2. `env.all(): Record<string, string>` on `HostEnv`, so `git` (which
+   scrubs it), `imageTools` (which adds to it), `subprocessRunInfo`, and
+   `mcpResolver` (which also sets a variable; `env.set` exists) leave
+   `WAITING`. `memoryHost` answers from its `variables`.
+3. Random bytes through `host.random` (or WebCrypto's
+   `getRandomValues`, which both platforms have): `oauth`'s PKCE
+   verifier, `spill`.
+4. Terminal size and colour support on `host.terminal`: `termcolors`,
+   `args`, `layout/render`.
+5. `exit`, `send`, and `on` through `host.system`: `exitProcess`,
+   `callbackForwarding`, `costTelemetry`, `state/context.ts`.
+6. The verdicts, each a `NODE_ONLY` entry with one sentence: the ffmpeg
+   probe (`spawnSync` before an interrupt), `memory/frame.ts` and
+   `memory/store.ts` (the synchronous `createExecutionContext`),
+   `replyAttachments` (synchronous prompt-runner callbacks),
+   `policyDirs` (by design), the files that pull in the compiler
+   (`runtime/template/*`, `toolBlockDiagnostics`, `stdlib/template`,
+   `debuggerState`), `statelog.ts` (`statelogParser` reads with `fs`),
+   `oauth` (its callback server is `http`), `speech` and `system`
+   (raw stdin), `config.ts`, `importPaths.ts`, `statelogClient.ts`
+   (`fs`), `gitignore` and `shell` (`fs` for walks), `ffmpeg`,
+   `image`, `vision`, `thread`, `mcpBridge.mjs`.
+
+Review focus: the `NODE_ONLY` reasons (that list is what the browser
+build never includes) and the two or three new host functions.
+
+**F2, the browser platform.** Tasks 32 to 35: `browserHost`,
+`default.browser.ts` behind `#default-host`, `lib/runtime/browser.ts`
+as the entry point, the CI check that bundles it with esbuild
+`--platform=browser` and fails on any Node import, and the exceptions
+lists deleted. The one open design decision is smoltalk: it imports
+`fs`, `path`, and `url`, and the thread store reaches it, so this PR
+either stubs it for the browser or declares the model client outside
+the bundle. Put the options in the PR description for the owner to
+decide there.
+
+**F3, the tag and the platform check.** Tasks 37 to 44: `@capabilities`
+parsed and checked on every `std::` effect, the check that the tags
+match the code, `--platform` and the config field, the compile-time
+check, Node-only stdlib modules, functions that use the host and raise
+nothing, and refusing before the prompt. Compiler plus stdlib, no host
+changes. Review focus: the tag table and the error a user sees.
+
+F2 and F3 can be one PR if the owner wants fewer still; F1 stays on its
+own because it is the long mechanical one.
 
 Stage 19, the clock and random values, is dropped. The browser goal does
 not need it.

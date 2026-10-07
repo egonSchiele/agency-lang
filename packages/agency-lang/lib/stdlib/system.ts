@@ -65,7 +65,7 @@ async function openUrlImpl(
   const signal = ctx.getAbortSignal(stack);
 
   if (platform === "macos") {
-    await abortableExec("open", ["--", url], signal);
+    await abortableExec(ctx.host, "open", ["--", url], signal);
   } else {
     throw new Error(
       `openUrl is currently only supported on macOS (detected: ${platform}). ` +
@@ -119,22 +119,24 @@ async function screenshotImpl(
   if (platform === "macos") {
     if (hasRegion) {
       await abortableExec(
+        ctx.host,
         "screencapture",
         ["-R", `${x},${y},${width},${height}`, resolvedPath],
         signal,
       );
     } else {
-      await abortableExec("screencapture", ["-x", resolvedPath], signal);
+      await abortableExec(ctx.host, "screencapture", ["-x", resolvedPath], signal);
     }
   } else if (platform === "linux") {
     if (hasRegion) {
       await abortableExec(
+        ctx.host,
         "import",
         ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath],
         signal,
       );
     } else {
-      await abortableExec("import", ["-window", "root", resolvedPath], signal);
+      await abortableExec(ctx.host, "import", ["-window", "root", resolvedPath], signal);
     }
   } else {
     console.error(

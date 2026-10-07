@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
 import { consoleLogSink } from "../logger.js";
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
+import { nodeSubprocess } from "./nodeSubprocess.js";
 import { realClock, type Clock } from "../runtime/clock.js";
 import {
   makeHost,
@@ -48,6 +49,7 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     parts: {
       files: nodeFilesPart(options.files),
       network: options.network ?? nodeNetwork,
+      subprocess: nodeSubprocess,
       env: nodeEnv,
       terminal: nodeTerminal,
       system: nodeSystem,

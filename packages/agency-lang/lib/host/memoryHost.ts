@@ -19,6 +19,8 @@ import {
   type HostFiles,
   type HostNetwork,
   type HostRandom,
+  type HostSubprocess,
+  type Command,
   type HostSettings,
   type HostSystem,
   type HostTerminal,
@@ -59,6 +61,9 @@ export type MemoryHostOptions = {
   /** What `network.fetch` answers with. Without one, every request is
    *  refused with an error that names the URL. */
   fetch?: HostNetwork["fetch"];
+  /** What runs commands. Without one, every command is refused with an
+   *  error that names the program. */
+  subprocess?: HostSubprocess;
   cwd?: string;
   homeDir?: string;
   operatingSystem?: OperatingSystem;
@@ -93,6 +98,7 @@ export function memoryHost(options: MemoryHostOptions = {}): MemoryHost {
     parts: {
       files: memoryFiles(state, cwd),
       network: memoryNetwork(options),
+      subprocess: memorySubprocess(options),
       env: memoryEnv(state),
       terminal: memoryTerminal(state),
       system: memorySystem(options, cwd),
@@ -446,6 +452,31 @@ function memoryNetwork(options: MemoryHostOptions): HostNetwork {
         throw new Error(`The memory host has no network to reach ${url}.`);
       }
       return options.fetch(input, init);
+    },
+  };
+}
+
+function describeCommand(command: Command): string {
+  return command.kind === "shell"
+    ? `the shell script ${JSON.stringify(command.script)}`
+    : command.program;
+}
+
+function memorySubprocess(options: MemoryHostOptions): HostSubprocess {
+  const refuse = (command: Command) =>
+    new Error(`The memory host has no subprocesses to run ${describeCommand(command)}.`);
+  return {
+    run: async (command, runOptions) => {
+      if (options.subprocess === undefined) {
+        throw refuse(command);
+      }
+      return options.subprocess.run(command, runOptions);
+    },
+    start: async (command, runOptions) => {
+      if (options.subprocess === undefined) {
+        throw refuse(command);
+      }
+      return options.subprocess.start(command, runOptions);
     },
   };
 }

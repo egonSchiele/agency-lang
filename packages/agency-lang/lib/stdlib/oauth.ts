@@ -4,9 +4,9 @@ import { sha256Bytes } from "../utils/hash.js";
 import { encodeBase64Url } from "./base64.js";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { program } from "./abortable.js";
 import os from "os";
 import path from "path";
-import { execFile } from "child_process";
 import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
@@ -97,14 +97,20 @@ function parseExtraParams(str: string): Record<string, string> {
   return result;
 }
 
-function openBrowser(url: string): void {
-  if (process.platform === "darwin") {
-    execFile("open", [url], () => {});
-  } else if (process.platform === "win32") {
-    execFile("cmd.exe", ["/c", "start", "", url], () => {});
-  } else {
-    execFile("xdg-open", [url], () => {});
-  }
+/** Opens `url` in the user's browser and does not wait: a failure to
+ *  open is nothing the flow can act on, the printed URL is the fallback.
+ *  A host with no subprocess part refuses when `run` is read, before any
+ *  promise exists, so the call is made inside a promise chain. */
+function openBrowser(host: Host, url: string): void {
+  const command =
+    process.platform === "darwin"
+      ? program("open", [url])
+      : process.platform === "win32"
+        ? program("cmd.exe", ["/c", "start", "", url])
+        : program("xdg-open", [url]);
+  Promise.resolve()
+    .then(() => host.subprocess.run(command))
+    .catch(() => undefined);
 }
 
 function waitForCallback(
@@ -247,7 +253,7 @@ async function saveTokens(host: Host, name: string, tokens: StoredTokens): Promi
   await host.files.mkdir(located.dir, ".");
   const json = JSON.stringify(tokens, null, 2);
 
-  const key = await getEncryptionKey();
+  const key = await getEncryptionKey(host);
   const content = key ? encrypt(json, key) : json;
 
   await host.files.writeText(located.dir, located.file, content, { fileMode: 0o600 });
@@ -258,7 +264,7 @@ async function loadTokens(host: Host, name: string): Promise<StoredTokens | null
   try {
     const raw = await host.files.readText(located.dir, located.file);
 
-    const key = await getEncryptionKey();
+    const key = await getEncryptionKey(host);
     const json = key ? decrypt(raw, key) : raw;
 
     const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -323,7 +329,7 @@ async function authorizeImpl(
   }
 
   const callbackPromise = waitForCallback(port, signal);
-  openBrowser(authorizationUrl.toString());
+  openBrowser(host, authorizationUrl.toString());
 
   const { code, state: returnedState } = await callbackPromise;
 

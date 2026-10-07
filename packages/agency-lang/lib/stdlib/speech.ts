@@ -1,14 +1,13 @@
-import { spawn } from "child_process";
 import { nanoid } from "nanoid";
 import os from "os";
 import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
-import { abortableExec } from "./abortable.js";
+import { abortableExec, program } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
-import type { Host } from "../host/host.js";
+import type { Host, RunResult } from "../host/host.js";
 import {
   meteredDispatch,
   recordUsage,
@@ -89,7 +88,7 @@ async function speakImpl(
       if (outputFile !== "") {
         args.push("-o", await outputPath(ctx.host, outputFile, allowedPaths));
       }
-      await abortableExec("say", args, ctx.getAbortSignal(stack));
+      await abortableExec(ctx.host, "say", args, ctx.getAbortSignal(stack));
     } finally {
       if (owned) {
         try {
@@ -148,8 +147,6 @@ async function recordImpl(
     args.push("silence", "1", "0.1", "3%", "1", seconds, "3%");
   }
 
-  const proc = spawn("rec", args, { stdio: ["pipe", "ignore", "ignore"] });
-
   const cleanupStdin = (listener: (data: Buffer) => void) => {
     if (isTTY) {
       process.stdin.removeListener("data", listener);
@@ -159,62 +156,48 @@ async function recordImpl(
   };
 
   let stoppedByUser = false;
-  let cancelled = false;
   const signal = ctx.getAbortSignal(stack);
-
-  await new Promise<void>((resolve, reject) => {
-    const onData = (data: Buffer) => {
-      const key = data[0];
-      // Only stop on Enter (CR or LF) or Ctrl+C
-      if (key === 0x0d || key === 0x0a || key === 0x03) {
-        stoppedByUser = true;
-        cleanupStdin(onData);
-        proc.kill("SIGTERM");
-      }
-    };
-
-    const onAbort = () => {
-      cancelled = true;
+  // The child is told to stop on the run's abort signal and on Enter; the
+  // host reports which, if either, ended it.
+  const proc = await ctx.host.subprocess.start(program("rec", args), {
+    signal,
+    collect: { stdout: false, stderr: false },
+  });
+  const onData = (data: Buffer) => {
+    const key = data[0];
+    // Only stop on Enter (CR or LF) or Ctrl+C
+    if (key === 0x0d || key === 0x0a || key === 0x03) {
+      stoppedByUser = true;
       cleanupStdin(onData);
       proc.kill("SIGTERM");
-    };
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-
-    proc.on("error", (err) => {
-      signal.removeEventListener("abort", onAbort);
-      cleanupStdin(onData);
-      if (!outputFile) removeQuietly(ctx.host, outPath);
-      reject(
-        new Error(
-          `Failed to start 'rec' command: ${err.message}. ` +
-            `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`,
-        ),
-      );
-    });
-
-    proc.on("close", (code) => {
-      signal.removeEventListener("abort", onAbort);
-      cleanupStdin(onData);
-      if (cancelled) {
-        if (!outputFile) removeQuietly(ctx.host, outPath);
-        reject(new AgencyCancelledError("record cancelled"));
-        return;
-      }
-      if (code !== 0 && code !== null && !stoppedByUser) {
-        if (!outputFile) removeQuietly(ctx.host, outPath);
-        reject(new Error(`'rec' exited with code ${code}`));
-      } else {
-        resolve();
-      }
-    });
-
-    if (isTTY) {
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.on("data", onData);
     }
-  });
+  };
+  if (isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", onData);
+  }
+
+  let result: RunResult;
+  try {
+    result = await proc.wait();
+  } catch (err) {
+    cleanupStdin(onData);
+    if (!outputFile) removeQuietly(ctx.host, outPath);
+    throw new Error(
+      `Failed to start 'rec' command: ${(err as Error).message}. ` +
+        `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`,
+    );
+  }
+  cleanupStdin(onData);
+  if (result.aborted) {
+    if (!outputFile) removeQuietly(ctx.host, outPath);
+    throw new AgencyCancelledError("record cancelled");
+  }
+  if (result.exitCode !== 0 && result.exitCode !== null && !stoppedByUser) {
+    if (!outputFile) removeQuietly(ctx.host, outPath);
+    throw new Error(`'rec' exited with code ${result.exitCode}`);
+  }
 
   return outPath;
 }

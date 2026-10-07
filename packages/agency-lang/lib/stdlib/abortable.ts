@@ -1,4 +1,4 @@
-import { spawn, SpawnOptions, ChildProcess } from "child_process";
+import type { Command, Host, RunOptions, RunResult } from "../host/host.js";
 import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors.js";
 
 /**
@@ -14,19 +14,11 @@ function leafCancel(message: string, signal: AbortSignal | undefined): AgencyCan
 }
 
 /**
- * Shared abortability helpers for stdlib JS implementations whose
- * underlying API doesn't natively support `AbortSignal`. Used by
- * `shell.ts`, `speech.ts`, and `system.ts` to (1) thread cancellation
- * through `child_process.spawn` and `execFile`, and (2) cancel a
- * `setTimeout`-based sleep on abort.
- *
- * Why a separate file: each call site that needs cancellation has to
- * (a) listen to the signal, (b) tear down the in-flight resource,
- * (c) translate the resulting "killed by signal" outcome into an
- * `AgencyCancelledError` so `__tryCall` re-throws it. Doing that
- * inline once per caller is bug-prone (forget any of the three and
- * cancellation silently breaks for that function). Centralizing them
- * keeps the contract identical across the stdlib.
+ * The stdlib's ways of running a program through `host.subprocess`. The
+ * host reports how a child ended; the functions here decide what each
+ * ending means, so every caller gets the same contract: a child killed
+ * because the run's abort signal fired rejects with
+ * `AgencyCancelledError`, which `__tryCall` re-throws.
  */
 
 export type SpawnResult = {
@@ -35,244 +27,232 @@ export type SpawnResult = {
   exitCode: number;
 };
 
-/**
- * Stream teardown error codes that are safe to swallow. They mean the pipe
- * went away — the child exited or we killed it (byte-cap, timeout, abort) —
- * rather than a genuine failure. Everything else on a stdio stream is routed
- * to the promise's reject so it becomes a normal Failure at the call site.
- */
-const BENIGN_STREAM_ERRORS = new Set(["EPIPE", "ECONNRESET"]);
-
-/**
- * Attach an `error` listener to a child's stdio stream. Each of stdin/stdout/
- * stderr is its own EventEmitter, and an `error` event with no listener is
- * re-thrown by Node from an event-loop tick — outside any try/catch — which
- * crashes the whole process instead of converting to a Failure. `child.on
- * ("error")` does NOT cover these; the stream emitters need their own guard.
- */
-function guardStdioStream(
-  stream: NodeJS.ReadableStream | NodeJS.WritableStream | null | undefined,
-  reject: (err: unknown) => void,
-): void {
-  stream?.on("error", (err: NodeJS.ErrnoException) => {
-    if (!BENIGN_STREAM_ERRORS.has(err.code ?? "")) {
-      reject(err);
-    }
-  });
-}
-
-export type AbortableSpawnOptions = SpawnOptions & {
+export type AbortableSpawnOptions = {
+  cwd?: string;
+  env?: Record<string, string>;
   input?: string;
   /** Time limit in ms. 0 or undefined = no time limit. */
   timeout?: number;
   /** When set, an abort fires the same teardown path as the timeout
    *  and the returned promise rejects with `AgencyCancelledError`. */
   signal?: AbortSignal;
-  /** Max stdout to buffer, in UTF-8 bytes. Once exceeded the child is
-   *  killed, stdout is marked truncated (a note is appended), and the
-   *  call resolves successfully with the partial output. 0/undefined =
-   *  unbounded. Keeps auto-approved reads (e.g. a huge `git diff`) from
-   *  buffering unbounded memory. */
+  /** Max bytes to buffer per output stream, in UTF-8 bytes. Once stdout
+   *  exceeds it the child is killed, stdout is marked truncated (a note
+   *  is appended), and the call resolves successfully with the partial
+   *  output; once stderr exceeds it the call resolves with exit code 1
+   *  and a note in stderr. 0/undefined = unbounded. Keeps auto-approved
+   *  reads (e.g. a huge `git diff`) from buffering unbounded memory. */
   maxOutputBytes?: number;
 };
 
+/** `command` as the host takes it: a program with its arguments. */
+export function program(name: string, args: string[]): Command {
+  return { kind: "program", program: name, args };
+}
+
+/** Run `command` and wait, with the run's cancellation applied: a child
+ *  killed because `signal` fired rejects with `AgencyCancelledError`. */
+async function runCancellable(
+  host: Host,
+  command: Command,
+  options: RunOptions,
+  describe: string,
+): Promise<RunResult> {
+  if (options.signal?.aborted) {
+    throw leafCancel(`${describe} cancelled`, options.signal);
+  }
+  let result: RunResult;
+  try {
+    result = await host.subprocess.run(command, options);
+  } catch (err) {
+    if (options.signal?.aborted || isAbortError(err)) {
+      throw leafCancel(`${describe} cancelled`, options.signal);
+    }
+    throw err;
+  }
+  if (result.aborted) {
+    throw leafCancel(`${describe} cancelled`, options.signal);
+  }
+  return result;
+}
+
 /**
- * `child_process.spawn` accepts a `signal` option natively as of
- * Node 16, but that path only kills the child with SIGTERM and
- * surfaces an `AbortError` on the child's emitter — it doesn't
- * give us the "translate to `AgencyCancelledError` and reject the
- * outer promise" behavior we want. So we register our own listener
- * and call `child.kill()` explicitly, which is the same code path
- * the existing timeout uses.
+ * Run `command` with `args` and collect its output. A timeout resolves
+ * with exit code 1 and a note in stderr; the byte cap on stdout resolves
+ * with the partial output and a note in stdout, and on stderr with exit
+ * code 1 and a note; an abort rejects with `AgencyCancelledError`.
  */
-export function abortableSpawn(
+export async function abortableSpawn(
+  host: Host,
   command: string,
   args: string[],
   options: AbortableSpawnOptions,
 ): Promise<SpawnResult> {
-  return new Promise((resolve, reject) => {
-    // Strip our custom keys out before handing to Node. `signal` in
-    // particular: we handle it ourselves (see the docblock above) and
-    // don't want Node's built-in handler racing with ours.
-    const { signal: _sig, input: _in, timeout: _to, ...spawnOptions } = options;
-    if (options.signal?.aborted) {
-      reject(leafCancel(`${command} cancelled`, options.signal));
-      return;
-    }
-    const child = spawn(command, args, {
-      ...spawnOptions,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+  return spawnResultOf(
+    command,
+    options,
+    await runCancellable(
+      host,
+      program(command, args),
+      {
+        cwd: options.cwd,
+        env: options.env,
+        input: options.input,
+        timeoutMs: options.timeout,
+        signal: options.signal,
+        maxOutputBytes: options.maxOutputBytes,
+      },
+      command,
+    ),
+  );
+}
 
-    let stdout = "";
-    let stderr = "";
-    let stdoutBytes = 0;
-    let truncated = false;
-    let timedOut = false;
-    let aborted = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const maxOutputBytes = options.maxOutputBytes ?? 0;
+/** `abortableSpawn` for a script the platform's shell runs. */
+export async function abortableShell(
+  host: Host,
+  script: string,
+  options: AbortableSpawnOptions,
+): Promise<SpawnResult> {
+  return spawnResultOf(
+    "sh",
+    options,
+    await runCancellable(
+      host,
+      { kind: "shell", script },
+      {
+        cwd: options.cwd,
+        env: options.env,
+        input: options.input,
+        timeoutMs: options.timeout,
+        signal: options.signal,
+        maxOutputBytes: options.maxOutputBytes,
+      },
+      "sh",
+    ),
+  );
+}
 
-    child.stdout!.setEncoding("utf8");
-    child.stderr!.setEncoding("utf8");
-    child.stdout!.on("data", (data: string) => {
-      if (truncated) return;
-      if (maxOutputBytes > 0) {
-        const chunkBytes = Buffer.byteLength(data, "utf8");
-        if (stdoutBytes + chunkBytes > maxOutputBytes) {
-          // Append only the byte-prefix that fits, then kill the child so
-          // memory stays bounded even if git delivers one large chunk.
-          const remaining = maxOutputBytes - stdoutBytes;
-          stdout += Buffer.from(data, "utf8").subarray(0, remaining).toString("utf8");
-          truncated = true;
-          child.kill("SIGTERM");
-          return;
-        }
-        stdoutBytes += chunkBytes;
-      }
-      stdout += data;
-    });
-    child.stderr!.on("data", (data: string) => {
-      stderr += data;
-    });
-
-    // Guard every stdio stream against a stray `error` event, or an unhandled
-    // one crashes the process. The common case is EPIPE on stdin: a child that
-    // ignores stdin (a file reader like `hexdump`) or exits early closes its
-    // stdin pipe with no reader, so our write raises EPIPE. stdout/stderr can
-    // likewise emit late errors when we kill the child mid-read.
-    guardStdioStream(child.stdin, reject);
-    guardStdioStream(child.stdout, reject);
-    guardStdioStream(child.stderr, reject);
-    if (options.input) {
-      child.stdin!.write(options.input);
-      child.stdin!.end();
-    } else {
-      child.stdin!.end();
-    }
-
-    if (options.timeout && options.timeout > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGTERM");
-      }, options.timeout);
-    }
-
-    const onAbort = () => {
-      aborted = true;
-      child.kill("SIGTERM");
+function spawnResultOf(
+  command: string,
+  options: AbortableSpawnOptions,
+  result: RunResult,
+): SpawnResult {
+  if (result.truncated === "stdout") {
+    // We killed the child on purpose after hitting the byte cap; treat
+    // the partial output as a success rather than a spawn failure.
+    return {
+      stdout: result.stdout + `\n[output truncated at ${options.maxOutputBytes} bytes]`,
+      stderr: result.stderr,
+      exitCode: 0,
     };
-    if (options.signal) {
-      if (options.signal.aborted) onAbort();
-      else options.signal.addEventListener("abort", onAbort, { once: true });
-    }
-
-    const cleanup = () => {
-      if (timer) clearTimeout(timer);
-      if (options.signal) options.signal.removeEventListener("abort", onAbort);
+  }
+  if (result.truncated === "stderr") {
+    // A child that wrote that much to stderr was failing; its exit code
+    // is whatever the kill left, so say so.
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr + `\n[standard error truncated at ${options.maxOutputBytes} bytes]`,
+      exitCode: 1,
     };
-
-    child.on("close", (code) => {
-      cleanup();
-      if (aborted) {
-        reject(leafCancel(`${command} cancelled`, options.signal));
-      } else if (truncated) {
-        // We killed the child on purpose after hitting the byte cap; treat
-        // the partial output as a success rather than a spawn failure.
-        resolve({
-          stdout: stdout + `\n[output truncated at ${maxOutputBytes} bytes]`,
-          stderr,
-          exitCode: 0,
-        });
-      } else if (timedOut) {
-        resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
-      } else {
-        resolve({ stdout, stderr, exitCode: code ?? 1 });
-      }
-    });
-    child.on("error", (err) => {
-      cleanup();
-      if (aborted || isAbortError(err)) {
-        reject(leafCancel(`${command} cancelled`, options.signal));
-        return;
-      }
-      reject(err);
-    });
-  });
+  }
+  if (result.timedOut) {
+    return { stdout: result.stdout, stderr: result.stderr + "\nProcess timed out", exitCode: 1 };
+  }
+  return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode ?? 1 };
 }
 
 /**
- * Spawn a child that we don't need to read output from, with the
- * same abort-on-signal behavior. Used for `_say` (the `say`
- * command), `_screenshot`, `_openUrl`, etc. — anything where we
- * just want to wait for the child to exit, getting an
- * `AgencyCancelledError` if the run is cancelled.
+ * Run a child whose output is not wanted, with the same abort-on-signal
+ * behavior. Used for `_say` (the `say` command), `_screenshot`, `_openUrl`,
+ * etc. — anything where we just want to wait for the child to exit,
+ * getting an `AgencyCancelledError` if the run is cancelled.
  *
  * Distinct from `abortableSpawn` so callers that don't want stdout
  * piping (some of these run for minutes streaming audio to the
- * speakers and would buffer indefinitely) get the right behavior.
+ * speakers and would buffer indefinitely) get the right behavior. A
+ * non-zero exit, or a signal nobody here sent, rejects with the
+ * child's standard error in the message.
  */
-export function abortableExec(
+export async function abortableExec(
+  host: Host,
   command: string,
   args: string[],
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(leafCancel(`${command} cancelled`, signal));
-      return;
-    }
-    const child: ChildProcess = spawn(command, args, {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-    let stderr = "";
-    let aborted = false;
-    child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (data: string) => {
-      stderr += data;
-    });
-    // stdin/stdout are `ignore`d here (no stream), but stderr is piped and,
-    // like any stdio emitter, crashes the process on an unhandled `error`.
-    guardStdioStream(child.stdin, reject);
-    guardStdioStream(child.stdout, reject);
-    guardStdioStream(child.stderr, reject);
+  const result = await runCancellable(
+    host,
+    program(command, args),
+    { signal, collect: { stdout: false, stderr: true } },
+    command,
+  );
+  if (result.exitCode === 0) {
+    return;
+  }
+  if (result.exitCode === null) {
+    throw new Error(`${command} killed by signal ${result.signal}: ${result.stderr}`);
+  }
+  throw new Error(`${command} exited with code ${result.exitCode}: ${result.stderr}`);
+}
 
-    const onAbort = () => {
-      aborted = true;
-      child.kill("SIGTERM");
-    };
-    if (signal) {
-      if (signal.aborted) onAbort();
-      else signal.addEventListener("abort", onAbort, { once: true });
-    }
+/** The failure `runProgram` rejects with for a child that did not exit
+ *  with 0, wrote past the output limit, ran past its time limit, or was
+ *  cancelled, carrying its output the way Node's `execFile` does.
+ *  `ending` says which. */
+export class ProgramFailed extends Error {
+  constructor(
+    command: string,
+    ending: string,
+    public readonly exitCode: number | null,
+    public readonly stdout: string,
+    public readonly stderr: string,
+  ) {
+    super(`${command} ${ending}: ${stderr.trim()}`);
+    this.name = "ProgramFailed";
+  }
+}
 
-    const cleanup = () => {
-      if (signal) signal.removeEventListener("abort", onAbort);
-    };
+/** How much of each output stream `runProgram` keeps unless the caller
+ *  says otherwise: the default `maxBuffer` of Node's `execFile`. */
+export const PROGRAM_OUTPUT_LIMIT = 1024 * 1024;
 
-    child.on("close", (code, sig) => {
-      cleanup();
-      if (aborted) {
-        reject(leafCancel(`${command} cancelled`, signal));
-      } else if (code === 0) {
-        resolve();
-      } else if (code === null) {
-        // Child exited due to a signal we didn't send (aborted is false).
-        // Surface it so callers don't see a silent success.
-        reject(new Error(`${command} killed by signal ${sig}: ${stderr}`));
-      } else {
-        reject(new Error(`${command} exited with code ${code}: ${stderr}`));
-      }
-    });
-    child.on("error", (err) => {
-      cleanup();
-      if (aborted || isAbortError(err)) {
-        reject(leafCancel(`${command} cancelled`, signal));
-        return;
-      }
-      reject(err);
-    });
+/**
+ * Run `command` with `args` and return its output, rejecting with
+ * `ProgramFailed` when it does not exit with 0, writes more than the
+ * output limit to one stream, runs past `timeoutMs`, or is cancelled by
+ * `signal`, and with the host's error when it cannot be started. The
+ * contract of Node's `execFile`, for the helpers that call a fixed
+ * program such as `osascript` or `security`.
+ */
+export async function runProgram(
+  host: Host,
+  command: string,
+  args: string[],
+  options: RunOptions = {},
+): Promise<{ stdout: string; stderr: string }> {
+  const limit = options.maxOutputBytes ?? PROGRAM_OUTPUT_LIMIT;
+  const result = await host.subprocess.run(program(command, args), {
+    ...options,
+    maxOutputBytes: limit,
   });
+  // A killed child may still have exited with 0, if it finished before
+  // the kill reached it or handled the signal; what it printed is not
+  // its answer.
+  const failed = (ending: string) =>
+    new ProgramFailed(command, ending, result.exitCode, result.stdout, result.stderr);
+  if (result.truncated !== null) {
+    throw failed(`wrote more than ${limit} bytes to ${result.truncated}`);
+  }
+  if (result.timedOut) {
+    throw failed(`did not finish within ${options.timeoutMs} ms`);
+  }
+  if (result.aborted) {
+    throw failed("was cancelled");
+  }
+  if (result.exitCode !== 0) {
+    const ending = result.exitCode === null ? "was killed" : `exited with code ${result.exitCode}`;
+    throw new ProgramFailed(command, ending, result.exitCode, result.stdout, result.stderr);
+  }
+  return { stdout: result.stdout, stderr: result.stderr };
 }
 
 /**

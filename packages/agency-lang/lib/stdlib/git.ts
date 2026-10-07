@@ -29,7 +29,12 @@ export async function gitRunImpl(
   host: Host,
   cwd: string,
   args: string[],
-  opts?: { signal?: AbortSignal; env?: NodeJS.ProcessEnv; timeoutMs?: number; maxBytes?: number },
+  opts?: {
+    signal?: AbortSignal;
+    env?: Record<string, string | undefined>;
+    timeoutMs?: number;
+    maxBytes?: number;
+  },
 ): Promise<string> {
   if (!cwd || !path.isAbsolute(cwd)) {
     throw new Error(
@@ -46,7 +51,7 @@ export async function gitRunImpl(
   const env = scrubEnv(opts?.env ?? process.env);
   // Bound stdout in abortableSpawn (UTF-8 bytes, kills the child once
   // exceeded) so an auto-approved read can't buffer unbounded memory.
-  const res = await abortableSpawn("git", [...GIT_HARDENING_FLAGS, ...args], {
+  const res = await abortableSpawn(host, "git", [...GIT_HARDENING_FLAGS, ...args], {
     cwd,
     env,
     signal: opts?.signal,

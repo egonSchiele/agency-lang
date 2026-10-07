@@ -4,6 +4,7 @@ import { withCtx, jsonResponse, stubToken } from "./testUtils.js";
 import { _githubRequest, GITHUB_API_BASE, type GithubEndpoint } from "./request.js";
 import { pagingQuery } from "./args.js";
 import { _resetGithubCredentialCacheForTests, _resolveAndCache } from "./credential.js";
+import { defaultHost } from "#default-host";
 import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 
 function oversizedResponse(): Response {
@@ -128,7 +129,9 @@ describe("_githubRequest", () => {
       ghAuthToken: async () => null,
       keyringGet: async () => null,
     };
-    expect(await _resolveAndCache(fresh)).toBe("fresh");
+    // The run above was on the default host; its cache entry is the one a
+    // stale token would come from.
+    expect(await _resolveAndCache(defaultHost(), fresh)).toBe("fresh");
   });
 
   it("names the endpoint when a successful response is not JSON", async () => {

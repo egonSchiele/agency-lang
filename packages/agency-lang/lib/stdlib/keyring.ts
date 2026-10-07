@@ -1,7 +1,7 @@
-import { execFile, spawn } from "child_process";
-import { promisify } from "util";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { program, runProgram } from "./abortable.js";
 
-const execFileAsync = promisify(execFile);
 const DEFAULT_SERVICE = "agency-lang";
 
 /**
@@ -10,16 +10,27 @@ const DEFAULT_SERVICE = "agency-lang";
  * Linux: Secret Service via `secret-tool` CLI
  */
 export async function _setSecret(key: string, value: string, service?: string): Promise<void> {
+  const host = currentHost();
+  return setSecret(host, key, value, service);
+}
+
+/** `_setSecret` for a caller that has the host. */
+export async function setSecret(
+  host: Host,
+  key: string,
+  value: string,
+  service?: string,
+): Promise<void> {
   if (!key) throw new Error("Keyring key must not be empty.");
   if (!value) throw new Error("Keyring value must not be empty.");
   const svc = service || DEFAULT_SERVICE;
 
   if (process.platform === "darwin") {
     try {
-      await execFileAsync("security", ["delete-generic-password", "-s", svc, "-a", key]);
+      await runProgram(host, "security", ["delete-generic-password", "-s", svc, "-a", key]);
     } catch {}
 
-    await execFileAsync("security", [
+    await runProgram(host, "security", [
       "add-generic-password",
       "-s",
       svc,
@@ -30,22 +41,13 @@ export async function _setSecret(key: string, value: string, service?: string): 
       "-U",
     ]);
   } else if (process.platform === "linux") {
-    const child = spawn(
-      "secret-tool",
-      ["store", "--label", `${svc}:${key}`, "service", svc, "account", key],
-      { stdio: ["pipe", "pipe", "pipe"] },
+    const result = await host.subprocess.run(
+      program("secret-tool", ["store", "--label", `${svc}:${key}`, "service", svc, "account", key]),
+      { input: value },
     );
-
-    child.stdin.write(value);
-    child.stdin.end();
-
-    await new Promise<void>((resolve, reject) => {
-      child.on("close", (code: number) => {
-        if (code === 0) resolve();
-        else reject(new Error(`secret-tool store failed with exit code ${code}`));
-      });
-      child.on("error", reject);
-    });
+    if (result.exitCode !== 0) {
+      throw new Error(`secret-tool store failed with exit code ${result.exitCode}`);
+    }
   } else {
     throw new Error(
       `System keyring is not supported on ${process.platform}. ` +
@@ -54,18 +56,14 @@ export async function _setSecret(key: string, value: string, service?: string): 
   }
 }
 
-/** Run a lookup command, bounded by `timeoutMs` when one is given. Without
- *  a bound the call passes no options object at all, so callers and tests
- *  that never asked for a timeout see the same execFile call as before. */
+/** Run a lookup command, bounded by `timeoutMs` when one is given. */
 function lookup(
+  host: Host,
   command: string,
   args: string[],
   timeoutMs: number | undefined,
 ): Promise<{ stdout: string; stderr: string }> {
-  if (timeoutMs === undefined) {
-    return execFileAsync(command, args);
-  }
-  return execFileAsync(command, args, { timeout: timeoutMs });
+  return runProgram(host, command, args, { timeoutMs });
 }
 
 /**
@@ -82,12 +80,24 @@ export async function _getSecret(
   service?: string,
   timeoutMs?: number,
 ): Promise<string | null> {
+  const host = currentHost();
+  return getSecret(host, key, service, timeoutMs);
+}
+
+/** `_getSecret` for a caller that has the host. */
+export async function getSecret(
+  host: Host,
+  key: string,
+  service?: string,
+  timeoutMs?: number,
+): Promise<string | null> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
 
   if (process.platform === "darwin") {
     try {
       const { stdout } = await lookup(
+        host,
         "security",
         ["find-generic-password", "-s", svc, "-a", key, "-w"],
         timeoutMs,
@@ -99,6 +109,7 @@ export async function _getSecret(
   } else if (process.platform === "linux") {
     try {
       const { stdout } = await lookup(
+        host,
         "secret-tool",
         ["lookup", "service", svc, "account", key],
         timeoutMs,
@@ -120,19 +131,25 @@ export async function _getSecret(
  * Returns true if the secret was deleted, false if it didn't exist.
  */
 export async function _deleteSecret(key: string, service?: string): Promise<boolean> {
+  const host = currentHost();
+  return deleteSecret(host, key, service);
+}
+
+/** `_deleteSecret` for a caller that has the host. */
+export async function deleteSecret(host: Host, key: string, service?: string): Promise<boolean> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
 
   if (process.platform === "darwin") {
     try {
-      await execFileAsync("security", ["delete-generic-password", "-s", svc, "-a", key]);
+      await runProgram(host, "security", ["delete-generic-password", "-s", svc, "-a", key]);
       return true;
     } catch {
       return false;
     }
   } else if (process.platform === "linux") {
     try {
-      await execFileAsync("secret-tool", ["clear", "service", svc, "account", key]);
+      await runProgram(host, "secret-tool", ["clear", "service", svc, "account", key]);
       return true;
     } catch {
       return false;
@@ -149,16 +166,22 @@ export async function _deleteSecret(key: string, service?: string): Promise<bool
  * Check if the system keyring is available on this platform.
  */
 export async function _isKeyringAvailable(): Promise<boolean> {
+  const host = currentHost();
+  return isKeyringAvailable(host);
+}
+
+/** `_isKeyringAvailable` for a caller that has the host. */
+export async function isKeyringAvailable(host: Host): Promise<boolean> {
   if (process.platform === "darwin") {
     try {
-      await execFileAsync("security", ["help"]);
+      await runProgram(host, "security", ["help"]);
       return true;
     } catch {
       return false;
     }
   } else if (process.platform === "linux") {
     try {
-      await execFileAsync("secret-tool", ["--version"]);
+      await runProgram(host, "secret-tool", ["--version"]);
       return true;
     } catch {
       return false;

@@ -24,6 +24,44 @@ export function sha256Text(value: string): string {
   return sha256Hex(value);
 }
 
+// The asynchronous pair below runs on WebCrypto, `crypto.subtle`, which
+// Node and every browser have, so it is the same code on both platforms
+// and the platform does the hashing. A caller that is async already (the
+// S3 request signer, the OAuth PKCE challenge) uses these; the synchronous
+// pair above stays for the callers that cannot await, such as the
+// checkpoint checksum.
+
+/** The SHA-256 digest of `data`, as 32 bytes, from WebCrypto. A string is
+ *  hashed as UTF-8. */
+export async function sha256BytesAsync(data: Uint8Array | string): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", toBuffer(toBytes(data))));
+}
+
+/** HMAC-SHA256 of `data` under `key`, as 32 bytes, from WebCrypto. A
+ *  string is used as UTF-8. */
+export async function hmacSha256Async(
+  key: Uint8Array | string,
+  data: Uint8Array | string,
+): Promise<Uint8Array> {
+  const keyBytes = toBytes(key);
+  // HMAC pads a key shorter than the block with zero bytes, so an empty
+  // key and a block of zeros are the same key; WebCrypto refuses the
+  // empty spelling, so it is given the other.
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    toBuffer(keyBytes.length === 0 ? new Uint8Array(64) : keyBytes),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, toBuffer(toBytes(data))));
+}
+
+/** The SHA-256 digest of `data` as lowercase hex, from WebCrypto. */
+export async function sha256HexAsync(data: Uint8Array | string): Promise<string> {
+  return toHex(await sha256BytesAsync(data));
+}
+
 /** Bytes as lowercase hex. */
 export function toHex(bytes: Uint8Array): string {
   let hex = "";
@@ -38,4 +76,11 @@ function toBytes(value: Uint8Array | string): Uint8Array {
     return new TextEncoder().encode(value);
   }
   return value;
+}
+
+/** A copy of `view`'s bytes in an `ArrayBuffer` of their own, which is
+ *  what WebCrypto takes: a view over a larger buffer, such as a Node
+ *  `Buffer` from the pool, or over a `SharedArrayBuffer`, is neither. */
+function toBuffer(view: Uint8Array): ArrayBuffer {
+  return new Uint8Array(view).buffer as ArrayBuffer;
 }

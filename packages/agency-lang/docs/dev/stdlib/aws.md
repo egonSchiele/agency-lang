@@ -9,7 +9,9 @@ docstrings in `stdlib/aws/s3.agency`.
 
 Every AWS request is an ordinary HTTPS request whose `Authorization` header is
 computed by AWS Signature Version 4 (SigV4). SigV4 needs only SHA-256 and
-HMAC-SHA-256, both in Node's built-in `crypto`. Produce the same header the SDK
+HMAC-SHA-256, which `lib/utils/hash.ts` takes from WebCrypto (`crypto.subtle`,
+on Node and in a browser alike), so `signRequest` and `presignRequest` are
+async. Produce the same header the SDK
 would and AWS cannot tell the difference. We implement **plain SigV4 only** — not
 SigV4a (the elliptic-curve, multi-region-access-point variant).
 

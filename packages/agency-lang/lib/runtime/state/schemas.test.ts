@@ -285,6 +285,7 @@ describe("moduleFingerprints round trip", () => {
     };
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
     expect(revived).not.toBeNull();
+    // `compiledAt` is a field older checkpoints carry; it rides along.
     expect(revived!.moduleFingerprints).toEqual({
       "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
     });

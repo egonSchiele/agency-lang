@@ -427,7 +427,6 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
       ts.call(ts.id("__registerModuleFingerprint"), [
         ts.str(opts.moduleFingerprint.moduleId),
         ts.str(opts.moduleFingerprint.hash),
-        ts.raw("import.meta.url"),
       ]),
     );
   }

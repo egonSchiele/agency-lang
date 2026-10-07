@@ -8,10 +8,6 @@ import { CheckpointCodeChangedError } from "./errors.js";
 
 afterEach(__resetModuleFingerprintRegistry);
 
-// Fake artifact URLs: compiledAt degrades to "unknown", which is all these
-// tests need — the check compares hashes.
-const UNKNOWN = "unknown";
-
 const frame = (moduleId: string | null, scopeName: string | null, branches?: any) => {
   const frameJson: any = { args: {}, locals: {}, threads: null, step: 0, moduleId, scopeName };
   if (branches) {
@@ -29,61 +25,60 @@ const stack = (frames: any[]) => ({
 
 describe("collectModuleFingerprints", () => {
   it("collects fingerprints for modules that have a frame and a registered entry", () => {
-    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
-    registerModuleFingerprint("b.agency", "bbb", "not-a-url");
+    registerModuleFingerprint("a.agency", "aaa");
+    registerModuleFingerprint("b.agency", "bbb");
     const out = collectModuleFingerprints(
       stack([frame("a.agency", "main"), frame("b.agency", "double")]) as any,
     );
     expect(out).toEqual({
-      "a.agency": { hash: "aaa", compiledAt: UNKNOWN },
-      "b.agency": { hash: "bbb", compiledAt: UNKNOWN },
+      "a.agency": { hash: "aaa" },
+      "b.agency": { hash: "bbb" },
     });
   });
 
   it("skips unnamed/bootstrap frames and modules with no registered entry", () => {
-    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
+    registerModuleFingerprint("a.agency", "aaa");
     const out = collectModuleFingerprints(
       stack([frame("a.agency", "main"), frame("", ""), frame(null, "runPrompt")]) as any,
     );
-    expect(out).toEqual({ "a.agency": { hash: "aaa", compiledAt: UNKNOWN } });
+    expect(out).toEqual({ "a.agency": { hash: "aaa" } });
   });
 
   it("recurses into fork/parallel branch stacks", () => {
-    registerModuleFingerprint("a.agency", "aaa", "not-a-url");
-    registerModuleFingerprint("w.agency", "ccc", "not-a-url");
+    registerModuleFingerprint("a.agency", "aaa");
+    registerModuleFingerprint("w.agency", "ccc");
     const branchy = frame("a.agency", "main", {
       fork_1_0: { stack: stack([frame("w.agency", "worker")]) },
     });
     const out = collectModuleFingerprints(stack([branchy]) as any);
     expect(out).toEqual({
-      "a.agency": { hash: "aaa", compiledAt: UNKNOWN },
-      "w.agency": { hash: "ccc", compiledAt: UNKNOWN },
+      "a.agency": { hash: "aaa" },
+      "w.agency": { hash: "ccc" },
     });
   });
 });
 
 describe("assertCodeUnchanged", () => {
-  it("throws when a referenced module changed or is missing, naming both code versions", () => {
-    registerModuleFingerprint("a.agency", "NEW", "not-a-url");
-    expect(() =>
-      assertCodeUnchanged({ "a.agency": { hash: "OLD", compiledAt: "2026-08-30T00:00:00.000Z" } }),
-    ).toThrow(CheckpointCodeChangedError);
+  it("throws when a referenced module changed or is missing, naming both fingerprints", () => {
+    registerModuleFingerprint("a.agency", "NEW");
+    expect(() => assertCodeUnchanged({ "a.agency": { hash: "OLD" } })).toThrow(
+      CheckpointCodeChangedError,
+    );
     try {
-      assertCodeUnchanged({ "a.agency": { hash: "OLD", compiledAt: "2026-08-30T00:00:00.000Z" } });
+      assertCodeUnchanged({ "a.agency": { hash: "OLD" } });
     } catch (err) {
       expect((err as Error).message).toContain("a.agency");
-      expect((err as Error).message).toContain("2026-08-30T00:00:00.000Z");
+      expect((err as Error).message).toContain("fingerprint OLD");
+      expect((err as Error).message).toContain("fingerprint NEW");
     }
-    expect(() =>
-      assertCodeUnchanged({ "gone.agency": { hash: "OLD", compiledAt: UNKNOWN } }),
-    ).toThrow(CheckpointCodeChangedError);
+    expect(() => assertCodeUnchanged({ "gone.agency": { hash: "OLD" } })).toThrow(
+      CheckpointCodeChangedError,
+    );
   });
 
   it("passes when all match, and on an undefined field", () => {
-    registerModuleFingerprint("a.agency", "SAME", "not-a-url");
-    expect(() =>
-      assertCodeUnchanged({ "a.agency": { hash: "SAME", compiledAt: UNKNOWN } }),
-    ).not.toThrow();
+    registerModuleFingerprint("a.agency", "SAME");
+    expect(() => assertCodeUnchanged({ "a.agency": { hash: "SAME" } })).not.toThrow();
     expect(() => assertCodeUnchanged(undefined)).not.toThrow();
   });
 });

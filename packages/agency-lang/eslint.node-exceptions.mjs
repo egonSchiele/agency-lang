@@ -74,7 +74,6 @@ export const WAITING = [
   "lib/runtime/exitProcess.ts",
   "lib/runtime/memory/frame.ts",
   "lib/runtime/memory/store.ts",
-  "lib/runtime/moduleFingerprintRegistry.ts",
   "lib/runtime/replyAttachments.ts",
   "lib/runtime/state/context.ts",
   "lib/runtime/policyDirs.ts",

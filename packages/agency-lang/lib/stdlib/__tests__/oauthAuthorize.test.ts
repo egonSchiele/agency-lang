@@ -8,12 +8,23 @@ import http from "http";
 // We let http remain real so the callback server actually starts.
 let capturedAuthUrl: string | null = null;
 
-vi.mock("child_process", () => ({
-  execFile: vi.fn((_cmd: unknown, args: unknown, cb: unknown) => {
-    const argList = args as string[];
-    if (argList?.[0]) capturedAuthUrl = argList[0];
-    if (typeof cb === "function") (cb as Function)(null, "", "");
-  }),
+// The browser opener runs `open <url>` through the host; capture the URL.
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: {
+    run: vi.fn(async (command: { kind: string; args?: string[] }) => {
+      if (command.args?.[0]) capturedAuthUrl = command.args[0];
+      return {
+        exitCode: 0,
+        signal: null,
+        stdout: "",
+        stderr: "",
+        truncated: null,
+        timedOut: false,
+        aborted: false,
+      };
+    }),
+    start: vi.fn(),
+  },
 }));
 
 // Skip encryption — no system keyring on CI
@@ -28,11 +39,13 @@ import { runInTestContext } from "../../runtime/asyncContext.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
+import { nodeHost } from "../../host/nodeHost.js";
+import { PLATFORM_CAPABILITIES, type Host } from "../../host/host.js";
 
 // Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()
 // finds a frame. These tests don't exercise checkpoint or guard
 // state, so a minimal context suffices.
-function withCtx<T>(fn: () => Promise<T>): Promise<T> {
+function withCtx<T>(fn: () => Promise<T>, host?: Host): Promise<T> {
   const ctx = new RuntimeContext({
     statelogConfig: {
       host: "https://example.com",
@@ -42,6 +55,7 @@ function withCtx<T>(fn: () => Promise<T>): Promise<T> {
     },
     smoltalkDefaults: {},
     dirname: "/tmp",
+    host,
   });
   return runInTestContext(ctx, new StateStack(), new ThreadStore(), fn);
 }
@@ -144,6 +158,44 @@ describe("_authorize", () => {
     // Tokens should be stored and retrievable
     expect(await _isAuthorized("test-provider")).toBe(true);
     expect(await withCtx(() => _getAccessToken("test-provider"))).toBe("mock-access-token");
+  });
+
+  it("goes on without a browser when the host refuses to run one", async () => {
+    // A host without the subprocess capability refuses `run` as soon as it
+    // is called. The printed URL is the user's way in, so the flow must
+    // keep listening for the callback.
+    const noSubprocess = nodeHost({
+      capabilities: PLATFORM_CAPABILITIES.node.filter((c) => c !== "subprocess"),
+    });
+    const port = TEST_PORT + 1;
+    const outcome = withCtx(
+      () =>
+        _authorize("no-browser", {
+          authUrl: "https://localhost/auth",
+          tokenUrl: "https://localhost/token",
+          clientId: "id",
+          clientSecret: "secret",
+          scopes: "read",
+          port,
+        }),
+      noSubprocess,
+    ).then(
+      () => "completed",
+      (error: Error) => error.message,
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    expect(capturedAuthUrl).toBeNull();
+
+    // The callback server is up: a callback with the wrong state reaches it
+    // and fails the state check, not a missing server.
+    await new Promise<void>((resolve, reject) => {
+      const req = http.get(`http://127.0.0.1:${port}/oauth/callback?code=c&state=wrong`, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on("error", reject);
+    });
+    expect(await outcome).toContain("state mismatch");
   });
 
   it("rejects non-HTTPS token URL (except localhost)", async () => {

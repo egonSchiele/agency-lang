@@ -208,6 +208,67 @@ export type HostRandom = {
   bytes(length: number): Uint8Array;
 };
 
+/** What a host runs: a program with its arguments, or a script for the
+ *  platform's shell. */
+export type Command =
+  { kind: "program"; program: string; args: string[] } | { kind: "shell"; script: string };
+
+export type RunOptions = {
+  /** The working directory; the host's own when left out. */
+  cwd?: string;
+  /** The child's whole environment; the host's own when left out. */
+  env?: Record<string, string>;
+  /** Sent to standard input, which is then closed. Without it standard
+   *  input is closed at once. */
+  input?: string | Uint8Array;
+  /** The child is killed when it has run this long. 0 or absent: no limit. */
+  timeoutMs?: number;
+  /** The child is killed when this fires. */
+  signal?: AbortSignal;
+  /** Each of standard output and standard error is kept up to this many
+   *  bytes; past it the child is killed and `truncated` names the stream.
+   *  0 or absent: no limit. */
+  maxOutputBytes?: number;
+  /** Whether standard output and standard error are collected. A child
+   *  that writes for minutes, such as a speech player, is not collected. */
+  collect?: { stdout: boolean; stderr: boolean };
+  /** The signal a kill sends. SIGTERM when left out. */
+  killSignal?: "SIGTERM" | "SIGKILL";
+};
+
+/** How a child ended. The caller decides what each case means. */
+export type RunResult = {
+  /** The exit code, or null when a signal ended the child. */
+  exitCode: number | null;
+  /** The signal that ended the child, or null. */
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  /** The stream that reached `maxOutputBytes`, for which the child was
+   *  killed, or null. */
+  truncated: "stdout" | "stderr" | null;
+  /** The child was killed because `timeoutMs` passed. */
+  timedOut: boolean;
+  /** The child was killed because `signal` fired. */
+  aborted: boolean;
+};
+
+/** A child that was started and is still running. */
+export type RunningProcess = {
+  kill(signal?: "SIGTERM" | "SIGKILL"): void;
+  /** Resolves when the child ends. */
+  wait(): Promise<RunResult>;
+};
+
+/** Subprocesses. `run` starts a child and waits for it. A program that
+ *  cannot be started rejects with the platform's error (`ENOENT` on
+ *  Node), not a result. `start` hands back the running child, for a
+ *  caller that stops it on an event of its own, such as a keypress. */
+export type HostSubprocess = {
+  run(command: Command, options?: RunOptions): Promise<RunResult>;
+  start(command: Command, options?: RunOptions): Promise<RunningProcess>;
+};
+
 /** The network, as the platform's own `fetch`: the same arguments and the
  *  same `Response`. A host can refuse it, limit it to a list of sites, or
  *  answer from scripted responses, the way the test runner's fetch mocks
@@ -216,12 +277,13 @@ export type HostNetwork = {
   fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
 };
 
-/** The parts a host is built from. `files`, `network`, `env`, and
- *  `terminal` are capabilities, so a host may leave them out; `makeHost`
+/** The parts a host is built from. `files`, `network`, `subprocess`,
+ *  `env`, and `terminal` are capabilities, so a host may leave them out; `makeHost`
  *  then supplies parts that refuse. The other parts are required. */
 export type HostParts = {
   files?: HostFiles;
   network?: HostNetwork;
+  subprocess?: HostSubprocess;
   env?: HostEnv;
   terminal?: HostTerminal;
   system: HostSystem;
@@ -237,6 +299,7 @@ export type Host = {
   capabilities: Capability[];
   files: HostFiles;
   network: HostNetwork;
+  subprocess: HostSubprocess;
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -252,6 +315,7 @@ export type Host = {
 export const PART_CAPABILITY = {
   files: "fileRead",
   network: "network",
+  subprocess: "subprocess",
   env: "env",
   terminal: "terminal",
 } as const satisfies Record<string, Capability>;
@@ -349,6 +413,7 @@ export function makeHost(args: MakeHostArgs): Host {
     capabilities: [...capabilities],
     files: built.files as HostFiles,
     network: built.network as HostNetwork,
+    subprocess: built.subprocess as HostSubprocess,
     env: built.env as HostEnv,
     terminal: built.terminal as HostTerminal,
     system: parts.system,

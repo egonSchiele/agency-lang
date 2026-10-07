@@ -385,10 +385,20 @@ export type Command =
   | { kind: "shell"; script: string };
 
 export type HostSubprocess = {
-  run(command: Command, options: RunOptions): Promise<RunResult>;
-  start(command: Command, options: RunOptions): Promise<RunningProcess>;
+  run(command: Command, options?: RunOptions): Promise<RunResult>;
+  start(command: Command, options?: RunOptions): Promise<RunningProcess>;
 };
 ```
+
+`RunOptions` holds the working directory, the whole environment, text or
+bytes for standard input, a time limit, an abort signal, a cap on standard
+output, which streams to collect, and the signal a kill sends.
+`RunResult` reports the raw facts: the exit code or the ending signal,
+both streams, and whether the child was killed for the cap, the time
+limit, or the abort signal; what each ending means is the caller's
+decision, made in `lib/stdlib/abortable.ts`. `RunningProcess` has `kill`
+and `wait`. A program that cannot be started rejects with the platform's
+error.
 
 The code calls Node's subprocess functions at 29 call sites in four
 styles. They come down to three needs, and the host covers two.

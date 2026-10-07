@@ -104,7 +104,7 @@ export async function sendAwsRequest(
 
   const { ctx, stack } = run;
   const signal = ctx.getAbortSignal(stack);
-  const headers = signRequest({
+  const headers = await signRequest({
     method: request.method,
     wireUrl,
     canonicalUri: request.target.canonicalUri,

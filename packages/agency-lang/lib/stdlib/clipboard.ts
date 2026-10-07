@@ -1,24 +1,28 @@
-import { spawn, execFile } from "child_process";
-import { promisify } from "util";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { program, runProgram } from "./abortable.js";
 import { detectPlatform } from "./utils.js";
 
-const execFileAsync = promisify(execFile);
-
-function spawnWithInput(command: string, args: string[], input: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
-    child.stdin!.end(input);
-    child.on("close", () => resolve());
-    child.on("error", reject);
+/** Hand `input` to the program and wait for it, whatever its exit code. */
+async function runWithInput(
+  host: Host,
+  name: string,
+  args: string[],
+  input: string,
+): Promise<void> {
+  await host.subprocess.run(program(name, args), {
+    input,
+    collect: { stdout: false, stderr: false },
   });
 }
 
 export async function _copy(text: string): Promise<void> {
+  const host = currentHost();
   const platform = await detectPlatform();
   if (platform === "macos") {
-    await spawnWithInput("pbcopy", [], text);
+    await runWithInput(host, "pbcopy", [], text);
   } else if (platform === "linux") {
-    await spawnWithInput("xclip", ["-selection", "clipboard"], text);
+    await runWithInput(host, "xclip", ["-selection", "clipboard"], text);
   } else {
     console.error(
       `copy is not supported on platform: ${platform}. ` + `Supported platforms: macOS, Linux.`,
@@ -27,12 +31,13 @@ export async function _copy(text: string): Promise<void> {
 }
 
 export async function _paste(): Promise<string> {
+  const host = currentHost();
   const platform = await detectPlatform();
   if (platform === "macos") {
-    const { stdout } = await execFileAsync("pbpaste");
+    const { stdout } = await runProgram(host, "pbpaste", []);
     return stdout;
   } else if (platform === "linux") {
-    const { stdout } = await execFileAsync("xclip", ["-selection", "clipboard", "-o"]);
+    const { stdout } = await runProgram(host, "xclip", ["-selection", "clipboard", "-o"]);
     return stdout;
   } else {
     console.error(

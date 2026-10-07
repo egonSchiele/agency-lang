@@ -1,18 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("child_process", () => ({
-  execFile: vi.fn(
-    (
-      _cmd: string,
-      _args: string[],
-      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-    ) => {
-      cb(null, { stdout: "", stderr: "" });
-    },
-  ),
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 
-import { execFile } from "child_process";
+import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { nodeHost } from "../../host/nodeHost.js";
+import { exited, failed, programRun } from "./fakeSubprocess.js";
 import {
   runNotesScript,
   withTimeout,
@@ -31,22 +25,17 @@ import {
 
 type MockFn = ReturnType<typeof vi.fn>;
 
-/** Make the mocked execFile fail with the given stderr, as osascript does. */
+const run = nodeSubprocess.run as unknown as MockFn;
+const host = nodeHost();
+
+/** Make the mocked osascript fail with the given stderr, as osascript does. */
 function mockFailure(stderr: string): void {
-  (execFile as unknown as MockFn).mockImplementationOnce(
-    (_c: string, _a: string[], cb: (e: unknown) => void) => {
-      cb({ stderr, code: 1 });
-    },
-  );
+  run.mockImplementationOnce(async () => failed(stderr));
 }
 
-/** Make the mocked execFile succeed with the given stdout. */
+/** Make the mocked osascript succeed with the given stdout. */
 function mockStdout(stdout: string): void {
-  (execFile as unknown as MockFn).mockImplementationOnce(
-    (_c: string, _a: string[], cb: (e: null, r: { stdout: string; stderr: string }) => void) => {
-      cb(null, { stdout, stderr: "" });
-    },
-  );
+  run.mockImplementationOnce(async () => exited(stdout));
 }
 
 // Every describe below needs the same two things: fresh mocks and a darwin
@@ -66,16 +55,16 @@ afterEach(() => {
 describe("runNotesScript", () => {
   it("rejects immediately on a non-darwin platform", async () => {
     Object.defineProperty(process, "platform", { value: "linux", writable: true });
-    await expect(runNotesScript("script", [])).rejects.toThrow(
+    await expect(runNotesScript(host, "script", [])).rejects.toThrow(
       "Apple Notes is only available on macOS",
     );
-    expect(execFile).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("passes args straight through to argv with NO '-' separator", async () => {
     mockStdout("ok");
-    await runNotesScript("SCRIPT", ["alpha", "beta"]);
-    const [cmd, args] = (execFile as unknown as MockFn).mock.calls[0];
+    await runNotesScript(host, "SCRIPT", ["alpha", "beta"]);
+    const { program: cmd, args } = programRun(run);
     expect(cmd).toBe("osascript");
     // The `-` is NOT a separator: osascript passes it through as argv item 1
     // and shifts every real argument. Spec section 3.6.
@@ -85,8 +74,8 @@ describe("runNotesScript", () => {
   it("keeps a hostile title inert in argv rather than in the script", async () => {
     mockStdout("ok");
     const hostile = '"; do shell script "rm -rf ~"; "';
-    await runNotesScript("SCRIPT", [hostile]);
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    await runNotesScript(host, "SCRIPT", [hostile]);
+    const { args } = programRun(run, 0);
     expect(args[1]).toBe("SCRIPT");
     expect(args[2]).toBe(hostile);
     expect(args[1]).not.toContain("do shell script");
@@ -99,25 +88,25 @@ describe("runNotesScript", () => {
     // with nothing queued would RESOLVE and the assertion would fail.
     mockFailure("execution error: Not authorized to send Apple events to Notes. (-1743)");
     mockFailure("execution error: Not authorized to send Apple events to Notes. (-1743)");
-    await expect(runNotesScript("s", [])).rejects.toThrow(/Not authorized to control Notes/);
-    await expect(runNotesScript("s", [])).rejects.toThrow(/Privacy & Security/);
+    await expect(runNotesScript(host, "s", [])).rejects.toThrow(/Not authorized to control Notes/);
+    await expect(runNotesScript(host, "s", [])).rejects.toThrow(/Privacy & Security/);
   });
 
   it("maps -1712 to a hedged timeout error", async () => {
     mockFailure("execution error: Notes got an error: AppleEvent timed out. (-1712)");
     // -1712 cannot distinguish "consent dialog unanswered" from "Notes wedged",
     // so the message must hedge. Spec section 2.8.
-    await expect(runNotesScript("s", [])).rejects.toThrow(/usually means/);
+    await expect(runNotesScript(host, "s", [])).rejects.toThrow(/usually means/);
   });
 
   it("surfaces an unrecognised stderr rather than swallowing it", async () => {
     mockFailure("execution error: something else entirely (-9999)");
-    await expect(runNotesScript("s", [])).rejects.toThrow(/something else entirely/);
+    await expect(runNotesScript(host, "s", [])).rejects.toThrow(/something else entirely/);
   });
 
   it("trims only trailing whitespace, because leading whitespace is meaningful in plaintext", async () => {
     mockStdout("  value  \n");
-    await expect(runNotesScript("s", [])).resolves.toBe("  value");
+    await expect(runNotesScript(host, "s", [])).resolves.toBe("  value");
   });
 });
 
@@ -142,7 +131,7 @@ describe("_preflightNote", () => {
   it("never chains a property read through container", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     const script = args[1];
     // `name of container of n` errors -1728 on EVERY note, locked or not.
     // Spec section 9.2. This test exists so a "tidying" refactor cannot
@@ -154,7 +143,7 @@ describe("_preflightNote", () => {
   it("walks up to the account rather than assuming one hop", async () => {
     mockStdout(["Q3", "2017", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     const script = args[1];
     // A folder's container is its PARENT FOLDER when nested, not the account.
     // Measured: `container of folder "2017"` is "Archived", not "iCloud". One
@@ -167,7 +156,7 @@ describe("_preflightNote", () => {
   it("fails closed if the account walk does not reach an account", async () => {
     mockStdout(["Q3", "2017", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     // The walk is bounded. If it never lands on an account, error rather than
     // returning a folder name as the account.
     expect(args[1]).toContain("Could not resolve the account");
@@ -176,7 +165,7 @@ describe("_preflightNote", () => {
   it("reads only title, folder, account and the locked flag — never the body", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     const script = args[1];
     // This query is not interrupt-gated, so it must never touch content.
     expect(script).not.toContain("body of");
@@ -186,7 +175,7 @@ describe("_preflightNote", () => {
   it("passes the id as argv, not in the script", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[2]).toBe("x-coredata://note/1");
     expect(args[1]).not.toContain("x-coredata://note/1");
   });
@@ -253,7 +242,7 @@ describe("_readNote", () => {
     mockStdout(["plain body text", "2026-07-17"].join(FIELD_DELIM)); // read
     const n = await _readNote("x-coredata://note/1");
     expect(n.body).toBe("plain body text");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     // body is HTML and would waste tokens and read badly. Spec section 2.4.
     expect(args[1]).toContain("plaintext of");
     expect(args[1]).not.toContain("body of");
@@ -263,7 +252,7 @@ describe("_readNote", () => {
     mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
     await expect(_readNote("x-coredata://note/1")).rejects.toThrow(/locked/i);
     // Only the preflight ran. No content read was attempted.
-    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   it("fails closed when the folder assertion does not match", async () => {
@@ -288,7 +277,7 @@ describe("_readNote", () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["body", "2026-07-17"].join(FIELD_DELIM));
     await _readNote("x-coredata://note/1", "Work");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     // Same treatment as the write path (spec section 6.4): a note that moved
     // folders during the approval fails to resolve instead of being read.
     expect(args[1]).toContain("of folder (item 2 of argv)");
@@ -303,14 +292,14 @@ describe("_listNotes", () => {
     const notes = await _listNotes();
     expect(notes).toHaveLength(1);
     expect(notes[0].title).toBe("One");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[1]).not.toContain("of folder");
   });
 
   it("scopes to the folder when one is given, passed as argv", async () => {
     mockStdout("");
     await _listNotes("Work");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[1]).toContain("notes of folder (item 1 of argv)");
     expect(args[2]).toBe("Work");
   });
@@ -325,7 +314,7 @@ describe("_searchNotes", () => {
   it("searches plaintext, never body", async () => {
     mockStdout("");
     await _searchNotes("budget");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     // body is HTML: searching it matches markup, so `div` would match every
     // note the user owns. Spec section 9.3.
     expect(args[1]).toContain("plaintext contains");
@@ -335,7 +324,7 @@ describe("_searchNotes", () => {
   it("passes the query as argv, not in the script", async () => {
     mockStdout("");
     await _searchNotes('"; do shell script "x"; "');
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[1]).not.toContain("do shell script");
     expect(args[2]).toBe('"; do shell script "x"; "');
   });
@@ -380,7 +369,7 @@ describe("_listFolders", () => {
   it("asks Notes for top-level folders only", async () => {
     mockStdout("");
     await _listFolders();
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     // A bare `repeat with f in folders` flattens the hierarchy: it returns
     // "Archived" and its children "2010s"/"2017"/"2019" side by side with
     // nothing marking the difference, so "2017" reads as a peer of "Recently
@@ -404,7 +393,7 @@ describe("_folderExists", () => {
   it("passes the folder as argv and parses a true reply", async () => {
     mockStdout("true");
     await expect(_folderExists("Agency Notes")).resolves.toBe(true);
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[1]).toContain("exists folder (item 1 of argv)");
     expect(args[2]).toBe("Agency Notes");
   });
@@ -419,7 +408,7 @@ describe("_createNote", () => {
   it("passes title, html and folder as argv, never in the script", async () => {
     mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _createNote('"; do shell script "x"; "', "<p>b</p>", "Agency Notes");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     expect(args[1]).not.toContain("do shell script");
     expect(args[2]).toBe('"; do shell script "x"; "');
     expect(args[3]).toBe("<p>b</p>");
@@ -429,7 +418,7 @@ describe("_createNote", () => {
   it("creates the folder if it is missing", async () => {
     mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _createNote("T", "<p>b</p>", "Agency Notes");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const { args } = programRun(run, 0);
     // "Agency Notes" will not exist on a fresh machine. Spec section 9.4.
     expect(args[1]).toContain("make new folder");
   });
@@ -449,14 +438,14 @@ describe("_appendToNote", () => {
   it("refuses a locked note and never issues a write", async () => {
     mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
     await expect(_appendToNote("x-coredata://note/1", "<p>x</p>")).rejects.toThrow(/locked/i);
-    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   it("re-checks the locked flag inside the write script", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _appendToNote("x-coredata://note/1", "<p>x</p>");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     // The pre-flight check is separated from the write by a human approval,
     // so it is check-then-act. The write script re-checks. Spec section 6.4.
     expect(args[1]).toContain("password protected");
@@ -466,7 +455,7 @@ describe("_appendToNote", () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _appendToNote("x-coredata://note/1", "<p>x</p>", "Work");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     // The scoped lookup IS the assertion: it fails if the note is not in the
     // folder, so the check cannot drift from the access. Spec section 6.4.
     expect(args[1]).toContain("of folder (item 3 of argv)");
@@ -476,7 +465,7 @@ describe("_appendToNote", () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _appendToNote("x-coredata://note/1", "<p>x</p>");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     expect(args[1]).not.toContain("of folder (item 3 of argv)");
   });
 
@@ -484,7 +473,7 @@ describe("_appendToNote", () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _appendToNote("x-coredata://note/1", "<p>x</p>");
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     expect(args[1]).toContain("(body of n) &");
   });
 });
@@ -493,14 +482,14 @@ describe("_deleteNote", () => {
   it("refuses a locked note", async () => {
     mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
     await expect(_deleteNote("x-coredata://note/1")).rejects.toThrow(/locked/i);
-    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   it("deletes an unlocked note", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout("");
     await expect(_deleteNote("x-coredata://note/1")).resolves.toBeNull();
-    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    const { args } = programRun(run, 1);
     expect(args[1]).toContain("delete n");
   });
 });

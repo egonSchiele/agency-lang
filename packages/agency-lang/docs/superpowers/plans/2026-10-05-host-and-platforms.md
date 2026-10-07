@@ -19,7 +19,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PR B, PR C, and PR C2 are merged. PR D is open as #1182.
+PRs B, C, C2, D, D2, and D4 are merged. PR D3 is open as #1184 and PR D5 as #1186.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -27,9 +27,10 @@ PR B, PR C, and PR C2 are merged. PR D is open as #1182.
 | B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | merged, #1179 |
 | C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | merged, #1180 |
 | C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | merged, #1181 |
-| D | Network, `Buffer` | 9, 12 | open, #1182 |
-| D2 | Subprocesses | 8 | next |
-| D3 | Portable paths | 10 | |
+| D | Network, `Buffer` | 9, 12 | merged, #1182 |
+| D2 | Subprocesses | 8 | merged, #1183 |
+| D3 | Portable paths | 10 | open, #1184 |
+| D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
 | D5 | The checkpoint checksum | 13 (Task 30) | open, #1186 |
 | E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
 
@@ -168,6 +169,37 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR D2 learned
+
+1. **Task 23's count: 29 call sites in two shapes.** Run-and-wait:
+   `abortableSpawn` (shell, git), `abortableExec` (say, screenshot,
+   open), `execFileAsync` (keyring 8, clipboard 2, notify 2, imessage,
+   appleNotes, ocr with `maxBuffer`, gh with a timeout), keyring's
+   `spawn` with input, imageTools (an env override, a timeout, JSON on
+   stdout), ffmpeg (bytes on stdin, SIGKILL at the deadline), oauth's
+   fire-and-forget `open`. Start-and-keep: `rec` alone, killed from a
+   keypress. The sync `spawnSync` ffmpeg probe is neither.
+2. **`RunResult` reports facts, the caller decides.** The exit code or
+   signal, both streams, and three flags (`truncated`, `timedOut`,
+   `aborted`). `abortable.ts` keeps every mapping the callers had: the
+   byte cap resolves with exit 0 and a note, the time limit with exit 1
+   and a note, an abort rejects with `AgencyCancelledError`. Node's
+   `run` is the old `abortableSpawn` body moved to
+   `lib/host/nodeSubprocess.ts`.
+3. **`runProgram` is `execFile`'s contract** (reject on a non-zero exit
+   with the output on the error) for the helpers that called it, so
+   their `catch` blocks did not change.
+4. **The ffmpeg probe stays synchronous.** `_validateSpeakLocalArgs`
+   runs before the interrupt and is synchronous, with twelve tests of
+   its own; the host runs nothing synchronously. Task 24 step 3 is not
+   done.
+5. **Six test files mocked `child_process`.** They mock
+   `lib/host/nodeSubprocess.ts` now, with `fakeSubprocess.ts` for the
+   scripted answers; the old `[cmd, args]` reads became `programRun`.
+6. **A child's environment is `Record<string, string>`.** `scrubEnv`
+   drops unset entries, and imageTools copies `process.env` the same
+   way; `process.env` itself allows `undefined`.
 
 ### What PR D learned
 
@@ -871,13 +903,16 @@ One PR each, in this order.
 
 ### Task 28: hashing
 
-Done in #1177, with one change still to make: `sha256.portable.ts` is
-hand-written SHA-256, and the browser has WebCrypto. Add async
-`sha256BytesAsync` and `hmacSha256Async` to `lib/utils/hash.ts`, over
-`crypto.subtle` on both platforms, and move the S3 request signer and the
-OAuth PKCE challenge to them; both callers are async already. The
-hand-written version then serves only the synchronous checkpoint
-checksum (Task 30), and it stays tested against Node's output. Done in
+Done in #1177, and the one change left after it in PR D4:
+`sha256.portable.ts` is hand-written SHA-256, and the browser has
+WebCrypto. D4 adds async `sha256BytesAsync`, `sha256HexAsync`, and
+`hmacSha256Async` to `lib/utils/hash.ts`, over `crypto.subtle` on both
+platforms, and moves the S3 request signer and the OAuth PKCE challenge
+to them; both callers were async already, and `signRequest` and
+`presignRequest` became async with them. The hand-written version serves
+the callers that cannot await, `sha256Text` in the compiler and the
+checkpoint checksum (Task 30), and it stays tested against Node's
+output. Done in
 #1177: Node keeps its own crypto through a `#sha256` entry in the
 `imports` field of `package.json`, with an ambient declaration in
 `lib/utils/packageImports.d.ts` and an alias in `vitest.aliases.ts`. PR B

@@ -12,8 +12,8 @@ const base = {
 };
 
 describe("signRequest", () => {
-  it("reproduces AWS's published S3 GET test-vector signature", () => {
-    const headers = signRequest({
+  it("reproduces AWS's published S3 GET test-vector signature", async () => {
+    const headers = await signRequest({
       ...base,
       method: "GET",
       wireUrl: "https://examplebucket.s3.amazonaws.com/test.txt",
@@ -25,10 +25,10 @@ describe("signRequest", () => {
     );
   });
 
-  it("hashes raw binary bytes for the content hash", () => {
+  it("hashes raw binary bytes for the content hash", async () => {
     const bytes = new Uint8Array([0, 1, 2, 253, 254, 255]);
     const expected = createHash("sha256").update(bytes).digest("hex");
-    const headers = signRequest({
+    const headers = await signRequest({
       ...base,
       method: "PUT",
       wireUrl: "https://b.s3.us-east-1.amazonaws.com/k",
@@ -38,8 +38,8 @@ describe("signRequest", () => {
     expect(headers["x-amz-content-sha256"]).toBe(expected);
   });
 
-  it("signs the session token header when present", () => {
-    const headers = signRequest({
+  it("signs the session token header when present", async () => {
+    const headers = await signRequest({
       ...base,
       method: "GET",
       wireUrl: "https://b.s3.us-east-1.amazonaws.com/k",
@@ -52,8 +52,8 @@ describe("signRequest", () => {
 });
 
 describe("presignRequest", () => {
-  it("reproduces AWS's published presigned-GET test-vector URL exactly", () => {
-    const url = presignRequest({
+  it("reproduces AWS's published presigned-GET test-vector URL exactly", async () => {
+    const url = await presignRequest({
       ...base,
       method: "GET",
       target: createAwsRequestTarget("https://examplebucket.s3.amazonaws.com", "/test.txt"),
@@ -70,8 +70,8 @@ describe("presignRequest", () => {
     );
   });
 
-  it("signs the session token in the query, sorted before X-Amz-SignedHeaders", () => {
-    const url = presignRequest({
+  it("signs the session token in the query, sorted before X-Amz-SignedHeaders", async () => {
+    const url = await presignRequest({
       ...base,
       method: "GET",
       target: createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k"),
@@ -81,9 +81,9 @@ describe("presignRequest", () => {
     expect(url).toContain("&X-Amz-Security-Token=TOKEN&X-Amz-SignedHeaders=host&X-Amz-Signature=");
   });
 
-  it("rounds a sub-second millisecond remainder UP to whole seconds", () => {
+  it("rounds a sub-second millisecond remainder UP to whole seconds", async () => {
     // X-Amz-Expires must be an integer; 1500ms must sign as 2s, never 1.5 or 1.
-    const url = presignRequest({
+    const url = await presignRequest({
       ...base,
       method: "GET",
       target: createAwsRequestTarget("https://b.s3.us-east-1.amazonaws.com", "/k"),
@@ -95,8 +95,8 @@ describe("presignRequest", () => {
   // The AWS vector's key is the trivial `test.txt`; this case pins the
   // one-encoding contract — the emitted path and query are byte-for-byte the
   // strings that were signed, with no second encoding or normalization.
-  it("emits hostile key and token characters exactly as signed", () => {
-    const url = presignRequest({
+  it("emits hostile key and token characters exactly as signed", async () => {
+    const url = await presignRequest({
       ...base,
       method: "GET",
       // key "a b/%雪//c", encoded once by the endpoint builder's convention

@@ -9,6 +9,7 @@ import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
+import { requireCapabilities } from "../host/host.js";
 import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
@@ -1535,6 +1536,7 @@ export async function _runFor(
   maxDepth: number = DEFAULT_MAX_SUBPROCESS_DEPTH,
 ): Promise<any> {
   const { ctx, stack: stateStack } = store;
+  requireCapabilities(ctx.host, ["subprocess"], "run");
 
   // Nested subprocesses are allowed: every run() is gated by a std::run
   // interrupt flowing through the distributed handler chain, and this depth

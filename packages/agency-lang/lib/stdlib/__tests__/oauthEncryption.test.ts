@@ -1,6 +1,31 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import crypto from "crypto";
-import { encrypt, decrypt } from "../oauthEncryption.js";
+import { encrypt, decrypt, getEncryptionKey } from "../oauthEncryption.js";
+import { memoryHost } from "../../host/memoryHost.js";
+
+describe("getEncryptionKey", () => {
+  const originalKey = process.env.AGENCY_OAUTH_KEY;
+  afterEach(() => {
+    if (originalKey === undefined) {
+      delete process.env.AGENCY_OAUTH_KEY;
+    } else {
+      process.env.AGENCY_OAUTH_KEY = originalKey;
+    }
+  });
+
+  it("hashes AGENCY_OAUTH_KEY without touching the host", async () => {
+    process.env.AGENCY_OAUTH_KEY = "pass";
+    const key = await getEncryptionKey(memoryHost({ capabilities: [] }));
+    expect(key).toEqual(crypto.createHash("sha256").update("pass").digest());
+  });
+
+  it("reads the keyring through the given host, so a host without subprocesses has no key", async () => {
+    delete process.env.AGENCY_OAUTH_KEY;
+    // The memory host runs no programs, so the keyring is unavailable
+    // there whatever this machine has. Nothing reaches the real keyring.
+    expect(await getEncryptionKey(memoryHost())).toBeNull();
+  });
+});
 
 describe("encrypt/decrypt", () => {
   const key = crypto.randomBytes(32);

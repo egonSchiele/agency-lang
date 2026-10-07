@@ -1,24 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { _sendIMessage } from "../imessage.js";
 
-vi.mock("child_process", () => ({
-  execFile: vi.fn(
-    (
-      _cmd: string,
-      _args: string[],
-      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-    ) => {
-      cb(null, { stdout: "", stderr: "" });
-    },
-  ),
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 
-import { execFile } from "child_process";
+import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { exited, failed, programRun } from "./fakeSubprocess.js";
+
+const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;
 
 /** The args array osascript was called with on the first (only) invocation. */
 function osascriptArgs(): string[] {
-  const calls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls;
-  return calls[0][1];
+  return programRun(run).args;
 }
 
 describe("_sendIMessage", () => {
@@ -39,11 +33,10 @@ describe("_sendIMessage", () => {
     expect(result).toEqual({ sent: true });
     // Shape: ["-e", <script>, <recipient>, <message>]. No "-" separator:
     // osascript passes a bare "-" through as argv item 1 and shifts the rest.
-    expect(execFile).toHaveBeenCalledWith(
-      "osascript",
-      ["-e", expect.any(String), "+15551234567", "Hello!"],
-      expect.any(Function),
-    );
+    expect(programRun(run)).toEqual({
+      program: "osascript",
+      args: ["-e", expect.any(String), "+15551234567", "Hello!"],
+    });
   });
 
   it("keeps the script constant — no caller data is spliced into it", async () => {
@@ -105,11 +98,7 @@ describe("_sendIMessage", () => {
   });
 
   it("throws with stderr info when osascript fails, without leaking the message", async () => {
-    (execFile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      (_cmd: string, _args: string[], cb: (err: unknown) => void) => {
-        cb({ stderr: "execution error: Messages got an error", code: 1 });
-      },
-    );
+    run.mockImplementation(async () => failed("execution error: Messages got an error"));
 
     const err = await _sendIMessage("+15551234567", "Hi").catch((e) => e);
     expect(err.message).toContain("Failed to send iMessage:");

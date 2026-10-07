@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AGENCY_ENTRY_NODE, AGENCY_RESUME_FILE, AGENCY_RESUME_OVERRIDES } from "../constants.js";
 import { runCliEntry } from "./cliEntry.js";
 import { signCheckpoint } from "./checkpointChecksum.js";
+import { defaultHost } from "#default-host";
 import { makeCheckpoint } from "./checkpointTestHelpers.js";
 
 const originalResumeFile = process.env[AGENCY_RESUME_FILE];
@@ -114,7 +115,7 @@ describe("runCliEntry", () => {
   it("accepts a checkpoint with a valid signature", async () => {
     process.env.AGENCY_CHECKPOINT_KEY = "a".repeat(32);
     const checkpoint = makeCheckpoint();
-    signCheckpoint(checkpoint);
+    signCheckpoint(checkpoint, defaultHost().settings);
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(checkpoint.toJSON());
 
     await expect(
@@ -125,7 +126,7 @@ describe("runCliEntry", () => {
   it("refuses a tampered signed checkpoint", async () => {
     process.env.AGENCY_CHECKPOINT_KEY = "a".repeat(32);
     const checkpoint = makeCheckpoint({ value: 1 });
-    signCheckpoint(checkpoint);
+    signCheckpoint(checkpoint, defaultHost().settings);
     const json = checkpoint.toJSON();
     json.nodeId = "tampered";
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(json);
@@ -139,7 +140,7 @@ describe("runCliEntry", () => {
     process.env.AGENCY_CHECKPOINT_KEY = "a".repeat(32);
     process.env.AGENCY_RESUME_FORCE = "1";
     const checkpoint = makeCheckpoint({ value: 1 });
-    signCheckpoint(checkpoint);
+    signCheckpoint(checkpoint, defaultHost().settings);
     const json = checkpoint.toJSON();
     json.nodeId = "tampered";
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(json);

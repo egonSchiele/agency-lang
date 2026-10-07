@@ -910,8 +910,9 @@ too, keeping its validation.
 Read `docs/dev/runtime/checkpoint-integrity.md` first. This PR gets its
 own review. Done in PR D5: `checkpointChecksum.ts` signs with
 `hmacSha256` from `lib/utils/hash.ts`, compares with its own
-`constantTimeEqual`, reads the keys through `host.settings.read` on
-`currentHost()`, and left `WAITING`. A checkpoint signed by the old
+`constantTimeEqual`, reads the keys from the `HostSettings` its caller
+passes (signing runs after awaits, where `currentHost()` cannot be
+read), and left `WAITING`. A checkpoint signed by the old
 code verifies under the new one (a test holds a fixed checkpoint, key,
 and checksum computed with `createHmac`). Verification of a 6.3 MB
 checkpoint took 8.2 ms before and 9.0 ms after, on the M5 Ultra; the

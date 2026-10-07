@@ -68,9 +68,14 @@ tree must appear in the schema in the same change.
 
 - `AGENCY_CHECKPOINT_KEY`, at least 32 bytes (`openssl rand -hex 32`). A
   short key throws `CheckpointKeyTooShortError`; an unset key means signing
-  is off. Both functions read it through `host.settings.read` on the current
-  run's host, or the platform's default host when a host verifies outside
-  any run, which on Node is the environment.
+  is off. Both functions read it from the `HostSettings` they are given:
+  `signCheckpoint` takes the run's host's settings from its caller
+  (`Checkpoint.fromStateStack` passes `ctx.host.settings`, and the edit
+  paths pass the settings of the context they re-sign for), because it
+  runs after awaits, where the current run cannot be read.
+  `verifyCheckpointChecksum` takes them too, and a host that verifies a
+  checkpoint outside any run can leave them out and get the platform's
+  default host, which on Node reads the environment.
 - Rotation: move the retiring key into `AGENCY_CHECKPOINT_KEY_OLD`
   (comma-separated, verify-only) and put the new key in
   `AGENCY_CHECKPOINT_KEY`; outstanding checkpoints keep verifying.

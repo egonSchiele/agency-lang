@@ -18,6 +18,7 @@
  */
 import fs from "fs";
 import type { Stats } from "fs";
+import os from "os";
 import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
@@ -35,7 +36,7 @@ export function root(dir: string): Root {
   if (dir === undefined || dir === null || dir.trim() === "") {
     throw new Error('dir must not be empty. Use "." for the current directory.');
   }
-  const lexical = path.resolve(process.cwd(), expandPath(dir));
+  const lexical = path.resolve(process.cwd(), expandPath(dir, os.homedir()));
   return { real: walkSpelling(lexical) };
 }
 
@@ -82,7 +83,7 @@ function walkSpelling(target: string): string {
  *  root. Returns the absolute path to operate on. "" and "." mean the root
  *  itself. A component that does not exist yet is accepted lexically. */
 export function resolveUnder(root: Root, target: string): string {
-  const expanded = expandPath(target);
+  const expanded = expandPath(target, os.homedir());
   if (path.isAbsolute(expanded)) {
     throw escapeError(target, root.real, expanded);
   }
@@ -137,7 +138,7 @@ export function fixedRoot(real: string): Root {
   if (real === undefined || real === null || real.trim() === "") {
     throw new Error('dir must not be empty. Use "." for the current directory.');
   }
-  const lexical = path.resolve(process.cwd(), expandPath(real));
+  const lexical = path.resolve(process.cwd(), expandPath(real, os.homedir()));
   const parsed = path.parse(lexical);
   const segments = lexical
     .slice(parsed.root.length)
@@ -170,7 +171,7 @@ export function fixedPath(p: string): Located {
   if (p === undefined || p === null || p.trim() === "") {
     throw new Error("path must not be empty.");
   }
-  const lexical = path.resolve(process.cwd(), expandPath(p));
+  const lexical = path.resolve(process.cwd(), expandPath(p, os.homedir()));
   return { root: fixedRoot(path.dirname(lexical)), target: path.basename(lexical) };
 }
 
@@ -182,7 +183,7 @@ export function wholePath(p: string): Located {
   if (p === undefined || p === null || p.trim() === "") {
     throw new Error("path must not be empty.");
   }
-  const lexical = path.resolve(process.cwd(), expandPath(p));
+  const lexical = path.resolve(process.cwd(), expandPath(p, os.homedir()));
   return { root: root(path.dirname(lexical)), target: path.basename(lexical) };
 }
 

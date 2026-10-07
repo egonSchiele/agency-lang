@@ -47,7 +47,7 @@ export function withTimeout(body: string): string {
  *  so interpolating them would be an injection path. argv values are not
  *  parsed as AppleScript. */
 export async function runNotesScript(host: Host, script: string, args: string[]): Promise<string> {
-  if (process.platform !== "darwin") {
+  if (host.system.operatingSystem() !== "macos") {
     throw new Error("Apple Notes is only available on macOS.");
   }
 

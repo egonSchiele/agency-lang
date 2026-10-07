@@ -1,4 +1,5 @@
 import path from "#path";
+import { currentHost } from "../runtime/currentHost.js";
 import { expandPath } from "./expandPath.js";
 
 /**
@@ -73,13 +74,13 @@ function pushWords(segment: string, out: string[]): void {
  *  shorthand policy; it throws on `~user/...`, which is not a media
  *  mention worth failing detection over — leave those tokens as-is (the
  *  Agency side drops them at the stat gate). */
-function normalizeToken(token: string): string {
+function normalizeToken(token: string, homeDir: string): string {
   let normalized = token;
   while (normalized.length > 0 && /[,.?:'"]$/.test(normalized)) {
     normalized = normalized.slice(0, normalized.length - 1);
   }
   if (normalized === "~" || normalized.startsWith("~/")) {
-    normalized = expandPath(normalized);
+    normalized = expandPath(normalized, homeDir);
   }
   return normalized;
 }
@@ -89,6 +90,7 @@ function normalizeToken(token: string): string {
  *  message order as `{ path, mime }` candidates. Purely lexical: paths
  *  are NOT resolved or checked for existence here. */
 export function _scanMediaPaths(msg: string): MediaPathCandidate[] {
+  const host = currentHost();
   if (!MEDIA_EXT_HINT.test(msg)) {
     return [];
   }
@@ -105,7 +107,7 @@ export function _scanMediaPaths(msg: string): MediaPathCandidate[] {
 
   const candidates: MediaPathCandidate[] = [];
   for (const token of tokens) {
-    const normalized = normalizeToken(token);
+    const normalized = normalizeToken(token, host.system.homeDir());
     const mime = MIME_TYPES[path.extname(normalized).toLowerCase()];
     if (mime !== undefined) {
       candidates.push({ path: normalized, mime });

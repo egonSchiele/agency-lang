@@ -15,7 +15,6 @@ const FS_IMPORTERS = {
   "lib/stdlib/gitignore.ts":
     "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
   "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",
-  "lib/stdlib/utils.ts": "reads /proc/version once to tell WSL from Linux, a fixed kernel file",
 };
 
 const FS_MODULES = ["fs", "fs/promises", "node:fs", "node:fs/promises"];

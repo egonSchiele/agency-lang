@@ -118,6 +118,7 @@ The read and write seams run a directory swap between the open and the validatio
 
 ## Things that are easy to miss
 
+- `expandPath(p, homeDir)` takes the home directory as an argument, from `host.system.homeDir()`, so a `~` means the run's home and not the process's. The synchronous module passes `os.homedir()`.
 - `_ls`, `_glob`, and `_grep` take the approved directory first and where in it to start second. Results stay relative to the second argument. `scanSkillsSubdirs` passes the root and the subdirectory separately so a linked subdirectory is refused rather than becoming its own root.
 - `stat` returning `null` for a link is a hidden entry, not an error. The Agency `StatInfo` and `LsEntry` `type` fields have no `"symlink"` member.
 - A standalone `exists(p)` or `stat(p)` with no `dir` passes `p` as the root and `"."` as the target, so it follows the caller's spelling.

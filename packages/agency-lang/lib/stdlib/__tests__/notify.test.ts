@@ -3,16 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../host/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
-
-// detectPlatform caches its answer, so overriding process.platform is not
-// enough to pin the macOS branch. Mock the detector itself.
-vi.mock("../utils.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../utils.js")>()),
-  detectPlatform: vi.fn(async () => "macos" as const),
-}));
+// The default host reports macOS, so the osascript branch runs.
+vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
 import { nodeSubprocess } from "../../host/nodeSubprocess.js";
-import { exited, failed, programRun } from "./fakeSubprocess.js";
+import { exited, failed, programRun, testDefaultHost } from "./fakeSubprocess.js";
 
 const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;
 import { _notify } from "../notify.js";

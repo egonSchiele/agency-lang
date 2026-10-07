@@ -36,7 +36,7 @@ export async function _sendIMessage(
   options?: IMessageOptions,
 ): Promise<IMessageResult> {
   const host = currentHost();
-  if (process.platform !== "darwin") {
+  if (host.system.operatingSystem() !== "macos") {
     throw new Error("iMessage is only available on macOS.");
   }
 

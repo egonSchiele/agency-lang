@@ -81,15 +81,17 @@ describe("resolveDir", () => {
 });
 
 describe("resolveCwdPath", () => {
+  const host = nodeHost();
+
   it("resolves a relative path against the cwd", () => {
-    expect(resolveCwdPath("a/b.txt")).toBe(path.resolve(process.cwd(), "a/b.txt"));
+    expect(resolveCwdPath(host, "a/b.txt")).toBe(path.resolve(process.cwd(), "a/b.txt"));
   });
 
   it("expands ~", () => {
-    expect(resolveCwdPath("~/x.md")).toBe(path.join(os.homedir(), "x.md"));
+    expect(resolveCwdPath(host, "~/x.md")).toBe(path.join(os.homedir(), "x.md"));
   });
 
   it("passes absolute paths through", () => {
-    expect(resolveCwdPath("/tmp/x")).toBe(path.resolve("/tmp/x"));
+    expect(resolveCwdPath(host, "/tmp/x")).toBe(path.resolve("/tmp/x"));
   });
 });

@@ -50,6 +50,44 @@ function spawnCommand(command: Command, options: RunOptions): ChildProcess {
   return spawn(command.program, command.args, spawnOptions);
 }
 
+/** Collect a stream's text, keeping at most `limit` bytes when `limit`
+ *  is positive. Past the limit the prefix that fits is kept and
+ *  `onOverflow` runs once. */
+function collector(
+  limit: number,
+  onOverflow: () => void,
+): {
+  take: (data: string) => void;
+  text: () => string;
+} {
+  let text = "";
+  let bytes = 0;
+  let full = false;
+  return {
+    take(data) {
+      if (full) {
+        return;
+      }
+      if (limit > 0) {
+        const chunkBytes = Buffer.byteLength(data, "utf8");
+        if (bytes + chunkBytes > limit) {
+          // Keep only the byte-prefix that fits, so memory stays bounded
+          // even when the child delivers one large chunk.
+          text += Buffer.from(data, "utf8")
+            .subarray(0, limit - bytes)
+            .toString("utf8");
+          full = true;
+          onOverflow();
+          return;
+        }
+        bytes += chunkBytes;
+      }
+      text += data;
+    },
+    text: () => text,
+  };
+}
+
 /** Start the child, wire its output, input, timeout, and signal, and
  *  settle `ended` when it closes. */
 function startChild(
@@ -57,9 +95,6 @@ function startChild(
   options: RunOptions,
 ): { child: ChildProcess; ended: Promise<RunResult>; kill: RunningProcess["kill"] } {
   const child = spawnCommand(command, options);
-  let stdout = "";
-  let stderr = "";
-  let stdoutBytes = 0;
   let truncated = false;
   let timedOut = false;
   let aborted = false;
@@ -68,32 +103,19 @@ function startChild(
   const kill: RunningProcess["kill"] = (signal) => {
     child.kill(signal ?? killSignal);
   };
+  // Each stream has its own limit, as execFile's maxBuffer works.
+  const overflow = () => {
+    truncated = true;
+    kill();
+  };
+  const stdout = collector(maxOutputBytes, overflow);
+  const stderr = collector(maxOutputBytes, overflow);
 
   const ended = new Promise<RunResult>((resolve, reject) => {
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (data: string) => {
-      if (truncated) {
-        return;
-      }
-      if (maxOutputBytes > 0) {
-        const chunkBytes = Buffer.byteLength(data, "utf8");
-        if (stdoutBytes + chunkBytes > maxOutputBytes) {
-          // Append only the byte-prefix that fits, then kill the child so
-          // memory stays bounded even if it delivers one large chunk.
-          const remaining = maxOutputBytes - stdoutBytes;
-          stdout += Buffer.from(data, "utf8").subarray(0, remaining).toString("utf8");
-          truncated = true;
-          kill();
-          return;
-        }
-        stdoutBytes += chunkBytes;
-      }
-      stdout += data;
-    });
-    child.stderr?.on("data", (data: string) => {
-      stderr += data;
-    });
+    child.stdout?.on("data", stdout.take);
+    child.stderr?.on("data", stderr.take);
 
     // Guard every stdio stream against a stray `error` event, or an unhandled
     // one crashes the process. The common case is EPIPE on stdin: a child that
@@ -140,8 +162,8 @@ function startChild(
       resolve({
         exitCode: code,
         signal: endedBy,
-        stdout,
-        stderr,
+        stdout: stdout.text(),
+        stderr: stderr.text(),
         truncated,
         timedOut,
         aborted,

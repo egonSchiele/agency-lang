@@ -225,8 +225,9 @@ export type RunOptions = {
   timeoutMs?: number;
   /** The child is killed when this fires. */
   signal?: AbortSignal;
-  /** Standard output is kept up to this many bytes; past it the child is
-   *  killed and `truncated` is set. 0 or absent: no limit. */
+  /** Each of standard output and standard error is kept up to this many
+   *  bytes; past it the child is killed and `truncated` is set. 0 or
+   *  absent: no limit. */
   maxOutputBytes?: number;
   /** Whether standard output and standard error are collected. A child
    *  that writes for minutes, such as a speech player, is not collected. */

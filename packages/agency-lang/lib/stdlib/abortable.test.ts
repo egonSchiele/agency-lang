@@ -3,8 +3,16 @@ import { AgencyCancelledError } from "../runtime/errors.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
-import { abortableSleep, abortableSpawn } from "./abortable.js";
+import {
+  PROGRAM_OUTPUT_LIMIT,
+  ProgramFailed,
+  abortableSleep,
+  abortableSpawn,
+  runProgram,
+} from "./abortable.js";
 import { nodeHost } from "../host/nodeHost.js";
+import { memoryHost } from "../host/memoryHost.js";
+import type { RunOptions } from "../host/host.js";
 
 const host = nodeHost();
 import { __internal_sleep, __internal_input } from "./builtins.js";
@@ -85,6 +93,71 @@ describe("abortableSpawn", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("[output truncated at 1000 bytes]");
+  });
+});
+
+describe("runProgram", () => {
+  it("returns the output of a child that exits with 0", async () => {
+    const { stdout } = await runProgram(host, "printf", ["hi"]);
+    expect(stdout).toBe("hi");
+  });
+
+  it("rejects with ProgramFailed, carrying the output, on a non-zero exit", async () => {
+    const failure = await runProgram(host, "sh", ["-c", "echo out; echo err >&2; exit 3"]).catch(
+      (error) => error,
+    );
+    expect(failure).toBeInstanceOf(ProgramFailed);
+    expect(failure.exitCode).toBe(3);
+    expect(failure.stdout).toBe("out\n");
+    expect(failure.stderr).toBe("err\n");
+    expect(failure.message).toContain("exited with code 3");
+  });
+
+  it("limits each output stream to execFile's default unless told otherwise", async () => {
+    const seen: RunOptions[] = [];
+    const recording = memoryHost({
+      subprocess: {
+        run: async (_command, options) => {
+          seen.push(options ?? {});
+          return {
+            exitCode: 0,
+            signal: null,
+            stdout: "",
+            stderr: "",
+            truncated: false,
+            timedOut: false,
+            aborted: false,
+          };
+        },
+        start: async () => {
+          throw new Error("not started here");
+        },
+      },
+    });
+    await runProgram(recording, "x", []);
+    await runProgram(recording, "x", [], { maxOutputBytes: 5 });
+    expect(seen[0].maxOutputBytes).toBe(PROGRAM_OUTPUT_LIMIT);
+    expect(seen[1].maxOutputBytes).toBe(5);
+  });
+
+  it("rejects a child that wrote past the limit, even one that exited with 0", async () => {
+    // The child finishes before the kill reaches it, so its exit code is 0.
+    const failure = await runProgram(host, "printf", ["abcdefgh"], { maxOutputBytes: 4 }).catch(
+      (error) => error,
+    );
+    expect(failure).toBeInstanceOf(ProgramFailed);
+    expect(failure.message).toContain("wrote more than 4 bytes");
+    expect(failure.stdout).toBe("abcd");
+  });
+
+  it("limits standard error as well as standard output", async () => {
+    // `exec` so the writer is the child itself and the kill reaches it.
+    const failure = await runProgram(host, "sh", ["-c", "exec yes >&2"], {
+      maxOutputBytes: 1000,
+    }).catch((error) => error);
+    expect(failure).toBeInstanceOf(ProgramFailed);
+    expect(failure.message).toContain("wrote more than 1000 bytes");
+    expect(Buffer.byteLength(failure.stderr, "utf8")).toBe(1000);
   });
 });
 

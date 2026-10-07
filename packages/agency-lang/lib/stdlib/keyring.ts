@@ -11,6 +11,16 @@ const DEFAULT_SERVICE = "agency-lang";
  */
 export async function _setSecret(key: string, value: string, service?: string): Promise<void> {
   const host = currentHost();
+  return setSecret(host, key, value, service);
+}
+
+/** `_setSecret` for a caller that has the host. */
+export async function setSecret(
+  host: Host,
+  key: string,
+  value: string,
+  service?: string,
+): Promise<void> {
   if (!key) throw new Error("Keyring key must not be empty.");
   if (!value) throw new Error("Keyring value must not be empty.");
   const svc = service || DEFAULT_SERVICE;
@@ -46,18 +56,13 @@ export async function _setSecret(key: string, value: string, service?: string): 
   }
 }
 
-/** Run a lookup command, bounded by `timeoutMs` when one is given. Without
- *  a bound the call passes no options object at all, so callers and tests
- *  that never asked for a timeout see the same execFile call as before. */
+/** Run a lookup command, bounded by `timeoutMs` when one is given. */
 function lookup(
   host: Host,
   command: string,
   args: string[],
   timeoutMs: number | undefined,
 ): Promise<{ stdout: string; stderr: string }> {
-  if (timeoutMs === undefined) {
-    return runProgram(host, command, args);
-  }
   return runProgram(host, command, args, { timeoutMs });
 }
 
@@ -128,6 +133,11 @@ export async function getSecret(
  */
 export async function _deleteSecret(key: string, service?: string): Promise<boolean> {
   const host = currentHost();
+  return deleteSecret(host, key, service);
+}
+
+/** `_deleteSecret` for a caller that has the host. */
+export async function deleteSecret(host: Host, key: string, service?: string): Promise<boolean> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
 
@@ -158,6 +168,11 @@ export async function _deleteSecret(key: string, service?: string): Promise<bool
  */
 export async function _isKeyringAvailable(): Promise<boolean> {
   const host = currentHost();
+  return isKeyringAvailable(host);
+}
+
+/** `_isKeyringAvailable` for a caller that has the host. */
+export async function isKeyringAvailable(host: Host): Promise<boolean> {
   if (process.platform === "darwin") {
     try {
       await runProgram(host, "security", ["help"]);

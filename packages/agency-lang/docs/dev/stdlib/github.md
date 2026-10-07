@@ -38,7 +38,10 @@ The token never becomes an Agency value, because a checkpoint serializes
 every variable. No public function takes or returns a token. Every function
 raises its interrupt first, and the token is read only after approval,
 inside one TypeScript call with no interrupt point. The resolver is
-TypeScript-internal and is not a tool. The `.agency` file imports only the
+TypeScript-internal and is not a tool. A found token is cached for the
+process, together with the host that found it; a run on another host
+resolves its own, since that host may refuse subprocesses or see another
+environment, and a 401 forgets the cache. The `.agency` file imports only the
 binding files it needs, which keeps the stdlib's own Agency code from
 reaching the token by accident. It is not a sandbox. Any TypeScript import
 can read anything, and that accepted risk is what `--agency-only` exists to

@@ -185,28 +185,31 @@ export async function abortableExec(
 }
 
 /** The failure `runProgram` rejects with for a child that did not exit
- *  with 0, carrying its output the way Node's `execFile` does. */
+ *  with 0 or wrote past the output limit, carrying its output the way
+ *  Node's `execFile` does. `ending` says which. */
 export class ProgramFailed extends Error {
   constructor(
     command: string,
+    ending: string,
     public readonly exitCode: number | null,
     public readonly stdout: string,
     public readonly stderr: string,
   ) {
-    super(
-      exitCode === null
-        ? `${command} was killed: ${stderr.trim()}`
-        : `${command} exited with code ${exitCode}: ${stderr.trim()}`,
-    );
+    super(`${command} ${ending}: ${stderr.trim()}`);
     this.name = "ProgramFailed";
   }
 }
 
+/** How much of each output stream `runProgram` keeps unless the caller
+ *  says otherwise: the default `maxBuffer` of Node's `execFile`. */
+export const PROGRAM_OUTPUT_LIMIT = 1024 * 1024;
+
 /**
  * Run `command` with `args` and return its output, rejecting with
- * `ProgramFailed` when it does not exit with 0 and with the host's error
- * when it cannot be started. The contract of Node's `execFile`, for the
- * helpers that call a fixed program such as `osascript` or `security`.
+ * `ProgramFailed` when it does not exit with 0 or writes more than the
+ * output limit to one stream, and with the host's error when it cannot
+ * be started. The contract of Node's `execFile`, for the helpers that
+ * call a fixed program such as `osascript` or `security`.
  */
 export async function runProgram(
   host: Host,
@@ -214,9 +217,25 @@ export async function runProgram(
   args: string[],
   options: RunOptions = {},
 ): Promise<{ stdout: string; stderr: string }> {
-  const result = await host.subprocess.run(program(command, args), options);
+  const limit = options.maxOutputBytes ?? PROGRAM_OUTPUT_LIMIT;
+  const result = await host.subprocess.run(program(command, args), {
+    ...options,
+    maxOutputBytes: limit,
+  });
+  if (result.truncated) {
+    // The child may still have exited with 0, if it finished before the
+    // kill reached it. Partial output is not its output.
+    throw new ProgramFailed(
+      command,
+      `wrote more than ${limit} bytes`,
+      result.exitCode,
+      result.stdout,
+      result.stderr,
+    );
+  }
   if (result.exitCode !== 0) {
-    throw new ProgramFailed(command, result.exitCode, result.stdout, result.stderr);
+    const ending = result.exitCode === null ? "was killed" : `exited with code ${result.exitCode}`;
+    throw new ProgramFailed(command, ending, result.exitCode, result.stdout, result.stderr);
   }
   return { stdout: result.stdout, stderr: result.stderr };
 }

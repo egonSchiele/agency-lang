@@ -85,28 +85,30 @@ async function ghAuthToken(host: Host): Promise<string | null> {
 // cache in lib/runtime/effectSets.ts and the always-scope registry — so the
 // coding-standards rule against per-run module state does not apply. Never
 // checkpointed. Only a SUCCESS is cached: a miss re-resolves next call, so a
-// setSecret() in the same session takes effect without a restart.
-let cachedToken: string | null = null;
+// setSecret() in the same session takes effect without a restart. The token
+// belongs to the host that resolved it: a run on another host, which may
+// refuse subprocesses or see another environment, resolves its own.
+let cached: { host: Host; token: string } | null = null;
 
 export function _resetGithubCredentialCacheForTests(): void {
-  cachedToken = null;
+  cached = null;
 }
 
 /** Forget the cached token. Called on a 401 so the remedies in that failure
  *  message (a new gh login, a new GITHUB_TOKEN, a new keyring entry) take
  *  effect on the next call instead of after a restart. */
 export function invalidateGithubCredentialCache(): void {
-  cachedToken = null;
+  cached = null;
 }
 
 /** The cache layer over the precedence logic, injectable so tests can drive
  *  the cache with fake sources and never touch a real credential. */
-export async function _resolveAndCache(sources: CredentialSources): Promise<string> {
-  if (cachedToken !== null) {
-    return cachedToken;
+export async function _resolveAndCache(host: Host, sources: CredentialSources): Promise<string> {
+  if (cached !== null && cached.host === host) {
+    return cached.token;
   }
   const token = await resolveTokenFromSources(sources);
-  cachedToken = token;
+  cached = { host, token };
   return token;
 }
 
@@ -114,7 +116,7 @@ export async function _resolveAndCache(sources: CredentialSources): Promise<stri
  *  operation's interrupt is approved — never from Agency. The invariant:
  *  nothing reads the token without an approved interrupt in front of it. */
 export async function resolveGithubToken(host: Host): Promise<string> {
-  return _resolveAndCache({
+  return _resolveAndCache(host, {
     env: process.env,
     ghAuthToken: () => ghAuthToken(host),
     keyringGet: (key, service) => keyringGetBounded(host, key, service),

@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { _getSecret, _setSecret, _isKeyringAvailable } from "./keyring.js";
+import type { Host } from "../host/host.js";
+import { getSecret, setSecret, isKeyringAvailable } from "./keyring.js";
 
 const KEYRING_KEY = "oauth-encryption-key";
 const ALGORITHM = "aes-256-gcm";
@@ -10,21 +11,22 @@ const TAG_LENGTH = 16;
 /**
  * Get or create the encryption key for OAuth token files.
  * Priority: AGENCY_OAUTH_KEY env var > system keyring > null (plaintext fallback)
+ * The keyring is reached through `host`, the run's host.
  */
-export async function getEncryptionKey(): Promise<Buffer | null> {
+export async function getEncryptionKey(host: Host): Promise<Buffer | null> {
   const envKey = process.env.AGENCY_OAUTH_KEY;
   if (envKey) {
     return crypto.createHash("sha256").update(envKey).digest();
   }
 
-  if (await _isKeyringAvailable()) {
-    const stored = await _getSecret(KEYRING_KEY);
+  if (await isKeyringAvailable(host)) {
+    const stored = await getSecret(host, KEYRING_KEY);
     if (stored) {
       const decoded = Buffer.from(stored, "hex");
       if (decoded.length !== KEY_LENGTH) {
         // Corrupted key — regenerate
         const newKey = crypto.randomBytes(KEY_LENGTH);
-        await _setSecret(KEYRING_KEY, newKey.toString("hex"));
+        await setSecret(host, KEYRING_KEY, newKey.toString("hex"));
         return newKey;
       }
       return decoded;
@@ -32,10 +34,10 @@ export async function getEncryptionKey(): Promise<Buffer | null> {
 
     // Generate a new key, store it, then re-read to handle races
     const newKey = crypto.randomBytes(KEY_LENGTH);
-    await _setSecret(KEYRING_KEY, newKey.toString("hex"));
+    await setSecret(host, KEYRING_KEY, newKey.toString("hex"));
 
     // Re-read to converge on a single key if another process raced us
-    const verify = await _getSecret(KEYRING_KEY);
+    const verify = await getSecret(host, KEYRING_KEY);
     if (verify) {
       return Buffer.from(verify, "hex");
     }

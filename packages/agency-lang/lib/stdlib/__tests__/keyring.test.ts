@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "../keyring.js";
 
+import { PROGRAM_OUTPUT_LIMIT } from "../abortable.js";
 import { exited, failed, programRun } from "./fakeSubprocess.js";
 
 // The host's subprocess part, mocked: `mockRun` answers each program.
@@ -114,13 +115,16 @@ describe("keyring (macOS)", () => {
     it("passes the timeout to the subprocess", async () => {
       mockRun.mockImplementation(async () => exited("tok\n"));
       expect(await _getSecret("k", "svc", 1234)).toBe("tok");
-      expect(mockRun.mock.calls[0][1]).toEqual({ timeoutMs: 1234 });
+      expect(mockRun.mock.calls[0][1]).toEqual({
+        timeoutMs: 1234,
+        maxOutputBytes: PROGRAM_OUTPUT_LIMIT,
+      });
     });
 
     it("passes no timeout when none is given", async () => {
       mockRun.mockImplementation(async () => exited("tok"));
       await _getSecret("k");
-      expect(mockRun.mock.calls[0][1]).toEqual({});
+      expect(mockRun.mock.calls[0][1]).toEqual({ maxOutputBytes: PROGRAM_OUTPUT_LIMIT });
     });
 
     it("reads a lookup killed at the deadline as a miss", async () => {

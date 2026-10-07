@@ -98,7 +98,9 @@ function parseExtraParams(str: string): Record<string, string> {
 }
 
 /** Opens `url` in the user's browser and does not wait: a failure to
- *  open is nothing the flow can act on, the printed URL is the fallback. */
+ *  open is nothing the flow can act on, the printed URL is the fallback.
+ *  A host with no subprocess part refuses when `run` is read, before any
+ *  promise exists, so the call is made inside a promise chain. */
 function openBrowser(host: Host, url: string): void {
   const command =
     process.platform === "darwin"
@@ -106,7 +108,9 @@ function openBrowser(host: Host, url: string): void {
       : process.platform === "win32"
         ? program("cmd.exe", ["/c", "start", "", url])
         : program("xdg-open", [url]);
-  host.subprocess.run(command).catch(() => undefined);
+  Promise.resolve()
+    .then(() => host.subprocess.run(command))
+    .catch(() => undefined);
 }
 
 function waitForCallback(
@@ -249,7 +253,7 @@ async function saveTokens(host: Host, name: string, tokens: StoredTokens): Promi
   await host.files.mkdir(located.dir, ".");
   const json = JSON.stringify(tokens, null, 2);
 
-  const key = await getEncryptionKey();
+  const key = await getEncryptionKey(host);
   const content = key ? encrypt(json, key) : json;
 
   await host.files.writeText(located.dir, located.file, content, { fileMode: 0o600 });
@@ -260,7 +264,7 @@ async function loadTokens(host: Host, name: string): Promise<StoredTokens | null
   try {
     const raw = await host.files.readText(located.dir, located.file);
 
-    const key = await getEncryptionKey();
+    const key = await getEncryptionKey(host);
     const json = key ? decrypt(raw, key) : raw;
 
     const parsed = JSON.parse(json) as Record<string, unknown>;

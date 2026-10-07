@@ -328,7 +328,7 @@ export async function rejectDangerousPath(
   }
   // Expand `~` first so the home / top-level checks below are
   // performed against the actual target, not the literal `~/foo`.
-  const lexical = path.resolve(host.system.cwd(), expandPath(trimmed));
+  const lexical = path.resolve(host.system.cwd(), expandPath(trimmed, host.system.homeDir()));
   const real = await host.files.realDir(lexical);
   const homeReal = await host.files.realDir(host.system.homeDir());
   const cwdReal = await host.files.realDir(host.system.cwd());

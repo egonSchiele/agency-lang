@@ -1,9 +1,7 @@
-import * as os from "node:os";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "#path";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { Host } from "../host/host.js";
+import type { Host, OperatingSystem } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { runProgram } from "./abortable.js";
 
@@ -14,7 +12,10 @@ const OSASCRIPT_MAX_STDOUT_BYTES = 64 * 1024 * 1024;
 /** The JavaScript for Automation program that drives Vision. It ships
  *  beside this file (the makefile copies it into dist) and osascript
  *  runs it by path; the image path, language, and fast flag are argv. */
-const VISION_SCRIPT_PATH = fileURLToPath(new URL("./visionOcr.jxa", import.meta.url));
+/** The Vision script, beside this module. */
+function visionScriptPath(host: Host): string {
+  return path.join(host.system.moduleDir(import.meta.url), "visionOcr.jxa");
+}
 
 /** Normalized to 0..1 with the origin at the top left, so `y` grows
  *  downward. */
@@ -92,7 +93,7 @@ async function runVisionOnCopy(
   fast: boolean,
 ): Promise<string> {
   const { files } = host;
-  const tmpDir = await files.root(os.tmpdir());
+  const tmpDir = await files.root(host.system.tempDir());
   const tmpName = `agency-ocr-${nanoid()}${extension}`;
   const tmpFile = await files.resolvePath(tmpDir, tmpName);
   let owned = false;
@@ -100,7 +101,7 @@ async function runVisionOnCopy(
     // Owner-only: the temp directory is shared and the image may be private.
     await files.writeBytes(tmpDir, tmpName, bytes, { mode: "create-only", fileMode: 0o600 });
     owned = true;
-    const args = ["-l", "JavaScript", VISION_SCRIPT_PATH, tmpFile, language, String(fast)];
+    const args = ["-l", "JavaScript", visionScriptPath(host), tmpFile, language, String(fast)];
     return await runner(args);
   } finally {
     if (owned) {
@@ -113,12 +114,12 @@ async function runVisionOnCopy(
 export async function _recognizeTextLocalWith(
   host: Host,
   runner: OsascriptRunner,
-  platform: string,
+  platform: OperatingSystem,
   approvedPath: string,
   language: string,
   fast: boolean,
 ): Promise<TextBlock[]> {
-  if (platform !== "darwin") {
+  if (platform !== "macos") {
     throw new Error(NOT_MACOS_MESSAGE);
   }
   const bytes = await readApprovedImage(host, approvedPath);
@@ -143,7 +144,7 @@ export function _recognizeTextLocal(
   return _recognizeTextLocalWith(
     host,
     osascriptRunner(host),
-    process.platform,
+    host.system.operatingSystem(),
     approvedPath,
     language,
     fast,

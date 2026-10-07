@@ -2,7 +2,6 @@ import { nanoid } from "nanoid";
 import os from "os";
 import path from "#path";
 import process from "process";
-import { detectPlatform } from "./utils.js";
 import { abortableExec, program } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
@@ -66,7 +65,7 @@ async function speakImpl(
 ): Promise<void> {
   if (text === "") return;
 
-  const platform = await detectPlatform();
+  const platform = ctx.host.system.operatingSystem();
   if (platform === "macos") {
     const { files } = ctx.host;
     const tmpDir = await files.root(os.tmpdir());

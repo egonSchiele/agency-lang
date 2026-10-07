@@ -4,9 +4,10 @@ import { _sendIMessage } from "../imessage.js";
 vi.mock("../../host/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
+vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
 import { nodeSubprocess } from "../../host/nodeSubprocess.js";
-import { exited, failed, programRun } from "./fakeSubprocess.js";
+import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fakeSubprocess.js";
 
 const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;
 
@@ -16,15 +17,13 @@ function osascriptArgs(): string[] {
 }
 
 describe("_sendIMessage", () => {
-  const originalPlatform = process.platform;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+    testPlatform.os = "macos";
   });
 
   afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+    testPlatform.os = "macos";
   });
 
   it("passes recipient and message as argv, not as script source", async () => {
@@ -83,8 +82,8 @@ describe("_sendIMessage", () => {
     expect(args[1]).not.toContain("do shell script");
   });
 
-  it("throws on non-macOS platforms", async () => {
-    Object.defineProperty(process, "platform", { value: "linux", writable: true });
+  it("throws on a host that is not macOS", async () => {
+    testPlatform.os = "linux";
 
     await expect(_sendIMessage("+15551234567", "Hi")).rejects.toThrow("only available on macOS");
   });

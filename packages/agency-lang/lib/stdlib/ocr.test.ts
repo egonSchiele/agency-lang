@@ -25,14 +25,21 @@ describe("_recognizeTextLocalWith", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("refuses a platform that is not darwin without touching the file or running anything", async () => {
+  it("refuses a platform that is not macOS without touching the file or running anything", async () => {
     let called = false;
     const runner: OsascriptRunner = async () => {
       called = true;
       return ONE_BLOCK;
     };
     await expect(
-      _recognizeTextLocalWith(host, runner, "linux", path.join(tmp, "missing.png"), "", false),
+      _recognizeTextLocalWith(
+        host,
+        runner,
+        "linux" as const,
+        path.join(tmp, "missing.png"),
+        "",
+        false,
+      ),
     ).rejects.toThrow(/Vision OCR requires macOS/);
     expect(called).toBe(false);
   });
@@ -40,7 +47,7 @@ describe("_recognizeTextLocalWith", () => {
   it("refuses a missing file after approval", async () => {
     const runner: OsascriptRunner = async () => ONE_BLOCK;
     await expect(
-      _recognizeTextLocalWith(host, runner, "darwin", path.join(tmp, "missing.png"), "", false),
+      _recognizeTextLocalWith(host, runner, "macos", path.join(tmp, "missing.png"), "", false),
     ).rejects.toThrow(/no such file/);
   });
 
@@ -48,23 +55,21 @@ describe("_recognizeTextLocalWith", () => {
     const link = path.join(tmp, "link.png");
     fs.symlinkSync(image, link);
     const runner: OsascriptRunner = async () => ONE_BLOCK;
-    await expect(
-      _recognizeTextLocalWith(host, runner, "darwin", link, "", false),
-    ).rejects.toThrow();
+    await expect(_recognizeTextLocalWith(host, runner, "macos", link, "", false)).rejects.toThrow();
   });
 
   it("surfaces a non-zero exit as an error naming osascript", async () => {
     const runner: OsascriptRunner = async () => {
       throw new Error("Command failed: osascript ... boom");
     };
-    await expect(_recognizeTextLocalWith(host, runner, "darwin", image, "", false)).rejects.toThrow(
+    await expect(_recognizeTextLocalWith(host, runner, "macos", image, "", false)).rejects.toThrow(
       /osascript/,
     );
   });
 
   it("rejects stdout that is not a JSON array", async () => {
     const runner: OsascriptRunner = async () => "not json";
-    await expect(_recognizeTextLocalWith(host, runner, "darwin", image, "", false)).rejects.toThrow(
+    await expect(_recognizeTextLocalWith(host, runner, "macos", image, "", false)).rejects.toThrow(
       /did not return JSON/,
     );
   });
@@ -79,7 +84,7 @@ describe("_recognizeTextLocalWith", () => {
       tempBytes = fs.readFileSync(tempSeen, "utf8");
       return ONE_BLOCK;
     };
-    await _recognizeTextLocalWith(host, runner, "darwin", image, "en-US", true);
+    await _recognizeTextLocalWith(host, runner, "macos", image, "en-US", true);
     // The script is a file beside ocr.ts, the values ride on argv, and the
     // subprocess only ever sees a file this call wrote from validated bytes.
     const script = seen[seen.length - 4];
@@ -99,14 +104,14 @@ describe("_recognizeTextLocalWith", () => {
       throw new Error("boom");
     };
     await expect(
-      _recognizeTextLocalWith(host, runner, "darwin", image, "", false),
+      _recognizeTextLocalWith(host, runner, "macos", image, "", false),
     ).rejects.toThrow();
     expect(fs.existsSync(tempSeen)).toBe(false);
   });
 
   it("returns the parsed blocks", async () => {
     const runner: OsascriptRunner = async () => ONE_BLOCK;
-    const blocks = await _recognizeTextLocalWith(host, runner, "darwin", image, "", false);
+    const blocks = await _recognizeTextLocalWith(host, runner, "macos", image, "", false);
     expect(blocks).toEqual([
       { text: "HELLO", confidence: 1, box: { x: 0.1, y: 0.2, width: 0.5, height: 0.1 } },
     ]);

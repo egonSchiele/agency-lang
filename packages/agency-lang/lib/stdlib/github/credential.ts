@@ -116,8 +116,15 @@ export async function _resolveAndCache(host: Host, sources: CredentialSources): 
  *  operation's interrupt is approved — never from Agency. The invariant:
  *  nothing reads the token without an approved interrupt in front of it. */
 export async function resolveGithubToken(host: Host): Promise<string> {
+  // The token is the runtime's own credential, read through `settings`
+  // like a connector's API key, so a host that refuses `env` to the
+  // program can still send it.
+  const { settings } = host;
   return _resolveAndCache(host, {
-    env: process.env,
+    env: {
+      GITHUB_TOKEN: settings.read("GITHUB_TOKEN") ?? undefined,
+      GH_TOKEN: settings.read("GH_TOKEN") ?? undefined,
+    },
     ghAuthToken: () => ghAuthToken(host),
     keyringGet: (key, service) => keyringGetBounded(host, key, service),
   });

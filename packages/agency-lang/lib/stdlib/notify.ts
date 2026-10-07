@@ -1,6 +1,5 @@
 import { currentHost } from "../runtime/currentHost.js";
 import { runProgram } from "./abortable.js";
-import { detectPlatform } from "./utils.js";
 
 // The desktop notification behind `notify` in std::system. It runs a
 // subprocess, so it lives apart from builtins.ts, which backs the prelude
@@ -13,7 +12,7 @@ end run`;
 
 export async function _notify(title: string, message: string): Promise<boolean> {
   const host = currentHost();
-  const platform = await detectPlatform();
+  const platform = host.system.operatingSystem();
   if (platform === "macos") {
     // The title and message arrive as argv rather than being spliced into the
     // script source, so AppleScript never parses them as code. `notify` is

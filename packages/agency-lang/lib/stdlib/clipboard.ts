@@ -1,7 +1,6 @@
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { program, runProgram } from "./abortable.js";
-import { detectPlatform } from "./utils.js";
 
 /** Hand `input` to the program and wait for it, whatever its exit code. */
 async function runWithInput(
@@ -18,7 +17,7 @@ async function runWithInput(
 
 export async function _copy(text: string): Promise<void> {
   const host = currentHost();
-  const platform = await detectPlatform();
+  const platform = host.system.operatingSystem();
   if (platform === "macos") {
     await runWithInput(host, "pbcopy", [], text);
   } else if (platform === "linux") {
@@ -32,7 +31,7 @@ export async function _copy(text: string): Promise<void> {
 
 export async function _paste(): Promise<string> {
   const host = currentHost();
-  const platform = await detectPlatform();
+  const platform = host.system.operatingSystem();
   if (platform === "macos") {
     const { stdout } = await runProgram(host, "pbpaste", []);
     return stdout;

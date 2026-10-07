@@ -30,6 +30,8 @@ The host has two kinds of part.
 
 **Every host provides the other parts.** `system`, `settings`, `clock`, and `random` have no capability name. No platform lacks a clock, and nearly every function reads the time, so a capability for it would be on every effect.
 
+`system` is where a helper learns about the platform: `operatingSystem()` (`macos`, `linux`, `windows`, `wsl`, or `unknown`; on Node, WSL is told from Linux by reading `/proc/version` once), `cwd()`, `homeDir()`, `tempDir()`, `moduleDir(import.meta.url)` for a file that ships beside a module, and the rest. A helper that picks a program by platform, such as the keyring over `security` or `secret-tool`, reads `operatingSystem()` and never `process.platform`; `expandPath(p, homeDir)` takes the home directory from `system.homeDir()`, and `resolveCwdPath(host, p)` the working directory from `system.cwd()`.
+
 `PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree.
 
 ### `env` and `settings` read the same variables

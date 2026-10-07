@@ -19,7 +19,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PRs B, C, C2, D, D2, D4, and D5 are merged. PR D3 is open as #1184.
+PRs B, C, C2, D, D2, D3, D4, D5, and E1 are merged. PR E2 is open as #1189.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -29,9 +29,10 @@ PRs B, C, C2, D, D2, D4, and D5 are merged. PR D3 is open as #1184.
 | C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | merged, #1181 |
 | D | Network, `Buffer` | 9, 12 | merged, #1182 |
 | D2 | Subprocesses | 8 | merged, #1183 |
-| D3 | Portable paths | 10 | open, #1184 |
+| D3 | Portable paths | 10 | merged, #1184 |
 | D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
+| E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | open, #1189 |
 | E | The browser entry point and CI checks, the `@capabilities` tag, `--platform` | 15, 17, 18 | |
 
@@ -170,6 +171,40 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR E1 learned
+
+1. **The count.** 48 files on `WAITING`; 28 read `process.*`. By kind:
+   `platform` in 9 files (keyring 11 reads, utils 5, oauth 2, shell,
+   ocr, imessage, appleNotes, ffmpeg), `cwd` in 5 (shell 3, resolveDir
+   3, git, frame, policyDirs), `env` by name in 8 (termcolors 3,
+   mcpResolver 3, oauth, credential, imageTools, git, subprocessRunInfo,
+   config, statelogClient), and the rest terminal streams, `exit`,
+   `send`, `on`, and `argv`, which are other PRs.
+2. **`host.system.operatingSystem()` replaced `detectPlatform`.** Both
+   told WSL from Linux by reading `/proc/version` once; `lib/stdlib/utils.ts`
+   held nothing else and is gone. Its three callers (notify, clipboard,
+   speech) read the host they already had.
+3. **`expandPath` takes the home directory.** Every caller had a host;
+   `nodeFiles.ts` and `memory/frame.ts`, the synchronous Node-only
+   files, pass `os.homedir()`.
+4. **Four test files patched `process.platform`** with
+   `Object.defineProperty`. They now mock `#default-host` with
+   `testDefaultHost` from `fakeSubprocess.ts`, a node host that reports
+   `testPlatform.os`, and the one test that needs a different system
+   sets that field. `hostOn(os)` is the same host for a function that
+   takes one.
+5. **The whole environment for a child stays on `process.env`.** `git`
+   scrubs it and `imageTools` adds to it; the host's `env` part reads
+   one variable by name and `RunOptions.env` takes a complete map, so
+   those two, `subprocessRunInfo`, and `mcpResolver` (which also sets a
+   variable) need an `env.all()` or an overrides option first. Left
+   for the next round, with `config.ts`, `statelogClient.ts`, and
+   `termcolors.ts`, which read the environment but stay for `fs` and
+   the terminal.
+6. **Eight files left `WAITING`**: `keyring`, `utils` (deleted),
+   `resolveDir`, `expandPath`, `imessage`, `appleNotes`, `ocr`,
+   `github/credential`. 40 remain.
 
 ### What PR D3 learned
 

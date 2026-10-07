@@ -1,8 +1,14 @@
-import type { Host } from "../host/host.js";
+import type { Host, OperatingSystem } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { program, runProgram } from "./abortable.js";
 
 const DEFAULT_SERVICE = "agency-lang";
+
+/** Whether `secret-tool`, the Secret Service client, is the keyring to
+ *  use. WSL is Linux here: the tool runs inside it as on any Linux. */
+function usesSecretTool(os: OperatingSystem): boolean {
+  return os === "linux" || os === "wsl";
+}
 
 /**
  * Store a secret in the system keyring.
@@ -24,8 +30,9 @@ export async function setSecret(
   if (!key) throw new Error("Keyring key must not be empty.");
   if (!value) throw new Error("Keyring value must not be empty.");
   const svc = service || DEFAULT_SERVICE;
+  const os = host.system.operatingSystem();
 
-  if (process.platform === "darwin") {
+  if (os === "macos") {
     try {
       await runProgram(host, "security", ["delete-generic-password", "-s", svc, "-a", key]);
     } catch {}
@@ -40,7 +47,7 @@ export async function setSecret(
       value,
       "-U",
     ]);
-  } else if (process.platform === "linux") {
+  } else if (usesSecretTool(os)) {
     const result = await host.subprocess.run(
       program("secret-tool", ["store", "--label", `${svc}:${key}`, "service", svc, "account", key]),
       { input: value },
@@ -50,7 +57,7 @@ export async function setSecret(
     }
   } else {
     throw new Error(
-      `System keyring is not supported on ${process.platform}. ` +
+      `System keyring is not supported on ${os}. ` +
         `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
@@ -93,8 +100,9 @@ export async function getSecret(
 ): Promise<string | null> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
+  const os = host.system.operatingSystem();
 
-  if (process.platform === "darwin") {
+  if (os === "macos") {
     try {
       const { stdout } = await lookup(
         host,
@@ -106,7 +114,7 @@ export async function getSecret(
     } catch {
       return null;
     }
-  } else if (process.platform === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       const { stdout } = await lookup(
         host,
@@ -120,7 +128,7 @@ export async function getSecret(
     }
   } else {
     throw new Error(
-      `System keyring is not supported on ${process.platform}. ` +
+      `System keyring is not supported on ${os}. ` +
         `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
@@ -139,15 +147,16 @@ export async function _deleteSecret(key: string, service?: string): Promise<bool
 export async function deleteSecret(host: Host, key: string, service?: string): Promise<boolean> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
+  const os = host.system.operatingSystem();
 
-  if (process.platform === "darwin") {
+  if (os === "macos") {
     try {
       await runProgram(host, "security", ["delete-generic-password", "-s", svc, "-a", key]);
       return true;
     } catch {
       return false;
     }
-  } else if (process.platform === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       await runProgram(host, "secret-tool", ["clear", "service", svc, "account", key]);
       return true;
@@ -156,7 +165,7 @@ export async function deleteSecret(host: Host, key: string, service?: string): P
     }
   } else {
     throw new Error(
-      `System keyring is not supported on ${process.platform}. ` +
+      `System keyring is not supported on ${os}. ` +
         `Set the AGENCY_OAUTH_KEY environment variable instead.`,
     );
   }
@@ -172,14 +181,15 @@ export async function _isKeyringAvailable(): Promise<boolean> {
 
 /** `_isKeyringAvailable` for a caller that has the host. */
 export async function isKeyringAvailable(host: Host): Promise<boolean> {
-  if (process.platform === "darwin") {
+  const os = host.system.operatingSystem();
+  if (os === "macos") {
     try {
       await runProgram(host, "security", ["help"]);
       return true;
     } catch {
       return false;
     }
-  } else if (process.platform === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       await runProgram(host, "secret-tool", ["--version"]);
       return true;

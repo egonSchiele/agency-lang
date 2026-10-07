@@ -1,4 +1,3 @@
-import process from "process";
 import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
@@ -138,7 +137,7 @@ async function execImpl(
   if (cmdError) throw new Error(cmdError);
   // Route through `resolveSpawnCwd` (cwd-anchored) so `~` expansion,
   // allow-list enforcement, and the exists-before-spawn check land in one
-  // place. Relative `cwd: "./sub"` stays anchored to `process.cwd()` (the
+  // place. Relative `cwd: "./sub"` stays anchored to the run's working directory (the
   // existing semantics) because we pass `base: "cwd"`. Empty `cwd` is the
   // "no override" sentinel — the child inherits the parent's cwd.
   const cwdResolved = await resolveSpawnCwd(ctx.host, cwd, options?.allowedPaths ?? []);
@@ -276,7 +275,7 @@ async function approvedRoot(
 ): Promise<Root> {
   const approved = await host.files.fixedRoot(rootDir);
   const walked = await host.files.resolvePath(approved, target);
-  await assertContained(host, walked, allowedPaths ?? [], process.cwd());
+  await assertContained(host, walked, allowedPaths ?? [], host.system.cwd());
   return approved;
 }
 
@@ -290,7 +289,7 @@ async function probeRoot(
 ): Promise<Root> {
   const probed = await host.files.root(rootDir);
   const walked = await host.files.resolvePath(probed, target);
-  await assertContained(host, walked, allowedPaths ?? [], process.cwd());
+  await assertContained(host, walked, allowedPaths ?? [], host.system.cwd());
   return probed;
 }
 
@@ -667,10 +666,12 @@ export async function _which(command: string): Promise<string> {
       `which: command name must not contain path separators or NUL bytes (got '${command}')`,
     );
   }
-  const pathEnv = process.env.PATH ?? "";
+  const pathEnv = host.settings.read("PATH") ?? "";
   const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
-  const isWindows = process.platform === "win32";
-  const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
+  const isWindows = host.system.operatingSystem() === "windows";
+  const extensions = isWindows
+    ? (host.settings.read("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
   for (const dir of dirs) {
     for (const ext of extensions) {
       const candidate = path.resolve(host.system.cwd(), dir, command + ext);

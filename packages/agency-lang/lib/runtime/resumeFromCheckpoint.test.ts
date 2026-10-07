@@ -25,7 +25,7 @@ describe("resumeFromCheckpoint", () => {
 
   it("refuses a checkpoint whose module fingerprints no longer match", async () => {
     const cp = makeCheckpoint();
-    cp.moduleFingerprints = { "mod-that-changed": { hash: "stale", compiledAt: "then" } };
+    cp.moduleFingerprints = { "mod-that-changed": { hash: "stale" } };
     await expect(
       resumeFromCheckpoint({
         ctx: makeCtx(),

@@ -71,8 +71,9 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
-  /** Fingerprint + compile time of each module with a live frame, captured at
-   *  creation so a resume can refuse when the code changed. */
+  /** The fingerprint (a hash of the generated code) of each module with a
+   *  live frame, captured at creation so a resume can refuse when the code
+   *  changed. */
   public moduleFingerprints?: Record<string, ModuleFingerprint>;
   /** What the run had spent when this checkpoint was taken, so a resumed run
    *  keeps counting from there. `unknown` because a checkpoint comes back from

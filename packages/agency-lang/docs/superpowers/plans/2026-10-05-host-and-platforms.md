@@ -19,7 +19,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PRs B, C, C2, D, D2, D3, D4, and D5 are merged. PR E1 is open as #1188.
+PRs B, C, C2, D, D2, D3, D4, D5, and E1 are merged. PR E2 is open as #1189.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -32,8 +32,9 @@ PRs B, C, C2, D, D2, D3, D4, and D5 are merged. PR E1 is open as #1188.
 | D3 | Portable paths | 10 | merged, #1184 |
 | D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
-| E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | open, #1188 |
-| E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
+| E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
+| E2 | Module fingerprints without `statSync` | 14 (Task 31) | open, #1189 |
+| E | The browser entry point and CI checks, the `@capabilities` tag, `--platform` | 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -1043,7 +1044,15 @@ HMAC is Node's either way, and the rest is `canonicalize`.
 ### Task 31: module fingerprints
 
 Read `docs/dev/runtime/checkpoint-code-fingerprints.md` first. This PR
-gets its own review.
+gets its own review. Steps 1, 3, and 4 were already done when this task
+was written: the fingerprint has been a hash of the generated code since
+the feature shipped. What was left was step 2, done in PR E2: the
+registry held a `compiledAt` beside the hash, read from the artifact's
+mtime with `statSync`, and used only in the refusal message. The owner
+chose to drop it: the message now quotes the first characters of both
+fingerprints, `registerModuleFingerprint` takes the id and the hash, the
+emitter no longer passes `import.meta.url`, and the checkpoint schema
+keeps `compiledAt` optional so older checkpoints still parse.
 
 1. Have the compiler compute each module's fingerprint and pass it to
    `__registerModuleFingerprint` in the generated code.

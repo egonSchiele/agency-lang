@@ -17,13 +17,15 @@ merely imports can be edited freely.
 ## How it works
 
 - Each compiled module registers its identity as its file's last statement:
-  `__registerModuleFingerprint("<moduleId>", sha256(generated code), import.meta.url)`.
+  `__registerModuleFingerprint("<moduleId>", sha256(generated code))`.
   The hash covers the module's printed output up to that line — the thing
   resume actually replays into — so a change from ANY source (the module's
   code, a splice generator, a template, the compiler itself) changes it. The
   emitted bytes carry no timestamp, so identical input emits identical bytes
-  and incremental emit stays byte-identical; the registry derives "compiled
-  at" from the artifact's mtime instead.
+  and incremental emit stays byte-identical. The registry holds the hash
+  and nothing else; it reads no file, so it is the same on every platform.
+  A checkpoint written by an older build may carry a `compiledAt` beside
+  the hash, which the schema accepts and nothing reads.
 - `lib/runtime/moduleFingerprintRegistry.ts` holds those entries per process.
   Like handlers, the registry is derived from loaded code and never
   serialized; it is rebuilt whenever code loads, including in a resumed
@@ -38,8 +40,10 @@ merely imports can be edited freely.
   field.
 - `respondToInterrupts` calls `assertCodeUnchanged` before `restoreState`, so
   an out-of-date checkpoint is never partially executed. The error message
-  carries both compile timestamps — the code the checkpoint ran and the code
-  loaded now. Rewind and the debugger restore directly and skip the check:
+  carries the first characters of both fingerprints — the code the
+  checkpoint ran and the code loaded now — enough to tell them apart and
+  to match against a build. Rewind and the debugger restore directly and
+  skip the check:
   they are in-process, so the code cannot have changed under them.
 
 A frame participates only when it has a non-empty `moduleId` with a

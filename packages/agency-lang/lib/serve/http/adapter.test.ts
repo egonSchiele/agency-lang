@@ -682,16 +682,12 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
 
   it("maps a code-changed refusal to 409 with the module named", async () => {
     const handler = handlerFor(async () => {
-      throw new CheckpointCodeChangedError(
-        "mod.agency",
-        "2026-08-30T00:00:00.000Z",
-        "2026-08-31T00:00:00.000Z",
-      );
+      throw new CheckpointCodeChangedError("mod.agency", "oldhash0000000", "newhash0000000");
     });
     const result = await handler("POST", "/node/run", {});
     expect(result.status).toBe(409);
     expect(result.body).toMatchObject({ success: false });
     expect((result.body as { error: string }).error).toContain("mod.agency");
-    expect((result.body as { error: string }).error).toContain("2026-08-30T00:00:00.000Z");
+    expect((result.body as { error: string }).error).toContain("oldhash00000…");
   });
 });

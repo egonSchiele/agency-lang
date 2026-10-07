@@ -28,19 +28,25 @@ export class CheckpointError extends Error {
 export class CheckpointCodeChangedError extends Error {
   constructor(
     public readonly moduleId: string,
-    checkpointCompiledAt: string,
-    currentCompiledAt: string | undefined,
+    checkpointHash: string,
+    currentHash: string | undefined,
   ) {
     const current =
-      currentCompiledAt === undefined
+      currentHash === undefined
         ? `the module is not loaded now (deleted, renamed, or compiled from a different directory)`
-        : `the current code was compiled ${currentCompiledAt}`;
+        : `the loaded code has fingerprint ${fingerprintPrefix(currentHash)}`;
     super(
       `Cannot resume: the code of "${moduleId}" has changed since this checkpoint was created. ` +
-        `The checkpoint ran code compiled ${checkpointCompiledAt}; ${current}.`,
+        `The checkpoint ran code with fingerprint ${fingerprintPrefix(checkpointHash)}; ${current}.`,
     );
     this.name = "CheckpointCodeChangedError";
   }
+}
+
+/** The first characters of a fingerprint, enough to tell two apart in a
+ *  message; a whole SHA-256 would only make the line harder to read. */
+function fingerprintPrefix(hash: string): string {
+  return hash.length > 12 ? `${hash.slice(0, 12)}…` : hash;
 }
 
 /** Base for the signals the runtime throws to unwind a whole run on purpose.

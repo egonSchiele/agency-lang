@@ -44,7 +44,7 @@ export function assertCodeUnchanged(
   for (const [moduleId, stored] of Object.entries(moduleFingerprints)) {
     const current = getModuleFingerprint(moduleId);
     if (current?.hash !== stored.hash) {
-      throw new CheckpointCodeChangedError(moduleId, stored.compiledAt, current?.compiledAt);
+      throw new CheckpointCodeChangedError(moduleId, stored.hash, current?.hash);
     }
   }
 }

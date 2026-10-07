@@ -109,7 +109,9 @@ export const checkpointSchema = z.object({
   label: z.string().nullable().optional().default(null),
   pinned: z.boolean().optional().default(false),
   moduleFingerprints: z
-    .record(z.string(), z.object({ hash: z.string(), compiledAt: z.string() }))
+    // `compiledAt` is a field older checkpoints carry; the registry no
+    // longer records one.
+    .record(z.string(), z.object({ hash: z.string(), compiledAt: z.string().optional() }))
     .optional(),
   usage: z.unknown().optional(),
   signature: z.string().optional(),

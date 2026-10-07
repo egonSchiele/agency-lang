@@ -10,8 +10,7 @@ import { transformSync } from "esbuild";
 
 const FILE = path.join(os.tmpdir(), "agency-modfp-itest.agency");
 
-const REGISTRATION =
-  /__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})", import\.meta\.url\);?/;
+const REGISTRATION = /__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})"\);?/;
 
 function generate(source: string): string {
   const parsed = parseAgency(source, {}, true);

@@ -3,9 +3,9 @@
 // nested .gitignore files that refine their parents. Not covered:
 // .git/info/exclude and the global excludes file, which live outside the
 // tree being walked.
-import fs from "fs/promises";
 import path from "#path";
 import picomatch from "picomatch";
+import type { Host } from "../host/host.js";
 
 type Rule = {
   /** Matches the path itself, relative to the directory the .gitignore lives in. */
@@ -76,12 +76,12 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
  * rooted in a subdirectory would otherwise miss the root file, where
  * rules like `**\/*.js` usually live. With no repository above `dir`,
  * nothing applies. */
-export async function readAncestorGitignores(dir: string): Promise<GitignoreFile[]> {
-  const ancestors = await repositoryAncestors(dir);
+export async function readAncestorGitignores(host: Host, dir: string): Promise<GitignoreFile[]> {
+  const ancestors = await repositoryAncestors(host, dir);
   if (ancestors === null) return [];
   const files: GitignoreFile[] = [];
   for (const ancestor of ancestors) {
-    const file = await readGitignore(ancestor);
+    const file = await readGitignore(host, ancestor);
     if (file) files.push(file);
   }
   return files;
@@ -91,33 +91,36 @@ export async function readAncestorGitignores(dir: string): Promise<GitignoreFile
  * including the repository root, outermost first. Null when no ancestor
  * holds a `.git` entry, and empty when `dir` is itself a repository root:
  * git never lets an enclosing repository's rules reach inside. */
-export async function repositoryAncestors(dir: string): Promise<string[] | null> {
-  if (await exists(path.join(path.resolve(dir), ".git"))) return [];
+export async function repositoryAncestors(host: Host, dir: string): Promise<string[] | null> {
+  const start = path.resolve(host.system.cwd(), dir);
+  if (await hasGitEntry(host, start)) return [];
   const ancestors: string[] = [];
-  let current = path.dirname(path.resolve(dir));
+  let current = path.dirname(start);
   for (;;) {
     ancestors.unshift(current);
-    if (await exists(path.join(current, ".git"))) return ancestors;
+    if (await hasGitEntry(host, current)) return ancestors;
     const parent = path.dirname(current);
     if (parent === current) return null;
     current = parent;
   }
 }
 
-async function exists(p: string): Promise<boolean> {
+// These two read above the walk root, where no approval names a root, so
+// each makes one for the directory it reads: the read is of one file git
+// itself would read, and the text becomes rules, never a value.
+async function hasGitEntry(host: Host, dir: string): Promise<boolean> {
   try {
-    await fs.lstat(p);
-    return true;
+    return (await host.files.stat(await host.files.root(dir), ".git")) !== null;
   } catch {
     return false;
   }
 }
 
 /** The .gitignore in `dir`, or null when there is none. */
-export async function readGitignore(dir: string): Promise<GitignoreFile | null> {
+export async function readGitignore(host: Host, dir: string): Promise<GitignoreFile | null> {
   let text: string;
   try {
-    text = await fs.readFile(path.join(dir, ".gitignore"), "utf8");
+    text = await host.files.readText(await host.files.root(dir), ".gitignore");
   } catch {
     return null;
   }

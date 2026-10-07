@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 import { isIgnored, parseGitignore, readAncestorGitignores } from "./gitignore.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
 const root = "/repo";
 const at = (relative: string) => `${root}/${relative}`;
@@ -77,6 +78,7 @@ describe("parseGitignore + isIgnored", () => {
 });
 
 describe("readAncestorGitignores", () => {
+  const host = nodeHost();
   const scratchDirs: string[] = [];
   afterEach(() => {
     for (const dir of scratchDirs.splice(0)) safeDeleteDirectoryWithin(tmpdir(), dir);
@@ -93,7 +95,7 @@ describe("readAncestorGitignores", () => {
     mkdirSync(join(outer, ".git"));
     writeFileSync(join(outer, ".gitignore"), "*.log\n");
     mkdirSync(join(outer, "lib", "deep"), { recursive: true });
-    const files = await readAncestorGitignores(join(outer, "lib", "deep"));
+    const files = await readAncestorGitignores(host, join(outer, "lib", "deep"));
     expect(files.map((file) => file.dir)).toEqual([outer]);
   });
 
@@ -104,14 +106,14 @@ describe("readAncestorGitignores", () => {
     const inner = join(outer, "inner");
     mkdirSync(join(inner, ".git"), { recursive: true });
     mkdirSync(join(inner, "src"));
-    expect(await readAncestorGitignores(inner)).toEqual([]);
-    const fromSrc = await readAncestorGitignores(join(inner, "src"));
+    expect(await readAncestorGitignores(host, inner)).toEqual([]);
+    const fromSrc = await readAncestorGitignores(host, join(inner, "src"));
     expect(fromSrc.map((file) => file.dir)).toEqual([]);
   });
 
   it("finds nothing outside any repository", async () => {
     const dir = repo();
     writeFileSync(join(dir, ".gitignore"), "*.log\n");
-    expect(await readAncestorGitignores(join(dir))).toEqual([]);
+    expect(await readAncestorGitignores(host, join(dir))).toEqual([]);
   });
 });

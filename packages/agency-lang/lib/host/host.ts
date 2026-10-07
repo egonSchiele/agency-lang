@@ -165,6 +165,8 @@ export type HostTerminal = {
   /** Show `prompt` and read one line. Rejects with the signal's reason when
    *  `signal` aborts while waiting. */
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
+  /** Everything on standard input until it ends, as text. */
+  readAll(): Promise<string>;
   /** Whether a person is at the terminal. False under a pipe or in CI. */
   isInteractive(): boolean;
   /** The width and height in character cells, or null when standard
@@ -198,6 +200,9 @@ export type HostSystem = {
    *  when this is true. */
   isMainModule(moduleUrl: string): boolean;
   exit(code: number): never;
+  /** Name the process, as `ps` and an activity monitor show it. A
+   *  platform with no process name ignores it. */
+  setTitle(title: string): void;
   /** The channel to the parent process, when the parent forked this one
    *  with an IPC channel the way Agency's subprocess runs do, or null.
    *  `send` throws once the parent is gone. */
@@ -288,10 +293,14 @@ export type RunningProcess = {
 /** Subprocesses. `run` starts a child and waits for it. A program that
  *  cannot be started rejects with the platform's error (`ENOENT` on
  *  Node), not a result. `start` hands back the running child, for a
- *  caller that stops it on an event of its own, such as a keypress. */
+ *  caller that stops it on an event of its own, such as a keypress.
+ *  `locate` is the path a program name resolves to on the search path,
+ *  the way the shell finds it (`PATH`, and `PATHEXT` on Windows), or
+ *  null when nothing executable has that name. */
 export type HostSubprocess = {
   run(command: Command, options?: RunOptions): Promise<RunResult>;
   start(command: Command, options?: RunOptions): Promise<RunningProcess>;
+  locate(program: string): Promise<string | null>;
 };
 
 /** The network, as the platform's own `fetch`: the same arguments and the

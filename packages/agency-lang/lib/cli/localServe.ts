@@ -1,6 +1,7 @@
 import { MLX_VLM_VERSION, MLX_VLM_RULES, vlmServeArgs, imageChatExample } from "./vlmChat.js";
 import type { RequestRules } from "./requestRules.js";
-import { VLM_ARCHITECTURES, architectureOfModelDir } from "../stdlib/modelKind.js";
+import { VLM_ARCHITECTURES } from "../stdlib/modelKind.js";
+import { architectureOfModelDir, visionFamilyOf } from "../stdlib/modelDirKind.js";
 import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
@@ -37,7 +38,7 @@ import {
 import { IMAGES_PATH, VISION_PATHS } from "./serveLog.js";
 import { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
 export { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
-import { VISION_ONNX_FILES, visionFamilyOf, type VisionFamily } from "../stdlib/modelKind.js";
+import { VISION_ONNX_FILES, type VisionFamily } from "../stdlib/modelKind.js";
 import {
   _resolveModel,
   _mlxServedName,

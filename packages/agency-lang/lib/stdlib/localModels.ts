@@ -96,7 +96,8 @@ export {
   type ModelInfo,
   type ModelTag,
 } from "./modelCatalog.js";
-import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+import { isModelKind, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+import { kindOfModelDir } from "./modelDirKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
 /** A folder the config names under `client`, or null when it is not set.

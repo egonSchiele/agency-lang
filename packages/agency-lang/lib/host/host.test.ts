@@ -288,14 +288,15 @@ describe("nodeHost", () => {
   it("has a parent channel only when process.send exists", () => {
     const system = nodeHost().system;
     const original = process.send;
+    const sent: unknown[] = [];
+    const fake = (message: unknown) => {
+      sent.push(message);
+      return true;
+    };
     try {
       process.send = undefined;
       expect(system.parentChannel()).toBeNull();
-      const sent: unknown[] = [];
-      process.send = ((message: unknown) => {
-        sent.push(message);
-        return true;
-      }) as typeof process.send;
+      process.send = fake as unknown as typeof process.send;
       system.parentChannel()?.send({ type: "hello" });
       expect(sent).toEqual([{ type: "hello" }]);
     } finally {

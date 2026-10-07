@@ -103,8 +103,11 @@ dir)` in `localModels.ts`, the one function every reader calls:
    `_downloadModel` when the download finishes, from `--kind` when the
    user gave one, else from the catalog or the files. `--kind` is refused
    for a directory or a GGUF model, since neither keeps a record.
-3. The files, through `kindOfModelDir` in `modelKind.ts`, the one place a
-   kind is decided from files. Its rule table, first match wins:
+3. The files, through `kindOfModelDir` in `modelDirKind.ts`, which reads
+   the directory and hands what it found to the rule table in
+   `modelKind.ts`, the one place a kind is decided from files. (The table
+   is apart from the reader so that `config.ts`, which lists the kinds,
+   pulls in no `fs`.) The rules, first match wins:
 
    | Files | Kind |
    |---|---|

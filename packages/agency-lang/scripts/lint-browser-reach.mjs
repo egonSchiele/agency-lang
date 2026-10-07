@@ -9,7 +9,11 @@
 //    so the rule never looks at it (add the file to BROWSER_FILES, or put
 //    the importer on a list), or
 // 2. a file it reached imports a file on NODE_ONLY, which would drag Node
-//    code into the browser bundle.
+//    code into the browser bundle, unless REACHES_NODE_ONLY lists that
+//    import as one the browser entry point still has to cut; a listed
+//    import that is gone fails too, so that list only gets shorter. An
+//    import of the Node file behind a "#" name (#default-host, #sha256,
+//    #path) is not one: the browser build picks the other file.
 //
 // `node scripts/lint-browser-reach.mjs --list` prints the files it reached
 // instead of checking them.
@@ -24,7 +28,7 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import picomatch from "picomatch";
-import { NODE_ONLY, WAITING } from "../eslint.node-exceptions.mjs";
+import { NODE_ONLY, REACHES_NODE_ONLY, WAITING } from "../eslint.node-exceptions.mjs";
 import { BROWSER_FILES } from "../eslint.config.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,16 +78,29 @@ function stdlibHelpers() {
   return libFiles.filter(
     (file) =>
       file.startsWith("lib/stdlib/") &&
+      !file.startsWith("lib/stdlib/__tests__/") &&
       file.endsWith(".ts") &&
       !file.endsWith(".test.ts") &&
       !listed.includes(file),
   );
 }
 
-/** The metafile of a bundle that stops at every listed file. */
+/** The Node file behind each "#" name, which the aliases below point the
+ *  bundle at. The browser condition picks another file for each, so an
+ *  import of one is not an import of Node-only code. */
+const PLATFORM_FILES = [
+  "lib/host/node/default.node.ts",
+  "lib/utils/sha256.node.ts",
+  "lib/utils/path.node.ts",
+];
+
+/** The metafile of a bundle that stops at every listed file, and the
+ *  output directory the bundle was written to, which the metafile's paths
+ *  to external files are relative to. */
 function bundleMetafile() {
   const scratch = mkdtempSync(path.join(os.tmpdir(), "agency-browser-reach-"));
   const metafile = path.join(scratch, "meta.json");
+  const outdir = path.join(scratch, "out");
   try {
     execFileSync(
       path.join(packageRoot, "node_modules/.bin/esbuild"),
@@ -99,33 +116,33 @@ function bundleMetafile() {
         "--alias:#path=./lib/utils/path.node.ts",
         ...listed.map((file) => `--external:${path.join(packageRoot, file)}`),
         `--metafile=${metafile}`,
-        `--outdir=${path.join(scratch, "out")}`,
+        `--outdir=${outdir}`,
         "--log-level=silent",
       ],
       { cwd: packageRoot, stdio: ["ignore", "ignore", "inherit"] },
     );
-    return JSON.parse(readFileSync(metafile, "utf8"));
+    return { meta: JSON.parse(readFileSync(metafile, "utf8")), outdir };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
 
-/** The source file an import specifier in `importer` names, relative to
- *  the package root, or null for a package import. */
-function resolveImport(importer, specifier) {
-  let target;
+/** The source file an import of an external file names, relative to the
+ *  package root, or null for a package import. The metafile writes the
+ *  path of an external file relative to the output directory. */
+function resolveImport(specifier, outdir) {
   if (specifier.startsWith("@/")) {
-    target = path.join("lib", specifier.slice(2));
-  } else if (specifier.startsWith(".")) {
-    target = path.join(path.dirname(importer), specifier);
-  } else {
+    return path.join("lib", specifier.slice(2)).replace(/\.js$/, ".ts");
+  }
+  if (!specifier.startsWith(".")) {
     return null;
   }
+  const target = path.relative(packageRoot, path.resolve(outdir, specifier));
   const asSource = target.replace(/\.js$/, ".ts");
   return existsSync(path.join(packageRoot, asSource)) ? asSource : target;
 }
 
-const meta = bundleMetafile();
+const { meta, outdir } = bundleMetafile();
 // lib/templates holds files generated from .mustache templates, which ESLint
 // ignores; they import typestache and nothing else.
 const reached = Object.keys(meta.inputs)
@@ -137,6 +154,7 @@ if (process.argv.includes("--list")) {
 }
 const covered = picomatch(BROWSER_FILES);
 const problems = [];
+const seenReaches = [];
 
 for (const file of reached) {
   if (!covered(file)) {
@@ -154,10 +172,25 @@ for (const file of reached) {
     if (!entry.external) {
       continue;
     }
-    const target = resolveImport(file, entry.path);
-    if (target && nodeOnly.files.includes(target)) {
+    const target = resolveImport(entry.path, outdir);
+    if (target === null || PLATFORM_FILES.includes(target) || !nodeOnly.files.includes(target)) {
+      continue;
+    }
+    if (REACHES_NODE_ONLY[file]?.includes(target)) {
+      seenReaches.push(`${file} -> ${target}`);
+      continue;
+    }
+    problems.push(
+      `${file} imports ${target}, which is Node-only. Reach the platform through the host instead.`,
+    );
+  }
+}
+
+for (const [file, targets] of Object.entries(REACHES_NODE_ONLY)) {
+  for (const target of targets) {
+    if (!seenReaches.includes(`${file} -> ${target}`)) {
       problems.push(
-        `${file} imports ${target}, which is Node-only. Reach the platform through the host instead.`,
+        `${file} no longer imports ${target}. Remove that entry from REACHES_NODE_ONLY in eslint.node-exceptions.mjs.`,
       );
     }
   }
@@ -172,5 +205,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.files.length} are Node-only and ${waiting.files.length} are waiting.`,
+  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.files.length} are Node-only, ${waiting.files.length} are waiting, and ${seenReaches.length} imports of a Node-only file remain to cut.`,
 );

@@ -12,9 +12,6 @@ const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segmen
 const FS_IMPORTERS = {
   "lib/stdlib/modelBackend.ts":
     "recognizes a model directory, including a Hugging Face cache snapshot whose entries are symlinks into blobs/; reads names and sizes only, never contents",
-  "lib/stdlib/gitignore.ts":
-    "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
-  "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",
 };
 
 const FS_MODULES = ["fs", "fs/promises", "node:fs", "node:fs/promises"];
@@ -51,6 +48,7 @@ export const BROWSER_FILES = [
   "lib/constants.ts",
   "lib/duration.ts",
   "lib/importPaths.ts",
+  "lib/typeChecker/diagnostics.ts",
   "lib/logger.ts",
   "lib/matchVal.ts",
   "lib/statelogClient.ts",

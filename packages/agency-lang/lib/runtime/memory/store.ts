@@ -1,7 +1,7 @@
 import type { MemoryGraphData, ConversationSummary, EmbeddingIndex, MemoryStore } from "./types.js";
 import { MemoryGraphDataSchema, EmbeddingIndexSchema, ConversationSummarySchema } from "./types.js";
 import type { z } from "zod";
-import path from "node:path";
+import path from "#path";
 import type { HostFiles, Root } from "../../host/host.js";
 import { createLogger, type Logger, type LogLevel } from "../../logger.js";
 

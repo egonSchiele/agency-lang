@@ -109,6 +109,13 @@ const nodeTerminal: HostTerminal = {
   writeErr: (text) => {
     process.stderr.write(text);
   },
+  readAll: async () => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+    }
+    return Buffer.concat(chunks).toString("utf8");
+  },
   isInteractive: () => process.stdin.isTTY === true,
   size: () => {
     const { columns, rows } = process.stdout;
@@ -217,6 +224,9 @@ const nodeSystem: HostSystem = {
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
   exit: (code) => process.exit(code),
+  setTitle: (title) => {
+    process.title = title;
+  },
   // Read at the time of the call: a test stands in for process.send.
   parentChannel: () => {
     const send = process.send;

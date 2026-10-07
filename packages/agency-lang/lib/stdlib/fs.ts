@@ -1,9 +1,9 @@
-import path from "path";
-import process from "process";
+import path from "#path";
 import diff_match_patch from "diff-match-patch";
 import type { Host, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { assertContained } from "./assertContained.js";
+import { WINDOWS_PATHS } from "./isContained.js";
 import { expandPath } from "./expandPath.js";
 
 export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
@@ -122,7 +122,7 @@ export type PatchResult = {
 
 /** The real whole path of every file a patch touches, in patch order, for
  *  the `std::applyPatch` payload. Paths in the patch text are relative to
- *  the process cwd. */
+ *  the run's working directory. */
 export async function _patchFiles(patch: string): Promise<string[]> {
   const host = currentHost();
   const files: string[] = [];
@@ -153,7 +153,7 @@ export async function _applyPatch(
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     const spelled = approved === undefined ? f.path : approved[i];
-    await assertContained(host, spelled, allowedPaths ?? [], process.cwd());
+    await assertContained(host, spelled, allowedPaths ?? [], host.system.cwd());
     const located =
       approved === undefined
         ? await host.files.wholePath(spelled)
@@ -284,7 +284,7 @@ async function locateWhole(
   p: string,
   allowedPaths: string[] | undefined,
 ): Promise<Located> {
-  await assertContained(host, p, allowedPaths ?? [], process.cwd());
+  await assertContained(host, p, allowedPaths ?? [], host.system.cwd());
   return host.files.fixedPath(p);
 }
 
@@ -328,7 +328,7 @@ export async function rejectDangerousPath(
   }
   // Expand `~` first so the home / top-level checks below are
   // performed against the actual target, not the literal `~/foo`.
-  const lexical = path.resolve(process.cwd(), expandPath(trimmed));
+  const lexical = path.resolve(host.system.cwd(), expandPath(trimmed));
   const real = await host.files.realDir(lexical);
   const homeReal = await host.files.realDir(host.system.homeDir());
   const cwdReal = await host.files.realDir(host.system.cwd());
@@ -364,14 +364,14 @@ export async function rejectDangerousPath(
 }
 
 function samePath(a: string, b: string): boolean {
-  if (process.platform === "win32") {
+  if (WINDOWS_PATHS) {
     return a.toLowerCase() === b.toLowerCase();
   }
   return a === b;
 }
 
 function cwdStartsWith(cwd: string, prefix: string): boolean {
-  if (process.platform === "win32") {
+  if (WINDOWS_PATHS) {
     return cwd.toLowerCase().startsWith(prefix.toLowerCase());
   }
   return cwd.startsWith(prefix);

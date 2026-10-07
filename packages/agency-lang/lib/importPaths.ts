@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import { ImportResolutionError } from "./importResolutionError.js";
-import * as path from "path";
+import path from "#path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import picomatch from "picomatch";

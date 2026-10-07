@@ -56,12 +56,15 @@ export const BROWSER_FILES = [
   "lib/statelogClient.ts",
   "lib/statelogSender.ts",
   "lib/types/function.ts",
+  "lib/utils/canonicalize.ts",
   "lib/utils/columnWidths.ts",
   "lib/utils/diff.ts",
   "lib/utils/hash.ts",
   "lib/utils/iteration.ts",
   "lib/utils/sha256.node.ts",
   "lib/utils/sha256.portable.ts",
+  "lib/utils/path.node.ts",
+  "lib/utils/path.portable.ts",
   "lib/utils/termcolors.ts",
 ];
 

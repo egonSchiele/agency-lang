@@ -2,7 +2,7 @@ import process from "process";
 import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
-import path from "path";
+import path from "#path";
 import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str } from "tarsec";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -660,6 +660,7 @@ export async function _exists(
 }
 
 export async function _which(command: string): Promise<string> {
+  const host = currentHost();
   if (command.length === 0) return "";
   if (command.includes("/") || command.includes("\\") || command.includes("\0")) {
     throw new Error(
@@ -672,7 +673,7 @@ export async function _which(command: string): Promise<string> {
   const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
   for (const dir of dirs) {
     for (const ext of extensions) {
-      const candidate = path.resolve(dir, command + ext);
+      const candidate = path.resolve(host.system.cwd(), dir, command + ext);
       try {
         const st = await fs.stat(candidate);
         if (!st.isFile()) continue;

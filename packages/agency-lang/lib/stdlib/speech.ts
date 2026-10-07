@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import os from "os";
-import path from "path";
+import path from "#path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec, program } from "./abortable.js";

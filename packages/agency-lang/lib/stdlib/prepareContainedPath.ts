@@ -1,4 +1,4 @@
-import path from "path";
+import path from "#path";
 import { currentHost } from "../runtime/currentHost.js";
 import { resolveCwdPath } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";

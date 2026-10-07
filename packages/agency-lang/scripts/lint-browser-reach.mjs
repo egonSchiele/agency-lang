@@ -63,6 +63,7 @@ function bundleMetafile() {
         "--packages=external",
         "--alias:#default-host=./lib/host/default.node.ts",
         "--alias:#sha256=./lib/utils/sha256.node.ts",
+        "--alias:#path=./lib/utils/path.node.ts",
         ...listed.map((file) => `--external:${path.join(packageRoot, file)}`),
         `--metafile=${metafile}`,
         `--outdir=${path.join(scratch, "out")}`,

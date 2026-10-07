@@ -6,7 +6,7 @@ import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { program } from "./abortable.js";
 import os from "os";
-import path from "path";
+import path from "#path";
 import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";

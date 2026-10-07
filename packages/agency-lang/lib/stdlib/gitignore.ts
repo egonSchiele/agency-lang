@@ -4,7 +4,7 @@
 // .git/info/exclude and the global excludes file, which live outside the
 // tree being walked.
 import fs from "fs/promises";
-import path from "path";
+import path from "#path";
 import picomatch from "picomatch";
 
 type Rule = {
@@ -87,10 +87,10 @@ export async function readAncestorGitignores(dir: string): Promise<GitignoreFile
   return files;
 }
 
-/** The directories strictly above `dir` up to and including the repository
- * root, outermost first. Null when no ancestor holds a `.git` entry, and
- * empty when `dir` is itself a repository root: git never lets an
- * enclosing repository's rules reach inside. */
+/** The directories strictly above `dir`, an absolute path, up to and
+ * including the repository root, outermost first. Null when no ancestor
+ * holds a `.git` entry, and empty when `dir` is itself a repository root:
+ * git never lets an enclosing repository's rules reach inside. */
 export async function repositoryAncestors(dir: string): Promise<string[] | null> {
   if (await exists(path.join(path.resolve(dir), ".git"))) return [];
   const ancestors: string[] = [];

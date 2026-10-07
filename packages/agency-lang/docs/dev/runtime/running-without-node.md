@@ -42,11 +42,12 @@ When you are deciding about a Node feature, go through these steps:
 
 ## Where the targets may differ
 
-The plan is for the targets to differ in four places and nowhere else. The first two are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other two.
+The plan is for the targets to differ in five places and nowhere else. The first three are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other two.
 
 | What differs | Where it lives |
 | --- | --- |
 | Hashing, where Node's OpenSSL is about nine times faster than JavaScript | One pair of files, `lib/utils/sha256.node.ts` and `sha256.portable.ts`, chosen by the `#sha256` entry in the `imports` field of `package.json` |
+| Path arithmetic, where Node's `path` follows the platform's rules | One pair of files, `lib/utils/path.node.ts` (Node's `path`) and `path.portable.ts` (`path-browserify`, Node's own POSIX `path.js`), chosen by the `#path` entry. See [Paths](#paths) |
 | Platform calls, such as reading a file or an environment variable | The host, `lib/host/`. One pair of files, `default.node.ts` and `default.browser.ts`, chosen by the `#default-host` entry, each of which builds the host of its platform. See [host.md](host.md) |
 | Which runtime modules are included | One entry point for the browser beside `lib/runtime/index.ts` |
 | Which stdlib modules exist | The `@capabilities` tag on each effect, which makes a browser build of a program that raises a file effect a compile error |
@@ -72,6 +73,14 @@ Node resolves `#sha256` to the `default` file. esbuild resolves it to the `brows
 Two other places have to know about each entry. `lib/utils/packageImports.d.ts` declares the name's type with an ambient `declare module`, so a fresh checkout type-checks before `dist` exists. `vitest.aliases.ts` maps it for the test runner, which does not read `package.json`. When you add an entry, add it to both. Do not add it to `paths` in `tsconfig.json`: the build runs `tsc-alias`, which rewrites every `paths` entry into a relative import and would undo the choice.
 
 Hashing is the only case so far where Node keeps a faster implementation. Rule 3 above asks for a measurement first: the portable SHA-256 takes 0.8 ms on a 240 KB file and 25 ms on 8 MB, against 0.086 ms and 2.6 ms for Node's.
+
+### Paths
+
+A file the browser can reach imports `path` from `#path`, never from `path`. On Node that is Node's own module, with the platform's rules. In a browser bundle it is `path-browserify`, which is Node's POSIX `path.js` on its own, so the two give the same answers on macOS and Linux; `lib/utils/path.test.ts` checks that on the inputs the containment tests use, since the containment checks are built on `resolve` and `relative`. The declaration in `packageImports.d.ts` names only the functions both modules have.
+
+`path.resolve` reads the process's working directory when no argument is absolute, and a browser has none. So every `resolve` is given an absolute first argument: the run's working directory from `host.system.cwd()`, or a path already resolved. `relative` resolves both of its arguments the same way, and its callers pass absolute paths.
+
+Windows path rules follow the path module, not the operating system: `isContained` and the cwd check in `lib/stdlib/fs.ts` compare paths case-insensitively when `path.sep` is a backslash, which is `WINDOWS_PATHS` in `lib/stdlib/isContained.ts`. In a browser bundle the module is POSIX and the comparison is exact.
 
 Other languages with several targets work the same way. TypeScript's compiler never calls `fs`. It calls a `System` object, and Node and the browser playground each supply one. Kotlin has `expect` and `actual`. Go picks whole files by name, such as `file_js.go`. Dart has conditional imports.
 

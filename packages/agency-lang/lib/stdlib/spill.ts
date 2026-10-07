@@ -2,7 +2,7 @@
 // kept, and the two ways it comes back out. One fixed place, outside every
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
-import path from "path";
+import path from "#path";
 import { randomBytes } from "crypto";
 import type { Host, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";

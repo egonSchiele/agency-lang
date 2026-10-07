@@ -1,11 +1,15 @@
-import path from "path";
+import path from "#path";
+import { currentHost } from "../runtime/currentHost.js";
 
 export function _join(parts: string[]): string {
   return path.join(...parts);
 }
 
+/** Resolves from the run's working directory, like `path.resolve`
+ *  does from the process's. */
 export function _resolve(parts: string[]): string {
-  return path.resolve(...parts);
+  const host = currentHost();
+  return path.resolve(host.system.cwd(), ...parts);
 }
 
 export function _basename(p: string, ext: string): string {

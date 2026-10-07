@@ -17,6 +17,29 @@ declare module "#sha256" {
   export function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array;
 }
 
+declare module "#path" {
+  import nodePath from "path";
+  /** The path module: Node's own on Node (the platform's rules), and
+   *  Node's POSIX `path.js` in a browser bundle. The functions both have;
+   *  `matchesGlob` and `toNamespacedPath` are Node's alone. A caller gives
+   *  `resolve` an absolute first argument, the working directory from
+   *  `host.system.cwd()`, so the module never reads `process.cwd()`. */
+  const portablePath: Pick<
+    typeof nodePath,
+    | "basename"
+    | "dirname"
+    | "extname"
+    | "format"
+    | "isAbsolute"
+    | "join"
+    | "normalize"
+    | "parse"
+    | "relative"
+    | "resolve"
+  > & { sep: string; delimiter: string };
+  export default portablePath;
+}
+
 declare module "#default-host" {
   import type { Host } from "../host/host.js";
   /** The host a RuntimeContext uses when its caller passed none: a

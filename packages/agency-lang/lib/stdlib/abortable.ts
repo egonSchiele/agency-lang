@@ -36,11 +36,12 @@ export type AbortableSpawnOptions = {
   /** When set, an abort fires the same teardown path as the timeout
    *  and the returned promise rejects with `AgencyCancelledError`. */
   signal?: AbortSignal;
-  /** Max stdout to buffer, in UTF-8 bytes. Once exceeded the child is
-   *  killed, stdout is marked truncated (a note is appended), and the
-   *  call resolves successfully with the partial output. 0/undefined =
-   *  unbounded. Keeps auto-approved reads (e.g. a huge `git diff`) from
-   *  buffering unbounded memory. */
+  /** Max bytes to buffer per output stream, in UTF-8 bytes. Once stdout
+   *  exceeds it the child is killed, stdout is marked truncated (a note
+   *  is appended), and the call resolves successfully with the partial
+   *  output; once stderr exceeds it the call resolves with exit code 1
+   *  and a note in stderr. 0/undefined = unbounded. Keeps auto-approved
+   *  reads (e.g. a huge `git diff`) from buffering unbounded memory. */
   maxOutputBytes?: number;
 };
 
@@ -77,9 +78,9 @@ async function runCancellable(
 
 /**
  * Run `command` with `args` and collect its output. A timeout resolves
- * with exit code 1 and a note in stderr; the byte cap resolves with the
- * partial output and a note in stdout; an abort rejects with
- * `AgencyCancelledError`.
+ * with exit code 1 and a note in stderr; the byte cap on stdout resolves
+ * with the partial output and a note in stdout, and on stderr with exit
+ * code 1 and a note; an abort rejects with `AgencyCancelledError`.
  */
 export async function abortableSpawn(
   host: Host,
@@ -136,13 +137,22 @@ function spawnResultOf(
   options: AbortableSpawnOptions,
   result: RunResult,
 ): SpawnResult {
-  if (result.truncated) {
+  if (result.truncated === "stdout") {
     // We killed the child on purpose after hitting the byte cap; treat
     // the partial output as a success rather than a spawn failure.
     return {
       stdout: result.stdout + `\n[output truncated at ${options.maxOutputBytes} bytes]`,
       stderr: result.stderr,
       exitCode: 0,
+    };
+  }
+  if (result.truncated === "stderr") {
+    // A child that wrote that much to stderr was failing; its exit code
+    // is whatever the kill left, so say so.
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr + `\n[standard error truncated at ${options.maxOutputBytes} bytes]`,
+      exitCode: 1,
     };
   }
   if (result.timedOut) {
@@ -185,8 +195,9 @@ export async function abortableExec(
 }
 
 /** The failure `runProgram` rejects with for a child that did not exit
- *  with 0 or wrote past the output limit, carrying its output the way
- *  Node's `execFile` does. `ending` says which. */
+ *  with 0, wrote past the output limit, ran past its time limit, or was
+ *  cancelled, carrying its output the way Node's `execFile` does.
+ *  `ending` says which. */
 export class ProgramFailed extends Error {
   constructor(
     command: string,
@@ -206,10 +217,11 @@ export const PROGRAM_OUTPUT_LIMIT = 1024 * 1024;
 
 /**
  * Run `command` with `args` and return its output, rejecting with
- * `ProgramFailed` when it does not exit with 0 or writes more than the
- * output limit to one stream, and with the host's error when it cannot
- * be started. The contract of Node's `execFile`, for the helpers that
- * call a fixed program such as `osascript` or `security`.
+ * `ProgramFailed` when it does not exit with 0, writes more than the
+ * output limit to one stream, runs past `timeoutMs`, or is cancelled by
+ * `signal`, and with the host's error when it cannot be started. The
+ * contract of Node's `execFile`, for the helpers that call a fixed
+ * program such as `osascript` or `security`.
  */
 export async function runProgram(
   host: Host,
@@ -222,16 +234,19 @@ export async function runProgram(
     ...options,
     maxOutputBytes: limit,
   });
-  if (result.truncated) {
-    // The child may still have exited with 0, if it finished before the
-    // kill reached it. Partial output is not its output.
-    throw new ProgramFailed(
-      command,
-      `wrote more than ${limit} bytes`,
-      result.exitCode,
-      result.stdout,
-      result.stderr,
-    );
+  // A killed child may still have exited with 0, if it finished before
+  // the kill reached it or handled the signal; what it printed is not
+  // its answer.
+  const failed = (ending: string) =>
+    new ProgramFailed(command, ending, result.exitCode, result.stdout, result.stderr);
+  if (result.truncated !== null) {
+    throw failed(`wrote more than ${limit} bytes to ${result.truncated}`);
+  }
+  if (result.timedOut) {
+    throw failed(`did not finish within ${options.timeoutMs} ms`);
+  }
+  if (result.aborted) {
+    throw failed("was cancelled");
   }
   if (result.exitCode !== 0) {
     const ending = result.exitCode === null ? "was killed" : `exited with code ${result.exitCode}`;

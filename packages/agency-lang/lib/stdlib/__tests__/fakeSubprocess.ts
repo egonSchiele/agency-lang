@@ -14,7 +14,7 @@ export function exited(stdout = "", stderr = ""): RunResult {
     signal: null,
     stdout,
     stderr,
-    truncated: false,
+    truncated: null,
     timedOut: false,
     aborted: false,
   };
@@ -27,7 +27,7 @@ export function failed(stderr = "", exitCode: number | null = 1): RunResult {
     signal: null,
     stdout: "",
     stderr,
-    truncated: false,
+    truncated: null,
     timedOut: false,
     aborted: false,
   };

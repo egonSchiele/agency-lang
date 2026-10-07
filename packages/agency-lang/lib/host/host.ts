@@ -226,8 +226,8 @@ export type RunOptions = {
   /** The child is killed when this fires. */
   signal?: AbortSignal;
   /** Each of standard output and standard error is kept up to this many
-   *  bytes; past it the child is killed and `truncated` is set. 0 or
-   *  absent: no limit. */
+   *  bytes; past it the child is killed and `truncated` names the stream.
+   *  0 or absent: no limit. */
   maxOutputBytes?: number;
   /** Whether standard output and standard error are collected. A child
    *  that writes for minutes, such as a speech player, is not collected. */
@@ -244,8 +244,9 @@ export type RunResult = {
   signal: string | null;
   stdout: string;
   stderr: string;
-  /** The child was killed because `maxOutputBytes` was reached. */
-  truncated: boolean;
+  /** The stream that reached `maxOutputBytes`, for which the child was
+   *  killed, or null. */
+  truncated: "stdout" | "stderr" | null;
   /** The child was killed because `timeoutMs` passed. */
   timedOut: boolean;
   /** The child was killed because `signal` fired. */

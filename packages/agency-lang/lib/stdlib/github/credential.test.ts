@@ -136,7 +136,7 @@ describe("_resolveAndCache (cache layer, injected sources)", () => {
     expect(await _resolveAndCache(other, sources({ env: { GITHUB_TOKEN: "other-host" } }))).toBe(
       "other-host",
     );
-    // The cache now belongs to the other host; the first host resolves again too.
+    // The cache belongs to the other host; the first host resolves again too.
     expect(await _resolveAndCache(host, sources({ env: { GITHUB_TOKEN: "first-again" } }))).toBe(
       "first-again",
     );

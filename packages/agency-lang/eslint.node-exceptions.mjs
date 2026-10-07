@@ -93,7 +93,6 @@ export const WAITING = [
   "lib/stdlib/oauth.ts",
   "lib/stdlib/shell.ts",
   "lib/stdlib/speech.ts",
-  "lib/stdlib/spill.ts",
   "lib/stdlib/statelog.ts",
   "lib/stdlib/system.ts",
   "lib/stdlib/template.ts",

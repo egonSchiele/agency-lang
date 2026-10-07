@@ -166,7 +166,7 @@ export { SimpleOpenAIClient } from "./simpleOpenAIClient.js";
 export type { LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 export { DeterministicClient } from "./deterministicClient.js";
 export type { LLMMock, ReturnMock, ToolCallMock } from "./deterministicClient.js";
-export { installFetchMock } from "./fetchMock.js";
+export { fetchMock } from "./fetchMock.js";
 export type { FetchMock } from "./fetchMock.js";
 
 export {

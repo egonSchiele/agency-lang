@@ -1,9 +1,10 @@
 /**
  * One strict base64 decoder shared by every caller (writeBinary, S3 binary
- * uploads). `Buffer.from(x, "base64")` silently drops invalid characters and
+ * uploads). A lenient decoder silently drops invalid characters and
  * truncates at bad padding, so it would produce corrupted bytes rather than
- * fail. This validates first and throws a clear error; whitespace is allowed and
- * ignored.
+ * fail. This validates first and throws a clear error; whitespace is allowed
+ * and ignored. The decoding itself is the platform's own `atob`, which Node
+ * and browsers both have.
  */
 export const BASE64_QUANTUM_LENGTH = 4;
 export const BASE64_MAX_PADDING_LENGTH = 2;
@@ -19,7 +20,23 @@ export function decodeBase64Strict(base64: string): Uint8Array {
   ) {
     throw new Error("`base64` is not valid base64-encoded data (expected standard base64).");
   }
-  return new Uint8Array(Buffer.from(normalized, "base64"));
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/** `encodeBase64` in the URL-safe alphabet with no padding, the way
+ *  `base64url` spells it. */
+export function encodeBase64Url(bytes: Uint8Array): string {
+  return encodeBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** The number of bytes in the UTF-8 encoding of `text`. */
+export function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
 }
 
 /** Standard base64 with padding, through the platform's own `btoa`, which

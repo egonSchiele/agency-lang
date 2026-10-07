@@ -1,3 +1,4 @@
+import { currentHost } from "../runtime/currentHost.js";
 import { _getAccessToken, _isAuthorized, _authorize } from "./oauth.js";
 
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -89,6 +90,7 @@ export async function _authorizeCalendar(
 }
 
 export async function _listEvents(params?: ListEventsParams): Promise<CalendarEvent[]> {
+  const host = currentHost();
   const token = await getToken();
   const calendarId = params?.calendarId || "primary";
 
@@ -108,7 +110,7 @@ export async function _listEvents(params?: ListEventsParams): Promise<CalendarEv
     url.searchParams.set("maxResults", "10");
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await host.network.fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -122,6 +124,7 @@ export async function _listEvents(params?: ListEventsParams): Promise<CalendarEv
 }
 
 export async function _createEvent(params: CreateEventParams): Promise<CalendarEvent> {
+  const host = currentHost();
   const token = await getToken();
   const calendarId = params.calendarId || "primary";
 
@@ -137,7 +140,7 @@ export async function _createEvent(params: CreateEventParams): Promise<CalendarE
     body.attendees = params.attendees.map((email) => ({ email }));
   }
 
-  const response = await fetch(
+  const response = await host.network.fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
@@ -161,6 +164,7 @@ export async function _createEvent(params: CreateEventParams): Promise<CalendarE
 }
 
 export async function _updateEvent(params: UpdateEventParams): Promise<CalendarEvent> {
+  const host = currentHost();
   const token = await getToken();
   const calendarId = params.calendarId || "primary";
 
@@ -171,7 +175,7 @@ export async function _updateEvent(params: UpdateEventParams): Promise<CalendarE
   if (params.description) body.description = params.description;
   if (params.location) body.location = params.location;
 
-  const response = await fetch(
+  const response = await host.network.fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(params.eventId)}`,
     {
       method: "PATCH",
@@ -198,10 +202,11 @@ export async function _deleteEvent(
   eventId: string,
   calendarId?: string,
 ): Promise<{ deleted: boolean }> {
+  const host = currentHost();
   const token = await getToken();
   const cal = calendarId || "primary";
 
-  const response = await fetch(
+  const response = await host.network.fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(eventId)}`,
     {
       method: "DELETE",

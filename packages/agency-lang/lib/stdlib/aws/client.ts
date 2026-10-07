@@ -119,7 +119,7 @@ export async function sendAwsRequest(
 
   return runHttp(
     async () => {
-      const response = await fetch(wireUrl, {
+      const response = await ctx.host.network.fetch(wireUrl, {
         method: request.method,
         headers,
         // Node's fetch accepts a Uint8Array body at runtime; the cast sidesteps

@@ -18,6 +18,7 @@ import {
   type Capability,
   type Host,
   type HostEnv,
+  type HostNetwork,
   type HostRandom,
   type HostSettings,
   type HostSystem,
@@ -31,6 +32,9 @@ export type NodeHostOptions = {
   capabilities?: Capability[];
   /** Options for the file part; the symlink tests pass `seams`. */
   files?: NodeFilesOptions;
+  /** Defaults to the global `fetch`. The test runner passes one that
+   *  answers from its fetch mocks. */
+  network?: HostNetwork;
   /** Defaults to the real clock. A test passes a `FakeClock`. */
   clock?: Clock;
   onUse?: MakeHostArgs["onUse"];
@@ -43,6 +47,7 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     onUse: options.onUse,
     parts: {
       files: nodeFilesPart(options.files),
+      network: options.network ?? nodeNetwork,
       env: nodeEnv,
       terminal: nodeTerminal,
       system: nodeSystem,
@@ -52,6 +57,12 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     },
   });
 }
+
+// Read at the time of the call, not when this file loads, so a test that
+// replaces the global `fetch` is honoured.
+const nodeNetwork: HostNetwork = {
+  fetch: (input, init) => globalThis.fetch(input, init),
+};
 
 const nodeEnv: HostEnv = {
   get: (name) => process.env[name] ?? null,

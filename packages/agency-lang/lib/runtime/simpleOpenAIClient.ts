@@ -2,6 +2,7 @@ import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smolta
 import type { Result } from "smoltalk";
 import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
 import { DEFAULT_MODEL } from "@/config/config.js";
+import type { HostNetwork } from "../host/host.js";
 import { currentHost } from "./currentHost.js";
 
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
@@ -9,9 +10,13 @@ import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig, ToolCall } from
 export class SimpleOpenAIClient implements LLMClient {
   private apiKey: string;
   private defaultModel: string;
+  /** The network of the host this client was built under. */
+  private network: HostNetwork;
 
   constructor(opts?: { apiKey?: string; model?: string }) {
-    const apiKey = opts?.apiKey ?? currentHost().settings.read("OPENAI_API_KEY");
+    const host = currentHost();
+    this.network = host.network;
+    const apiKey = opts?.apiKey ?? host.settings.read("OPENAI_API_KEY");
     if (!apiKey) {
       throw new Error(
         "OPENAI_API_KEY not found. Pass apiKey option or set OPENAI_API_KEY environment variable.",
@@ -26,7 +31,7 @@ export class SimpleOpenAIClient implements LLMClient {
     const body = this.buildRequestBody(config, model);
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await this.network.fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,7 +84,7 @@ export class SimpleOpenAIClient implements LLMClient {
     const body: Record<string, unknown> = { model, input };
     if (config?.dimensions) body.dimensions = config.dimensions;
     try {
-      const response = await fetch("https://api.openai.com/v1/embeddings", {
+      const response = await this.network.fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

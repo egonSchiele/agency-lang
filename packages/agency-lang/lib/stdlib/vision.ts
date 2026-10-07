@@ -8,7 +8,7 @@ import {
   type LocalRequestOptions,
 } from "./localRequest.js";
 import { approvedFileBytes } from "./approvedPath.js";
-import type { Host } from "../host/host.js";
+import type { Host, HostNetwork } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { encodeBase64 } from "./base64.js";
 import * as path from "node:path";
@@ -147,6 +147,7 @@ async function approvedBase64(
  *  the caller gave, for the message that says how to start a server, and
  *  `servedName` the one `checkVisionModel` returned for it. */
 export async function postVisionRequest(
+  network: HostNetwork,
   task: VisionTask,
   model: string,
   servedName: string,
@@ -155,6 +156,7 @@ export async function postVisionRequest(
   options: LocalRequestOptions = {},
 ): Promise<LocalReply> {
   const out = await postLocalJson(
+    network,
     VISION_TASKS[task].route,
     { model: servedName, image: imageBase64, ...fields },
     REQUEST_TIMEOUT_MS,
@@ -187,7 +189,7 @@ async function visionRequest(
   if ("error" in image) {
     return image;
   }
-  return postVisionRequest(task, model, checked.servedName, image.base64, fields);
+  return postVisionRequest(host.network, task, model, checked.servedName, image.base64, fields);
 }
 
 /** The answer in a reply: its `replyField`, with each item given its

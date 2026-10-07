@@ -18,7 +18,8 @@ export type SearchOptions = {
 };
 
 export async function _search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
   const apiKey = options?.apiKey || settings.read("BRAVE_API_KEY");
   if (!apiKey) {
@@ -36,7 +37,7 @@ export async function _search(query: string, options?: SearchOptions): Promise<S
   if (options?.safesearch) url.searchParams.set("safesearch", options.safesearch);
   if (options?.freshness) url.searchParams.set("freshness", options.freshness);
 
-  const response = await fetch(url, {
+  const response = await host.network.fetch(url, {
     headers: {
       Accept: "application/json",
       "X-Subscription-Token": apiKey,
@@ -69,7 +70,8 @@ export async function _tavilySearch(
   query: string,
   options?: TavilySearchOptions,
 ): Promise<SearchResult[]> {
-  const { settings } = currentHost();
+  const host = currentHost();
+  const { settings } = host;
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
   const apiKey = options?.apiKey || settings.read("TAVILY_API_KEY");
   if (!apiKey) {
@@ -84,7 +86,7 @@ export async function _tavilySearch(
   if (options?.searchDepth) body.search_depth = options.searchDepth;
   if (options?.topic) body.topic = options.topic;
 
-  const response = await fetch(TAVILY_SEARCH_URL, {
+  const response = await host.network.fetch(TAVILY_SEARCH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

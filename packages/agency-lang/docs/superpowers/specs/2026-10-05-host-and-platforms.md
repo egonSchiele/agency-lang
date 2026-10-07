@@ -363,15 +363,19 @@ inside one call.
 
 ```ts
 export type HostNetwork = {
-  fetch(request: Request): Promise<Response>;
+  fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
 };
 ```
 
-`Request` and `Response` are the web standard types, which Node and
-browsers both have. The stdlib calls the global `fetch` today. Every such
-call moves to `host.network.fetch`, so a host can refuse it or limit it
-to a list of sites. `installFetchMock` becomes a host that returns
-scripted responses.
+The platform's own `fetch`, with its arguments and its `Response`, which
+Node and browsers both have. The stdlib called the global `fetch`; every
+such call goes through `host.network.fetch`, so a host can refuse it or
+limit it to a list of sites. The test runner's fetch mocks are a network
+part the default host builds from `AGENCY_FETCH_MOCKS_FILE`. The model
+client's own requests do not go through the host: smoltalk, and any
+`LLMClient` a caller supplies, fetch for themselves. `SimpleOpenAIClient`,
+the small client the runtime ships, is Agency's own code and uses the
+network part of the host it was built under.
 
 ### Subprocesses
 

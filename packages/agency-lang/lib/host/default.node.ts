@@ -8,36 +8,40 @@
 
 import { readFileSync } from "fs";
 import { FakeClock } from "../runtime/clock.js";
-import { installFetchMock } from "../runtime/fetchMock.js";
-import { nodeHost } from "./nodeHost.js";
-import type { Host } from "./host.js";
+import { fetchMock } from "../runtime/fetchMock.js";
+import { nodeHost, type NodeHostOptions } from "./nodeHost.js";
+import type { Host, HostNetwork } from "./host.js";
 
-let fetchMocksInstalled = false;
+let mockNetwork: HostNetwork | null | undefined;
 
-/** Install the fetch mocks when AGENCY_FETCH_MOCKS_FILE names a file, once
- *  per process. The runner writes the resolved mocks (returnFile bodies
- *  already inlined) to a temp file and passes its path — a file, not an
- *  inline env value, so a large response body cannot blow the exec arg/env
- *  size limit (ARG_MAX). Independent of AGENCY_LLM_MOCKS — a test may mock
- *  the network while using a real LLM, or vice versa. This runs when the
- *  first context is built, before any node runs, ahead of any http.ts /
- *  stdlib / interop fetch, by replacing the global `fetch`. */
-function installFetchMocksOnce(): void {
-  if (fetchMocksInstalled) {
-    return;
+/** The network part that answers from the fetch mocks when
+ *  AGENCY_FETCH_MOCKS_FILE names a file, read once per process, or null
+ *  when it does not. The runner writes the resolved mocks (returnFile
+ *  bodies already inlined) to a temp file and passes its path — a file,
+ *  not an inline env value, so a large response body cannot blow the exec
+ *  arg/env size limit (ARG_MAX). Independent of AGENCY_LLM_MOCKS — a test
+ *  may mock the network while using a real LLM, or vice versa. */
+function fetchMockNetwork(): HostNetwork | null {
+  if (mockNetwork === undefined) {
+    const mocksFile = process.env.AGENCY_FETCH_MOCKS_FILE;
+    mockNetwork = mocksFile
+      ? { fetch: fetchMock(JSON.parse(readFileSync(mocksFile, "utf-8"))) }
+      : null;
   }
-  fetchMocksInstalled = true;
-  const mocksFile = process.env.AGENCY_FETCH_MOCKS_FILE;
-  if (mocksFile) {
-    installFetchMock(JSON.parse(readFileSync(mocksFile, "utf-8")));
-  }
+  return mockNetwork;
 }
 
 export function defaultHost(): Host {
-  installFetchMocksOnce();
+  const options: NodeHostOptions = {};
   // Require exactly "1", not any truthy string. AGENCY_FAKE_CLOCK=0 must
   // disable, not enable — a non-empty "0" is truthy and would surprise. The
   // test runner sets the variable per test case (see lib/cli/util.ts).
-  const fakeClock = process.env.AGENCY_FAKE_CLOCK === "1";
-  return nodeHost(fakeClock ? { clock: new FakeClock() } : {});
+  if (process.env.AGENCY_FAKE_CLOCK === "1") {
+    options.clock = new FakeClock();
+  }
+  const network = fetchMockNetwork();
+  if (network !== null) {
+    options.network = network;
+  }
+  return nodeHost(options);
 }

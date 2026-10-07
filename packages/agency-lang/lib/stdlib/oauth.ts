@@ -1,6 +1,7 @@
 import http from "http";
 import crypto from "crypto";
 import { sha256Bytes } from "../utils/hash.js";
+import { encodeBase64Url } from "./base64.js";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import os from "os";
@@ -73,7 +74,7 @@ function generateCodeVerifier(): string {
 }
 
 function generateCodeChallenge(verifier: string): string {
-  return Buffer.from(sha256Bytes(new TextEncoder().encode(verifier))).toString("base64url");
+  return encodeBase64Url(sha256Bytes(new TextEncoder().encode(verifier)));
 }
 
 function escapeHtml(str: string): string {
@@ -201,6 +202,7 @@ function waitForCallback(
 }
 
 async function exchangeCodeForTokens(
+  host: Host,
   tokenUrl: string,
   params: Record<string, string>,
   signal: AbortSignal | undefined,
@@ -209,7 +211,7 @@ async function exchangeCodeForTokens(
 
   return runHttp(
     async () => {
-      const response = await fetch(tokenUrl, {
+      const response = await host.network.fetch(tokenUrl, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
@@ -338,7 +340,7 @@ async function authorizeImpl(
   };
   if (config.clientSecret) exchangeParams.client_secret = config.clientSecret;
 
-  const tokenResponse = await exchangeCodeForTokens(config.tokenUrl, exchangeParams, signal);
+  const tokenResponse = await exchangeCodeForTokens(host, config.tokenUrl, exchangeParams, signal);
 
   const tokens: StoredTokens = {
     access_token: tokenResponse.access_token,
@@ -419,7 +421,12 @@ async function getAccessTokenImpl(
       };
       if (tokens.client_secret) refreshParams.client_secret = tokens.client_secret;
 
-      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, refreshParams, signal);
+      const refreshResponse = await exchangeCodeForTokens(
+        host,
+        tokens.token_url,
+        refreshParams,
+        signal,
+      );
 
       tokens.access_token = refreshResponse.access_token;
       tokens.expires_at = Date.now() + refreshResponse.expires_in * 1000;

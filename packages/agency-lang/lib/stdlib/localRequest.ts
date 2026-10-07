@@ -1,3 +1,4 @@
+import type { HostNetwork } from "../host/host.js";
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 
 /** Posting a request to the server `agency local serve` runs. Every
@@ -40,6 +41,7 @@ function describeFetchError(err: unknown): string {
  *  the request is waiting or while the reply's body is arriving. A request
  *  that runs out of time keeps the timeout's own message. */
 export async function postLocalJson(
+  network: HostNetwork,
   route: string,
   body: Record<string, unknown>,
   timeoutMs: number,
@@ -49,7 +51,7 @@ export async function postLocalJson(
   const cancelled = () => options.signal?.aborted === true;
   let res: Response;
   try {
-    res = await fetch(`${mlxBaseUrl(options.baseUrl)}${route}`, {
+    res = await network.fetch(`${mlxBaseUrl(options.baseUrl)}${route}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

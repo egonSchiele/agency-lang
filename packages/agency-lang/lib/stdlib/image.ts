@@ -196,7 +196,7 @@ export async function _generateImage(
     return failure(`Image generation failed: ${out.error}`);
   }
   return success({
-    base64: Buffer.from(out.image.data).toString("base64"),
+    base64: encodeBase64(out.image.data),
     mimeType: out.image.mimeType,
   });
 }
@@ -270,7 +270,7 @@ export async function _generateImageLocal(
   }
   const image = out.image as LocalGeneratedImage;
   return success({
-    base64: Buffer.from(image.data).toString("base64"),
+    base64: encodeBase64(image.data),
     mimeType: image.mimeType,
     seed: image.seed ?? null,
   });

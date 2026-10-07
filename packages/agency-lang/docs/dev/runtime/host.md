@@ -12,6 +12,8 @@ The design is `docs/superpowers/specs/2026-10-05-host-and-platforms.md`.
 export type Host = {
   name: string;
   capabilities: Capability[];
+  files: HostFiles;
+  network: HostNetwork;
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -23,7 +25,7 @@ export type Host = {
 
 The host has two kinds of part.
 
-**A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs: `files` needs `fileRead`, and its writing functions (`FILE_WRITE_FUNCTIONS`) need `fileWrite` as well; `env` and `terminal` need their own names.
+**A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs: `files` needs `fileRead`, and its writing functions (`FILE_WRITE_FUNCTIONS`) need `fileWrite` as well; `network`, `env`, and `terminal` need their own names.
 
 **Every host provides the other parts.** `system`, `settings`, `clock`, and `random` have no capability name. No platform lacks a clock, and nearly every function reads the time, so a capability for it would be on every effect.
 
@@ -102,11 +104,15 @@ Three functions exist only on the host:
 
 A refusal from `makeHost` throws when the function is called, before any promise exists. An `await` in an async caller turns that into a rejection, which is where every caller stands.
 
+### The network part
+
+`HostNetwork` is the platform's own `fetch`, with the same arguments and the same `Response`, so a host can refuse it, limit it to a list of sites, or answer from scripted responses. `nodeHost` calls the global `fetch` at the time of each call, so a test that replaces the global is honoured. `memoryHost` refuses every request unless the test passed a `fetch`. Every `fetch` in the stdlib goes through `host.network.fetch`, and a helper reaches the network the way it reaches files: through the run it was handed, or `currentHost()` on its first line. The model client is the exception: smoltalk, and any `LLMClient` a caller supplies, makes its own requests, which the host neither sees nor refuses. `SimpleOpenAIClient`, the small client the runtime ships, is Agency's own code and does go through the network part of the host it was built under.
+
 ### The default host
 
 `lib/host/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`. The runtime imports it as `#default-host`, an entry in the `imports` field of `package.json` that resolves to this file under the `default` condition. `running-without-node.md` explains the mechanism and the three places that have to know about each entry.
 
-`default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, which it installs once per process by replacing the global `fetch`. `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
+`default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, read once per process, which becomes the host's network part (`fetchMock` in `lib/runtime/fetchMock.ts`); the global `fetch` is left alone. `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
 
 ## How code reaches the host
 

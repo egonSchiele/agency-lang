@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { nodeHost } from "../host/nodeHost.js";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { postLocalJson, explainNoServer, CANCELLED } from "./localRequest.js";
+
+const { network } = nodeHost();
 
 describe("postLocalJson", () => {
   // A stand-in for the local model server. `respond` is set by each test
@@ -50,24 +53,26 @@ describe("postLocalJson", () => {
 
   it("posts to the address it is given and returns the parsed reply", async () => {
     answerWith(200, '{"tags":[]}');
-    const out = await postLocalJson("/vision/tags", { model: "m" }, LONG_MS, "vision", { baseUrl });
+    const out = await postLocalJson(network, "/vision/tags", { model: "m" }, LONG_MS, "vision", {
+      baseUrl,
+    });
     expect(out).toEqual({ reply: { tags: [] } });
     expect(received).toEqual(["/v1/vision/tags"]);
   });
 
   it("returns the server's own message for a refusal", async () => {
     answerWith(400, '{"error":{"message":"steps must be at most 50."}}');
-    const out = await postLocalJson("/x", {}, LONG_MS, "image", { baseUrl });
+    const out = await postLocalJson(network, "/x", {}, LONG_MS, "image", { baseUrl });
     expect(out).toEqual({ error: "steps must be at most 50." });
   });
 
   it("names the server when a reply is not JSON, or is a refusal with no message", async () => {
     answerWith(500, "oops");
-    expect(await postLocalJson("/x", {}, LONG_MS, "image", { baseUrl })).toEqual({
+    expect(await postLocalJson(network, "/x", {}, LONG_MS, "image", { baseUrl })).toEqual({
       error: "The image server answered 500 with a body that is not JSON.",
     });
     answerWith(503, "{}");
-    expect(await postLocalJson("/x", {}, LONG_MS, "vision", { baseUrl })).toEqual({
+    expect(await postLocalJson(network, "/x", {}, LONG_MS, "vision", { baseUrl })).toEqual({
       error: "The vision server answered 503.",
     });
   });
@@ -76,7 +81,7 @@ describe("postLocalJson", () => {
     answerWith(200, "{}");
     const controller = new AbortController();
     controller.abort();
-    const out = await postLocalJson("/x", {}, LONG_MS, "image", {
+    const out = await postLocalJson(network, "/x", {}, LONG_MS, "image", {
       baseUrl,
       signal: controller.signal,
     });
@@ -89,7 +94,7 @@ describe("postLocalJson", () => {
     respond = () => {};
     const arrived = nextRequest();
     const controller = new AbortController();
-    const pending = postLocalJson("/x", {}, LONG_MS, "image", {
+    const pending = postLocalJson(network, "/x", {}, LONG_MS, "image", {
       baseUrl,
       signal: controller.signal,
     });
@@ -106,7 +111,7 @@ describe("postLocalJson", () => {
     };
     const arrived = nextRequest();
     const controller = new AbortController();
-    const pending = postLocalJson("/x", {}, LONG_MS, "image", {
+    const pending = postLocalJson(network, "/x", {}, LONG_MS, "image", {
       baseUrl,
       signal: controller.signal,
     });
@@ -122,7 +127,7 @@ describe("postLocalJson", () => {
     received = [];
     respond = () => {};
     onRequest = () => {};
-    const out = await postLocalJson("/x", {}, 50, "image", {
+    const out = await postLocalJson(network, "/x", {}, 50, "image", {
       baseUrl,
       signal: new AbortController().signal,
     });

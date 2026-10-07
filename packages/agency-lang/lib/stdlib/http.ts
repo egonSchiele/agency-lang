@@ -219,7 +219,7 @@ async function fetchImpl(
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(
     async () => {
-      const result = await fetch(url, buildInit(method, headers, body, signal));
+      const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
       let responseBody: string;
       try {
         responseBody = await readBodyCapped(result, url, signal);
@@ -279,7 +279,7 @@ async function fetchJSONImpl(
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(
     async () => {
-      const result = await fetch(url, buildInit(method, headers, body, signal));
+      const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
       const text = await readBodyCapped(result, url, signal);
       const statusFailure = httpStatusFailure(result, url, text);
       if (statusFailure) return statusFailure;
@@ -336,7 +336,7 @@ async function fetchMarkdownImpl(
   const signal = ctx.getAbortSignal(stack);
   return await runHttp(
     async () => {
-      const result = await fetch(url, buildInit(method, headers, body, signal));
+      const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
       const contentType = result.headers.get("content-type") ?? "";
       const responseBody = await readBodyCapped(result, url, signal);
       const statusFailure = httpStatusFailure(result, url, responseBody);

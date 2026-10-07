@@ -61,7 +61,10 @@ export async function _githubRequest<Params, Out>(
   const url = buildUrl(endpoint, params);
   return await runHttp(
     async () => {
-      const response = await fetch(url, buildRequestInit(endpoint, params, token, signal));
+      const response = await run.ctx.host.network.fetch(
+        url,
+        buildRequestInit(endpoint, params, token, signal),
+      );
       const text = await readBodyText(response, url, signal, isPaginated(endpoint, params));
       if (!response.ok) {
         if (response.status === 401) {

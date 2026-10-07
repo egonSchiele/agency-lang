@@ -208,11 +208,20 @@ export type HostRandom = {
   bytes(length: number): Uint8Array;
 };
 
-/** The parts a host is built from. `files`, `env`, and `terminal` are
- *  capabilities, so a host may leave them out; `makeHost` then supplies
- *  parts that refuse. The other parts are required. */
+/** The network, as the platform's own `fetch`: the same arguments and the
+ *  same `Response`. A host can refuse it, limit it to a list of sites, or
+ *  answer from scripted responses, the way the test runner's fetch mocks
+ *  do. */
+export type HostNetwork = {
+  fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
+};
+
+/** The parts a host is built from. `files`, `network`, `env`, and
+ *  `terminal` are capabilities, so a host may leave them out; `makeHost`
+ *  then supplies parts that refuse. The other parts are required. */
 export type HostParts = {
   files?: HostFiles;
+  network?: HostNetwork;
   env?: HostEnv;
   terminal?: HostTerminal;
   system: HostSystem;
@@ -227,6 +236,7 @@ export type Host = {
   /** What this host has. Only `requireCapabilities` reads it. */
   capabilities: Capability[];
   files: HostFiles;
+  network: HostNetwork;
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -241,6 +251,7 @@ export type Host = {
  *  in FILE_WRITE_FUNCTIONS. */
 export const PART_CAPABILITY = {
   files: "fileRead",
+  network: "network",
   env: "env",
   terminal: "terminal",
 } as const satisfies Record<string, Capability>;
@@ -337,6 +348,7 @@ export function makeHost(args: MakeHostArgs): Host {
     name,
     capabilities: [...capabilities],
     files: built.files as HostFiles,
+    network: built.network as HostNetwork,
     env: built.env as HostEnv,
     terminal: built.terminal as HostTerminal,
     system: parts.system,

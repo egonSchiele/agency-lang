@@ -84,8 +84,7 @@ export async function _getSecret(
   return getSecret(host, key, service, timeoutMs);
 }
 
-/** `_getSecret` for a caller that has the host, such as the GitHub
- *  credential chain, which runs after other awaits. */
+/** `_getSecret` for a caller that has the host. */
 export async function getSecret(
   host: Host,
   key: string,

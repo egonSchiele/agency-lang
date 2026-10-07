@@ -18,7 +18,7 @@ vi.mock("../../host/nodeSubprocess.js", () => ({
         signal: null,
         stdout: "",
         stderr: "",
-        truncated: false,
+        truncated: null,
         timedOut: false,
         aborted: false,
       };

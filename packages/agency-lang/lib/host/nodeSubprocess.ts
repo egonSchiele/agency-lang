@@ -4,7 +4,7 @@
 // ending means is the caller's decision (lib/stdlib/abortable.ts turns a
 // cancelled child into an AgencyCancelledError, for example). A program
 // that cannot be started rejects with Node's own error, so a caller can
-// read `code === "ENOENT"` as before.
+// read `code === "ENOENT"`.
 
 import { spawn, type ChildProcess } from "child_process";
 import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "./host.js";
@@ -95,7 +95,7 @@ function startChild(
   options: RunOptions,
 ): { child: ChildProcess; ended: Promise<RunResult>; kill: RunningProcess["kill"] } {
   const child = spawnCommand(command, options);
-  let truncated = false;
+  let truncated: "stdout" | "stderr" | null = null;
   let timedOut = false;
   let aborted = false;
   const maxOutputBytes = options.maxOutputBytes ?? 0;
@@ -103,13 +103,16 @@ function startChild(
   const kill: RunningProcess["kill"] = (signal) => {
     child.kill(signal ?? killSignal);
   };
-  // Each stream has its own limit, as execFile's maxBuffer works.
-  const overflow = () => {
-    truncated = true;
+  // Each stream has its own limit, as execFile's maxBuffer works. The
+  // first to overflow is the one reported.
+  const overflow = (stream: "stdout" | "stderr") => () => {
+    if (truncated === null) {
+      truncated = stream;
+    }
     kill();
   };
-  const stdout = collector(maxOutputBytes, overflow);
-  const stderr = collector(maxOutputBytes, overflow);
+  const stdout = collector(maxOutputBytes, overflow("stdout"));
+  const stderr = collector(maxOutputBytes, overflow("stderr"));
 
   const ended = new Promise<RunResult>((resolve, reject) => {
     child.stdout?.setEncoding("utf8");

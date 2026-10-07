@@ -12,7 +12,20 @@ import {
 } from "./abortable.js";
 import { nodeHost } from "../host/nodeHost.js";
 import { memoryHost } from "../host/memoryHost.js";
-import type { RunOptions } from "../host/host.js";
+import type { RunOptions, RunResult } from "../host/host.js";
+
+/** A child that exited with 0 and printed `stdout`. */
+function finished(stdout: string): RunResult {
+  return {
+    exitCode: 0,
+    signal: null,
+    stdout,
+    stderr: "",
+    truncated: null,
+    timedOut: false,
+    aborted: false,
+  };
+}
 
 const host = nodeHost();
 import { __internal_sleep, __internal_input } from "./builtins.js";
@@ -94,6 +107,15 @@ describe("abortableSpawn", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("[output truncated at 1000 bytes]");
   });
+
+  it("reports a failure, not a success, when standard error is what overflowed", async () => {
+    const result = await abortableSpawn(host, "sh", ["-c", "exec yes >&2"], {
+      maxOutputBytes: 1000,
+      signal: new AbortController().signal,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("[standard error truncated at 1000 bytes]");
+  });
 });
 
 describe("runProgram", () => {
@@ -119,15 +141,7 @@ describe("runProgram", () => {
       subprocess: {
         run: async (_command, options) => {
           seen.push(options ?? {});
-          return {
-            exitCode: 0,
-            signal: null,
-            stdout: "",
-            stderr: "",
-            truncated: false,
-            timedOut: false,
-            aborted: false,
-          };
+          return finished("");
         },
         start: async () => {
           throw new Error("not started here");
@@ -146,8 +160,32 @@ describe("runProgram", () => {
       (error) => error,
     );
     expect(failure).toBeInstanceOf(ProgramFailed);
-    expect(failure.message).toContain("wrote more than 4 bytes");
+    expect(failure.message).toContain("wrote more than 4 bytes to stdout");
     expect(failure.stdout).toBe("abcd");
+  });
+
+  it("rejects a child killed at its deadline or cancelled, even one that exited with 0", async () => {
+    // A child can handle the signal and still exit with 0; the host says
+    // what happened, and `runProgram` does not take the output as an answer.
+    const answers: RunResult[] = [
+      { ...finished("late"), timedOut: true },
+      { ...finished("gone"), aborted: true },
+    ];
+    const scripted = memoryHost({
+      subprocess: {
+        run: async () => answers.shift()!,
+        start: async () => {
+          throw new Error("not started here");
+        },
+      },
+    });
+    const late = await runProgram(scripted, "x", [], { timeoutMs: 5 }).catch((error) => error);
+    expect(late).toBeInstanceOf(ProgramFailed);
+    expect(late.message).toContain("did not finish within 5 ms");
+    expect(late.stdout).toBe("late");
+    const gone = await runProgram(scripted, "x", []).catch((error) => error);
+    expect(gone).toBeInstanceOf(ProgramFailed);
+    expect(gone.message).toContain("was cancelled");
   });
 
   it("limits standard error as well as standard output", async () => {
@@ -156,7 +194,7 @@ describe("runProgram", () => {
       maxOutputBytes: 1000,
     }).catch((error) => error);
     expect(failure).toBeInstanceOf(ProgramFailed);
-    expect(failure.message).toContain("wrote more than 1000 bytes");
+    expect(failure.message).toContain("wrote more than 1000 bytes to stderr");
     expect(Buffer.byteLength(failure.stderr, "utf8")).toBe(1000);
   });
 });

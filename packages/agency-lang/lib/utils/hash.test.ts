@@ -125,7 +125,7 @@ describe("hash.ts, the WebCrypto pair", () => {
     expect(toHex(await sha256BytesAsync(new Uint8Array(data)))).toBe(referenceSha256(data));
   });
 
-  it("hashes a view over a shared buffer, not the whole buffer", async () => {
+  it("hashes a view over a larger buffer, not the whole buffer", async () => {
     // A Node Buffer from randomBytes can be a view into a larger pool.
     const pool = new Uint8Array(64);
     for (let i = 0; i < pool.length; i++) {
@@ -134,6 +134,24 @@ describe("hash.ts, the WebCrypto pair", () => {
     const view = pool.subarray(8, 20);
     expect(toHex(await sha256BytesAsync(view))).toBe(referenceSha256(view));
     expect(toHex(await hmacSha256Async(view, view))).toBe(referenceHmac(view, view));
+  });
+
+  it("hashes a view over a SharedArrayBuffer", async () => {
+    const shared = new Uint8Array(new SharedArrayBuffer(16));
+    for (let i = 0; i < shared.length; i++) {
+      shared[i] = 255 - i;
+    }
+    expect(toHex(await sha256BytesAsync(shared))).toBe(referenceSha256(new Uint8Array(shared)));
+    expect(toHex(await hmacSha256Async(shared, shared))).toBe(
+      referenceHmac(new Uint8Array(shared), new Uint8Array(shared)),
+    );
+  });
+
+  it("accepts an empty key, like the synchronous pair", async () => {
+    expect(toHex(await hmacSha256Async("", "data"))).toBe(referenceHmac("", "data"));
+    expect(toHex(await hmacSha256Async(new Uint8Array(0), new Uint8Array(0)))).toBe(
+      referenceHmac(new Uint8Array(0), new Uint8Array(0)),
+    );
   });
 
   it("matches the RFC 4231 HMAC test case 2 and Node for random keys", async () => {

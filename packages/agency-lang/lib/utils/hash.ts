@@ -43,9 +43,13 @@ export async function hmacSha256Async(
   key: Uint8Array | string,
   data: Uint8Array | string,
 ): Promise<Uint8Array> {
+  const keyBytes = toBytes(key);
+  // HMAC pads a key shorter than the block with zero bytes, so an empty
+  // key and a block of zeros are the same key; WebCrypto refuses the
+  // empty spelling, so it is given the other.
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    toBuffer(toBytes(key)),
+    toBuffer(keyBytes.length === 0 ? new Uint8Array(64) : keyBytes),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -74,9 +78,9 @@ function toBytes(value: Uint8Array | string): Uint8Array {
   return value;
 }
 
-/** The bytes of `view` as an `ArrayBuffer` of their own, which WebCrypto
- *  takes; a view over a shared buffer, such as a Node `Buffer`, would
- *  otherwise hand it the whole pool. */
+/** A copy of `view`'s bytes in an `ArrayBuffer` of their own, which is
+ *  what WebCrypto takes: a view over a larger buffer, such as a Node
+ *  `Buffer` from the pool, or over a `SharedArrayBuffer`, is neither. */
 function toBuffer(view: Uint8Array): ArrayBuffer {
-  return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+  return new Uint8Array(view).buffer as ArrayBuffer;
 }

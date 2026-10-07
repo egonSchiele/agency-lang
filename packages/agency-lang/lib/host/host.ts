@@ -167,7 +167,17 @@ export type HostTerminal = {
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   /** Whether a person is at the terminal. False under a pipe or in CI. */
   isInteractive(): boolean;
+  /** The width and height in character cells, or null when standard
+   *  output is not a terminal (a pipe, a file). */
+  size(): TerminalSize | null;
+  /** Whether output should carry ANSI colour. On Node that is the usual
+   *  convention: no when `NO_COLOR` is set, yes when `FORCE_COLOR` is set
+   *  to anything but an empty string, `0`, or `false`, and otherwise yes
+   *  when standard output is a terminal. */
+  supportsColor(): boolean;
 };
+
+export type TerminalSize = { columns: number; rows: number };
 
 /** Facts about the process and the machine. Every host has these, so they
  *  are not a capability. `browserHost` answers each with a value the app

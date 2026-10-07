@@ -521,6 +521,8 @@ function memoryTerminal(state: MemoryHostState): HostTerminal {
       return line;
     },
     isInteractive: () => false,
+    size: () => null,
+    supportsColor: () => false,
   };
 }
 

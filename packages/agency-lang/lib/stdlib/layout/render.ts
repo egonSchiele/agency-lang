@@ -17,7 +17,7 @@ import { column, row } from "./axis.js";
 import { table } from "./table.js";
 import { barchart } from "./barchart.js";
 import { NodeHandler, SizingContext } from "./sizing.js";
-import { autoUseColor } from "@/utils/termcolors.js";
+import { currentHost } from "../../runtime/currentHost.js";
 
 export type Viewport = { cols: number; rows: number };
 
@@ -39,10 +39,12 @@ export function renderNode(node: LayoutNode): Block {
 }
 
 export function _viewport(): Viewport {
-  return {
-    cols: process.stdout.columns ?? DEFAULT_VIEWPORT.cols,
-    rows: process.stdout.rows ?? DEFAULT_VIEWPORT.rows,
-  };
+  const host = currentHost();
+  const size = host.terminal.size();
+  if (size === null) {
+    return { ...DEFAULT_VIEWPORT };
+  }
+  return { cols: size.columns, rows: size.rows };
 }
 
 export function growToWidth(block: Block, targetWidth: number): Block {
@@ -141,7 +143,8 @@ export function _render(
   cols?: number,
   rows?: number,
 ): string {
-  const useColor = color === "auto" ? autoUseColor() : color === true;
+  const host = currentHost();
+  const useColor = color === "auto" ? host.terminal.supportsColor() : color === true;
   const out = render(node, buildViewport(cols, rows));
   return useColor ? out : stripAnsi(out);
 }

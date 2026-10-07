@@ -247,6 +247,44 @@ describe("nodeHost", () => {
     expect(host.system.isMainModule(import.meta.url)).toBe(false);
   });
 
+  it("reports the terminal size, or null under a pipe", () => {
+    const size = nodeHost().terminal.size();
+    if (process.stdout.isTTY) {
+      expect(size).toEqual({ columns: process.stdout.columns, rows: process.stdout.rows });
+    } else {
+      expect(size).toBeNull();
+    }
+  });
+
+  it("decides colour from NO_COLOR, then FORCE_COLOR, then the terminal", () => {
+    const saved = { NO_COLOR: process.env.NO_COLOR, FORCE_COLOR: process.env.FORCE_COLOR };
+    const restore = (name: "NO_COLOR" | "FORCE_COLOR") => {
+      if (saved[name] === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = saved[name];
+      }
+    };
+    const terminal = nodeHost().terminal;
+    try {
+      delete process.env.NO_COLOR;
+      process.env.FORCE_COLOR = "1";
+      expect(terminal.supportsColor()).toBe(true);
+      process.env.NO_COLOR = "1";
+      expect(terminal.supportsColor()).toBe(false);
+      delete process.env.NO_COLOR;
+      process.env.FORCE_COLOR = "0";
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+      process.env.FORCE_COLOR = "false";
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+      delete process.env.FORCE_COLOR;
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+    } finally {
+      restore("NO_COLOR");
+      restore("FORCE_COLOR");
+    }
+  });
+
   it("makes random ids and bytes", () => {
     const host = nodeHost();
     expect(host.random.id()).not.toBe(host.random.id());
@@ -264,6 +302,12 @@ describe("nodeHost", () => {
 });
 
 describe("memoryHost", () => {
+  it("has no terminal size and no colour", () => {
+    const host = memoryHost();
+    expect(host.terminal.size()).toBeNull();
+    expect(host.terminal.supportsColor()).toBe(false);
+  });
+
   it("answers env.all from its variables, as a copy", () => {
     const host = memoryHost({ variables: { A: "1", B: "2" } });
     const all = host.env.all();

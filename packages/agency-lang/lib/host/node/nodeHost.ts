@@ -110,6 +110,25 @@ const nodeTerminal: HostTerminal = {
     process.stderr.write(text);
   },
   isInteractive: () => process.stdin.isTTY === true,
+  size: () => {
+    const { columns, rows } = process.stdout;
+    if (columns === undefined || rows === undefined) {
+      return null;
+    }
+    return { columns, rows };
+  },
+  // Read at the time of the call, so a test can set the variables.
+  supportsColor: () => {
+    const noColor = process.env.NO_COLOR;
+    if (noColor !== undefined && noColor !== "") {
+      return false;
+    }
+    const force = process.env.FORCE_COLOR;
+    if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
+      return true;
+    }
+    return process.stdout.isTTY === true;
+  },
   readLine: (prompt, signal) => {
     if (signal?.aborted) {
       return Promise.reject(signal.reason);

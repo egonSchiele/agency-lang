@@ -87,7 +87,6 @@ export const WAITING = [
   "lib/stdlib/ffmpeg.ts",
   "lib/stdlib/gitignore.ts",
   "lib/stdlib/image.ts",
-  "lib/stdlib/layout/render.ts",
   "lib/stdlib/mcpBridge.mjs",
   "lib/stdlib/mcpResolver.ts",
   "lib/stdlib/oauth.ts",
@@ -98,5 +97,4 @@ export const WAITING = [
   "lib/stdlib/template.ts",
   "lib/stdlib/thread.ts",
   "lib/stdlib/vision.ts",
-  "lib/utils/termcolors.ts",
 ];

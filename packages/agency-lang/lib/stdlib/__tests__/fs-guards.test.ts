@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import process from "process";
 import { rejectDangerousPath } from "../fs.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 
 const host = nodeHost();
 

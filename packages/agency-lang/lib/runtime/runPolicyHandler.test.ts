@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { nodeHost } from "@/host/nodeHost.js";
+import { nodeHost } from "@/host/node/nodeHost.js";
 import { resolvePolicyDirs } from "@/runtime/policyDirs.js";
 
 const DIRS = resolvePolicyDirs(nodeHost());

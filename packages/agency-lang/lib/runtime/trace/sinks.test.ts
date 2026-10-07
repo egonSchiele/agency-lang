@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { CallbackSink } from "./sinks.js";
 import { FileSink } from "./fileSink.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import type { TraceLine } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";

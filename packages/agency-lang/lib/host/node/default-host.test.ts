@@ -11,7 +11,7 @@ import * as nodeDefault from "./default.node.js";
 //
 // The field points at dist/, so this needs a build. CI runs `make ci` before
 // the tests. Locally, run `make` first.
-const packageRoot = path.resolve(import.meta.dirname, "../..");
+const packageRoot = path.resolve(import.meta.dirname, "../../..");
 const builtContext = path.join(packageRoot, "dist/lib/runtime/state/context.js");
 
 async function bundleFor(platform: "browser" | "node"): Promise<string> {

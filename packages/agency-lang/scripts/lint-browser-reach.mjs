@@ -28,23 +28,56 @@ import { NODE_ONLY, WAITING } from "../eslint.node-exceptions.mjs";
 import { BROWSER_FILES } from "../eslint.config.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const nodeOnly = Object.keys(NODE_ONLY);
-const listed = [...nodeOnly, ...WAITING];
 
-function stdlibHelpers() {
+/** Every file under `dir`, relative to the package root. */
+function filesUnder(dir) {
   const found = [];
   const walk = (current) => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      } else {
         found.push(path.relative(packageRoot, full));
       }
     }
   };
-  walk(path.join(packageRoot, "lib/stdlib"));
-  return found.filter((file) => !listed.includes(file)).sort();
+  walk(path.join(packageRoot, dir));
+  return found.sort();
+}
+
+const libFiles = filesUnder("lib");
+
+/** The files the patterns name. A pattern is a file path or a glob such
+ *  as lib/host/node/**, and a pattern that names no file is reported. */
+function expand(patterns) {
+  const files = [];
+  const empty = [];
+  for (const pattern of patterns) {
+    // Not `filter(isMatch)`: a picomatch matcher takes a second argument,
+    // and filter would pass it the index.
+    const isMatch = picomatch(pattern);
+    const matched = libFiles.filter((file) => isMatch(file));
+    if (matched.length === 0) {
+      empty.push(pattern);
+    }
+    files.push(...matched);
+  }
+  return { files, empty };
+}
+
+const nodeOnly = expand(Object.keys(NODE_ONLY));
+const waiting = expand(WAITING);
+const listed = [...nodeOnly.files, ...waiting.files];
+
+function stdlibHelpers() {
+  return libFiles.filter(
+    (file) =>
+      file.startsWith("lib/stdlib/") &&
+      file.endsWith(".ts") &&
+      !file.endsWith(".test.ts") &&
+      !listed.includes(file),
+  );
 }
 
 /** The metafile of a bundle that stops at every listed file. */
@@ -61,7 +94,7 @@ function bundleMetafile() {
         "--platform=node",
         "--format=esm",
         "--packages=external",
-        "--alias:#default-host=./lib/host/default.node.ts",
+        "--alias:#default-host=./lib/host/node/default.node.ts",
         "--alias:#sha256=./lib/utils/sha256.node.ts",
         "--alias:#path=./lib/utils/path.node.ts",
         ...listed.map((file) => `--external:${path.join(packageRoot, file)}`),
@@ -122,7 +155,7 @@ for (const file of reached) {
       continue;
     }
     const target = resolveImport(file, entry.path);
-    if (target && nodeOnly.includes(target)) {
+    if (target && nodeOnly.files.includes(target)) {
       problems.push(
         `${file} imports ${target}, which is Node-only. Reach the platform through the host instead.`,
       );
@@ -130,10 +163,8 @@ for (const file of reached) {
   }
 }
 
-for (const file of listed) {
-  if (!existsSync(path.join(packageRoot, file))) {
-    problems.push(`${file} is in eslint.node-exceptions.mjs but does not exist. Remove it.`);
-  }
+for (const pattern of [...nodeOnly.empty, ...waiting.empty]) {
+  problems.push(`${pattern} is in eslint.node-exceptions.mjs but names no file. Remove it.`);
 }
 
 if (problems.length > 0) {
@@ -141,5 +172,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.length} are Node-only and ${WAITING.length} are waiting.`,
+  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.files.length} are Node-only and ${waiting.files.length} are waiting.`,
 );

@@ -84,7 +84,7 @@ other two layers point forward to it; move it up when phase 1 merges.
 
 Every file operation the standard library performs on a path an Agency
 program chose goes through `host.files`, which on Node is
-`lib/host/nodeFiles.ts`. The approved directory
+`lib/host/node/nodeFiles.ts`. The approved directory
 is realpathed once, and a symlink at any component below it is refused,
 whatever it points at. Reads and writes validate the open descriptor. An
 ESLint rule refuses `fs` imports elsewhere under `lib/stdlib` unless the file

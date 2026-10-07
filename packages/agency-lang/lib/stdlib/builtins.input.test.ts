@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { PassThrough } from "node:stream";
 import { __internal_input } from "./builtins.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
 // inputImpl reads the line through the host's terminal, and nodeHost reads
 // process.stdin/stdout at call time, so tests swap in a PassThrough pair for

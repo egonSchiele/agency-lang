@@ -82,14 +82,14 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 
 | Host | File | Capabilities | What it is built from |
 | --- | --- | --- | --- |
-| `nodeHost` | `lib/host/nodeHost.ts` | all seven | `process`, `os`, `readline`, `crypto`, the real clock |
+| `nodeHost` | `lib/host/node/nodeHost.ts` | all seven | `process`, `os`, `readline`, `crypto`, the real clock |
 | `memoryHost` | `lib/host/memoryHost.ts` | whatever the test asks for; all seven by default | an object of files, recorded output, scripted input lines, an object of variables, `FakeClock` |
 
 Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
 
 ### The file part
 
-`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises, and every file operation the stdlib performs on a path a program chose goes through it. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises, and every file operation the stdlib performs on a path a program chose goes through it. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/node/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
 
 A stdlib helper reaches the file part the way it reaches every other part: through `run.ctx.host` when it was handed the run, through `currentHost()` on its first line when Agency calls it as a plain function, and as an argument when it is a helper below those. A helper that reads a path for a program outside the host, such as the ffmpeg command or a Python script, gets the string from `resolvePath`; nothing outside `lib/host` reads a `Root`. The files with no run to take a host from, the compiler and the local-model code among them, call the synchronous module directly and say so at the import.
 
@@ -117,11 +117,11 @@ A refusal from `makeHost` throws when the function is called, before any promise
 
 `lib/stdlib/abortable.ts` is the stdlib's layer over it, and every stdlib helper that runs a program goes through one of its functions: `abortableSpawn` and `abortableShell` (output collected; the cap on standard output and the time limit resolve with a note, the cap on standard error resolves as a failure, an abort rejects with `AgencyCancelledError`), `abortableExec` (output not wanted; a non-zero exit rejects), and `runProgram` (the contract of Node's `execFile`: each output stream is capped at 1 MiB unless the caller says otherwise, and a child that exited with anything but 0, wrote past the cap, ran past its time limit, or was cancelled rejects with `ProgramFailed`, which carries the output). The one `fork` in `lib/runtime/ipc.ts` stays there, Node-only, and `_runFor` checks the `subprocess` capability on its first line. The ffmpeg probe in `ffmpeg.ts` stays on `spawnSync`, because it runs inside a synchronous check before an interrupt and the host runs nothing synchronously.
 
-A test of a helper that runs a fixed program mocks `lib/host/nodeSubprocess.ts` and scripts `run` with the helpers in `lib/stdlib/__tests__/fakeSubprocess.ts`. `memoryHost` refuses every command unless the test passed a `subprocess`.
+A test of a helper that runs a fixed program mocks `lib/host/node/nodeSubprocess.ts` and scripts `run` with the helpers in `lib/stdlib/__tests__/fakeSubprocess.ts`. `memoryHost` refuses every command unless the test passed a `subprocess`.
 
 ### The default host
 
-`lib/host/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`. The runtime imports it as `#default-host`, an entry in the `imports` field of `package.json` that resolves to this file under the `default` condition. `running-without-node.md` explains the mechanism and the three places that have to know about each entry.
+`lib/host/node/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`. The runtime imports it as `#default-host`, an entry in the `imports` field of `package.json` that resolves to this file under the `default` condition. `running-without-node.md` explains the mechanism and the three places that have to know about each entry.
 
 `default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, read once per process, which becomes the host's network part (`fetchMock` in `lib/runtime/fetchMock.ts`); the global `fetch` is left alone. `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
 
@@ -177,7 +177,7 @@ A file the browser can reach may not import a Node module or use the globals `pr
 
 `eslint.node-exceptions.mjs` lists the files that fail it:
 
-- `NODE_ONLY` is for good, with the reason beside each file. `nodeHost.ts` is one; so are the files that run a child process, prompt at a terminal, or load modules from disk.
+- `NODE_ONLY` is for good, with the reason beside each entry. An entry is a file, or a directory glob: `lib/host/node/**` covers `nodeHost` and the files it is built from, which live there so that one entry names them all. The files that run a child process, prompt at a terminal, or load modules from disk are listed one by one.
 - `WAITING` is for a file whose Node use has not moved into the host yet. It only gets shorter.
 
 `scripts/lint-browser-reach.mjs`, which `lint:structure` runs, bundles the runtime and the stdlib with esbuild, stopping at every listed file, and fails when the bundle reaches a file `BROWSER_FILES` does not cover, or when a reached file imports one on `NODE_ONLY`. `lib/runtime/index.ts` is the one exception to the second check: it is Node's entry point, and the browser has its own. `node scripts/lint-browser-reach.mjs --list` prints what it reached.

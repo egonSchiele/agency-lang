@@ -49,7 +49,7 @@ export type {
   WriteMode,
   WriteOptions,
 } from "../host/host.js";
-export { nodeHost } from "../host/nodeHost.js";
+export { nodeHost } from "../host/node/nodeHost.js";
 export { memoryHost } from "../host/memoryHost.js";
 export type { MemoryHost, MemoryHostOptions, MemoryHostState } from "../host/memoryHost.js";
 export { defaultHost } from "#default-host";
@@ -58,7 +58,7 @@ export { defaultHost } from "#default-host";
 // This entry point is Node's; the browser entry point exports a portable
 // `path` and a host-backed `os` in their place.
 export { path, os } from "./agencyGlobals.node.js";
-export type { NodeHostOptions } from "../host/nodeHost.js";
+export type { NodeHostOptions } from "../host/node/nodeHost.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";
 export type { InterruptOpts, ResumableScope, ResumableScopeOpts } from "./agency.js";

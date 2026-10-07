@@ -13,7 +13,7 @@ import {
   type CapabilityPart,
   type Host,
 } from "./host.js";
-import { nodeHost } from "./nodeHost.js";
+import { nodeHost } from "./node/nodeHost.js";
 import { FakeClock } from "../runtime/clock.js";
 
 function call(host: Host, functionName: string): unknown {

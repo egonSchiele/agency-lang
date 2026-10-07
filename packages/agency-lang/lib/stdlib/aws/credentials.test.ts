@@ -1,5 +1,5 @@
 import { resolveAwsCredentials, resolveRegion, type AwsCredentials } from "./credentials.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 
 const settings = nodeHost().settings;
 

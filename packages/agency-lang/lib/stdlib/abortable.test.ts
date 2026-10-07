@@ -10,7 +10,7 @@ import {
   abortableSpawn,
   runProgram,
 } from "./abortable.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { memoryHost } from "../host/memoryHost.js";
 import type { RunOptions, RunResult } from "../host/host.js";
 

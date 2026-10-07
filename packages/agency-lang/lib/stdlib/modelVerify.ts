@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 // The synchronous file operations of nodeHost, not host.files: local models are Node-only.
-import { wholePath, readStream, move } from "../host/nodeFiles.js";
+import { wholePath, readStream, move } from "../host/node/nodeFiles.js";
 
 /** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
  *  `update` is guarded so a synchronous throw in the data handler rejects the

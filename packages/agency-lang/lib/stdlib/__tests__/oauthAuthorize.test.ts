@@ -9,7 +9,7 @@ import http from "http";
 let capturedAuthUrl: string | null = null;
 
 // The browser opener runs `open <url>` through the host; capture the URL.
-vi.mock("../../host/nodeSubprocess.js", () => ({
+vi.mock("../../host/node/nodeSubprocess.js", () => ({
   nodeSubprocess: {
     run: vi.fn(async (command: { kind: string; args?: string[] }) => {
       if (command.args?.[0]) capturedAuthUrl = command.args[0];
@@ -39,7 +39,7 @@ import { runInTestContext } from "../../runtime/asyncContext.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import { PLATFORM_CAPABILITIES, type Host } from "../../host/host.js";
 
 // Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()

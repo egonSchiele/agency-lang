@@ -7,7 +7,7 @@
 // read `code === "ENOENT"`.
 
 import { spawn, type ChildProcess } from "child_process";
-import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "./host.js";
+import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
 
 /**
  * Stream teardown error codes that are safe to swallow. They mean the pipe

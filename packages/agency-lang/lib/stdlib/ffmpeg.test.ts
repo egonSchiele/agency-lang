@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { assertFfmpegAvailable, buildTranscodeArgs, transcode } from "./ffmpeg.js";
 import { wavFile } from "./wavFile.js";
 

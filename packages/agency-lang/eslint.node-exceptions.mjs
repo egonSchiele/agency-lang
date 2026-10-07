@@ -12,16 +12,14 @@
 // when a file it reaches is not covered by the rule, or imports a file on
 // NODE_ONLY.
 
-/** Node-only for good, each with the reason. lib/runtime/browser.ts
- *  exports a stand-in for every header name that comes from one of these,
- *  and a stdlib module whose compiled file imports one is Node-only. */
+/** Node-only for good, each with the reason. An entry is a file, or a
+ *  directory glob such as lib/host/node/** for every file under it.
+ *  lib/runtime/browser.ts exports a stand-in for every header name that
+ *  comes from one of these, and a stdlib module whose compiled file imports
+ *  one is Node-only. */
 export const NODE_ONLY = {
-  "lib/host/default.node.ts":
-    "builds the default host for Node; the browser condition of #default-host picks default.browser.ts instead",
-  "lib/host/nodeFiles.ts": "the contained file operations of nodeHost, over fs",
-  "lib/host/nodeFilesPart.ts": "the file part of nodeHost, over nodeFiles.ts",
-  "lib/host/nodeHost.ts": "the host for Node, built from Node modules on purpose",
-  "lib/host/nodeSubprocess.ts": "the subprocess part of nodeHost, over child_process",
+  "lib/host/node/**":
+    "the host for Node, built from Node modules on purpose, and default.node.ts, which the default condition of #default-host picks",
   "lib/runtime/agencyGlobals.node.ts":
     "re-exports Node's path and os for Agency code; the browser entry point exports portable ones",
   "lib/runtime/cliEntry.ts": "starts a program from the command line",

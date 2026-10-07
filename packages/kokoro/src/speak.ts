@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { root } from "agency-lang/host-lib/nodeFiles.js";
+import { root } from "agency-lang/host-lib/node/nodeFiles.js";
 import type { Host } from "agency-lang/host-lib/host.js";
 import { outputPath, pathExists, publishSpeechOutput } from "agency-lang/stdlib-lib/speech.js";
 import type { AudioFormat } from "./audioFormat.js";

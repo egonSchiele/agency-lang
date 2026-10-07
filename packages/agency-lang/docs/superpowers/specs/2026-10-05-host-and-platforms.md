@@ -581,7 +581,7 @@ const host = memoryHost({ files, capabilities: ["fileRead", "terminal"] });
 environment variables switch on test doubles today: `AGENCY_FAKE_CLOCK`,
 `AGENCY_FETCH_MOCKS_FILE`, and `AGENCY_LLM_MOCKS`. The first two describe
 parts of the host. They stay as the way the test runner asks for a
-double, and they are read in one place, `lib/host/default.node.ts`, which
+double, and they are read in one place, `lib/host/node/default.node.ts`, which
 returns a host with a fake clock or scripted responses. `AGENCY_LLM_MOCKS`
 stays with the `LLMClient`.
 
@@ -616,10 +616,10 @@ Capabilities add to handlers and policies and replace neither:
 | File | Contents |
 | --- | --- |
 | `lib/host/host.ts` | The types above, `NEEDS`, `PLATFORM_CAPABILITIES`, `makeHost`, and `UnsupportedOnHostError`. Imports no Node module. |
-| `lib/host/nodeHost.ts` | `nodeHost`. Its file part is `contained.ts`, moved. |
+| `lib/host/node/nodeHost.ts` | `nodeHost`. Its file part is `contained.ts`, moved. |
 | `lib/host/browserHost.ts` | `browserHost`. |
 | `lib/host/memoryHost.ts` | `memoryHost`. |
-| `lib/host/default.node.ts` | Exports a `nodeHost` as the default host. |
+| `lib/host/node/default.node.ts` | Exports a `nodeHost` as the default host. |
 | `lib/host/default.browser.ts` | Exports a `browserHost` as the default host. |
 
 ### How the default host is chosen
@@ -632,7 +632,7 @@ are the only code that differs by platform. Both go through the
 "imports": {
   "#default-host": {
     "browser": "./dist/lib/host/default.browser.js",
-    "default": "./dist/lib/host/default.node.js"
+    "default": "./dist/lib/host/node/default.node.js"
   }
 }
 ```

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { getOrCreateStore, _resetStoreRegistry } from "./registry.js";
 import { FileMemoryStore } from "./store.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 
 const files = nodeHost().files;
 

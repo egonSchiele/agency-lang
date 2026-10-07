@@ -4,7 +4,7 @@ import * as path from "path";
 import * as os from "os";
 import { TraceWriter } from "../runtime/trace/traceWriter.js";
 import { FileSink } from "../runtime/trace/fileSink.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { traceLog } from "./events.js";
 

@@ -3,7 +3,7 @@
 // the same checks, and takes the same time. Node-only.
 
 import fs from "fs";
-import type { FileStat, HostFiles, WriteOptions } from "./host.js";
+import type { FileStat, HostFiles, WriteOptions } from "../host.js";
 import * as files from "./nodeFiles.js";
 import type { Seams } from "./nodeFiles.js";
 

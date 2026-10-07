@@ -22,11 +22,11 @@ import os from "os";
 import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
-import { expandPath } from "../stdlib/expandPath.js";
-import { isContained } from "../stdlib/isContained.js";
+import { expandPath } from "../../stdlib/expandPath.js";
+import { isContained } from "../../stdlib/isContained.js";
 
-export type { Root } from "./roots.js";
-import type { Root } from "./roots.js";
+export type { Root } from "../roots.js";
+import type { Root } from "../roots.js";
 
 /** A whole path the approval named, as its real parent plus a final name
  *  that is never followed. */

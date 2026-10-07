@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { assertContained } from "./assertContained.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
 const host = nodeHost();
 

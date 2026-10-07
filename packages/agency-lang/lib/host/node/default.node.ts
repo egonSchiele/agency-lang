@@ -7,10 +7,10 @@
 // for a double of part of the host.
 
 import { readFileSync } from "fs";
-import { FakeClock } from "../runtime/clock.js";
-import { fetchMock } from "../runtime/fetchMock.js";
+import { FakeClock } from "../../runtime/clock.js";
+import { fetchMock } from "../../runtime/fetchMock.js";
 import { nodeHost, type NodeHostOptions } from "./nodeHost.js";
-import type { Host, HostNetwork } from "./host.js";
+import type { Host, HostNetwork } from "../host.js";
 
 let mockNetwork: HostNetwork | null | undefined;
 

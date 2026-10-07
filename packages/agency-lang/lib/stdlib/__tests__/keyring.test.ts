@@ -7,7 +7,7 @@ import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fak
 // The host's subprocess part, mocked: `mockRun` answers each program.
 const mockRun = vi.fn();
 
-vi.mock("../../host/nodeSubprocess.js", () => ({
+vi.mock("../../host/node/nodeSubprocess.js", () => ({
   nodeSubprocess: {
     run: (...args: unknown[]) => mockRun(...args),
     start: vi.fn(),

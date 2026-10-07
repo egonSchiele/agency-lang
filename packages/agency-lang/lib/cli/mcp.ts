@@ -1,5 +1,5 @@
 import * as path from "path";
-import { nodeHost } from "@/host/nodeHost.js";
+import { nodeHost } from "@/host/node/nodeHost.js";
 import { isFailure } from "@/runtime/index.js";
 import { agentHomeDir } from "@/runtime/agentHome.js";
 import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/config/target.js";

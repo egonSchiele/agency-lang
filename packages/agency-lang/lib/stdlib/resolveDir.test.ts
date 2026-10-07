@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveDir, resolveCwdPath } from "./resolveDir.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { withRun } from "../runtime/asyncContext.js";
 
 describe("resolveDir", () => {

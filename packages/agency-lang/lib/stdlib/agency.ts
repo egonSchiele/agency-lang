@@ -11,7 +11,7 @@ import {
   stat,
   wholePath,
   type Root,
-} from "../host/nodeFiles.js";
+} from "../host/node/nodeFiles.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";

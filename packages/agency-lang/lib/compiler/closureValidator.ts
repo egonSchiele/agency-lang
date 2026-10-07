@@ -26,7 +26,7 @@ import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
 // The synchronous file operations of nodeHost, not host.files: the compiler
 // has no run to take a host from.
-import { root, readText } from "@/host/nodeFiles.js";
+import { root, readText } from "@/host/node/nodeFiles.js";
 import type { AgencyProgram } from "@/types.js";
 
 declare const validatedClosureBrand: unique symbol;

@@ -9,10 +9,10 @@ import path from "path";
 import readline from "readline";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
-import { consoleLogSink } from "../logger.js";
+import { consoleLogSink } from "../../logger.js";
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
 import { nodeSubprocess } from "./nodeSubprocess.js";
-import { realClock, type Clock } from "../runtime/clock.js";
+import { realClock, type Clock } from "../../runtime/clock.js";
 import {
   makeHost,
   PLATFORM_CAPABILITIES,
@@ -26,7 +26,7 @@ import {
   type HostTerminal,
   type MakeHostArgs,
   type OperatingSystem,
-} from "./host.js";
+} from "../host.js";
 
 export type NodeHostOptions = {
   /** Defaults to every capability Node has, `PLATFORM_CAPABILITIES.node`. */

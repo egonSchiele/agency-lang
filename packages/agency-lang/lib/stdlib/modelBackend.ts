@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 // The synchronous file operations of nodeHost, not host.files: local models are Node-only.
-import { wholePath, stat, root, readText } from "../host/nodeFiles.js";
+import { wholePath, stat, root, readText } from "../host/node/nodeFiles.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
  *  MLX models run in mlx_lm.server, and diffusers models in Agency's image

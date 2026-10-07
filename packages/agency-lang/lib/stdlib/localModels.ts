@@ -8,7 +8,7 @@ import {
   readText,
   writeText,
   type Root,
-} from "../host/nodeFiles.js";
+} from "../host/node/nodeFiles.js";
 import { isContained } from "./isContained.js";
 import * as os from "node:os";
 import * as path from "node:path";

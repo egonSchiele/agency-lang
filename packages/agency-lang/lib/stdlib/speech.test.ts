@@ -17,7 +17,7 @@ import {
 import { assertFfmpegAvailable, transcode } from "./ffmpeg.js";
 import type * as ffmpegModule from "./ffmpeg.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
 // No ffmpeg here: speech.ffmpeg.test.ts runs the real one.
 vi.mock("./ffmpeg.js", async (importOriginal) => ({

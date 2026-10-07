@@ -7,7 +7,7 @@ import {
   expandAgentHomeDir,
   resolvePolicyDirs,
 } from "./policyDirs.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { getStdlibDir } from "../importPaths.js";
 
 // The matcher takes the directories a run resolved when it started. These

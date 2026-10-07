@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { currentRun } from "agency-lang/runtime";
-import { _realTarget, fixedPath, resolveUnder, stat } from "agency-lang/host-lib/nodeFiles.js";
+import { _realTarget, fixedPath, resolveUnder, stat } from "agency-lang/host-lib/node/nodeFiles.js";
 import { configuredPython, serverRulesDir } from "agency-lang/stdlib-lib/localPython.js";
 import {
   _resolveModel,

@@ -37,8 +37,8 @@ left ships as a few large PRs, each one topic, in dependency order.
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
 | E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
-| F1 | `WAITING` emptied: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, and a `NODE_ONLY` reason for every file that stays | Task 35 | next |
-| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts`, the CI bundle check, the exceptions lists deleted, and the smoltalk decision | 15 | |
+| F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | open |
+| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts`, the CI bundle check, the nine seams in `REACHES_NODE_ONLY` cut, the six `WAITING` files moved, the exceptions lists deleted, and the smoltalk decision | 15 | |
 | F3 | The `@capabilities` tag on every `std::` effect, checked against the code; `--platform` and the config field; the compile-time check; Node-only stdlib modules; refusing before the prompt | 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
@@ -87,7 +87,17 @@ build never includes) and the two or three new host functions.
 `default.browser.ts` behind `#default-host`, `lib/runtime/browser.ts`
 as the entry point, the CI check that bundles it with esbuild
 `--platform=browser` and fails on any Node import, and the exceptions
-lists deleted. The one open design decision is smoltalk: it imports
+lists deleted. Before the lists can go, two of them have to empty (see
+"What PR F1 learned"): the nine imports in `REACHES_NODE_ONLY`, where a
+core runtime file imports a Node-only one (`interrupts.ts` and
+`agency.ts` import `ipc.ts`; `node.ts` and `resumeSetup.ts` import the
+provider loaders; `state/context.ts` the coverage collector;
+`memory/manager.ts` the local models; `runPolicyHandler.ts` the terminal
+prompts), each cut by a host function or a per-platform file; and the
+six files left in `WAITING`, each with what it needs beside it in
+`eslint.node-exceptions.mjs` (`config.ts`, `importPaths.ts`,
+`memory/frame.ts`, `replyAttachments.ts`, `policyDirs.ts`,
+`statelogClient.ts`). The one open design decision is smoltalk: it imports
 `fs`, `path`, and `url`, and the thread store reaches it, so this PR
 either stubs it for the browser or declares the model client outside
 the bundle. Put the options in the PR description for the owner to
@@ -232,6 +242,51 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR F1 learned
+
+1. **The reach lint's import check had never fired.** esbuild writes an
+   external file's path in the metafile relative to the output directory
+   (`../../../Users/.../lib/runtime/ipc.ts`), and the script resolved it
+   against the importer, so no import of a Node-only file ever matched.
+   Fixed, it reported nine imports of a Node-only file by a core runtime
+   file that had been there all along. They are listed in
+   `REACHES_NODE_ONLY`, which only gets shorter, and F2 cuts them.
+2. **A file a core file imports cannot be "Node-only with a reason".**
+   The plan's verdict list for F1 had `config.ts`, `memory/frame.ts`,
+   `policyDirs.ts`, `replyAttachments.ts`, and the `template/*` files as
+   `NODE_ONLY` entries. `state/context.ts`, `prompt.ts`, and
+   `lib/types/function.ts` import them, so with the lint working those
+   verdicts would just have moved the files to `REACHES_NODE_ONLY`. The
+   `template/*` files and `debuggerState.ts` turned out fine: the core
+   imports of them are type-only, which esbuild drops. The other five,
+   plus `statelogClient.ts`, stay in `WAITING` with what each needs.
+3. **`import { defaultHost } from "#default-host"` was typed `any`.**
+   The ambient declaration in `packageImports.d.ts` imported `Host` by a
+   relative path, which TypeScript ignores inside an ambient module
+   without a word. Every reader of the default host was unchecked until
+   `exitProcess.ts` returned its `exit` as `never`. The import is by the
+   `@/` alias now.
+4. **`ttyColor` decides on first use, through a proxy.** It used to be
+   chosen when `termcolors.ts` loaded, from `process.stdout.isTTY`. Asking
+   the default host at load time would build a host for every program
+   that imports the module, and would throw on a host without a terminal;
+   the proxy asks once, on the first colour.
+5. **`config.ts` reached `fs` through `modelKind.ts`,** which held both
+   the kind rules and three functions that read a model directory. The
+   readers moved to `modelDirKind.ts`; the rules stay portable.
+6. **The eslint rule on `WAITING` files hid two moves that were cheap.**
+   `shell.ts` and `gitignore.ts` had been on `FS_IMPORTERS` with reasons
+   ("no approval names a `PATH` entry or the directories above the walk
+   root"), and the host answers both: `subprocess.locate` is the `PATH`
+   walk, and `files.root(dir)` makes a root for a directory above the walk
+   root the way `git.ts` already did for its working directory.
+7. **`std::args` is Node-only.** It parses with `node:util`'s `parseArgs`
+   and ends the process; a browser has no command line. `std::calendar`
+   is Node-only through `std::oauth`, whose sign-in runs a callback server
+   on `http`. `std::image`, `std::vision`, `std::embedding`, and
+   `std::llm` are Node-only through the local-model files. F3's
+   compile-time check reads the same list.
 
 ### What PR E1 learned
 

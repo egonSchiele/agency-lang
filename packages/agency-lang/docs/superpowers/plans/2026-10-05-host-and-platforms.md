@@ -19,7 +19,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PRs B, C, C2, D, D2, and D4 are merged. PR D3 is open as #1184 and PR D5 as #1186.
+PRs B, C, C2, D, D2, D4, and D5 are merged. PR D3 is open as #1184.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -31,7 +31,7 @@ PRs B, C, C2, D, D2, and D4 are merged. PR D3 is open as #1184 and PR D5 as #118
 | D2 | Subprocesses | 8 | merged, #1183 |
 | D3 | Portable paths | 10 | open, #1184 |
 | D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
-| D5 | The checkpoint checksum | 13 (Task 30) | open, #1186 |
+| D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
 | E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
@@ -169,6 +169,47 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR D3 learned
+
+1. **Task 27's count.** Of the 58 files on `WAITING`, 20 imported
+   `path`, and nothing the reach lint already covered did. Across the
+   20: `join` 35 calls, `resolve` 14, `sep` 12, `dirname` 12,
+   `relative` 6, `basename` 5, `isAbsolute` 4, `extname` 4, `parse` 1,
+   `delimiter` 1. No `path.win32` anywhere in `lib/`. The Windows-rule
+   dependencies: `path.sep` in 7 files (splitting a relative path into
+   segments, and `dir + sep` prefix checks) and `process.platform ===
+   "win32"` near a path call in 3 (`isContained.ts` case-folds,
+   `fs.ts`'s cwd check case-folds, `shell.ts` reads `PATHEXT`).
+2. **`#path` is a pair of files like `#sha256`**: `lib/utils/path.node.ts`
+   re-exports Node's `path`, `path.portable.ts` re-exports
+   `path-browserify` 1.0.1, which is Node's POSIX `path.js`.
+   `lib/utils/path.test.ts` checks the two agree on the containment
+   tests' inputs, and that the portable `resolve` never reads
+   `process.cwd()` when its first argument is absolute.
+3. **The declaration names the subset both modules have.** Node's `path`
+   has `matchesGlob` and `toNamespacedPath`; `path-browserify` does
+   not, and its types give `sep` and `delimiter` as `string` where
+   Node's are literal unions. `packageImports.d.ts` declares a `Pick`
+   of Node's type with those two widened.
+4. **Only three `resolve` calls had a relative first argument** that
+   could come from a program: `_resolve` in `stdlib/path.ts`,
+   `rejectDangerousPath` in `fs.ts` (which read `process.cwd()`), and
+   `_which` in `shell.ts` (a relative `PATH` entry). Each takes the
+   working directory from the host now. `repositoryAncestors` in
+   `gitignore.ts` documents that its argument is absolute; the one
+   runtime caller passes `walkRoot.base`. The compiler's resolves in
+   `importPaths.ts` are left: that file stays on Node for `fs`.
+5. **Windows path rules follow the path module, not the operating
+   system.** `WINDOWS_PATHS` in `isContained.ts` is `path.sep === "\\"`;
+   `isContained` and `fs.ts`'s `samePath` and `cwdStartsWith` read it,
+   and `process` left both files.
+6. **Nine files left `WAITING`** once `path` was portable:
+   `agentHome.ts`, `traceWriter.ts`, `assertContained.ts`, `fs.ts`,
+   `isContained.ts`, `mediaPathScan.ts`, `path.ts`,
+   `prepareContainedPath.ts`, `skills.ts`. That pulled
+   `lib/utils/canonicalize.ts` into the bundle, so it joined
+   `BROWSER_FILES`. 49 files are waiting now.
 
 ### What PR D2 learned
 
@@ -900,6 +941,9 @@ One PR each, in this order.
    the working directory as an argument, from `host.system.cwd()`.
 4. Replace `path` imports in files the lint rule covers, and move
    `isContained` into the new module.
+
+Done, stacked on D2. `isContained` stayed in `lib/stdlib/isContained.ts`
+over `#path`; a module of its own was not needed.
 
 ### Task 28: hashing
 

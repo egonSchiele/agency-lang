@@ -1,6 +1,6 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
-import * as path from "path";
+import path from "#path";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";

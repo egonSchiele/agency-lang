@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import * as path from "path";
+import path from "#path";
 import { globalNodeModulesRoots } from "../runtime/localProvider.js";
 
 const PKG = "@agency-lang/mcp";

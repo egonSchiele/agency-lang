@@ -5,7 +5,7 @@ import { McpServersSchema, type McpServers } from "./mcpServers.js";
 import { mapConfigValues } from "./paths.js";
 import { MODEL_KINDS, type ModelKind } from "../stdlib/modelKind.js";
 import * as fs from "fs";
-import * as path from "path";
+import path from "#path";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",

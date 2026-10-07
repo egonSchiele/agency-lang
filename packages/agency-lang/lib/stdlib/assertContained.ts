@@ -1,4 +1,4 @@
-import path from "path";
+import path from "#path";
 import type { Host } from "../host/host.js";
 import { expandPath } from "./expandPath.js";
 import { isContained } from "./isContained.js";

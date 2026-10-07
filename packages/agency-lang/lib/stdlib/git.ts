@@ -1,4 +1,4 @@
-import path from "path";
+import path from "#path";
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import process from "process";

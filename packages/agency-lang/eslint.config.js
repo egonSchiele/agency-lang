@@ -63,6 +63,8 @@ export const BROWSER_FILES = [
   "lib/utils/iteration.ts",
   "lib/utils/sha256.node.ts",
   "lib/utils/sha256.portable.ts",
+  "lib/utils/path.node.ts",
+  "lib/utils/path.portable.ts",
   "lib/utils/termcolors.ts",
 ];
 

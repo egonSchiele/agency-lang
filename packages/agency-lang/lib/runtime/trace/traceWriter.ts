@@ -1,4 +1,4 @@
-import path from "path";
+import path from "#path";
 import type { HostFiles } from "../../host/host.js";
 import { VERSION } from "../../stdlib/version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";

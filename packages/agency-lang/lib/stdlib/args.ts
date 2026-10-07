@@ -1,5 +1,5 @@
 import process from "process";
-import * as path from "path";
+import path from "#path";
 import { parseArgs as nodeParseArgs } from "node:util";
 import { exitProcessNow } from "../runtime/exitProcess.js";
 

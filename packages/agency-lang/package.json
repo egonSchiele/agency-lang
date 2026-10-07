@@ -115,6 +115,10 @@
     "#sha256": {
       "browser": "./dist/lib/utils/sha256.portable.js",
       "default": "./dist/lib/utils/sha256.node.js"
+    },
+    "#path": {
+      "browser": "./dist/lib/utils/path.portable.js",
+      "default": "./dist/lib/utils/path.node.js"
     }
   },
   "type": "module",
@@ -136,6 +140,7 @@
     "esbuild": "^0.27.4",
     "highlight.js": "^10.7.1",
     "nanoid": "^5.1.6",
+    "path-browserify": "1.0.1",
     "picomatch": "^4.0.4",
     "prompts": "^2.4.2",
     "smoltalk": "^0.16.0",
@@ -149,6 +154,7 @@
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
     "@types/node": "^25.0.3",
+    "@types/path-browserify": "1.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/prompts": "^2.4.9",
     "eslint": "^10.3.0",

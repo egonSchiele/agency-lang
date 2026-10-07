@@ -1,4 +1,4 @@
-import path from "path";
+import path from "#path";
 import type { Host } from "../host/host.js";
 
 /** The agent home directory: `AGENCY_AGENT_HOME`, or `~/.agency-agent`.

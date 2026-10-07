@@ -192,9 +192,8 @@ function colorForOutput(): ColorFunction {
 
 /**
  * Like `color`, but emits no ANSI codes when standard output is not a
- * terminal (output piped to a file or another process). It decides on
- * first use rather than when this module loads, so no host is built for a
- * program that never colours anything.
+ * terminal (output piped to a file or another process). It asks the
+ * default host on its first use.
  *
  * @example
  * ```ts

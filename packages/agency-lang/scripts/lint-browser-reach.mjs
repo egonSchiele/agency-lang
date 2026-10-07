@@ -11,9 +11,10 @@
 // 2. a file it reached imports a file on NODE_ONLY, which would drag Node
 //    code into the browser bundle, unless REACHES_NODE_ONLY lists that
 //    import as one the browser entry point still has to cut; a listed
-//    import that is gone fails too, so that list only gets shorter. An
-//    import of the Node file behind a "#" name (#default-host, #sha256,
-//    #path) is not one: the browser build picks the other file.
+//    import that is gone fails too, so that list only gets shorter. The
+//    "#" names (#default-host, #sha256, #path) are left unresolved, since
+//    the browser build picks another file for each; an import of the Node
+//    file behind one by its own path is reported like any other.
 //
 // `node scripts/lint-browser-reach.mjs --list` prints the files it reached
 // instead of checking them.
@@ -85,14 +86,9 @@ function stdlibHelpers() {
   );
 }
 
-/** The Node file behind each "#" name, which the aliases below point the
- *  bundle at. The browser condition picks another file for each, so an
- *  import of one is not an import of Node-only code. */
-const PLATFORM_FILES = [
-  "lib/host/node/default.node.ts",
-  "lib/utils/sha256.node.ts",
-  "lib/utils/path.node.ts",
-];
+/** The names the "imports" field of package.json resolves per platform.
+ *  The bundle leaves them unresolved, so the metafile keeps the name. */
+const PLATFORM_NAMES = ["#default-host", "#sha256", "#path"];
 
 /** The metafile of a bundle that stops at every listed file, and the
  *  output directory the bundle was written to, which the metafile's paths
@@ -111,9 +107,7 @@ function bundleMetafile() {
         "--platform=node",
         "--format=esm",
         "--packages=external",
-        "--alias:#default-host=./lib/host/node/default.node.ts",
-        "--alias:#sha256=./lib/utils/sha256.node.ts",
-        "--alias:#path=./lib/utils/path.node.ts",
+        ...PLATFORM_NAMES.map((name) => `--external:${name}`),
         ...listed.map((file) => `--external:${path.join(packageRoot, file)}`),
         `--metafile=${metafile}`,
         `--outdir=${outdir}`,
@@ -173,7 +167,7 @@ for (const file of reached) {
       continue;
     }
     const target = resolveImport(entry.path, outdir);
-    if (target === null || PLATFORM_FILES.includes(target) || !nodeOnly.files.includes(target)) {
+    if (target === null || !nodeOnly.files.includes(target)) {
       continue;
     }
     if (REACHES_NODE_ONLY[file]?.includes(target)) {

@@ -117,9 +117,6 @@ bare `process.exit()` in those directories. The module has two functions:
 - `exitProcessNow(code)` exits at once and loses the pending requests. Each
   call site says why it cannot wait.
 
-Both end the process through the default host's `system.exit`, the one
-place in the runtime that calls `process.exit`.
-
 | Exit | Function |
 |---|---|
 | Budget trip (`reportBudgetExceededAndExit`) | `exitProcess` |

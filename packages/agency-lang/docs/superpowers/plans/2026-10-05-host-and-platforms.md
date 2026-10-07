@@ -32,7 +32,7 @@ PRs B, C, C2, D, D2, D4, and D5 are merged. PR D3 is open as #1184.
 | D3 | Portable paths | 10 | open, #1184 |
 | D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
-| E2 | Module fingerprints without `statSync` | 14 (Task 31) | open |
+| E2 | Module fingerprints without `statSync` | 14 (Task 31) | open, #1189 |
 | E | The browser entry point and CI checks, the `@capabilities` tag, `--platform` | 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be

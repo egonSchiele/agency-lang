@@ -1,3 +1,5 @@
+import { defaultHost } from "#default-host";
+import type { HostSettings } from "../host/host.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
@@ -8,8 +10,16 @@ import type { GraphState } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
 
-export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string, unknown>): void {
-  const changed = applyLocalOverrides(checkpoint, overrides);
+/** Write `overrides` into the checkpoint's last frame in place, re-signing
+ *  it under `settings` when it was signed. A caller outside any run, such
+ *  as a host editing a checkpoint it holds, gets the platform's default
+ *  host. */
+export function applyOverrides(
+  checkpoint: Checkpoint,
+  overrides: Record<string, unknown>,
+  settings: HostSettings = defaultHost().settings,
+): void {
+  const changed = applyLocalOverrides(checkpoint, overrides, settings);
   Object.assign(checkpoint, changed);
 }
 

@@ -1,6 +1,7 @@
 import type { DebuggerState } from "../debugger/debuggerState.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { signCheckpoint } from "./checkpointChecksum.js";
+import type { HostSettings } from "../host/host.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import { CheckpointError, type RestoreSignal } from "./errors.js";
@@ -55,9 +56,12 @@ function checkedOverrides(overrides: Record<string, unknown>): Record<string, un
   return checked;
 }
 
+/** A copy of `source` with `overrides` written into its last frame's
+ *  locals, re-signed under `settings` when it was signed. */
 export function applyLocalOverrides(
   source: Checkpoint,
-  overrides: Record<string, unknown> = {},
+  overrides: Record<string, unknown>,
+  settings: HostSettings,
 ): Checkpoint {
   const checkpoint = deepClone(source);
   const frame = StateStack.lastFrameJSON(checkpoint.stack);
@@ -65,7 +69,7 @@ export function applyLocalOverrides(
     frame.locals[key] = value;
   }
   if (checkpoint.signature !== undefined) {
-    signCheckpoint(checkpoint);
+    signCheckpoint(checkpoint, settings);
   }
   return checkpoint;
 }
@@ -131,13 +135,18 @@ export async function restoreForResume(
   execCtx: RuntimeContext<GraphState>,
   request: ResumeRequest,
 ): Promise<Checkpoint> {
-  const checkpoint = applyLocalOverrides(request.checkpoint, request.overrides?.locals);
+  const settings = execCtx.host.settings;
+  const checkpoint = applyLocalOverrides(
+    request.checkpoint,
+    request.overrides?.locals ?? {},
+    settings,
+  );
   if (request.overrides?.args) {
     for (const [name, value] of Object.entries(checkedOverrides(request.overrides.args))) {
       StateStack.lastFrameJSON(checkpoint.stack).args[name] = value;
     }
     if (checkpoint.signature !== undefined) {
-      signCheckpoint(checkpoint);
+      signCheckpoint(checkpoint, settings);
     }
   }
   assertCodeUnchanged(checkpoint.moduleFingerprints);

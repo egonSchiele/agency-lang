@@ -19,7 +19,7 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PRs B, C, C2, and D are merged. PR D2 is open as #1183.
+PRs B, C, C2, D, D2, and D4 are merged. PR D3 is open as #1184 and PR D5 as #1186.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
@@ -28,10 +28,11 @@ PRs B, C, C2, and D are merged. PR D2 is open as #1183.
 | C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | merged, #1180 |
 | C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | merged, #1181 |
 | D | Network, `Buffer` | 9, 12 | merged, #1182 |
-| D2 | Subprocesses | 8 | open, #1183 |
-| D3 | Portable paths | 10 | |
-| D4 | WebCrypto for the async hashers | 11 (Task 28) | open, #1185 |
-| E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
+| D2 | Subprocesses | 8 | merged, #1183 |
+| D3 | Portable paths | 10 | open, #1184 |
+| D4 | WebCrypto for the async hashers | 11 (Task 28) | merged, #1185 |
+| D5 | The checkpoint checksum | 13 (Task 30) | open, #1186 |
+| E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -942,7 +943,15 @@ too, keeping its validation.
 ### Task 30: the checkpoint checksum
 
 Read `docs/dev/runtime/checkpoint-integrity.md` first. This PR gets its
-own review.
+own review. Done in PR D5: `checkpointChecksum.ts` signs with
+`hmacSha256` from `lib/utils/hash.ts`, compares with its own
+`constantTimeEqual`, reads the keys from the `HostSettings` its caller
+passes (signing runs after awaits, where `currentHost()` cannot be
+read), and left `WAITING`. A checkpoint signed by the old
+code verifies under the new one (a test holds a fixed checkpoint, key,
+and checksum computed with `createHmac`). Verification of a 6.3 MB
+checkpoint took 8.2 ms before and 9.0 ms after, on the M5 Ultra; the
+HMAC is Node's either way, and the rest is `canonicalize`.
 
 1. Use the HMAC from `lib/utils/hash.ts`, added in Task 28.
 2. Write a constant-time comparison to replace `timingSafeEqual`.

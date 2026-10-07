@@ -1,5 +1,8 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { defaultHost } from "#default-host";
 import { canonicalize } from "@/utils/canonicalize.js";
+import { hmacSha256, toHex } from "@/utils/hash.js";
+import type { HostSettings } from "../host/host.js";
+import { utf8ByteLength } from "../stdlib/base64.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 
 /** Both shapes a checkpoint travels as: the live class instance, and the
@@ -20,14 +23,15 @@ export class CheckpointKeyTooShortError extends Error {
   }
 }
 
-/** Read the signing key from the environment. null = not configured (signing off). */
-function resolveKey(): string | null {
-  const raw = process.env[KEY_ENV_VAR];
-  if (raw === undefined || raw === "") {
+/** Read the signing key from the host's settings. null = not configured
+ *  (signing off). */
+function resolveKey(settings: HostSettings): string | null {
+  const raw = settings.read(KEY_ENV_VAR);
+  if (raw === null || raw === "") {
     return null;
   }
-  if (Buffer.byteLength(raw, "utf8") < MIN_KEY_BYTES) {
-    throw new CheckpointKeyTooShortError(Buffer.byteLength(raw, "utf8"));
+  if (utf8ByteLength(raw) < MIN_KEY_BYTES) {
+    throw new CheckpointKeyTooShortError(utf8ByteLength(raw));
   }
   return raw;
 }
@@ -35,14 +39,14 @@ function resolveKey(): string | null {
 /** Retired keys accepted at verify time only: comma-separated, each subject to
  *  the same minimum length. Rotation = move the old key here, sign with a new
  *  one; outstanding checkpoints keep verifying. Nothing ever signs with these. */
-function resolveOldKeys(): string[] {
-  const raw = process.env[OLD_KEYS_ENV_VAR];
-  if (raw === undefined || raw === "") {
+function resolveOldKeys(settings: HostSettings): string[] {
+  const raw = settings.read(OLD_KEYS_ENV_VAR);
+  if (raw === null || raw === "") {
     return [];
   }
   return raw.split(",").map((candidate) => {
-    if (Buffer.byteLength(candidate, "utf8") < MIN_KEY_BYTES) {
-      throw new CheckpointKeyTooShortError(Buffer.byteLength(candidate, "utf8"));
+    if (utf8ByteLength(candidate) < MIN_KEY_BYTES) {
+      throw new CheckpointKeyTooShortError(utf8ByteLength(candidate));
     }
     return candidate;
   });
@@ -68,21 +72,35 @@ function canonicalString(cp: SignableCheckpoint): string {
 }
 
 function computeMac(cp: SignableCheckpoint, key: string): string {
-  return createHmac("sha256", key).update(canonicalString(cp)).digest("hex");
+  return toHex(hmacSha256(key, canonicalString(cp)));
+}
+
+/** Whether two strings are equal, taking the same time for every pair of
+ *  the same length, so the time taken says nothing about where the first
+ *  difference is. The lengths are compared first; a signature is always
+ *  64 hex characters, so a length mismatch gives nothing away. */
+export function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) {
+    difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return difference === 0;
 }
 
 function macMatches(cp: SignableCheckpoint, signature: string, key: string): boolean {
-  const expected = Buffer.from(computeMac(cp, key), "hex");
-  const actual = Buffer.from(signature, "hex");
-  if (expected.length !== actual.length) {
-    return false;
-  }
-  return timingSafeEqual(expected, actual);
+  // Hex is hex in either case.
+  return constantTimeEqual(computeMac(cp, key), signature.toLowerCase());
 }
 
-/** Embed a checksum in `cp.signature` when a key is configured; no-op otherwise. */
-export function signCheckpoint(cp: SignableCheckpoint): void {
-  const key = resolveKey();
+/** Embed a checksum in `cp.signature` when `settings`, the settings of the
+ *  run's host, hold a key; no-op otherwise. The caller passes the host's
+ *  settings because signing happens after awaits, where the current run
+ *  cannot be read. */
+export function signCheckpoint(cp: SignableCheckpoint, settings: HostSettings): void {
+  const key = resolveKey(settings);
   if (key === null) {
     return;
   }
@@ -92,9 +110,15 @@ export function signCheckpoint(cp: SignableCheckpoint): void {
 /** True iff `cp` carries a signature valid under the configured key or one of
  *  the retired keys in AGENCY_CHECKPOINT_KEY_OLD, compared in constant time.
  *  False if the signature is absent, matches no key, or no key is configured —
- *  a stripped signature therefore reads as NOT verified (downgrade guard). */
-export function verifyCheckpointChecksum(cp: SignableCheckpoint): boolean {
-  const key = resolveKey();
+ *  a stripped signature therefore reads as NOT verified (downgrade guard).
+ *  The keys come from `settings`: the run's host inside the runtime, and the
+ *  platform's default host (the environment, on Node) for a host that
+ *  verifies a checkpoint outside any run. */
+export function verifyCheckpointChecksum(
+  cp: SignableCheckpoint,
+  settings: HostSettings = defaultHost().settings,
+): boolean {
+  const key = resolveKey(settings);
   const signature = cp.signature;
   if (key === null || signature === undefined) {
     return false;
@@ -102,5 +126,5 @@ export function verifyCheckpointChecksum(cp: SignableCheckpoint): boolean {
   if (macMatches(cp, signature, key)) {
     return true;
   }
-  return resolveOldKeys().some((oldKey) => macMatches(cp, signature, oldKey));
+  return resolveOldKeys(settings).some((oldKey) => macMatches(cp, signature, oldKey));
 }

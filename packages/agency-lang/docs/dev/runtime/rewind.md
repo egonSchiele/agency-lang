@@ -79,8 +79,10 @@ The implementation is `rewindFrom` in `lib/runtime/rewind.ts`. It:
 
 ## Overriding values
 
-`applyOverrides(checkpoint, overrides)` writes each entry into
-`StateStack.lastFrameJSON(checkpoint.stack).locals`. So:
+`applyOverrides(checkpoint, overrides, settings)` writes each entry into
+`StateStack.lastFrameJSON(checkpoint.stack).locals` and re-signs a signed
+checkpoint under `settings`, the host settings that hold the key; a caller
+outside any run can leave them out and get the platform's default host. So:
 
 - you can override any local variable in the checkpoint's top frame;
 - you cannot override arguments, which live in `frame.args`, not `frame.locals`;

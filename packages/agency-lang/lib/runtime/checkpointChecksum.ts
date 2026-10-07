@@ -91,7 +91,8 @@ export function constantTimeEqual(a: string, b: string): boolean {
 }
 
 function macMatches(cp: SignableCheckpoint, signature: string, key: string): boolean {
-  return constantTimeEqual(computeMac(cp, key), signature);
+  // Hex is hex in either case.
+  return constantTimeEqual(computeMac(cp, key), signature.toLowerCase());
 }
 
 /** Embed a checksum in `cp.signature` when a key is configured; no-op otherwise. */

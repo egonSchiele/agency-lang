@@ -182,10 +182,9 @@ describe("checkpoint checksum", () => {
   });
 
   it("still verifies a checksum made with Node's createHmac", () => {
-    // The checksum below was computed with `createHmac("sha256", KEY)` over
-    // the canonical string of this exact checkpoint, before the HMAC moved
-    // to lib/utils/hash.ts. A checkpoint signed by an older build keeps
-    // verifying.
+    // The checksum below was computed with Node's `createHmac("sha256", KEY)`
+    // over the canonical string of this exact checkpoint, so a checkpoint
+    // signed by any build of the signer keeps verifying.
     process.env.AGENCY_CHECKPOINT_KEY = KEY;
     const plain: CheckpointJSON = {
       id: 7,
@@ -205,6 +204,8 @@ describe("checkpoint checksum", () => {
       pinned: false,
       signature: "1546bf5e035066194bb8e5eba743e0ae8a7cbd8989cebb9840b1e62e70857984",
     };
+    expect(verifyCheckpointChecksum(plain)).toBe(true);
+    plain.signature = plain.signature!.toUpperCase();
     expect(verifyCheckpointChecksum(plain)).toBe(true);
     plain.signature = "1546bf5e035066194bb8e5eba743e0ae8a7cbd8989cebb9840b1e62e70857988";
     expect(verifyCheckpointChecksum(plain)).toBe(false);

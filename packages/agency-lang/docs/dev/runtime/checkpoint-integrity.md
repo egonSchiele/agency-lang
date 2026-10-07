@@ -37,8 +37,8 @@ be resumed without a key.
 
 `Checkpoint.fromStateStack` is the single chokepoint every checkpoint is
 created through, and its last statement calls `signCheckpoint`. With no key in
-the environment that call is a no-op; with a key, every checkpoint comes out
-signed. The legitimate edit paths — resume-time overrides,
+the current host's settings that call is a no-op; with a key, every checkpoint
+comes out signed. The legitimate edit paths — resume-time overrides,
 `CheckpointStore.pin`, and `Checkpoint.clone` — re-sign, so an edited
 checkpoint stays self-consistent. Both functions also accept the plain parsed
 JSON form of a checkpoint, which is what the external resume path carries.

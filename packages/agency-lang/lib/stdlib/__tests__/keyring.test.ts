@@ -164,6 +164,30 @@ describe("keyring (macOS)", () => {
   });
 });
 
+describe("keyring (WSL)", () => {
+  // WSL reports as "wsl", and secret-tool runs there as on any Linux.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testPlatform.os = "wsl";
+    mockRun.mockImplementation(async () => exited("stored-value\n"));
+  });
+
+  it("reads through secret-tool", async () => {
+    expect(await _getSecret("k", "svc")).toBe("stored-value");
+    const [cmd, args] = call(0);
+    expect(cmd).toBe("secret-tool");
+    expect(args).toEqual(["lookup", "service", "svc", "account", "k"]);
+  });
+
+  it("stores, deletes, and reports the keyring available", async () => {
+    await _setSecret("k", "v", "svc");
+    expect(call(0)[0]).toBe("secret-tool");
+    expect(mockRun.mock.calls[0][1]).toEqual({ input: "v" });
+    expect(await _deleteSecret("k", "svc")).toBe(true);
+    expect(await _isKeyringAvailable()).toBe(true);
+  });
+});
+
 describe("keyring (unsupported platform)", () => {
   beforeEach(() => {
     testPlatform.os = "windows";

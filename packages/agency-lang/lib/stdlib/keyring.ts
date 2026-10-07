@@ -1,8 +1,14 @@
-import type { Host } from "../host/host.js";
+import type { Host, OperatingSystem } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { program, runProgram } from "./abortable.js";
 
 const DEFAULT_SERVICE = "agency-lang";
+
+/** Whether `secret-tool`, the Secret Service client, is the keyring to
+ *  use. WSL is Linux here: the tool runs inside it as on any Linux. */
+function usesSecretTool(os: OperatingSystem): boolean {
+  return os === "linux" || os === "wsl";
+}
 
 /**
  * Store a secret in the system keyring.
@@ -41,7 +47,7 @@ export async function setSecret(
       value,
       "-U",
     ]);
-  } else if (os === "linux") {
+  } else if (usesSecretTool(os)) {
     const result = await host.subprocess.run(
       program("secret-tool", ["store", "--label", `${svc}:${key}`, "service", svc, "account", key]),
       { input: value },
@@ -108,7 +114,7 @@ export async function getSecret(
     } catch {
       return null;
     }
-  } else if (os === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       const { stdout } = await lookup(
         host,
@@ -150,7 +156,7 @@ export async function deleteSecret(host: Host, key: string, service?: string): P
     } catch {
       return false;
     }
-  } else if (os === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       await runProgram(host, "secret-tool", ["clear", "service", svc, "account", key]);
       return true;
@@ -183,7 +189,7 @@ export async function isKeyringAvailable(host: Host): Promise<boolean> {
     } catch {
       return false;
     }
-  } else if (os === "linux") {
+  } else if (usesSecretTool(os)) {
     try {
       await runProgram(host, "secret-tool", ["--version"]);
       return true;

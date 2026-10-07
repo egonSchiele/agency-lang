@@ -30,7 +30,7 @@ PR B, PR C, and PR C2 are merged. PR D is open as #1182.
 | D | Network, `Buffer` | 9, 12 | open, #1182 |
 | D2 | Subprocesses | 8 | next |
 | D3 | Portable paths | 10 | |
-| D5 | The checkpoint checksum | 13 (Task 30) | open |
+| D5 | The checkpoint checksum | 13 (Task 30) | open, #1186 |
 | E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be

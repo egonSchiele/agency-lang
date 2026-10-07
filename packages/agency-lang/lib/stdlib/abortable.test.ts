@@ -4,6 +4,9 @@ import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableSleep, abortableSpawn } from "./abortable.js";
+import { nodeHost } from "../host/nodeHost.js";
+
+const host = nodeHost();
 import { __internal_sleep, __internal_input } from "./builtins.js";
 import { __internal_exec, __internal_bash } from "./shell.js";
 
@@ -44,13 +47,13 @@ describe("abortableSpawn", () => {
   it("kills the child and rejects with AgencyCancelledError on abort", async () => {
     const ac = new AbortController();
     // Use a `sleep` that would block for minutes if not aborted.
-    const p = abortableSpawn("sleep", ["60"], { signal: ac.signal });
+    const p = abortableSpawn(host, "sleep", ["60"], { signal: ac.signal });
     setTimeout(() => ac.abort(), 20);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
   it("returns normally when the child exits before any abort", async () => {
-    const result = await abortableSpawn("printf", ["hello"], {
+    const result = await abortableSpawn(host, "printf", ["hello"], {
       signal: new AbortController().signal,
     });
     expect(result.stdout).toBe("hello");
@@ -64,7 +67,7 @@ describe("abortableSpawn", () => {
     // child.stdin that unhandled event crashes the whole process; the handler
     // added in abortable.ts swallows EPIPE so the call resolves instead.
     const bigInput = "x".repeat(1_000_000);
-    const result = await abortableSpawn("true", [], {
+    const result = await abortableSpawn(host, "true", [], {
       input: bigInput,
       signal: new AbortController().signal,
     });
@@ -76,7 +79,7 @@ describe("abortableSpawn", () => {
     // stdout `data` handler, tearing down the pipe while a read is in flight
     // — the case where stdout/stderr can emit a late `error`. The stream
     // guards keep that from crashing the process; the call resolves truncated.
-    const result = await abortableSpawn("yes", [], {
+    const result = await abortableSpawn(host, "yes", [], {
       maxOutputBytes: 1000,
       signal: new AbortController().signal,
     });

@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { success, failure, type ResultValue } from "../runtime/result.js";
-import type { Host } from "../host/host.js";
+import type { Host, RunResult } from "../host/host.js";
+import { program } from "./abortable.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { approvedFilePath } from "./approvedPath.js";
 import { configuredPython } from "./localPython.js";
@@ -29,37 +29,44 @@ type ToolResult = Record<string, unknown>;
 /** Runs one command and returns its JSON line, or the reason it failed.
  *  Nothing here reads or writes a file: the script does, on paths this
  *  module has already checked. */
-export async function _runImageTool(args: string[]): Promise<ToolResult | { error: string }> {
+export async function _runImageTool(
+  host: Host,
+  args: string[],
+): Promise<ToolResult | { error: string }> {
   const python = configuredPython();
-  return new Promise((resolve) => {
-    const child = spawn(python, [imageToolsScript(), ...args], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, HF_HUB_OFFLINE: "1" },
+  let result: RunResult;
+  try {
+    result = await host.subprocess.run(program(python, [imageToolsScript(), ...args]), {
+      env: { ...hostEnvironment(), HF_HUB_OFFLINE: "1" },
+      timeoutMs: TOOL_TIMEOUT_MS,
+      collect: { stdout: true, stderr: true },
     });
-    let out = "";
-    let err = "";
-    child.stdout.on("data", (chunk) => (out += chunk));
-    child.stderr.on("data", (chunk) => (err += chunk));
-    const timer = setTimeout(() => child.kill(), TOOL_TIMEOUT_MS);
-    child.on("error", (spawnError) => {
-      clearTimeout(timer);
-      resolve({
-        error: `${python} could not be run (${spawnError.message}). The image tools need the Python agency local serve uses, with Pillow installed.`,
-      });
-    });
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        resolve({ error: err.trim() === "" ? `imageTools.py exited with ${code}` : err.trim() });
-        return;
-      }
-      try {
-        resolve(JSON.parse(out) as ToolResult);
-      } catch {
-        resolve({ error: `imageTools.py printed something that is not JSON: ${out.trim()}` });
-      }
-    });
-  });
+  } catch (spawnError) {
+    return {
+      error: `${python} could not be run (${(spawnError as Error).message}). The image tools need the Python agency local serve uses, with Pillow installed.`,
+    };
+  }
+  if (result.exitCode !== 0) {
+    const err = result.stderr.trim();
+    return { error: err === "" ? `imageTools.py exited with ${result.exitCode}` : err };
+  }
+  try {
+    return JSON.parse(result.stdout) as ToolResult;
+  } catch {
+    return { error: `imageTools.py printed something that is not JSON: ${result.stdout.trim()}` };
+  }
+}
+
+/** The process's environment with no unset entries, the way a host takes
+ *  a child's environment. */
+function hostEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  return env;
 }
 
 /** The output path, once its parent is a real directory with no symlink
@@ -102,7 +109,7 @@ export async function _cropImage(
   if (typeof out !== "string") {
     return fail(out.error);
   }
-  const result = await _runImageTool([
+  const result = await _runImageTool(host, [
     "crop",
     source,
     out,
@@ -125,7 +132,7 @@ export async function _imageSize(spelling: string): Promise<ResultValue> {
   } catch (err) {
     return failure(`imageSize failed: ${(err as Error).message}`);
   }
-  const result = await _runImageTool(["size", source]);
+  const result = await _runImageTool(host, ["size", source]);
   if ("error" in result) {
     return failure(`imageSize failed: ${String(result.error)}`);
   }
@@ -152,7 +159,7 @@ export async function _pasteImages(
   if (typeof out !== "string") {
     return fail(out.error);
   }
-  const result = await _runImageTool(["paste", out, String(columns), ...sources]);
+  const result = await _runImageTool(host, ["paste", out, String(columns), ...sources]);
   if ("error" in result) {
     return fail(String(result.error));
   }

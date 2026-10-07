@@ -57,7 +57,7 @@ export async function _githubRequest<Params, Out>(
 ): Promise<Out> {
   const { ctx, stack } = run;
   const signal = ctx.getAbortSignal(stack);
-  const token = await resolveGithubToken();
+  const token = await resolveGithubToken(run.ctx.host);
   const url = buildUrl(endpoint, params);
   return await runHttp(
     async () => {

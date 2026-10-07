@@ -8,12 +8,23 @@ import http from "http";
 // We let http remain real so the callback server actually starts.
 let capturedAuthUrl: string | null = null;
 
-vi.mock("child_process", () => ({
-  execFile: vi.fn((_cmd: unknown, args: unknown, cb: unknown) => {
-    const argList = args as string[];
-    if (argList?.[0]) capturedAuthUrl = argList[0];
-    if (typeof cb === "function") (cb as Function)(null, "", "");
-  }),
+// The browser opener runs `open <url>` through the host; capture the URL.
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: {
+    run: vi.fn(async (command: { kind: string; args?: string[] }) => {
+      if (command.args?.[0]) capturedAuthUrl = command.args[0];
+      return {
+        exitCode: 0,
+        signal: null,
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        timedOut: false,
+        aborted: false,
+      };
+    }),
+    start: vi.fn(),
+  },
 }));
 
 // Skip encryption — no system keyring on CI

@@ -1,12 +1,10 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { currentHost } from "../runtime/currentHost.js";
+import { runProgram } from "./abortable.js";
 import { detectPlatform } from "./utils.js";
 
 // The desktop notification behind `notify` in std::system. It runs a
 // subprocess, so it lives apart from builtins.ts, which backs the prelude
 // and must not import child_process.
-
-const execFileAsync = promisify(execFile);
 
 /** argv item 1 is the message, item 2 is the title. See `_notify`. */
 const NOTIFY_SCRIPT = `on run argv
@@ -14,6 +12,7 @@ const NOTIFY_SCRIPT = `on run argv
 end run`;
 
 export async function _notify(title: string, message: string): Promise<boolean> {
+  const host = currentHost();
   const platform = await detectPlatform();
   if (platform === "macos") {
     // The title and message arrive as argv rather than being spliced into the
@@ -22,9 +21,9 @@ export async function _notify(title: string, message: string): Promise<boolean> 
     // as the escape function keeps up with every AppleScript metacharacter.
     // No "-" before the arguments: osascript would pass it through as argv
     // item 1 and shift every real argument by one.
-    await execFileAsync("osascript", ["-e", NOTIFY_SCRIPT, message, title]);
+    await runProgram(host, "osascript", ["-e", NOTIFY_SCRIPT, message, title]);
   } else if (platform === "linux") {
-    await execFileAsync("notify-send", [title, message]);
+    await runProgram(host, "notify-send", [title, message]);
   } else if (platform === "wsl") {
     console.error(
       `notify is not yet supported in WSL. ` +

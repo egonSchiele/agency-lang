@@ -10,7 +10,7 @@ import type { Host, Root, Entry } from "../host/host.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
-import { abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.js";
+import { abortableShell, abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
@@ -143,7 +143,12 @@ async function execImpl(
   // "no override" sentinel — the child inherits the parent's cwd.
   const cwdResolved = await resolveSpawnCwd(ctx.host, cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
+  return abortableSpawn(
+    ctx.host,
+    command,
+    args,
+    buildSpawnOptions(cwdResolved, timeout, stdin, signal),
+  );
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -215,11 +220,7 @@ async function bashImpl(
   // See `execImpl` for the cwd-resolution rationale.
   const cwdResolved = await resolveSpawnCwd(ctx.host, cwd, options?.allowedPaths ?? []);
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn(
-    "sh",
-    ["-c", command],
-    buildSpawnOptions(cwdResolved, timeout, stdin, signal),
-  );
+  return abortableShell(ctx.host, command, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;

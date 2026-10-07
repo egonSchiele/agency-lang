@@ -1,9 +1,12 @@
 // Copied from packages/kokoro/src/ffmpeg.ts, with pcm and wav output and a
 // speed filter added.
-import { spawn, spawnSync } from "node:child_process";
+// spawnSync for the probe only: it runs before any interrupt, inside a
+// synchronous check, and the host runs nothing synchronously.
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
-import type { Host } from "../host/host.js";
+import type { Host, RunResult } from "../host/host.js";
+import { program } from "./abortable.js";
 import { throwAbortReason } from "./abortReason.js";
 
 export const TRANSCODE_FORMATS = ["wav", "mp3", "m4a", "pcm"] as const;
@@ -103,7 +106,7 @@ export async function transcode(
   const name = `agency-speech-encode-${randomUUID()}.${format}`;
   const outputFile = await files.resolvePath(tmp, name);
   try {
-    await runFfmpeg(buildTranscodeArgs(format, speed, outputFile), wav, signal);
+    await runFfmpeg(host, buildTranscodeArgs(format, speed, outputFile), wav, signal);
     return await files.readBytes(tmp, name);
   } finally {
     if ((await files.stat(tmp, name)) !== null) {
@@ -112,65 +115,37 @@ export async function transcode(
   }
 }
 
-function runFfmpeg(args: string[], input: Uint8Array, signal: AbortSignal): Promise<void> {
+async function runFfmpeg(
+  host: Host,
+  args: string[],
+  input: Uint8Array,
+  signal: AbortSignal,
+): Promise<void> {
   if (signal.aborted) {
     throwAbortReason(signal);
   }
-  const proc = spawn("ffmpeg", args, { stdio: ["pipe", "ignore", "pipe"] });
-  const stderr: Buffer[] = [];
-  proc.stderr!.on("data", (chunk: Buffer) => stderr.push(chunk));
-  // ffmpeg closes stdin early when it rejects the input. The exit code
-  // reports that; the write error is noise.
-  proc.stdin!.on("error", () => undefined);
-  proc.stdin!.end(Buffer.from(input));
-
-  let killReason: string | null = null;
-  const kill = (reason: string): void => {
-    if (killReason === null) {
-      killReason = reason;
-      proc.kill("SIGKILL");
+  let result: RunResult;
+  try {
+    result = await host.subprocess.run(program("ffmpeg", args), {
+      input,
+      signal,
+      timeoutMs: FFMPEG_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      collect: { stdout: false, stderr: true },
+    });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new FfmpegError(`ffmpeg is not on PATH. ${installHint()}`);
     }
-  };
-  const timer = setTimeout(
-    () => kill(`ffmpeg exceeded ${FFMPEG_TIMEOUT_MS} ms`),
-    FFMPEG_TIMEOUT_MS,
-  );
-  const onAbort = (): void => kill("cancelled");
-  signal.addEventListener("abort", onAbort, { once: true });
-
-  return new Promise<void>((resolve, reject) => {
-    const finish = (): void => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-    };
-    proc.on("error", (err: NodeJS.ErrnoException) => {
-      finish();
-      if (err.code === "ENOENT") {
-        reject(new FfmpegError(`ffmpeg is not on PATH. ${installHint()}`));
-      } else {
-        reject(new FfmpegError(`failed to start ffmpeg: ${err.message}`));
-      }
-    });
-    proc.on("close", (code: number | null) => {
-      finish();
-      if (signal.aborted) {
-        try {
-          throwAbortReason(signal);
-        } catch (err) {
-          reject(err);
-        }
-        return;
-      }
-      if (killReason !== null) {
-        reject(new FfmpegError(killReason));
-        return;
-      }
-      if (code !== 0) {
-        const detail = Buffer.concat(stderr).toString("utf8").trim();
-        reject(new FfmpegError(`ffmpeg exited with code ${code}: ${detail}`));
-        return;
-      }
-      resolve();
-    });
-  });
+    throw new FfmpegError(`failed to start ffmpeg: ${(err as Error).message}`);
+  }
+  if (signal.aborted) {
+    throwAbortReason(signal);
+  }
+  if (result.timedOut) {
+    throw new FfmpegError(`ffmpeg exceeded ${FFMPEG_TIMEOUT_MS} ms`);
+  }
+  if (result.exitCode !== 0) {
+    throw new FfmpegError(`ffmpeg exited with code ${result.exitCode}: ${result.stderr.trim()}`);
+  }
 }

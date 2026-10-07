@@ -14,6 +14,7 @@ export type Host = {
   capabilities: Capability[];
   files: HostFiles;
   network: HostNetwork;
+  subprocess: HostSubprocess;
   env: HostEnv;
   terminal: HostTerminal;
   system: HostSystem;
@@ -25,7 +26,7 @@ export type Host = {
 
 The host has two kinds of part.
 
-**A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs: `files` needs `fileRead`, and its writing functions (`FILE_WRITE_FUNCTIONS`) need `fileWrite` as well; `network`, `env`, and `terminal` need their own names.
+**A capability is a part a host may lack or refuse.** There are seven names: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. `host.capabilities` lists the ones this host has. `PART_CAPABILITY` says which capability each capability part needs: `files` needs `fileRead`, and its writing functions (`FILE_WRITE_FUNCTIONS`) need `fileWrite` as well; `network`, `subprocess`, `env`, and `terminal` need their own names.
 
 **Every host provides the other parts.** `system`, `settings`, `clock`, and `random` have no capability name. No platform lacks a clock, and nearly every function reads the time, so a capability for it would be on every effect.
 
@@ -107,6 +108,14 @@ A refusal from `makeHost` throws when the function is called, before any promise
 ### The network part
 
 `HostNetwork` is the platform's own `fetch`, with the same arguments and the same `Response`, so a host can refuse it, limit it to a list of sites, or answer from scripted responses. `nodeHost` calls the global `fetch` at the time of each call, so a test that replaces the global is honoured. `memoryHost` refuses every request unless the test passed a `fetch`. Every `fetch` in the stdlib goes through `host.network.fetch`, and a helper reaches the network the way it reaches files: through the run it was handed, or `currentHost()` on its first line. The model client is the exception: smoltalk, and any `LLMClient` a caller supplies, makes its own requests, which the host neither sees nor refuses. `SimpleOpenAIClient`, the small client the runtime ships, is Agency's own code and does go through the network part of the host it was built under.
+
+### The subprocess part
+
+`HostSubprocess` runs a `Command`: a program with its arguments, or a script for the platform's shell. `run` starts the child and waits, collecting its output; `start` hands back the running child with `kill` and `wait`, for the one caller that stops a child on an event of its own (`record`, on a keypress). `RunOptions` carries the working directory, the whole environment, text or bytes for standard input, a time limit, an abort signal, a cap on standard output, which streams to collect, and the signal a kill sends. `RunResult` reports the raw facts: the exit code or the signal, both streams, and whether the child was killed for the cap, the time limit, or the abort signal. What each ending means is the caller's decision. A program that cannot be started rejects with the platform's error (`ENOENT` on Node), so `ffmpeg.ts` can still say "not on PATH".
+
+`lib/stdlib/abortable.ts` is the stdlib's layer over it, and every stdlib helper that runs a program goes through one of its functions: `abortableSpawn` and `abortableShell` (output collected; the byte cap and the time limit resolve with a note, an abort rejects with `AgencyCancelledError`), `abortableExec` (output not wanted; a non-zero exit rejects), and `runProgram` (the contract of Node's `execFile`: a non-zero exit rejects with `ProgramFailed`, which carries the output). The one `fork` in `lib/runtime/ipc.ts` stays there, Node-only, and `_runFor` checks the `subprocess` capability on its first line. The ffmpeg probe in `ffmpeg.ts` stays on `spawnSync`, because it runs inside a synchronous check before an interrupt and the host runs nothing synchronously.
+
+A test of a helper that runs a fixed program mocks `lib/host/nodeSubprocess.ts` and scripts `run` with the helpers in `lib/stdlib/__tests__/fakeSubprocess.ts`. `memoryHost` refuses every command unless the test passed a `subprocess`.
 
 ### The default host
 

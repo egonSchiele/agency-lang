@@ -1,8 +1,6 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { currentHost } from "../runtime/currentHost.js";
+import { runProgram } from "./abortable.js";
 import { checkRecipients } from "./messaging.js";
-
-const execFileAsync = promisify(execFile);
 
 /** The recipient and the message body arrive as argv, never spliced into this
  *  source. That matters here more than usual: `sendIMessage` is handed to an
@@ -37,6 +35,7 @@ export async function _sendIMessage(
   message: string,
   options?: IMessageOptions,
 ): Promise<IMessageResult> {
+  const host = currentHost();
   if (process.platform !== "darwin") {
     throw new Error("iMessage is only available on macOS.");
   }
@@ -55,14 +54,14 @@ export async function _sendIMessage(
   try {
     // No "-" before the arguments: osascript passes a bare "-" through as
     // argv item 1 and shifts every real argument by one. Same as appleNotes.ts.
-    await execFileAsync("osascript", ["-e", SEND_SCRIPT, to, message]);
+    await runProgram(host, "osascript", ["-e", SEND_SCRIPT, to, message]);
     return { sent: true };
   } catch (error: unknown) {
     // Report stderr only, which carries the actionable detail. The raw error
     // also carries the full argv, and that now includes the recipient and the
     // message body, which should not end up in a thrown message.
-    const err = error as { stderr?: string; code?: number };
-    const detail = err.stderr?.trim() || `exit code ${err.code ?? "unknown"}`;
+    const err = error as { stderr?: string; exitCode?: number | null };
+    const detail = err.stderr?.trim() || `exit code ${err.exitCode ?? "unknown"}`;
     throw new Error(`Failed to send iMessage: ${detail}`);
   }
 }

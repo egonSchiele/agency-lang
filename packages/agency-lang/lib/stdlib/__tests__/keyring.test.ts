@@ -1,14 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "../keyring.js";
 
-// Mock child_process
-const mockExecFile = vi.fn();
-const mockSpawn = vi.fn();
+import { exited, failed, programRun } from "./fakeSubprocess.js";
 
-vi.mock("child_process", () => ({
-  execFile: (...args: unknown[]) => mockExecFile(...args),
-  spawn: (...args: unknown[]) => mockSpawn(...args),
+// The host's subprocess part, mocked: `mockRun` answers each program.
+const mockRun = vi.fn();
+
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: {
+    run: (...args: unknown[]) => mockRun(...args),
+    start: vi.fn(),
+  },
 }));
+
+/** The program and args of the `index`th run. */
+function call(index: number): [string, string[]] {
+  const { program, args } = programRun(mockRun, index);
+  return [program, args];
+}
 
 const originalPlatform = process.platform;
 afterAll(() => {
@@ -19,41 +28,23 @@ describe("keyring (macOS)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-    // Default: execFile succeeds
-    mockExecFile.mockImplementation(
-      (
-        _cmd: string,
-        _args: string[],
-        cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-      ) => {
-        cb(null, { stdout: "", stderr: "" });
-      },
-    );
+    // Default: every program exits with 0
+    mockRun.mockImplementation(async () => exited());
   });
 
   describe("_setSecret", () => {
     it("calls security add-generic-password with correct args", async () => {
       // First call is delete (may fail), second is add
       let callCount = 0;
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          callCount++;
-          if (callCount === 1) {
-            // delete call - can fail
-            cb(new Error("not found"), { stdout: "", stderr: "" });
-          } else {
-            cb(null, { stdout: "", stderr: "" });
-          }
-        },
-      );
+      mockRun.mockImplementation(async () => {
+        callCount++;
+        // The delete call can fail
+        return callCount === 1 ? failed("not found") : exited();
+      });
 
       await _setSecret("my-key", "my-value");
 
-      const addCall = mockExecFile.mock.calls[1];
+      const addCall = call(1);
       expect(addCall[0]).toBe("security");
       expect(addCall[1]).toContain("add-generic-password");
       expect(addCall[1]).toContain("-a");
@@ -66,21 +57,14 @@ describe("keyring (macOS)", () => {
 
     it("uses custom service name", async () => {
       let callCount = 0;
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          callCount++;
-          if (callCount === 1) cb(new Error("not found"), { stdout: "", stderr: "" });
-          else cb(null, { stdout: "", stderr: "" });
-        },
-      );
+      mockRun.mockImplementation(async () => {
+        callCount++;
+        return callCount === 1 ? failed("not found") : exited();
+      });
 
       await _setSecret("key", "val", "my-app");
 
-      const addCall = mockExecFile.mock.calls[1];
+      const addCall = call(1);
       expect(addCall[1]).toContain("my-app");
     });
 
@@ -95,32 +79,15 @@ describe("keyring (macOS)", () => {
 
   describe("_getSecret", () => {
     it("returns the secret value", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          cb(null, { stdout: "my-secret-value\n", stderr: "" });
-        },
-      );
+      mockRun.mockImplementation(async () => exited("my-secret-value\n"));
 
       const result = await _getSecret("my-key");
       expect(result).toBe("my-secret-value");
     });
 
     it("returns null when secret not found", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          cb(new Error("security: SecKeychainSearchCopyNext: not found"), {
-            stdout: "",
-            stderr: "",
-          });
-        },
+      mockRun.mockImplementation(async () =>
+        failed("security: SecKeychainSearchCopyNext: not found"),
       );
 
       const result = await _getSecret("nonexistent");
@@ -128,19 +95,11 @@ describe("keyring (macOS)", () => {
     });
 
     it("uses correct security command", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          cb(null, { stdout: "val", stderr: "" });
-        },
-      );
+      mockRun.mockImplementation(async () => exited("val"));
 
       await _getSecret("test-key", "custom-svc");
 
-      const [cmd, args] = mockExecFile.mock.calls[0];
+      const [cmd, args] = call(0);
       expect(cmd).toBe("security");
       expect(args).toContain("find-generic-password");
       expect(args).toContain("-s");
@@ -152,35 +111,24 @@ describe("keyring (macOS)", () => {
   });
 
   describe("_getSecret with a timeout", () => {
-    // promisify(execFile) calls execFile(cmd, args, options, cb) when options
-    // are given, so these mocks take the callback from the last argument.
-    function answerLast(stdout: string): void {
-      mockExecFile.mockImplementation((...args: unknown[]) => {
-        const cb = args.at(-1) as (
-          err: Error | null,
-          result: { stdout: string; stderr: string },
-        ) => void;
-        cb(null, { stdout, stderr: "" });
-      });
-    }
-
     it("passes the timeout to the subprocess", async () => {
-      answerLast("tok\n");
+      mockRun.mockImplementation(async () => exited("tok\n"));
       expect(await _getSecret("k", "svc", 1234)).toBe("tok");
-      expect(mockExecFile.mock.calls[0][2]).toEqual({ timeout: 1234 });
+      expect(mockRun.mock.calls[0][1]).toEqual({ timeoutMs: 1234 });
     });
 
-    it("passes no options object when no timeout is given", async () => {
-      answerLast("tok");
+    it("passes no timeout when none is given", async () => {
+      mockRun.mockImplementation(async () => exited("tok"));
       await _getSecret("k");
-      expect(mockExecFile.mock.calls[0]).toHaveLength(3);
+      expect(mockRun.mock.calls[0][1]).toEqual({});
     });
 
     it("reads a lookup killed at the deadline as a miss", async () => {
-      mockExecFile.mockImplementation((...args: unknown[]) => {
-        const cb = args.at(-1) as (err: Error) => void;
-        cb(Object.assign(new Error("timed out"), { killed: true, signal: "SIGTERM" }));
-      });
+      mockRun.mockImplementation(async () => ({
+        ...failed("", null),
+        signal: "SIGTERM",
+        timedOut: true,
+      }));
       expect(await _getSecret("k", "svc", 10)).toBeNull();
     });
   });
@@ -192,15 +140,7 @@ describe("keyring (macOS)", () => {
     });
 
     it("returns false when not found", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          cb(new Error("not found"), { stdout: "", stderr: "" });
-        },
-      );
+      mockRun.mockImplementation(async () => failed("not found"));
 
       const result = await _deleteSecret("nonexistent");
       expect(result).toBe(false);
@@ -213,15 +153,7 @@ describe("keyring (macOS)", () => {
     });
 
     it("returns false when security command fails", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-        ) => {
-          cb(new Error("command not found"), { stdout: "", stderr: "" });
-        },
-      );
+      mockRun.mockImplementation(async () => failed("command not found"));
 
       expect(await _isKeyringAvailable()).toBe(false);
     });

@@ -131,16 +131,20 @@ const SCRUB_ENV_KEYS: string[] = [
   "GIT_CEILING_DIRECTORIES",
 ];
 
-/** Shallow copy of `base` with git command-injection vars removed. */
-export function scrubEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const scrubbed: NodeJS.ProcessEnv = { ...base };
-  for (const key of Object.keys(scrubbed)) {
-    for (const rule of SCRUB_ENV_KEYS) {
-      const matches = rule.endsWith("*") ? key.startsWith(rule.slice(0, -1)) : key === rule;
-      if (matches) {
-        delete scrubbed[key];
-        break;
-      }
+/** Copy of `base` with git command-injection vars removed, and with no
+ *  unset entries, the way a host takes a child's environment. */
+export function scrubEnv(base: Record<string, string | undefined>): Record<string, string> {
+  const scrubbed: Record<string, string> = {};
+  for (const key of Object.keys(base)) {
+    const value = base[key];
+    if (value === undefined) {
+      continue;
+    }
+    const scrub = SCRUB_ENV_KEYS.some((rule) =>
+      rule.endsWith("*") ? key.startsWith(rule.slice(0, -1)) : key === rule,
+    );
+    if (!scrub) {
+      scrubbed[key] = value;
     }
   }
   return scrubbed;

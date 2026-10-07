@@ -1,5 +1,3 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,8 +5,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
-
-const execFileAsync = promisify(execFile);
+import { runProgram } from "./abortable.js";
 
 /** Vision prints one JSON array per run. A dense page is well under a
  *  megabyte; the cap only guards against a runaway script. */
@@ -63,12 +60,15 @@ export function parseBlocks(stdout: string): TextBlock[] {
   return result.data;
 }
 
-const defaultRunner: OsascriptRunner = async (args) => {
-  const { stdout } = await execFileAsync("osascript", args, {
-    maxBuffer: OSASCRIPT_MAX_STDOUT_BYTES,
-  });
-  return stdout;
-};
+/** The runner that calls the real osascript through `host`. */
+function osascriptRunner(host: Host): OsascriptRunner {
+  return async (args) => {
+    const { stdout } = await runProgram(host, "osascript", args, {
+      maxOutputBytes: OSASCRIPT_MAX_STDOUT_BYTES,
+    });
+    return stdout;
+  };
+}
 
 /** Read the approved file through a validated descriptor. `approvedPath`
  *  is the spelling the approver saw; `fixedPath` refuses a symlink that
@@ -142,7 +142,7 @@ export function _recognizeTextLocal(
   const host = currentHost();
   return _recognizeTextLocalWith(
     host,
-    defaultRunner,
+    osascriptRunner(host),
     process.platform,
     approvedPath,
     language,

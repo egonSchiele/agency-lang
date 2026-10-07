@@ -1,8 +1,6 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { _getSecret } from "../keyring.js";
-
-const execFileAsync = promisify(execFile);
+import type { Host } from "../../host/host.js";
+import { runProgram } from "../abortable.js";
+import { getSecret } from "../keyring.js";
 
 export type CredentialSources = {
   env: Record<string, string | undefined>;
@@ -69,14 +67,14 @@ async function readSource(read: () => Promise<string | null>): Promise<string | 
 const GH_AUTH_TOKEN_TIMEOUT_MS = 5000;
 const KEYRING_TIMEOUT_MS = 5000;
 
-function keyringGetBounded(key: string, service: string): Promise<string | null> {
-  return _getSecret(key, service, KEYRING_TIMEOUT_MS);
+function keyringGetBounded(host: Host, key: string, service: string): Promise<string | null> {
+  return getSecret(host, key, service, KEYRING_TIMEOUT_MS);
 }
 
-async function ghAuthToken(): Promise<string | null> {
+async function ghAuthToken(host: Host): Promise<string | null> {
   // Fixed literal argv, no shell, nothing model-supplied.
-  const { stdout } = await execFileAsync("gh", ["auth", "token"], {
-    timeout: GH_AUTH_TOKEN_TIMEOUT_MS,
+  const { stdout } = await runProgram(host, "gh", ["auth", "token"], {
+    timeoutMs: GH_AUTH_TOKEN_TIMEOUT_MS,
   });
   const token = stdout.trim();
   return token === "" ? null : token;
@@ -115,10 +113,10 @@ export async function _resolveAndCache(sources: CredentialSources): Promise<stri
 /** The token for GitHub requests. Called ONLY by _githubRequest, after the
  *  operation's interrupt is approved — never from Agency. The invariant:
  *  nothing reads the token without an approved interrupt in front of it. */
-export async function resolveGithubToken(): Promise<string> {
+export async function resolveGithubToken(host: Host): Promise<string> {
   return _resolveAndCache({
     env: process.env,
-    ghAuthToken,
-    keyringGet: keyringGetBounded,
+    ghAuthToken: () => ghAuthToken(host),
+    keyringGet: (key, service) => keyringGetBounded(host, key, service),
   });
 }

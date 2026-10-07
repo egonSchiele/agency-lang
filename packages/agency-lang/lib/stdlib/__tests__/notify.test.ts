@@ -1,15 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("child_process", () => ({
-  execFile: vi.fn(
-    (
-      _cmd: string,
-      _args: string[],
-      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
-    ) => {
-      cb(null, { stdout: "", stderr: "" });
-    },
-  ),
+vi.mock("../../host/nodeSubprocess.js", () => ({
+  nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 
 // detectPlatform caches its answer, so overriding process.platform is not
@@ -19,12 +11,14 @@ vi.mock("../utils.js", async (importOriginal) => ({
   detectPlatform: vi.fn(async () => "macos" as const),
 }));
 
-import { execFile } from "child_process";
+import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { exited, failed, programRun } from "./fakeSubprocess.js";
+
+const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;
 import { _notify } from "../notify.js";
 
 function osascriptArgs(): string[] {
-  const calls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls;
-  return calls[0][1];
+  return programRun(run).args;
 }
 
 describe("_notify on macOS", () => {
@@ -36,11 +30,10 @@ describe("_notify on macOS", () => {
     await _notify("Build done", "3 tests failed");
 
     // _notify(title, message); the script reads message first, then title.
-    expect(execFile).toHaveBeenCalledWith(
-      "osascript",
-      ["-e", expect.any(String), "3 tests failed", "Build done"],
-      expect.any(Function),
-    );
+    expect(programRun(run)).toEqual({
+      program: "osascript",
+      args: ["-e", expect.any(String), "3 tests failed", "Build done"],
+    });
 
     const script = osascriptArgs()[1];
     expect(script).not.toContain("Build done");

@@ -1,5 +1,6 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { runProgram } from "./abortable.js";
 import renderWithTimeout from "../templates/applescript/notes/withTimeout.js";
 import renderAccountWalk from "../templates/applescript/notes/accountWalk.js";
 import renderPreflight from "../templates/applescript/notes/preflight.js";
@@ -18,8 +19,6 @@ import renderAppendScoped from "../templates/applescript/notes/appendScoped.js";
 import renderAppendUnscoped from "../templates/applescript/notes/appendUnscoped.js";
 import renderDeleteScoped from "../templates/applescript/notes/deleteScoped.js";
 import renderDeleteUnscoped from "../templates/applescript/notes/deleteUnscoped.js";
-
-const execFileAsync = promisify(execFile);
 
 /** Our own bound on the wait. Without it, AppleScript's 120-second default
  *  applies, which is indistinguishable from a hang for an agent tool call.
@@ -47,7 +46,7 @@ export function withTimeout(body: string): string {
  *  model-authored, and the model may have been influenced by a page it read,
  *  so interpolating them would be an injection path. argv values are not
  *  parsed as AppleScript. */
-export async function runNotesScript(script: string, args: string[]): Promise<string> {
+export async function runNotesScript(host: Host, script: string, args: string[]): Promise<string> {
   if (process.platform !== "darwin") {
     throw new Error("Apple Notes is only available on macOS.");
   }
@@ -55,7 +54,7 @@ export async function runNotesScript(script: string, args: string[]): Promise<st
   try {
     // No "-" before args: osascript passes it through as argv item 1 and
     // shifts every real argument by one.
-    const { stdout } = await execFileAsync("osascript", ["-e", script, ...args]);
+    const { stdout } = await runProgram(host, "osascript", ["-e", script, ...args]);
     // trimEnd, not trim: osascript appends a trailing newline, but leading
     // whitespace is meaningful in note plaintext (indented code, for one) and
     // the plaintext is the first field of a read reply. Same as keyring.ts.
@@ -128,7 +127,12 @@ const PREFLIGHT_SCRIPT = withTimeout(renderPreflight({ accountWalk: ACCOUNT_WALK
  *  widen this query on the strength of that weaker claim. It reads three
  *  properties and no content, and it should stay that way. */
 export async function _preflightNote(id: string): Promise<NotePreflight> {
-  const raw = await runNotesScript(PREFLIGHT_SCRIPT, [id]);
+  const host = currentHost();
+  return preflightNote(host, id);
+}
+
+async function preflightNote(host: Host, id: string): Promise<NotePreflight> {
+  const raw = await runNotesScript(host, PREFLIGHT_SCRIPT, [id]);
   const parts = raw.split(FIELD_DELIM);
   if (parts.length !== 4) {
     throw new Error(`Notes returned an unexpected reply for note ${id}.`);
@@ -213,14 +217,15 @@ const READ_UNSCOPED_SCRIPT = withTimeout(renderReadUnscoped({}));
 const READ_SCOPED_SCRIPT = withTimeout(renderReadScoped({}));
 
 export async function _readNote(id: string, folder?: string): Promise<NoteContentTs> {
-  const meta = await _preflightNote(id);
+  const host = currentHost();
+  const meta = await preflightNote(host, id);
   assertFolder(meta, folder);
   assertNotLocked(meta);
 
   const raw =
     folder == null
-      ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
-      : await runNotesScript(READ_SCOPED_SCRIPT, [id, folder]);
+      ? await runNotesScript(host, READ_UNSCOPED_SCRIPT, [id])
+      : await runNotesScript(host, READ_SCOPED_SCRIPT, [id, folder]);
   const parts = raw.split(FIELD_DELIM);
   if (parts.length !== 2) {
     throw new Error(`Notes returned an unexpected reply for note ${id}.`);
@@ -262,10 +267,11 @@ const LIST_ALL_SCRIPT = withTimeout(renderListAll({ noteRow: NOTE_ROW }));
 const LIST_IN_FOLDER_SCRIPT = withTimeout(renderListInFolder({ noteRow: NOTE_ROW }));
 
 export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
+  const host = currentHost();
   const raw =
     folder == null
-      ? await runNotesScript(LIST_ALL_SCRIPT, [])
-      : await runNotesScript(LIST_IN_FOLDER_SCRIPT, [folder]);
+      ? await runNotesScript(host, LIST_ALL_SCRIPT, [])
+      : await runNotesScript(host, LIST_IN_FOLDER_SCRIPT, [folder]);
   return parseNoteRows(raw);
 }
 
@@ -276,10 +282,11 @@ const SEARCH_ALL_SCRIPT = withTimeout(renderSearchAll({ noteRow: NOTE_ROW }));
 const SEARCH_IN_FOLDER_SCRIPT = withTimeout(renderSearchInFolder({ noteRow: NOTE_ROW }));
 
 export async function _searchNotes(query: string, folder?: string): Promise<NoteMeta[]> {
+  const host = currentHost();
   const raw =
     folder == null
-      ? await runNotesScript(SEARCH_ALL_SCRIPT, [query])
-      : await runNotesScript(SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
+      ? await runNotesScript(host, SEARCH_ALL_SCRIPT, [query])
+      : await runNotesScript(host, SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
   return parseNoteRows(raw);
 }
 
@@ -301,7 +308,8 @@ export async function _searchNotes(query: string, folder?: string): Promise<Note
 const LIST_FOLDERS_SCRIPT = withTimeout(renderListFolders({}));
 
 export async function _listFolders(): Promise<FolderMeta[]> {
-  const raw = await runNotesScript(LIST_FOLDERS_SCRIPT, []);
+  const host = currentHost();
+  const raw = await runNotesScript(host, LIST_FOLDERS_SCRIPT, []);
   const rows = raw.split("\n").filter((line) => line.length > 0);
   return rows.map((line) => {
     const fields = line.split(FIELD_DELIM);
@@ -319,7 +327,8 @@ export async function _listFolders(): Promise<FolderMeta[]> {
 const FOLDER_EXISTS_SCRIPT = withTimeout(renderFolderExists({}));
 
 export async function _folderExists(folder: string): Promise<boolean> {
-  const raw = await runNotesScript(FOLDER_EXISTS_SCRIPT, [folder]);
+  const host = currentHost();
+  const raw = await runNotesScript(host, FOLDER_EXISTS_SCRIPT, [folder]);
   return raw.trim() === "true";
 }
 
@@ -331,7 +340,8 @@ const CREATE_SCRIPT = withTimeout(renderCreate({ accountWalk: ACCOUNT_WALK }));
 /** Create a note. `html` is HTML, already rendered — this layer does not know
  *  about markdown. The Agency module does the conversion. */
 export async function _createNote(title: string, html: string, folder: string): Promise<NoteMeta> {
-  const raw = await runNotesScript(CREATE_SCRIPT, [title, html, folder]);
+  const host = currentHost();
+  const raw = await runNotesScript(host, CREATE_SCRIPT, [title, html, folder]);
   const rows = parseNoteRows(raw);
   if (rows.length !== 1) {
     throw new Error("Notes returned an unexpected reply while creating a note.");
@@ -361,14 +371,15 @@ const APPEND_UNSCOPED_SCRIPT = withTimeout(renderAppendUnscoped({ appendBody: AP
  *  pre-flight. This second pre-flight is the authoritative one for the
  *  write. */
 export async function _appendToNote(id: string, html: string, folder?: string): Promise<NoteMeta> {
-  const meta = await _preflightNote(id);
+  const host = currentHost();
+  const meta = await preflightNote(host, id);
   assertFolder(meta, folder);
   assertNotLocked(meta);
 
   const raw =
     folder == null
-      ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
-      : await runNotesScript(APPEND_SCOPED_SCRIPT, [id, html, folder]);
+      ? await runNotesScript(host, APPEND_UNSCOPED_SCRIPT, [id, html])
+      : await runNotesScript(host, APPEND_SCOPED_SCRIPT, [id, html, folder]);
 
   const rows = parseNoteRows(raw);
   if (rows.length !== 1) {
@@ -382,14 +393,15 @@ const DELETE_UNSCOPED_SCRIPT = withTimeout(renderDeleteUnscoped({}));
 
 /** Delete a note. It moves to Recently Deleted, where it stays ~30 days. */
 export async function _deleteNote(id: string, folder?: string): Promise<null> {
-  const meta = await _preflightNote(id);
+  const host = currentHost();
+  const meta = await preflightNote(host, id);
   assertFolder(meta, folder);
   assertNotLocked(meta);
 
   if (folder == null) {
-    await runNotesScript(DELETE_UNSCOPED_SCRIPT, [id]);
+    await runNotesScript(host, DELETE_UNSCOPED_SCRIPT, [id]);
   } else {
-    await runNotesScript(DELETE_SCOPED_SCRIPT, [id, folder]);
+    await runNotesScript(host, DELETE_SCOPED_SCRIPT, [id, folder]);
   }
   return null;
 }

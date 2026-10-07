@@ -262,7 +262,31 @@ describe("frame moduleId round trip", () => {
 });
 
 describe("moduleFingerprints round trip", () => {
-  it("keeps moduleFingerprints through Checkpoint.fromJSON", () => {
+  it("keeps a hash-only fingerprint through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 3,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      moduleFingerprints: { "mod.agency": { hash: "abc123" } },
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.moduleFingerprints).toEqual({ "mod.agency": { hash: "abc123" } });
+  });
+
+  it("keeps the compiledAt an older checkpoint carries through Checkpoint.fromJSON", () => {
     const original = {
       id: 4,
       nodeId: "start",

@@ -30,6 +30,7 @@ PR B, PR C, and PR C2 are merged. PR D is open as #1182.
 | D | Network, `Buffer` | 9, 12 | open, #1182 |
 | D2 | Subprocesses | 8 | next |
 | D3 | Portable paths | 10 | |
+| D4 | WebCrypto for the async hashers | 11 (Task 28) | open |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
@@ -870,13 +871,16 @@ One PR each, in this order.
 
 ### Task 28: hashing
 
-Done in #1177, with one change still to make: `sha256.portable.ts` is
-hand-written SHA-256, and the browser has WebCrypto. Add async
-`sha256BytesAsync` and `hmacSha256Async` to `lib/utils/hash.ts`, over
-`crypto.subtle` on both platforms, and move the S3 request signer and the
-OAuth PKCE challenge to them; both callers are async already. The
-hand-written version then serves only the synchronous checkpoint
-checksum (Task 30), and it stays tested against Node's output. Done in
+Done in #1177, and the one change left after it in PR D4:
+`sha256.portable.ts` is hand-written SHA-256, and the browser has
+WebCrypto. D4 adds async `sha256BytesAsync`, `sha256HexAsync`, and
+`hmacSha256Async` to `lib/utils/hash.ts`, over `crypto.subtle` on both
+platforms, and moves the S3 request signer and the OAuth PKCE challenge
+to them; both callers were async already, and `signRequest` and
+`presignRequest` became async with them. The hand-written version serves
+the callers that cannot await, `sha256Text` in the compiler and the
+checkpoint checksum (Task 30), and it stays tested against Node's
+output. Done in
 #1177: Node keeps its own crypto through a `#sha256` entry in the
 `imports` field of `package.json`, with an ambient declaration in
 `lib/utils/packageImports.d.ts` and an alias in `vitest.aliases.ts`. PR B

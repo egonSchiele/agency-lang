@@ -1,4 +1,4 @@
-import { sha256Hex, hmacSha256, toHex } from "../../utils/hash.js";
+import { sha256HexAsync, hmacSha256Async, toHex } from "../../utils/hash.js";
 import { awsUriEncode } from "./uri.js";
 import { type AwsRequestTarget } from "./client.js";
 
@@ -31,8 +31,8 @@ export type SignInput = {
   date?: Date;
 };
 
-function hmac(key: string | Uint8Array, data: string): Uint8Array {
-  return hmacSha256(key, data);
+function hmac(key: string | Uint8Array, data: string): Promise<Uint8Array> {
+  return hmacSha256Async(key, data);
 }
 
 function amzDates(date: Date): { amzDate: string; dateStamp: string } {
@@ -49,25 +49,25 @@ function amzDates(date: Date): { amzDate: string; dateStamp: string } {
   return { amzDate, dateStamp: amzDate.slice(0, 8) };
 }
 
-function deriveSigningKey(
+async function deriveSigningKey(
   secret: string,
   dateStamp: string,
   region: string,
   service: string,
-): Uint8Array {
-  const kDate = hmac("AWS4" + secret, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, service);
+): Promise<Uint8Array> {
+  const kDate = await hmac("AWS4" + secret, dateStamp);
+  const kRegion = await hmac(kDate, region);
+  const kService = await hmac(kRegion, service);
   return hmac(kService, "aws4_request");
 }
 
 /** Sign a request and return the headers to send, including Authorization. */
-export function signRequest(input: SignInput): Record<string, string> {
+export async function signRequest(input: SignInput): Promise<Record<string, string>> {
   const now = input.date ?? new Date();
   const { amzDate, dateStamp } = amzDates(now);
   const host = new URL(input.wireUrl).host;
   const body = input.body ?? "";
-  const payloadHash = sha256Hex(body);
+  const payloadHash = await sha256HexAsync(body);
 
   const headers: Record<string, string> = {
     host,
@@ -101,16 +101,16 @@ export function signRequest(input: SignInput): Record<string, string> {
     "AWS4-HMAC-SHA256",
     amzDate,
     credentialScope,
-    sha256Hex(canonicalRequest),
+    await sha256HexAsync(canonicalRequest),
   ].join("\n");
 
-  const signingKey = deriveSigningKey(
+  const signingKey = await deriveSigningKey(
     input.secretAccessKey,
     dateStamp,
     input.region,
     input.service,
   );
-  const signature = toHex(hmac(signingKey, stringToSign));
+  const signature = toHex(await hmac(signingKey, stringToSign));
 
   const authorization =
     `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}, ` +
@@ -140,7 +140,7 @@ export type PresignInput = {
  * is signed is byte-for-byte the query emitted in the URL (plus the trailing
  * X-Amz-Signature).
  */
-export function presignRequest(input: PresignInput): string {
+export async function presignRequest(input: PresignInput): Promise<string> {
   const now = input.date ?? new Date();
   const { amzDate, dateStamp } = amzDates(now);
   const wireUrl = input.target.origin + input.target.canonicalUri;
@@ -185,16 +185,16 @@ export function presignRequest(input: PresignInput): string {
     "AWS4-HMAC-SHA256",
     amzDate,
     credentialScope,
-    sha256Hex(canonicalRequest),
+    await sha256HexAsync(canonicalRequest),
   ].join("\n");
 
-  const signingKey = deriveSigningKey(
+  const signingKey = await deriveSigningKey(
     input.secretAccessKey,
     dateStamp,
     input.region,
     input.service,
   );
-  const signature = toHex(hmac(signingKey, stringToSign));
+  const signature = toHex(await hmac(signingKey, stringToSign));
 
   return `${wireUrl}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }

@@ -265,7 +265,7 @@ export async function runS3Operation(
       // must run here explicitly.
       const hostError = hostOutsidePartitionFailure(target, partition);
       if (hostError) return hostError;
-      const url = presignRequest({
+      const url = await presignRequest({
         method: "GET",
         target,
         region: partition.region,

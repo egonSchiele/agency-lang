@@ -9,6 +9,63 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        {
+          "return": {
+            "response": [
+              101
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              3,
+              5
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              7,
+              11
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              13,
+              17
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              103,
+              107
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              109,
+              113
+            ]
+          }
+        },
+        {
+          "return": {
+            "response": [
+              23,
+              29
+            ]
+          }
+        }
       ]
     }
   ]

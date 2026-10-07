@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { FileMemoryStore } from "./store.js";
+import { nodeHost } from "../../host/nodeHost.js";
+
+const files = nodeHost().files;
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -10,7 +13,7 @@ describe("FileMemoryStore", () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-test-"));
-    store = new FileMemoryStore(tmpDir);
+    store = new FileMemoryStore(files, tmpDir);
   });
 
   afterEach(() => {

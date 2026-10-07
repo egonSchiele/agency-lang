@@ -312,6 +312,13 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       }
       return makeRoot(absolute(cwd, dir));
     },
+    fixedRoot: async (dir) => {
+      if (dir.trim() === "") {
+        throw new Error('dir must not be empty. Use "." for the current directory.');
+      }
+      return makeRoot(absolute(cwd, dir));
+    },
+    realDir: async (dir) => absolute(cwd, dir),
     wholePath: async (p) => {
       const full = absolute(cwd, p);
       return { root: makeRoot(parentOf(full)), target: baseOf(full) };
@@ -381,6 +388,16 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
         store.write(full, new Uint8Array(0), options);
       }
       return store.openForWrite(full);
+    },
+    openForAppend: async (root, target, options) => {
+      const full = resolve(root, target);
+      if (!state.files[full]) {
+        store.write(full, new Uint8Array(0), options);
+      }
+      return {
+        append: async (data) => store.write(full, data, { mode: "append" }),
+        close: async () => {},
+      };
     },
     mkdir: async (root, target) => {
       const full = resolve(root, target);

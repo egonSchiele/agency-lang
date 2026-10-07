@@ -6,7 +6,7 @@ import { __internal_exec, __internal_bash, _glob, _grep } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
-import { _realDir } from "./contained.js";
+import { _realDir } from "./fs.js";
 import { safeDeleteDirectory } from "../utils.js";
 import { findPackageRoot } from "../importPaths.js";
 
@@ -233,7 +233,7 @@ describe("_glob and symlinks", () => {
     fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
     const linked = path.join(root, "linked");
     await expect(_glob(linked, ".", "*.md", 100)).rejects.toThrow(/symlink/);
-    expect(await _glob(_realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
+    expect(await _glob(await _realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { currentRun, logOf, type Run } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { ExtractionResult, ForgetResult, MemoryManager } from "../runtime/memory/index.js";
+import { requireCapabilities } from "../host/host.js";
 import { MemoryFrame } from "../runtime/memory/frame.js";
 import type { MemoryConfig } from "../runtime/memory/types.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -209,6 +210,7 @@ export async function _forget(query: string): Promise<void> {
 export async function _enableMemory(config: MemoryConfig): Promise<void> {
   const run = currentRun();
   if (!run.stack) return;
+  requireCapabilities(run.ctx.host, ["fileRead", "fileWrite"], "enableMemory");
   run.stack.pushMemoryFrame(new MemoryFrame(config));
   startLocalEmbeddingResolution(run, config);
 }
@@ -244,6 +246,7 @@ export function _disableMemory(): void {
 export function _pushMemoryFrame(config: MemoryConfig): boolean {
   const run = currentRun();
   if (!run.stack) return false;
+  requireCapabilities(run.ctx.host, ["fileRead", "fileWrite"], "memory");
   const pushed = run.stack.pushMemoryFrame(new MemoryFrame(config));
   if (pushed) {
     startLocalEmbeddingResolution(run, config);

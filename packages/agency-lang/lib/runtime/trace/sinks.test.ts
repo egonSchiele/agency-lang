@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { CallbackSink } from "./sinks.js";
 import { FileSink } from "./fileSink.js";
+import { nodeHost } from "../../host/nodeHost.js";
 import type { TraceLine } from "./types.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -13,6 +14,8 @@ function readJsonl(filePath: string): any[] {
     .split("\n")
     .map((line) => JSON.parse(line));
 }
+
+const files = nodeHost().files;
 
 const sampleHeader: TraceLine = {
   type: "header",
@@ -44,7 +47,7 @@ describe("FileSink", () => {
   });
 
   it("writes JSONL lines to file", async () => {
-    const sink = new FileSink(filePath);
+    const sink = await FileSink.open(files, filePath);
     await sink.writeLine(sampleHeader);
     await sink.writeLine(sampleChunk);
     await sink.close();
@@ -56,7 +59,7 @@ describe("FileSink", () => {
   });
 
   it("close() flushes pending writes", async () => {
-    const sink = new FileSink(filePath);
+    const sink = await FileSink.open(files, filePath);
     await sink.writeLine(sampleHeader);
     await sink.close();
 

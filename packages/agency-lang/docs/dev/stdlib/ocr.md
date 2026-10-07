@@ -86,7 +86,7 @@ attachment for a model with no image input or an over-full call, and it
 appends its own marker to the tool result saying so. A return string that
 claimed delivery would contradict that marker. `viewFile` pre-checks the
 two things it can know before the interrupt, existence and size, by a
-stat through `contained.ts`, and refuses to run outside a tool call
+stat through `host.files`, and refuses to run outside a tool call
 because `attachToReply` silently drops there.
 
 ## Files

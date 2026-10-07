@@ -105,6 +105,7 @@
       "require": "./dist/lib/local/public.js"
     },
     "./stdlib-lib/*": "./dist/lib/stdlib/*",
+    "./host-lib/*": "./dist/lib/host/*",
     "./stdlib/*": "./stdlib/*"
   },
   "imports": {

@@ -14,7 +14,7 @@ import { exists } from "std::shell"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
-import { _realDir } from "agency-lang/stdlib-lib/contained.js"
+import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 import {
   _docsDir,
   _bundledDocsDir,

@@ -1,5 +1,5 @@
 import { _scanMediaPaths } from "agency-lang/stdlib-lib/mediaPathScan.js"
-import { _realDir } from "agency-lang/stdlib-lib/contained.js"
+import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 import { applyAgentCwd } from "std::index"
 import { modelSupportsInput } from "std::llm"
 import { stat } from "std::shell"

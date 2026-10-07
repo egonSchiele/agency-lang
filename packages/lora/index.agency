@@ -30,7 +30,7 @@ server picks it up by name the first time a request asks for it.
 */
 
 import { _planTraining, _train, _loraInfo } from "./dist/src/agency.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { dirname, basename } from "std::path"
 
 // One effect for the whole run: it reads the images folder, writes the

@@ -30,8 +30,10 @@
  * `new MemoryFrame(...)` instances and JSON-restored plain shapes,
  * which is what we need because checkpoint restore is real.
  */
-import fs from "node:fs";
 import path from "node:path";
+// The synchronous file operations of nodeHost, not host.files: a frame is
+// made inside createExecutionContext, which has no await.
+import { mkdir, root, _realDir } from "../../host/nodeFiles.js";
 import { expandPath } from "../../stdlib/expandPath.js";
 import type { MemoryConfig } from "./types.js";
 
@@ -50,8 +52,8 @@ export class MemoryFrame {
     // under cwd (issue #230).
     const expanded = expandPath(config.dir);
     const resolved = path.resolve(process.cwd(), expanded);
-    fs.mkdirSync(resolved, { recursive: true });
-    this.configKey = fs.realpathSync(resolved);
+    mkdir(root(resolved), ".");
+    this.configKey = _realDir(resolved);
     this.config = config;
   }
 

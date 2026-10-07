@@ -85,7 +85,7 @@ describe("mcpList", () => {
     await mcpAdd("fs", { command: "npx" });
     const logs: string[] = [];
     (console.log as any).mockImplementation((s: string) => logs.push(s));
-    expect(mcpList()).toBe(0);
+    expect(await mcpList()).toBe(0);
     expect(logs.join("\n")).toContain("fs");
     expect(logs.join("\n")).toContain("[project]");
   });
@@ -120,11 +120,11 @@ describe("config targets", () => {
     await mcpAdd("fs", { command: "npx" }, target);
     const logs: string[] = [];
     (console.log as any).mockImplementation((line: string) => logs.push(line));
-    expect(mcpList(target)).toBe(0);
+    expect(await mcpList(target)).toBe(0);
     expect(logs.join("\n")).toContain("fs");
   });
 
-  it("list shows servers from both project files", () => {
+  it("list shows servers from both project files", async () => {
     fs.writeFileSync(
       path.join(dir, "agency.json"),
       JSON.stringify({ mcpServers: { team: { command: "npx" } } }),
@@ -135,15 +135,15 @@ describe("config targets", () => {
     );
     const logs: string[] = [];
     (console.log as any).mockImplementation((line: string) => logs.push(line));
-    expect(mcpList()).toBe(0);
+    expect(await mcpList()).toBe(0);
     const out = logs.join("\n");
     expect(out).toContain("team");
     expect(out).toContain("mine — http https://m/mcp [project]");
   });
 
-  it("list fails when the project config does not load", () => {
+  it("list fails when the project config does not load", async () => {
     fs.writeFileSync(path.join(dir, "agency.local.json"), "{ not json");
-    expect(mcpList()).toBe(1);
+    expect(await mcpList()).toBe(1);
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("agency.local.json"));
   });
 });

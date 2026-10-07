@@ -8,6 +8,7 @@ import { realpathSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
+import { nodeHost } from "../host/nodeHost.js";
 import { transcode } from "./ffmpeg.js";
 import { _speakLocal } from "./speech.js";
 import { wavFile } from "./wavFile.js";
@@ -23,6 +24,7 @@ it("ffmpeg is on the PATH when AGENCY_REQUIRE_FFMPEG=1", () => {
   }
 });
 
+const host = nodeHost();
 const SAMPLE_RATE = 24000;
 const WAV_HEADER_BYTES = 44;
 
@@ -60,8 +62,8 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
   const signal = new AbortController().signal;
 
   it("encodes mp3 and m4a", async () => {
-    const mp3 = await transcode(wav, "mp3", 1, signal);
-    const m4a = await transcode(wav, "m4a", 1, signal);
+    const mp3 = await transcode(host, wav, "mp3", 1, signal);
+    const m4a = await transcode(host, wav, "m4a", 1, signal);
     const mp3Start = ascii(mp3, 0, 3) === "ID3" || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0);
     expect(mp3Start).toBe(true);
     expect(ascii(m4a, 4, 8)).toBe("ftyp");
@@ -69,19 +71,19 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
   });
 
   it("writes a plain wav, and halves its samples at speed 2", async () => {
-    const same = await transcode(wav, "wav", 1, signal);
+    const same = await transcode(host, wav, "wav", 1, signal);
     expect(ascii(same, 0, 4)).toBe("RIFF");
     expect(dataChunkBytes(same)).toBe(pcm.length);
     expect(same.length).toBe(WAV_HEADER_BYTES + pcm.length);
 
-    const fast = await transcode(wav, "wav", 2, signal);
+    const fast = await transcode(host, wav, "wav", 2, signal);
     const ratio = dataChunkBytes(fast) / pcm.length;
     expect(ratio).toBeGreaterThan(0.45);
     expect(ratio).toBeLessThan(0.55);
   });
 
   it("writes raw pcm with no header at speed 1.5", async () => {
-    const out = await transcode(wav, "pcm", 1.5, signal);
+    const out = await transcode(host, wav, "pcm", 1.5, signal);
     expect(ascii(out, 0, 4)).not.toBe("RIFF");
     expect(out.length % 2).toBe(0);
     const ratio = out.length / pcm.length;
@@ -101,6 +103,7 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
     it("writes an mp3 from the server's pcm", async () => {
       const store = {
         ctx: {
+          host,
           llmClient: {
             speak: async () => ({
               success: true,

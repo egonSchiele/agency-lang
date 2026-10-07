@@ -2,6 +2,9 @@ import { describe, it as baseIt, expect, vi, beforeEach, afterEach } from "vites
 import { userMessage, assistantMessage, systemMessage, toolMessage } from "smoltalk";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
+import { nodeHost } from "../../host/nodeHost.js";
+
+const files = nodeHost().files;
 import { StatelogClient } from "../../statelogClient.js";
 import { agency } from "../agency.js";
 import { RuntimeContext } from "../state/context.js";
@@ -96,7 +99,7 @@ describe("MemoryManager", () => {
   });
 
   it("defaults to 'default' memoryId", () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const manager = new MemoryManager({
       store,
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
@@ -132,7 +135,7 @@ describe("MemoryManager", () => {
     const client = mockLlmClient();
     (client.embed as any).mockResolvedValue(pricedEmpty);
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
@@ -177,7 +180,7 @@ describe("MemoryManager", () => {
     const client = mockLlmClient();
     (client.embed as any).mockResolvedValue(pricedEmpty);
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
       llmClient: client,
     });
@@ -195,7 +198,7 @@ describe("MemoryManager", () => {
   });
 
   it("sets memoryId", () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const manager = new MemoryManager({
       store,
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
@@ -206,7 +209,7 @@ describe("MemoryManager", () => {
   });
 
   it("lazily initializes on first operation", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const manager = new MemoryManager({
       store,
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
@@ -218,7 +221,7 @@ describe("MemoryManager", () => {
   });
 
   it("persists graph on save", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
       wrapTextResult(
@@ -249,7 +252,7 @@ describe("MemoryManager", () => {
   });
 
   it("caches per memoryId — switching id keeps both in memory", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockImplementation(async (config: any) => {
       const prompt = config?.messages?.[0]?.content ?? "";
@@ -290,7 +293,7 @@ describe("MemoryManager", () => {
   });
 
   it("persists on every write (remember auto-saves)", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
       wrapTextResult(
@@ -318,7 +321,7 @@ describe("MemoryManager", () => {
   });
 
   it("recall pipes cheap-tier candidates through the LLM filter and returns matches", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     // First text call: extraction populates Mom + observation.
     client.text.mockResolvedValueOnce(
@@ -347,7 +350,7 @@ describe("MemoryManager", () => {
   });
 
   it("recall drops Tier-3 hallucinated ids that were never offered", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
       wrapTextResult(
@@ -373,7 +376,7 @@ describe("MemoryManager", () => {
   });
 
   it("recall feeds embed text contextualized as '{name} ({type}): {content}'", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
       wrapTextResult(
@@ -400,7 +403,7 @@ describe("MemoryManager", () => {
   });
 
   it("forget uses substring matching (soft-delete via validTo)", async () => {
-    const store = new FileMemoryStore(tmpDir);
+    const store = new FileMemoryStore(files, tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
       wrapTextResult(
@@ -509,7 +512,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -544,7 +547,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -592,7 +595,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -633,7 +636,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -708,7 +711,7 @@ describe("MemoryManager", () => {
       const env = makeFrame();
       const client = mockLlmClientWithCost(0.05, 0);
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -738,7 +741,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -757,7 +760,7 @@ describe("MemoryManager", () => {
       const other = makeFrame();
       const client = mockLlmClientWithCost(0.05, 0);
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -774,7 +777,7 @@ describe("MemoryManager", () => {
       const env = makeFrame();
       const client = mockLlmClientWithCost(1.0, 0);
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -813,7 +816,7 @@ describe("MemoryManager", () => {
         ),
       );
       const manager = new MemoryManager({
-        store: new FileMemoryStore(tmpDir),
+        store: new FileMemoryStore(files, tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
       });
@@ -850,7 +853,7 @@ describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
     smoltalkDefaults?: Record<string, unknown>;
   }) {
     return new MemoryManager({
-      store: new FileMemoryStore(os.tmpdir()),
+      store: new FileMemoryStore(files, os.tmpdir()),
       config: { dir: os.tmpdir(), embeddings: opts.embeddings },
       llmClient: mockLlmClient(),
       smoltalkDefaults: opts.smoltalkDefaults as any,
@@ -942,7 +945,7 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
 
   function makeManager(client: ReturnType<typeof mockLlmClient>) {
     return new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: {
         dir: tmpDir,
         embeddings: { model: "text-embedding-3-small" },
@@ -1028,7 +1031,7 @@ describe("MemoryManager embeddings for local providers", () => {
 
   it("derives nothing for mlx and names the config to set", async () => {
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: { provider: "mlx", model: "mlx-community/Qwen3-Coder-Next-4bit" },
@@ -1046,7 +1049,7 @@ describe("MemoryManager embeddings for local providers", () => {
 
   it("tells a llama-cpp user what to download and what to set", async () => {
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: { provider: "llama-cpp", model: "/m/x.gguf" },
@@ -1061,7 +1064,7 @@ describe("MemoryManager embeddings for local providers", () => {
   it("resolves a llama-cpp catalog name to the downloaded path, once", async () => {
     vi.mocked(_resolveLocalEmbeddingModel).mockClear();
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "nomic-embed-text", provider: "llama-cpp" } },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
@@ -1076,7 +1079,7 @@ describe("MemoryManager embeddings for local providers", () => {
   it("hands a .gguf path to the resolver and does not resolve a hosted model", async () => {
     vi.mocked(_resolveLocalEmbeddingModel).mockClear();
     const local = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "/x/emb.gguf", provider: "llama-cpp" } },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
@@ -1088,7 +1091,7 @@ describe("MemoryManager embeddings for local providers", () => {
     expect(_resolveLocalEmbeddingModel).toHaveBeenCalledWith("llama-cpp", "/x/emb.gguf");
     vi.mocked(_resolveLocalEmbeddingModel).mockClear();
     const hosted = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small", provider: "openai" } },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
@@ -1103,7 +1106,7 @@ describe("MemoryManager embeddings for local providers", () => {
   it("turns a failed download into a skipped tier, logged once", async () => {
     vi.mocked(_resolveLocalEmbeddingModel).mockRejectedValueOnce(new Error("network down"));
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: { dir: tmpDir, embeddings: { model: "nomic-embed-text", provider: "llama-cpp" } },
       llmClient: mockLlmClient() as any,
       smoltalkDefaults: {},
@@ -1118,7 +1121,7 @@ describe("MemoryManager embeddings for local providers", () => {
   it("passes the mlx base URL through to embed", async () => {
     const client = mockLlmClient();
     const manager = new MemoryManager({
-      store: new FileMemoryStore(tmpDir),
+      store: new FileMemoryStore(files, tmpDir),
       config: {
         dir: tmpDir,
         embeddings: { model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ", provider: "mlx" },

@@ -1,5 +1,6 @@
 import * as path from "node:path";
-import { root, stat, readText, writeText, mkdir } from "./contained.js";
+// The synchronous file operations of nodeHost, not host.files: local models are Node-only.
+import { root, stat, readText, writeText, mkdir } from "../host/nodeFiles.js";
 import type { ServedBackend } from "./modelBackend.js";
 import { isModelKind, type ModelKind } from "./modelKind.js";
 

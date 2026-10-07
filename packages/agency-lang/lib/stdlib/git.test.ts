@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { nodeHost } from "../host/nodeHost.js";
 import {
   gitRunImpl,
   assertPathsContained,
@@ -35,6 +36,8 @@ async function seedRepo(): Promise<string> {
   return repo;
 }
 
+const host = nodeHost();
+
 describe("gitRunImpl explicit-cwd contract", () => {
   let repo: string;
   beforeAll(async () => {
@@ -45,26 +48,28 @@ describe("gitRunImpl explicit-cwd contract", () => {
   });
 
   it("runs against an explicit repo and returns stdout", async () => {
-    const status = parseStatus(await gitRunImpl(repo, statusArgs()));
+    const status = parseStatus(await gitRunImpl(host, repo, statusArgs()));
     expect(status.branch.length).toBeGreaterThan(0);
   });
   it("THROWS on empty cwd (never inherits process.cwd())", async () => {
-    await expect(gitRunImpl("", statusArgs())).rejects.toThrow(/absolute|repo directory/i);
+    await expect(gitRunImpl(host, "", statusArgs())).rejects.toThrow(/absolute|repo directory/i);
   });
   it("THROWS on a relative cwd", async () => {
-    await expect(gitRunImpl("relative/dir", statusArgs())).rejects.toThrow(
+    await expect(gitRunImpl(host, "relative/dir", statusArgs())).rejects.toThrow(
       /absolute|repo directory/i,
     );
   });
   it("THROWS on a non-existent cwd", async () => {
-    await expect(gitRunImpl(path.join(repo, "nope"), statusArgs())).rejects.toThrow(
+    await expect(gitRunImpl(host, path.join(repo, "nope"), statusArgs())).rejects.toThrow(
       /exist|repo directory/i,
     );
   });
   it("THROWS on a git error surfacing stderr", async () => {
     const nonRepo = await fs.mkdtemp(path.join(os.tmpdir(), "notrepo-"));
     try {
-      await expect(gitRunImpl(nonRepo, statusArgs())).rejects.toThrow(/not a git repository/i);
+      await expect(gitRunImpl(host, nonRepo, statusArgs())).rejects.toThrow(
+        /not a git repository/i,
+      );
     } finally {
       await fs.rm(nonRepo, { recursive: true, force: true });
     }
@@ -81,13 +86,17 @@ describe("format/parser round-trips against real git", () => {
   });
 
   it("status", async () => {
-    const s = parseStatus(await gitRunImpl(repo, statusArgs()));
+    const s = parseStatus(await gitRunImpl(host, repo, statusArgs()));
     expect(s.entries.length).toBe(0); // clean tree after seed
     expect(s.branch.length).toBeGreaterThan(0);
   });
   it("log", async () => {
     const log = parseLog(
-      await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })),
+      await gitRunImpl(
+        host,
+        repo,
+        logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" }),
+      ),
     );
     expect(log.commits[0].subject).toBe("seed subject");
     expect(log.commits[0].sha.length).toBeGreaterThanOrEqual(7);
@@ -95,9 +104,13 @@ describe("format/parser round-trips against real git", () => {
   it("commit round-trips (write via commitArgs, read back via log)", async () => {
     await fs.writeFile(path.join(repo, "b.txt"), "more\n");
     await pexec("git", ["add", "b.txt"], { cwd: repo });
-    await gitRunImpl(repo, commitArgs({ message: "add b" }));
+    await gitRunImpl(host, repo, commitArgs({ message: "add b" }));
     const log = parseLog(
-      await gitRunImpl(repo, logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" })),
+      await gitRunImpl(
+        host,
+        repo,
+        logArgs({ count: 10, oneline: false, path: "", ref: "", author: "" }),
+      ),
     );
     expect(log.commits[0].subject).toBe("add b");
   });
@@ -105,7 +118,7 @@ describe("format/parser round-trips against real git", () => {
     await fs.writeFile(path.join(repo, "a.txt"), "one\ntwo\nthree\n");
     await pexec("git", ["add", "a.txt"], { cwd: repo });
     const diff = parseDiff(
-      await gitRunImpl(repo, diffArgs({ ref: "", ref2: "", staged: true, path: "" })),
+      await gitRunImpl(host, repo, diffArgs({ ref: "", ref2: "", staged: true, path: "" })),
     );
     const file = diff.files.find((f) => f.path === "a.txt");
     expect(file).toBeTruthy();
@@ -115,6 +128,7 @@ describe("format/parser round-trips against real git", () => {
   it("log with a path filter (exercises --end-of-options -- <path>)", async () => {
     const log = parseLog(
       await gitRunImpl(
+        host,
         repo,
         logArgs({ count: 10, oneline: false, path: "a.txt", ref: "", author: "" }),
       ),
@@ -122,16 +136,16 @@ describe("format/parser round-trips against real git", () => {
     expect(log.commits.length).toBeGreaterThanOrEqual(1);
   });
   it("branchList", async () => {
-    const branches = parseBranchList(await gitRunImpl(repo, branchListArgs()));
+    const branches = parseBranchList(await gitRunImpl(host, repo, branchListArgs()));
     expect(branches.some((b) => b.current)).toBe(true);
   });
   it("blame", async () => {
-    const blame = parseBlame(await gitRunImpl(repo, blameArgs({ path: "a.txt", ref: "" })));
+    const blame = parseBlame(await gitRunImpl(host, repo, blameArgs({ path: "a.txt", ref: "" })));
     expect(blame[0].content).toBe("one");
     expect(blame[0].sha.length).toBeGreaterThanOrEqual(7);
   });
   it("show (parseDiff skips the commit header preamble)", async () => {
-    const show = parseDiff(await gitRunImpl(repo, showArgs({ ref: "HEAD" })));
+    const show = parseDiff(await gitRunImpl(host, repo, showArgs({ ref: "HEAD" })));
     expect(show.files.length).toBeGreaterThanOrEqual(1); // regression: used to return []
     expect(show.patch).toContain("commit "); // full show output retained
   });
@@ -152,7 +166,7 @@ describe("gitRunImpl output cap (bytes, not code units)", () => {
 
   it("truncates by UTF-8 bytes and still succeeds", async () => {
     // `git show HEAD` includes the big.txt diff (~10 KB of multi-byte "é").
-    const out = await gitRunImpl(repo, showArgs({ ref: "HEAD" }), { maxBytes: 200 });
+    const out = await gitRunImpl(host, repo, showArgs({ ref: "HEAD" }), { maxBytes: 200 });
     expect(Buffer.byteLength(out, "utf8")).toBeLessThan(500); // bounded near the 200-byte cap
     expect(out).toContain("[output truncated");
   });
@@ -183,7 +197,7 @@ describe("env-scrub integration (the safety control end-to-end)", () => {
     // If scrubEnv were not applied, git would run this external diff driver.
     await fs.writeFile(path.join(repo, "a.txt"), "changed\n");
     const evilEnv = { ...process.env, GIT_EXTERNAL_DIFF: `sh -c 'touch ${sentinel}'` };
-    await gitRunImpl(repo, ["diff"], { env: evilEnv });
+    await gitRunImpl(host, repo, ["diff"], { env: evilEnv });
     await expect(fs.access(sentinel)).rejects.toBeTruthy(); // sentinel was NOT created
   });
 });

@@ -19,14 +19,14 @@ before it has merged. All paths are relative to `packages/agency-lang`.
 ## Status
 
 Stages 1, 16, and 11 are merged, as three PRs: #1175, #1176, and #1177.
-PR B is open. Start with PR C once it has merged.
+PR B and PR C are merged. PR C2 is open as #1181.
 
 | PR | What it ships | Stages | State |
 |---|---|---|---|
 | #1175, #1176, #1177 | Programs stop importing the compiler; `std::capabilities` becomes `std::effectSets`; hashing through `#sha256` | 1, 16, 11 | merged |
-| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | open, #1179 |
-| C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | open, stacked on B |
-| C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | next |
+| B | `lib/host/`, `ctx.host`, a host per run, the lint rule, the `process` and `os` moves, policy directories resolved once | 2, 3, 4, 6a | merged, #1179 |
+| C | `contained.ts` becomes the file part of `nodeHost`, `updateText` and `withLock` and `locate` on the host, `memoryHost` and the shared file battery, the effect sets data file, the trace sinks | 5, 6b, 6c, 7 | merged, #1180 |
+| C2 | The 33 importers of `contained.ts` move to `run.ctx.host.files` and go async; `Root` readers move from `rootPath` to `resolvePath`; the runtime's own file use (memory, attachments, builtins, `node.ts`) | 6 (Tasks 16, 17, 18), 20 | open, #1181 |
 | D | Subprocesses, network, portable paths, `Buffer` | 8, 9, 10, 12 | |
 | E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
 
@@ -165,6 +165,63 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR C2 learned
+
+1. **The host needed two more helpers.** `fixedRoot` (the approved
+   spelling of a directory, after the interrupt) and `realDir` (the real
+   spelling of a directory, for a payload or a comparison) had no twin
+   on the host; `builtins.ts`, `template.ts`, `fs.ts`, `shell.ts`, and
+   `assertContained.ts` all needed them. `openForAppend` came later, for
+   the trace writer, which adds a line at a time to a file it keeps open.
+2. **How a helper gets the host.** A helper handed the run reads
+   `run.ctx.host`; a helper Agency calls as a plain function reads
+   `currentHost()` on its first line; a helper below those takes the
+   host as an argument. `assertContained`, `resolveDir`, `gitRunImpl`,
+   `outputPath`, `transcode`, `approvedFilePath`, and the OAuth token
+   helpers all take it. `assertPathsContained` is called from Agency
+   code directly, so it reads `currentHost()` instead.
+   `scripts/lint-run-reads.mjs` already follows `currentHost()`, because
+   it calls `currentRunOrNone()` on entry.
+3. **`path.join(rootPath(root), rel)` became `resolvePath(root, rel)`**,
+   which also walks the path for links. In a walk that touches every
+   entry (`grep`, `glob`) that would double the lstat work, so
+   `walkDir` asks once for the root's path and joins the entries itself.
+4. **`updateText` reads first and treats only ENOENT as missing.** With
+   a `stat` first, a link at the final name read as a missing file and
+   `applyPatch` wrote through it; `readText` refuses the link the way
+   every read does. `edit` on a file that does not exist now says "no
+   such file" in its own words rather than with Node's ENOENT message.
+5. **Two readability checks went two ways.** The one before a paid
+   transcribe reads the first piece of the file through `readChunks`,
+   because a test pins that an unreadable file fails before dispatch.
+   The one before a file is handed to another program is a `stat`, which
+   still refuses a link at the final name and anything that is not a
+   regular file.
+6. **Three callers cannot move yet.** `memory/frame.ts` makes and
+   realpaths the memory directory inside `createExecutionContext`, which
+   has no `await`. `replyAttachments.ts` reads an attachment's file in
+   two synchronous callbacks of the prompt runner, where tool-loop
+   decisions are made inside a step. `policyDirs.ts` resolves while the
+   context is built. Each calls `lib/host/nodeFiles.ts` directly with a
+   comment at the import. The spec's table has the rows.
+7. **`FileMemoryStore` is cached per directory across runs**, as before,
+   so a second run that enables memory on the same directory with a
+   different host gets the first run's store. On Node every host's
+   files behave the same.
+8. **`_loadModelData` and `_registerProviderModule` take a `Locate`**,
+   `(files, p) => Promise<Located>`: `fixed` after an interrupt, `whole`
+   from the CLI, both exported from `llm.ts`.
+9. **Node-only files still use the synchronous module.** The nine
+   Node-only stdlib files, the compiler's `closureValidator.ts`, and
+   `lib/cli/hostedModels.ts`'s callee keep calling `nodeFiles.ts`, each
+   with a comment. `localImageInputs.ts` reads image bytes through
+   `host.files` anyway, because `encodedImageInput` could go async
+   cheaply and its callers in `lib/local` already were.
+10. **Files that left the waiting list:** `builtins.ts` (stdlib),
+    `agentSessions.ts`, `lib/runtime/builtins.ts`, `node.ts`, and
+    `trace/fileSink.ts` (which left Node-only). `statelog.ts` stays:
+    it pulls in `lib/eval/statelogParser.ts`, which reads with `fs`.
 
 Every PR ends with the steps under "Finishing a PR".
 

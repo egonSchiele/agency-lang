@@ -726,9 +726,11 @@ middle of a run. Each file gets one of three answers.
 | `coverageCollector.ts`, `trace/traceReader.ts` | Node-only. They are tooling. |
 | `trace/sinks.ts` | `FileSink` moves to its own Node-only file. `CallbackSink` stays. |
 | `trace/traceWriter.ts` | Writes through its sink and stops importing `fs`. Configuring a trace file on a host without `fileWrite` is an error when the context is built. |
-| `memory/store.ts`, `memory/frame.ts` | Move to `host.files`. Enabling memory on a host without files is an error when memory is enabled. |
-| `replyAttachments.ts`, `builtins.ts` | Move to `host.files`. A refusal is a failure of the function that asked. |
-| `node.ts` | Phase 2 reads what it uses `fs` for and assigns it a row. |
+| `memory/store.ts` | Moves to `host.files`. Enabling memory on a host without files is an error when memory is enabled. |
+| `memory/frame.ts` | Makes the memory directory and realpaths it inside `createExecutionContext`, which has no `await`. Calls the synchronous module until that changes. |
+| `replyAttachments.ts` | Reads an attachment's file inside two synchronous callbacks of the prompt runner (the tool-result callback and a turn-boundary producer). Moves to `host.files` once those callbacks can take an `await`. |
+| `builtins.ts` | Its one file read was dead code and is deleted. |
+| `node.ts` | Empties the trace file at the start of a fresh run. Moves to `host.files`, like the trace writer. |
 | `effectSets.ts` | Stops reading the effect sets file at run time. `make` writes the sets into a TypeScript data file. |
 | `policy.ts` | See below. |
 

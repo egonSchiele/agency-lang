@@ -18,7 +18,7 @@ import {
   _validateSpeakLocalArgs,
   _validateTranscribeArgs,
 } from "agency-lang/stdlib-lib/speech.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _realTarget } from "agency-lang/stdlib-lib/fs.js"
 
 /** @module Speak text aloud locally, synthesize and transcribe speech in the
 cloud, and record from the microphone.

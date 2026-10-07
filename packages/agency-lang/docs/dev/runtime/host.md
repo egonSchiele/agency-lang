@@ -84,13 +84,17 @@ Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, cloc
 
 ### The file part
 
-`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+`HostFiles` is the contained file operations of `docs/dev/stdlib/contained-files.md` as promises, and every file operation the stdlib performs on a path a program chose goes through it. Every function takes a `Root` an approval named. Resolving and reading need `fileRead`; writing, moving, and deleting need `fileWrite`. `nodeHost` implements them over `lib/host/nodeFiles.ts`, the synchronous module, one operation per call, so an operation still runs in one piece with the same checks. `memoryHost` keeps files in a plain object with POSIX path rules and no symlinks.
+
+A stdlib helper reaches the file part the way it reaches every other part: through `run.ctx.host` when it was handed the run, through `currentHost()` on its first line when Agency calls it as a plain function, and as an argument when it is a helper below those. A helper that reads a path for a program outside the host, such as the ffmpeg command or a Python script, gets the string from `resolvePath`; nothing outside `lib/host` reads a `Root`. The files with no run to take a host from, the compiler and the local-model code among them, call the synchronous module directly and say so at the import.
 
 Three functions exist only on the host:
 
 - `updateText(root, target, change)` reads a file, calls `change` with its text (`null` when the file does not exist), and writes the result, with nothing able to run between the read and the write. A read followed by a separate write would let another branch of a `fork` write the same file in between, and one write would be lost.
 - `withLock(root, target, work)` holds a lock on one path for the length of `work`. The lock belongs to the host, so it covers every run that shares it, which the per-run lock in `lock.md` does not.
 - `locate(dir, filename, operation)` finds the `dir` and `filename` an interrupt payload shows, found in one synchronous piece because it runs between a wrapper's call and its interrupt.
+
+`openForAppend(root, target)` keeps a file open for appends, for the trace writer, which adds a line at a time; `openForWrite` is for writes at an offset, for the model downloader.
 
 `memoryHost`'s path rules (`normalize`, `isUnder`) are a second implementation of "nothing above the root", with no symlinks to refuse. They serve tests. Before `memoryHost` holds files for code the user does not trust, they need the review `nodeFiles.ts` had.
 

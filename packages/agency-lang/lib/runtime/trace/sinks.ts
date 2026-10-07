@@ -9,7 +9,7 @@ export type TraceSink = {
   existing?(): Promise<{ hasHeader: boolean; chunkHashes: Set<string> }>;
 };
 
-// FileSink is in fileSink.ts, which is Node-only.
+// FileSink is in fileSink.ts.
 
 export class CallbackSink implements TraceSink {
   private callback: TraceCallback;

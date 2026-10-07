@@ -1,4 +1,5 @@
-import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
+import type { HostFiles, Located } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { currentRunOrNone, getRuntimeContext } from "../runtime/asyncContext.js";
 import { modelProviderOverride } from "../runtime/llmConfig.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
@@ -92,11 +93,21 @@ export function _setLlmOptions(opts: LlmDefaults): void {
  *  refuses a link in it, and a link at the file itself is refused too. */
 export async function _registerProviderModule(
   modulePath: string,
-  locate: (p: string) => Located = fixedPath,
+  locate: Locate = fixed,
 ): Promise<void> {
-  const located = locate(modulePath);
-  await loadProviderModuleByPath(resolveUnder(located.root, located.target));
+  const { files } = currentHost();
+  const located = await locate(files, modulePath);
+  await loadProviderModuleByPath(await files.resolvePath(located.root, located.target));
 }
+
+/** How a path a function was given becomes a root plus a final name. */
+export type Locate = (files: HostFiles, p: string) => Promise<Located>;
+
+/** After an interrupt: the spelling the approver saw, with no link in it. */
+export const fixed: Locate = (files, p) => files.fixedPath(p);
+
+/** With no interrupt, as from the CLI: the caller's own spelling. */
+export const whole: Locate = (files, p) => files.wholePath(p);
 
 /**
  * Stable, flat view of one hosted model for discovery/pickers. Maps smoltalk's
@@ -238,14 +249,15 @@ export async function _fetchModelData(
  *  `locate` splits the path into its parent and final name. The Agency
  *  wrapper raised `std::read` on the real spelling, so the default refuses
  *  a link in it; a CLI caller with no approval passes `wholePath`. */
-export function _loadModelData(
+export async function _loadModelData(
   path: string,
-  locate: (p: string) => Located = fixedPath,
-): { ok: boolean; count: number; error: string } {
+  locate: Locate = fixed,
+): Promise<{ ok: boolean; count: number; error: string }> {
+  const { files } = currentHost();
   let text: string;
   try {
-    const located = locate(path);
-    text = readText(located.root, located.target);
+    const located = await locate(files, path);
+    text = await files.readText(located.root, located.target);
   } catch (err) {
     return { ok: false, count: 0, error: `cannot read ${path}: ${(err as Error).message}` };
   }

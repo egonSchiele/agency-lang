@@ -49,19 +49,19 @@ describe("fragment parsing", () => {
 });
 
 describe("_loadTemplate / _holesOf", () => {
-  it("lists holes in source order with sort, splice, and annotated type", () => {
+  it("lists holes in source order with sort, splice, and annotated type", async () => {
     const { dir, filename } = withTemplate(
       `node main() {\n  #setup\n  const x = #value: number\n}\n`,
     );
-    expect(_holesOf(_loadTemplate(dir, filename))).toEqual([
+    expect(_holesOf(await _loadTemplate(dir, filename))).toEqual([
       { name: "setup", sort: "statements", splice: false, type: null, origin: null },
       { name: "value", sort: "expr", splice: false, type: "number", origin: null },
     ]);
   });
 
-  it("returns an empty list when there are none", () => {
+  it("returns an empty list when there are none", async () => {
     const { dir, filename } = withTemplate(`node main() {\n  return 1\n}\n`);
-    expect(_holesOf(_loadTemplate(dir, filename))).toEqual([]);
+    expect(_holesOf(await _loadTemplate(dir, filename))).toEqual([]);
   });
 
   it("lists a duplicated hole name once, first occurrence winning", () => {
@@ -73,14 +73,14 @@ describe("_loadTemplate / _holesOf", () => {
     ]);
   });
 
-  it("fails on a file that does not parse", () => {
+  it("fails on a file that does not parse", async () => {
     const { dir, filename } = withTemplate(`node {{{`);
-    expect(() => _loadTemplate(dir, filename)).toThrow();
+    await expect(_loadTemplate(dir, filename)).rejects.toThrow();
   });
 
-  it("fails on a file that does not exist", () => {
+  it("fails on a file that does not exist", async () => {
     const { dir } = withTemplate(`node main() {\n  return 1\n}\n`);
-    expect(() => _loadTemplate(dir, "missing.agency")).toThrow();
+    await expect(_loadTemplate(dir, "missing.agency")).rejects.toThrow();
   });
 });
 

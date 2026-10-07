@@ -1,12 +1,12 @@
 import { execFile } from "child_process";
-import { rootPath } from "../host/roots.js";
 import { promisify } from "util";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { fixedPath, readBytes, root, writeBytes, remove } from "./contained.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -74,9 +74,9 @@ const defaultRunner: OsascriptRunner = async (args) => {
  *  is the spelling the approver saw; `fixedPath` refuses a symlink that
  *  appeared while the prompt was pending, and `readBytes` refuses a link
  *  at the final name or anything that is not a regular file. */
-function readApprovedImage(approvedPath: string): Buffer {
-  const located = fixedPath(approvedPath);
-  return readBytes(located.root, located.target);
+async function readApprovedImage(host: Host, approvedPath: string): Promise<Uint8Array> {
+  const located = await host.files.fixedPath(approvedPath);
+  return host.files.readBytes(located.root, located.target);
 }
 
 /** Run the Vision script over a temp copy of `bytes`. osascript opens a
@@ -84,31 +84,34 @@ function readApprovedImage(approvedPath: string): Buffer {
  *  this call created from bytes that were already validated. Only a file
  *  this call created is removed afterwards. */
 async function runVisionOnCopy(
+  host: Host,
   runner: OsascriptRunner,
-  bytes: Buffer,
+  bytes: Uint8Array,
   extension: string,
   language: string,
   fast: boolean,
 ): Promise<string> {
-  const tmpDir = root(os.tmpdir());
+  const { files } = host;
+  const tmpDir = await files.root(os.tmpdir());
   const tmpName = `agency-ocr-${nanoid()}${extension}`;
-  const tmpFile = path.join(rootPath(tmpDir), tmpName);
+  const tmpFile = await files.resolvePath(tmpDir, tmpName);
   let owned = false;
   try {
     // Owner-only: the temp directory is shared and the image may be private.
-    writeBytes(tmpDir, tmpName, bytes, { mode: "create-only", fileMode: 0o600 });
+    await files.writeBytes(tmpDir, tmpName, bytes, { mode: "create-only", fileMode: 0o600 });
     owned = true;
     const args = ["-l", "JavaScript", VISION_SCRIPT_PATH, tmpFile, language, String(fast)];
     return await runner(args);
   } finally {
     if (owned) {
-      remove(tmpDir, tmpName);
+      await files.remove(tmpDir, tmpName);
     }
   }
 }
 
 /** Backs `std::ocr.readTextBlocks` after its interrupt was approved. */
 export async function _recognizeTextLocalWith(
+  host: Host,
   runner: OsascriptRunner,
   platform: string,
   approvedPath: string,
@@ -118,11 +121,11 @@ export async function _recognizeTextLocalWith(
   if (platform !== "darwin") {
     throw new Error(NOT_MACOS_MESSAGE);
   }
-  const bytes = readApprovedImage(approvedPath);
+  const bytes = await readApprovedImage(host, approvedPath);
   const extension = path.extname(approvedPath).toLowerCase();
   let stdout: string;
   try {
-    stdout = await runVisionOnCopy(runner, bytes, extension, language, fast);
+    stdout = await runVisionOnCopy(host, runner, bytes, extension, language, fast);
   } catch (error: unknown) {
     const err = error as { stderr?: string; message?: string };
     const detail = (err.stderr ?? err.message ?? "").trim();
@@ -136,5 +139,13 @@ export function _recognizeTextLocal(
   language: string,
   fast: boolean,
 ): Promise<TextBlock[]> {
-  return _recognizeTextLocalWith(defaultRunner, process.platform, approvedPath, language, fast);
+  const host = currentHost();
+  return _recognizeTextLocalWith(
+    host,
+    defaultRunner,
+    process.platform,
+    approvedPath,
+    language,
+    fast,
+  );
 }

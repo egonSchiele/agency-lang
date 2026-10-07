@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nodeHost } from "../host/nodeHost.js";
 import { assertFfmpegAvailable, buildTranscodeArgs, transcode } from "./ffmpeg.js";
 import { wavFile } from "./wavFile.js";
+
+const host = nodeHost();
 
 const HEAD = ["-hide_banner", "-loglevel", "error", "-f", "wav", "-i", "pipe:0"];
 
@@ -71,7 +74,7 @@ describe("without ffmpeg on the PATH", () => {
   it("transcode fails instead of hanging", async () => {
     vi.stubEnv("PATH", "");
     const wav = wavFile([Uint8Array.of(0, 0, 1, 0)], 24000);
-    await expect(transcode(wav, "mp3", 1, new AbortController().signal)).rejects.toThrow(
+    await expect(transcode(host, wav, "mp3", 1, new AbortController().signal)).rejects.toThrow(
       /ffmpeg is not on PATH/,
     );
   });
@@ -84,7 +87,7 @@ it("transcode rejects with the abort reason when the signal already fired, befor
   controller.abort(reason);
   const wav = wavFile([Uint8Array.of(0, 0)], 24000);
   try {
-    await expect(transcode(wav, "mp3", 1, controller.signal)).rejects.toBe(reason);
+    await expect(transcode(host, wav, "mp3", 1, controller.signal)).rejects.toBe(reason);
   } finally {
     vi.unstubAllEnvs();
   }

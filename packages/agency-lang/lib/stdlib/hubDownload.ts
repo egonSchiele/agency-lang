@@ -1,4 +1,5 @@
 import * as path from "node:path";
+// The synchronous file operations of nodeHost, not host.files: local models are Node-only.
 import {
   root,
   resolveUnder,
@@ -8,7 +9,7 @@ import {
   openForWrite,
   type Root,
   type WritableFile,
-} from "./contained.js";
+} from "../host/nodeFiles.js";
 import {
   readMlxModelRecord,
   writeMlxModelRecord,

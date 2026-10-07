@@ -1,5 +1,6 @@
 import path from "path";
-import { root, stat } from "./contained.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import process from "process";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { abortableSpawn } from "./abortable.js";
@@ -25,6 +26,7 @@ const DEFAULT_MAX_OUTPUT_BYTES = 2_000_000;
  * oversized output, and returns stdout.
  */
 export async function gitRunImpl(
+  host: Host,
   cwd: string,
   args: string[],
   opts?: { signal?: AbortSignal; env?: NodeJS.ProcessEnv; timeoutMs?: number; maxBytes?: number },
@@ -34,11 +36,11 @@ export async function gitRunImpl(
       `git: no repo directory — pass an explicit absolute "cwd" or set the agent working directory (got "${cwd}")`,
     );
   }
-  const info = stat(root(cwd), ".");
+  const info = await host.files.stat(await host.files.root(cwd), ".");
   if (info === null) {
     throw new Error(`git: repo directory does not exist: ${cwd}`);
   }
-  if (!info.isDirectory()) {
+  if (info.kind !== "dir") {
     throw new Error(`git: repo directory is not a directory: ${cwd}`);
   }
   const env = scrubEnv(opts?.env ?? process.env);
@@ -68,7 +70,7 @@ export async function gitRunImpl(
 /** ALS-reading wrapper Agency calls; mirrors `_exec` in shell.ts. */
 export async function _gitRun(cwd: string, args: string[]): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
-  return gitRunImpl(cwd, args, { signal: ctx.getAbortSignal(stack) });
+  return gitRunImpl(ctx.host, cwd, args, { signal: ctx.getAbortSignal(stack) });
 }
 
 /** True when `cwd` is inside a git work tree. Never throws — a non-repo (or a
@@ -77,7 +79,7 @@ export async function _gitRun(cwd: string, args: string[]): Promise<string> {
 export async function _gitIsRepo(cwd: string): Promise<boolean> {
   const { ctx, stack } = getRuntimeContext();
   try {
-    const out = await gitRunImpl(cwd, ["rev-parse", "--is-inside-work-tree"], {
+    const out = await gitRunImpl(ctx.host, cwd, ["rev-parse", "--is-inside-work-tree"], {
       signal: ctx.getAbortSignal(stack),
     });
     return out.trim() === "true";
@@ -96,11 +98,12 @@ export async function assertPathsContained(
   allowedPaths: string[],
   cwd: string,
 ): Promise<void> {
+  const host = currentHost();
   if (allowedPaths.length === 0) {
     return;
   }
   for (const p of paths) {
-    await assertContained(p, allowedPaths, cwd);
+    await assertContained(host, p, allowedPaths, cwd);
   }
 }
 

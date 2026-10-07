@@ -10,7 +10,7 @@ import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import type { Clock } from "../clock.js";
 import { defaultHost } from "#default-host";
-import { withClock, type Host } from "../../host/host.js";
+import { requireCapabilities, withClock, type Host } from "../../host/host.js";
 import { resolvePolicyDirs } from "../policyDirs.js";
 import type { PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
@@ -413,6 +413,7 @@ export class RuntimeContext<T> {
     // `getActiveMemoryManager()` on each execCtx so there's a single
     // source of truth (the active stateStack's frame stack).
     if (args.memory) {
+      requireCapabilities(this.host, ["fileRead", "fileWrite"], "memory");
       this.jsonMemoryConfig = args.memory;
     }
   }
@@ -527,6 +528,7 @@ export class RuntimeContext<T> {
     execCtx.traceWriter = await TraceWriter.create({
       runId,
       traceConfig: this.traceConfig,
+      files: execCtx.host.files,
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
@@ -630,7 +632,7 @@ export class RuntimeContext<T> {
     if (cached) return cached;
 
     const manager = new MemoryManager({
-      store: getOrCreateStore(frame.configKey, this.logLevel),
+      store: getOrCreateStore(this.host.files, frame.configKey, this.logLevel),
       config: frame.config,
       llmClient: this._llmClient,
       smoltalkDefaults: this.smoltalkDefaults,

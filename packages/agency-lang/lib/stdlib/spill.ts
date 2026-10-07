@@ -2,14 +2,13 @@
 // kept, and the two ways it comes back out. One fixed place, outside every
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
-import os from "os";
-import { rootPath } from "../host/roots.js";
 import path from "path";
 import { randomBytes } from "crypto";
+import type { Host, Located } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { sliceLines } from "./builtins.js";
 import { compileGrepQuery } from "./grepQuery.js";
 import { firstMatchingLines, type GrepMatch } from "./shell.js";
-import { root, wholePath, mkdir, readText, writeText, type Located } from "./contained.js";
 
 const SPILL_SUBDIR = path.join(".agency-agent", "tool-output");
 
@@ -17,17 +16,18 @@ const SPILL_SUBDIR = path.join(".agency-agent", "tool-output");
  * link planted at `~/.agency-agent` is refused by the same rule as any
  * other link below a root. `AGENCY_TOOL_OUTPUT_DIR` overrides it so a test
  * can point the spill somewhere it may delete. */
-function spillLocation(): Located {
-  const override = process.env.AGENCY_TOOL_OUTPUT_DIR;
-  if (override !== undefined && override !== "") {
-    return wholePath(override);
+async function spillLocation(host: Host): Promise<Located> {
+  const override = host.settings.read("AGENCY_TOOL_OUTPUT_DIR");
+  if (override !== null && override !== "") {
+    return host.files.wholePath(override);
   }
-  return { root: root(os.homedir()), target: SPILL_SUBDIR };
+  return { root: await host.files.root(host.system.homeDir()), target: SPILL_SUBDIR };
 }
 
-export function _spillDir(): string {
-  const location = spillLocation();
-  return path.join(rootPath(location.root), location.target);
+export async function _spillDir(): Promise<string> {
+  const host = currentHost();
+  const location = await spillLocation(host);
+  return host.files.resolvePath(location.root, location.target);
 }
 
 // A saved file's name: a timestamp, a random suffix, `.log`. The read
@@ -49,35 +49,37 @@ function checkName(filename: string): void {
 }
 
 /** The spill directory, created if needed. */
-async function spillDirReady(): Promise<Located> {
-  const location = spillLocation();
-  mkdir(location.root, location.target);
+async function spillDirReady(host: Host): Promise<Located> {
+  const location = await spillLocation(host);
+  await host.files.mkdir(location.root, location.target);
   return location;
 }
 
 /** Write `text` under the spill directory as `filename`. The file is
  * created fresh: an existing entry, a symlink included, is never opened. */
 export async function _spillOutput(filename: string, text: string): Promise<string> {
+  const host = currentHost();
   checkName(filename);
-  const location = await spillDirReady();
+  const location = await spillDirReady(host);
   const file = path.join(location.target, filename);
-  writeText(location.root, file, text, { mode: "create-only", fileMode: 0o600 });
-  return path.join(rootPath(location.root), file);
+  await host.files.writeText(location.root, file, text, { mode: "create-only", fileMode: 0o600 });
+  return host.files.resolvePath(location.root, file);
 }
 
 /** One saved file's text, read through a descriptor that is checked to sit
  * inside the spill directory, so a symlink named like a saved file leads
  * nowhere. */
-async function readSaved(filename: string): Promise<string> {
+async function readSaved(host: Host, filename: string): Promise<string> {
   checkName(filename);
-  const location = await spillDirReady();
-  return readText(location.root, path.join(location.target, filename));
+  const location = await spillDirReady(host);
+  return host.files.readText(location.root, path.join(location.target, filename));
 }
 
 /** The saved file, whole or a slice of lines; the same offset and limit
  * rules as `read`. */
 export async function _readSpill(filename: string, offset: number, limit: number): Promise<string> {
-  const text = await readSaved(filename);
+  const host = currentHost();
+  const text = await readSaved(host, filename);
   return sliceLines(text, offset, limit);
 }
 
@@ -87,6 +89,7 @@ export async function _grepSpill(
   filename: string,
   maxResults: number,
 ): Promise<GrepMatch[]> {
+  const host = currentHost();
   const plan = compileGrepQuery({
     pattern,
     flags: "",
@@ -95,6 +98,6 @@ export async function _grepSpill(
     filesOnly: false,
     invert: false,
   });
-  const text = await readSaved(filename);
+  const text = await readSaved(host, filename);
   return firstMatchingLines(text, plan, maxResults).map((hit) => ({ file: filename, ...hit }));
 }

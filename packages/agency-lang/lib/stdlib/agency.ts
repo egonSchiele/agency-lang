@@ -1,6 +1,7 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { rootPath } from "../host/roots.js";
 import { resolve, sep, join, dirname } from "path";
+// The synchronous file operations of nodeHost, not host.files: this file runs a subprocess and is Node-only.
 import {
   root,
   fixedRoot,
@@ -10,7 +11,7 @@ import {
   stat,
   wholePath,
   type Root,
-} from "./contained.js";
+} from "../host/nodeFiles.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";

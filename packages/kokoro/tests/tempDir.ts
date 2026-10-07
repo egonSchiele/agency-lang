@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { remove, root } from "agency-lang/stdlib-lib/contained.js";
+import { remove, root } from "agency-lang/host-lib/nodeFiles.js";
 
 /** A new directory directly under the temp directory, spelled without
  *  symlinks, which the contained file helpers refuse. */

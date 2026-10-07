@@ -3,8 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { clearModelData, getModel, getRegisteredModelData } from "smoltalk";
-import { _loadModelData } from "./llm.js";
-import { wholePath } from "./contained.js";
+import { _loadModelData, whole } from "./llm.js";
 
 // Real paths: the loader runs after a `std::read` approval named the file,
 // so it refuses a link in the spelling, and /var is a link on macOS.
@@ -69,55 +68,55 @@ const B = JSON.stringify({
 describe("_loadModelData", () => {
   beforeEach(() => clearModelData());
 
-  it("registers a file's models (visible via getModel) and returns its count", () => {
-    const res = _loadModelData(tmpFile("a.json", A));
+  it("registers a file's models (visible via getModel) and returns its count", async () => {
+    const res = await _loadModelData(tmpFile("a.json", A));
     expect(res).toEqual({ ok: true, count: 2, error: "" });
     expect(getModel("custom-a" as any)?.provider).toBe("acme");
   });
 
-  it("accumulates: later load layers over earlier, overlay wins on collision", () => {
-    _loadModelData(tmpFile("a.json", A));
-    const res = _loadModelData(tmpFile("b.json", B));
+  it("accumulates: later load layers over earlier, overlay wins on collision", async () => {
+    await _loadModelData(tmpFile("a.json", A));
+    const res = await _loadModelData(tmpFile("b.json", B));
     expect(res.ok).toBe(true);
     expect(getModel("custom-a" as any)).toBeDefined();
     expect(getModel("custom-b" as any)).toBeDefined();
     expect((getModel("shared" as any) as any)?.inputTokenCost).toBe(9); // B wins
   });
 
-  it("preserves prior hostedTools when a later file omits them", () => {
-    _loadModelData(tmpFile("a.json", A)); // has hostedTools
-    _loadModelData(tmpFile("b.json", B)); // models-only
+  it("preserves prior hostedTools when a later file omits them", async () => {
+    await _loadModelData(tmpFile("a.json", A)); // has hostedTools
+    await _loadModelData(tmpFile("b.json", B)); // models-only
     expect(
       (getRegisteredModelData()?.hostedTools ?? []).some((t: any) => t.name === "tool-a"),
     ).toBe(true);
   });
 
-  it("returns count = this file's models, not the running total", () => {
-    _loadModelData(tmpFile("a.json", A)); // 2
-    expect(_loadModelData(tmpFile("b.json", B)).count).toBe(2); // this file's 2, not 4
+  it("returns count = this file's models, not the running total", async () => {
+    await _loadModelData(tmpFile("a.json", A)); // 2
+    expect((await _loadModelData(tmpFile("b.json", B))).count).toBe(2); // this file's 2, not 4
   });
 
-  it("fails on missing file / invalid JSON / no models array, leaving prior registration intact", () => {
-    _loadModelData(tmpFile("a.json", A));
-    expect(_loadModelData("/no/such/file.json").ok).toBe(false);
-    expect(_loadModelData(tmpFile("bad.json", "{not json")).ok).toBe(false);
-    expect(_loadModelData(tmpFile("nomodels.json", "{}")).ok).toBe(false);
+  it("fails on missing file / invalid JSON / no models array, leaving prior registration intact", async () => {
+    await _loadModelData(tmpFile("a.json", A));
+    expect((await _loadModelData("/no/such/file.json")).ok).toBe(false);
+    expect((await _loadModelData(tmpFile("bad.json", "{not json"))).ok).toBe(false);
+    expect((await _loadModelData(tmpFile("nomodels.json", "{}"))).ok).toBe(false);
     expect(getModel("custom-a" as any)).toBeDefined();
   });
 
-  it("refuses a link in the path by default and accepts it through wholePath", () => {
+  it("refuses a link in the path by default and accepts it through whole", async () => {
     const file = tmpFile("a.json", A);
     const linkDir = path.join(path.dirname(file), "link");
     fs.symlinkSync(path.dirname(file), linkDir);
     const viaLink = path.join(linkDir, "a.json");
-    const refused = _loadModelData(viaLink);
+    const refused = await _loadModelData(viaLink);
     expect(refused.ok).toBe(false);
     expect(refused.error).toMatch(/is a symlink/);
-    expect(_loadModelData(viaLink, wholePath).ok).toBe(true);
+    expect((await _loadModelData(viaLink, whole)).ok).toBe(true);
   });
 
-  it("fails on schemaVersion mismatch after a prior load", () => {
-    _loadModelData(tmpFile("v1.json", A)); // schemaVersion 1
+  it("fails on schemaVersion mismatch after a prior load", async () => {
+    await _loadModelData(tmpFile("v1.json", A)); // schemaVersion 1
     const v2 = JSON.stringify({
       schemaVersion: 2,
       models: [
@@ -131,7 +130,7 @@ describe("_loadModelData", () => {
         },
       ],
     });
-    const res = _loadModelData(tmpFile("v2.json", v2));
+    const res = await _loadModelData(tmpFile("v2.json", v2));
     expect(res.ok).toBe(false);
     expect(res.error).toContain("schemaVersion");
     expect(getModel("custom-a" as any)).toBeDefined(); // v1 intact

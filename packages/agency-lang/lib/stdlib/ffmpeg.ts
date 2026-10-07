@@ -1,11 +1,9 @@
 // Copied from packages/kokoro/src/ffmpeg.ts, with pcm and wav output and a
 // speed filter added.
 import { spawn, spawnSync } from "node:child_process";
-import { rootPath } from "../host/roots.js";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
-import * as path from "node:path";
-import { readBytes, remove, root, stat } from "./contained.js";
+import type { Host } from "../host/host.js";
 import { throwAbortReason } from "./abortReason.js";
 
 export const TRANSCODE_FORMATS = ["wav", "mp3", "m4a", "pcm"] as const;
@@ -91,23 +89,25 @@ export function buildTranscodeArgs(
 
 /** The bytes of `wav` at `speed`, encoded as `format`. ffmpeg writes a temp
  *  file, because the m4a container needs a seekable output. The file is
- *  read back through the contained helpers, which refuse a symlink, and it
- *  is removed whether or not encoding succeeds. */
+ *  read back through the host's files, which refuse a symlink, and it is
+ *  removed whether or not encoding succeeds. */
 export async function transcode(
+  host: Host,
   wav: Uint8Array,
   format: TranscodeFormat,
   speed: number,
   signal: AbortSignal,
 ): Promise<Uint8Array> {
-  const tmp = root(os.tmpdir());
+  const { files } = host;
+  const tmp = await files.root(os.tmpdir());
   const name = `agency-speech-encode-${randomUUID()}.${format}`;
-  const outputFile = path.join(rootPath(tmp), name);
+  const outputFile = await files.resolvePath(tmp, name);
   try {
     await runFfmpeg(buildTranscodeArgs(format, speed, outputFile), wav, signal);
-    return new Uint8Array(readBytes(tmp, name));
+    return await files.readBytes(tmp, name);
   } finally {
-    if (stat(tmp, name) !== null) {
-      remove(tmp, name);
+    if ((await files.stat(tmp, name)) !== null) {
+      await files.remove(tmp, name);
     }
   }
 }

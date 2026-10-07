@@ -250,7 +250,7 @@ the payload, and reads the file with `approvedFileBytes` after
 approval, in `vision.ts`.
 `approvedFileBytes` holds the spelling with `fixedPath`, so a symlink
 planted while the prompt was pending is refused, and reads through
-`readBytes` in `contained.ts`.
+`readBytes` on `host.files`.
 
 `vision.ts` is one HTTP call behind five thin exports, each one call to
 `visionCall` with a row of `VISION_TASKS`. The call has three parts:

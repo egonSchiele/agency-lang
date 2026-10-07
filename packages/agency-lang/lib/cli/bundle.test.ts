@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createBundle, extractBundle } from "./bundle.js";
 import { TraceWriter } from "@/runtime/trace/traceWriter.js";
 import { FileSink } from "@/runtime/trace/fileSink.js";
+import { nodeHost } from "@/host/nodeHost.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import * as fs from "fs";
@@ -9,6 +10,7 @@ import * as path from "path";
 import * as os from "os";
 
 const RUN_ID = "test-run-id";
+const files = nodeHost().files;
 
 describe("createBundle", () => {
   let tmpDir: string;
@@ -29,7 +31,7 @@ describe("createBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter(RUN_ID, "main.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "main.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,
@@ -124,7 +126,7 @@ describe("extractBundle", () => {
   });
 
   async function writeTestTrace() {
-    const writer = new TraceWriter(RUN_ID, "main.agency", [new FileSink(tracePath)]);
+    const writer = new TraceWriter(RUN_ID, "main.agency", [await FileSink.open(files, tracePath)]);
     await writer.writeCheckpoint(
       new Checkpoint({
         id: 0,

@@ -6,11 +6,10 @@ const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segmen
 
 // Files under lib/stdlib that may import fs directly, each with the reason.
 // Everything else in lib/stdlib reads and writes files through
-// lib/stdlib/contained.ts, which refuses symlinks below the approved
-// directory (docs/dev/stdlib/contained-files.md). To add a file here, say
-// which fixed file it touches and why no approval names that path.
+// `host.files`, which refuses symlinks below the approved directory
+// (docs/dev/stdlib/contained-files.md). To add a file here, say which
+// fixed file it touches and why no approval names that path.
 const FS_IMPORTERS = {
-  "lib/stdlib/contained.ts": "the module every other file operation goes through",
   "lib/stdlib/modelBackend.ts":
     "recognizes a model directory, including a Hugging Face cache snapshot whose entries are symlinks into blobs/; reads names and sizes only, never contents",
   "lib/stdlib/gitignore.ts":
@@ -147,7 +146,7 @@ export default [
           paths: FS_MODULES.map((name) => ({
             name,
             message:
-              "lib/stdlib reads and writes files through lib/stdlib/contained.ts. If this file truly needs fs, add it to FS_IMPORTERS in eslint.config.js with the reason.",
+              "lib/stdlib reads and writes files through host.files (docs/dev/stdlib/contained-files.md). If this file truly needs fs, add it to FS_IMPORTERS in eslint.config.js with the reason.",
           })),
         },
       ],

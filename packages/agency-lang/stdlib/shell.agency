@@ -11,7 +11,7 @@ import {
   _exec,
   _bash,
  } from "agency-lang/stdlib-lib/shell.js"
-import { _realDir } from "agency-lang/stdlib-lib/contained.js"
+import { _realDir } from "agency-lang/stdlib-lib/fs.js"
 
 
 /** @module

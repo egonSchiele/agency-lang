@@ -45,7 +45,7 @@ file created in the meantime must never be overwritten.
 
 The `dir` in the interrupt payload is the real spelling (`~` expanded,
 resolved against the process cwd, links in the spelling followed once:
-`_realDir` from `lib/stdlib/contained.ts`), so relative, `~`-led, and
+`_realDir` from `lib/stdlib/fs.ts`), so relative, `~`-led, and
 symlink-spelled directories produce the same payload the write that
 follows will report, and an always-scope rule saved from a save approval
 covers both interrupts. Every scan payload in this module is spelled the

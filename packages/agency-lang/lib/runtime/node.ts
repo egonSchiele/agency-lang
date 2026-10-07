@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import { MessageJSON } from "smoltalk";
 import {
   currentRunOrNone,
@@ -416,8 +414,10 @@ async function runNodeCore({
   // accumulate into the same file naturally.
   const tracePath = resolveTraceFilePath(ctx.traceConfig, resolved.runId);
   if (tracePath) {
-    fs.mkdirSync(path.dirname(tracePath), { recursive: true });
-    fs.writeFileSync(tracePath, "");
+    const { files } = invocation?.host ?? ctx.host;
+    const located = await files.wholePath(tracePath);
+    await files.mkdir(located.root, ".");
+    await files.writeText(located.root, located.target, "");
   }
 
   const execCtx = await ctx.createExecutionContext(resolved);

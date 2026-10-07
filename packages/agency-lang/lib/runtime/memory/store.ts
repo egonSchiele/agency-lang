@@ -1,8 +1,8 @@
 import type { MemoryGraphData, ConversationSummary, EmbeddingIndex, MemoryStore } from "./types.js";
 import { MemoryGraphDataSchema, EmbeddingIndexSchema, ConversationSummarySchema } from "./types.js";
 import type { z } from "zod";
-import fs from "node:fs";
 import path from "node:path";
+import type { HostFiles, Root } from "../../host/host.js";
 import { createLogger, type Logger, type LogLevel } from "../../logger.js";
 
 // memoryIds become directory names, so anything that could escape the
@@ -19,29 +19,49 @@ function validateMemoryId(memoryId: string): void {
   }
 }
 
+/** Where the files of a memory store live: the files part of the host
+ *  that enabled memory, and the memory directory as a root in it. */
 export class FileMemoryStore implements MemoryStore {
   /** Built once in the constructor from `logLevel`. Each line emitted
    *  is `[memory]`-prefixed so it groups with the manager's output
    *  when grepping. */
   private logger: Logger;
+  /** The memory directory as a root, resolved on first use. The
+   *  directory exists by then: `MemoryFrame` created it. */
+  private baseRoot: Promise<Root> | null = null;
 
   constructor(
+    private files: HostFiles,
     private baseDir: string,
     logLevel?: LogLevel,
   ) {
     this.logger = createLogger(logLevel ?? "info");
   }
 
-  private dir(memoryId: string): string {
-    validateMemoryId(memoryId);
-    return path.join(this.baseDir, memoryId);
+  private root(): Promise<Root> {
+    if (this.baseRoot === null) {
+      this.baseRoot = this.files.root(this.baseDir);
+    }
+    return this.baseRoot;
   }
 
-  private ensureDir(memoryId: string): void {
-    const dir = this.dir(memoryId);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      this.logger.debug(`[memory] FileMemoryStore: mkdir ${dir}`);
+  /** The path of a memory's file, relative to the memory directory. */
+  private file(memoryId: string, name: string): string {
+    validateMemoryId(memoryId);
+    return path.join(memoryId, name);
+  }
+
+  /** The whole path of a memory's file, for a message. */
+  private describe(memoryId: string, name: string): string {
+    return path.join(this.baseDir, memoryId, name);
+  }
+
+  private async ensureDir(memoryId: string): Promise<void> {
+    validateMemoryId(memoryId);
+    const root = await this.root();
+    if ((await this.files.stat(root, memoryId)) === null) {
+      await this.files.mkdir(root, memoryId);
+      this.logger.debug(`[memory] FileMemoryStore: mkdir ${path.join(this.baseDir, memoryId)}`);
     }
   }
 
@@ -64,61 +84,76 @@ export class FileMemoryStore implements MemoryStore {
     return result.data;
   }
 
-  private async readJSON(filePath: string): Promise<unknown | null> {
-    if (!fs.existsSync(filePath)) {
-      this.logger.debug(`[memory] FileMemoryStore: read miss ${filePath}`);
+  private async readJSON(memoryId: string, name: string): Promise<unknown | null> {
+    const file = this.file(memoryId, name);
+    const root = await this.root();
+    if ((await this.files.stat(root, file)) === null) {
+      this.logger.debug(`[memory] FileMemoryStore: read miss ${this.describe(memoryId, name)}`);
       return null;
     }
-    const content = await fs.promises.readFile(filePath, "utf-8");
-    this.logger.debug(`[memory] FileMemoryStore: read ${filePath} (${content.length} bytes)`);
+    const content = await this.files.readText(root, file);
+    this.logger.debug(
+      `[memory] FileMemoryStore: read ${this.describe(memoryId, name)} (${content.length} bytes)`,
+    );
     return JSON.parse(content);
   }
 
-  private async writeJSON(filePath: string, data: unknown): Promise<void> {
+  private async writeJSON(memoryId: string, name: string, data: unknown): Promise<void> {
     const serialized = JSON.stringify(data, null, 2);
-    await fs.promises.writeFile(filePath, serialized, "utf-8");
-    this.logger.debug(`[memory] FileMemoryStore: wrote ${filePath} (${serialized.length} bytes)`);
+    await this.files.writeText(await this.root(), this.file(memoryId, name), serialized);
+    this.logger.debug(
+      `[memory] FileMemoryStore: wrote ${this.describe(memoryId, name)} (${serialized.length} bytes)`,
+    );
   }
 
   async loadGraph(memoryId: string): Promise<MemoryGraphData> {
-    const filePath = path.join(this.dir(memoryId), "graph.json");
-    const raw = await this.readJSON(filePath);
+    const raw = await this.readJSON(memoryId, "graph.json");
     if (raw === null) return { entities: [], relations: [], nextId: 1 };
-    return this.validate(MemoryGraphDataSchema, raw, filePath, "load");
+    return this.validate(MemoryGraphDataSchema, raw, this.describe(memoryId, "graph.json"), "load");
   }
 
   async saveGraph(memoryId: string, graph: MemoryGraphData): Promise<void> {
-    this.ensureDir(memoryId);
-    const filePath = path.join(this.dir(memoryId), "graph.json");
-    this.validate(MemoryGraphDataSchema, graph, filePath, "save");
-    await this.writeJSON(filePath, graph);
+    await this.ensureDir(memoryId);
+    this.validate(MemoryGraphDataSchema, graph, this.describe(memoryId, "graph.json"), "save");
+    await this.writeJSON(memoryId, "graph.json", graph);
   }
 
   async loadEmbeddings(memoryId: string): Promise<EmbeddingIndex | null> {
-    const filePath = path.join(this.dir(memoryId), "embeddings.json");
-    const raw = await this.readJSON(filePath);
+    const raw = await this.readJSON(memoryId, "embeddings.json");
     if (raw === null) return null;
-    return this.validate(EmbeddingIndexSchema, raw, filePath, "load");
+    return this.validate(
+      EmbeddingIndexSchema,
+      raw,
+      this.describe(memoryId, "embeddings.json"),
+      "load",
+    );
   }
 
   async saveEmbeddings(memoryId: string, index: EmbeddingIndex): Promise<void> {
-    this.ensureDir(memoryId);
-    const filePath = path.join(this.dir(memoryId), "embeddings.json");
-    this.validate(EmbeddingIndexSchema, index, filePath, "save");
-    await this.writeJSON(filePath, index);
+    await this.ensureDir(memoryId);
+    this.validate(EmbeddingIndexSchema, index, this.describe(memoryId, "embeddings.json"), "save");
+    await this.writeJSON(memoryId, "embeddings.json", index);
   }
 
   async loadSummary(memoryId: string): Promise<ConversationSummary | null> {
-    const filePath = path.join(this.dir(memoryId), "summary.json");
-    const raw = await this.readJSON(filePath);
+    const raw = await this.readJSON(memoryId, "summary.json");
     if (raw === null) return null;
-    return this.validate(ConversationSummarySchema, raw, filePath, "load");
+    return this.validate(
+      ConversationSummarySchema,
+      raw,
+      this.describe(memoryId, "summary.json"),
+      "load",
+    );
   }
 
   async saveSummary(memoryId: string, summary: ConversationSummary): Promise<void> {
-    this.ensureDir(memoryId);
-    const filePath = path.join(this.dir(memoryId), "summary.json");
-    this.validate(ConversationSummarySchema, summary, filePath, "save");
-    await this.writeJSON(filePath, summary);
+    await this.ensureDir(memoryId);
+    this.validate(
+      ConversationSummarySchema,
+      summary,
+      this.describe(memoryId, "summary.json"),
+      "save",
+    );
+    await this.writeJSON(memoryId, "summary.json", summary);
   }
 }

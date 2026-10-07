@@ -2557,8 +2557,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
   mcpCmd
     .command("list")
     .description("List the Agency agent's configured MCP servers")
-    .action(() => {
-      process.exitCode = mcpList(getConfigTarget());
+    .action(async () => {
+      process.exitCode = await mcpList(getConfigTarget());
     });
   mcpCmd
     .command("add <name>")

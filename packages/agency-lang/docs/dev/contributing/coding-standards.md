@@ -138,23 +138,24 @@ Always create new commits. Never use `git push --force` or `git commit --amend`.
 
 ---
 
-### Touch files through `contained.ts`
+### Touch files through `host.files`
 
-Any stdlib function in `lib/stdlib/` that reads, writes, lists, or probes a path an Agency value chose calls [`contained.ts`](../../../lib/stdlib/contained.ts) with the approved directory as its root. A directory plus a relative target uses `root(dir)` and the operation:
+Any stdlib function in `lib/stdlib/` that reads, writes, lists, or probes a path an Agency value chose calls the file part of the run's host with the approved directory as its root. A directory plus a relative target uses `root(dir)` and the operation:
 
 ```ts
 // Bad
 const text = fs.readFileSync(path.resolve(dir, filename), "utf8");
 
 // Good
-const text = readText(root(dir), filename);
+const { files } = run.ctx.host;
+const text = await files.readText(await files.root(dir), filename);
 ```
 
-A whole path the interrupt named, such as the target of `remove`, goes through `wholePath(p)`, which splits it into a real parent and a final name that is never followed. Resolve the caller's spelling with `root` or `wholePath` before raising the interrupt, and hold it with `fixedRoot` or `fixedPath` after approval, so a link planted at the approved path during the prompt is refused rather than followed. `resolveDir` remains for the `allowedPaths` guardrail and for anchoring a relative path to the cwd. The reasoning and the API are in [`docs/dev/stdlib/contained-files.md`](../stdlib/contained-files.md).
+A whole path the interrupt named, such as the target of `remove`, goes through `wholePath(p)`, which splits it into a real parent and a final name that is never followed. Resolve the caller's spelling with `root` or `wholePath` before raising the interrupt, and hold it with `fixedRoot` or `fixedPath` after approval, so a link planted at the approved path during the prompt is refused rather than followed. `resolveDir` remains for the `allowedPaths` guardrail and for anchoring a relative path to the cwd. A function Agency calls as a plain helper reads `currentHost()` on its first line, before any `await`, and a helper below it takes the host as an argument. The reasoning and the API are in [`docs/dev/stdlib/contained-files.md`](../stdlib/contained-files.md).
 
 **Rationale:** A symlink below an approved directory must never be followed, and that rule has to hold at every call site. One module enforces it, so a new function cannot forget.
 
-**Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason.
+**Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason, and `no-restricted-syntax` refuses `.real` on a `Root` outside `lib/host`.
 
 ### Reach the platform through the host
 

@@ -1,4 +1,5 @@
-import { wholePath, readText, writeText, mkdir } from "./contained.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { isPlainObject } from "../config/paths.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
@@ -178,50 +179,87 @@ export async function _validateMcpServers(servers: RawMcpServers): Promise<Resul
   }
 }
 
-/** Read a config file's top-level object. `null` when absent. failure() when it
- *  exists but is unreadable / not valid JSON / not a JSON object — so the
- *  add/remove writers never clobber a file they could not fully parse. */
-function readConfigObject(file: string): ResultValue {
-  let text: string;
-  try {
-    const located = wholePath(file);
-    text = readText(located.root, located.target);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return success(null);
-    }
-    return failure(
-      `cannot read ${file}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+/** The top-level object of a config file's text: `null` for a file that
+ *  does not exist, the parsed object otherwise. Throws a `ConfigProblem`
+ *  for text that is not valid JSON or not an object, so the writers
+ *  never clobber a file they could not fully parse. */
+function parseConfigObject(file: string, text: string | null): Record<string, unknown> | null {
+  if (text === null) {
+    return null;
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return failure(
+    throw new ConfigProblem(
       `${file} is not valid JSON — fix it before editing servers (nothing was written)`,
     );
   }
   if (!isPlainObject(parsed)) {
-    return failure(`${file} is not a JSON object (nothing was written)`);
+    throw new ConfigProblem(`${file} is not a JSON object (nothing was written)`);
   }
-  return success(parsed);
+  return parsed;
 }
 
-function writeConfigObject(file: string, data: Record<string, unknown>): void {
-  const located = wholePath(file);
-  mkdir(located.root, ".");
-  writeText(located.root, located.target, JSON.stringify(data, null, 2) + "\n");
+/** A config file that cannot be edited, as a message for the caller. */
+class ConfigProblem extends Error {}
+
+/** Thrown inside `updateText` to leave the file as it is. */
+class Unchanged extends Error {}
+
+/** Change a config file in one piece: read it, hand its object (or null
+ *  when it does not exist) to `change`, and write what `change` returns,
+ *  with no other edit of the file in between. `change` returns null to
+ *  leave the file as it is, and then nothing is written or created. With
+ *  `create`, a missing file and its directory are made. A failure names
+ *  the problem. */
+async function updateConfigObject(
+  host: Host,
+  file: string,
+  create: boolean,
+  change: (raw: Record<string, unknown> | null) => Record<string, unknown> | null,
+): Promise<ResultValue> {
+  try {
+    const located = await host.files.wholePath(file);
+    if (create) {
+      await host.files.mkdir(located.root, ".");
+    }
+    await host.files.updateText(located.root, located.target, (text) => {
+      const next = change(parseConfigObject(file, text));
+      if (next === null) {
+        throw new Unchanged();
+      }
+      return JSON.stringify(next, null, 2) + "\n";
+    });
+  } catch (error) {
+    if (error instanceof Unchanged) {
+      return success(null);
+    }
+    if (error instanceof ConfigProblem) {
+      return failure(error.message);
+    }
+    return failure(
+      `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return success(null);
 }
 
 /** The mcpServers map from a config file. Lenient: a missing or unparseable
  *  file reads as no servers (used by `list`, which must never crash). */
-export function _readMcpServersFromFile(file: string): RawMcpServers {
-  const read = readConfigObject(file);
-  if (isFailure(read) || read.value === null) {
+export async function _readMcpServersFromFile(file: string): Promise<RawMcpServers> {
+  const host = currentHost();
+  try {
+    const located = await host.files.wholePath(file);
+    if ((await host.files.stat(located.root, located.target)) === null) {
+      return {};
+    }
+    const text = await host.files.readText(located.root, located.target);
+    const raw = parseConfigObject(file, text);
+    return raw === null ? {} : serversOf(raw);
+  } catch {
     return {};
   }
-  return serversOf(read.value as Record<string, unknown>);
 }
 
 /** Validate `config`, then add/overwrite it in `file`, preserving every other
@@ -232,54 +270,43 @@ export async function _addMcpServer(
   config: RawMcpServerConfig,
   file: string,
 ): Promise<ResultValue> {
+  const host = currentHost();
   const valid = await _validateMcpServers({ [name]: config });
   if (isFailure(valid)) {
     return valid;
   }
-  const read = readConfigObject(file);
-  if (isFailure(read)) {
-    return read;
-  }
-  const raw = (read.value ?? {}) as Record<string, unknown>;
-  raw.mcpServers = _mergeMcpServers(serversOf(raw), { [name]: config });
-  try {
-    writeConfigObject(file, raw);
-  } catch (error) {
-    return failure(
-      `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  return success(null);
+  return updateConfigObject(host, file, true, (raw) => {
+    const next = raw ?? {};
+    next.mcpServers = _mergeMcpServers(serversOf(next), { [name]: config });
+    return next;
+  });
 }
 
 /** Remove one server from `file`. success(true) if it existed and was removed,
  *  success(false) if it was not present, failure() if the file is unparseable. */
 export async function _removeMcpServer(name: string, file: string): Promise<ResultValue> {
-  const read = readConfigObject(file);
-  if (isFailure(read)) {
-    return read;
-  }
-  if (read.value === null) {
-    return success(false);
-  }
-  const raw = read.value as Record<string, unknown>;
-  const servers = serversOf(raw);
-  if (!Object.prototype.hasOwnProperty.call(servers, name)) {
-    return success(false);
-  }
-  const next: RawMcpServers = Object.create(null);
-  for (const key of Object.keys(servers)) {
-    if (key !== name) {
-      next[key] = servers[key];
+  const host = currentHost();
+  let removed = false;
+  const result = await updateConfigObject(host, file, false, (raw) => {
+    if (raw === null) {
+      return null;
     }
+    const servers = serversOf(raw);
+    if (!Object.prototype.hasOwnProperty.call(servers, name)) {
+      return null;
+    }
+    const next: RawMcpServers = Object.create(null);
+    for (const key of Object.keys(servers)) {
+      if (key !== name) {
+        next[key] = servers[key];
+      }
+    }
+    raw.mcpServers = next;
+    removed = true;
+    return raw;
+  });
+  if (isFailure(result)) {
+    return result;
   }
-  raw.mcpServers = next;
-  try {
-    writeConfigObject(file, raw);
-  } catch (error) {
-    return failure(
-      `cannot write ${file}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  return success(true);
+  return success(removed);
 }

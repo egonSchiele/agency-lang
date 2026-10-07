@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import { rootPath } from "../host/roots.js";
 import { nanoid } from "nanoid";
 import os from "os";
 import path from "path";
@@ -9,17 +8,7 @@ import { abortableExec } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
-import {
-  root,
-  wholePath,
-  fixedPath,
-  resolveUnder,
-  stat as statUnder,
-  remove,
-  readStream,
-  writeText,
-  writeBytes,
-} from "./contained.js";
+import type { Host } from "../host/host.js";
 import {
   meteredDispatch,
   recordUsage,
@@ -80,14 +69,15 @@ async function speakImpl(
 
   const platform = await detectPlatform();
   if (platform === "macos") {
-    const tmpDir = root(os.tmpdir());
+    const { files } = ctx.host;
+    const tmpDir = await files.root(os.tmpdir());
     const tmpName = `agency-speak-${nanoid()}.txt`;
-    const tmpFile = path.join(rootPath(tmpDir), tmpName);
+    const tmpFile = await files.resolvePath(tmpDir, tmpName);
     // Only a file this call created is removed afterwards. A create that
     // fails because the name was taken must not delete someone else's file.
     let owned = false;
     try {
-      writeText(tmpDir, tmpName, text, { mode: "create-only" });
+      await files.writeText(tmpDir, tmpName, text, { mode: "create-only" });
       owned = true;
       const args: string[] = ["-f", tmpFile];
       if (voice !== "") {
@@ -97,13 +87,13 @@ async function speakImpl(
         args.push("-r", String(rate));
       }
       if (outputFile !== "") {
-        args.push("-o", await outputPath(outputFile, allowedPaths));
+        args.push("-o", await outputPath(ctx.host, outputFile, allowedPaths));
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
       if (owned) {
         try {
-          remove(tmpDir, tmpName);
+          await files.remove(tmpDir, tmpName);
         } catch {}
       }
     }
@@ -149,7 +139,7 @@ async function recordImpl(
   }
 
   const outPath = outputFile
-    ? await outputPath(outputFile, allowedPaths)
+    ? await outputPath(ctx.host, outputFile, allowedPaths)
     : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
 
   const args = [outPath];
@@ -194,7 +184,7 @@ async function recordImpl(
     proc.on("error", (err) => {
       signal.removeEventListener("abort", onAbort);
       cleanupStdin(onData);
-      if (!outputFile) removeQuietly(outPath);
+      if (!outputFile) removeQuietly(ctx.host, outPath);
       reject(
         new Error(
           `Failed to start 'rec' command: ${err.message}. ` +
@@ -207,12 +197,12 @@ async function recordImpl(
       signal.removeEventListener("abort", onAbort);
       cleanupStdin(onData);
       if (cancelled) {
-        if (!outputFile) removeQuietly(outPath);
+        if (!outputFile) removeQuietly(ctx.host, outPath);
         reject(new AgencyCancelledError("record cancelled"));
         return;
       }
       if (code !== 0 && code !== null && !stoppedByUser) {
-        if (!outputFile) removeQuietly(outPath);
+        if (!outputFile) removeQuietly(ctx.host, outPath);
         reject(new Error(`'rec' exited with code ${code}`));
       } else {
         resolve();
@@ -233,12 +223,13 @@ async function recordImpl(
  *  interrupt named, checked against the program's own allow-list, whose
  *  final name is never followed. */
 export async function outputPath(
+  host: Host,
   outputFile: string,
   allowedPaths: string[] | undefined,
 ): Promise<string> {
-  await assertContained(outputFile, allowedPaths ?? []);
-  const located = fixedPath(outputFile);
-  return resolveUnder(located.root, located.target);
+  await assertContained(host, outputFile, allowedPaths ?? []);
+  const located = await host.files.fixedPath(outputFile);
+  return host.files.resolvePath(located.root, located.target);
 }
 
 /** Backs `std::speech.record`. */
@@ -350,19 +341,23 @@ export async function _transcribe(
   // The client then opens the pathname itself, so it can apply its size cap
   // before reading. That leaves the check-then-open window that
   // docs/dev/stdlib/contained-files.md describes for pathname operations.
-  await assertContained(filepath, allowedPaths ?? []);
-  const located = fixedPath(filepath);
-  const resolvedPath = resolveUnder(located.root, located.target);
-  const info = statUnder(located.root, located.target);
+  const { files } = ctx.host;
+  await assertContained(ctx.host, filepath, allowedPaths ?? []);
+  const located = await files.fixedPath(filepath);
+  const resolvedPath = await files.resolvePath(located.root, located.target);
+  const info = await files.stat(located.root, located.target);
   if (info === null) {
     throw new Error(`transcribe: no such file: ${resolvedPath}`);
   }
-  if (!info.isFile()) {
+  if (info.kind !== "file") {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }
   // Readability preflight: opening the file here throws EACCES before any
   // paid dispatch, and validates the descriptor the way every read does.
-  readStream(located.root, located.target).destroy();
+  // Leaving the loop after the first piece closes the file.
+  for await (const _piece of files.readChunks(located.root, located.target)) {
+    break;
+  }
 
   const source: AudioInput = { kind: "path", path: resolvedPath };
   const config: TranscribeConfig = { model };
@@ -418,13 +413,14 @@ export async function _transcribe(
  * replaced. Cancellation is checked last, right before the write.
  */
 export async function publishSpeechOutput(
+  host: Host,
   finalPath: string,
   audio: Uint8Array,
   signal: AbortSignal,
 ): Promise<void> {
-  const located = fixedPath(finalPath);
+  const located = await host.files.fixedPath(finalPath);
   if (signal.aborted) throwAbortReason(signal);
-  writeBytes(located.root, located.target, Buffer.from(audio), { mode: "create-only" });
+  await host.files.writeBytes(located.root, located.target, audio, { mode: "create-only" });
 }
 
 /**
@@ -529,14 +525,15 @@ async function synthesizeToFile(run: Run, s: Synthesis): Promise<string> {
   // runtime-owned temp path (exempt from allowedPaths, like record()).
   let finalPath: string;
   if (s.outputFile) {
-    finalPath = await outputPath(s.outputFile, s.allowedPaths);
+    finalPath = await outputPath(ctx.host, s.outputFile, s.allowedPaths);
   } else {
     // The real spelling of the temp dir, so the no-follow check below sees
     // no link in it (/var is a link on macOS).
-    finalPath = path.join(rootPath(root(os.tmpdir())), `agency-tts-${nanoid()}.${s.format}`);
+    const tmpDir = await ctx.host.files.realDir(os.tmpdir());
+    finalPath = path.join(tmpDir, `agency-tts-${nanoid()}.${s.format}`);
   }
   // No-clobber preflight: new speech output never overwrites an existing file.
-  if (await pathExists(finalPath)) {
+  if (await pathExists(ctx.host, finalPath)) {
     throw new Error(`${s.name}: output file already exists: ${finalPath}`);
   }
 
@@ -577,7 +574,7 @@ async function synthesizeToFile(run: Run, s: Synthesis): Promise<string> {
     );
   }
 
-  await publishSpeechOutput(finalPath, speech.audio, signal);
+  await publishSpeechOutput(ctx.host, finalPath, speech.audio, signal);
   return finalPath;
 }
 
@@ -780,7 +777,7 @@ export async function _speakLocal(
     finish: transcoded
       ? async (wav, signal) => ({
           ...wav,
-          audio: await transcode(wav.audio, localFormat, speed, signal),
+          audio: await transcode(run.ctx.host, wav.audio, localFormat, speed, signal),
           mimeType: LOCAL_SPEECH_MIME[localFormat],
         })
       : undefined,
@@ -788,18 +785,18 @@ export async function _speakLocal(
 }
 
 /** True when `p` exists. A symlink at `p`, dangling or not, throws from
- *  `resolveUnder`, so paid synthesis never proceeds toward a commit that
+ *  `resolvePath`, so paid synthesis never proceeds toward a commit that
  *  would be refused. */
-export async function pathExists(p: string): Promise<boolean> {
-  const located = fixedPath(p);
-  resolveUnder(located.root, located.target);
-  return statUnder(located.root, located.target) !== null;
+export async function pathExists(host: Host, p: string): Promise<boolean> {
+  const located = await host.files.fixedPath(p);
+  await host.files.resolvePath(located.root, located.target);
+  return (await host.files.stat(located.root, located.target)) !== null;
 }
 
 /** Best-effort removal of a runtime-owned temp file. */
-function removeQuietly(p: string): void {
-  try {
-    const located = wholePath(p);
-    remove(located.root, located.target);
-  } catch {}
+function removeQuietly(host: Host, p: string): void {
+  host.files
+    .wholePath(p)
+    .then((located) => host.files.remove(located.root, located.target))
+    .catch(() => {});
 }

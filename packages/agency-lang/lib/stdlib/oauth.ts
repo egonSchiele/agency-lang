@@ -1,7 +1,8 @@
 import http from "http";
 import crypto from "crypto";
 import { sha256Bytes } from "../utils/hash.js";
-import { root, stat, remove, mkdir, readText, writeText, type Root } from "./contained.js";
+import type { Host, Root } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 import os from "os";
 import path from "path";
 import { execFile } from "child_process";
@@ -58,13 +59,13 @@ type StoredTokens = {
 };
 
 /** The token directory as a root plus the provider's file name in it. */
-function tokenLocation(name: string): { dir: Root; file: string } {
+async function tokenLocation(host: Host, name: string): Promise<{ dir: Root; file: string }> {
   if (!VALID_NAME_PATTERN.test(name)) {
     throw new Error(
       `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`,
     );
   }
-  return { dir: root(getTokenDir()), file: `${name}.json` };
+  return { dir: await host.files.root(getTokenDir()), file: `${name}.json` };
 }
 
 function generateCodeVerifier(): string {
@@ -239,21 +240,21 @@ async function exchangeCodeForTokens(
   );
 }
 
-async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
-  const located = tokenLocation(name);
-  mkdir(located.dir, ".");
+async function saveTokens(host: Host, name: string, tokens: StoredTokens): Promise<void> {
+  const located = await tokenLocation(host, name);
+  await host.files.mkdir(located.dir, ".");
   const json = JSON.stringify(tokens, null, 2);
 
   const key = await getEncryptionKey();
   const content = key ? encrypt(json, key) : json;
 
-  writeText(located.dir, located.file, content, { fileMode: 0o600 });
+  await host.files.writeText(located.dir, located.file, content, { fileMode: 0o600 });
 }
 
-async function loadTokens(name: string): Promise<StoredTokens | null> {
-  const located = tokenLocation(name);
+async function loadTokens(host: Host, name: string): Promise<StoredTokens | null> {
+  const located = await tokenLocation(host, name);
   try {
-    const raw = readText(located.dir, located.file);
+    const raw = await host.files.readText(located.dir, located.file);
 
     const key = await getEncryptionKey();
     const json = key ? decrypt(raw, key) : raw;
@@ -284,6 +285,7 @@ async function loadTokens(name: string): Promise<StoredTokens | null> {
  * exchange `fetch` all tear down on abort.
  */
 async function authorizeImpl(
+  host: Host,
   name: string,
   config: OAuthConfig,
   signal: AbortSignal | undefined,
@@ -347,7 +349,7 @@ async function authorizeImpl(
     client_secret: config.clientSecret,
   };
 
-  await saveTokens(name, tokens);
+  await saveTokens(host, name, tokens);
 
   return { success: true };
 }
@@ -369,7 +371,7 @@ export async function __internal_authorize(
   name: string,
   config: OAuthConfig,
 ): Promise<{ success: boolean }> {
-  return authorizeImpl(name, config, ctx.getAbortSignal(stack));
+  return authorizeImpl(ctx.host, name, config, ctx.getAbortSignal(stack));
 }
 
 /**
@@ -380,11 +382,15 @@ export async function __internal_authorize(
  */
 export async function _authorize(name: string, config: OAuthConfig): Promise<{ success: boolean }> {
   const { ctx, stack } = getRuntimeContext();
-  return authorizeImpl(name, config, ctx.getAbortSignal(stack));
+  return authorizeImpl(ctx.host, name, config, ctx.getAbortSignal(stack));
 }
 
-async function getAccessTokenImpl(name: string, signal: AbortSignal | undefined): Promise<string> {
-  const tokens = await loadTokens(name);
+async function getAccessTokenImpl(
+  host: Host,
+  name: string,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  const tokens = await loadTokens(host, name);
   if (!tokens) {
     throw new Error(`No OAuth tokens found for "${name}". Run authorize() first.`);
   }
@@ -422,7 +428,7 @@ async function getAccessTokenImpl(name: string, signal: AbortSignal | undefined)
         tokens.refresh_token = refreshResponse.refresh_token;
       }
 
-      await saveTokens(name, tokens);
+      await saveTokens(host, name, tokens);
 
       return tokens.access_token;
     } finally {
@@ -448,7 +454,7 @@ export async function __internal_getAccessToken(
   _threads: ThreadStore,
   name: string,
 ): Promise<string> {
-  return getAccessTokenImpl(name, ctx.getAbortSignal(stack));
+  return getAccessTokenImpl(ctx.host, name, ctx.getAbortSignal(stack));
 }
 
 /**
@@ -459,19 +465,21 @@ export async function __internal_getAccessToken(
  */
 export async function _getAccessToken(name: string): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
-  return getAccessTokenImpl(name, ctx.getAbortSignal(stack));
+  return getAccessTokenImpl(ctx.host, name, ctx.getAbortSignal(stack));
 }
 
 export async function _isAuthorized(name: string): Promise<boolean> {
-  return (await loadTokens(name)) !== null;
+  const host = currentHost();
+  return (await loadTokens(host, name)) !== null;
 }
 
 export async function _revokeAuth(name: string): Promise<{ revoked: boolean }> {
-  const located = tokenLocation(name);
-  const info = stat(located.dir, located.file);
-  if (info === null || !info.isFile()) {
+  const host = currentHost();
+  const located = await tokenLocation(host, name);
+  const info = await host.files.stat(located.dir, located.file);
+  if (info === null || info.kind !== "file") {
     return { revoked: false };
   }
-  remove(located.dir, located.file);
+  await host.files.remove(located.dir, located.file);
   return { revoked: true };
 }

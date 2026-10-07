@@ -2,7 +2,7 @@
 
 Suppose an agent asks to read files in `~/project` and you approve. Inside `~/project` there is a symlink named `secrets` that points at `~/.ssh`. If `read("secrets/id_rsa", "~/project")` follows the link, it reads your SSH key under an approval that named `~/project`. The same hole exists for a linked directory, and for every operation that lists, probes, creates, copies, moves, or deletes.
 
-`lib/host/nodeFiles.ts` closes it in one place. It is the file part of `nodeHost` (see `docs/dev/runtime/host.md`), and every file operation the standard library performs on a path an Agency program chose goes through it, and a lint rule keeps it that way. Containment is not something a call site opts into. `run.ctx.host.files` is the same operations as promises; `lib/stdlib/contained.ts` re-exports the synchronous ones for the callers that still use them.
+`host.files` closes it in one place. Every file operation the standard library performs on a path an Agency program chose goes through the file part of the run's host (see `docs/dev/runtime/host.md`), and a lint rule keeps it that way. Containment is not something a call site opts into. On Node the file part is `lib/host/nodeFiles.ts`, the synchronous module this doc describes, wrapped in promises by `lib/host/nodeFilesPart.ts`. A few files with no run to take a host from, such as the compiler and the local-model code, call the synchronous module directly and say so in a comment at the import.
 
 ## The property
 
@@ -26,10 +26,10 @@ A wrapper resolves the caller's spelling with `root()` before it raises, and put
 
 ```ts
 // in the wrapper, before the interrupt
-const real = _realDir(dir);           // root(dir).real
+const real = await _realDir(dir);                  // host.files.realDir(dir)
 // ... interrupt std::ls(..., { dir: real })
 // in the primitive, after approval
-const approved = fixedRoot(real);     // refuses if real now contains a link
+const approved = await host.files.fixedRoot(real); // refuses if real now contains a link
 ```
 
 `wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` parses the patch before the interrupt and puts the real path of every touched file in the payload as `files`; after approval each entry goes through `fixedPath`.
@@ -39,15 +39,15 @@ const approved = fixedRoot(real);     // refuses if real now contains a link
 A **dir plus relative target** operation has the approved directory as its root. `read`, `write`, `edit`, `ls`, `glob`, `grep`, `exists`, `stat`, the sandbox functions in `std::agency`, and the scan reads in `std::skills` and `std::toolbox` are this shape. The primitive takes the root first and the relative target second:
 
 ```ts
-readText(root("/home/me/project"), "notes/today.md")
+await host.files.readText(await host.files.root("/home/me/project"), "notes/today.md");
 ```
 
 A **whole path** operation names the whole path in its interrupt. `mkdir(dir)`, `remove(target)`, `copy(src, dest)`, `move(src, dest)`, an output file for `say`, `record`, or `screenshot`, and a policy file write are this shape. `wholePath(p)` splits the path into a real parent and one final name that is never followed:
 
 ```ts
-const located = wholePath("/home/me/project/build");
-// located.root.real is "/home/me/project", located.target is "build"
-remove(located.root, located.target);
+const located = await host.files.wholePath("/home/me/project/build");
+// located.root is "/home/me/project" realpathed, located.target is "build"
+await host.files.remove(located.root, located.target);
 ```
 
 If `build` were a symlink, `remove` would refuse it rather than follow it or delete the link.
@@ -56,29 +56,35 @@ A **standalone probe** such as `exists("/home/me/project/build")`, with no `dir`
 
 ## The API
 
+These are the functions of `host.files`, each a promise. The synchronous module has the same functions under the same names, except where noted.
+
 - `root(dir): Root` realpaths a caller's spelling once, before the interrupt. A dangling link or a loop in the spelling throws. A directory that does not exist yet keeps a lexical tail under its nearest real ancestor.
 - `fixedRoot(real): Root` takes the spelling an approver saw, after the interrupt, and refuses a symlink anywhere in it.
-- `resolveUnder(root, target): string` joins a relative target and refuses an absolute path, a `~` path, an upward escape, and any symlink below the root. `""` and `"."` mean the root.
+- `resolvePath(root, target): string` (`resolveUnder` in the synchronous module) joins a relative target and refuses an absolute path, a `~` path, an upward escape, and any symlink below the root. `""` and `"."` mean the root. It is also how a caller gets the path a root stands for, to hand to another program: nothing outside `lib/host` reads a `Root` directly.
 - `wholePath(p): Located` splits a whole path into `{ root, target }` before the interrupt. `fixedPath(p)` does the same after it.
-- `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk. `readStream` does the same validation and returns a stream over that descriptor, for a file too large to buffer, such as a downloaded model being hashed.
+- `realDir(dir)` and `realPath(p)` (`_realDir` and `_realTarget` in the synchronous module) give the Agency wrappers the real spelling for an interrupt payload.
+- `locate(dir, filename, operation)` is what `prepareContainedPath` calls for `read`, `write`, and `edit`: the real `dir` and the normalized `filename`, resolved in one piece because it runs between a wrapper's call and its interrupt.
+- `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk. `readChunks` (`readStream` in the synchronous module) does the same validation and returns the file in pieces, for a file too large to buffer, such as a downloaded model being hashed.
 - `writeText`, `writeBytes` take a `mode` of `overwrite`, `append`, or `create-only`, an optional `fileMode`, and validate the descriptor the same way before any byte is written. Overwrite writes a sibling temporary file and renames it over the target, so a failed write leaves the old file whole. The file's mode bits are kept. The inode changes on every overwrite. Create-only writes the sibling the same way and hard-links it to the target name, which fails if anything is already there, so a new file appears complete or not at all.
+- `updateText(root, target, change)` reads a file, calls `change` with its text (`null` when the file does not exist), and writes what `change` returns, with no other call on that file in between. `edit` and `applyPatch` use it. `withLock(root, target, work)` holds a lock on one path for the length of `work`; the lock belongs to the host, so it covers every run that shares it.
 - `openForWrite` opens a file for writes at any offset and returns a handle with `writeAt`, `truncate`, and `close`. It is for the MLX downloader, whose chunks land out of order. The open is the same as append: no following of a final link, a real parent for a new file, and the descriptor validated before it is handed back.
 - `list(root, target)` returns one level with symlinked entries left out.
-- `stat(root, target)` returns `null` for a missing entry and for a symlink below the root.
+- `stat(root, target)` returns `null` for a missing entry and for a symlink below the root, and otherwise `{ kind, size, modifiedMs }`.
 - `mkdir`, `remove`, `move` never dereference. `copy` reads and writes every file through validated descriptors and refuses a source tree that contains a link anywhere.
-- `_realDir(dir)` and `_realTarget(p)` give the Agency wrappers the real spelling for an interrupt payload.
 
 The `allowedPaths` parameter on public functions such as `gitAdd`, `say`, `mkdir`, and `statelog.evalRecord` is a different thing. It is a guardrail the program's author sets on itself, implemented by `assertContained`, and it still works the same way. Only the underscore primitives lost it, because for them it doubled as the containment switch.
 
 ## The lint fence
 
-`eslint.config.js` forbids importing `fs` or `fs/promises` anywhere under `lib/stdlib`, except in files listed in `FS_IMPORTERS` with a one-line reason each. A new module that reaches for `fs` fails `pnpm run lint:structure` until it either goes through `contained.ts` or is added to the list with a reason.
+`eslint.config.js` forbids importing `fs` or `fs/promises` anywhere under `lib/stdlib`, except in files listed in `FS_IMPORTERS` with a one-line reason each. A new module that reaches for `fs` fails `pnpm run lint:structure` until it either goes through `host.files` or is added to the list with a reason. A second rule refuses `.real` on a `Root` outside `lib/host`, so a caller cannot join a path itself and skip the checks.
 
 The rule for a new module is one question: where did this path come from?
 
-1. The agent or user chose it. Call `contained.ts` with the approved directory as root.
-2. It is a fixed file Agency owns, such as settings under the agent home. Call `contained.ts` with the agent home as root.
+1. The agent or user chose it. Call `host.files` with the approved directory as root.
+2. It is a fixed file Agency owns, such as settings under the agent home. Call `host.files` with the agent home as root.
 3. Neither. Import `fs`, add the file to `FS_IMPORTERS`, and say why.
+
+Where the host comes from: a function handed the run reads `run.ctx.host`; a function Agency calls as a plain helper reads `currentHost()` on its first line, before any `await`; a helper below those takes the host as an argument. `scripts/lint-run-reads.mjs` reports a `currentHost()` that could run after an `await`.
 
 The files on the allow-list today, and why:
 
@@ -86,7 +92,7 @@ The files on the allow-list today, and why:
 - `shell.ts` probes `PATH` entries for `which` and checks the working directory for `exec`. No approval names either.
 - `utils.ts` reads `/proc/version` once to tell WSL from Linux.
 
-Files that keep Agency's own state, such as the REPL history, saved agent sessions, OAuth tokens, and the model download manifest, also go through this module. They pass the directory they were given to `root`, because no interrupt is involved and the path is the program's own spelling. A user who points one of these directories at a symlink gets it followed, as anywhere else in the spelling of a root.
+Files that keep Agency's own state, such as the REPL history, saved agent sessions, OAuth tokens, and the model download manifest, also go through the host. They pass the directory they were given to `root`, because no interrupt is involved and the path is the program's own spelling. A user who points one of these directories at a symlink gets it followed, as anywhere else in the spelling of a root.
 
 ## The symlink battery
 
@@ -100,17 +106,20 @@ The read and write seams run a directory swap between the open and the validatio
 
 ## Where the pieces are
 
-- `lib/host/nodeFiles.ts`: the module. `lib/host/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root`; a `.real` read outside `lib/host` fails the lint. `lib/host/nodeFilesPart.ts` wraps each operation in a promise for the host and adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate` (what `prepareContainedPath` calls). `lib/stdlib/contained.ts` re-exports the synchronous module for the callers that still use it.
-- `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, now built on `root` and `resolveUnder`. `resolveRedirectTarget` for `safeBash` uses `root` to find where a redirect lands.
-- `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, now built on `root`.
-- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `localModels.ts`, `localModelManifest.ts`, `cli.ts`, `agentSessions.ts`, `oauth.ts`: the migrated callers.
-- `stdlib/index.agency`, `fs.agency`, `shell.agency`, `skills.agency`, `toolbox.agency`, `llm.agency`: the wrappers, which canonicalize their payload directory with `_realDir` or `_realTarget` before raising.
-- `eslint.config.js`: `FS_IMPORTERS` and the `no-restricted-imports` block.
+- `lib/host/host.ts`: the `HostFiles` type. `lib/host/files.shared.test.ts` runs one battery over every host that has files.
+- `lib/host/nodeFiles.ts`: the synchronous module behind Node's host. `lib/host/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root`; a `.real` read outside `lib/host` fails the lint. `lib/host/nodeFilesPart.ts` wraps each operation in a promise for the host and adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate`.
+- `lib/host/memoryHost.ts`: the same operations over an object of files, for tests.
+- `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, built on `locate`. `resolveRedirectTarget` for `safeBash` uses `realDir` to find where a redirect lands.
+- `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, built on `realDir`. `lib/stdlib/isContained.ts` is the path predicate it and the synchronous module share.
+- `lib/stdlib/approvedPath.ts`: the post-approval checks shared by the functions that hand a file to another program or read its bytes for one.
+- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `ffmpeg.ts`, `ocr.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `thread.ts`, `vision.ts`, `image.ts`, `imageTools.ts`, `agentSessions.ts`, `oauth.ts`: the callers on `host.files`. `agency.ts`, `cli.ts`, `localModels.ts`, `localModelManifest.ts`, `localImageInputs.ts`, `modelBackend.ts`, `modelVerify.ts`, `mlxModelRecord.ts`, `hubDownload.ts`, `lib/compiler/closureValidator.ts`, and `lib/runtime/policyDirs.ts`: the callers on the synchronous module, each with a comment at the import saying why.
+- `stdlib/index.agency`, `fs.agency`, `shell.agency`, `skills.agency`, `toolbox.agency`, `llm.agency`: the wrappers, which canonicalize their payload directory with `_realDir` or `_realTarget` from `lib/stdlib/fs.ts` before raising.
+- `eslint.config.js`: `FS_IMPORTERS`, the `no-restricted-imports` block, and the `.real` rule.
 
 ## Things that are easy to miss
 
 - `_ls`, `_glob`, and `_grep` take the approved directory first and where in it to start second. Results stay relative to the second argument. `scanSkillsSubdirs` passes the root and the subdirectory separately so a linked subdirectory is refused rather than becoming its own root.
 - `stat` returning `null` for a link is a hidden entry, not an error. The Agency `StatInfo` and `LsEntry` `type` fields have no `"symlink"` member.
 - A standalone `exists(p)` or `stat(p)` with no `dir` passes `p` as the root and `"."` as the target, so it follows the caller's spelling.
-- A TypeScript function that runs both after an Agency interrupt and from the CLI takes a `locate` argument, the way `_loadModelData` does. The Agency wrapper leaves the default, `fixedPath`, because the approver saw the real spelling. The CLI passes `wholePath`, because no approval happened and the user's own spelling may run through a link.
+- A TypeScript function that runs both after an Agency interrupt and from the CLI takes a `locate` argument, the way `_loadModelData` does. The Agency wrapper leaves the default, `fixed` (`fixedPath`), because the approver saw the real spelling. The CLI passes `whole` (`wholePath`), because no approval happened and the user's own spelling may run through a link.
 - The payloads for `ls`, `glob`, `grep`, `mkdir`, `copy`, `move`, `remove`, `skillsDir`, `commandsDir`, and `scanSkillsSubdirs` now carry the real spelling, the way `read` and `write` did before. A policy written against `/tmp/...` on macOS matches `/private/tmp/...`, which the built-in rules already do through `resolveDotDirPattern`.

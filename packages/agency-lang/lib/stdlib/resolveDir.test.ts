@@ -3,9 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveDir, resolveCwdPath } from "./resolveDir.js";
+import { nodeHost } from "../host/nodeHost.js";
 import { withRun } from "../runtime/asyncContext.js";
 
 describe("resolveDir", () => {
+  const host = nodeHost();
   let tmpRoot: string;
   let originalCwd: string;
 
@@ -23,12 +25,12 @@ describe("resolveDir", () => {
   it("expands ~ to the home directory", async () => {
     // Use the inside-home/no-op-allowedPaths case so the test doesn't
     // depend on any path inside $HOME existing.
-    const result = await resolveDir("~");
+    const result = await resolveDir(host, "~");
     expect(result).toBe(os.homedir());
   });
 
   it("expands ~/sub to homedir/sub without requiring it to exist", async () => {
-    const result = await resolveDir("~/some-nonexistent-subdir-xyz");
+    const result = await resolveDir(host, "~/some-nonexistent-subdir-xyz");
     expect(result).toBe(path.join(os.homedir(), "some-nonexistent-subdir-xyz"));
   });
 
@@ -37,7 +39,7 @@ describe("resolveDir", () => {
     // pre-create the dir; callers that need it created do that
     // themselves. So we compare lexically against realpath of the
     // existing tmpRoot.
-    const result = await resolveDir("./sub");
+    const result = await resolveDir(host, "./sub");
     expect(result).toBe(path.join(fs.realpathSync(tmpRoot), "sub"));
     expect(result).not.toContain(os.homedir());
   });
@@ -46,14 +48,16 @@ describe("resolveDir", () => {
     const allowed = path.join(tmpRoot, "allowed-root");
     fs.mkdirSync(allowed, { recursive: true });
     const target = path.join("allowed-root", "inside");
-    const result = await resolveDir(target, [allowed]);
+    const result = await resolveDir(host, target, [allowed]);
     expect(result.startsWith(fs.realpathSync(allowed))).toBe(true);
   });
 
   it("throws when the resolved path is outside the allow-list", async () => {
     const allowed = path.join(tmpRoot, "allowed-root");
     fs.mkdirSync(allowed, { recursive: true });
-    await expect(resolveDir(path.join(tmpRoot, "outside"), [allowed])).rejects.toThrow(/not under/);
+    await expect(resolveDir(host, path.join(tmpRoot, "outside"), [allowed])).rejects.toThrow(
+      /not under/,
+    );
   });
 
   it("stays cwd-anchored under a run", async () => {
@@ -63,7 +67,7 @@ describe("resolveDir", () => {
         stack: {},
         threads: {},
       } as any,
-      () => resolveDir("./prompts"),
+      () => resolveDir(host, "./prompts"),
     );
     expect(result).toBe(path.join(fs.realpathSync(tmpRoot), "prompts"));
   });
@@ -71,7 +75,7 @@ describe("resolveDir", () => {
   it("validates tilde-in-target against a tilde-in-allowlist (cross product)", async () => {
     // Exercises that expansion is applied symmetrically: both target
     // and allowlist entries reach `assertContained` already expanded.
-    const result = await resolveDir("~/sandbox/work", ["~/sandbox"]);
+    const result = await resolveDir(host, "~/sandbox/work", ["~/sandbox"]);
     expect(result).toBe(path.join(os.homedir(), "sandbox", "work"));
   });
 });

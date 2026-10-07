@@ -81,19 +81,20 @@ const GENERATE_IMAGE = "generateImage";
 /** The request fields that carry a call's input images, each image as
  *  base64. Throws when an image cannot be read or is over its field's
  *  size cap. */
-function encodedFields(
+async function encodedFields(
   fields: string[],
   inputs: Record<string, ImageInput[]>,
-): Record<string, string | string[]> {
-  return Object.fromEntries(
-    fields.map((field) => {
-      const maxBytes = LOCAL_IMAGE_FIELDS[field].maxBytes;
-      const encoded = inputs[field].map((input) =>
-        encodedImageInput(input, maxBytes, GENERATE_IMAGE),
-      );
-      return [field, fieldValue(field, encoded)];
-    }),
-  );
+): Promise<Record<string, string | string[]>> {
+  const out: Record<string, string | string[]> = {};
+  for (const field of fields) {
+    const maxBytes = LOCAL_IMAGE_FIELDS[field].maxBytes;
+    const encoded: string[] = [];
+    for (const input of inputs[field]) {
+      encoded.push(await encodedImageInput(input, maxBytes, GENERATE_IMAGE));
+    }
+    out[field] = fieldValue(field, encoded);
+  }
+  return out;
 }
 
 /** Generate one image with a local image model. The twin of
@@ -129,7 +130,7 @@ export async function generateImage(
   }
   let images: Record<string, string | string[]>;
   try {
-    images = encodedFields(mode.fields, inputs);
+    images = await encodedFields(mode.fields, inputs);
   } catch (err) {
     return fail((err as Error).message);
   }
@@ -209,7 +210,7 @@ async function visionCallWith<T>(
   }
   let imageBase64: string;
   try {
-    imageBase64 = encodedImageInput(options.image, MAX_IMAGE_BYTES, name);
+    imageBase64 = await encodedImageInput(options.image, MAX_IMAGE_BYTES, name);
   } catch (err) {
     return fail((err as Error).message);
   }

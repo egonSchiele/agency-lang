@@ -23,12 +23,13 @@
  * runtime's deterministic-replay invariants.)
  *
  * - **Multiple agent runs in the same process sharing one `absDir`:**
- *   intentional. Both runs see the same `FileMemoryStore`, which
- *   means writes from run A are visible to run B (and vice versa)
- *   if they touch the same `memoryId`. That's the whole point of a
- *   file-backed store — memory persists across runs and is shared
- *   between concurrent agents working on the same workspace. Each
- *   run still has its own `MemoryManager` wrapping the store
+ *   intentional. Runs on one host see the same `FileMemoryStore`, and
+ *   a store keeps nothing in memory, so writes from run A are visible
+ *   to run B (and vice versa) if they touch the same `memoryId`, on the
+ *   same host or on two hosts over the same files. That's the whole
+ *   point of a file-backed store — memory persists across runs and is
+ *   shared between concurrent agents working on the same workspace.
+ *   Each run still has its own `MemoryManager` wrapping the store
  *   (per-execCtx statelog client, log level, smoltalk defaults).
  * - **Relationship to `memoryId`:** `absDir` is *where* the store
  *   lives on disk; `memoryId` (set via `setMemoryId(...)`) is
@@ -46,26 +47,37 @@
  *   contract — see `docs/dev/runtime/checkpointing.md` for which state IS
  *   in the contract.
  */
+import type { HostFiles } from "../../host/host.js";
 import { FileMemoryStore } from "./store.js";
 import type { LogLevel } from "../../logger.js";
 
-const stores: Record<string, FileMemoryStore> = {};
+/** One store per directory per file part. A store reads and writes
+ *  through the file part it was made with, so two hosts that name the
+ *  same directory each get their own. */
+type StoreEntry = { files: HostFiles; absDir: string; store: FileMemoryStore };
+
+let stores: StoreEntry[] = [];
 
 /**
- * Return the `FileMemoryStore` for `absDir`, creating it on first
- * call. The directory itself must already exist (callers route
- * through `MemoryFrame`'s constructor, which mkdir-p's before
- * reaching here).
+ * Return the `FileMemoryStore` for `absDir` over `files`, the file part
+ * of the host that enabled memory, creating it on first call. The
+ * directory itself must already exist (callers route through
+ * `MemoryFrame`'s constructor, which mkdir-p's before reaching here).
+ * Every execution context of one host shares the store for a directory.
  */
-export function getOrCreateStore(absDir: string, logLevel?: LogLevel): FileMemoryStore {
-  const existing = stores[absDir];
-  if (existing) return existing;
-  const store = new FileMemoryStore(absDir, logLevel);
-  stores[absDir] = store;
+export function getOrCreateStore(
+  files: HostFiles,
+  absDir: string,
+  logLevel?: LogLevel,
+): FileMemoryStore {
+  const existing = stores.find((entry) => entry.files === files && entry.absDir === absDir);
+  if (existing) return existing.store;
+  const store = new FileMemoryStore(files, absDir, logLevel);
+  stores.push({ files, absDir, store });
   return store;
 }
 
 /** Test-only: drop all cached stores. */
 export function _resetStoreRegistry(): void {
-  for (const key of Object.keys(stores)) delete stores[key];
+  stores = [];
 }

@@ -2,8 +2,9 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { success, failure, type ResultValue } from "../runtime/result.js";
-import { fixedPath, resolveUnder, stat as statUnder } from "./contained.js";
-import { _approvedFilePath } from "./approvedPath.js";
+import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
+import { approvedFilePath } from "./approvedPath.js";
 import { configuredPython } from "./localPython.js";
 import type { BoundingBox } from "./ocr.js";
 
@@ -64,11 +65,11 @@ export async function _runImageTool(args: string[]): Promise<ToolResult | { erro
 /** The output path, once its parent is a real directory with no symlink
  *  in the spelling and the file itself is not there yet. The script
  *  creates it with mode x, so a race to create it fails there too. */
-function checkOutputPath(spelling: string): string | { error: string } {
+async function checkOutputPath(host: Host, spelling: string): Promise<string | { error: string }> {
   try {
-    const located = fixedPath(spelling);
-    const resolved = resolveUnder(located.root, located.target);
-    if (statUnder(located.root, located.target) !== null) {
+    const located = await host.files.fixedPath(spelling);
+    const resolved = await host.files.resolvePath(located.root, located.target);
+    if ((await host.files.stat(located.root, located.target)) !== null) {
       return { error: `${resolved} already exists. Remove it first, or write elsewhere.` };
     }
     return resolved;
@@ -89,14 +90,15 @@ export async function _cropImage(
   pad: number,
   square: boolean,
 ): Promise<ResultValue> {
+  const host = currentHost();
   const fail = (message: string) => failure(`cropImage failed: ${message}`);
   let source: string;
   try {
-    source = _approvedFilePath(spelling);
+    source = await approvedFilePath(host, spelling);
   } catch (err) {
     return fail((err as Error).message);
   }
-  const out = checkOutputPath(outSpelling);
+  const out = await checkOutputPath(host, outSpelling);
   if (typeof out !== "string") {
     return fail(out.error);
   }
@@ -116,9 +118,10 @@ export async function _cropImage(
 
 /** Backs `imageSize`. */
 export async function _imageSize(spelling: string): Promise<ResultValue> {
+  const host = currentHost();
   let source: string;
   try {
-    source = _approvedFilePath(spelling);
+    source = await approvedFilePath(host, spelling);
   } catch (err) {
     return failure(`imageSize failed: ${(err as Error).message}`);
   }
@@ -135,16 +138,17 @@ export async function _pasteImages(
   outSpelling: string,
   columns: number,
 ): Promise<ResultValue> {
+  const host = currentHost();
   const fail = (message: string) => failure(`pasteImages failed: ${message}`);
   const sources: string[] = [];
   for (const spelling of spellings) {
     try {
-      sources.push(_approvedFilePath(spelling));
+      sources.push(await approvedFilePath(host, spelling));
     } catch (err) {
       return fail((err as Error).message);
     }
   }
-  const out = checkOutputPath(outSpelling);
+  const out = await checkOutputPath(host, outSpelling);
   if (typeof out !== "string") {
     return fail(out.error);
   }

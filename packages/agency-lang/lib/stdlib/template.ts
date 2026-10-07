@@ -1,4 +1,4 @@
-import { fixedRoot, readText } from "./contained.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { AgencyNode } from "../types.js";
 import { exprParser, bodyParser } from "../parsers/parsers.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
@@ -33,9 +33,10 @@ export function _toSource(code: Code): string {
   return generateAgency(code as Parameters<typeof generateAgency>[0]);
 }
 
-export function _loadTemplate(dir: string, filename: string): Code {
-  const program = _parseAST(readText(fixedRoot(dir), filename));
-  return { ...program, kind: "program" } as Code;
+export async function _loadTemplate(dir: string, filename: string): Promise<Code> {
+  const host = currentHost();
+  const source = await host.files.readText(await host.files.fixedRoot(dir), filename);
+  return { ..._parseAST(source), kind: "program" } as Code;
 }
 
 export function _loadTemplateFromString(source: string): Code {

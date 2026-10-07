@@ -1,8 +1,10 @@
 import * as path from "node:path";
 import { MAX_IMAGE_BYTES } from "./vision.js";
-import { _realTarget, wholePath, stat as statUnder } from "./contained.js";
+// The synchronous file operations of nodeHost, not host.files: local models are Node-only.
+import { _realTarget, wholePath, stat as statUnder } from "../host/nodeFiles.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { approvedFileBytes } from "./approvedPath.js";
+import { currentHost } from "../runtime/currentHost.js";
 
 /** The images a `generateImageLocal` request can carry, one row per request
  *  field. `INPUT_IMAGES` in lib/cli/diffusersImageRules.py is the same
@@ -397,17 +399,18 @@ export function fieldValue(field: string, encoded: string[]): string | string[] 
  *  A path goes through the same checks a stdlib input does: a file on
  *  this machine, an image extension, a regular file, no symlink, and a
  *  read through the contained-files module. Throws with the reason. */
-export function encodedImageInput(
+export async function encodedImageInput(
   input: string | Uint8Array,
   maxBytes: number,
   caller: string,
-): string {
+): Promise<string> {
+  const host = currentHost();
   if (typeof input === "string") {
     if (isRemoteSource(input)) {
       throw new Error(`${caller} reads files on this machine only.`);
     }
     const real = checkedImageFile(input, maxBytes, caller);
-    return approvedFileBytes(real, maxBytes).toString("base64");
+    return Buffer.from(await approvedFileBytes(host, real, maxBytes)).toString("base64");
   }
   if (input.length > maxBytes) {
     throw new Error(

@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { readBytes, remove, root, stat } from "agency-lang/stdlib-lib/contained.js";
+import { readBytes, remove, root, stat } from "agency-lang/host-lib/nodeFiles.js";
 import { throwAbortReason } from "agency-lang/stdlib-lib/speech.js";
 import type { AudioFormat } from "./audioFormat.js";
 

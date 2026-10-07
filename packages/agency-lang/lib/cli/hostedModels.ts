@@ -2,9 +2,9 @@ import {
   _listHostedModels,
   _fetchModelData,
   _loadModelData,
+  whole,
   type HostedModelInfo,
 } from "../stdlib/llm.js";
-import { wholePath } from "@/stdlib/contained.js";
 
 export type ModelsListOpts = {
   provider?: string;
@@ -59,7 +59,7 @@ export function formatHostedCatalog(models: HostedModelInfo[]): string {
 // doesn't mistake a baked-only list for the merged one.
 export async function modelsList(opts: ModelsListOpts, files: string[] = []): Promise<void> {
   for (const file of files) {
-    const res = _loadModelData(file, wholePath);
+    const res = await _loadModelData(file, whole);
     if (!res.ok) {
       console.error(`Cannot load ${file}: ${res.error}`);
       process.exitCode = 1;

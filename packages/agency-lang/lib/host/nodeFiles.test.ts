@@ -9,7 +9,6 @@ import {
   fixedPath,
   resolveUnder,
   wholePath,
-  isContained,
   readText,
   readStream,
   readBytes,
@@ -193,16 +192,6 @@ describe("wholePath", () => {
     } finally {
       cleanup(dir);
     }
-  });
-});
-
-describe("isContained", () => {
-  test("same path, descendant, and escape", () => {
-    expect(isContained("/a/b", "/a/b")).toBe(true);
-    expect(isContained("/a/b/c", "/a/b")).toBe(true);
-    expect(isContained("/a/bc", "/a/b")).toBe(false);
-    expect(isContained("/x", "/a/b")).toBe(false);
-    expect(isContained("/a/b", "/")).toBe(true);
   });
 });
 

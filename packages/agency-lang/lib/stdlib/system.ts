@@ -3,7 +3,6 @@ import { abortableExec } from "./abortable.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { assertContained } from "./assertContained.js";
-import { fixedPath, resolveUnder } from "./contained.js";
 import { exitProcess } from "../runtime/exitProcess.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -110,9 +109,10 @@ async function screenshotImpl(
 ): Promise<void> {
   const platform = ctx.host.system.operatingSystem();
   // A whole path the interrupt named: the final name is never followed.
-  await assertContained(filepath, allowedPaths ?? []);
-  const located = fixedPath(filepath);
-  const resolvedPath = resolveUnder(located.root, located.target);
+  const { files } = ctx.host;
+  await assertContained(ctx.host, filepath, allowedPaths ?? []);
+  const located = await files.fixedPath(filepath);
+  const resolvedPath = await files.resolvePath(located.root, located.target);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
   const signal = ctx.getAbortSignal(stack);
 

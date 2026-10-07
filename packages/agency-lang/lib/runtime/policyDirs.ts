@@ -11,7 +11,9 @@ import { rootPath } from "../host/roots.js";
 import { defaultHost } from "#default-host";
 import { getPackageRoot } from "../importPaths.js";
 import type { Host } from "../host/host.js";
-import { root } from "../stdlib/contained.js";
+// The synchronous file operations of nodeHost, not host.files: the
+// directories are resolved while the context is built, with no await.
+import { root } from "../host/nodeFiles.js";
 import { agentHomeDir } from "./agentHome.js";
 import {
   substituteAgentHome,

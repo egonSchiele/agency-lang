@@ -1,6 +1,5 @@
 import path from "path";
-import { rootPath } from "../host/roots.js";
-import { root, locateSync } from "./contained.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { resolveCwdPath } from "./resolveDir.js";
 import { expandPath } from "./expandPath.js";
 
@@ -18,16 +17,17 @@ export type FileOperation = "read" | "write";
  * and `filename` is the normalized relative path. An escape, or a symlink
  * below dir, throws before any interrupt exists.
  *
- * Sync fs throughout (async signature kept so rejections stay
- * rejections): this runs between a wrapper's call and its interrupt, and
- * a real await there would hand the event loop to concurrent branches.
+ * The host's `locate` runs its steps in one piece: this runs between a
+ * wrapper's call and its interrupt, and a real wait there would hand the
+ * event loop to concurrent branches.
  */
 export async function prepareContainedPath(
   dir: string,
   filename: string,
   operation: FileOperation,
 ): Promise<ContainedPath> {
-  return locateSync(dir, filename, operation);
+  const host = currentHost();
+  return host.files.locate(dir, filename, operation);
 }
 
 export type TildeMode = "expand" | "literal";
@@ -44,11 +44,12 @@ export async function resolveRedirectTarget(
   cwd: string,
   tildeMode: TildeMode,
 ): Promise<ContainedPath> {
+  const host = currentHost();
   if (cwd.trim() === "") {
     throw new Error("redirect refused: cwd must not be empty.");
   }
   const baseDir = resolveCwdPath(cwd);
   const expanded = tildeMode === "expand" ? expandPath(target) : target;
-  const resolved = rootPath(root(path.resolve(baseDir, expanded)));
+  const resolved = await host.files.realDir(path.resolve(baseDir, expanded));
   return { dir: path.dirname(resolved), filename: path.basename(resolved) };
 }

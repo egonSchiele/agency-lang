@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { root, stat } from "agency-lang/stdlib-lib/contained.js";
+import { root, stat } from "agency-lang/host-lib/nodeFiles.js";
 import {
   downloadHubSnapshot,
   type DownloadOptions,

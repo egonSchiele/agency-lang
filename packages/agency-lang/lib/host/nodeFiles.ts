@@ -22,6 +22,7 @@ import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
 import { expandPath } from "../stdlib/expandPath.js";
+import { isContained } from "../stdlib/isContained.js";
 
 export type { Root } from "./roots.js";
 import type { Root } from "./roots.js";
@@ -185,24 +186,6 @@ export function wholePath(p: string): Located {
   return { root: root(path.dirname(lexical)), target: path.basename(lexical) };
 }
 
-/** True when `target` is `root` or sits inside it. Uses `path.relative` so
- *  a root of `/` works. Case-insensitive on Windows. */
-export function isContained(target: string, root: string): boolean {
-  const t = process.platform === "win32" ? target.toLowerCase() : target;
-  const r = process.platform === "win32" ? root.toLowerCase() : root;
-  if (t === r) {
-    return true;
-  }
-  const rel = path.relative(r, t);
-  if (rel === "") {
-    return true;
-  }
-  if (path.isAbsolute(rel)) {
-    return false;
-  }
-  return rel.split(path.sep)[0] !== "..";
-}
-
 /** The `dir` and `filename` an interrupt payload shows for a single-file
  *  operation such as `read` or `write`: `dir` is the real directory and
  *  `filename` the normalized relative path, so the payload and the
@@ -355,7 +338,7 @@ export function writeBytes(
     createViaSibling(root, resolved, data, fileMode, seams);
     return;
   }
-  const fd = openForAppend(root, resolved, fileMode);
+  const fd = appendDescriptor(root, resolved, fileMode);
   try {
     validateDescriptor(fd, root, resolved, seams, "write");
     fs.writeFileSync(fd, data);
@@ -364,8 +347,47 @@ export function writeBytes(
   }
 }
 
-function openForAppend(root: Root, resolved: string, fileMode: number): number {
+function appendDescriptor(root: Root, resolved: string, fileMode: number): number {
   return openOrCreate(root, resolved, fs.constants.O_WRONLY | fs.constants.O_APPEND, fileMode);
+}
+
+export type AppendableFile = {
+  /** Write all of `data` at the end of the file, looping over a short
+   *  write. The descriptor was opened for appending, so two handles on
+   *  one file never write over each other. */
+  append(data: Uint8Array): void;
+  close(): void;
+};
+
+/** Open a file for appends and keep it open, for a writer that adds a
+ *  line at a time, such as the trace writer. The open is the same as
+ *  `append` mode in `writeBytes`: no following of a final link, a real
+ *  parent for a new file, and the descriptor validated before it is
+ *  handed back. */
+export function openForAppend(
+  root: Root,
+  target: string,
+  options: WriteOptions = {},
+): AppendableFile {
+  const resolved = resolveUnder(root, target);
+  const fd = appendDescriptor(root, resolved, options.fileMode ?? DEFAULT_FILE_MODE);
+  try {
+    validateDescriptor(fd, root, resolved, options.seams ?? {}, "write");
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
+  }
+  return {
+    append(data) {
+      let written = 0;
+      while (written < data.length) {
+        written += fs.writeSync(fd, data, written, data.length - written);
+      }
+    },
+    close() {
+      fs.closeSync(fd);
+    },
+  };
 }
 
 /** Open an existing file with `flags`, or create a new one. A new file's
@@ -677,6 +699,7 @@ export const PRIMITIVES = [
   "writeText",
   "writeBytes",
   "openForWrite",
+  "openForAppend",
   "list",
   "stat",
   "mkdir",
@@ -692,7 +715,6 @@ export const HELPERS = [
   "resolveUnder",
   "wholePath",
   "fixedPath",
-  "isContained",
   "locateSync",
   "_realDir",
   "_realTarget",

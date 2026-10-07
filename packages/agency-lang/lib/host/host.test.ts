@@ -285,6 +285,35 @@ describe("nodeHost", () => {
     }
   });
 
+  it("has a parent channel only when process.send exists", () => {
+    const system = nodeHost().system;
+    const original = process.send;
+    try {
+      process.send = undefined;
+      expect(system.parentChannel()).toBeNull();
+      const sent: unknown[] = [];
+      process.send = ((message: unknown) => {
+        sent.push(message);
+        return true;
+      }) as typeof process.send;
+      system.parentChannel()?.send({ type: "hello" });
+      expect(sent).toEqual([{ type: "hello" }]);
+    } finally {
+      process.send = original;
+    }
+  });
+
+  it("registers an exit listener on the process", () => {
+    const system = nodeHost().system;
+    const listener = () => {};
+    system.onExit(listener);
+    try {
+      expect(process.listeners("exit")).toContain(listener);
+    } finally {
+      process.removeListener("exit", listener);
+    }
+  });
+
   it("makes random ids and bytes", () => {
     const host = nodeHost();
     expect(host.random.id()).not.toBe(host.random.id());
@@ -306,6 +335,16 @@ describe("memoryHost", () => {
     const host = memoryHost();
     expect(host.terminal.size()).toBeNull();
     expect(host.terminal.supportsColor()).toBe(false);
+  });
+
+  it("has no parent and never runs an exit listener", () => {
+    const host = memoryHost();
+    expect(host.system.parentChannel()).toBeNull();
+    let ran = false;
+    host.system.onExit(() => {
+      ran = true;
+    });
+    expect(ran).toBe(false);
   });
 
   it("answers env.all from its variables, as a copy", () => {

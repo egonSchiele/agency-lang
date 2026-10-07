@@ -198,6 +198,18 @@ export type HostSystem = {
    *  when this is true. */
   isMainModule(moduleUrl: string): boolean;
   exit(code: number): never;
+  /** The channel to the parent process, when the parent forked this one
+   *  with an IPC channel the way Agency's subprocess runs do, or null.
+   *  `send` throws once the parent is gone. */
+  parentChannel(): ParentChannel | null;
+  /** Run `fn` as the process ends, for a synchronous write such as the
+   *  coverage file. On a platform whose process does not end, `fn` never
+   *  runs. */
+  onExit(fn: () => void): void;
+};
+
+export type ParentChannel = {
+  send(message: unknown): void;
 };
 
 /** How the runtime reads what it needs for itself and reports what it must.

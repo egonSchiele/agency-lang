@@ -6,8 +6,9 @@
  * docs/superpowers/specs/2026-08-04-full-cost-token-breakdown-design.md).
  *
  * Deliberately dependency-light (the subprocessRunInfo.ts layering pattern):
- * the only runtime import is subprocessRunInfo; `NormalizedDelta` is a type-only
- * import (erased at runtime), so this stays a leaf module. The recordPaidUsage
+ * the runtime imports are subprocessRunInfo and the default host, whose
+ * `system.parentChannel()` is the IPC channel; `NormalizedDelta` is a
+ * type-only import (erased at runtime), so this stays a leaf module. The recordPaidUsage
  * sink calls the sender here on every accounted delta; stateStack / accounting
  * must not import ipc.ts.
  *
@@ -16,6 +17,7 @@
  * this process anyway.
  */
 
+import { defaultHost } from "#default-host";
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
 import type { RootLog } from "../statelogClient.js";
 import type { NormalizedDelta } from "./invocationUsage.js";
@@ -44,12 +46,12 @@ export type IpcInvocationUsageIncompleteMessage = {
 export type IpcUsageMessage = IpcInvocationUsageMessage | IpcInvocationUsageIncompleteMessage;
 
 function canSend(): boolean {
-  return isIpcMode() && typeof process.send === "function";
+  return isIpcMode() && defaultHost().system.parentChannel() !== null;
 }
 
 function trySend(msg: IpcUsageMessage, log: RootLog | undefined): void {
   try {
-    (process.send as (m: unknown) => boolean)(msg);
+    defaultHost().system.parentChannel()?.send(msg);
   } catch (err) {
     // Channel gone — parent died; the watchdog will exit this process.
     // Swallowed (fire-and-forget invariant), but traceable via the shared

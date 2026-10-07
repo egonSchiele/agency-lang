@@ -49,6 +49,7 @@ export const BROWSER_FILES = [
   "lib/config/config.ts",
   "lib/config/paths.ts",
   "lib/constants.ts",
+  "lib/duration.ts",
   "lib/importPaths.ts",
   "lib/logger.ts",
   "lib/matchVal.ts",

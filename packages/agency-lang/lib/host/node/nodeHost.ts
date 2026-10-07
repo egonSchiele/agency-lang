@@ -217,6 +217,21 @@ const nodeSystem: HostSystem = {
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
   exit: (code) => process.exit(code),
+  // Read at the time of the call: a test stands in for process.send.
+  parentChannel: () => {
+    const send = process.send;
+    if (typeof send !== "function") {
+      return null;
+    }
+    return {
+      send: (message) => {
+        send.call(process, message);
+      },
+    };
+  },
+  onExit: (fn) => {
+    process.on("exit", fn);
+  },
 };
 
 const nodeRandom: HostRandom = {

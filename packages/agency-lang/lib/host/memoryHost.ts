@@ -539,6 +539,8 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     exit: (code) => {
       throw new Error(`exit(${code}): the memory host cannot end the process.`);
     },
+    parentChannel: () => null,
+    onExit: () => {},
   };
 }
 

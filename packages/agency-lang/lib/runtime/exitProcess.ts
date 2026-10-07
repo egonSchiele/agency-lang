@@ -1,3 +1,4 @@
+import { defaultHost } from "#default-host";
 import { flushPendingStatelogPosts } from "../statelogSender.js";
 
 /**
@@ -10,8 +11,7 @@ import { flushPendingStatelogPosts } from "../statelogSender.js";
  */
 export async function exitProcess(code: number): Promise<never> {
   await flushPendingStatelogPosts();
-  // eslint-disable-next-line no-restricted-syntax
-  process.exit(code);
+  return defaultHost().system.exit(code);
 }
 
 /**
@@ -20,6 +20,5 @@ export async function exitProcess(code: number): Promise<never> {
  * or an exit from code that cannot be async. Say why at the call site.
  */
 export function exitProcessNow(code: number): never {
-  // eslint-disable-next-line no-restricted-syntax
-  process.exit(code);
+  return defaultHost().system.exit(code);
 }

@@ -32,6 +32,8 @@ The host has two kinds of part.
 
 `system` is where a helper learns about the platform: `operatingSystem()` (`macos`, `linux`, `windows`, `wsl`, or `unknown`; on Node, WSL is told from Linux by reading `/proc/version` once), `cwd()`, `homeDir()`, `tempDir()`, `moduleDir(import.meta.url)` for a file that ships beside a module, and the rest. A helper that picks a program by platform, such as the keyring over `security` or `secret-tool`, reads `operatingSystem()` and never `process.platform`; `expandPath(p, homeDir)` takes the home directory from `system.homeDir()`, and `resolveCwdPath(host, p)` the working directory from `system.cwd()`.
 
+`system` also holds what a process does rather than knows: `exit(code)`, which `lib/runtime/exitProcess.ts` calls after the pending log requests are sent; `parentChannel()`, the IPC channel to the parent when Agency forked this process for a subprocess run (null otherwise), which the callback and usage forwarders send on; and `onExit(fn)`, for the coverage collector's write at the end. These are per process, not per run, so the three files that use them ask `defaultHost()`.
+
 `PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree.
 
 ### `env` and `settings` read the same variables

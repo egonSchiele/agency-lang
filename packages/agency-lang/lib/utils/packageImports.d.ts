@@ -41,7 +41,9 @@ declare module "#path" {
 }
 
 declare module "#default-host" {
-  import type { Host } from "../host/host.js";
+  // Not a relative path: inside an ambient module declaration TypeScript
+  // ignores one, and this import would silently become `any`.
+  import type { Host } from "@/host/host.js";
   /** The host a RuntimeContext uses when its caller passed none: a
    *  `nodeHost` on Node, a `browserHost` in a browser bundle. */
   export function defaultHost(): Host;

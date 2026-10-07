@@ -68,7 +68,6 @@ export const WAITING = [
   "lib/importPaths.ts",
   "lib/runtime/agentHome.ts",
   "lib/runtime/callbackForwarding.ts",
-  "lib/runtime/checkpointChecksum.ts",
   "lib/runtime/costTelemetry.ts",
   "lib/runtime/exitProcess.ts",
   "lib/runtime/memory/frame.ts",

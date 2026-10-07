@@ -1,10 +1,16 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
+import { Checkpoint, CheckpointStore, type CheckpointJSON } from "./state/checkpointStore.js";
 import {
   signCheckpoint,
   verifyCheckpointChecksum,
+  constantTimeEqual,
   CheckpointKeyTooShortError,
 } from "./checkpointChecksum.js";
+import { memoryHost } from "../host/memoryHost.js";
+import { runInTestContext } from "./asyncContext.js";
+import { RuntimeContext } from "./state/context.js";
+import { StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
 
 const KEY = "0123456789abcdef0123456789abcdef"; // 32 bytes
 const ROTATED_KEY = "ffffffffffffffffffffffffffffffff";
@@ -173,6 +179,68 @@ describe("checkpoint checksum", () => {
     checkpoint.stack.stack[0].locals.x = 42; // simulate an override edit
     signCheckpoint(checkpoint); // re-sign
     expect(verifyCheckpointChecksum(checkpoint)).toBe(true);
+  });
+
+  it("still verifies a checksum made with Node's createHmac", () => {
+    // The checksum below was computed with `createHmac("sha256", KEY)` over
+    // the canonical string of this exact checkpoint, before the HMAC moved
+    // to lib/utils/hash.ts. A checkpoint signed by an older build keeps
+    // verifying.
+    process.env.AGENCY_CHECKPOINT_KEY = KEY;
+    const plain: CheckpointJSON = {
+      id: 7,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      stack: {
+        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 0, scopeName: "main" }],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+      globals: { store: {}, initializedModules: [] },
+      label: null,
+      pinned: false,
+      signature: "1546bf5e035066194bb8e5eba743e0ae8a7cbd8989cebb9840b1e62e70857984",
+    };
+    expect(verifyCheckpointChecksum(plain)).toBe(true);
+    plain.signature = "1546bf5e035066194bb8e5eba743e0ae8a7cbd8989cebb9840b1e62e70857988";
+    expect(verifyCheckpointChecksum(plain)).toBe(false);
+  });
+
+  it("reads the key from the run's host", async () => {
+    // No key in the environment; the run's host carries one.
+    const host = memoryHost({ variables: { AGENCY_CHECKPOINT_KEY: KEY } });
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "https://example.com",
+        apiKey: "test-api-key",
+        projectId: "test-project",
+        debugMode: false,
+      },
+      smoltalkDefaults: {},
+      dirname: "/",
+      host,
+    });
+    const checkpoint = makeCheckpoint();
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), async () => {
+      signCheckpoint(checkpoint);
+      expect(verifyCheckpointChecksum(checkpoint)).toBe(true);
+    });
+    expect(checkpoint.signature).toBeDefined();
+    // Outside the run the default host has no key: not verified.
+    expect(verifyCheckpointChecksum(checkpoint)).toBe(false);
+  });
+});
+
+describe("constantTimeEqual", () => {
+  it("compares whole strings", () => {
+    expect(constantTimeEqual("abc", "abc")).toBe(true);
+    expect(constantTimeEqual("abc", "abd")).toBe(false);
+    expect(constantTimeEqual("abc", "ab")).toBe(false);
+    expect(constantTimeEqual("", "")).toBe(true);
   });
 });
 

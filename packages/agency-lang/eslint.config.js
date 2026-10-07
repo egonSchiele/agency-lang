@@ -56,6 +56,7 @@ export const BROWSER_FILES = [
   "lib/statelogClient.ts",
   "lib/statelogSender.ts",
   "lib/types/function.ts",
+  "lib/utils/canonicalize.ts",
   "lib/utils/columnWidths.ts",
   "lib/utils/diff.ts",
   "lib/utils/hash.ts",

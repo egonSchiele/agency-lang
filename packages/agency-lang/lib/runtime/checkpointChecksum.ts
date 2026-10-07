@@ -1,5 +1,7 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { canonicalize } from "@/utils/canonicalize.js";
+import { hmacSha256, toHex } from "@/utils/hash.js";
+import { utf8ByteLength } from "../stdlib/base64.js";
+import { currentHost } from "./currentHost.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 
 /** Both shapes a checkpoint travels as: the live class instance, and the
@@ -20,14 +22,16 @@ export class CheckpointKeyTooShortError extends Error {
   }
 }
 
-/** Read the signing key from the environment. null = not configured (signing off). */
+/** Read the signing key from the host's settings. null = not configured
+ *  (signing off). The host is the current run's, or the platform's default
+ *  when a host verifies a checkpoint outside any run. */
 function resolveKey(): string | null {
-  const raw = process.env[KEY_ENV_VAR];
-  if (raw === undefined || raw === "") {
+  const raw = currentHost().settings.read(KEY_ENV_VAR);
+  if (raw === null || raw === "") {
     return null;
   }
-  if (Buffer.byteLength(raw, "utf8") < MIN_KEY_BYTES) {
-    throw new CheckpointKeyTooShortError(Buffer.byteLength(raw, "utf8"));
+  if (utf8ByteLength(raw) < MIN_KEY_BYTES) {
+    throw new CheckpointKeyTooShortError(utf8ByteLength(raw));
   }
   return raw;
 }
@@ -36,13 +40,13 @@ function resolveKey(): string | null {
  *  the same minimum length. Rotation = move the old key here, sign with a new
  *  one; outstanding checkpoints keep verifying. Nothing ever signs with these. */
 function resolveOldKeys(): string[] {
-  const raw = process.env[OLD_KEYS_ENV_VAR];
-  if (raw === undefined || raw === "") {
+  const raw = currentHost().settings.read(OLD_KEYS_ENV_VAR);
+  if (raw === null || raw === "") {
     return [];
   }
   return raw.split(",").map((candidate) => {
-    if (Buffer.byteLength(candidate, "utf8") < MIN_KEY_BYTES) {
-      throw new CheckpointKeyTooShortError(Buffer.byteLength(candidate, "utf8"));
+    if (utf8ByteLength(candidate) < MIN_KEY_BYTES) {
+      throw new CheckpointKeyTooShortError(utf8ByteLength(candidate));
     }
     return candidate;
   });
@@ -68,16 +72,26 @@ function canonicalString(cp: SignableCheckpoint): string {
 }
 
 function computeMac(cp: SignableCheckpoint, key: string): string {
-  return createHmac("sha256", key).update(canonicalString(cp)).digest("hex");
+  return toHex(hmacSha256(key, canonicalString(cp)));
+}
+
+/** Whether two strings are equal, taking the same time for every pair of
+ *  the same length, so the time taken says nothing about where the first
+ *  difference is. The lengths are compared first; a signature is always
+ *  64 hex characters, so a length mismatch gives nothing away. */
+export function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) {
+    difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return difference === 0;
 }
 
 function macMatches(cp: SignableCheckpoint, signature: string, key: string): boolean {
-  const expected = Buffer.from(computeMac(cp, key), "hex");
-  const actual = Buffer.from(signature, "hex");
-  if (expected.length !== actual.length) {
-    return false;
-  }
-  return timingSafeEqual(expected, actual);
+  return constantTimeEqual(computeMac(cp, key), signature);
 }
 
 /** Embed a checksum in `cp.signature` when a key is configured; no-op otherwise. */

@@ -15,9 +15,11 @@ if (!verifyCheckpointChecksum(checkpoint)) {
 ```
 
 `verifyCheckpointChecksum` returns true only when the checkpoint carries a
-signature that validates under the configured key, compared in constant time.
-A missing signature returns false, so a caller cannot dodge verification by
-stripping the field.
+signature that validates under the configured key, compared in constant time
+(`constantTimeEqual` in `checkpointChecksum.ts` compares every character of
+two strings of the same length, so the time taken says nothing about where
+they differ). A missing signature returns false, so a caller cannot dodge
+verification by stripping the field.
 
 ## Where verification is enforced
 
@@ -43,7 +45,9 @@ JSON form of a checkpoint, which is what the external resume path carries.
 
 ## What is signed
 
-HMAC-SHA256, hex-encoded, over:
+HMAC-SHA256 from `lib/utils/hash.ts` (the synchronous pair behind `#sha256`,
+since signing happens inside `Checkpoint.fromStateStack`, which cannot
+await), hex-encoded, over:
 
 ```
 "agency.checkpoint.v1" + "\n" + canonicalize(toJSON() minus the signature field)
@@ -64,7 +68,9 @@ tree must appear in the schema in the same change.
 
 - `AGENCY_CHECKPOINT_KEY`, at least 32 bytes (`openssl rand -hex 32`). A
   short key throws `CheckpointKeyTooShortError`; an unset key means signing
-  is off.
+  is off. Both functions read it through `host.settings.read` on the current
+  run's host, or the platform's default host when a host verifies outside
+  any run, which on Node is the environment.
 - Rotation: move the retiring key into `AGENCY_CHECKPOINT_KEY_OLD`
   (comma-separated, verify-only) and put the new key in
   `AGENCY_CHECKPOINT_KEY`; outstanding checkpoints keep verifying.

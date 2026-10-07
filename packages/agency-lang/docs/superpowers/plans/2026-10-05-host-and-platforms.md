@@ -30,7 +30,8 @@ PR B, PR C, and PR C2 are merged. PR D is open as #1182.
 | D | Network, `Buffer` | 9, 12 | open, #1182 |
 | D2 | Subprocesses | 8 | next |
 | D3 | Portable paths | 10 | |
-| E | The checkpoint checksum, module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 13, 14, 15, 17, 18 | |
+| D5 | The checkpoint checksum | 13 (Task 30) | open |
+| E | Module fingerprints, the browser entry point and CI checks, the `@capabilities` tag, `--platform` | 14, 15, 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -907,7 +908,14 @@ too, keeping its validation.
 ### Task 30: the checkpoint checksum
 
 Read `docs/dev/runtime/checkpoint-integrity.md` first. This PR gets its
-own review.
+own review. Done in PR D5: `checkpointChecksum.ts` signs with
+`hmacSha256` from `lib/utils/hash.ts`, compares with its own
+`constantTimeEqual`, reads the keys through `host.settings.read` on
+`currentHost()`, and left `WAITING`. A checkpoint signed by the old
+code verifies under the new one (a test holds a fixed checkpoint, key,
+and checksum computed with `createHmac`). Verification of a 6.3 MB
+checkpoint took 8.2 ms before and 9.0 ms after, on the M5 Ultra; the
+HMAC is Node's either way, and the rest is `canonicalize`.
 
 1. Use the HMAC from `lib/utils/hash.ts`, added in Task 28.
 2. Write a constant-time comparison to replace `timingSafeEqual`.

@@ -1,7 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 
 // Mock ONLY the modality probe; everything else in smoltalk is unused here.
 // NOTE: this replaces the ENTIRE smoltalk module for this file — if
@@ -23,8 +20,17 @@ import {
 } from "./replyAttachments.js";
 import { MAX_REPLY_ATTACHMENTS_PER_CALL } from "../config/config.js";
 
-function imagePart(p: string): ReplyAttachmentPart {
-  return { type: "image", source: { kind: "path", path: p } };
+/** An image part the way the bridge queues one: a path source already
+ *  read into base64 (lib/stdlib/thread.ts, `_attachToReply`). */
+function imagePart(bytes = 1): ReplyAttachmentPart {
+  return {
+    type: "image",
+    source: {
+      kind: "base64",
+      base64: Buffer.alloc(bytes).toString("base64"),
+      mimeType: "image/png",
+    },
+  };
 }
 
 describe("harvestReplyAttachments", () => {
@@ -42,10 +48,8 @@ describe("harvestReplyAttachments", () => {
 
   it("harvests a queued attachment: id, marker, buffer entry", () => {
     const runnerState: Record<string, any> = {};
-    // The gate stats the file, so it must exist.
-    fs.writeFileSync("/tmp/chart.png", Buffer.from([1]));
     const marker = harvestReplyAttachments({
-      queued: [imagePart("/tmp/chart.png")],
+      queued: [imagePart()],
       runnerState,
       model: "vision-model",
       toolName: "showChart",
@@ -60,18 +64,15 @@ describe("harvestReplyAttachments", () => {
   });
 
   it("assigns sequential ids across harvests within one runnerState", () => {
-    fs.writeFileSync("/tmp/tra-a.png", Buffer.from([1]));
-    fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
-    fs.writeFileSync("/tmp/tra-c.png", Buffer.from([1]));
     const runnerState: Record<string, any> = {};
     const markerA = harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-a.png")],
+      queued: [imagePart()],
       runnerState,
       model: "m",
       toolName: "toolA",
     });
     const markerB = harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-b.png"), imagePart("/tmp/tra-c.png")],
+      queued: [imagePart(), imagePart()],
       runnerState,
       model: "m",
       toolName: "toolB",
@@ -91,18 +92,16 @@ describe("harvestReplyAttachments", () => {
     // is module-keyed and flat, so concurrent branches consume from one
     // queue nondeterministically; the property is structural and pinned
     // here plus by the sequential-isolation execution test.)
-    fs.writeFileSync("/tmp/tra-a.png", Buffer.from([1]));
-    fs.writeFileSync("/tmp/tra-b.png", Buffer.from([1]));
     const runnerStateLeft: Record<string, any> = {};
     const runnerStateRight: Record<string, any> = {};
     harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-a.png")],
+      queued: [imagePart()],
       runnerState: runnerStateLeft,
       model: "m",
       toolName: "t",
     });
     harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-b.png")],
+      queued: [imagePart()],
       runnerState: runnerStateRight,
       model: "m",
       toolName: "t",
@@ -116,7 +115,7 @@ describe("harvestReplyAttachments", () => {
   it("drops attachments with a skip marker when the model has no image input", () => {
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-a.png")],
+      queued: [imagePart()],
       runnerState,
       model: "text-only-model",
       toolName: "showChart",
@@ -126,10 +125,9 @@ describe("harvestReplyAttachments", () => {
   });
 
   it("attaches optimistically when modality support is unknown (tri-state)", () => {
-    fs.writeFileSync("/tmp/tra-a.png", Buffer.from([1]));
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      queued: [imagePart("/tmp/tra-a.png")],
+      queued: [imagePart()],
       runnerState,
       model: "unknown-model",
       toolName: "t",
@@ -152,27 +150,22 @@ describe("harvestReplyAttachments", () => {
     expect(runnerState.replyAttachments).toEqual([]);
   });
 
-  it("skips oversized path attachments at harvest (fs.stat size)", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tra-"));
-    const bigFile = path.join(dir, "big.png");
-    fs.writeFileSync(bigFile, Buffer.alloc(21 * 1024 * 1024));
+  it("skips an oversized inlined attachment at harvest", () => {
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      queued: [imagePart(bigFile)],
+      queued: [imagePart(21 * 1024 * 1024)],
       runnerState,
       model: "m",
       toolName: "t",
     });
     expect(marker).toContain("skipped: too large to attach");
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("caps the per-call total with a visible skip marker", () => {
     const runnerState: Record<string, any> = {};
     const queued: ReplyAttachmentPart[] = [];
     for (let i = 0; i < MAX_REPLY_ATTACHMENTS_PER_CALL + 1; i++) {
-      fs.writeFileSync(`/tmp/tra-cap-${i}.png`, Buffer.from([1]));
-      queued.push(imagePart(`/tmp/tra-cap-${i}.png`));
+      queued.push(imagePart());
     }
     const marker = harvestReplyAttachments({ queued, runnerState, model: "m", toolName: "t" });
     expect(runnerState.replyAttachments).toHaveLength(MAX_REPLY_ATTACHMENTS_PER_CALL);
@@ -181,10 +174,10 @@ describe("harvestReplyAttachments", () => {
     );
   });
 
-  it("skips a missing path file at harvest with an honest marker", () => {
+  it("skips a path the bridge could not read, with an honest marker", () => {
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      queued: [imagePart("/nonexistent-tra/missing.png")],
+      queued: [{ type: "image", source: { kind: "path", path: "/nonexistent-tra/missing.png" } }],
       runnerState,
       model: "m",
       toolName: "t",
@@ -230,20 +223,7 @@ describe("buildReplyUserMessage", () => {
     expect(parts[1]).toMatchObject({ type: "image", source: { kind: "base64" } });
   });
 
-  it("inlines path sources to base64 with the extension MIME type", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tra-"));
-    const file = path.join(dir, "pic.png");
-    fs.writeFileSync(file, Buffer.from([1, 2, 3, 4]));
-    const parts = buildReplyUserMessage([
-      { id: "img_1", toolName: "t", part: { type: "image", source: { kind: "path", path: file } } },
-    ]) as any[];
-    expect(parts[1].source.kind).toBe("base64");
-    expect(parts[1].source.base64).toBe(Buffer.from([1, 2, 3, 4]).toString("base64"));
-    expect(parts[1].source.mimeType).toBe("image/png");
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  it("replaces an unreadable path with a text part instead of throwing", () => {
+  it("replaces a path source, which harvest never lets through, with a text part", () => {
     const parts = buildReplyUserMessage([
       {
         id: "img_1",

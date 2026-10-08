@@ -11,7 +11,9 @@ import path from "#path";
 import { currentRun, currentRunOrNone } from "../runtime/asyncContext.js";
 import type { Clock } from "../runtime/clock.js";
 import { currentHost } from "../runtime/currentHost.js";
+import type { Host } from "../host/host.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
+import { encodeBase64 } from "./base64.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
@@ -255,8 +257,13 @@ export function _audioAttachment(
  *  user message after the tool round (see lib/runtime/replyAttachments.ts).
  *  Outside a tool invocation there is no tool loop to harvest, so the
  *  attachment is dropped with a statelog error — never a throw (a tool
- *  must not crash because its host context changed). */
-export function _attachToReply(attachment: unknown): void {
+ *  must not crash because its host context changed).
+ *
+ *  A path source is read here, through the host, and queued as base64,
+ *  so the queue holds the bytes the tool meant and no later step reads
+ *  the disk. A path that cannot be read is queued as it is, and harvest
+ *  reports it as not found. */
+export async function _attachToReply(attachment: unknown): Promise<void> {
   const frame = currentRunOrNone();
   if (!frame?.stack) {
     return;
@@ -269,7 +276,33 @@ export function _attachToReply(attachment: unknown): void {
     });
     return;
   }
-  frame.stack.queueReplyAttachment(attachment as ReplyAttachmentPart);
+  frame.stack.queueReplyAttachment(
+    await inlinePathSource(frame.ctx.host, attachment as ReplyAttachmentPart),
+  );
+}
+
+/** The part with a path source read into base64, or the part as it is
+ *  for every other source and for a path that cannot be read. */
+async function inlinePathSource(
+  host: Host,
+  part: ReplyAttachmentPart,
+): Promise<ReplyAttachmentPart> {
+  if (part.source.kind !== "path") {
+    return part;
+  }
+  const filePath = part.source.path;
+  let bytes: Uint8Array;
+  try {
+    const located = await host.files.wholePath(filePath);
+    bytes = await host.files.readBytes(located.root, located.target);
+  } catch {
+    return part;
+  }
+  const mimeType =
+    part.source.mimeType ??
+    MIME_TYPES[path.extname(filePath).toLowerCase()] ??
+    (part.type === "image" ? "image/png" : "application/pdf");
+  return { ...part, source: { kind: "base64", base64: encodeBase64(bytes), mimeType } };
 }
 
 /** Backs `std::thread.endTurn`. Marks the current tool invocation so the

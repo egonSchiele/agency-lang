@@ -98,6 +98,4 @@ export const REACHES_NODE_ONLY = {
  *  by a file the browser can reach, so none can be Node-only; what each
  *  one needs is beside it. Sorted. */
 export const WAITING = [
-  // reads an attachment by path in a synchronous prompt-runner callback
-  "lib/runtime/replyAttachments.ts",
 ];

@@ -1,8 +1,5 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { modelSupportsInputModality, type ImagePart, type FilePart } from "smoltalk";
 import { MAX_REPLY_ATTACHMENTS_PER_CALL, MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
-import { MIME_TYPES } from "../stdlib/mediaPathScan.js";
 import { success, failure, isSuccess, type ResultValue } from "./result.js";
 
 /**
@@ -36,22 +33,13 @@ export type HarvestedReplyAttachment = {
 export const BUFFER_KEY = "replyAttachments";
 const COUNTER_KEY = "replyAttachmentCounter";
 
-/** Decoded size estimate. base64 length * 3/4 for inline data; fs.stat for
- *  paths; URLs and provider refs are unknowable pre-fetch and pass through
- *  (documented limitation — mirrors user-supplied URL attachments). */
+/** Decoded size estimate: base64 length * 3/4 for inline data, which is
+ *  what a path source became when it was queued. URLs and provider refs
+ *  are unknowable pre-fetch and pass through (documented limitation —
+ *  mirrors user-supplied URL attachments). */
 function estimatedBytes(part: ReplyAttachmentPart): number | null {
   if (part.source.kind === "base64") {
     return Math.floor((part.source.base64.length * 3) / 4);
-  }
-  if (part.source.kind === "path") {
-    try {
-      return fs.statSync(part.source.path).size;
-    } catch {
-      // Intentional swallow: a missing file is a NORMAL outcome here —
-      // the file-not-found gate reports it as a skip marker; this
-      // function only answers "how big, if knowable".
-      return null;
-    }
   }
   return null;
 }
@@ -76,11 +64,10 @@ function gateReplyAttachment(
   if (modelSupportsInputModality(model as any, modality) === false) {
     return failure(`the current model has no ${modalityWord} input`);
   }
-  if (part.source.kind === "path" && !fs.existsSync(part.source.path)) {
-    // Catch a bad path at harvest so the tool result carries an honest
-    // skip marker instead of "attached" followed by a could-not-be-read
-    // part. The builder keeps its own fallback for the delete-between-
-    // harvest-and-injection race.
+  if (part.source.kind === "path") {
+    // The bridge reads a path source when the tool queues it and queues
+    // the bytes; a path still here is one it could not read. Caught at
+    // harvest so the tool result carries an honest skip marker.
     return failure("file not found");
   }
   const bytes = estimatedBytes(part);
@@ -147,41 +134,18 @@ export function appendReplyMarker(
 }
 
 /** Build the parts array for the injected user message: one label text part
- *  immediately before each attachment part. Path sources are inlined to
- *  base64 HERE (not at send) so the persistent thread never re-reads a file
- *  that may later be deleted or edited; url/base64/provider sources pass
- *  through. Never throws: an unreadable path becomes a text part naming the
- *  failure. */
+ *  immediately before each attachment part. A path source was read into
+ *  base64 when the tool queued it, so the persistent thread never re-reads
+ *  a file that may later be deleted or edited; url/base64/provider sources
+ *  pass through. Never throws: a path harvest let through (it cannot) is
+ *  reported as a text part. */
 export function buildReplyUserMessage(harvested: HarvestedReplyAttachment[]): unknown[] {
   const parts: unknown[] = [];
   for (const entry of harvested) {
     const kindWord = entry.part.type === "image" ? "image" : "file";
     const label = `[${entry.id} — ${kindWord} output of tool ${entry.toolName}]`;
     if (entry.part.source.kind === "path") {
-      const filePath = entry.part.source.path;
-      let base64: string;
-      try {
-        base64 = fs.readFileSync(filePath).toString("base64");
-      } catch (error: unknown) {
-        // Intentional swallow: the file vanished between harvest and
-        // injection (harvest already gates missing files). The text part
-        // IS the report — injection must never fail the turn.
-        const message = error instanceof Error ? error.message : String(error);
-        parts.push({ type: "text", text: `[${entry.id} could not be read: ${message}]` });
-        continue;
-      }
-      const mimeType =
-        entry.part.source.mimeType ??
-        MIME_TYPES[path.extname(filePath).toLowerCase()] ??
-        (entry.part.type === "image" ? "image/png" : "application/pdf");
-      parts.push({ type: "text", text: label });
-      parts.push({
-        type: entry.part.type,
-        source: { kind: "base64", base64, mimeType },
-        ...("filename" in entry.part && entry.part.filename !== undefined
-          ? { filename: entry.part.filename }
-          : {}),
-      });
+      parts.push({ type: "text", text: `[${entry.id} could not be read: file not found]` });
     } else {
       parts.push({ type: "text", text: label });
       parts.push(entry.part);

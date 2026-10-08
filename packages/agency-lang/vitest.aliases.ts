@@ -7,6 +7,7 @@ import path from "path";
 export const aliases: Record<string, string> = {
   "@": path.resolve(import.meta.dirname, "./lib"),
   "#default-host": path.resolve(import.meta.dirname, "./lib/host/node/default.node.ts"),
+  "#platform": path.resolve(import.meta.dirname, "./lib/runtime/platform.node.ts"),
   "#sha256": path.resolve(import.meta.dirname, "./lib/utils/sha256.node.ts"),
   "#path": path.resolve(import.meta.dirname, "./lib/utils/path.node.ts"),
 };

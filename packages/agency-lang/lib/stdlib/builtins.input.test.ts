@@ -86,4 +86,9 @@ describe("input() and buffered lines", () => {
     fakeStdin.write("typed ahead\n");
     await expect(callInput()).resolves.toBe("typed ahead");
   });
+
+  it("resolves with an empty line when stdin ends before a line arrives", async () => {
+    fakeStdin.end();
+    await expect(callInput()).resolves.toBe("");
+  });
 });

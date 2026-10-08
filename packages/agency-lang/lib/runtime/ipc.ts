@@ -33,8 +33,49 @@ import { normalizeIpcUsageDelta, type NormalizedDelta } from "./invocationUsage.
 import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
 import { invokeCallbacks } from "./hooks.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
-// isIpcMode lives in subprocessRunInfo.ts (dependency-free, so the telemetry
-// leaf can share it); re-exported here for the existing consumers.
+// The child side of the channel (the senders, the message types, the
+// payload limit, and the debug log) is in ipcChild.ts, which has no Node
+// import so a program can reach it on any platform; re-exported here for
+// the existing consumers.
+export {
+  ipcLog,
+  ipcRole,
+  sendInterruptToParent,
+  sendLockAcquireToParent,
+  serializeInterruptsForIpc,
+  setSubprocessIpcPayloadLimit,
+} from "./ipcChild.js";
+export type {
+  IpcDecisionMessage,
+  IpcErrorMessage,
+  IpcInterruptMessage,
+  IpcInterruptedMessage,
+  IpcLockAcquireMessage,
+  IpcLockGrantedMessage,
+  IpcLockReleaseMessage,
+  IpcResultMessage,
+  ParentToSubprocess,
+  SerializedInterrupt,
+  SubprocessToParent,
+} from "./ipcChild.js";
+import {
+  ipcLog,
+  ipcRole as role,
+  sendLockAcquireToParent,
+  serializedByteLength,
+  serializeInterruptsForIpc,
+  type IpcDecisionMessage,
+  type IpcErrorMessage,
+  type IpcInterruptMessage,
+  type IpcInterruptedMessage,
+  type IpcLockAcquireMessage,
+  type IpcLockGrantedMessage,
+  type IpcLockReleaseMessage,
+  type IpcResultMessage,
+  type ParentToSubprocess,
+  type SerializedInterrupt,
+  type SubprocessToParent,
+} from "./ipcChild.js";
 export { isIpcMode };
 
 export { getSubprocessRunInfo, setSubprocessRunInfo, type SubprocessRunInfo };
@@ -140,177 +181,6 @@ export function makeLimitFailure(
   });
 }
 
-let subprocessIpcPayloadLimit = Infinity;
-
-export function setSubprocessIpcPayloadLimit(limit: number): void {
-  subprocessIpcPayloadLimit = limit;
-}
-
-function serializedByteLength(
-  value: any,
-): { ok: true; serialized: string; byteLength: number } | { ok: false; error: string } {
-  try {
-    const serialized = JSON.stringify(value);
-    return { ok: true, serialized, byteLength: Buffer.byteLength(serialized, "utf8") };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-function buildIpcPayloadLimitError(
-  threshold: number,
-  value: number,
-  samplePrefix = "",
-): IpcErrorMessage {
-  return {
-    type: "error",
-    error: JSON.stringify({
-      reason: "limit_exceeded",
-      limit: "ipc_payload",
-      threshold,
-      value,
-      message: `IPC payload (${value} bytes) exceeded ipcPayload limit of ${threshold}`,
-      samplePrefix,
-    }),
-  };
-}
-
-// ── IPC Debug Logger ──
-// Toggle with AGENCY_IPC_DEBUG=1. Logs every IPC message to stderr
-// with direction, timestamp, and message type. Truncates large payloads.
-
-const ipcDebug = process.env.AGENCY_IPC_DEBUG === "1";
-const role = isIpcMode() ? "child" : "parent";
-
-export function ipcLog(direction: "send" | "recv", msg: any): void {
-  if (!ipcDebug) return;
-  const ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
-  const type = msg?.type ?? "unknown";
-  let detail: string;
-  if (type === "interrupt") detail = `effect=${msg.interrupt?.effect}`;
-  else if (type === "decision") detail = `outcome=${msg.outcome?.kind}`;
-  else if (type === "result") detail = `data=${truncate(msg.value?.data)}`;
-  else if (type === "interrupted") detail = `count=${msg.interrupts?.length}`;
-  else if (type === "error") detail = `error=${truncate(msg.error)}`;
-  else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
-  else if (type === "resume") detail = `node=${msg.node} responses=${msg.responses?.length}`;
-  else if (type === "telemetry") detail = `costUsd=${msg.costUsd}`;
-  else detail = truncate(msg);
-  process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
-}
-
-export type IpcInterruptMessage = {
-  type: "interrupt";
-  /** The child's interrupt-level id, preserved verbatim end-to-end: it keys
-   * the decision reply and both processes' statelog events, and — when the
-   * interrupt ultimately surfaces to the user — the resume response. */
-  interruptId: string;
-  interrupt: {
-    effect: string;
-    message: string;
-    data: any;
-    origin: string;
-    expectsValue?: boolean;
-    /** The fields an "approve always here" rule pins for this effect, from
-     * its declaration. The child always sends it; the parent may never have
-     * imported that module. The receiver treats a missing scope as empty. */
-    alwaysScope?: ScopedField[];
-  };
-};
-
-export type IpcResultMessage = {
-  type: "result";
-  value: any;
-};
-
-/** An interrupt as it travels over IPC: the per-interrupt checkpoint fields
- * are stripped — the batch-level checkpoint travels once, at the message
- * level (see IpcInterruptedMessage). */
-export type SerializedInterrupt = {
-  type: "interrupt";
-  interruptId: string;
-  runId: string;
-  effect: string;
-  message: string;
-  data: any;
-  origin: string;
-};
-
-/** Terminal message for a child that paused itself: its unresolved
- * interrupts plus the shared checkpoint they all resume from. A third
- * terminal outcome alongside `result` and `error`. */
-export type IpcInterruptedMessage = {
-  type: "interrupted";
-  interrupts: SerializedInterrupt[];
-  checkpoint: any;
-  subprocessSessionId: string;
-};
-
-/** Convert a child's final Interrupt[] into the `interrupted` terminal
- * message: strip each interrupt's checkpoint fields and hoist the shared
- * batch checkpoint (every interrupt in a batch carries the same one). */
-export function serializeInterruptsForIpc(interrupts: any[]): IpcInterruptedMessage {
-  const checkpoint = interrupts[0]?.checkpoint;
-  const serialized = interrupts.map((intr) => {
-    const { checkpoint: _cp, checkpointId: _cpId, ...rest } = intr;
-    return rest as SerializedInterrupt;
-  });
-  return {
-    type: "interrupted",
-    interrupts: serialized,
-    checkpoint,
-    subprocessSessionId: getSubprocessRunInfo().subprocessSessionId ?? "",
-  };
-}
-
-export type IpcErrorMessage = {
-  type: "error";
-  error: string;
-};
-
-/** The parent's reply to a relayed interrupt: its handler chain OUTCOME,
- * not a verdict. The child merges this with its own local outcome and
- * decides (see `mergeChainOutcomes` in interrupts.ts). */
-export type IpcDecisionMessage = {
-  type: "decision";
-  interruptId: string;
-  outcome: HandlerChainOutcome;
-};
-
-export type IpcLockAcquireMessage = {
-  type: "lockAcquire";
-  requestId: string;
-  name: string;
-  ownerId?: string;
-  timeoutMs?: number;
-  warnAfterMs?: number;
-};
-
-export type IpcLockGrantedMessage = {
-  type: "lockGranted";
-  requestId: string;
-  error?: string;
-};
-
-export type IpcLockReleaseMessage = {
-  type: "lockRelease";
-  requestId: string;
-  name: string;
-  ownerId?: string;
-};
-
-export type SubprocessToParent =
-  | IpcInterruptMessage
-  | IpcResultMessage
-  | IpcInterruptedMessage
-  | IpcErrorMessage
-  | IpcLockAcquireMessage
-  | IpcLockReleaseMessage
-  | IpcInvocationUsageMessage
-  | { type: "invocationUsageIncomplete" }
-  | IpcCallbackMessage;
-export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
-
 const sessionLockOwners: Record<string, string[]> = {};
 
 export function registerSessionLock(
@@ -353,114 +223,6 @@ export function cleanupSessionLocks(
   for (const releaserKey of releaserKeys) {
     releaseSessionOwner(ctx, sessionId, releaserKey);
   }
-}
-
-/**
- * Send an interrupt to the parent process and await the parent's handler
- * chain OUTCOME (not a verdict — the child merges and decides). The parent
- * always replies explicitly; the child never infers from silence.
- * `interruptId` is the child's interrupt-level id, used verbatim as the
- * message id so decision routing and statelog correlation share one key.
- */
-export async function sendInterruptToParent(
-  interruptData: IpcInterruptMessage["interrupt"],
-  interruptId: string,
-): Promise<HandlerChainOutcome> {
-  if (typeof process.send !== "function") {
-    throw new Error(
-      "sendInterruptToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
-    );
-  }
-  const outMsg = {
-    type: "interrupt",
-    interruptId,
-    interrupt: interruptData,
-  } satisfies IpcInterruptMessage;
-  const serialized = serializedByteLength(outMsg);
-  if (!serialized.ok) {
-    const value = `Failed to serialize interrupt payload: ${serialized.error}`;
-    process.send!({ type: "error", error: value } satisfies IpcErrorMessage);
-    return { kind: "rejected", value };
-  }
-  if (serialized.byteLength > subprocessIpcPayloadLimit) {
-    const errorMsg = buildIpcPayloadLimitError(
-      subprocessIpcPayloadLimit,
-      serialized.byteLength,
-      serialized.serialized.slice(0, 1024),
-    );
-    process.send!(errorMsg);
-    return { kind: "rejected", value: errorMsg.error };
-  }
-  ipcLog("send", outMsg);
-  return new Promise((resolve) => {
-    const handler = (msg: any) => {
-      if (msg.type === "decision" && msg.interruptId === interruptId) {
-        process.removeListener("message", handler);
-        ipcLog("recv", msg);
-        resolve(msg.outcome as HandlerChainOutcome);
-      }
-    };
-    process.on("message", handler);
-    // Safe to assert — guarded by typeof check at function entry
-    process.send!(outMsg);
-  });
-}
-
-export async function sendLockAcquireToParent(
-  name: string,
-  opts: WithLockOptions = {},
-): Promise<LockRelease> {
-  if (typeof process.send !== "function") {
-    throw new Error(
-      "sendLockAcquireToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
-    );
-  }
-  const outMsg = {
-    type: "lockAcquire",
-    requestId: nanoid(),
-    name,
-    ...(opts.ownerId !== undefined ? { ownerId: opts.ownerId } : {}),
-    ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
-    ...(opts.warnAfterMs !== undefined ? { warnAfterMs: opts.warnAfterMs } : {}),
-  } satisfies IpcLockAcquireMessage;
-  ipcLog("send", outMsg);
-  // No per-call `disconnect` handling: the bootstrap's watchdog
-  // (subprocess-bootstrap.ts) is the single disconnect authority — it
-  // registers at module load, fires first, and exits the process, so a
-  // later-registered handler here could never run anyway. Same contract
-  // as sendInterruptToParent.
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const handler = (msg: any) => {
-      if (msg.type === "lockGranted" && msg.requestId === outMsg.requestId) {
-        if (settled) return;
-        settled = true;
-        process.removeListener("message", handler);
-        ipcLog("recv", msg);
-        if (msg.error) {
-          reject(new Error(msg.error));
-          return;
-        }
-        let released = false;
-        resolve(() => {
-          if (released) return;
-          released = true;
-          const releaseMsg = {
-            type: "lockRelease",
-            requestId: outMsg.requestId,
-            name,
-            ...(opts.ownerId !== undefined ? { ownerId: opts.ownerId } : {}),
-          } satisfies IpcLockReleaseMessage;
-          ipcLog("send", releaseMsg);
-          if (typeof process.send === "function" && process.connected !== false) {
-            process.send(releaseMsg);
-          }
-        });
-      }
-    };
-    process.on("message", handler);
-    process.send!(outMsg);
-  });
 }
 
 /**

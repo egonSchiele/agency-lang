@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PassThrough } from "node:stream";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
@@ -214,12 +215,23 @@ describe("__internal_sleep", () => {
 
 describe("__internal_input", () => {
   it("rejects with AgencyCancelledError on abort while waiting on stdin", async () => {
-    const ctx = makeMockCtx();
-    const stack = new StateStack();
-    const threads = new ThreadStore();
-    const p = __internal_input(ctx, stack, threads, "> ");
-    setTimeout(() => ctx.cancel("test"), 20);
-    await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
+    // The test runner's stdin has ended, which the host answers with "" at
+    // once, so the read waits on a stream that stays open instead.
+    const stdin = new PassThrough();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+    try {
+      const ctx = makeMockCtx();
+      const stack = new StateStack();
+      const threads = new ThreadStore();
+      const p = __internal_input(ctx, stack, threads, "> ");
+      setTimeout(() => ctx.cancel("test"), 20);
+      await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
+    } finally {
+      if (realStdin) {
+        Object.defineProperty(process, "stdin", realStdin);
+      }
+    }
   });
 });
 

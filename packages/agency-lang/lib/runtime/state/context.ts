@@ -5,7 +5,8 @@ import type { LogLevel } from "../../logger.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig, type RootLog } from "../../statelogClient.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
-import { CoverageCollector } from "../coverageCollector.js";
+import type { CoverageCollector } from "../coverageCollector.js";
+import { newCoverageCollector } from "#platform";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import type { Clock } from "../clock.js";
@@ -50,9 +51,12 @@ import { PendingPromiseStore } from "./pendingPromiseStore.js";
  * agency.json's coverage.outDir; defaults to ".coverage" otherwise.
  */
 let _processCoverageCollector: CoverageCollector | null = null;
-function getProcessCoverageCollector(host: Host): CoverageCollector {
+function getProcessCoverageCollector(host: Host): CoverageCollector | null {
   if (_processCoverageCollector) return _processCoverageCollector;
-  const collector = new CoverageCollector();
+  const collector = newCoverageCollector();
+  if (collector === null) {
+    return null;
+  }
   _processCoverageCollector = collector;
   const outDir = host.settings.read("AGENCY_COVERAGE_OUTDIR") ?? ".coverage";
   host.system.onExit(() => {
@@ -566,7 +570,7 @@ export class RuntimeContext<T> {
     execCtx.jsonMemoryConfig = this.jsonMemoryConfig;
     execCtx.memoryManagerCache = {};
     if (this.jsonMemoryConfig) {
-      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, this.host));
     }
 
     return execCtx;
@@ -623,7 +627,7 @@ export class RuntimeContext<T> {
       // An empty-array stack (user explicitly called `disableMemory()`)
       // has `hasMemoryFrameStack()` true and is NOT re-seeded — that
       // would resurrect what the user asked to turn off.
-      stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, this.host));
       frame = stack.activeMemoryFrame();
     }
     if (!frame) return undefined;

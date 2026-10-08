@@ -1,20 +1,22 @@
 // Checks that the lint rule for browser-reachable files covers every file a
 // browser bundle of the runtime would contain. Part of `lint:structure`.
 //
-// It bundles lib/runtime/index.ts and every stdlib helper with esbuild,
+// It bundles lib/runtime/browser.ts and every stdlib helper with esbuild,
 // treating the files in eslint.node-exceptions.mjs as leaves it does not
 // enter, and reads the metafile. Then it fails when:
 //
 // 1. a file it reached is not matched by BROWSER_FILES in eslint.config.js,
 //    so the rule never looks at it (add the file to BROWSER_FILES, or put
-//    the importer on a list), or
+//    the importer on the list), or
 // 2. a file it reached imports a file on NODE_ONLY, which would drag Node
-//    code into the browser bundle, unless REACHES_NODE_ONLY lists that
-//    import as one the browser entry point still has to cut; a listed
-//    import that is gone fails too, so that list only gets shorter. The
-//    "#" names (#default-host, #sha256, #path) are left unresolved, since
-//    the browser build picks another file for each; an import of the Node
-//    file behind one by its own path is reported like any other.
+//    code into the browser bundle. The "#" names (#default-host, #platform,
+//    #sha256, #path) are left unresolved, since the browser build picks
+//    another file for each; an import of the Node file behind one by its
+//    own path is reported like any other.
+//
+// scripts/bundle-browser-smoke.mjs is the end-to-end check of the same
+// thing: it bundles a compiled program for the browser and fails on any
+// Node import.
 //
 // `node scripts/lint-browser-reach.mjs --list` prints the files it reached
 // instead of checking them.
@@ -29,7 +31,7 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import picomatch from "picomatch";
-import { NODE_ONLY, REACHES_NODE_ONLY, WAITING } from "../eslint.node-exceptions.mjs";
+import { NODE_ONLY } from "../eslint.node-exceptions.mjs";
 import { BROWSER_FILES } from "../eslint.config.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -72,8 +74,7 @@ function expand(patterns) {
 }
 
 const nodeOnly = expand(Object.keys(NODE_ONLY));
-const waiting = expand(WAITING);
-const listed = [...nodeOnly.files, ...waiting.files];
+const listed = nodeOnly.files;
 
 function stdlibHelpers() {
   return libFiles.filter(
@@ -88,7 +89,7 @@ function stdlibHelpers() {
 
 /** The names the "imports" field of package.json resolves per platform.
  *  The bundle leaves them unresolved, so the metafile keeps the name. */
-const PLATFORM_NAMES = ["#default-host", "#sha256", "#path"];
+const PLATFORM_NAMES = ["#default-host", "#platform", "#sha256", "#path"];
 
 /** The metafile of a bundle that stops at every listed file, and the
  *  output directory the bundle was written to, which the metafile's paths
@@ -101,7 +102,7 @@ function bundleMetafile() {
     execFileSync(
       path.join(packageRoot, "node_modules/.bin/esbuild"),
       [
-        "lib/runtime/index.ts",
+        "lib/runtime/browser.ts",
         ...stdlibHelpers(),
         "--bundle",
         "--platform=node",
@@ -148,19 +149,12 @@ if (process.argv.includes("--list")) {
 }
 const covered = picomatch(BROWSER_FILES);
 const problems = [];
-const seenReaches = [];
 
 for (const file of reached) {
   if (!covered(file)) {
     problems.push(
       `${file} is in the browser bundle but BROWSER_FILES in eslint.config.js does not cover it.`,
     );
-  }
-  // The entry point is per platform: lib/runtime/index.ts is Node's and
-  // may import Node-only files, because lib/runtime/browser.ts stands in
-  // for it in a browser bundle with portable exports.
-  if (file === "lib/runtime/index.ts") {
-    continue;
   }
   for (const entry of meta.inputs[file].imports) {
     if (!entry.external) {
@@ -170,27 +164,13 @@ for (const file of reached) {
     if (target === null || !nodeOnly.files.includes(target)) {
       continue;
     }
-    if (REACHES_NODE_ONLY[file]?.includes(target)) {
-      seenReaches.push(`${file} -> ${target}`);
-      continue;
-    }
     problems.push(
       `${file} imports ${target}, which is Node-only. Reach the platform through the host instead.`,
     );
   }
 }
 
-for (const [file, targets] of Object.entries(REACHES_NODE_ONLY)) {
-  for (const target of targets) {
-    if (!seenReaches.includes(`${file} -> ${target}`)) {
-      problems.push(
-        `${file} no longer imports ${target}. Remove that entry from REACHES_NODE_ONLY in eslint.node-exceptions.mjs.`,
-      );
-    }
-  }
-}
-
-for (const pattern of [...nodeOnly.empty, ...waiting.empty]) {
+for (const pattern of nodeOnly.empty) {
   problems.push(`${pattern} is in eslint.node-exceptions.mjs but names no file. Remove it.`);
 }
 
@@ -199,5 +179,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.files.length} are Node-only, ${waiting.files.length} are waiting, and ${seenReaches.length} imports of a Node-only file remain to cut.`,
+  `lint-browser-reach: the browser bundle reaches ${reached.length} files, all covered by the lint rule; ${nodeOnly.files.length} are Node-only.`,
 );

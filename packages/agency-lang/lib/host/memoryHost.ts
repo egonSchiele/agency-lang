@@ -66,6 +66,8 @@ export type MemoryHostOptions = {
   subprocess?: HostSubprocess;
   cwd?: string;
   homeDir?: string;
+  /** What `system.installDir` answers; null without. */
+  installDir?: string;
   operatingSystem?: OperatingSystem;
   clock?: FakeClock;
   onUse?: MakeHostArgs["onUse"];
@@ -543,6 +545,8 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     processId: () => 1,
     moduleDir: (moduleUrl) => parentOf(moduleUrl.replace(/^file:\/\//, "")),
     isMainModule: () => false,
+    installDir: () => options.installDir ?? null,
+    realDir: (dir) => absolute(cwd, dir),
     exit: (code) => {
       throw new Error(`exit(${code}): the memory host cannot end the process.`);
     },

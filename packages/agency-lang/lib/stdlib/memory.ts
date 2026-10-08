@@ -211,7 +211,7 @@ export async function _enableMemory(config: MemoryConfig): Promise<void> {
   const run = currentRun();
   if (!run.stack) return;
   requireCapabilities(run.ctx.host, ["fileRead", "fileWrite"], "enableMemory");
-  run.stack.pushMemoryFrame(new MemoryFrame(config));
+  run.stack.pushMemoryFrame(new MemoryFrame(config, run.ctx.host));
   startLocalEmbeddingResolution(run, config);
 }
 
@@ -247,7 +247,7 @@ export function _pushMemoryFrame(config: MemoryConfig): boolean {
   const run = currentRun();
   if (!run.stack) return false;
   requireCapabilities(run.ctx.host, ["fileRead", "fileWrite"], "memory");
-  const pushed = run.stack.pushMemoryFrame(new MemoryFrame(config));
+  const pushed = run.stack.pushMemoryFrame(new MemoryFrame(config, run.ctx.host));
   if (pushed) {
     startLocalEmbeddingResolution(run, config);
   }

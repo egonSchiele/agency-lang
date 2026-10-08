@@ -10,7 +10,10 @@ tool round.
 
 1. A tool calls `std::thread.attachToReply(image(path))` during its
    invocation. The bridge (`_attachToReply` in `lib/stdlib/thread.ts`)
-   pushes onto the CALLING INVOCATION's branch-local `stack.other`
+   reads a path source through the host's files and queues the bytes as
+   base64, with the MIME type from the extension; a path it cannot read
+   is queued as written, for harvest to report. It pushes onto the
+   CALLING INVOCATION's branch-local `stack.other`
    (`pendingReplyAttachments`) through
    `StateStack.queueReplyAttachment`. Each parallel tool call has its
    own branch stack, so queues cannot mix. Branch state serializes, so a
@@ -21,9 +24,10 @@ tool round.
    completion, inside the idempotent per-tool invoke step, so harvest
    runs exactly once per tool call across interrupt and resume.
    `harvestReplyAttachments` (`lib/runtime/replyAttachments.ts`) gates
-   each entry on four things: modality, a missing file, size
-   (`MAX_REPLY_ATTACHMENT_BYTES`, 20 MB) and per-call count
-   (`MAX_REPLY_ATTACHMENTS_PER_CALL`, 10). The modality gate is
+   each entry on four things: modality, a path the bridge could not read
+   (reported as "file not found"), size (`MAX_REPLY_ATTACHMENT_BYTES`,
+   20 MB, from the base64 length) and per-call count
+   (`MAX_REPLY_ATTACHMENTS_PER_CALL`, 10). Harvest reads no file. The modality gate is
    tri-state through smoltalk's `modelSupportsInputModality`, and only
    an explicit `false` drops the attachment. Harvest then assigns a
    persistent `img_N` id from a counter on `runnerState`, appends the
@@ -35,7 +39,7 @@ tool round.
    (`lib/runtime/turnBoundary.ts`) drains `attachmentsProducer` under
    the resume-idempotent step key `round.<n>.attachReplies`, and
    `buildReplyUserMessage` puts a label text part before each
-   attachment part. Path sources are inlined to base64 at build time, so
+   attachment part. The bytes were read when the tool queued them, so
    the persistent thread never re-reads a file that may be deleted;
    url and base64 sources pass through. Injecting after the COMPLETE
    round satisfies every provider's adjacency rule, which requires all

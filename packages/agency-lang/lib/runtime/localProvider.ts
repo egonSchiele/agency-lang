@@ -106,16 +106,7 @@ export function chooseEntryPath(args: {
   return { entryPath: undefined, source: "none" };
 }
 
-/** The one field of StatelogClient this module needs. Structural so the
- *  runtime bootstrap can pass its client without this file importing the
- *  statelog module. */
-type LocalModelEventSink = {
-  localModelLoaded(args: {
-    model?: string;
-    entryPath?: string;
-    entrySource: string;
-  }): Promise<void>;
-};
+import type { LocalModelEventSink } from "./platform.js";
 
 /** Bootstrap hook: when the baked/overridden config routes calls to the
  *  llama-cpp provider, load it eagerly with the probe-assisted entry path.

@@ -748,30 +748,33 @@ describe("<agent-home> dir patterns", () => {
 });
 
 describe("resolveDotDirPattern escaping", () => {
+  // A cwd under a directory that does not exist keeps its spelling, so the
+  // expected paths are the ones written here. (Under /tmp, macOS would
+  // resolve the parent to /private/tmp.)
   it("treats glob characters in the launch path as literal", () => {
-    const resolved = resolveDotDirPattern("{.,./**}", "/tmp/cwd*");
-    expect(picomatch.isMatch("/tmp/cwd*", resolved)).toBe(true);
-    expect(picomatch.isMatch("/tmp/cwd*/sub/deep", resolved)).toBe(true);
+    const resolved = resolveDotDirPattern("{.,./**}", "/no-such-dir/cwd*");
+    expect(picomatch.isMatch("/no-such-dir/cwd*", resolved)).toBe(true);
+    expect(picomatch.isMatch("/no-such-dir/cwd*/sub/deep", resolved)).toBe(true);
     // Without escaping, the `*` in the path would approve this sibling.
-    expect(picomatch.isMatch("/tmp/cwd-neighbor", resolved)).toBe(false);
+    expect(picomatch.isMatch("/no-such-dir/cwd-neighbor", resolved)).toBe(false);
   });
 
   it("escapes brackets and braces in the launch path", () => {
-    const resolved = resolveDotDirPattern("./**", "/tmp/v[1]{a,b}");
-    expect(picomatch.isMatch("/tmp/v[1]{a,b}/x", resolved)).toBe(true);
-    expect(picomatch.isMatch("/tmp/v1a/x", resolved)).toBe(false);
+    const resolved = resolveDotDirPattern("./**", "/no-such-dir/v[1]{a,b}");
+    expect(picomatch.isMatch("/no-such-dir/v[1]{a,b}/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/no-such-dir/v1a/x", resolved)).toBe(false);
   });
 
   it("inserts a cwd containing replacement-string metacharacters literally", () => {
-    const resolved = resolveDotDirPattern("./**", "/tmp/a$&b");
-    expect(picomatch.isMatch("/tmp/a$&b/x", resolved)).toBe(true);
-    expect(picomatch.isMatch("/tmp/a.b/x", resolved)).toBe(false);
+    const resolved = resolveDotDirPattern("./**", "/no-such-dir/a$&b");
+    expect(picomatch.isMatch("/no-such-dir/a$&b/x", resolved)).toBe(true);
+    expect(picomatch.isMatch("/no-such-dir/a.b/x", resolved)).toBe(false);
   });
 
   it("keeps glob syntax live in the user-written suffix", () => {
-    const resolved = resolveDotDirPattern("./sub/**", "/tmp/plain");
-    expect(picomatch.isMatch("/tmp/plain/sub/a/b", resolved)).toBe(true);
-    expect(picomatch.isMatch("/tmp/plain/other", resolved)).toBe(false);
+    const resolved = resolveDotDirPattern("./sub/**", "/no-such-dir/plain");
+    expect(picomatch.isMatch("/no-such-dir/plain/sub/a/b", resolved)).toBe(true);
+    expect(picomatch.isMatch("/no-such-dir/plain/other", resolved)).toBe(false);
   });
 });
 

@@ -1,0 +1,17 @@
+// The program the browser smoke test bundles and runs. It touches what a
+// browser host has (printing, an environment value, the clock, an
+// interrupt a handler approves) and one thing it refuses (a file read),
+// and prints what it saw.
+import { env } from "std::system"
+
+node main() {
+  print("hello from the browser")
+  const greeting = env("GREETING") with approve
+  print("GREETING is " + greeting)
+  sleep(10)
+  const result = read("hello.txt") with approve
+  match (result) {
+    success(text) => print("read succeeded unexpectedly")
+    failure(message) => print("read refused: " + message)
+  }
+}

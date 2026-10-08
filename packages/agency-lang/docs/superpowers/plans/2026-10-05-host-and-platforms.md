@@ -280,8 +280,10 @@ does.
 6. **`fixedPath` is not for reading a file a tool named.** It refuses a
    link anywhere in the spelling, and `/tmp` is one on macOS. `wholePath`
    is the read of a program-chosen path: the real parent, plus the name.
-7. **The bundle is 3.3 MB unminified.** Most of it is zod, the parser, and
-   the stdlib helpers every program imports.
+7. **The bundle is 3.3 MB unminified.** By module count, highlight.js
+   (193 files, through `std::syntax` and the markdown renderer) and zod
+   (88) are most of it; an app that minifies and tree-shakes will see
+   less.
 
 ### What PR F1 learned
 

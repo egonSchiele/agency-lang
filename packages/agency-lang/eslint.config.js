@@ -44,6 +44,7 @@ export const BROWSER_FILES = [
   "lib/simplemachine/**/*.ts",
   "lib/host/**/*.ts",
   "lib/config/config.ts",
+  "lib/config/mcpServers.ts",
   "lib/config/paths.ts",
   "lib/constants.ts",
   "lib/duration.ts",

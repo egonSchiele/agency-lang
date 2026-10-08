@@ -2,10 +2,9 @@ import { AgencyNode } from "../types.js";
 import type { LogLevel } from "../logger.js";
 import { z } from "zod";
 import { McpServersSchema, type McpServers } from "./mcpServers.js";
+import { defaultHost } from "#default-host";
 import { mapConfigValues } from "./paths.js";
 import { MODEL_KINDS, type ModelKind } from "../stdlib/modelKind.js";
-import * as fs from "fs";
-import path from "#path";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
@@ -762,21 +761,6 @@ function issueLines(issue: z.core.$ZodIssue, parent: PropertyKey[]): string[] {
   return [`  - ${at.map(String).join(".")}: ${issue.message}`];
 }
 
-/** Load exactly one config file. A missing file is an empty config. For a
- *  project directory, use readConfig in lib/config/target.ts. */
-export function loadConfigSafe(configPath: string): ConfigResult {
-  if (!fs.existsSync(configPath)) {
-    return { config: {} };
-  }
-  try {
-    const raw: unknown = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    return validateConfig(raw, configPath);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { config: {}, error: `Error loading config from ${configPath}: ${message}` };
-  }
-}
-
 // ════════════════════════════════════════════════════════════════════════
 // Config resolution — the single source of truth
 //
@@ -988,9 +972,15 @@ export function serializeConfigOverrides(overrides: Partial<AgencyConfig>): stri
 
 /** Read + validate AGENCY_CONFIG_OVERRIDES. Returns {} when the var is absent,
  *  unparseable, or fails schema validation, so a malformed value can never
- *  brick startup. */
-export function readConfigOverrides(env: NodeJS.ProcessEnv = process.env): Partial<AgencyConfig> {
-  const raw = env[CONFIG_OVERRIDES_ENV];
+ *  brick startup. Reads the default host's settings unless handed an
+ *  environment, which the CLI does for a child it is about to start. */
+export function readConfigOverrides(
+  env?: Record<string, string | undefined>,
+): Partial<AgencyConfig> {
+  const raw =
+    env === undefined
+      ? defaultHost().settings.read(CONFIG_OVERRIDES_ENV)
+      : env[CONFIG_OVERRIDES_ENV];
   if (!raw) return {};
   try {
     const result = AgencyConfigSchema.safeParse(JSON.parse(raw));

@@ -98,9 +98,6 @@ export const REACHES_NODE_ONLY = {
  *  by a file the browser can reach, so none can be Node-only; what each
  *  one needs is beside it. Sorted. */
 export const WAITING = [
-  // loadConfigSafe reads agency.json with fs; the runtime needs only the
-  // schema, the defaults, and readConfigOverrides
-  "lib/config/config.ts",
   // a memory frame's directory is made synchronously in
   // createExecutionContext, through nodeFiles.ts
   "lib/runtime/memory/frame.ts",

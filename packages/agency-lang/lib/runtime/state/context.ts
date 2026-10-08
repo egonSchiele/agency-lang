@@ -570,7 +570,7 @@ export class RuntimeContext<T> {
     execCtx.jsonMemoryConfig = this.jsonMemoryConfig;
     execCtx.memoryManagerCache = {};
     if (this.jsonMemoryConfig) {
-      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, this.host));
     }
 
     return execCtx;
@@ -627,7 +627,7 @@ export class RuntimeContext<T> {
       // An empty-array stack (user explicitly called `disableMemory()`)
       // has `hasMemoryFrameStack()` true and is NOT re-seeded — that
       // would resurrect what the user asked to turn off.
-      stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      stack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, this.host));
       frame = stack.activeMemoryFrame();
     }
     if (!frame) return undefined;

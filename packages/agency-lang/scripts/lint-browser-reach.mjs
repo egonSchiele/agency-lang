@@ -88,7 +88,7 @@ function stdlibHelpers() {
 
 /** The names the "imports" field of package.json resolves per platform.
  *  The bundle leaves them unresolved, so the metafile keeps the name. */
-const PLATFORM_NAMES = ["#default-host", "#sha256", "#path"];
+const PLATFORM_NAMES = ["#default-host", "#platform", "#sha256", "#path"];
 
 /** The metafile of a bundle that stops at every listed file, and the
  *  output directory the bundle was written to, which the metafile's paths

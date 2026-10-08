@@ -30,6 +30,8 @@ export const NODE_ONLY = {
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
+  "lib/runtime/platform.node.ts":
+    "the Node side of #platform: provider modules from disk, the coverage collector, local models",
   "lib/runtime/providerModules.ts": "loads provider modules from disk",
   "lib/runtime/subprocess-bootstrap.ts": "the child end of ipc.ts",
   "lib/runtime/template/**":
@@ -90,10 +92,6 @@ export const NODE_ONLY = {
  *  reach lint fails on an import of a Node-only file this does not name,
  *  and on a named one that is gone, so this list only gets shorter. */
 export const REACHES_NODE_ONLY = {
-  "lib/runtime/memory/manager.ts": ["lib/stdlib/localModels.ts"],
-  "lib/runtime/node.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
-  "lib/runtime/resumeSetup.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
-  "lib/runtime/state/context.ts": ["lib/runtime/coverageCollector.ts"],
 };
 
 /** Files whose Node use has not moved into the host yet. Each is imported

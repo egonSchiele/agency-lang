@@ -114,6 +114,10 @@
       "browser": "./dist/lib/host/default.browser.js",
       "default": "./dist/lib/host/node/default.node.js"
     },
+    "#platform": {
+      "browser": "./dist/lib/runtime/platform.browser.js",
+      "default": "./dist/lib/runtime/platform.node.js"
+    },
     "#sha256": {
       "browser": "./dist/lib/utils/sha256.portable.js",
       "default": "./dist/lib/utils/sha256.node.js"

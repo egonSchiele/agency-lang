@@ -283,7 +283,7 @@ await callHook(__run, {
     };
   }
 })
-export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
@@ -294,7 +294,9 @@ export async function greet(name: string, { messages: __invocationMessages, call
     callbacks: __invocationCallbacks,
     invocation: {
       config: __invocationConfig,
-      traceId: __invocationTraceId
+      traceId: __invocationTraceId,
+      policy: __invocationPolicy,
+      host: __invocationHost
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

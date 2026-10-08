@@ -91,8 +91,6 @@ export const NODE_ONLY = {
  *  reach lint fails on an import of a Node-only file this does not name,
  *  and on a named one that is gone, so this list only gets shorter. */
 export const REACHES_NODE_ONLY = {
-  "lib/runtime/agency.ts": ["lib/runtime/ipc.ts"],
-  "lib/runtime/interrupts.ts": ["lib/runtime/ipc.ts"],
   "lib/runtime/memory/manager.ts": ["lib/stdlib/localModels.ts"],
   "lib/runtime/node.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
   "lib/runtime/resumeSetup.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],

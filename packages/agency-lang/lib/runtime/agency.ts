@@ -57,7 +57,8 @@ import {
   type ResumableScopeOpts,
 } from "./resumableScope.js";
 import { withLockOnCtx, type WithLockOptions } from "./lock.js";
-import { isIpcMode, sendLockAcquireToParent } from "./ipc.js";
+import { isIpcMode } from "./subprocessRunInfo.js";
+import { sendLockAcquireToParent } from "./ipcChild.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";

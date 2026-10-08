@@ -237,6 +237,12 @@ const nodeSystem: HostSystem = {
       send: (message) => {
         send.call(process, message);
       },
+      onMessage: (listener) => {
+        process.on("message", listener);
+        return () => {
+          process.removeListener("message", listener);
+        };
+      },
     };
   },
   onExit: (fn) => {

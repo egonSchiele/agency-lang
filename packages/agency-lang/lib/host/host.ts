@@ -215,6 +215,9 @@ export type HostSystem = {
 
 export type ParentChannel = {
   send(message: unknown): void;
+  /** Hand every message from the parent to `listener` until the returned
+   *  function is called. */
+  onMessage(listener: (message: unknown) => void): () => void;
 };
 
 /** How the runtime reads what it needs for itself and reports what it must.

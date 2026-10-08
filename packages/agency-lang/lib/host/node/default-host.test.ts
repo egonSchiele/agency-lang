@@ -22,8 +22,10 @@ async function bundleFor(platform: "browser" | "node"): Promise<string> {
     write: false,
     platform,
     format: "esm",
-    // context.ts reaches most of the runtime, and on Node every module it
-    // imports resolves. The test only reads which host file came in.
+    // Packages stay outside the bundle: smoltalk and the model SDKs it
+    // loads import Node modules, which a browser build cannot resolve. The
+    // test only reads which host file came in.
+    packages: "external",
     absWorkingDir: packageRoot,
     logLevel: "silent",
   });

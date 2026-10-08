@@ -1,7 +1,7 @@
 // Checks that the lint rule for browser-reachable files covers every file a
 // browser bundle of the runtime would contain. Part of `lint:structure`.
 //
-// It bundles lib/runtime/index.ts and every stdlib helper with esbuild,
+// It bundles lib/runtime/browser.ts and every stdlib helper with esbuild,
 // treating the files in eslint.node-exceptions.mjs as leaves it does not
 // enter, and reads the metafile. Then it fails when:
 //
@@ -101,7 +101,7 @@ function bundleMetafile() {
     execFileSync(
       path.join(packageRoot, "node_modules/.bin/esbuild"),
       [
-        "lib/runtime/index.ts",
+        "lib/runtime/browser.ts",
         ...stdlibHelpers(),
         "--bundle",
         "--platform=node",
@@ -155,12 +155,6 @@ for (const file of reached) {
     problems.push(
       `${file} is in the browser bundle but BROWSER_FILES in eslint.config.js does not cover it.`,
     );
-  }
-  // The entry point is per platform: lib/runtime/index.ts is Node's and
-  // may import Node-only files, because lib/runtime/browser.ts stands in
-  // for it in a browser bundle with portable exports.
-  if (file === "lib/runtime/index.ts") {
-    continue;
   }
   for (const entry of meta.inputs[file].imports) {
     if (!entry.external) {

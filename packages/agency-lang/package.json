@@ -66,6 +66,7 @@
     },
     "./runtime": {
       "types": "./dist/lib/runtime/index.d.ts",
+      "browser": "./dist/lib/runtime/browser.js",
       "import": "./dist/lib/runtime/index.js",
       "require": "./dist/lib/runtime/index.js"
     },

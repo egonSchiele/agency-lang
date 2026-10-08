@@ -28,7 +28,6 @@ export const NODE_ONLY = {
   "lib/runtime/cliInterruptResolution.ts":
     "the command line's endpoint for interrupts nothing handled",
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
-  "lib/runtime/interruptPrompts.ts": "asks a person at a terminal to approve an interrupt",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
   "lib/runtime/providerModules.ts": "loads provider modules from disk",
@@ -94,7 +93,6 @@ export const REACHES_NODE_ONLY = {
   "lib/runtime/memory/manager.ts": ["lib/stdlib/localModels.ts"],
   "lib/runtime/node.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
   "lib/runtime/resumeSetup.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
-  "lib/runtime/runPolicyHandler.ts": ["lib/runtime/interruptPrompts.ts"],
   "lib/runtime/state/context.ts": ["lib/runtime/coverageCollector.ts"],
 };
 

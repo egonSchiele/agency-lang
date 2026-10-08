@@ -151,6 +151,12 @@ const nodeTerminal: HostTerminal = {
         reject(signal?.reason);
       };
       signal?.addEventListener("abort", onAbort, { once: true });
+      // Standard input ended (a pipe ran dry, or Ctrl-D): there is no line.
+      const onClose = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve("");
+      };
+      rl.once("close", onClose);
       const ask = () => {
         const askedAt = Date.now();
         rl.question(prompt, (answer: string) => {
@@ -173,6 +179,7 @@ const nodeTerminal: HostTerminal = {
             return;
           }
           signal?.removeEventListener("abort", onAbort);
+          rl.removeListener("close", onClose);
           rl.close();
           resolve(answer);
         });

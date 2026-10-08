@@ -163,7 +163,8 @@ export type HostTerminal = {
   /** Write text to standard error, with no newline added. */
   writeErr(text: string): void;
   /** Show `prompt` and read one line. Rejects with the signal's reason when
-   *  `signal` aborts while waiting. */
+   *  `signal` aborts while waiting, and resolves with "" when standard
+   *  input ends first. */
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   /** Everything on standard input until it ends, as text. */
   readAll(): Promise<string>;

@@ -147,18 +147,21 @@ const nodeTerminal: HostTerminal = {
     return new Promise<string>((resolve, reject) => {
       // Readline holds stdin exclusively, so a blocked read after Ctrl-C or
       // a race-loser abort would otherwise sit there forever.
+      // Standard input ended (a pipe ran dry, or Ctrl-D): there is no line.
+      const onClose = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve("");
+      };
       const onAbort = () => {
+        // Closing the interface fires "close" too; that is not an end of
+        // input.
+        rl.removeListener("close", onClose);
         try {
           rl.close();
         } catch {}
         reject(signal?.reason);
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      // Standard input ended (a pipe ran dry, or Ctrl-D): there is no line.
-      const onClose = () => {
-        signal?.removeEventListener("abort", onAbort);
-        resolve("");
-      };
       rl.once("close", onClose);
       const ask = () => {
         const askedAt = Date.now();

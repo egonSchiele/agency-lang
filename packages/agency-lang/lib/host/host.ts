@@ -196,6 +196,17 @@ export type HostSystem = {
   processId(): number;
   /** The directory of the module whose `import.meta.url` is given. */
   moduleDir(moduleUrl: string): string;
+  /** Where the agency-lang package is installed, for the files it ships
+   *  (the stdlib, its docs, the agents' skills and prompts) and for policy
+   *  patterns that name them; null where the package is bundled into the
+   *  program, as in a browser. */
+  installDir(): string | null;
+  /** The real spelling of a directory, the way file effects spell the
+   *  paths in their payloads: links resolved through the part that exists,
+   *  the rest as written, so a directory not made yet is spelled the way
+   *  it will be. Synchronous, because the policy directories are resolved
+   *  while a context is built. */
+  realDir(dir: string): string;
   /** Whether the module whose `import.meta.url` is given is the one the
    *  process was started with. A compiled program runs its `main` node only
    *  when this is true. */

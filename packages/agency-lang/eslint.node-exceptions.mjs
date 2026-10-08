@@ -101,16 +101,11 @@ export const WAITING = [
   // loadConfigSafe reads agency.json with fs; the runtime needs only the
   // schema, the defaults, and readConfigOverrides
   "lib/config/config.ts",
-  // the package root and the agents directory, found with fs, createRequire,
-  // and import.meta.url; policyDirs.ts needs them
-  "lib/importPaths.ts",
   // a memory frame's directory is made synchronously in
   // createExecutionContext, through nodeFiles.ts
   "lib/runtime/memory/frame.ts",
   // reads an attachment by path in a synchronous prompt-runner callback
   "lib/runtime/replyAttachments.ts",
-  // realpaths the policy directories once, by design
-  "lib/runtime/policyDirs.ts",
   // the debug log file is written with fs; STATELOG_API_KEY is read from
   // process.env
   "lib/statelogClient.ts",

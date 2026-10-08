@@ -100,6 +100,8 @@ function browserSystem(cwd: string): HostSystem {
     // generated header's `__dirname`.
     moduleDir: (moduleUrl) => moduleUrl.replace(/[^/]*$/, ""),
     isMainModule: () => false,
+    installDir: () => null,
+    realDir: (dir) => dir,
     exit: (code) => {
       throw new Error(`exit(${code}): a browser page cannot end its process.`);
     },

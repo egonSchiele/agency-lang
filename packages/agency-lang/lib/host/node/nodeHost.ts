@@ -10,6 +10,9 @@ import readline from "readline";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
 import { consoleLogSink } from "../../logger.js";
+import { getPackageRoot } from "../../importPaths.js";
+import { rootPath } from "../roots.js";
+import { root } from "./nodeFiles.js";
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
 import { nodeSubprocess } from "./nodeSubprocess.js";
 import { realClock, type Clock } from "../../runtime/clock.js";
@@ -230,6 +233,20 @@ const nodeSystem: HostSystem = {
   processId: () => process.pid,
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
+  installDir: () => {
+    try {
+      return getPackageRoot();
+    } catch {
+      return null;
+    }
+  },
+  realDir: (dir) => {
+    try {
+      return rootPath(root(dir));
+    } catch {
+      return dir;
+    }
+  },
   exit: (code) => process.exit(code),
   setTitle: (title) => {
     process.title = title;

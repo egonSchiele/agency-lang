@@ -1,19 +1,12 @@
 // The directories a policy's `dir` patterns stand for, resolved once when a
 // run's context is built. The matcher in policy.ts takes the resolved
 // strings and touches no file, because it runs while an interrupt is being
-// answered and a disk read does not belong on that path.
-//
-// This file reads the disk through Node, so it is on the waiting list of
-// eslint.node-exceptions.mjs.
+// answered and a disk read does not belong on that path. The host's
+// `system.realDir` and `system.installDir` are synchronous for the same
+// reason.
 
-import { realpathSync } from "fs";
-import { rootPath } from "../host/roots.js";
 import { defaultHost } from "#default-host";
-import { getPackageRoot } from "../importPaths.js";
 import type { Host } from "../host/host.js";
-// The synchronous file operations of nodeHost, not host.files: the
-// directories are resolved while the context is built, with no await.
-import { root } from "../host/node/nodeFiles.js";
 import { agentHomeDir } from "./agentHome.js";
 import {
   substituteAgentHome,
@@ -30,45 +23,32 @@ export type { PolicyDirs } from "./policy.js";
  *  stays as it was rather than failing every rule. */
 export function resolvePolicyDirs(host: Host): PolicyDirs {
   return {
-    cwd: realOrAsWritten(host.system.cwd()),
-    agentHome: realOrAsWritten(agentHomeDir(host)),
-    agencyInstallDir: installDirOrNull(),
+    cwd: host.system.realDir(host.system.cwd()),
+    agentHome: host.system.realDir(agentHomeDir(host)),
+    agencyInstallDir: host.system.installDir(),
   };
-}
-
-function realOrAsWritten(dir: string): string {
-  try {
-    return rootPath(root(dir));
-  } catch {
-    return dir;
-  }
-}
-
-function installDirOrNull(): string | null {
-  try {
-    return getPackageRoot();
-  } catch {
-    return null;
-  }
 }
 
 /** `substituteDot` over the real path of `cwd`. For tests, which inject
  *  the cwd. A cwd that cannot be resolved keeps its lexical spelling. */
-export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd()): string {
-  let realCwd: string;
-  try {
-    realCwd = realpathSync(cwd);
-  } catch {
-    realCwd = cwd;
-  }
-  return substituteDot(pattern, realCwd);
+export function resolveDotDirPattern(
+  pattern: string,
+  cwd: string = defaultHost().system.cwd(),
+): string {
+  return substituteDot(pattern, defaultHost().system.realDir(cwd));
 }
 
 /** `substituteInstallDir` over the install root, or the pattern as written
  *  when the root cannot be found. For tests, which inject the root. */
 export function expandAgencyInstallDir(
   pattern: string,
-  root: () => string = getPackageRoot,
+  root: () => string = () => {
+    const dir = defaultHost().system.installDir();
+    if (dir === null) {
+      throw new Error("the agency-lang package is not installed on disk");
+    }
+    return dir;
+  },
 ): string {
   let resolved: string | null;
   try {
@@ -83,7 +63,10 @@ export function expandAgencyInstallDir(
  *  tests, which inject the home. */
 export function expandAgentHomeDir(
   pattern: string,
-  home: () => string = () => realOrAsWritten(agentHomeDir(defaultHost())),
+  home: () => string = () => {
+    const host = defaultHost();
+    return host.system.realDir(agentHomeDir(host));
+  },
 ): string {
   return substituteAgentHome(pattern, home());
 }

@@ -1,11 +1,23 @@
 import path from "#path";
-import { getStdlibDir } from "../importPaths.js";
+import { currentHost } from "../runtime/currentHost.js";
+
+/** The stdlib directory of the installed package, through the host so it
+ *  resolves in both dev and npm installs. A platform where the package is
+ *  bundled into the program, such as a browser, has none. */
+function stdlibDir(): string {
+  const installDir = currentHost().system.installDir();
+  if (installDir === null) {
+    throw new Error(
+      "The files agency-lang ships (its docs, skills, and prompts) are not on disk on this platform.",
+    );
+  }
+  return path.join(installDir, "stdlib");
+}
 
 /**
  * Absolute path to a section of the packaged Agency docs. `make` stages
  * `docs/site/{guide,cli}` into `stdlib/docs/` (see stage-stdlib-docs in
- * the makefile), and stdlib resolves in both dev and npm installs via
- * getStdlibDir, so one copy serves compiled and source runs.
+ * the makefile), so one copy serves compiled and source runs.
  */
 export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): string {
   return path.join(_bundledDocsDir(), section);
@@ -13,7 +25,7 @@ export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): s
 
 /** The parent of every packaged docs section. */
 export function _bundledDocsDir(): string {
-  return path.join(getStdlibDir(), "docs");
+  return path.join(stdlibDir(), "docs");
 }
 
 /**
@@ -27,8 +39,8 @@ export { stringifyFrontmatter as _stringifyFrontmatter } from "tarsec/parsers/ma
 
 /**
  * Absolute path to the skills we ship for one agent, under
- * `stdlib/agents/skills/<agent>`. Resolved through getStdlibDir for the
- * same reason as _docsDir: a path relative to the calling file works in the
+ * `stdlib/agents/skills/<agent>`. Resolved through the host for the same
+ * reason as _docsDir: a path relative to the calling file works in the
  * repo and breaks once the package is installed into node_modules.
  *
  * The name is confined to that directory. `agentSkill` deliberately skips
@@ -38,7 +50,7 @@ export { stringifyFrontmatter as _stringifyFrontmatter } from "tarsec/parsers/ma
  * here keeps that trust argument true.
  */
 export function _agentSkillsDir(agent: string): string {
-  const root = path.join(getStdlibDir(), "agents", "skills");
+  const root = path.join(stdlibDir(), "agents", "skills");
   const resolved = path.resolve(root, agent);
   const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
   if (resolved !== root && !resolved.startsWith(rootWithSep)) {
@@ -52,9 +64,9 @@ export function _agentSkillsDir(agent: string): string {
 
 /**
  * Absolute path to the prompt text we ship for the stdlib agents, under
- * `stdlib/agents/prompts`. Resolved through getStdlibDir for the same
- * reason as _docsDir.
+ * `stdlib/agents/prompts`. Resolved through the host for the same reason
+ * as _docsDir.
  */
 export function _agentPromptsDir(): string {
-  return path.join(getStdlibDir(), "agents", "prompts");
+  return path.join(stdlibDir(), "agents", "prompts");
 }

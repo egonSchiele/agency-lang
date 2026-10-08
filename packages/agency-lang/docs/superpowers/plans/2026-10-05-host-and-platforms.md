@@ -37,8 +37,8 @@ left ships as a few large PRs, each one topic, in dependency order.
 | D5 | The checkpoint checksum | 13 (Task 30) | merged, #1186 |
 | E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
-| F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | open |
-| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts`, the CI bundle check, the nine seams in `REACHES_NODE_ONLY` cut, the six `WAITING` files moved, the exceptions lists deleted, and the smoltalk decision | 15 | |
+| F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | merged, #1191 |
+| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | open |
 | F3 | The `@capabilities` tag on every `std::` effect, checked against the code; `--platform` and the config field; the compile-time check; Node-only stdlib modules; refusing before the prompt | 17, 18 | |
 
 The headings below keep their stage numbers, so a task can still be
@@ -242,6 +242,46 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR F2 learned
+
+1. **A browser-reachable file that needs Node has three ways out, and
+   which one is right follows from whose business the thing is.** A fact
+   about the platform (where the package is installed, a directory's real
+   spelling, the parent channel) goes on the host. A hook of Agency's own
+   machinery that needs the disk (provider modules, the coverage
+   collector, the statelog log file, a local model) goes behind
+   `#platform`, one more per-platform pair resolved like `#default-host`.
+   A read that happened in a synchronous callback (a memory frame's
+   directory, a reply attachment's file) moves to the place that can
+   await: the store's first write, the bridge that queues the attachment.
+2. **The generated header imported a name nothing exports.** `McpManager`
+   had been in the import list with no export behind it; TypeScript drops
+   an unused import, so Node never noticed, and the first bundler did.
+   `browser.test.ts` now checks every header name against both entries.
+3. **The generated `main()` forwarded two of the four `InvocationOptions`.**
+   Its type said `& InvocationOptions`, its body passed `config` and
+   `traceId`. `policy` and `host` are forwarded now, which is how a page
+   hands its `browserHost` to a program.
+4. **Three dependencies reach for Node at load.** smoltalk imports `fs`,
+   `path`, and `url`; tarsec imports `process` and `child_process` for its
+   tracing (the current version checks for Node before using them, the
+   older copy a dependency pins reads `process.env.DEBUG` outright); and
+   typestache reads the global `process`. The bundle check gives each a
+   stand-in under `tests/browser/shims`. smoltalk's is the one that
+   matters: a program in a browser cannot call a model until smoltalk
+   ships a browser build (spec section 8).
+5. **`host.system.realDir` keeps the partial spelling.** The policy
+   directories and the memory frame both want a directory that does not
+   exist yet spelled the way it will be (links resolved through the part
+   that exists), not the path as written; `realpathSync` with a fallback
+   would have spelled `/tmp/x` on macOS two ways depending on whether `x`
+   existed, and a test caught it.
+6. **`fixedPath` is not for reading a file a tool named.** It refuses a
+   link anywhere in the spelling, and `/tmp` is one on macOS. `wholePath`
+   is the read of a program-chosen path: the real parent, plus the name.
+7. **The bundle is 3.3 MB unminified.** Most of it is zod, the parser, and
+   the stdlib helpers every program imports.
 
 ### What PR F1 learned
 

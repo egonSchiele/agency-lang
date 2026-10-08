@@ -1,16 +1,13 @@
-// Files the browser entry point can reach that still use Node.
+// The files of the runtime and the stdlib that are Node-only for good.
 //
 // The lint rule in eslint.config.js bans Node modules and Node globals in
-// every file a browser bundle of the runtime would contain. The first two
-// lists are the exceptions. Together they only ever get shorter: a file
-// leaves WAITING when its Node use moves into the host, and nothing joins
-// NODE_ONLY without a reason beside it. The spec is
-// docs/superpowers/specs/2026-10-05-host-and-platforms.md.
+// every file a browser bundle of the runtime would contain; the files here
+// are exempt, and nothing joins the list without a reason beside it. The
+// spec is docs/superpowers/specs/2026-10-05-host-and-platforms.md.
 //
-// scripts/lint-browser-reach.mjs reads all three lists. It walks the
-// imports of the runtime and the stdlib without entering a listed file,
-// and fails when a file it reaches is not covered by the rule, or imports
-// a file on NODE_ONLY that REACHES_NODE_ONLY does not name.
+// scripts/lint-browser-reach.mjs reads the list too. It bundles the browser
+// entry point and the stdlib without entering a listed file, and fails when
+// a file it reaches is not covered by the rule, or imports a listed file.
 
 /** Node-only for good, each with the reason. An entry is a file, or a
  *  directory glob such as lib/host/node/** for every file under it.
@@ -84,18 +81,3 @@ export const NODE_ONLY = {
   "lib/utils/path.node.ts":
     "Node path; the browser condition of #path picks path.portable.ts",
 };
-
-/** Imports of a Node-only file by a file the browser can reach, as
- *  importer: targets. Each is a seam the browser entry point
- *  (lib/runtime/browser.ts) has to cut, by a host function or a
- *  per-platform file; until then the Node bundle needs the import. The
- *  reach lint fails on an import of a Node-only file this does not name,
- *  and on a named one that is gone, so this list only gets shorter. */
-export const REACHES_NODE_ONLY = {
-};
-
-/** Files whose Node use has not moved into the host yet. Each is imported
- *  by a file the browser can reach, so none can be Node-only; what each
- *  one needs is beside it. Sorted. */
-export const WAITING = [
-];

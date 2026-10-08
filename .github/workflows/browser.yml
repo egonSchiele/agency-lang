@@ -1,0 +1,37 @@
+# Security: all actions pinned to SHA. Do not use pull_request_target.
+#
+# The browser bundle check: a compiled Agency program bundled with esbuild
+# for the browser, which fails on any Node import left in the runtime, and
+# the same bundle run in headless Chromium (docs/dev/runtime/host.md, "The
+# browser"). `make ci` first, because the check compiles with the built
+# compiler and bundles the built runtime.
+name: Browser
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: make ci
+        working-directory: packages/agency-lang
+      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+        working-directory: packages/agency-lang
+      - run: pnpm run test:browser
+        working-directory: packages/agency-lang

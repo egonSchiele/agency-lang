@@ -1,6 +1,6 @@
 import { builtinModules } from "module";
 import tseslint from "typescript-eslint";
-import { NODE_ONLY, WAITING } from "./eslint.node-exceptions.mjs";
+import { NODE_ONLY } from "./eslint.node-exceptions.mjs";
 
 const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segment, paint, paintedLine), which escapes it. A raw line() lets statelog content be read as style tags.";
 
@@ -158,7 +158,7 @@ export default [
     // last block that sets a rule for a file, so this block repeats the fs
     // ban above for the stdlib files it covers, with the same exceptions.
     files: BROWSER_FILES,
-    ignores: ["**/*.test.ts", "lib/stdlib/__tests__/**", ...Object.keys(NODE_ONLY), ...WAITING],
+    ignores: ["**/*.test.ts", "lib/stdlib/__tests__/**", ...Object.keys(NODE_ONLY)],
     rules: {
       "no-restricted-imports": [
         "error",

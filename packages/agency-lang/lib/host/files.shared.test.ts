@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "fs";
 import os from "os";
 import path from "path";
 import type { Host } from "./host.js";
-import { nodeHost } from "./nodeHost.js";
+import { nodeHost } from "./node/nodeHost.js";
 import { memoryHost } from "./memoryHost.js";
 
 // One set of tests for every host that has files. Each case builds a host

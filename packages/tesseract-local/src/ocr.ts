@@ -1,5 +1,5 @@
 import { createWorker } from "tesseract.js";
-import { wholePath, readBytes } from "agency-lang/host-lib/nodeFiles.js";
+import { wholePath, readBytes } from "agency-lang/host-lib/node/nodeFiles.js";
 import { ensureLanguage, resolveLanguageDir } from "./languageManager.js";
 import type { LanguageName } from "./types.js";
 

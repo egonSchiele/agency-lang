@@ -110,7 +110,7 @@
   },
   "imports": {
     "#default-host": {
-      "default": "./dist/lib/host/default.node.js"
+      "default": "./dist/lib/host/node/default.node.js"
     },
     "#sha256": {
       "browser": "./dist/lib/utils/sha256.portable.js",

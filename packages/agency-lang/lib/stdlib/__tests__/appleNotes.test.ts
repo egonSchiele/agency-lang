@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../host/nodeSubprocess.js", () => ({
+vi.mock("../../host/node/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
-import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { nodeSubprocess } from "../../host/node/nodeSubprocess.js";
 import {
   exited,
   failed,

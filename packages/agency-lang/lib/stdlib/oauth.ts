@@ -1,6 +1,5 @@
 import http from "http";
-import crypto from "crypto";
-import { sha256BytesAsync } from "../utils/hash.js";
+import { sha256BytesAsync, toHex } from "../utils/hash.js";
 import { encodeBase64Url } from "./base64.js";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -71,8 +70,8 @@ async function tokenLocation(host: Host, name: string): Promise<{ dir: Root; fil
   return { dir: await host.files.root(getTokenDir(host)), file: `${name}.json` };
 }
 
-function generateCodeVerifier(): string {
-  return crypto.randomBytes(32).toString("base64url");
+function generateCodeVerifier(host: Host): string {
+  return encodeBase64Url(host.random.bytes(32));
 }
 
 async function generateCodeChallenge(verifier: string): Promise<string> {
@@ -306,8 +305,8 @@ async function authorizeImpl(
 
   const port = config.port && config.port > 0 ? config.port : DEFAULT_PORT;
   const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
-  const state = crypto.randomBytes(16).toString("hex");
-  const codeVerifier = generateCodeVerifier();
+  const state = toHex(host.random.bytes(16));
+  const codeVerifier = generateCodeVerifier(host);
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   const scopes = Array.isArray(config.scopes) ? config.scopes.join(" ") : config.scopes;

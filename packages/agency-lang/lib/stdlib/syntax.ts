@@ -3,7 +3,7 @@ import type { Theme } from "cli-highlight";
 import hljs from "highlight.js";
 import { color } from "@/utils/termcolors.js";
 import { computeHunks, renderDiff, renderPatch } from "@/utils/diff.js";
-import { autoUseColor } from "@/utils/termcolors.js";
+import { currentHost } from "../runtime/currentHost.js";
 import { resolveTheme } from "./syntax-themes.js";
 export { BUILTIN_THEME_NAMES } from "./syntax-themes.js";
 import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
@@ -161,8 +161,9 @@ export function _diff(
   language: string,
   theme: string | Record<string, { color?: string; styles?: string[] }>,
 ): string {
+  const host = currentHost();
   const hunks = computeHunks(oldText, newText, context, ignoreWhitespace);
-  const colored = color === "auto" ? autoUseColor() : color === true;
+  const colored = color === "auto" ? host.terminal.supportsColor() : color === true;
   // Resolve once, only when we'll actually highlight (language set AND colored).
   // resolveTheme throws on a bad theme, failing the diff early — but only when
   // highlighting would be emitted, so a plain/uncolored diff never validates an

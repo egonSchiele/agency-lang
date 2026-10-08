@@ -7,7 +7,7 @@ import type {
   TokenUsage,
 } from "smoltalk";
 import { nanoid } from "nanoid";
-import * as path from "node:path";
+import path from "#path";
 import { currentRun, currentRunOrNone } from "../runtime/asyncContext.js";
 import type { Clock } from "../runtime/clock.js";
 import { currentHost } from "../runtime/currentHost.js";

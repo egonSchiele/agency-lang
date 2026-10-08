@@ -1,6 +1,4 @@
 import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
-import fs from "fs/promises";
-import { constants as fsConstants } from "fs";
 import path from "#path";
 import { anyChar, capture, char, many, map, noneOf, or, Parser, sepBy, seqC, str } from "tarsec";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
@@ -72,21 +70,16 @@ async function resolveSpawnCwd(host: Host, cwd: string, allowedPaths: string[]):
   if (!cwd) return "";
   rejectCorruptedCwd(cwd);
   const resolved = await resolveDir(host, cwd, allowedPaths);
-  let stat;
-  try {
-    stat = await fs.stat(resolved);
-  } catch (e: any) {
-    if (e?.code === "ENOENT") {
-      throw new Error(
-        `Working directory does not exist: ${resolved}. ` +
-          "Create it first (e.g. `mkdir -p` from an existing directory, or " +
-          "another tool to create directories that you have access to) " +
-          "before running a command there.",
-      );
-    }
-    throw e;
+  const info = await host.files.stat(await host.files.root(resolved), ".");
+  if (info === null) {
+    throw new Error(
+      `Working directory does not exist: ${resolved}. ` +
+        "Create it first (e.g. `mkdir -p` from an existing directory, or " +
+        "another tool to create directories that you have access to) " +
+        "before running a command there.",
+    );
   }
-  if (!stat.isDirectory()) {
+  if (info.kind !== "dir") {
     throw new Error(`Working directory is not a directory: ${resolved}.`);
   }
   return resolved;
@@ -401,8 +394,8 @@ function prefixesAbove(dir: string): string[] {
 
 /** The .gitignore files that already apply when a walk enters `dir`,
  *  outermost first. Files above the root are read by `gitignore.ts`,
- *  since no approval names them. Files between the root and `dir` are
- *  read under the root. The nearest `.git` entry marks the repository
+ *  which makes a root per directory since no approval names them. Files
+ *  between the root and `dir` are read under the root. The nearest `.git` entry marks the repository
  *  root, and with no repository anywhere above `dir` nothing applies. */
 async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<GitignoreFile[]> {
   const { host, approved } = walkRoot;
@@ -423,11 +416,11 @@ async function ancestorIgnoreFiles(walkRoot: WalkRoot, dir: string): Promise<Git
       return inTree(i);
     }
   }
-  const above = await repositoryAncestors(walkRoot.base);
+  const above = await repositoryAncestors(host, walkRoot.base);
   if (above === null) return [];
   const aboveFiles: GitignoreFile[] = [];
   for (const ancestor of above) {
-    const file = await readGitignore(ancestor);
+    const file = await readGitignore(host, ancestor);
     if (file) aboveFiles.push(file);
   }
   return [...aboveFiles, ...(await inTree(0))];
@@ -666,24 +659,5 @@ export async function _which(command: string): Promise<string> {
       `which: command name must not contain path separators or NUL bytes (got '${command}')`,
     );
   }
-  const pathEnv = host.settings.read("PATH") ?? "";
-  const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
-  const isWindows = host.system.operatingSystem() === "windows";
-  const extensions = isWindows
-    ? (host.settings.read("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
-    : [""];
-  for (const dir of dirs) {
-    for (const ext of extensions) {
-      const candidate = path.resolve(host.system.cwd(), dir, command + ext);
-      try {
-        const st = await fs.stat(candidate);
-        if (!st.isFile()) continue;
-        if (!isWindows) {
-          await fs.access(candidate, fsConstants.X_OK);
-        }
-        return candidate;
-      } catch {}
-    }
-  }
-  return "";
+  return (await host.subprocess.locate(command)) ?? "";
 }

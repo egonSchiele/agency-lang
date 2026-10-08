@@ -9,7 +9,7 @@ import {
   openForWrite,
   type Root,
   type WritableFile,
-} from "../host/nodeFiles.js";
+} from "../host/node/nodeFiles.js";
 import {
   readMlxModelRecord,
   writeMlxModelRecord,

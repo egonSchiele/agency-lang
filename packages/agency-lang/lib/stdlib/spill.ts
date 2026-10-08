@@ -3,9 +3,9 @@
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
 import path from "#path";
-import { randomBytes } from "crypto";
 import type { Host, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { toHex } from "../utils/hash.js";
 import { sliceLines } from "./builtins.js";
 import { compileGrepQuery } from "./grepQuery.js";
 import { firstMatchingLines, type GrepMatch } from "./shell.js";
@@ -36,8 +36,9 @@ export async function _spillDir(): Promise<string> {
 const SPILL_NAME = /^[0-9A-Za-z][0-9A-Za-z_-]*\.log$/;
 
 export function _spillName(): string {
+  const host = currentHost();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `${stamp}-${randomBytes(3).toString("hex")}.log`;
+  return `${stamp}-${toHex(host.random.bytes(3))}.log`;
 }
 
 function checkName(filename: string): void {

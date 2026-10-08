@@ -25,7 +25,7 @@ import {
   HELPERS,
   type WriteMode,
 } from "./nodeFiles.js";
-import { safeDeleteDirectoryWithin } from "../utils.js";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 
 function makeDir(prefix: string): string {
   return fs.mkdtempSync(path.join(process.cwd(), prefix));

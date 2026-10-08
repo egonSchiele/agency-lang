@@ -9,10 +9,10 @@ import path from "path";
 import readline from "readline";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
-import { consoleLogSink } from "../logger.js";
+import { consoleLogSink } from "../../logger.js";
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
 import { nodeSubprocess } from "./nodeSubprocess.js";
-import { realClock, type Clock } from "../runtime/clock.js";
+import { realClock, type Clock } from "../../runtime/clock.js";
 import {
   makeHost,
   PLATFORM_CAPABILITIES,
@@ -26,7 +26,7 @@ import {
   type HostTerminal,
   type MakeHostArgs,
   type OperatingSystem,
-} from "./host.js";
+} from "../host.js";
 
 export type NodeHostOptions = {
   /** Defaults to every capability Node has, `PLATFORM_CAPABILITIES.node`. */
@@ -71,6 +71,17 @@ const nodeEnv: HostEnv = {
   set: (name, value) => {
     process.env[name] = value;
   },
+  // process.env can hold undefined for a variable deleted with `delete`;
+  // a child's environment cannot.
+  all: () => {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value;
+      }
+    }
+    return env;
+  },
 };
 
 const nodeSettings: HostSettings = {
@@ -98,7 +109,33 @@ const nodeTerminal: HostTerminal = {
   writeErr: (text) => {
     process.stderr.write(text);
   },
+  readAll: async () => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+    }
+    return Buffer.concat(chunks).toString("utf8");
+  },
   isInteractive: () => process.stdin.isTTY === true,
+  size: () => {
+    const { columns, rows } = process.stdout;
+    if (columns === undefined || rows === undefined) {
+      return null;
+    }
+    return { columns, rows };
+  },
+  // Read at the time of the call, so a test can set the variables.
+  supportsColor: () => {
+    const noColor = process.env.NO_COLOR;
+    if (noColor !== undefined && noColor !== "") {
+      return false;
+    }
+    const force = process.env.FORCE_COLOR;
+    if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
+      return true;
+    }
+    return process.stdout.isTTY === true;
+  },
   readLine: (prompt, signal) => {
     if (signal?.aborted) {
       return Promise.reject(signal.reason);
@@ -187,6 +224,24 @@ const nodeSystem: HostSystem = {
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
   exit: (code) => process.exit(code),
+  setTitle: (title) => {
+    process.title = title;
+  },
+  // Read at the time of the call: a test stands in for process.send.
+  parentChannel: () => {
+    const send = process.send;
+    if (typeof send !== "function") {
+      return null;
+    }
+    return {
+      send: (message) => {
+        send.call(process, message);
+      },
+    };
+  },
+  onExit: (fn) => {
+    process.on("exit", fn);
+  },
 };
 
 const nodeRandom: HostRandom = {

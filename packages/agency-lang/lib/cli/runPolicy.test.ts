@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { writeFileSync, mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";

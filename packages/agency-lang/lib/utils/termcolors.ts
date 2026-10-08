@@ -1,3 +1,5 @@
+import { defaultHost } from "#default-host";
+
 // ANSI escape codes
 export const RESET = "\x1b[0m";
 
@@ -170,9 +172,28 @@ function createNoopColorFunction(): ColorFunction {
 }
 
 /**
- * Like `color`, but emits no ANSI codes when stdout is not a TTY (e.g., when
- * output is piped to a file or another process). Use this anywhere you want
- * conditional coloring without manually checking `process.stdout.isTTY`.
+ * The same shape as `color`, but it never emits ANSI codes. Pass it where a
+ * caller has already decided that output should be plain (a test, or a
+ * command whose color setting resolved to off).
+ */
+export const plainColor: ColorFunction = createNoopColorFunction();
+
+let outputIsTerminal: boolean | undefined;
+
+/** Whether standard output is a terminal, asked of the default host once,
+ *  on the first use of `ttyColor`. A host without a terminal says no. */
+function colorForOutput(): ColorFunction {
+  if (outputIsTerminal === undefined) {
+    const host = defaultHost();
+    outputIsTerminal = host.capabilities.includes("terminal") && host.terminal.size() !== null;
+  }
+  return outputIsTerminal ? color : plainColor;
+}
+
+/**
+ * Like `color`, but emits no ANSI codes when standard output is not a
+ * terminal (output piped to a file or another process). It asks the
+ * default host on its first use.
  *
  * @example
  * ```ts
@@ -180,34 +201,18 @@ function createNoopColorFunction(): ColorFunction {
  * console.log(ttyColor.green("colored on a terminal, plain when piped"));
  * ```
  */
-export const ttyColor: ColorFunction = process.stdout.isTTY ? color : createNoopColorFunction();
+export const ttyColor: ColorFunction = new Proxy(color, {
+  get: (_target, prop: string) => colorForOutput()[prop as keyof ColorFunction],
+  apply: (_target, _thisArg, args: unknown[]) => colorForOutput()(...args),
+});
 
 /**
- * The same shape as `color`, but it never emits ANSI codes. Pass it where a
- * caller has already decided that output should be plain (a test, or a
- * command whose color setting resolved to off).
- */
-export const plainColor: ColorFunction = createNoopColorFunction();
-
-/**
- * Resolve whether to emit ANSI color for an `"auto"` setting, following the
- * de-facto ecosystem convention:
- *   * `NO_COLOR` set (any value)          → disable, no matter what.
- *   * `FORCE_COLOR` set to a truthy value → enable, no matter what.
- *   * otherwise                           → enable iff stdout is a TTY.
- *
- * `process.stdout.isTTY` alone is unreliable when Agency runs through nested
- * spawns (some intermediate hops drop the TTY flag), so the env-var fallbacks
- * give the user explicit overrides. Shared by stdlib helpers that expose an
- * `"auto" | boolean` color option (e.g. `std::ui/layout::render`, `std::syntax::diff`).
+ * Whether to emit ANSI color for an `"auto"` setting: the default host's
+ * `terminal.supportsColor()`, which on Node honours `NO_COLOR` and
+ * `FORCE_COLOR` before looking at whether stdout is a terminal, since the
+ * TTY flag alone is lost through some nested spawns. For a CLI command,
+ * which has no run; a stdlib helper asks the current host instead.
  */
 export function autoUseColor(): boolean {
-  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") {
-    return false;
-  }
-  const force = process.env.FORCE_COLOR;
-  if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
-    return true;
-  }
-  return process.stdout.isTTY === true;
+  return defaultHost().terminal.supportsColor();
 }

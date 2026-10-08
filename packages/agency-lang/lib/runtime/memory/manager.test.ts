@@ -2,7 +2,7 @@ import { describe, it as baseIt, expect, vi, beforeEach, afterEach } from "vites
 import { userMessage, assistantMessage, systemMessage, toolMessage } from "smoltalk";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 
 const files = nodeHost().files;
 import { StatelogClient } from "../../statelogClient.js";

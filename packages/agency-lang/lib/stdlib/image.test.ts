@@ -13,7 +13,7 @@ import { registerMlxImageProvider } from "./mlxImage.js";
 import { _localImageInputs, type LocalImageInputs } from "./localImageInputs.js";
 import { generateImage } from "../local/calls.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 
 /** The input images of a call with none. */
 const NO_INPUTS: LocalImageInputs = { files: [], settings: {} };

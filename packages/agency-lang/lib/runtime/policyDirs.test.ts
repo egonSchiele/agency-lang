@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { resolvePolicyDirs } from "./policyDirs.js";
 import { checkPolicy } from "./policy.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { RuntimeContext } from "./state/context.js";
 import type { Host } from "../host/host.js";
 

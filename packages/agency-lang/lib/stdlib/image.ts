@@ -1,4 +1,4 @@
-import * as path from "node:path";
+import path from "#path";
 import * as smoltalk from "smoltalk";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TraceWriter } from "./traceWriter.js";
 import { FileSink } from "./fileSink.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import { TraceReader } from "./traceReader.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";

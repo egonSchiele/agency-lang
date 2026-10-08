@@ -391,7 +391,7 @@ one machine's home. A root that cannot be found (a bundled build with no
 `package.json` above it) leaves `<agency>` as written and the rule simply
 never matches.
 
-The expanded home is resolved through `root()` in `lib/host/nodeFiles.ts`,
+The expanded home is resolved through `root()` in `lib/host/node/nodeFiles.ts`,
 the same walker every file effect uses for the directory in its payload,
 so a home reached through a symlinked ancestor (`/tmp` on macOS, a linked
 `$HOME`) matches the payload's spelling. The scan and save effects in

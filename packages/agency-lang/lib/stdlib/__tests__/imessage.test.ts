@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { _sendIMessage } from "../imessage.js";
 
-vi.mock("../../host/nodeSubprocess.js", () => ({
+vi.mock("../../host/node/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
-import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { nodeSubprocess } from "../../host/node/nodeSubprocess.js";
 import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fakeSubprocess.js";
 
 const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;

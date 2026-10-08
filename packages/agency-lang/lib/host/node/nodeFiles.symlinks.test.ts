@@ -20,7 +20,7 @@ import {
   PRIMITIVES,
   type Root,
 } from "./nodeFiles.js";
-import { safeDeleteDirectoryWithin } from "../utils.js";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 
 /**
  * The fixture every case builds:

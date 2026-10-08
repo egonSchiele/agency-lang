@@ -1,4 +1,3 @@
-import process from "process";
 import { abortableExec } from "./abortable.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -30,12 +29,8 @@ export function _isTTY(): boolean {
   return currentHost().terminal.isInteractive();
 }
 
-export async function _readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+export function _readStdin(): Promise<string> {
+  return currentHost().terminal.readAll();
 }
 
 export function _setEnv(name: string, value: string): void {
@@ -174,7 +169,7 @@ export async function _screenshot(
 }
 
 export function _setTitle(title: string): void {
-  process.title = title;
+  currentHost().system.setTitle(title);
 }
 
 /** The policy scope for std::openUrl: the hostname, so "approve always

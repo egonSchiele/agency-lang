@@ -146,6 +146,9 @@ export type HostFiles = {
 export type HostEnv = {
   get(name: string): string | null;
   set(name: string, value: string): void;
+  /** Every variable, for a child process's environment. A copy: writing
+   *  to it changes nothing. */
+  all(): Record<string, string>;
 };
 
 /** The terminal, for `print`, `input`, and the stdlib functions that write
@@ -162,9 +165,21 @@ export type HostTerminal = {
   /** Show `prompt` and read one line. Rejects with the signal's reason when
    *  `signal` aborts while waiting. */
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
+  /** Everything on standard input until it ends, as text. */
+  readAll(): Promise<string>;
   /** Whether a person is at the terminal. False under a pipe or in CI. */
   isInteractive(): boolean;
+  /** The width and height in character cells, or null when standard
+   *  output is not a terminal (a pipe, a file). */
+  size(): TerminalSize | null;
+  /** Whether output should carry ANSI colour. On Node that is the usual
+   *  convention: no when `NO_COLOR` is set, yes when `FORCE_COLOR` is set
+   *  to anything but an empty string, `0`, or `false`, and otherwise yes
+   *  when standard output is a terminal. */
+  supportsColor(): boolean;
 };
+
+export type TerminalSize = { columns: number; rows: number };
 
 /** Facts about the process and the machine. Every host has these, so they
  *  are not a capability. `browserHost` answers each with a value the app
@@ -185,6 +200,21 @@ export type HostSystem = {
    *  when this is true. */
   isMainModule(moduleUrl: string): boolean;
   exit(code: number): never;
+  /** Name the process, as `ps` and an activity monitor show it. A
+   *  platform with no process name ignores it. */
+  setTitle(title: string): void;
+  /** The channel to the parent process, when the parent forked this one
+   *  with an IPC channel the way Agency's subprocess runs do, or null.
+   *  `send` throws once the parent is gone. */
+  parentChannel(): ParentChannel | null;
+  /** Run `fn` as the process ends, for a synchronous write such as the
+   *  coverage file. On a platform whose process does not end, `fn` never
+   *  runs. */
+  onExit(fn: () => void): void;
+};
+
+export type ParentChannel = {
+  send(message: unknown): void;
 };
 
 /** How the runtime reads what it needs for itself and reports what it must.
@@ -263,10 +293,14 @@ export type RunningProcess = {
 /** Subprocesses. `run` starts a child and waits for it. A program that
  *  cannot be started rejects with the platform's error (`ENOENT` on
  *  Node), not a result. `start` hands back the running child, for a
- *  caller that stops it on an event of its own, such as a keypress. */
+ *  caller that stops it on an event of its own, such as a keypress.
+ *  `locate` is the path a program name resolves to on the search path,
+ *  the way the shell finds it (`PATH`, and `PATHEXT` on Windows), or
+ *  null when nothing executable has that name. */
 export type HostSubprocess = {
   run(command: Command, options?: RunOptions): Promise<RunResult>;
   start(command: Command, options?: RunOptions): Promise<RunningProcess>;
+  locate(program: string): Promise<string | null>;
 };
 
 /** The network, as the platform's own `fetch`: the same arguments and the

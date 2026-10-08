@@ -5,10 +5,12 @@
  * A subprocess executes exactly one run per process, so module scope is the
  * correct lifetime here (the same arrangement as the bootstrap's
  * ipcPayloadLimit). Kept intentionally minimal so both `ipc.ts` and
- * `state/context.ts` / `node.ts` can read it without import cycles. It has
- * no runtime imports: `ipcChildDebug` is handed the logger it posts to.
+ * `state/context.ts` / `node.ts` can read it without import cycles. Its one
+ * runtime import is the default host, for the two switches and the stderr
+ * line; `ipcChildDebug` is handed the logger it posts to.
  */
 
+import { defaultHost } from "#default-host";
 import type { RootLog } from "../statelogClient.js";
 
 export type SubprocessRunInfo = {
@@ -35,7 +37,7 @@ export type SubprocessRunInfo = {
  * by `buildForkOptions` before every fork). The single source of truth for
  * the mode signal — ipc.ts and the telemetry leaf both read it from here. */
 export function isIpcMode(): boolean {
-  return process.env.AGENCY_IPC === "1";
+  return defaultHost().settings.read("AGENCY_IPC") === "1";
 }
 
 /** Emit one child-side IPC diagnostic. Shared by callbackForwarding.ts and
@@ -57,9 +59,12 @@ export function ipcChildDebug(line: string, client: RootLog | undefined): void {
       // no-op: statelog diagnostics are best-effort
     }
   }
-  if (process.env.AGENCY_IPC_DEBUG !== "1") return;
+  const host = defaultHost();
+  if (host.settings.read("AGENCY_IPC_DEBUG") !== "1") {
+    return;
+  }
   const ts = new Date().toISOString().slice(11, 23);
-  process.stderr.write(`[ipc:child] ${ts} ${line}\n`);
+  host.terminal.writeErr(`[ipc:child] ${ts} ${line}\n`);
 }
 
 let info: SubprocessRunInfo = { depth: 0 };

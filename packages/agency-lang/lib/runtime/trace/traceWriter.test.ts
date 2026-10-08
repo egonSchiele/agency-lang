@@ -3,7 +3,7 @@ import { TraceWriter } from "./traceWriter.js";
 import { scanExistingTraceFile } from "./fileSink.js";
 import { CallbackSink } from "./sinks.js";
 import { FileSink } from "./fileSink.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import type { TraceLine } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
 import * as fs from "fs";

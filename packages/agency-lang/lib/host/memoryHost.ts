@@ -478,6 +478,12 @@ function memorySubprocess(options: MemoryHostOptions): HostSubprocess {
       }
       return options.subprocess.start(command, runOptions);
     },
+    locate: async (program) => {
+      if (options.subprocess === undefined) {
+        return null;
+      }
+      return options.subprocess.locate(program);
+    },
   };
 }
 
@@ -487,6 +493,7 @@ function memoryEnv(state: MemoryHostState): HostEnv {
     set: (name, value) => {
       state.variables[name] = value;
     },
+    all: () => ({ ...state.variables }),
   };
 }
 
@@ -519,7 +526,10 @@ function memoryTerminal(state: MemoryHostState): HostTerminal {
       }
       return line;
     },
+    readAll: async () => state.inputLines.splice(0).join("\n"),
     isInteractive: () => false,
+    size: () => null,
+    supportsColor: () => false,
   };
 }
 
@@ -536,6 +546,9 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     exit: (code) => {
       throw new Error(`exit(${code}): the memory host cannot end the process.`);
     },
+    setTitle: () => {},
+    parentChannel: () => null,
+    onExit: () => {},
   };
 }
 

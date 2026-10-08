@@ -7,7 +7,10 @@
 // read `code === "ENOENT"`.
 
 import { spawn, type ChildProcess } from "child_process";
-import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "./host.js";
+import { constants as fsConstants } from "fs";
+import fs from "fs/promises";
+import path from "path";
+import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
 
 /**
  * Stream teardown error codes that are safe to swallow. They mean the pipe
@@ -182,6 +185,29 @@ function startChild(
 
 export const nodeSubprocess: HostSubprocess = {
   run: (command, options = {}) => startChild(command, options).ended,
+  locate: async (program) => {
+    const dirs = (process.env.PATH ?? "").split(path.delimiter).filter((d) => d.length > 0);
+    const isWindows = process.platform === "win32";
+    const extensions = isWindows ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
+    for (const dir of dirs) {
+      for (const ext of extensions) {
+        const candidate = path.resolve(dir, program + ext);
+        try {
+          const st = await fs.stat(candidate);
+          if (!st.isFile()) {
+            continue;
+          }
+          if (!isWindows) {
+            await fs.access(candidate, fsConstants.X_OK);
+          }
+          return candidate;
+        } catch {
+          // not here, or not executable: try the next one
+        }
+      }
+    }
+    return null;
+  },
   start: async (command, options = {}) => {
     const { ended, kill } = startChild(command, options);
     // A rejection with nobody waiting yet must not be unhandled; `wait`

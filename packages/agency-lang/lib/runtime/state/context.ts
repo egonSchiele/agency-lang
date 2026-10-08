@@ -45,7 +45,7 @@ import { PendingPromiseStore } from "./pendingPromiseStore.js";
 /**
  * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
  * One collector per process — multiple RuntimeContext instances created within
- * the same process all share it, and a single `process.on("exit")` listener
+ * the same process all share it, and a single exit listener on the host
  * writes the merged data once. AGENCY_COVERAGE_OUTDIR is set by the CLI from
  * agency.json's coverage.outDir; defaults to ".coverage" otherwise.
  */
@@ -55,10 +55,10 @@ function getProcessCoverageCollector(host: Host): CoverageCollector {
   const collector = new CoverageCollector();
   _processCoverageCollector = collector;
   const outDir = host.settings.read("AGENCY_COVERAGE_OUTDIR") ?? ".coverage";
-  process.on("exit", () => {
-    // process.on("exit") handlers are sync-only and any throw is unhelpful at
-    // shutdown — log a warning and move on so coverage failures never make
-    // test runs flaky or noisy.
+  host.system.onExit(() => {
+    // Exit handlers are sync-only and any throw is unhelpful at shutdown —
+    // log a warning and move on so coverage failures never make test runs
+    // flaky or noisy.
     try {
       collector.write(outDir);
     } catch (err) {

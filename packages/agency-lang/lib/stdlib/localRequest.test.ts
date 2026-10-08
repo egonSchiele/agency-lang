@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { postLocalJson, explainNoServer, CANCELLED } from "./localRequest.js";

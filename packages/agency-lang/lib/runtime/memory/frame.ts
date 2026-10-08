@@ -34,7 +34,7 @@ import path from "node:path";
 // The synchronous file operations of nodeHost, not host.files: a frame is
 // made inside createExecutionContext, which has no await.
 import os from "node:os";
-import { mkdir, root, _realDir } from "../../host/nodeFiles.js";
+import { mkdir, root, _realDir } from "../../host/node/nodeFiles.js";
 import { expandPath } from "../../stdlib/expandPath.js";
 import type { MemoryConfig } from "./types.js";
 

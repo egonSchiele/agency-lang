@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../host/nodeSubprocess.js", () => ({
+vi.mock("../../host/node/nodeSubprocess.js", () => ({
   nodeSubprocess: { run: vi.fn(async () => exited()), start: vi.fn() },
 }));
 // The default host reports macOS, so the osascript branch runs.
 vi.mock("#default-host", () => ({ defaultHost: () => testDefaultHost() }));
 
-import { nodeSubprocess } from "../../host/nodeSubprocess.js";
+import { nodeSubprocess } from "../../host/node/nodeSubprocess.js";
 import { exited, failed, programRun, testDefaultHost } from "./fakeSubprocess.js";
 
 const run = nodeSubprocess.run as unknown as ReturnType<typeof vi.fn>;

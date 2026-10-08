@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RuntimeContext } from "./context.js";
 import { FakeClock } from "../clock.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 import { resolveInvocation } from "../invocationOptions.js";
 import type { Host } from "../../host/host.js";
 

@@ -1,6 +1,6 @@
 // A test-only `fetch` that serves canned HTTP responses. The default host
 // on Node builds its network part from it when AGENCY_FETCH_MOCKS_FILE is
-// set (lib/host/default.node.ts). Matches by URL (exact/glob/regex),
+// set (lib/host/node/default.node.ts). Matches by URL (exact/glob/regex),
 // optional method, and optional request body; returns a real Response so
 // every consumer (http.ts's getReader path, email.ts's .json(), …) works
 // off one shim.

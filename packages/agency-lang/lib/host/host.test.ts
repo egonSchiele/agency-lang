@@ -13,7 +13,8 @@ import {
   type CapabilityPart,
   type Host,
 } from "./host.js";
-import { nodeHost } from "./nodeHost.js";
+import { nodeHost } from "./node/nodeHost.js";
+import { memoryHost } from "./memoryHost.js";
 import { FakeClock } from "../runtime/clock.js";
 
 function call(host: Host, functionName: string): unknown {
@@ -220,6 +221,20 @@ describe("nodeHost", () => {
     }
   });
 
+  it("hands out a copy of the whole environment with no unset entries", () => {
+    const host = nodeHost();
+    host.env.set("AGENCY_HOST_TEST_VALUE", "one");
+    try {
+      const all = host.env.all();
+      expect(all.AGENCY_HOST_TEST_VALUE).toBe("one");
+      expect(Object.values(all).every((value) => typeof value === "string")).toBe(true);
+      all.AGENCY_HOST_TEST_VALUE = "two";
+      expect(host.env.get("AGENCY_HOST_TEST_VALUE")).toBe("one");
+    } finally {
+      delete process.env.AGENCY_HOST_TEST_VALUE;
+    }
+  });
+
   it("answers the system questions from the process", () => {
     const host = nodeHost();
     expect(host.system.cwd()).toBe(process.cwd());
@@ -230,6 +245,74 @@ describe("nodeHost", () => {
     );
     expect(host.system.moduleDir(import.meta.url)).toBe(import.meta.dirname);
     expect(host.system.isMainModule(import.meta.url)).toBe(false);
+  });
+
+  it("reports the terminal size, or null under a pipe", () => {
+    const size = nodeHost().terminal.size();
+    if (process.stdout.isTTY) {
+      expect(size).toEqual({ columns: process.stdout.columns, rows: process.stdout.rows });
+    } else {
+      expect(size).toBeNull();
+    }
+  });
+
+  it("decides colour from NO_COLOR, then FORCE_COLOR, then the terminal", () => {
+    const saved = { NO_COLOR: process.env.NO_COLOR, FORCE_COLOR: process.env.FORCE_COLOR };
+    const restore = (name: "NO_COLOR" | "FORCE_COLOR") => {
+      if (saved[name] === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = saved[name];
+      }
+    };
+    const terminal = nodeHost().terminal;
+    try {
+      delete process.env.NO_COLOR;
+      process.env.FORCE_COLOR = "1";
+      expect(terminal.supportsColor()).toBe(true);
+      process.env.NO_COLOR = "1";
+      expect(terminal.supportsColor()).toBe(false);
+      delete process.env.NO_COLOR;
+      process.env.FORCE_COLOR = "0";
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+      process.env.FORCE_COLOR = "false";
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+      delete process.env.FORCE_COLOR;
+      expect(terminal.supportsColor()).toBe(process.stdout.isTTY === true);
+    } finally {
+      restore("NO_COLOR");
+      restore("FORCE_COLOR");
+    }
+  });
+
+  it("has a parent channel only when process.send exists", () => {
+    const system = nodeHost().system;
+    const original = process.send;
+    const sent: unknown[] = [];
+    const fake = (message: unknown) => {
+      sent.push(message);
+      return true;
+    };
+    try {
+      process.send = undefined;
+      expect(system.parentChannel()).toBeNull();
+      process.send = fake as unknown as typeof process.send;
+      system.parentChannel()?.send({ type: "hello" });
+      expect(sent).toEqual([{ type: "hello" }]);
+    } finally {
+      process.send = original;
+    }
+  });
+
+  it("registers an exit listener on the process", () => {
+    const system = nodeHost().system;
+    const listener = () => {};
+    system.onExit(listener);
+    try {
+      expect(process.listeners("exit")).toContain(listener);
+    } finally {
+      process.removeListener("exit", listener);
+    }
   });
 
   it("makes random ids and bytes", () => {
@@ -245,5 +328,33 @@ describe("nodeHost", () => {
     const controller = new AbortController();
     controller.abort(new Error("cancelled"));
     await expect(host.terminal.readLine("? ", controller.signal)).rejects.toThrow("cancelled");
+  });
+});
+
+describe("memoryHost", () => {
+  it("has no terminal size and no colour", () => {
+    const host = memoryHost();
+    expect(host.terminal.size()).toBeNull();
+    expect(host.terminal.supportsColor()).toBe(false);
+  });
+
+  it("has no parent and never runs an exit listener", () => {
+    const host = memoryHost();
+    expect(host.system.parentChannel()).toBeNull();
+    let ran = false;
+    host.system.onExit(() => {
+      ran = true;
+    });
+    expect(ran).toBe(false);
+  });
+
+  it("answers env.all from its variables, as a copy", () => {
+    const host = memoryHost({ variables: { A: "1", B: "2" } });
+    const all = host.env.all();
+    expect(all).toEqual({ A: "1", B: "2" });
+    all.C = "3";
+    expect(host.env.get("C")).toBeNull();
+    host.env.set("D", "4");
+    expect(host.env.all()).toEqual({ A: "1", B: "2", D: "4" });
   });
 });

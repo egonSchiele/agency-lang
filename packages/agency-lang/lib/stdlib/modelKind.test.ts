@@ -3,7 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { architectureOfModelDir, kindOfModelDir, isModelKind, MODEL_KINDS } from "./modelKind.js";
+import { isModelKind, MODEL_KINDS } from "./modelKind.js";
+import { architectureOfModelDir, kindOfModelDir } from "./modelDirKind.js";
 
 describe("kindOfModelDir", () => {
   let dir: string;

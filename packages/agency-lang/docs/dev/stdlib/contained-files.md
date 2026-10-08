@@ -2,7 +2,7 @@
 
 Suppose an agent asks to read files in `~/project` and you approve. Inside `~/project` there is a symlink named `secrets` that points at `~/.ssh`. If `read("secrets/id_rsa", "~/project")` follows the link, it reads your SSH key under an approval that named `~/project`. The same hole exists for a linked directory, and for every operation that lists, probes, creates, copies, moves, or deletes.
 
-`host.files` closes it in one place. Every file operation the standard library performs on a path an Agency program chose goes through the file part of the run's host (see `docs/dev/runtime/host.md`), and a lint rule keeps it that way. Containment is not something a call site opts into. On Node the file part is `lib/host/nodeFiles.ts`, the synchronous module this doc describes, wrapped in promises by `lib/host/nodeFilesPart.ts`. A few files with no run to take a host from, such as the compiler and the local-model code, call the synchronous module directly and say so in a comment at the import.
+`host.files` closes it in one place. Every file operation the standard library performs on a path an Agency program chose goes through the file part of the run's host (see `docs/dev/runtime/host.md`), and a lint rule keeps it that way. Containment is not something a call site opts into. On Node the file part is `lib/host/node/nodeFiles.ts`, the synchronous module this doc describes, wrapped in promises by `lib/host/node/nodeFilesPart.ts`. A few files with no run to take a host from, such as the compiler and the local-model code, call the synchronous module directly and say so in a comment at the import.
 
 ## The property
 
@@ -96,7 +96,7 @@ Files that keep Agency's own state, such as the REPL history, saved agent sessio
 
 ## The symlink battery
 
-`lib/host/nodeFiles.symlinks.test.ts` is table-driven. `nodeFiles.ts` exports `PRIMITIVES`, the name of every operation, and `HELPERS`, the name of every other export. A test asserts the module exports nothing else, so an operation added without a registry entry fails.
+`lib/host/node/nodeFiles.symlinks.test.ts` is table-driven. `nodeFiles.ts` exports `PRIMITIVES`, the name of every operation, and `HELPERS`, the name of every other export. A test asserts the module exports nothing else, so an operation added without a registry entry fails.
 
 For every primitive the battery builds one fixture and runs six refusal cases: a linked file pointing outside, a linked directory pointing outside, a path under that linked directory, a linked directory pointing inside, a new name under it, and a dangling link. Each case first proves through plain `fs` that the link is reachable, so a case cannot pass because the fixture was never built. Each case then checks that nothing appeared outside the root or under the in-root link target.
 
@@ -107,7 +107,7 @@ The read and write seams run a directory swap between the open and the validatio
 ## Where the pieces are
 
 - `lib/host/host.ts`: the `HostFiles` type. `lib/host/files.shared.test.ts` runs one battery over every host that has files.
-- `lib/host/nodeFiles.ts`: the synchronous module behind Node's host. `lib/host/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root`; a `.real` read outside `lib/host` fails the lint. `lib/host/nodeFilesPart.ts` wraps each operation in a promise for the host and adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate`.
+- `lib/host/node/nodeFiles.ts`: the synchronous module behind Node's host. `lib/host/node/nodeFiles.test.ts` covers the helpers and write modes. `lib/host/roots.ts` owns the inside of a `Root`; a `.real` read outside `lib/host` fails the lint. `lib/host/node/nodeFilesPart.ts` wraps each operation in a promise for the host and adds `updateText` (a synchronous read and write with nothing between them), `withLock` (one lock per path, kept by the host), and `locate`.
 - `lib/host/memoryHost.ts`: the same operations over an object of files, for tests.
 - `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, built on `locate`. `resolveRedirectTarget` for `safeBash` uses `realDir` to find where a redirect lands.
 - `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, built on `realDir`. `lib/stdlib/isContained.ts` is the path predicate it and the synchronous module share.

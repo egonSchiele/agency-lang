@@ -1,5 +1,4 @@
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "#path";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import type { Host, RunResult } from "../host/host.js";
 import { program } from "./abortable.js";
@@ -16,8 +15,8 @@ import type { BoundingBox } from "./ocr.js";
 
 /** The script shipped next to the server scripts, copied into dist like
  *  them. */
-export function imageToolsScript(): string {
-  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "cli", "imageTools.py");
+export function imageToolsScript(host: Host): string {
+  return path.join(host.system.moduleDir(import.meta.url), "..", "cli", "imageTools.py");
 }
 
 /** Starting an interpreter and importing Pillow takes well under a second;
@@ -36,8 +35,8 @@ export async function _runImageTool(
   const python = configuredPython();
   let result: RunResult;
   try {
-    result = await host.subprocess.run(program(python, [imageToolsScript(), ...args]), {
-      env: { ...hostEnvironment(), HF_HUB_OFFLINE: "1" },
+    result = await host.subprocess.run(program(python, [imageToolsScript(host), ...args]), {
+      env: { ...host.env.all(), HF_HUB_OFFLINE: "1" },
       timeoutMs: TOOL_TIMEOUT_MS,
       collect: { stdout: true, stderr: true },
     });
@@ -55,18 +54,6 @@ export async function _runImageTool(
   } catch {
     return { error: `imageTools.py printed something that is not JSON: ${result.stdout.trim()}` };
   }
-}
-
-/** The process's environment with no unset entries, the way a host takes
- *  a child's environment. */
-function hostEnvironment(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
-      env[key] = value;
-    }
-  }
-  return env;
 }
 
 /** The output path, once its parent is a real directory with no symlink

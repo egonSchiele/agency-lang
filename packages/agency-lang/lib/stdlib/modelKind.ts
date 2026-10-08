@@ -1,5 +1,3 @@
-import { isDiffusersDir, modelDirEntries, readModelJson } from "./modelBackend.js";
-
 /** What a local model takes and returns. The kind decides which server
  *  script runs it, which route serves it, and which stdlib function calls
  *  it. What a model is good for (coding, reasoning, illustration) is not a
@@ -52,8 +50,8 @@ export const VISION_ONNX_FILES = ["model.onnx", "selected_tags.csv"];
 const SPEECH_MODEL_TYPES = ["qwen3_tts"];
 
 /** What is in a model directory, read once for every rule. A missing file,
- *  or one that is not JSON, is null. */
-type DirFacts = {
+ *  or one that is not JSON, is null. `modelDirKind.ts` reads them. */
+export type DirFacts = {
   names: string[];
   config: Record<string, unknown> | null;
   diffusers: boolean;
@@ -63,7 +61,7 @@ type DirFacts = {
  *  files say so. Checked top to bottom; the first match wins. */
 type KindRule = { kind: ModelKind; matches: (facts: DirFacts) => boolean };
 
-function architecture(config: Record<string, unknown> | null): string {
+export function architecture(config: Record<string, unknown> | null): string {
   const architectures = config?.architectures;
   if (!Array.isArray(architectures) || typeof architectures[0] !== "string") {
     return "";
@@ -112,30 +110,14 @@ const KIND_RULES: KindRule[] = [
   },
 ];
 
-/** What kind of model a directory holds, from its files alone, or null
- *  when no rule matches. This is the one place a kind is decided from
- *  files: `serve`, `list`, and `download` all come here. A `.gguf` file's
- *  parent directory counts as holding a chat model. */
-export function kindOfModelDir(dir: string): ModelKind | null {
-  const facts: DirFacts = {
-    names: modelDirEntries(dir).map((entry) => entry.name),
-    config: readModelJson(dir, "config.json"),
-    diffusers: isDiffusersDir(dir),
-  };
+/** What kind of model a directory holds, from what is in it, or null when
+ *  no rule matches. This is the one place a kind is decided from files:
+ *  `serve`, `list`, and `download` all come here, through
+ *  `kindOfModelDir` in `modelDirKind.ts`. A `.gguf` file's parent
+ *  directory counts as holding a chat model. */
+export function kindOfFacts(facts: DirFacts): ModelKind | null {
   return KIND_RULES.find((rule) => rule.matches(facts))?.kind ?? null;
-}
-
-/** The transformers vision family of the model in `dir`, from its
- *  config.json, or undefined for a directory with no such config, such as
- *  the ONNX tagger. */
-export function visionFamilyOf(dir: string): VisionFamily | undefined {
-  return VISION_FAMILIES[architectureOfModelDir(dir)];
 }
 
 /** Architectures validated for chat with images through serve --vlm. */
 export const VLM_ARCHITECTURES = ["Qwen3_5ForConditionalGeneration"];
-
-/** The first architecture in config.json, or an empty string when absent. */
-export function architectureOfModelDir(dir: string): string {
-  return architecture(readModelJson(dir, "config.json"));
-}

@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "vitest";
 import { installRootBudget, reinstallRootBudget } from "@/runtime/rootBudget.js";
 import { StateStack } from "@/runtime/state/stateStack.js";
 import { CostGuard, TimeGuard } from "@/runtime/guard.js";
-import { nodeHost } from "@/host/nodeHost.js";
+import { nodeHost } from "@/host/node/nodeHost.js";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
 
 // Reads the limits from process.env, as the default host does.

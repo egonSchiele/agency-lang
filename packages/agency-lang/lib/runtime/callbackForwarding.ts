@@ -4,8 +4,9 @@
  * inside a std::agency run() child (see the "Callback forwarding" section of
  * docs/dev/runtime/subprocess-ipc.md).
  *
- * Dependency-light leaf (mirrors costTelemetry.ts): the only runtime import is
- * subprocessRunInfo.ts (for isIpcMode + the shared ipcChildDebug). invokeCallbacks
+ * Dependency-light leaf (mirrors costTelemetry.ts): the runtime imports are
+ * subprocessRunInfo.ts (for isIpcMode + the shared ipcChildDebug) and the
+ * default host, whose `system.parentChannel()` is the IPC channel. invokeCallbacks
  * (hooks.ts) calls sendCallbackToParent on every event; hooks.ts must not import
  * ipc.ts, so the wire type + sender live here.
  *
@@ -20,6 +21,7 @@
  * tradeoff — see the plan's "Scope & design tradeoffs".
  */
 
+import { defaultHost } from "#default-host";
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
 import type { StatelogClient } from "../statelogClient.js";
 import type { CallbackName } from "../types/function.js";
@@ -66,7 +68,9 @@ export function sendCallbackToParent(
   log: StatelogClient | undefined,
   maxBytes: number = CALLBACK_PAYLOAD_LIMIT,
 ): void {
-  if (!isIpcMode() || typeof process.send !== "function") return;
+  if (!isIpcMode()) return;
+  const channel = defaultHost().system.parentChannel();
+  if (channel === null) return;
   if (NON_FORWARDABLE_CALLBACKS.includes(name)) return; // functions/Promises can't survive JSON
   // JSON.stringify drops function-valued fields (e.g. onAgentStart.cancel) and
   // throws on circular refs / BigInt. Serialize ONCE up front so an
@@ -93,7 +97,7 @@ export function sendCallbackToParent(
     // producing the SAME wire bytes we just measured. The up-front JSON.stringify
     // stays only to validate serializability + measure size; a redundant
     // parse-then-re-serialize round-trip would triple the hot-path cost.
-    process.send({ type: "callback", name, data } as IpcCallbackMessage);
+    channel.send({ type: "callback", name, data } as IpcCallbackMessage);
   } catch (err) {
     // Channel gone — parent died; the watchdog will reap this process.
     ipcChildDebug(

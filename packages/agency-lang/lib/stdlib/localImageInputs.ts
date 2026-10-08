@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 // The synchronous file operations of nodeHost, not host.files: local models are Node-only.
-import { _realTarget, wholePath, stat as statUnder } from "../host/nodeFiles.js";
+import { _realTarget, wholePath, stat as statUnder } from "../host/node/nodeFiles.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { currentHost } from "../runtime/currentHost.js";

@@ -11,7 +11,7 @@ import { approvedFileBytes } from "./approvedPath.js";
 import type { Host, HostNetwork } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { encodeBase64 } from "./base64.js";
-import * as path from "node:path";
+import path from "#path";
 
 /** The TypeScript half of `std::vision`: one HTTP call behind three thin
  *  exports. The Agency side has already raised `std::vision` for the

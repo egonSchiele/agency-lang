@@ -8,7 +8,7 @@ import { realpathSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { transcode } from "./ffmpeg.js";
 import { _speakLocal } from "./speech.js";
 import { wavFile } from "./wavFile.js";

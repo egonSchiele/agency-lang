@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import process from "process";
 // The synchronous file operations of nodeHost, not host.files: the terminal UI is Node-only.
-import { wholePath, stat, readText, writeText, mkdir } from "../host/nodeFiles.js";
+import { wholePath, stat, readText, writeText, mkdir } from "../host/node/nodeFiles.js";
 import { __call } from "../runtime/call.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";

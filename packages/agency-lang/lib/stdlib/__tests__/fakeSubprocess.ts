@@ -1,10 +1,10 @@
 // A stand-in for the subprocess part of the host, for the tests of helpers
 // that run a fixed program such as osascript or security. Each test mocks
-// lib/host/nodeSubprocess.ts with `vi.mock` and then reads what was run
+// lib/host/node/nodeSubprocess.ts with `vi.mock` and then reads what was run
 // and scripts what it answers through these.
 import { vi } from "vitest";
 import type { Command, Host, OperatingSystem, RunResult } from "../../host/host.js";
-import { nodeHost } from "../../host/nodeHost.js";
+import { nodeHost } from "../../host/node/nodeHost.js";
 
 /** The operating system `hostOn` and `testDefaultHost` report. A test that
  *  needs the macOS branch, or the refusal on another system, sets it. */

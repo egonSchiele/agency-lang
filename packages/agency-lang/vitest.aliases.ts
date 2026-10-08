@@ -6,7 +6,7 @@ import path from "path";
 // two in step, and keep this list in step with lib/utils/packageImports.d.ts.
 export const aliases: Record<string, string> = {
   "@": path.resolve(import.meta.dirname, "./lib"),
-  "#default-host": path.resolve(import.meta.dirname, "./lib/host/default.node.ts"),
+  "#default-host": path.resolve(import.meta.dirname, "./lib/host/node/default.node.ts"),
   "#sha256": path.resolve(import.meta.dirname, "./lib/utils/sha256.node.ts"),
   "#path": path.resolve(import.meta.dirname, "./lib/utils/path.node.ts"),
 };

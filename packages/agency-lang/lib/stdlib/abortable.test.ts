@@ -10,7 +10,7 @@ import {
   abortableSpawn,
   runProgram,
 } from "./abortable.js";
-import { nodeHost } from "../host/nodeHost.js";
+import { nodeHost } from "../host/node/nodeHost.js";
 import { memoryHost } from "../host/memoryHost.js";
 import type { RunOptions, RunResult } from "../host/host.js";
 
@@ -146,6 +146,7 @@ describe("runProgram", () => {
         start: async () => {
           throw new Error("not started here");
         },
+        locate: async () => null,
       },
     });
     await runProgram(recording, "x", []);
@@ -177,6 +178,7 @@ describe("runProgram", () => {
         start: async () => {
           throw new Error("not started here");
         },
+        locate: async () => null,
       },
     });
     const late = await runProgram(scripted, "x", [], { timeoutMs: 5 }).catch((error) => error);

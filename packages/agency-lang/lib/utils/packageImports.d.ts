@@ -45,10 +45,11 @@ declare module "#platform" {
   import type { ProviderLoadingContext } from "@/runtime/platform.js";
   /** The runtime hooks that differ by platform and are not the host's
    *  business. platform.node.ts loads provider modules from disk, makes a
-   *  coverage collector, and resolves a local model; platform.browser.ts
-   *  refuses each or does nothing. */
+   *  coverage collector, opens a log file, and resolves a local model;
+   *  platform.browser.ts refuses each or does nothing. */
   export function loadConfiguredProviders(execCtx: ProviderLoadingContext): Promise<void>;
   export function newCoverageCollector(): CoverageCollector | null;
+  export function openLineSink(filePath: string): (line: string) => void;
   export function resolveLocalEmbeddingModel(provider: string, model: string): Promise<string>;
 }
 

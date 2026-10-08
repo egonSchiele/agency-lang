@@ -106,7 +106,4 @@ export const WAITING = [
   "lib/runtime/memory/frame.ts",
   // reads an attachment by path in a synchronous prompt-runner callback
   "lib/runtime/replyAttachments.ts",
-  // the debug log file is written with fs; STATELOG_API_KEY is read from
-  // process.env
-  "lib/statelogClient.ts",
 ];

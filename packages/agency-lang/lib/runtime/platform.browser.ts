@@ -22,6 +22,10 @@ export function newCoverageCollector(): CoverageCollector | null {
   return null;
 }
 
+export function openLineSink(filePath: string): (line: string) => void {
+  throw new Error(`A log file (${filePath}) cannot be written in a browser.`);
+}
+
 export async function resolveLocalEmbeddingModel(provider: string, model: string): Promise<string> {
   throw new Error(`A local model (${provider}: ${model}) cannot run in a browser.`);
 }

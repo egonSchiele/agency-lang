@@ -1,5 +1,7 @@
 import { ls, glob, grep, exec, ExecResult } from "std::shell"
+import { every } from "std::array"
 import { Json } from "std::validation"
+import { _compileFileOutputs, _testReportJson, _testCompileFailureJson } from "agency-lang/stdlib-lib/agencyCli.js"
 
 import {
   _compile,
@@ -287,10 +289,12 @@ export type AgencyTestCase = {
 export type CaseReport = {
   node: string;
   pass: boolean;
-  feedback: string
+  feedback: string;
+  durationMs: number
 }
 
 export type TestReport = {
+  sourceFile: string;
   pass: boolean;
   cases: CaseReport[]
 }
@@ -321,6 +325,7 @@ export def test(
   ipcPayload: number = 100mb,
   stdout: number = 1mb,
   maxCost: number | null = null,
+  strict: boolean = false,
 ): Result<TestReport> {
   """
   Run test cases against an Agency file in the sandboxed subprocess and return a per-case report. The file's imports may name std:: modules, .agency files inside dir, and pkg:: packages with a pure-Agency closure.
@@ -333,10 +338,11 @@ export def test(
   @param ipcPayload - Max single IPC message size per case in BYTES (default 104857600 = 100mb)
   @param stdout - Max combined stdout+stderr output per case in BYTES (default 1048576 = 1mb)
   @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  @param strict - Also reject JavaScript globals outside the Agency-only allowlist
   """
-  const compiled = try _compileFile(dir, filename)
+  const compiled = try _compileFile(dir, filename, strict)
   if (compiled is failure(compileErr)) {
-    return compiled
+    return failure(compileErr, { kind: "compile-failed", sourceFile: filename, cases: cases })
   }
   let program = null
   if (compiled is success(value)) {
@@ -351,6 +357,7 @@ export def test(
     const caseReports: CaseReport[] = []
     let allPass = true
     for (testCase in cases) {
+      const startedAt = Date.now()
       // The scripted-answer state the inline handler mutates: which answer
       // is next, and whether an expectedMessage mismatch already decided
       // this case.
@@ -427,11 +434,13 @@ export def test(
         {
           node: testCase.node,
           pass: casePassed,
-          feedback: feedback
+          feedback: feedback,
+          durationMs: Date.now() - startedAt
         },
       )
     }
     return success({
+      sourceFile: filename,
       pass: allPass,
       cases: caseReports
     })
@@ -458,6 +467,7 @@ export def testFile(
   dir: string,
   filename: string,
   maxCost: number | null = null,
+  strict: boolean = false,
 ): Result<TestReport> {
   """
   Run the test cases a .test.json file declares against its source file.
@@ -465,6 +475,7 @@ export def testFile(
   @param dir - The directory holding the .test.json and the file it tests
   @param filename - The .test.json file
   @param maxCost - Max LLM spend in dollars for the WHOLE call. null = no cost limit.
+  @param strict - Also reject JavaScript globals outside the Agency-only allowlist
   """
   // Gate the read BEFORE the TS seam performs it (the typecheckFile idiom).
   // The whole file is validated and converted up front, so a malformed file
@@ -500,6 +511,7 @@ export def testFile(
       cases,
       wallClock: wire.defaultTimeoutMs ?? 60s,
       maxCost: maxCost,
+      strict: strict,
     )
   }
   return failure("unreachable")
@@ -1059,7 +1071,7 @@ These run the subcommands that have a function here in-process, and name
 the functions for the rest. */
 export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
 
-static const CLI_SUBCOMMANDS = ["test", "typecheck", "tc", "ast", "fmt", "run"]
+static const CLI_SUBCOMMANDS = ["compile", "test", "typecheck", "tc", "ast", "fmt", "run"]
 
 export idempotent def cliHandles(subcommand: string): boolean {
   """
@@ -1072,7 +1084,7 @@ export idempotent def cliHandles(subcommand: string): boolean {
 
 export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
   """
-  Run an `agency <subcommand> <file>` command line through the matching function: `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. Anything else (a flag, another subcommand, a missing file argument) is a failure saying what the call should have been.
+  Run an `agency <subcommand> <file>` command line through the matching function: `compile` writes validated Agency-only JavaScript through the file policy; `test` runs testFile, `typecheck`/`tc` runs typecheckFile, `ast` runs parseAST, `fmt` runs format, `run` runs runFile on node main. The result has the CLI's shape: stdout, stderr, exitCode. `test` also accepts `--agency-only` (strict name checks) and `--json` (the CLI report on stdout, human output on stderr). Other flags are refused; tests always run under the caller's handlers.
 
   @param args - The CLI arguments, subcommand first, e.g. ["test", "x.test.json"]
   @param cwd - The directory the file argument is inside
@@ -1080,7 +1092,9 @@ export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
   const supported = CLI_SUBCOMMANDS.join(", ")
   return match(args) {
     [sub, file] if (file.startsWith("-")) => failure("cli: `${sub}` takes a file, not a flag (${file}); call the function behind it for options")
+    ["compile", file] => cliCompile(cwd, file)
     ["test", file] => cliTest(cwd, file)
+    ["test", file, ...flags] if (flags.length > 0 && every(flags, \flag -> flag == "--agency-only" || flag == "--json")) => cliTest(cwd, file, flags.includes("--json"), flags.includes("--agency-only"))
     ["typecheck", file] => cliTypecheck(cwd, file)
     ["tc", file] => cliTypecheck(cwd, file)
     ["run", file] => cliRun(cwd, file)
@@ -1092,14 +1106,40 @@ export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
   }
 }
 
+// Compile the validated closure, then let the caller approve each output file.
+def cliCompile(cwd: string, file: string): Result<ExecResult> {
+  const prepared = try _prepareContainedPath(cwd, file, "read")
+  if (prepared is failure) { return prepared }
+  return interrupt std::read("Read this Agency source and its local imports?", {
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
+  })
+  const compiled = try _compileFileOutputs(prepared.value.dir, prepared.value.filename)
+  if (compiled is failure) { return compiled }
+  let lines: string[] = []
+  for (output in compiled.value) {
+    const saved = write(output.filename, output.code, prepared.value.dir)
+    if (saved is failure) { return saved }
+    lines.push("${output.filename.slice(0, -3) + ".agency"} → ${output.filename}")
+  }
+  return success({ stdout: lines.join("\n") + "\n", stderr: "", exitCode: 0 })
+}
+
 // Each wrapper returns the underlying failure as it is, so its data,
 // checkpoint, and origin reach the caller.
-def cliTest(cwd: string, file: string): Result<ExecResult> {
-  const report = testFile(cwd, file)
-  if (report is failure) {
+def cliTest(cwd: string, file: string, json: boolean = false, strict: boolean = false): Result<ExecResult> {
+  const report = testFile(cwd, file, strict: strict)
+  if (report is failure(error)) {
+    if (json && report.data?.kind == "compile-failed") {
+      return success({ stdout: _testCompileFailureJson(file, error, report.data), stderr: error + "\n", exitCode: 1 })
+    }
     return report
   }
-  return success(renderTestReport(report.value))
+  const rendered = renderTestReport(report.value)
+  if (json) {
+    return success({ stdout: _testReportJson(file, report.value), stderr: rendered.stdout, exitCode: rendered.exitCode })
+  }
+  return success(rendered)
 }
 
 def cliTypecheck(cwd: string, file: string): Result<ExecResult> {

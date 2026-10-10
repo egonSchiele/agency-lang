@@ -1,0 +1,104 @@
+import { cli } from "std::agency"
+import { mkdir } from "std::fs"
+
+const SOURCE = "export node answer(): number { return 42 }"
+const SUITE = """
+{"sourceFile":"main.agency","tests":[{"nodeName":"answer","expectedOutput":"42","evaluationCriteria":[{"type":"exact"}]}]}
+"""
+
+def seed(dir: string) {
+  mkdir(dir) with approve
+  write("main.agency", SOURCE, dir) with approve
+  write("main.test.json", SUITE, dir) with approve
+}
+
+node compileWritesOutput(): boolean {
+  const dir = ".cli-compile-output"
+  seed(dir)
+  const result = cli(["compile", "main.agency"], dir) with approve
+  if (result is failure) { return false }
+  const output = read("main.js", dir) with approve
+  if (output is failure) { return false }
+  return result.value.exitCode == 0 && result.value.stdout.includes("main.agency → main.js") && output.value.includes("42")
+}
+
+node deniedCompileWrite(): boolean {
+  const dir = ".cli-compile-denied"
+  seed(dir)
+  let sawWrite = false
+  let result: Result = failure("unset")
+  handle {
+    result = cli(["compile", "main.agency"], dir)
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      sawWrite = true
+      return reject("do not write compiled output")
+    }
+    return approve()
+  }
+  return sawWrite && isFailure(result)
+}
+
+node jsonTestRunsAndReports(): boolean {
+  const dir = ".cli-test-json"
+  seed(dir)
+  const result = cli(["test", "main.test.json", "--agency-only", "--json"], dir) with approve
+  if (result is failure) { return false }
+  const report = JSON.parse(result.value.stdout)
+  return result.value.exitCode == 0 && report.version == 1 && report.passed == 1 && report.files[0].cases[0].status == "passed" && result.value.stderr.includes("1/1 tests passed")
+}
+
+node parentCanRejectTestEffect(): boolean {
+  const dir = ".cli-test-reject"
+  seed(dir)
+  write("main.agency", "export node answer() { const wrote = write(\"effect.txt\", \"unsafe\", \"${dir}\") with approve\n return wrote }", dir) with approve
+  let sawWrite = false
+  let result: Result = failure("unset")
+  handle {
+    result = cli(["test", "main.test.json", "--json", "--agency-only"], dir)
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      sawWrite = true
+      return reject("test writes denied")
+    }
+    return approve()
+  }
+  if (result is failure) { return false }
+  const report = JSON.parse(result.value.stdout)
+  const output = read("effect.txt", dir) with approve
+  return sawWrite && result.value.exitCode == 1 && report.failed == 1 && isFailure(output)
+}
+
+node unsupportedTestFlagsFail(): boolean {
+  return isFailure(cli(["test", "main.test.json", "--approve", "*"]))
+}
+
+node compileKeepsImportLayout(): boolean {
+  const dir = ".cli-compile-imports"
+  mkdir(dir) with approve
+  mkdir("${dir}/src") with approve
+  write("src/value.agency", "export def value(): number { return 73 }", dir) with approve
+  write("src/main.agency", "import { value } from \"./value.agency\"; export node main(): number { return value() }", dir) with approve
+  const result = cli(["compile", "src/main.agency"], dir) with approve
+  const entry = read("src/main.js", dir) with approve
+  const dependency = read("src/value.js", dir) with approve
+  return isSuccess(result) && isSuccess(entry) && isSuccess(dependency)
+}
+
+node compileRejectsJavaScriptGlobals(): boolean {
+  const dir = ".cli-compile-globals"
+  mkdir(dir) with approve
+  write("main.agency", "export node main() { return process.cwd() }", dir) with approve
+  const result = cli(["compile", "main.agency"], dir) with approve
+  return isFailure(result)
+}
+
+node jsonCompileFailureReportsCases(): boolean {
+  const dir = ".cli-test-invalid"
+  seed(dir)
+  write("main.agency", "export node answer() { return process.cwd() }", dir) with approve
+  const result = cli(["test", "main.test.json", "--agency-only", "--json"], dir) with approve
+  if (result is failure) { return false }
+  const report = JSON.parse(result.value.stdout)
+  return result.value.exitCode == 1 && report.files[0].status == "compile-failed" && report.failed == 1 && report.filesFailed == 1 && report.files[0].cases[0].node == "answer"
+}

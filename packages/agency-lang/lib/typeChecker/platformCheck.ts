@@ -26,7 +26,7 @@ type EffectMap = Record<string, InterruptEffect[]>;
 /** The diagnostics the platform setting turns on. The compile path treats
  *  them as fatal whether or not the type checker was asked for. */
 export function isPlatformDiagnostic(error: TypeCheckError): boolean {
-  return error.name === "platformLacksCapability";
+  return error.name === "platformLacksCapability" || error.name === "nodeOnlyModule";
 }
 type CapabilityMap = Record<string, Capability[]>;
 

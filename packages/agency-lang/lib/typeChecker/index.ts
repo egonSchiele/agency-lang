@@ -52,6 +52,7 @@ import {
   buildEffectCapabilities,
 } from "./effectPayloadCheck.js";
 import { checkPlatformCapabilities } from "./platformCheck.js";
+import { checkNodeOnlyImports } from "./nodeOnlyModules.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { isNonTemplatedStdlib } from "../importPaths.js";
 import * as path from "node:path";
@@ -352,6 +353,7 @@ export class TypeChecker {
         buildEffectCapabilities(ctx),
         ctx,
       );
+      checkNodeOnlyImports(ctx);
     }
 
     // Match exhaustiveness over closed value types.

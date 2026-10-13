@@ -239,6 +239,11 @@ export const DIAGNOSTICS = {
     message:
       "{contextLabel} calls `{fn}`, which may interrupt [{effects}]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site by ending the statement with `with approve`.",
   },
+  nodeOnlyModule: {
+    code: "AG7009",
+    severity: "error",
+    message: "'{module}' works only on Node. The {platform} platform cannot import it.",
+  },
   unionFieldNotOnEveryMember: {
     code: "AG2008",
     severity: "error",

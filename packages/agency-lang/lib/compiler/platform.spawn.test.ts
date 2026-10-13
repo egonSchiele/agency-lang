@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFile } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { promisify } from "util";
 

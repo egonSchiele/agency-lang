@@ -56,7 +56,7 @@ function problemDiagnostic(
 
 /** A `@capabilities` tag on anything that is not a `def` or a `node`, or
  *  standing alone at the end of a list: one rule, with one hint for the
- *  effect declaration, where F3 taught people to write it. */
+ *  effect declaration, the natural place to write it by mistake. */
 function strayTagDiagnostics(ctx: TypeCheckerContext): TypeCheckError[] {
   return tagsAbove(ctx.programNodes).flatMap((entry) =>
     strayCapabilitiesTags(entry).map((tag) =>

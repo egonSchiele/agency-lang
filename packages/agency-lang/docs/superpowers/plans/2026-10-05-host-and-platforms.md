@@ -272,11 +272,20 @@ does.
    `stdlib-lib` helper", it reported `runWrite` in `std::safeBash/actions`,
    which calls `_write` directly and raised nothing, and 41 functions that
    reach a pure helper, now on the allow list with a sentence per group.
-6. **`--check-capabilities` can now check `env` and `terminal`.** F3 left
-   them out because `print` raised nothing. With the stack replay, a use
-   inside `print` is covered by `print`'s own `terminal` tag, so only `llm`
-   is left out.
-7. **`silentHostUse` was not needed.** The thirteen test files that carried
+6. **`--check-capabilities` can now check `env`.** F3 left it out because
+   `env()` raised before many uses. With the stack replay, a use inside
+   `env` is covered by its own tag. `terminal` stays out: the runtime
+   probes the terminal's size and colour support from whatever function
+   prints first, so CI showed the use landing on unrelated functions.
+   A host use made while no function is running (the runtime saving a
+   memory frame after the node returned) is a note, not a failure.
+7. **A refusal during a resume has to drop the paused chain's frames.**
+   The review asked for a test that pauses inside the tagged function,
+   approves the interrupt, and resumes on a smaller host. It found a
+   resume desync: the refused call never claimed its saved frame, so the
+   next call did. `StateStack.discardPausedChainFor` drops the frame and
+   everything below it when `enterCallable` refuses.
+8. **`silentHostUse` was not needed.** The thirteen test files that carried
    it were agents whose startup scans the bundled docs through
    `std::skills`; with the scans tagged `fileRead` and the stack replay,
    the uses are covered and the field is gone.

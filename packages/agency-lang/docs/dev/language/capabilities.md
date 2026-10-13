@@ -22,18 +22,12 @@ is for changing the mechanism.
 ## Why the tag is on the function
 
 A capability is a fact about code: this code asks the host to read a file.
-An effect is a question for a person: may this file be read? The first
-version of this feature (PR F3) put the tag on the effect declaration, and
-a function that raised no effect, such as `exists`, then had nowhere to say
-what it needed. The tag moved to the function.
-
-The tag goes on a `def` or a `node` and nowhere else. A module-wide tag was
-in the plan and came out: a tag on `std::shell` reached `std::skills`
-through one imported function and made every stdlib agent need
-`subprocess`. A tag on an import was the spec's follow-up and came out for
-the same reason the owner gave: one place to look. The plan and its review
-are `docs/superpowers/plans/2026-10-13-capabilities-on-functions.md` and
-the `-review.md` beside it.
+An effect is a question for a person: may this file be read? A function
+that raises no effect, such as `exists`, still reads files, so the tag sits
+on the function and not on the effect. It goes on a `def` or a `node` and
+nowhere else. A module-wide tag would leak: a tag on `std::shell` would
+reach `std::skills` through the one function it imports, `exists`, and make
+every stdlib agent need `subprocess`.
 
 ## The tag
 
@@ -55,10 +49,10 @@ The rules, each a diagnostic in `lib/typeChecker/capabilitiesCheck.ts`:
 - The tag sits above a `def` or a `node` (AG3028). One predicate decides
   it: a `@capabilities` tag attached to any other node, or standing alone,
   is stray. The effect declaration is the one case that adds a hint, "move
-  it to the function that raises the effect", because that is where F3
-  taught people to write it.
-- AG3027, two declarations of one effect disagreeing, is retired. The code
-  stays reserved in `diagnostics.ts` with a note.
+  it to the function that raises the effect", since that is the natural
+  mistake.
+- AG3027 is retired. The code stays reserved in `diagnostics.ts` with a
+  note.
 
 A tag with no names is written `@capabilities()`. The parser records
 whether a tag's parentheses were written (`parentheses` on the `Tag`
@@ -76,8 +70,8 @@ function's own tag onto `sym.capabilities`. Then `propagateEffects` in
 `EFFECT_VIEWS`, and `CAPABILITIES_NEEDED` is the third view beside the two
 effect views: it reads `sym.capabilities` as the seed, follows the same
 call edges through imports and re-exports, and writes the union back. A
-view is three functions, `readBody`, `readOwn`, and `writeBack`, so adding
-one touched no propagation code. `buildCompilationUnit` then builds
+view is three functions, `readBody`, `readOwn`, and `writeBack`.
+`buildCompilationUnit` then builds
 `capabilitiesByFunction` with `fieldTable`, beside the two effect tables.
 
 **The type checker.** `analyzeCapabilitiesFromScopes` in
@@ -99,34 +93,48 @@ it does for effects.
 A tag is written by hand. `agency test --check-capabilities` compares it
 with what the code did:
 
-1. The runner names a file in the `AGENCY_CAPABILITY_LOG` setting of each
-   case's subprocess (`lib/cli/test.ts`).
-2. In that process, `lib/host/node/default.node.ts` builds the host with an
-   `onUse` callback that appends `use <part.function> <capability>` to the
-   file for every capability function that runs, and `enterCallable`
-   (below) appends `enter <name> <capabilities>` when a function or node
-   starts and `exit <name>` when it ends (`lib/runtime/capabilityLog.ts`).
-   The exit is written in a `finally`, so a body that throws, fails, or is
-   aborted still leaves the stack; a missed exit would cover every later
-   host use in the case.
+1. The runner names a file in the `AGENCY_CAPABILITY_LOG` variable of each
+   case's subprocess (`lib/cli/test.ts`), and removes it when the case
+   ends, however it ends.
+2. In that process, `lib/host/node/default.node.ts` reads the variable once,
+   when it builds the host, and gives the host two callbacks that append to
+   the file: `onUse`, which `makeHost` calls with `use <part.function>
+   <capability>` before any capability function runs, and `onCallable`,
+   which `enterCallable` (below) calls with `enter <name> <capabilities>`
+   when a function or node starts and `exit <name>` when it ends
+   (`lib/runtime/capabilityLog.ts`). The exit is reported in a `finally`,
+   so a body that throws, fails, or is aborted still leaves the stack; a
+   missed exit would cover every later host use in the case. The path is
+   read once and kept on the host, so a program that changes the variable
+   with `setEnv` changes nothing; the runtime never reads a setting a
+   program controls to decide where to write.
 3. When the subprocess exits, `checkCapabilityLog` in
    `lib/cli/capabilityCheck.ts` replays the lines. `enter` pushes a frame,
    `exit` pops the innermost frame with that name, and a `use` is covered
    when any frame on the stack declares the capability. A use no frame
    covers fails the case and names the host function, the capability, and
-   the innermost function that was running.
+   the innermost function that was running. A use made while no function
+   was running is a note, not a failure: it is the runtime's own work after
+   a node returned (a memory frame being saved) or top-level code, and no
+   tag can cover it.
 
-`llm` is left out: both platforms have it, and a model call is made by
-`llm()`, which is not a function a tag can sit on. The other six are
-checked. `CHECKED_CAPABILITIES` is every name in `CAPABILITIES` minus
-that one, so a new capability is checked unless someone leaves it out.
+Two capabilities are left out. `llm`: both platforms have it, and a model
+call is made by `llm()`, which is not a function a tag can sit on.
+`terminal`: the runtime asks the terminal its size and colour support from
+whatever function prints first, so the use lands on a function whose tag
+has nothing to do with it. `CHECKED_CAPABILITIES` is every name in
+`CAPABILITIES` minus those two, so a new capability is checked unless
+someone leaves it out.
 
 Concurrent branches interleave their lines, so the stack is really the set
 of every in-flight function across branches, and a use is covered if any of
 them declares the capability. The errors this produces are false passes: a
 wrong tag can hide behind a concurrent function with the right one, so a
-green run does not prove the tags complete. The check also sees only what
-the tests run. The agency tests run with the flag in CI
+green run does not prove the tags complete. A subprocess started by
+`std::agency`'s `run` does not inherit the variable (`buildForkOptions` in
+`lib/runtime/ipc.ts` removes it), so a child program is not checked at all
+rather than checked against the parent's frames. The check also sees only
+what the tests run. The agency tests run with the flag in CI
 (`.github/workflows/test.yml`).
 
 ## Compiling for a platform
@@ -197,13 +205,23 @@ from `lib/host/host.ts`, the one function that reads `host.capabilities`,
 and converts the `UnsupportedOnHostError` it throws the way the generated
 catch converts one thrown inside a body: a statelog `error` event and
 `runtimeFailure`. So a refusal at entry and a refusal from inside the host
-read the same and log the same. One sentence is added for a model that
-called the function as a tool, `No tool call can supply it.`, so it does
-not try again with other arguments.
+read the same and log the same. One sentence is added, `Calling exists
+again will fail the same way.`, for a model that called the function as a
+tool and for a person reading the failure: nothing about the call was
+wrong, and another call will not help.
 
 The body never begins, so its `pushHandler` calls never run, and no handler
 is skipped by a partial run. This is the argument `checkFailureArgs` makes
 for failure propagation, and it holds here for the same reason.
+
+A function that reaches the host only for some of its inputs is tagged for
+all of them. `attachToReply` reads a file only when the attachment names a
+path, and passes a URL or base64 source through untouched, but it carries
+`fileRead`, so a browser program that attaches a base64 image is refused
+although it would have worked. The tag is a fact about the function, and
+the compile-time union has no way to say "only for path sources"; a
+function that needs to work on both kinds of host is split in two, one
+tagged and one not, and the caller picks.
 
 The function's own list reaches the runtime in the wrapper's metadata: the
 `createProps` object codegen emits gains `capabilities` when the tag names
@@ -222,10 +240,16 @@ A function reached through a chain of calls is checked when it is entered,
 so the transitive list is a compile-time matter only. A resume replays the
 node from the top and enters the call that was in progress again through
 `__call` and `invoke`, so a checkpoint taken on a full host and resumed on
-a smaller one is refused at the function, with the function's message.
-`tests/agency-js/host-capability-refusal` runs both raise forms, a tagged
-node, and the resume on a memory host without `subprocess`, and checks the
-handler never printed.
+a smaller one is refused at the function, with the function's message, and
+the line after the approved interrupt never runs. On a resume the state
+stack hands out the paused chain's saved frames in call order, and the
+refused call would have claimed the next one; `enterCallable` calls
+`discardPausedChainFor` on the stack so that frame and everything below it
+are dropped, or the next call would claim them and fail with a resume
+desync. `tests/agency-js/host-capability-refusal` runs both raise forms, a
+tagged node, a pause before the tagged function, and a pause inside it with
+the interrupt approved, all resumed on a memory host without `subprocess`,
+and checks the handler never printed and the body never ran.
 
 `callPlain` TypeScript helpers are not wrapped and get no check, which
 matches the decision that imports carry no tag.
@@ -268,8 +292,9 @@ does and has an empty list fails unless it is on the allow list in the
 test, which has a sentence per group (`range`, the `std::date` and
 `std::path` functions, agents that assemble a prompt and hand on the tools
 they are given, and the like). A second test fails if a name on the allow
-list carries a tag after all. The test found one missing tag when it was
-written, `runWrite` in `std::safeBash/actions`.
+list carries a tag after all. The test covers `stdlib/`; the agent's own
+Agency files under `lib/agents/` carry tags too (`sessions.agency`), and
+the runner checks those in CI.
 
 `agency doc` prints the transitive list as a `Needs:` line beside `Throws:`
 on every function and node (`formatNeeds` in `lib/cli/doc.ts`).

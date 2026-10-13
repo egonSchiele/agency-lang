@@ -2969,8 +2969,8 @@ const tagArgsList = map(
 );
 
 // The full tag: @name, @name() or @name(args). Whether the parentheses
-// were written is kept, so the formatter can write them back: an effect
-// that needs nothing from the host is `@capabilities()`.
+// were written is kept, so the formatter can write them back: a function
+// that needs nothing from the host can say so with `@capabilities()`.
 const _tagParserInner = memo(
   "tagParser",
   map(

@@ -5,9 +5,8 @@ which this plan changes. The design below replaces "Declaring what an
 effect needs", "Refusing before the approval prompt", and the follow-up
 section on import tags. Update the spec in the first task.
 
-**Review:** `2026-10-13-capabilities-on-functions-review.md` reviewed the
-first draft of this plan. The last section of this file lists what the
-review changed.
+**Review:** the first draft of this plan was reviewed before any code was
+written. The last section of this file lists what the review changed.
 
 Read first:
 
@@ -416,7 +415,7 @@ check.
 ## What the review changed
 
 The first draft of this plan had a module tag beside the function tag.
-The review (`2026-10-13-capabilities-on-functions-review.md`) found that
+The review found that
 a module tag leaks: `std::shell`'s module-wide `subprocess` reached
 `std::skills` through `exists`, and from there every stdlib agent. It also
 found that the module tag's position was ambiguous at the top of a file,

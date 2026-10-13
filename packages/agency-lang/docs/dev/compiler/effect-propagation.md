@@ -186,7 +186,7 @@ def hasNotes(): boolean {
 A view is three functions: `readBody` (which facts to take from a body),
 `readOwn` (the labels the crawl already put on the symbol), and `writeBack`.
 The two effect views wrap their labels as `{ effect }`; the capabilities
-view stores plain names. Adding the view touched no propagation code.
+view stores plain names.
 
 The type checker runs the same walk over its scopes in
 `analyzeCapabilitiesFromScopes`, seeded from `capabilitiesByFunction` for

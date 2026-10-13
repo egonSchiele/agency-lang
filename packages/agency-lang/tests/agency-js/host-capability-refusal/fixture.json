@@ -1,0 +1,10 @@
+{
+  "interruptForm": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
+  "interruptFormOutput": [],
+  "onFullHost": "ran ls",
+  "onFullHostOutput": ["handler ran for app::shell\n"],
+  "raiseForm": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
+  "raiseFormOutput": [],
+  "afterResume": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
+  "afterResumeOutput": []
+}

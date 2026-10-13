@@ -117,6 +117,7 @@ export {
   sameScopedFields,
 } from "./alwaysScope.js";
 export type { ScopedField } from "./alwaysScope.js";
+export { __registerEffectCapabilities, effectCapabilitiesFor } from "./effectCapabilities.js";
 
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";

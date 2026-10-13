@@ -2,6 +2,8 @@ import type { Tag } from "../types/tag.js";
 import type { Expression } from "../types.js";
 import { CAPABILITIES, type Capability } from "../host/host.js";
 import { levenshtein } from "../levenshtein.js";
+import { sameCapabilities } from "../runtime/effectCapabilities.js";
+export { sameCapabilities };
 
 /** `@capabilities(fileRead, subprocess)` on an effect declaration names
  *  what the host must have for the effect's function to work. The names
@@ -64,11 +66,6 @@ export function closestCapability(name: string): Capability {
     }
   }
   return best;
-}
-
-/** Same capabilities, in any order, each counted once. */
-export function sameCapabilities(a: Capability[], b: Capability[]): boolean {
-  return a.length === b.length && a.every((capability) => b.includes(capability));
 }
 
 /** Read the `@capabilities` tags on one declaration. Unknown names are

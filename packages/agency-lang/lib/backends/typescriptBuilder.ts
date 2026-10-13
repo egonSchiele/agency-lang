@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
 import { readAlwaysScope } from "../utils/alwaysTag.js";
+import { readCapabilities } from "../utils/capabilitiesTag.js";
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";
@@ -229,7 +230,8 @@ function walkMarkTopLevel(value: unknown): unknown {
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
-  /** One `__registerAlwaysScope(...)` per tagged effect declaration. */
+  /** One `__registerAlwaysScope(...)` or `__registerEffectCapabilities(...)`
+   *  per tagged effect declaration. */
   private alwaysScopeRegistrations: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
   /**
@@ -652,14 +654,23 @@ export class TypeScriptBuilder {
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
       case "effectDeclaration": {
-        // The payload type is compile-time only. An @always scope is the
-        // one thing a declaration contributes at runtime: one registration
-        // at module JS-load. The typechecker already validated the tags.
+        // The payload type is compile-time only. What a declaration
+        // contributes at runtime is its tags: an @always scope and the
+        // @capabilities list, each one registration at module JS-load. The
+        // typechecker already validated them.
         const { fields } = readAlwaysScope(node.tags);
         if (fields.length > 0) {
           this.alwaysScopeRegistrations.push(
             ts.raw(
               `__registerAlwaysScope(${JSON.stringify(node.effect)}, ${JSON.stringify(fields)});`,
+            ),
+          );
+        }
+        const { capabilities } = readCapabilities(node.tags);
+        if (capabilities.length > 0) {
+          this.alwaysScopeRegistrations.push(
+            ts.raw(
+              `__registerEffectCapabilities(${JSON.stringify(node.effect)}, ${JSON.stringify(capabilities)});`,
             ),
           );
         }

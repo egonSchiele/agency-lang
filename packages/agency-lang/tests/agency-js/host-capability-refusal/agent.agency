@@ -1,0 +1,62 @@
+// An effect the browser host cannot serve. The program runs on a memory
+// host without the subprocess capability, so every raise is rejected before
+// any handler runs; the handlers below print when they run, and the test
+// reads the host's output to check they never did. Both forms are here:
+// the statement, and the assignment that expects a value.
+@capabilities(subprocess)
+effect app::shell { command: string }
+
+// An effect that needs nothing, for the resume case: it surfaces, the
+// test answers it, and the tagged raise after it is still refused.
+effect app::goAhead {}
+
+def runIt(command: string): Result<string> {
+  interrupt app::shell("run ${command}?", { command: command })
+  return success("ran ${command}")
+}
+
+def askIt(): Result<string> {
+  const answer = interrupt app::shell("which command?", { command: "ls" })
+  return success("got ${answer}")
+}
+
+def guarded(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+export node interruptForm(): string {
+  let seen = ""
+  handle {
+    seen = guarded(runIt("ls"))
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve()
+  }
+  return seen
+}
+
+export node raiseForm(): string {
+  let seen = ""
+  handle {
+    seen = guarded(askIt())
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve("pwd")
+  }
+  return seen
+}
+
+export node afterResume(): string {
+  interrupt app::goAhead("ready?")
+  let seen = ""
+  handle {
+    seen = guarded(runIt("ls"))
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve()
+  }
+  return seen
+}

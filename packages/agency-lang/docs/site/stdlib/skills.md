@@ -122,7 +122,7 @@ effect std::skills::save {
 ### std::skills::review
 
 ```ts
-@capabilities
+@capabilities()
 effect std::skills::review {
   dir: string;
   name: string;

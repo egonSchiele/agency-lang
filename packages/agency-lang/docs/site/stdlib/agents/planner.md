@@ -20,7 +20,7 @@ Raised before a generated plan-agent runs, so the plan, source, and
 ```ts
 /** Raised before a generated plan-agent runs, so the plan, source, and
   capability envelope can be shown and approved. Reject halts and fails. */
-@capabilities
+@capabilities()
 effect std::agents::planApprove {
   plan: string;
   source: string;

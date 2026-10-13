@@ -56,7 +56,7 @@ effect std::memory::enableMemory {
 ### std::memory::disableMemory
 
 ```ts
-@capabilities
+@capabilities()
 effect std::memory::disableMemory {}
 ```
 

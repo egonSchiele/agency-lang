@@ -180,7 +180,7 @@ export type Unresolved = {
   reason: string
 }
 
-@capabilities
+@capabilities()
 effect std::toolbox::review {
   name: string;
   stagingDir: string;

@@ -70,7 +70,7 @@ export type MemoryConfig = {
 
 @capabilities(fileRead, fileWrite)
 effect std::memory::enableMemory { dir: string }
-@capabilities
+@capabilities()
 effect std::memory::disableMemory {}
 @capabilities(fileRead, fileWrite, llm)
 effect std::memory::remember { contentLength: number }

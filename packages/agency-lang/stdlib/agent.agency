@@ -16,7 +16,7 @@ type Todo = {
 
 let _todos: Todo[] = []
 
-@capabilities
+@capabilities()
 effect std::question {
   prompt: string
 }

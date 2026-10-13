@@ -17,7 +17,7 @@ list to track multi-step work across turns.
 ### std::question
 
 ```ts
-@capabilities
+@capabilities()
 effect std::question {
   prompt: string
 }

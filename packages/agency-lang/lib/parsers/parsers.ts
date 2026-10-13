@@ -2968,15 +2968,25 @@ const tagArgsList = map(
   (result) => result.args,
 );
 
-// The full tag: @name or @name(args)
+// The full tag: @name, @name() or @name(args). Whether the parentheses
+// were written is kept, so the formatter can write them back: an effect
+// that needs nothing from the host is `@capabilities()`.
 const _tagParserInner = memo(
   "tagParser",
-  seqC(
-    set("type", "tag"),
-    char("@"),
-    capture(many1WithJoin(varNameChar), "name"),
-    capture(or(tagArgsList, succeed([] as Expression[])), "arguments"),
-    optionalSemicolon,
+  map(
+    seqC(
+      set("type", "tag"),
+      char("@"),
+      capture(many1WithJoin(varNameChar), "name"),
+      capture(or(tagArgsList, succeed(null)), "writtenArguments"),
+      optionalSemicolon,
+    ),
+    (result) => ({
+      type: "tag" as const,
+      name: result.name,
+      arguments: result.writtenArguments ?? [],
+      parentheses: result.writtenArguments !== null,
+    }),
   ),
 );
 

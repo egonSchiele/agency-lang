@@ -227,7 +227,7 @@ effect std::toolbox::removeStagedFile {
 ### std::toolbox::review
 
 ```ts
-@capabilities
+@capabilities()
 effect std::toolbox::review {
   name: string;
   stagingDir: string;

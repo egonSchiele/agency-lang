@@ -34,7 +34,7 @@ effect std::screenshot {
 ### std::exit
 
 ```ts
-@capabilities
+@capabilities()
 effect std::exit {
   code: number
 }

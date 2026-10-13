@@ -1572,13 +1572,14 @@ describe("effect declaration tags", () => {
     expect(formatSource(src)).toBe(src);
   });
 
-  it("writes a @capabilities tag with no names without parentheses", () => {
-    // The spelling the stdlib uses for an effect that needs nothing.
+  it("keeps the parentheses on a tag written with none inside them", () => {
+    // `@capabilities()` is how the stdlib says an effect needs nothing
+    // from the host; a bare tag stays bare.
     expect(formatSource("@capabilities()\neffect app::x {}\n")).toBe(
-      "@capabilities\neffect app::x {}\n",
+      "@capabilities()\neffect app::x {}\n",
     );
-    expect(formatSource("@capabilities\neffect app::x {}\n")).toBe(
-      "@capabilities\neffect app::x {}\n",
+    expect(formatSource("@destructive\neffect app::y {}\n")).toBe(
+      "@destructive\neffect app::y {}\n",
     );
   });
 });

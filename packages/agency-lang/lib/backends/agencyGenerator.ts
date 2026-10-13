@@ -2209,7 +2209,7 @@ export class AgencyGenerator {
 
   protected formatTag(tag: Tag): string {
     if (tag.arguments.length === 0) {
-      return this.indentStr(`@${tag.name}`);
+      return this.indentStr(tag.parentheses === true ? `@${tag.name}()` : `@${tag.name}`);
     }
     const args = tag.arguments.map((arg) => this.processNode(arg as AgencyNode).trim());
     return this.indentStr(`@${tag.name}(${args.join(", ")})`);

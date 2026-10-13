@@ -525,7 +525,7 @@ type SkillDraft = {
 
 const ACCEPT = "accept"
 
-@capabilities
+@capabilities()
 effect std::skills::review {
   dir: string;
   name: string;

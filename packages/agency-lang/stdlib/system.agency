@@ -30,7 +30,7 @@ open URLs, and read from stdin.
 
 @capabilities(fileRead, subprocess)
 effect std::screenshot { filepath: string }
-@capabilities
+@capabilities()
 effect std::exit { code: number }
 @capabilities(env)
 @always(name)

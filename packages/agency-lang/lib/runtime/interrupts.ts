@@ -45,6 +45,7 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { sendInterruptToParent } from "./ipcChild.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
+import { recordRaise } from "./capabilityLog.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 import { TRACE_ID_ENV } from "../config/config.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -630,6 +631,7 @@ export async function interruptWithHandlers<T = any>(
   },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   assertUsable(run, "raise an interrupt");
+  recordRaise(run.ctx.host, effect);
   const stack = opts?.stack ?? run.stack;
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;

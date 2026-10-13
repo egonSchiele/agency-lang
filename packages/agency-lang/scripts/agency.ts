@@ -1380,6 +1380,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--agency-only",
       "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
     )
+    .option(
+      "--check-capabilities",
+      "Fail a case that asked the host for fileRead, fileWrite, network, or subprocess when no effect it raised is tagged @capabilities with that name",
+    )
     .option("--refuse-splices", DESC_REFUSE_SPLICES)
     .option(
       "--json",
@@ -1410,6 +1414,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           maxCost?: string;
           maxTime?: string;
           agencyOnly?: boolean;
+          checkCapabilities?: boolean;
           refuseSplices?: boolean;
           json?: boolean;
         },
@@ -1436,6 +1441,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
               }) ?? undefined,
             budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
             agencyOnly: opts.agencyOnly ?? false,
+            checkCapabilities: opts.checkCapabilities ?? false,
             output,
           };
         } catch (e) {

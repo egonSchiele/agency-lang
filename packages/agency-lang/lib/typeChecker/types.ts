@@ -11,6 +11,7 @@ import {
 import { SourceLocation } from "../types/base.js";
 import type { ImportedFunctionSignature, ScopedTypeAliases } from "../compilationUnit.js";
 import type { InterruptEffect, SymbolTable } from "../symbolTable.js";
+import type { Capability } from "../host/host.js";
 import type { InterruptCallGraph } from "./interruptAnalysis.js";
 // Type-only import: diagnostics.ts type-imports TypeCheckError from here, so
 // this pair of type-only imports has no runtime cycle.
@@ -40,6 +41,10 @@ export type TypeCheckResult = {
   errors: TypeCheckError[];
   scopes: ScopeInfo[];
   interruptEffectsByFunction: Record<string, InterruptEffect[]>;
+  /** What each function and node needs from the host, by name: its own
+   *  `@capabilities` tag unioned over everything it calls, imports
+   *  included. See docs/dev/language/capabilities.md. */
+  capabilitiesByFunction: Record<string, Capability[]>;
   interruptCallGraph: InterruptCallGraph;
   /** The flow graph built during the check (PR 1b). Exposed for tests/tooling
    *  (identity guard now; LSP hover / PR 4 later). Undefined if the check threw
@@ -92,6 +97,9 @@ export type TypeCheckerContext = {
   /** Names brought in by non-Agency JS imports — see CompilationUnit. */
   jsImportedNames: Record<string, true>;
   interruptEffectsByFunction: Record<string, InterruptEffect[]>;
+  /** The imported callables' needs from the host, the way
+   *  `interruptEffectsByFunction` carries their effects. */
+  capabilitiesByFunction: Record<string, Capability[]>;
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType>;
   inferringReturnType: Set<string>;

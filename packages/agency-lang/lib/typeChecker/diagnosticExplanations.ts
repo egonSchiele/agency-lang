@@ -300,6 +300,51 @@ effect app::x { a: string, b: string }
 
 **How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
 
+  capabilityUnknown: `A \`@capabilities\` tag names something that is not a capability. The names are fixed: \`fileRead\`, \`fileWrite\`, \`network\`, \`subprocess\`, \`env\`, \`terminal\`, and \`llm\`. Each one is a part of the host that a platform may lack, so a program cannot add to the list.
+
+\`\`\`
+@capabilities(flies)
+def load(path: string): string { ... }
+\`\`\`
+
+**How to fix:** write the name the message suggests, \`@capabilities(fileRead)\` here.`,
+
+  capabilitiesBadArgument: `Each argument to \`@capabilities\` must be a bare capability name. Strings, calls, and other expressions are not names.
+
+\`\`\`
+@capabilities("fileRead")
+def load(path: string): string { ... }
+\`\`\`
+
+**How to fix:** write \`@capabilities(fileRead)\`.`,
+
+  capabilitiesRepeatedTag: `\`@capabilities\` appears more than once on one function or node. It may appear once; list every capability in that one tag.
+
+\`\`\`
+@capabilities(fileRead)
+@capabilities(network)
+def sync(path: string): string { ... }
+\`\`\`
+
+**How to fix:** merge them: \`@capabilities(fileRead, network)\`.`,
+
+  capabilitiesConflict: `RETIRED. The \`@capabilities\` tag used to sit on effect declarations, and two declarations of one effect could carry tags that disagreed. The tag now sits on a \`def\` or a \`node\`, where one declaration has one tag, so there is nothing left to disagree.
+
+**How to fix:** nothing. If you suppressed it with \`// @tc-ignore AG3027\`, remove the suppression.`,
+
+  capabilitiesStrayTag: `A \`@capabilities\` tag ended up on something other than a function or a node: an effect declaration, a type, a constant, a bare call, or nothing at all. The tag says what a function needs from the host, and only a \`def\` or a \`node\` carries it. A wrapper that calls a tagged function needs no tag of its own; it inherits the need through the call.
+
+\`\`\`
+@capabilities(subprocess)
+effect app::shell { command: string }
+\`\`\`
+
+**How to fix:** move the tag so it sits directly above the \`def\` or \`node\` that asks the host for the capability. For an effect, that is the function that raises it.`,
+
+  platformLacksCapability: `The program is being compiled for a platform (\`--platform\`, or \`platform\` in agency.json) that lacks a capability one of its functions needs. A function needs what its own \`@capabilities\` tag names and what the functions it calls need. The lines after the message show the calls from the node or exported function to the function whose tag carries the capability. The browser platform, for example, has no \`fileRead\`, so a node that calls \`read\` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
+
+**How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.`,
+
   effectDataMissing: `The effect declares a payload, but this \`raise\`/\`interrupt\` supplied none. A declared payload is required at the raise site.
 
 **How to fix:** pass the data the effect expects.`,

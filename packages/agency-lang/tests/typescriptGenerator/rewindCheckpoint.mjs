@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -187,77 +187,78 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "rewindCheckpoint.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["message"] = __state.data.message;
-  }
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["message"] = __state.data.message;
+    }
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.mood = await runPrompt(__run, {
-          prompt: `Categorize: ${__stack.args.message}`,
-          messages: __run.threads.getOrCreateActive(),
-          responseFormat: z.object({
-            response: z.union([z.literal("happy"), z.literal("sad")])
-          }),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          removedTools: __self.__removedTools,
-          destructiveSink: __self,
-          checkpointInfo: runner.getCheckpointInfo()
-        });
+            prompt: `Categorize: ${__stack.args.message}`,
+            messages: __run.threads.getOrCreateActive(),
+            responseFormat: z.object({
+              response: z.union([z.literal("happy"), z.literal("sad")])
+            }),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            removedTools: __self.__removedTools,
+            destructiveSink: __self,
+            checkpointInfo: runner.getCheckpointInfo()
+          });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.mood)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __run.threads,
+              data: __stack.locals.mood
+            })
+            return;
+          }
+        });
+        await runner.step(2, __run, async (runner, __run) => {
+runner.halt({
             messages: __run.threads,
             data: __stack.locals.mood
           })
-          return;
-        }
-      });
-      await runner.step(2, __run, async (runner, __run) => {
-runner.halt({
-          messages: __run.threads,
-          data: __stack.locals.mood
-        })
 return;
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(3, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(3, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -269,11 +270,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main(message: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

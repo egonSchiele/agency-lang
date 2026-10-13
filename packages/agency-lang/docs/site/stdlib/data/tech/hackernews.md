@@ -134,7 +134,9 @@ Fetch a Hacker News story list and hydrate the top items into full stories (titl
 
 **Throws:** `std::hackernews`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L253))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L254))
 
 ### hnItem
 
@@ -157,7 +159,9 @@ Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its
 
 **Throws:** `std::hackernews`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L272))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L274))
 
 ### hnUser
 
@@ -182,7 +186,9 @@ Fetch a Hacker News user's public profile: karma, account age, about text, and s
 
 **Throws:** `std::hackernews`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L284))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L287))
 
 ### hnSearch
 
@@ -216,4 +222,6 @@ Search Hacker News stories by keyword via the Algolia index. Returns matching st
 
 **Throws:** `std::hackernews`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L296))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L300))

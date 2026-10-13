@@ -280,7 +280,9 @@ Create a note in the Notes app and return it, including its new id.
 
 **Throws:** `std::notes::create`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L212))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L214))
 
 ### appendToNote
 
@@ -310,7 +312,9 @@ Append Markdown to an existing note. Get the id from listNotes or searchNotes.
 
 **Throws:** `std::notes::append`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L245))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L248))
 
 ### readNote
 
@@ -337,7 +341,9 @@ Read a note's contents as plain text. Get the id from listNotes or searchNotes.
 
 **Throws:** `std::notes::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L275))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L279))
 
 ### searchNotes
 
@@ -365,7 +371,9 @@ Search notes by their text and return matching notes' metadata, without their
 
 **Throws:** `std::notes::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L297))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L302))
 
 ### listNotes
 
@@ -389,7 +397,9 @@ List notes' metadata, without their contents.
 
 **Throws:** `std::notes::list`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L316))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L322))
 
 ### listFolders
 
@@ -403,7 +413,9 @@ List the folders in the Notes app, with a count of the notes in each.
 
 **Throws:** `std::notes::list`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L332))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L339))
 
 ### deleteNote
 
@@ -431,4 +443,6 @@ Delete a note. It moves to the Recently Deleted folder, where it stays for
 
 **Throws:** `std::notes::delete`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L344))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L352))

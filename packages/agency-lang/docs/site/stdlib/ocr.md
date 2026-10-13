@@ -119,7 +119,9 @@ Recognize the text in an image with macOS Vision and return each line
 
 **Throws:** `std::ocr`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L61))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L62))
 
 ### readText
 
@@ -151,7 +153,9 @@ Recognize the text in an image with macOS Vision and return it as one
 
 **Throws:** `std::ocr`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L89))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L90))
 
 ### readTextWithModel
 
@@ -189,4 +193,6 @@ Send an image to a vision model and return the text it reads. The
 
 **Throws:** `std::ocrCloud`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L113))
+**Needs:** `fileRead`, `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L115))

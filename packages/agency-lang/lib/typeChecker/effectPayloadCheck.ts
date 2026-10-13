@@ -20,8 +20,8 @@ import {
   isAlwaysTag,
   ALWAYS_TAG,
   ALWAYS_UNDER_TAG,
-} from "../utils/alwaysTag.js";
-import type { AlwaysProblemKind, AlwaysTagProblem } from "../utils/alwaysTag.js";
+} from "./alwaysTag.js";
+import type { AlwaysProblemKind, AlwaysTagProblem } from "./alwaysTag.js";
 import { sameScopedFields, type ScopedField } from "../runtime/alwaysScope.js";
 import { synthType } from "./synthesizer.js";
 import { isAssignable } from "./assignability.js";

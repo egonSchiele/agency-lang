@@ -620,6 +620,8 @@ this via `with approve`.
 
 **Throws:** `std::read`
 
+**Needs:** `fileRead`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L454))
 
 ### setPolicy
@@ -642,6 +644,8 @@ with `parsePolicyFile` or constructing one by hand.
 |---|---|---|
 | path | `string` |  |
 | policy | [Policy](#policy) |  |
+
+**Needs:** `fileRead`, `fileWrite`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L498))
 
@@ -674,7 +678,9 @@ directory like `["/home/you/.myapp"]`.
 | policy | [Policy](#policy) |  |
 | allowedPaths | `string[]` | [] |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L515))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L516))
 
 ### missingPolicyRules
 
@@ -702,7 +708,9 @@ Neither runs on its own, and nothing is added without being asked for.
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L627))
+**Needs:** `fileRead`, `terminal`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L629))
 
 ### addPolicyRules
 
@@ -722,7 +730,9 @@ Append rules to the `cliPolicyHandler`'s active policy and write the policy file
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L637))
+**Needs:** `fileRead`, `fileWrite`, `terminal`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L640))
 
 ### flushPolicy
 
@@ -742,7 +752,9 @@ No-op when there are no pending changes. Auto-approves its own
 `std::write` via `with approve` (you opted in by installing the
 handler).
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L667))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L670))
 
 ### cliPolicyHandler
 
@@ -832,4 +844,4 @@ provides runtime safety.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1330))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1333))

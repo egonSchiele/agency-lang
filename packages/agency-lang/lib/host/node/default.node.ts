@@ -6,8 +6,13 @@
 // place that reads the environment variables the test runner uses to ask
 // for a double of part of the host.
 
-import { readFileSync } from "fs";
+import { appendFileSync, readFileSync } from "fs";
 import { FakeClock } from "../../runtime/clock.js";
+import {
+  CAPABILITY_LOG_SETTING,
+  formatCapabilityLogLine,
+  type CapabilityLogEntry,
+} from "../../runtime/capabilityLog.js";
 import { fetchMock } from "../../runtime/fetchMock.js";
 import { nodeHost, type NodeHostOptions } from "./nodeHost.js";
 import type { Host, HostNetwork } from "../host.js";
@@ -42,6 +47,17 @@ export function defaultHost(): Host {
   const network = fetchMockNetwork();
   if (network !== null) {
     options.network = network;
+  }
+  // `agency test --check-capabilities` names a file here. Every capability
+  // function the host runs, and every function or node that starts or ends,
+  // appends a line to it (lib/runtime/capabilityLog.ts). Read once, here:
+  // a program that changes the variable later changes nothing.
+  const capabilityLog = process.env[CAPABILITY_LOG_SETTING];
+  if (capabilityLog) {
+    const write = (entry: CapabilityLogEntry) =>
+      appendFileSync(capabilityLog, formatCapabilityLogLine(entry) + "\n");
+    options.onUse = (functionName, capability) => write({ kind: "use", functionName, capability });
+    options.onCallable = write;
   }
   return nodeHost(options);
 }

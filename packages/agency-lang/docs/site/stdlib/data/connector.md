@@ -55,6 +55,8 @@ Fetch a connector API path and return the parsed-JSON Result. Raises the
 
 **Throws:** `std::http::fetchJSON`
 
+**Needs:** `network`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/connector.agency#L25))
 
 ### connectorError

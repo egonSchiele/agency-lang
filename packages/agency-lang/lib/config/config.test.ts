@@ -205,6 +205,12 @@ describe("loadConfigSafe — removed options are ignored, not rejected", () => {
 });
 
 describe("applyCliFlags", () => {
+  it("sets the platform from --platform and leaves it alone otherwise", () => {
+    expect(applyCliFlags({}, { platform: "browser" }).platform).toBe("browser");
+    expect(applyCliFlags({ platform: "browser" }, {}).platform).toBe("browser");
+    expect(applyCliFlags({}, {}).platform).toBeUndefined();
+  });
+
   it("sets the llama.cpp draft model from --draft, and drops a stale one when the model changes without it", () => {
     const withDraft = applyCliFlags(
       {},

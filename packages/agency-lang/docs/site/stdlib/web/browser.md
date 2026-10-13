@@ -75,4 +75,6 @@ Run a browser automation task described in natural language via the Browser Use 
 
 **Throws:** `std::browserUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L28))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L29))

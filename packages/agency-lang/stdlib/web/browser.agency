@@ -25,6 +25,7 @@ type BrowserUseResult = {
 
 effect std::browserUse { task: string, model: string }
 
+@capabilities(network)
 export def browserUse(task: string, model: string = "", maxCostUsd: number = 0, proxyCountryCode: string = "", timeout: number = 0, apiKey: string = "", allowedDomains: string[] = []): Result {
   """
   Run a browser automation task described in natural language via the Browser Use cloud API. The managed browser has stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID.

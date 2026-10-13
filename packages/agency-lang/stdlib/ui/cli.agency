@@ -64,6 +64,7 @@ let _historyFile: string = ""
  * `paletteCommands` has no tab completion yet; there is no busy
  * spinner and no Ctrl+C cancel of an in-flight turn.
  */
+@capabilities(terminal)
 export def repl(
   status: any,
   onSubmit: any,
@@ -112,6 +113,7 @@ export def setSlashPalette(paletteCommands: Record<string, string>) {
   _setSlashPalette(paletteCommands)
 }
 
+@capabilities(terminal)
 export def clearScreen() {
   """Clear the terminal screen."""
   _clearScreen()
@@ -124,6 +126,7 @@ export def clearHistory() {
   _clearHistory(_historyFile)
 }
 
+@capabilities(terminal)
 def termWidth(): number {
   return _termWidth()
 }
@@ -135,6 +138,7 @@ export def hline(char: string = "─", width: number = null): string {
   return char.repeat(_width)
 }
 
+@capabilities(terminal)
 export def interruptChoice(
   title: string,
   body: string,

@@ -75,6 +75,7 @@ playback. */
 // that will be written. An empty outputFile means a temporary file the
 // runtime picks, and passes through. A path that cannot be resolved is
 // thrown, like the other argument checks in this module.
+@capabilities(fileRead)
 def realOutput(outputFile: string): string {
   if (outputFile == "") {
     return ""
@@ -86,6 +87,7 @@ def realOutput(outputFile: string): string {
   return real.value
 }
 
+@capabilities(fileRead, fileWrite, subprocess)
 export def say(
   text: string,
   voice: string = "",
@@ -123,6 +125,7 @@ export def say(
  * An empty `outputFile` is auto-generated under the system temp directory and
  * is not subject to the `allowedPaths` allow-list.
  */
+@capabilities(fileRead, fileWrite, subprocess, terminal)
 export def record(outputFile: string = "", silenceTimeout: number = 2000, allowedPaths: string[] = []): string {
   """
   Record audio from the microphone. Recording stops when the user presses Enter, or after the silence timeout elapses.
@@ -141,6 +144,7 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
 
 /** A cloud transcription request tears down on Ctrl-C, race-loser, or
 time-guard abort. Cost, spend guards, and statelog apply. */
+@capabilities(fileRead, llm)
 export def transcribe(
   filepath: string,
   language: string = "",
@@ -194,6 +198,7 @@ export def transcribe(
 /** A cloud synthesis request tears down on Ctrl-C, race-loser, or time-guard
 abort; a cancelled request never writes its output file. Cost, spend guards,
 and statelog apply. */
+@capabilities(fileRead, fileWrite, llm)
 export def speak(
   text: string,
   outputFile: string = "",
@@ -263,6 +268,7 @@ Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 `speakLocal` refuses such a call before raising any interrupt when
 `ffmpeg` is missing. The local models cannot change their own speed, so
 `speed` stretches the audio after it is generated, keeping its pitch. */
+@capabilities(fileRead, fileWrite, subprocess, llm)
 export def speakLocal(
   text: string,
   model: string,

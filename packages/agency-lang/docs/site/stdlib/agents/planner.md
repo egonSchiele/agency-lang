@@ -111,6 +111,8 @@ Gate generated code behind user approval, then run it: shows the plan,
 
 **Throws:** `std::agents::planApprove`, `std::run`, `std::guard`
 
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L186))
 
 ### plannerAgent
@@ -162,5 +164,7 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`, `std::agents::planApprove`, `std::run`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L224))

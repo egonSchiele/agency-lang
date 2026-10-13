@@ -74,7 +74,9 @@ Search Wikipedia for articles matching a query. Each result has a title, descrip
 
 **Throws:** `std::wikipedia::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L40))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
 
 ### summary
 
@@ -96,7 +98,9 @@ Get a summary of a Wikipedia article. Returns the title, description, intro extr
 
 **Throws:** `std::wikipedia::summary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L55))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L57))
 
 ### article
 
@@ -118,4 +122,6 @@ Get the full text of a Wikipedia article. Returns the title, plain-text content,
 
 **Throws:** `std::wikipedia::article`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L68))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L71))

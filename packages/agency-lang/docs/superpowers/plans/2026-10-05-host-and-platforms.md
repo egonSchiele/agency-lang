@@ -38,8 +38,9 @@ left ships as a few large PRs, each one topic, in dependency order.
 | E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
 | F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | merged, #1191 |
-| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | open |
-| F3 | The `@capabilities` tag on every `std::` effect, checked against the code; `--platform` and the config field; the compile-time check; Node-only stdlib modules; refusing before the prompt | 17, 18 | |
+| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | merged, #1192 |
+| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; the refusal at the raise | 17, 18 | open, #1193 |
+| F4 | The tag moves from effects to functions and nodes: a third propagation view, AG3029 from `capabilitiesByFunction`, `enterCallable` and the refusal at function entry, the stack-based `--check-capabilities`, 239 function tags in the stdlib, a `Needs:` line in `agency doc`. Plan: `2026-10-13-capabilities-on-functions.md` | 17, 18 | open, on top of F3 |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -242,6 +243,103 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR F4 learned
+
+1. **A module-wide tag leaks through imports.** The first plan had a tag
+   at the top of a file that applied to every function in it. `std::shell`
+   would have carried `fileRead, subprocess`, and `std::skills` imports
+   `exists` from it, so every stdlib agent would have needed `subprocess`
+   on the browser for a function that only stats a file. The tag is on
+   functions and nodes only.
+2. **The propagation pass took a third view with no new propagation
+   code.** `EffectView` became three functions (`readBody`, `readOwn`,
+   `writeBack`), and the capabilities view is one more entry in
+   `EFFECT_VIEWS`. The type checker's walk gained a seed parameter the
+   same way.
+3. **Nodes do not go through `AgencyFunction.invoke`.** A node body is an
+   arrow handed to `graph.node`, so its runtime check is a call to
+   `__enterCallable` that codegen wraps around the body. The run-parameter
+   fixture test caught the first version, whose callbacks did not declare
+   `__run`.
+4. **The host already had the check.** `requireCapabilities` in
+   `lib/host/host.ts` is the one function that reads `host.capabilities`,
+   and calling it from `enterCallable` gave the entry refusal the host's
+   own message and statelog event for free. The first plan would have
+   written a second loop and a second message.
+5. **The stdlib coverage test found a real gap.** Written as a fixpoint
+   over the compiler's own call edges (`callSummaries`) for "reaches a
+   `stdlib-lib` helper", it reported `runWrite` in `std::safeBash/actions`,
+   which calls `_write` directly and raised nothing, and 41 functions that
+   reach a pure helper, now on the allow list with a sentence per group.
+6. **`--check-capabilities` can now check `env`.** F3 left it out because
+   `env()` raised before many uses. With the stack replay, a use inside
+   `env` is covered by its own tag. `terminal` stays out: the runtime
+   probes the terminal's size and colour support from whatever function
+   prints first, so CI showed the use landing on unrelated functions.
+   A host use made while no function is running (the runtime saving a
+   memory frame after the node returned) is a note, not a failure.
+7. **A refusal during a resume has to drop the paused chain's frames.**
+   The review asked for a test that pauses inside the tagged function,
+   approves the interrupt, and resumes on a smaller host. It found a
+   resume desync: the refused call never claimed its saved frame, so the
+   next call did. `StateStack.discardPausedChainFor` drops the frame and
+   everything below it when `enterCallable` refuses.
+8. **`silentHostUse` was not needed.** The thirteen test files that carried
+   it were agents whose startup scans the bundled docs through
+   `std::skills`; with the scans tagged `fileRead` and the stack replay,
+   the uses are covered and the field is gone.
+
+### What PR F3 learned
+
+1. **The formatter dropped the parentheses of an empty tag.** It wrote
+   every tag with no arguments as `@name`, and `make` formats the stdlib,
+   so `@capabilities()` would not have survived a build. The parser now
+   records whether the parentheses were written, and the formatter keeps
+   them, so the docs show `@capabilities()` for an effect that needs
+   nothing.
+2. **The stdlib has 143 effects, not 300.** Seventeen of them are
+   `std::git::*` and eighteen `std::github::*`; the spec's estimate counted
+   something else.
+3. **A tag is the whole function, not the code after the raise.** The
+   runtime check records every host call a test made and compares it with
+   the tags of the effects raised, with no way to tell a call before the
+   raise from one after. So the github effects carry `subprocess` and
+   `env` for the `git remote` and `gh auth token` fallbacks, and every
+   write carries `fileRead` for the root it resolves first.
+4. **The check cannot attribute a host call to a function.** The host's
+   `onUse` has no run (`currentRun()` is only right before a function's
+   first await), so a case that calls a deliberately silent function
+   (the docs scan) and also raises an unrelated effect looks like a wrong
+   tag. The runner reports a case that raised nothing as a note, and a
+   test file can say `silentHostUse` with the reason; thirteen files
+   needed it, nearly all agent tests whose startup scans the bundled
+   docs. CI found twelve of them: the local run covered 62 files.
+   A full attribution would mean recording the frame's scope name at the
+   raise and at the call, which `stack.scopeName` has but the host cannot
+   reach.
+5. **The checker does not follow a call through a variable.** `const f =
+   read; f("a")` reaches no effect list; passing `f` on does. That is a
+   limit of effect propagation, recorded in its doc, and the plan's test
+   for "a function stored in a variable" became the passed-on form.
+6. **`read` is refused before it raises.** It resolves its path through
+   the host first, so on the browser host `files.locate` refuses it and
+   the raise-time check never sees `std::read`. The raise-time check
+   matters for the functions that raise first (`exec`, `bash`, `env`,
+   the network effects), where it keeps the approval prompt from being
+   asked for work that would then fail.
+7. **`pack` and `bundle` do not take `--platform`.** `pack` has
+   `--target node` and can only produce a Node bundle; `bundle` is the
+   trace bundle command. The flag is on `compile` and `typecheck`.
+8. **The compile path gates the checker on `typechecker.enabled`.**
+   `--platform browser` has to run it anyway, so `runTypecheck` runs the
+   checker for the platform findings alone when nothing else asked, and
+   treats them as fatal in warn mode too.
+9. **A list of Node-only stdlib modules in the compiler did not survive
+   review.** Task 42 as written was a second list kept in step by a test,
+   and it said nothing about a user's own TypeScript imports. It came out
+   again; the bundler reports those imports today, and the spec records a
+   tag on import statements as the follow-up.
 
 ### What PR F2 learned
 

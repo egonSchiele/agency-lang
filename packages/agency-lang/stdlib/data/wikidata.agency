@@ -215,6 +215,7 @@ def queryFinalize(fetchResult: any): Result<Record<string, string>[]> {
   }
 }
 
+@capabilities(network)
 export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> raises <std::wikidata, std::http::fetchJSON> {
   """
   Search Wikidata for entities by name. Returns matches with QID, label, description, and URL. The
@@ -229,6 +230,7 @@ export def wikidataSearch(name: string, limit: number = 5): Result<Entity[]> rai
   return searchFinalize(result)
 }
 
+@capabilities(network)
 export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikidata, std::http::fetchJSON> {
   """
   Fetch one Wikidata entity by its QID. Returns the English label, description, aliases, and claims
@@ -242,6 +244,7 @@ export def wikidataEntity(qid: string): Result<EntityDetail> raises <std::wikida
   return entityFinalize(result, qid)
 }
 
+@capabilities(network)
 export def wikidataQuery(sparql: string): Result<Record<string, string>[]> raises <std::wikidata, std::http::fetchJSON> {
   """
   Run a SPARQL query against the Wikidata Query Service and return rows (each a map of the SELECTed

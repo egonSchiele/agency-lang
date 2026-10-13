@@ -1,0 +1,14 @@
+{
+  "interruptForm": "failed: runIt needs the subprocess capability, which the memory host does not have. Calling runIt again will fail the same way.",
+  "interruptFormOutput": [],
+  "onFullHost": "ran ls",
+  "onFullHostOutput": ["handler ran for app::shell\n"],
+  "raiseForm": "failed: askIt needs the subprocess capability, which the memory host does not have. Calling askIt again will fail the same way.",
+  "raiseFormOutput": [],
+  "afterResume": "failed: runIt needs the subprocess capability, which the memory host does not have. Calling runIt again will fail the same way.",
+  "afterResumeOutput": [],
+  "taggedNode": "failed: taggedNode needs the subprocess capability, which the memory host does not have. Calling taggedNode again will fail the same way.",
+  "taggedNodeOutput": [],
+  "pausedInside": "failed: runIt needs the subprocess capability, which the memory host does not have. Calling runIt again will fail the same way.",
+  "pausedInsideOutput": []
+}

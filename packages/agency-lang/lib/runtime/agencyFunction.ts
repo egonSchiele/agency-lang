@@ -12,6 +12,8 @@ import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
+import { enterCallable } from "./capabilities.js";
+import type { Capability } from "../host/host.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -105,6 +107,9 @@ export type AgencyFunctionOpts = {
   markers?: ToolMarkers;
   isPreapproved?: boolean;
   registeredName?: string;
+  /** What the function's own `@capabilities` tag names. Checked against the
+   *  run's host on every call, before the body. Empty when untagged. */
+  capabilities?: Capability[];
 };
 
 export class AgencyFunction {
@@ -121,6 +126,7 @@ export class AgencyFunction {
   private readonly _checksFailures: boolean;
   readonly exported: boolean;
   readonly markers: ToolMarkers;
+  readonly capabilities: Capability[];
   private readonly _isPreapproved: boolean;
   /** The key this function's registered ancestor is stored under in the
    *  function registry. `.rename()` changes `name` but not this, and the
@@ -139,6 +145,7 @@ export class AgencyFunction {
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
+    this.capabilities = opts.capabilities ?? [];
     this._isPreapproved = opts.isPreapproved ?? false;
     this._unboundParams = opts.params.filter((p) => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter((p) => !p.variadic);
@@ -170,18 +177,32 @@ export class AgencyFunction {
     return { indices, values, originalParams: this.params };
   }
 
-  withToolDefinition(toolDefinition: ToolDefinition | null): AgencyFunction {
-    return new AgencyFunction({
+  /** This function's options, as they would be passed to the constructor.
+   *  `derive` spreads them under a change, so a derived copy carries every
+   *  field by construction and a new field needs adding in one place. */
+  private options(): AgencyFunctionOpts {
+    return {
       name: this.name,
       module: this.module,
       fn: this._fn,
       params: this.params,
-      toolDefinition,
+      toolDefinition: this.toolDefinition,
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
-    });
+      capabilities: this.capabilities,
+    };
+  }
+
+  /** A copy with `overrides` applied. Every derivation (`partial`,
+   *  `rename`, `describe`, `preapprove`) goes through here. */
+  private derive(overrides: Partial<AgencyFunctionOpts>): AgencyFunction {
+    return new AgencyFunction({ ...this.options(), ...overrides });
+  }
+
+  withToolDefinition(toolDefinition: ToolDefinition | null): AgencyFunction {
+    return this.derive({ toolDefinition });
   }
 
   getOriginalParams(): FuncParam[] {
@@ -200,39 +221,48 @@ export class AgencyFunction {
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
     assertUsable(outerRun, `call ${this.name}()`);
-    return withCallDepth(outerRun, this.name, async (run) => {
-      let args: unknown[];
-      try {
-        args = this._isBound
-          ? this.mergeWithBound(this.resolveArgs(descriptor))
-          : this.resolveArgs(descriptor);
-      } catch (err) {
-        // Argument binding failed — the function body never began. Tag the
-        // error so the tool loop maps it to the "nothing was executed"
-        // tier (its sole source of neverStarted: true).
-        if (err && typeof err === "object") {
-          (err as { preExecution?: boolean }).preExecution = true;
-        }
-        throw err;
+    // The host is checked before anything else: a function the run's host
+    // cannot serve returns the host's refusal here, and its body, with the
+    // handlers the body would push, never begins. See capabilities.ts.
+    return withCallDepth(outerRun, this.name, (run) =>
+      enterCallable(run, this.name, this.capabilities, () => this.run(run, descriptor)),
+    );
+  }
+
+  /** Argument resolution, failure propagation, and the body, under a run
+   *  whose host has already been checked. */
+  private async run(run: Run, descriptor: CallType): Promise<unknown> {
+    let args: unknown[];
+    try {
+      args = this._isBound
+        ? this.mergeWithBound(this.resolveArgs(descriptor))
+        : this.resolveArgs(descriptor);
+    } catch (err) {
+      // Argument binding failed — the function body never began. Tag the
+      // error so the tool loop maps it to the "nothing was executed"
+      // tier (its sole source of neverStarted: true).
+      if (err && typeof err === "object") {
+        (err as { preExecution?: boolean }).preExecution = true;
       }
-      // Failure propagation: a failure landing on a param that does not
-      // accept Results skips the body and returns the original failure
-      // (spec: docs/superpowers/specs/2026-07-08-failure-propagation-design.md).
-      // `args` is aligned with `this.params` in both branches: mergeWithBound
-      // rebuilds the full list, and in the unbound case params ARE the
-      // unbound list (variadic slot = gathered array). Skipping the body
-      // also skips its pushHandler calls — safe for the same reason pipe
-      // short-circuiting is safe: the call never begins, so no partial run
-      // can raise an effect past an unregistered handler.
-      if (this._checksFailures) {
-        const propagated = checkFailureArgs(run, this.name, this.params, args);
-        if (propagated !== null) {
-          return propagated;
-        }
+      throw err;
+    }
+    // Failure propagation: a failure landing on a param that does not
+    // accept Results skips the body and returns the original failure
+    // (spec: docs/superpowers/specs/2026-07-08-failure-propagation-design.md).
+    // `args` is aligned with `this.params` in both branches: mergeWithBound
+    // rebuilds the full list, and in the unbound case params ARE the
+    // unbound list (variadic slot = gathered array). Skipping the body
+    // also skips its pushHandler calls — safe for the same reason pipe
+    // short-circuiting is safe: the call never begins, so no partial run
+    // can raise an effect past an unregistered handler.
+    if (this._checksFailures) {
+      const propagated = checkFailureArgs(run, this.name, this.params, args);
+      if (propagated !== null) {
+        return propagated;
       }
-      // `_fn` may be imported TypeScript that built a Result by hand.
-      return normalizeForeignResult(await this._fn(run, ...args));
-    });
+    }
+    // `_fn` may be imported TypeScript that built a Result by hand.
+    return normalizeForeignResult(await this._fn(run, ...args));
   }
 
   partial(bindings: Record<string, unknown>): AgencyFunction {
@@ -277,17 +307,7 @@ export class AgencyFunction {
         }
       : null;
 
-    return new AgencyFunction({
-      name: this.name,
-      module: this.module,
-      fn: this._fn,
-      params: newParams,
-      toolDefinition: newToolDef,
-      exported: this.exported,
-      markers: this.markers,
-      isPreapproved: this._isPreapproved,
-      registeredName: this.registeredName,
-    });
+    return this.derive({ params: newParams, toolDefinition: newToolDef });
   }
 
   preapprove(): AgencyFunction {
@@ -318,17 +338,7 @@ export class AgencyFunction {
     // spends, so the hide-everything reading is also harmless).
     const wrapped: AgencyFunctionBody = (run, ...args) =>
       withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), []);
-    return new AgencyFunction({
-      name: this.name,
-      module: this.module,
-      fn: wrapped,
-      params: this.params,
-      toolDefinition: this.toolDefinition,
-      exported: this.exported,
-      markers: this.markers,
-      isPreapproved: true,
-      registeredName: this.registeredName,
-    });
+    return this.derive({ fn: wrapped, isPreapproved: true });
   }
 
   describe(description: string): AgencyFunction {
@@ -372,19 +382,10 @@ export class AgencyFunction {
 
   rename(newName: string): AgencyFunction {
     const newToolDef = this.toolDefinition ? { ...this.toolDefinition, name: newName } : null;
-    return new AgencyFunction({
-      name: newName,
-      module: this.module,
-      fn: this._fn,
-      params: this.params,
-      toolDefinition: newToolDef,
-      exported: this.exported,
-      markers: this.markers,
-      isPreapproved: this._isPreapproved,
-      // The registry never learns the new name, so serialization keeps the
-      // registered name for revival (see FunctionRefReviver).
-      registeredName: this.registeredName,
-    });
+    // The registry never learns the new name, so serialization keeps the
+    // registered name for revival (see FunctionRefReviver); `derive`
+    // carries it over.
+    return this.derive({ name: newName, toolDefinition: newToolDef });
   }
 
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {

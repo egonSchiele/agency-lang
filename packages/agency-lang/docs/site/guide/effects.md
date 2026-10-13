@@ -95,6 +95,10 @@ Both interrupt payloads have `dir` and `filename`, but the `read` function's pay
 
 You don't export or interrupt effect types – just import a function from that file and the effect will get imported automatically.
 
+## What a function needs from the host
+
+An effect says what a person is asked. What the machine running the program must be able to do is a separate fact, written on the function with the `@capabilities` tag. See [Capabilities](./capabilities).
+
 ## References
 - [handlers](./handlers)
 - [policies](./policies)

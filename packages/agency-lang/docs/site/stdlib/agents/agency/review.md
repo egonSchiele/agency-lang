@@ -99,4 +99,6 @@ Review Agency source code and return findings. Always includes parse and
 
 **Throws:** `std::guard`
 
+**Needs:** `fileRead`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L207))

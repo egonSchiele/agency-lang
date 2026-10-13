@@ -1,0 +1,80 @@
+// Functions the browser host cannot serve, by their @capabilities tag. The
+// program runs on a memory host without the subprocess capability, so each
+// tagged function is refused when it is entered, before its body runs and
+// before any handler is asked; the handlers below print when they run, and
+// the test reads the host's output to check they never did. Both raise
+// forms are here, the statement and the assignment that expects a value,
+// so the refusal is seen to come before either.
+effect app::shell { command: string }
+
+// An effect that needs nothing, for the resume case: it surfaces, the
+// test answers it, and the tagged function after it is still refused.
+effect app::goAhead {}
+
+@capabilities(subprocess)
+def runIt(command: string): Result<string> {
+  interrupt app::shell("run ${command}?", { command: command })
+  return success("ran ${command}")
+}
+
+@capabilities(subprocess)
+def askIt(): Result<string> {
+  const answer = interrupt app::shell("which command?", { command: "ls" })
+  return success("got ${answer}")
+}
+
+def guarded(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+export node interruptForm(): string {
+  let seen = ""
+  handle {
+    seen = guarded(runIt("ls"))
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve()
+  }
+  return seen
+}
+
+export node raiseForm(): string {
+  let seen = ""
+  handle {
+    seen = guarded(askIt())
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve("pwd")
+  }
+  return seen
+}
+
+export node afterResume(): string {
+  interrupt app::goAhead("ready?")
+  let seen = ""
+  handle {
+    seen = guarded(runIt("ls"))
+  } with (intr) {
+    print("handler ran for ${intr.effect}")
+    return approve()
+  }
+  return seen
+}
+
+// A pause inside the tagged function: app::shell surfaces with no handler,
+// the test approves it, and the resume runs on a host without subprocess.
+// The approval has been given, and the line after the interrupt must still
+// not run: the resume enters runIt again and is refused there.
+export node pausedInside(): string {
+  return guarded(runIt("ls"))
+}
+
+// A node carries the tag the same way, and is refused when it starts.
+@capabilities(subprocess)
+export node taggedNode(): string {
+  print("tagged node ran")
+  return "ran"
+}

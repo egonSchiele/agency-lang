@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -389,98 +389,99 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "foo2", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-    __stack.args["age"] = __state.data.age;
-  }
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "foo2", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+      __stack.args["age"] = __state.data.age;
+    }
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "foo2"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "foo2"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 await __call(__run, print, {
-          type: "positional",
-          args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
-        }) + greet
-      });
-      await runner.step(2, __run, async (runner, __run) => {
+            type: "positional",
+            args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
+          }) + greet
+        });
+        await runner.step(2, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt(__run, {
-          prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-          messages: __run.threads.getOrCreateActive(),
-          clientConfig: {},
-          maxToolCallRounds: 10,
-          removedTools: __self.__removedTools,
-          destructiveSink: __self,
-          checkpointInfo: runner.getCheckpointInfo()
-        });
+            prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
+            messages: __run.threads.getOrCreateActive(),
+            clientConfig: {},
+            maxToolCallRounds: 10,
+            removedTools: __self.__removedTools,
+            destructiveSink: __self,
+            checkpointInfo: runner.getCheckpointInfo()
+          });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.response)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __run.threads,
+              data: __stack.locals.response
+            })
+            return;
+          }
+        });
+        await runner.step(3, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [`Greeted, age is still ${__stack.args.age}...`]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(4, __run, async (runner, __run) => {
+runner.halt({
             messages: __run.threads,
             data: __stack.locals.response
           })
-          return;
-        }
-      });
-      await runner.step(3, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`Greeted, age is still ${__stack.args.age}...`]
-        });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(4, __run, async (runner, __run) => {
-runner.halt({
-          messages: __run.threads,
-          data: __stack.locals.response
-        })
 return;
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(5, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "foo2",
-          data: undefined
-        }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(5, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "foo2",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -492,11 +493,17 @@ await callHook(__run, {
                 functionName: "foo2",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "foo2" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "foo2" })
+      data: __failure
     };
-  }
+  });
 })
 graph.node("sayHi", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -511,80 +518,81 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "sayHi", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "sayHi", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+    }
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "sayHi"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`Saying hi to ${__stack.args.name}...`]
-        });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
+            name: "onNodeStart",
+            data: {
+              nodeName: "sayHi"
+            }
           })
-          return;
-        }
+        });
+        await runner.step(1, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [`Saying hi to ${__stack.args.name}...`]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(2, __run, async (runner, __run) => {
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.age = 30;
-      });
-      await runner.step(3, __run, async (runner, __run) => {
+        });
+        await runner.step(3, __run, async (runner, __run) => {
 __run.stack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
-          messages: __run.threads,
-          ctx: __run.ctx,
-          data: {
-            name: __stack.args.name,
-            age: __stack.locals.age
-          },
-          run: __state.run
-        }))
+            messages: __run.threads,
+            ctx: __run.ctx,
+            data: {
+              name: __stack.args.name,
+              age: __stack.locals.age
+            },
+            run: __state.run
+          }))
 return;
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(4, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "sayHi",
-          data: undefined
-        }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(4, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "sayHi",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -596,11 +604,17 @@ await callHook(__run, {
                 functionName: "sayHi",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "sayHi" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "sayHi" })
+      data: __failure
     };
-  }
+  });
 })
 graph.conditionalEdge("sayHi", ["foo2"])
 export async function foo2(name: string, age: number, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {

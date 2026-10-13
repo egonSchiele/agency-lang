@@ -20,7 +20,7 @@ which is why there is no `subpaths(dir)` form.
    `lib/utils/tagsAbove.ts` pairs them with the node that follows, without
    mutating anything. The symbol table and the typechecker run before the
    preprocessor attaches tags, so they read them through this helper.
-2. `lib/utils/alwaysTag.ts` reads the two tags into `ScopedField[]`, plus a
+2. `lib/typeChecker/alwaysTag.ts` reads the two tags into `ScopedField[]`, plus a
    list of problems (non-identifier argument, repeated tag, field named
    twice).
 3. The typechecker (`lib/typeChecker/effectPayloadCheck.ts`) checks every

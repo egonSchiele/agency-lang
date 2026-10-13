@@ -16,6 +16,7 @@
 - **`.describe(text)`** — set or override the tool description shown to the LLM.
 - **`.rename(name)`** — give a derived tool a distinct name. `.partial()` and `.describe()` keep the base name, so several tools derived from one function collide in a single `llm({ tools })` call unless you rename them.
 - **Retry-safety markers** — `markers` carries the `destructive` and `idempotent` flags the tool loop and the MCP adapter read off a registered tool.
+- **Capabilities** — `capabilities` carries what the function's own `@capabilities` tag names. `invoke` checks it against the run's host before argument resolution, through `enterCallable` in [lib/runtime/capabilities.ts](../../../lib/runtime/capabilities.ts), and returns the host's refusal as the call's failure when one is missing. The body, and the handlers it would push, never begin. See [capabilities.md](./capabilities.md).
 
 ## What it is NOT
 
@@ -43,7 +44,9 @@ The interesting code paths in [lib/runtime/agencyFunction.ts](../../../lib/runti
 - `partial(args)` — returns a new `AgencyFunction` whose implementation pre-binds the supplied args before invoking the original.
 - `preapprove()` — wraps the implementation function, not `invoke`, so the per-call hot path stays branch-free. The wrapper pushes the auto-approve handler on `ctx.handlers` through `withPushedHandler` in [asyncContext.ts](../../../lib/runtime/asyncContext.ts).
 
-The `invoke({type, ...})` entry point is what every dispatch path (codegen `__call`, `__callMethod`, LLM tool dispatch in `runPrompt`) goes through. It is the single chokepoint where argument resolution lives. The body it ultimately runs is the original plain JS function, which sees positional args only. `invoke` also runs the call-depth guard (`withCallDepth`) and the failure-propagation check (`checkFailureArgs`), which uses each parameter's `acceptsResult` flag.
+The `invoke({type, ...})` entry point is what every dispatch path (codegen `__call`, `__callMethod`, LLM tool dispatch in `runPrompt`) goes through. It is the single chokepoint where argument resolution lives. The body it ultimately runs is the original plain JS function, which sees positional args only. `invoke` also runs the call-depth guard (`withCallDepth`), the capability check at entry (`enterCallable`), and the failure-propagation check (`checkFailureArgs`), which uses each parameter's `acceptsResult` flag.
+
+Every derivation (`partial`, `rename`, `describe`, `preapprove`) goes through one private `derive(overrides)`, which spreads the current options under the change. A new field on `AgencyFunctionOpts` is carried by every derived copy once `options()` returns it; nothing copies fields by hand.
 
 ## See also
 

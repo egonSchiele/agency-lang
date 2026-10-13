@@ -1565,4 +1565,29 @@ describe("effect declaration tags", () => {
       "@always(name)\n@alwaysUnder(dir)\neffect app::x {\n  name: string;\n  dir: string\n}\n";
     expect(formatSource(src)).toBe(src);
   });
+
+  it("keeps a @capabilities tag above a def and above a node", () => {
+    const onDef =
+      "@capabilities(fileRead, subprocess)\nexport def exists(path: string): boolean {\n  return true\n}\n";
+    expect(formatSource(onDef)).toBe(onDef);
+    const onNode = '@capabilities(network)\nnode main() {\n  print("x")\n}\n';
+    expect(formatSource(onNode)).toBe(onNode);
+  });
+
+  it("keeps a @capabilities tag between a doc comment and its def", () => {
+    const src =
+      "/** Whether a file exists. */\n@capabilities(fileRead)\nexport def exists(path: string): boolean {\n  return true\n}\n";
+    expect(formatSource(src)).toBe(src);
+  });
+
+  it("keeps the parentheses on a tag written with none inside them", () => {
+    // `@capabilities()` declares nothing and stays as written; a bare tag
+    // stays bare.
+    expect(formatSource('@capabilities()\ndef f(): string {\n  return "x"\n}\n')).toBe(
+      '@capabilities()\ndef f(): string {\n  return "x"\n}\n',
+    );
+    expect(formatSource("@destructive\neffect app::y {}\n")).toBe(
+      "@destructive\neffect app::y {}\n",
+    );
+  });
 });

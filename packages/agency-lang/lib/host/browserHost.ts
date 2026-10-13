@@ -35,6 +35,7 @@ export type BrowserHostOptions = {
   /** The working directory to report. "/" without. */
   cwd?: string;
   onUse?: MakeHostArgs["onUse"];
+  onCallable?: MakeHostArgs["onCallable"];
 };
 
 export function browserHost(options: BrowserHostOptions = {}): Host {
@@ -43,6 +44,7 @@ export function browserHost(options: BrowserHostOptions = {}): Host {
     name: "browser",
     capabilities: options.capabilities ?? [...PLATFORM_CAPABILITIES.browser],
     onUse: options.onUse,
+    onCallable: options.onCallable,
     parts: {
       network: { fetch: options.fetch ?? ((input, init) => globalThis.fetch(input, init)) },
       env: browserEnv(variables),

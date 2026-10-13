@@ -81,7 +81,9 @@ The directory saved tool output lives in.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L58))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L59))
 
 ### keepOutput
 
@@ -109,7 +111,9 @@ What the model gets back for a command's output.
 
 **Throws:** `std::spill::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L65))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L66))
 
 ### readSpill
 
@@ -139,7 +143,9 @@ Read a saved tool-output file, named in a "full output saved as" notice. Returns
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L102))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L105))
 
 ### grepSpill
 
@@ -169,4 +175,6 @@ Search a saved tool-output file for a regular expression. Each match comes back 
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L120))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L124))

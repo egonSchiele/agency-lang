@@ -114,7 +114,9 @@ Fetch the YC companies in a batch. Returns each company's id, name, one-liner, b
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L177))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L178))
 
 ### ycIndustry
 
@@ -139,7 +141,9 @@ Fetch the YC companies in an industry. Returns each company's profile. An unknow
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L189))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L191))
 
 ### ycTag
 
@@ -162,7 +166,9 @@ Fetch the YC companies with a tag. Returns each company's profile. An unknown ta
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L201))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L204))
 
 ### ycList
 
@@ -188,7 +194,9 @@ Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-fou
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L213))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L217))
 
 ### ycMeta
 
@@ -203,4 +211,6 @@ Fetch the YC directory metadata: the available batch, industry, and tag slugs pl
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L231))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L236))

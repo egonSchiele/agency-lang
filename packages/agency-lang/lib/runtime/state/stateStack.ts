@@ -1102,6 +1102,29 @@ export class StateStack {
     this.stack.forEach((frame) => frame.deserializeMode());
   }
 
+  /**
+   * Drop the saved frames a call refused before it began would have
+   * claimed. On a resume, the frames still to be handed out are the paused
+   * chain in call order, and the next one belongs to the call now being
+   * made. When that call never starts (`enterCallable` refused it, because
+   * the host it resumed on lacks a capability), its frame and every frame
+   * below it are stale: they belong to a body that will not run. Left in
+   * place, the next call would claim them and fail with a resume desync.
+   * Does nothing outside a resume, or when the next frame is not this
+   * call's, since then the frames belong to something else.
+   */
+  discardPausedChainFor(scopeName: string): void {
+    if (this.mode !== "deserialize" || this.deserializeStackLength <= 0) {
+      return;
+    }
+    if (this.stack[0]?.scopeName !== scopeName) {
+      return;
+    }
+    this.stack.splice(0, this.deserializeStackLength);
+    this.deserializeStackLength = 0;
+    this.mode = "serialize";
+  }
+
   pop(): State | undefined {
     return this.stack.pop();
   }

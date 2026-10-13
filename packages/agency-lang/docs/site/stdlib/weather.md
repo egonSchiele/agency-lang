@@ -68,7 +68,9 @@ Usage from Agency code:
 
 **Throws:** `std::weather`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L50))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L51))
 
 ### celsiusToFahrenheit
 
@@ -86,7 +88,7 @@ Convert a temperature from Celsius to Fahrenheit.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L66))
 
 ### fahrenheitToCelsius
 
@@ -104,4 +106,4 @@ Convert a temperature from Fahrenheit to Celsius.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L71))

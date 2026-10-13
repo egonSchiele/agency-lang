@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -506,50 +506,26 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "threadsAndSubthreads.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.thread(1, __run, "create", async (__run) => ({}), async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.thread(1, __run, "create", async (__run) => ({}), async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt(__run, {
-            prompt: `What are the first 5 prime numbers?`,
-            messages: __run.threads.getOrCreateActive(),
-            responseFormat: z.object({
-              response: z.array(z.number())
-            }),
-            clientConfig: {},
-            maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
-            destructiveSink: __self,
-            checkpointInfo: runner.getCheckpointInfo()
-          });
-// halt if this is an interrupt
-if (hasInterrupts(__stack.locals.res1)) {
-            await __run.ctx.pendingPromises.awaitAll()
-            runner.halt({
-              messages: __run.threads,
-              data: __stack.locals.res1
-            })
-            return;
-          }
-        });
-await runner.thread(1, __run, "createSubthread", async (__run) => ({}), async (runner, __run) => {
-await runner.step(0, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.res2 = await runPrompt(__run, {
-              prompt: `What are the next 2 prime numbers after those?`,
+              prompt: `What are the first 5 prime numbers?`,
               messages: __run.threads.getOrCreateActive(),
               responseFormat: z.object({
                 response: z.array(z.number())
@@ -561,11 +537,11 @@ __stack.locals.res2 = await runPrompt(__run, {
               checkpointInfo: runner.getCheckpointInfo()
             });
 // halt if this is an interrupt
-if (hasInterrupts(__stack.locals.res2)) {
+if (hasInterrupts(__stack.locals.res1)) {
               await __run.ctx.pendingPromises.awaitAll()
               runner.halt({
                 messages: __run.threads,
-                data: __stack.locals.res2
+                data: __stack.locals.res1
               })
               return;
             }
@@ -573,11 +549,11 @@ if (hasInterrupts(__stack.locals.res2)) {
 await runner.thread(1, __run, "createSubthread", async (__run) => ({}), async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.res3 = await runPrompt(__run, {
-                prompt: `And what is the sum of all those numbers combined?`,
+__stack.locals.res2 = await runPrompt(__run, {
+                prompt: `What are the next 2 prime numbers after those?`,
                 messages: __run.threads.getOrCreateActive(),
                 responseFormat: z.object({
-                  response: z.number()
+                  response: z.array(z.number())
                 }),
                 clientConfig: {},
                 maxToolCallRounds: 10,
@@ -586,20 +562,72 @@ __stack.locals.res3 = await runPrompt(__run, {
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
-if (hasInterrupts(__stack.locals.res3)) {
+if (hasInterrupts(__stack.locals.res2)) {
                 await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   messages: __run.threads,
-                  data: __stack.locals.res3
+                  data: __stack.locals.res2
                 })
                 return;
               }
             });
-          });
+await runner.thread(1, __run, "createSubthread", async (__run) => ({}), async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res3 = await runPrompt(__run, {
+                  prompt: `And what is the sum of all those numbers combined?`,
+                  messages: __run.threads.getOrCreateActive(),
+                  responseFormat: z.object({
+                    response: z.number()
+                  }),
+                  clientConfig: {},
+                  maxToolCallRounds: 10,
+                  removedTools: __self.__removedTools,
+                  destructiveSink: __self,
+                  checkpointInfo: runner.getCheckpointInfo()
+                });
+// halt if this is an interrupt
+if (hasInterrupts(__stack.locals.res3)) {
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    messages: __run.threads,
+                    data: __stack.locals.res3
+                  })
+                  return;
+                }
+              });
+            });
 await runner.thread(2, __run, "create", async (__run) => ({}), async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt(__run, {
+                  prompt: `And what is the sum of all those numbers combined?`,
+                  messages: __run.threads.getOrCreateActive(),
+                  responseFormat: z.object({
+                    response: z.number()
+                  }),
+                  clientConfig: {},
+                  maxToolCallRounds: 10,
+                  removedTools: __self.__removedTools,
+                  destructiveSink: __self,
+                  checkpointInfo: runner.getCheckpointInfo()
+                });
+// halt if this is an interrupt
+if (hasInterrupts(__stack.locals.res5)) {
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    messages: __run.threads,
+                    data: __stack.locals.res5
+                  })
+                  return;
+                }
+              });
+            });
+          });
+await runner.thread(2, __run, "createSubthread", async (__run) => ({}), async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.res4 = await runPrompt(__run, {
                 prompt: `And what is the sum of all those numbers combined?`,
                 messages: __run.threads.getOrCreateActive(),
                 responseFormat: z.object({
@@ -612,152 +640,125 @@ __stack.locals.res5 = await runPrompt(__run, {
                 checkpointInfo: runner.getCheckpointInfo()
               });
 // halt if this is an interrupt
-if (hasInterrupts(__stack.locals.res5)) {
+if (hasInterrupts(__stack.locals.res4)) {
                 await __run.ctx.pendingPromises.awaitAll()
                 runner.halt({
                   messages: __run.threads,
-                  data: __stack.locals.res5
+                  data: __stack.locals.res4
                 })
                 return;
               }
             });
           });
         });
-await runner.thread(2, __run, "createSubthread", async (__run) => ({}), async (runner, __run) => {
-await runner.step(0, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.res4 = await runPrompt(__run, {
-              prompt: `And what is the sum of all those numbers combined?`,
-              messages: __run.threads.getOrCreateActive(),
-              responseFormat: z.object({
-                response: z.number()
-              }),
-              clientConfig: {},
-              maxToolCallRounds: 10,
-              removedTools: __self.__removedTools,
-              destructiveSink: __self,
-              checkpointInfo: runner.getCheckpointInfo()
-            });
-// halt if this is an interrupt
-if (hasInterrupts(__stack.locals.res4)) {
-              await __run.ctx.pendingPromises.awaitAll()
-              runner.halt({
-                messages: __run.threads,
-                data: __stack.locals.res4
-              })
-              return;
-            }
+        await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [`res1`, __stack.locals.res1]
           });
-        });
-      });
-      await runner.step(2, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`res1`, __stack.locals.res1]
-        });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(3, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`res2`, __stack.locals.res2]
+            throw __funcResult.toError()
+          }
         });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(4, __run, async (runner, __run) => {
+        await runner.step(3, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`res3`, __stack.locals.res3]
-        });
+            type: "positional",
+            args: [`res2`, __stack.locals.res2]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(5, __run, async (runner, __run) => {
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(4, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`res4`, __stack.locals.res4]
-        });
+            type: "positional",
+            args: [`res3`, __stack.locals.res3]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(6, __run, async (runner, __run) => {
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(5, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [`res5`, __stack.locals.res5]
-        });
+            type: "positional",
+            args: [`res4`, __stack.locals.res4]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(7, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(6, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [`res5`, __stack.locals.res5]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(7, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -769,11 +770,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

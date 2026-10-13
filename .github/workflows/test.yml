@@ -346,9 +346,11 @@ jobs:
       # when this shard ran only a slice. The coverage-report job merges the
       # shards and reports once. `--coverage` (no --accumulate) wipes
       # .coverage/ first; the agency-js step below adds --accumulate so it
-      # does not wipe this step's data.
+      # does not wipe this step's data. `--check-capabilities` fails a case
+      # in which the host was asked for a capability that no running
+      # function's @capabilities tag names (lib/cli/capabilityCheck.ts).
       run: |
-        time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only
+        time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only --check-capabilities
     - name: Agency-JS integration tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:

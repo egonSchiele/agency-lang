@@ -177,6 +177,7 @@ export default defineConfig({
             { text: "Template Agency", link: "/guide/template-agency" },
             { text: "Splices", link: "/guide/splices" },
             { text: "Memory", link: "/guide/memory" },
+            { text: "Capabilities", link: "/guide/capabilities" },
           ],
         },
         {

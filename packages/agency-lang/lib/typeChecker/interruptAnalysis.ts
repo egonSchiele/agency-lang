@@ -1,6 +1,8 @@
 import { isAnyType } from "./utils.js";
 import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { InterruptEffect } from "../symbolTable.js";
+import type { Capability } from "../host/host.js";
+import { ownCapabilities } from "./capabilitiesTag.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
 import { safeResolveType } from "./assignability.js";
@@ -84,30 +86,73 @@ export function analyzeInterruptsFromScopes(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): Record<string, InterruptEffect[]> {
-  return formatResult(propagateToFixpoint(collectProfiles(scopes, ctx)));
+  const imported = Object.fromEntries(
+    Object.entries(ctx.interruptEffectsByFunction).map(([name, effects]) => [
+      name,
+      effects.map((entry) => entry.effect),
+    ]),
+  );
+  const profiles = collectProfiles(scopes, ctx, imported, (profile) => profile.effects);
+  return formatResult(propagateToFixpoint(profiles));
+}
+
+/**
+ * The same pipeline for what each callable needs from the host. An imported
+ * function brings the list the symbol table propagated for it; a function of
+ * this file starts from its own `@capabilities` tag and gains what it calls,
+ * through the same call edges the effect walk follows, so the two cannot
+ * disagree about who calls whom. See docs/dev/language/capabilities.md.
+ */
+export function analyzeCapabilitiesFromScopes(
+  scopes: ScopeInfo[],
+  ctx: TypeCheckerContext,
+): Record<string, Capability[]> {
+  const own = ownCapabilities(ctx.programNodes);
+  const profiles = collectProfiles(
+    scopes,
+    ctx,
+    ctx.capabilitiesByFunction,
+    (_profile, name) => own[name] ?? [],
+  );
+  const propagated = propagateToFixpoint(profiles);
+  const result: Record<string, Capability[]> = Object.create(null);
+  for (const [name, profile] of Object.entries(propagated)) {
+    if (profile.effects.length > 0) {
+      result[name] = profile.effects as Capability[];
+    }
+  }
+  return result;
 }
 
 // -- Phase 1: Collect --
 
+/**
+ * One profile per imported callable, seeded with `imported[name]`, and one
+ * per scope of this file, seeded with `seed(profile, name)`: the body's own
+ * raises for the effect walk, the function's own tag for the capability
+ * walk. The callee keys are the same in both.
+ */
 function collectProfiles(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
+  imported: Record<string, string[]>,
+  seed: (profile: FunctionProfile, name: string) => string[],
 ): Record<string, FunctionProfile> {
   const profiles: Record<string, FunctionProfile> = {};
 
-  // Seed imported functions' direct kinds
-  for (const [name, importedKinds] of Object.entries(ctx.interruptEffectsByFunction)) {
-    profiles[name] = {
-      effects: importedKinds.map((entry) => entry.effect),
-      calleeKeys: [],
-    };
+  for (const [name, labels] of Object.entries(imported)) {
+    profiles[name] = { effects: [...labels], calleeKeys: [] };
   }
 
   // Analyze each scope (skip the top-level scope — it has no function name
   // and its body walks into function bodies, causing double-counting)
   for (const info of scopes) {
     if (!info.name || info.name === "top-level") continue;
-    profiles[info.name] = collectFromScope(info, ctx);
+    const profile = collectFromScope(info, ctx);
+    profiles[info.name] = {
+      effects: [...seed(profile, info.name)],
+      calleeKeys: profile.calleeKeys,
+    };
   }
 
   return profiles;

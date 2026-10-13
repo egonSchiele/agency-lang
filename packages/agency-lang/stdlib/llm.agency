@@ -145,6 +145,7 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
 @always(path)
 effect std::llm::registerProvider { path: string }
 
+@capabilities(fileRead)
 export def registerProviderModule(path: string): Result {
   """
   Load a provider module by path at runtime and register its custom provider
@@ -223,6 +224,7 @@ effect std::read {
 // is resolved relative to the working directory, or used as-is if absolute.
 // The interrupt names the real spelling of the file, and the read refuses a
 // link planted in that spelling afterwards.
+@capabilities(fileRead)
 export def loadModelData(path: string): Result<number> {
   """
   Load model data from a JSON file (the shape `agency models refresh`

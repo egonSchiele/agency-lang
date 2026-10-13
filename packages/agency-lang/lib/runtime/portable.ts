@@ -117,6 +117,7 @@ export {
   sameScopedFields,
 } from "./alwaysScope.js";
 export type { ScopedField } from "./alwaysScope.js";
+export { enterCallable as __enterCallable } from "./capabilities.js";
 
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";

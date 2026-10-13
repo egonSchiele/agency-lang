@@ -42,6 +42,7 @@ export type NodeHostOptions = {
   /** Defaults to the real clock. A test passes a `FakeClock`. */
   clock?: Clock;
   onUse?: MakeHostArgs["onUse"];
+  onCallable?: MakeHostArgs["onCallable"];
 };
 
 export function nodeHost(options: NodeHostOptions = {}): Host {
@@ -49,6 +50,7 @@ export function nodeHost(options: NodeHostOptions = {}): Host {
     name: "node",
     capabilities: options.capabilities ?? PLATFORM_CAPABILITIES.node,
     onUse: options.onUse,
+    onCallable: options.onCallable,
     parts: {
       files: nodeFilesPart(options.files),
       network: options.network ?? nodeNetwork,

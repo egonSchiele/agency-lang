@@ -87,6 +87,7 @@ export type S3CreateBucketResult = {
   location: string
 }
 
+@capabilities(network)
 export def s3Get(
   bucket: string,
   key: string,
@@ -107,6 +108,7 @@ export def s3Get(
   return try _s3Get(bucket, key, region)
 }
 
+@capabilities(network)
 export def s3GetBinary(
   bucket: string,
   key: string,
@@ -127,6 +129,7 @@ export def s3GetBinary(
   return try _s3GetBinary(bucket, key, region)
 }
 
+@capabilities(network)
 export def s3Put(
   bucket: string,
   key: string,
@@ -153,6 +156,7 @@ export def s3Put(
   }
 }
 
+@capabilities(network)
 export def s3PutBinary(
   bucket: string,
   key: string,
@@ -206,6 +210,7 @@ export def s3PresignGet(
   return try _s3PresignGet(bucket, key, expiresIn, region)
 }
 
+@capabilities(network)
 export def createBucket(
   bucket: string,
   region: string = "",

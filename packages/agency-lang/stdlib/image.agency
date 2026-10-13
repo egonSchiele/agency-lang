@@ -72,6 +72,7 @@ export type GeneratedImage = {
 
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 
+@capabilities(fileRead, llm)
 export def generateImage(
   prompt: string,
   model: string = "",
@@ -156,6 +157,7 @@ Each model has its own default strength with a mask, which can differ
 from its default without one. Z-Image Turbo's goes from 0.6 to 1.0, and
 1.0 draws the white part from scratch, keeping nothing of what was
 there. Pass a lower strength to keep some of it. */
+@capabilities(fileRead, subprocess, env, llm)
 export def generateImageLocal(
   prompt: string,
   model: string,
@@ -269,6 +271,7 @@ export def generateImageLocal(
   )
 }
 
+@capabilities(fileRead, fileWrite, subprocess, env)
 export def cropImage(
   path: string,
   box: ImageBox,
@@ -305,6 +308,7 @@ export def cropImage(
   return try _cropImage(real.value, box, out.value, pad, square)
 }
 
+@capabilities(fileRead, subprocess, env, llm)
 export idempotent def imageSize(path: string): Result<ImageSize> raises <std::readImage> {
   """
   The width and height of an image in pixels.
@@ -322,6 +326,7 @@ export idempotent def imageSize(path: string): Result<ImageSize> raises <std::re
   return try _imageSize(real.value)
 }
 
+@capabilities(fileRead, fileWrite, subprocess, env)
 export def pasteImages(
   paths: string[],
   outPath: string,

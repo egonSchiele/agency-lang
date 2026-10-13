@@ -45,6 +45,7 @@ effect std::getAccessToken { name: string }
 @always(name)
 effect std::revokeAuth { name: string }
 
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result {
   """
   Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider.
@@ -75,6 +76,7 @@ export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: 
   })
 }
 
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 export def getAccessToken(name: string): Result {
   """
   Get a valid OAuth access token for a previously authorized provider. Refreshes the token automatically if it has expired. Returns the access token string; throws if the provider is not yet authorized.
@@ -88,6 +90,7 @@ export def getAccessToken(name: string): Result {
   return try _getAccessToken(name)
 }
 
+@capabilities(fileRead)
 export def isAuthorized(name: string): boolean {
   """
   Check whether OAuth tokens are stored for a provider. Returns true if tokens exist locally; does not verify they are still valid.
@@ -97,6 +100,7 @@ export def isAuthorized(name: string): boolean {
   return _isAuthorized(name)
 }
 
+@capabilities(fileRead, fileWrite)
 export def revokeAuth(name: string): Result {
   """
   Delete stored OAuth tokens for a provider. Re-authorization is required before the provider can be used again.

@@ -213,6 +213,7 @@ def awardDetailFinalize(fetchResult: any): Result<AwardDetail> {
   }
 }
 
+@capabilities(network)
 export def usaspendingAwards(recipient: string = "", agency: string = "", awardType: string = "contracts", startDate: string = "", endDate: string = "", limit: number = 20): Result<Award[]> raises <std::usaspending, std::http::fetchJSON> {
   """
   Search U.S. federal awards. Returns each award's id, recipient, amount, awarding agency, dates, and
@@ -236,6 +237,7 @@ export def usaspendingAwards(recipient: string = "", agency: string = "", awardT
   return awardsFinalize(result)
 }
 
+@capabilities(network)
 export def usaspendingAward(awardId: string): Result<AwardDetail> raises <std::usaspending, std::http::fetchJSON> {
   """
   Fetch full detail for one federal award. Returns amount, recipient and UEI, awarding agency, dates,

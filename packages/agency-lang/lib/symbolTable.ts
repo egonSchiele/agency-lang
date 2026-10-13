@@ -22,6 +22,8 @@ import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
 import { effectDeclarationsWithTags } from "./utils/tagsAbove.js";
+import { ownCapabilities } from "./typeChecker/capabilitiesTag.js";
+import type { Capability } from "./host/host.js";
 import { resolveAgencyImportPath, isAgencyImport, isNonTemplatedStdlib } from "./importPaths.js";
 import { ImportResolutionError } from "./importResolutionError.js";
 
@@ -51,6 +53,10 @@ export type FunctionSymbol = {
   /** The subset of `interruptEffects` that nothing inside the callable answers
    *  with a handler. See `collectUnansweredFacts`. */
   unansweredEffects?: InterruptEffect[];
+  /** What the function needs from the host: its own `@capabilities` tag
+   *  when the crawl writes it, and after `propagateEffects` the union over
+   *  everything it calls. See docs/dev/language/capabilities.md. */
+  capabilities?: Capability[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -66,6 +72,8 @@ export type NodeSymbol = {
   /** The subset of `interruptEffects` that nothing inside the callable answers
    *  with a handler. See `collectUnansweredFacts`. */
   unansweredEffects?: InterruptEffect[];
+  /** As on `FunctionSymbol`: the node's own tag, then the transitive union. */
+  capabilities?: Capability[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -436,6 +444,7 @@ export function collectTypeAliasTags(program: AgencyProgram): Record<string, Tag
 export function classifySymbols(program: AgencyProgram): FileSymbols {
   const symbols: FileSymbols = {};
   const typeAliasTags = collectTypeAliasTags(program);
+  const declaredCapabilities = ownCapabilities(program.nodes);
 
   for (const { node } of walkNodes(program.nodes)) {
     switch (node.type) {
@@ -450,6 +459,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           exported: !!node.exported,
           interruptEffects: collectDirectInterruptEffects(declaredName(node.nodeName), node.body),
           unansweredEffects: collectDirectUnansweredEffects(declaredName(node.nodeName), node.body),
+          capabilities: declaredCapabilities[declaredName(node.nodeName)] ?? [],
         };
         break;
       case "function":
@@ -470,6 +480,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
             declaredName(node.functionName),
             node.body,
           ),
+          capabilities: declaredCapabilities[declaredName(node.functionName)] ?? [],
         };
         break;
       case "typeAlias":

@@ -3,6 +3,7 @@ import type { LogLevel } from "../logger.js";
 import { z } from "zod";
 import { McpServersSchema, type McpServers } from "./mcpServers.js";
 import { defaultHost } from "#default-host";
+import type { Platform } from "../host/host.js";
 import { mapConfigValues } from "./paths.js";
 import { MODEL_KINDS, type ModelKind } from "../stdlib/modelKind.js";
 
@@ -74,6 +75,15 @@ export interface AgencyConfig {
    * it.
    */
   refuseSplices?: boolean;
+  /**
+   * The platform the program is compiled for: `"node"` (the default) or
+   * `"browser"`. It turns on a check and changes nothing in the code the
+   * compiler emits: a node or exported function that can raise an effect
+   * tagged with a capability the platform lacks (`PLATFORM_CAPABILITIES`
+   * in lib/host/host.ts) fails to compile. `--platform` on `compile` and
+   * `typecheck` sets it. See docs/dev/language/capabilities.md.
+   */
+  platform?: Platform;
   logLevel?: LogLevel;
   outDir?: string;
 
@@ -529,6 +539,7 @@ export const AgencyConfigSchema = z
     mcpServers: McpServersSchema,
     allowNonAgencyGenerators: z.boolean(),
     refuseSplices: z.boolean(),
+    platform: z.enum(["node", "browser"]),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
     // Positive integer: the generated code does `maxToolCallRounds || 10`, so a
@@ -826,6 +837,8 @@ export type CliFlags = {
   strictTypes?: boolean;
   /** `--refuse-splices`: decline compile-time generator execution. */
   refuseSplices?: boolean;
+  /** `--platform`: the platform to check the program against. */
+  platform?: Platform;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
   model?: ResolvedModelFlag;
@@ -853,6 +866,8 @@ export type CliFlags = {
  *                      which is why it is a separate field, not a branch.
  *   --refuse-splices → refuseSplices=true (refuse to compile a file with a
  *                      splice rather than running its generator)
+ *   --platform <p>   → platform=<p>: check the program against that
+ *                      platform's capabilities
  *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
  *                      DELETED, so smoltalk infers the provider
  *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>
@@ -902,6 +917,9 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
   }
   if (flags.refuseSplices) {
     next.refuseSplices = true;
+  }
+  if (flags.platform !== undefined) {
+    next.platform = flags.platform;
   }
   if (flags.maxToolCallRounds !== undefined) {
     next.maxToolCallRounds = flags.maxToolCallRounds;

@@ -82,6 +82,11 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3021](effects.md#ag3021) | @&#123;tag&#125; appears more than once on effect '&#123;effect&#125;'. |
 | [AG3022](effects.md#ag3022) | Conflicting @always scopes for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree. |
 | [AG3023](effects.md#ag3023) | @&#123;tag&#125; is only valid on an effect declaration. |
+| [AG3024](effects.md#ag3024) | Unknown capability '&#123;name&#125;' on '&#123;callable&#125;'. Did you mean '&#123;suggestion&#125;'? The capabilities are &#123;known&#125;. |
+| [AG3025](effects.md#ag3025) | @capabilities arguments must be bare capability names (on '&#123;callable&#125;'). |
+| [AG3026](effects.md#ag3026) | @capabilities appears more than once on '&#123;callable&#125;'. |
+| [AG3028](effects.md#ag3028) | @capabilities goes on a def or a node.&#123;hint&#125; |
+| [AG3029](effects.md#ag3029) | &#123;kind&#125; '&#123;name&#125;' needs the &#123;capability&#125; capability, which the &#123;platform&#125; platform does not have. &#123;path&#125; |
 
 ## Names, scope, and reserved words
 

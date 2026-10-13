@@ -37,6 +37,7 @@ effect std::wikipedia::search { query: string, limit: number }
 effect std::wikipedia::summary { title: string }
 effect std::wikipedia::article { title: string }
 
+@capabilities(network)
 export def search(query: string, limit: number = 5): WikiSearchResult[] {
   """
   Search Wikipedia for articles matching a query. Each result has a title, description, and excerpt.
@@ -52,6 +53,7 @@ export def search(query: string, limit: number = 5): WikiSearchResult[] {
   return _search(query, limit)
 }
 
+@capabilities(network)
 export def summary(title: string): WikiSummary {
   """
   Get a summary of a Wikipedia article. Returns the title, description, intro extract, and URL.
@@ -65,6 +67,7 @@ export def summary(title: string): WikiSummary {
   return _summary(title)
 }
 
+@capabilities(network)
 export def article(title: string): WikiArticle {
   """
   Get the full text of a Wikipedia article. Returns the title, plain-text content, and URL.

@@ -5,6 +5,7 @@
  */
 
 import { adoptAlwaysScope, type ScopedField } from "./alwaysScope.js";
+import { CAPABILITY_LOG_SETTING } from "./capabilityLog.js";
 import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
@@ -440,9 +441,13 @@ export function collectSubprocessResponses(ctx: any, saved: SubprocessResumePayl
 
 export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): ForkOptions {
   const memoryMb = Math.max(1, Math.floor(args.limits.memory / (1024 * 1024)));
+  // The child gets the parent's environment minus the capability log: a
+  // child writing into the parent's log would have every host use covered
+  // by the parent's `run` frame, whatever the child's own tags say.
+  const { [CAPABILITY_LOG_SETTING]: _capabilityLog, ...env } = process.env;
   return {
     stdio: ["pipe", "pipe", "pipe", "ipc"],
-    env: { ...process.env, AGENCY_IPC: "1" },
+    env: { ...env, AGENCY_IPC: "1" },
     execArgv: [`--max-old-space-size=${memoryMb}`],
     ...(args.cwd ? { cwd: args.cwd } : {}),
   };

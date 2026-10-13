@@ -47,6 +47,7 @@ export type Embeddings = {
   model: string
 }
 
+@capabilities(llm)
 export def embed(
   text: string,
   model: string = "",
@@ -72,6 +73,7 @@ export def embed(
   return success({ vector: r.value.vectors[0], model: r.value.model })
 }
 
+@capabilities(llm)
 export def embedMany(
   texts: string[],
   model: string = "",

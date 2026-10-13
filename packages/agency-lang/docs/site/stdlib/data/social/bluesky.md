@@ -150,7 +150,9 @@ Search Bluesky posts by keyword. Returns matching posts with author, text,
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L251))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L252))
 
 ### bskyAuthorFeed
 
@@ -178,7 +180,9 @@ Fetch a Bluesky account's recent posts, newest first. Returns posts with
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L267))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L269))
 
 ### bskyProfile
 
@@ -203,4 +207,6 @@ Fetch a Bluesky account's public profile: display name, description, and
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L281))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L284))

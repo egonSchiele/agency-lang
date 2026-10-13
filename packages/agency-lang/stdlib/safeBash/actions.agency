@@ -107,6 +107,7 @@ export type Plan = {
   execution: Execution
 }
 
+@capabilities(fileRead, subprocess)
 export def runBash(command: string, cwd: string): Result<string> {
   """
   Run a command string through bash and return what it printed.
@@ -156,6 +157,7 @@ export def runBash(command: string, cwd: string): Result<string> {
   return success(out)
 }
 
+@capabilities(fileRead, fileWrite)
 export def runWrite(exec: WriteExec): Result<string> {
   """
   Perform the write a redirected echo asked for. Returns the empty string,

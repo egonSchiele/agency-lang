@@ -72,4 +72,6 @@ Run an Agency program and judge its result against the task. A program that
 
 **Throws:** `std::guard`, `std::run`
 
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L94))

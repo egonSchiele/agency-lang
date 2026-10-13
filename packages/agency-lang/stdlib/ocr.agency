@@ -58,6 +58,7 @@ export type TextBlock = {
 
 static const OCR_INSTRUCTION = "Transcribe all text in this image exactly as written, preserving line breaks. Return only the text."
 
+@capabilities(fileRead, fileWrite, subprocess)
 export def readTextBlocks(
   path: string,
   language: string = "",
@@ -110,6 +111,7 @@ export def readText(
   return success(lines.join("\n"))
 }
 
+@capabilities(fileRead, llm)
 export def readTextWithModel(
   path: string,
   model: string = "",

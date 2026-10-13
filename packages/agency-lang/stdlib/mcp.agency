@@ -32,6 +32,7 @@ export def isMcpAvailable(): boolean {
   return _isMcpAvailable()
 }
 
+@capabilities(fileRead)
 export def readProjectMcpConfig(dir: string): Record<string, any> {
   """Read the mcpServers block from the project agency.json under `dir`."""
   return _readProjectMcpConfig(dir)
@@ -42,12 +43,14 @@ export def mergeMcpServers(global: Record<string, any>, project: Record<string, 
   return _mergeMcpServers(global, project)
 }
 
+@capabilities(fileRead, fileWrite, network, subprocess)
 export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
   """Load gated MCP tools for every server in `merged`. Returns [] when the
   package is absent, incompatible, or no servers are configured."""
   return _loadMcpTools(merged, onOAuthRequired)
 }
 
+@capabilities(fileRead, fileWrite, network, subprocess)
 export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
   """Like loadMcpTools, but also returns a per-server status map for /mcp."""
   return _loadMcpToolsWithStatus(merged, onOAuthRequired)

@@ -109,4 +109,6 @@ Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series c
 
 **Throws:** `std::dbnomics`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L96))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L97))

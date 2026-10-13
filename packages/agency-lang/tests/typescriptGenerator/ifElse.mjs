@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -187,101 +187,102 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "ifElse.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "ifElse.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 //  Basic if statement with boolean variable
-      });
-      await runner.step(2, __run, async (runner, __run) => {
+        });
+        await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.flag = true;
-      });
-      await runner.ifElse(3, __run, [
+        });
+        await runner.ifElse(3, __run, [
 
   {
     condition: async (__run) => __stack.locals.flag,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.result = `condition was true`;
-            });
+              });
     },
   },
 
 ]);
-      await runner.step(4, __run, async (runner, __run) => {
+        await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await __call(__run, isReady, {
-          type: "positional",
-          args: []
-        });
+            type: "positional",
+            args: []
+          });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_0
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_0
+            })
+            return;
+          }
 if (isAborted(__stack.locals.__hoist_0)) {
-          throw __stack.locals.__hoist_0.toError()
-        }
-      });
-      await runner.ifElse(5, __run, [
+            throw __stack.locals.__hoist_0.toError()
+          }
+        });
+        await runner.ifElse(5, __run, [
 
   {
     condition: async (__run) => __stack.locals.__hoist_0,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.status = `ready`;
-            });
+              });
     },
   },
 
 ]);
-      await runner.step(6, __run, async (runner, __run) => {
+        await runner.step(6, __run, async (runner, __run) => {
 //  If statement with property access
-      });
-      await runner.step(7, __run, async (runner, __run) => {
+        });
+        await runner.step(7, __run, async (runner, __run) => {
 __stack.locals.obj = {
-          "active": true
-        };
-      });
-      await runner.ifElse(8, __run, [
+            "active": true
+          };
+        });
+        await runner.ifElse(8, __run, [
 
   {
     condition: async (__run) => __stack.locals.obj.active,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.message = `object is active`;
-            });
+              });
     },
   },
 
 ]);
-      await runner.step(9, __run, async (runner, __run) => {
+        await runner.step(9, __run, async (runner, __run) => {
 //  Nested if statements
-      });
-      await runner.step(10, __run, async (runner, __run) => {
+        });
+        await runner.step(10, __run, async (runner, __run) => {
 __stack.locals.outer = true;
-      });
-      await runner.ifElse(11, __run, [
+        });
+        await runner.ifElse(11, __run, [
 
   {
     condition: async (__run) => __stack.locals.outer,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.inner = false;
-            });
+              });
 await runner.ifElse(1, __run, [
 
   {
@@ -289,7 +290,7 @@ await runner.ifElse(1, __run, [
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.nested = `both true`;
-                  });
+                    });
     },
   },
 
@@ -298,7 +299,7 @@ __stack.locals.nested = `both true`;
   },
 
 ]);
-      await runner.step(12, __run, async (runner, __run) => {
+        await runner.step(12, __run, async (runner, __run) => {
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -306,79 +307,79 @@ __stack.locals.nested = `both true`;
 //    firstElement = "exists"
 //  }
 //  Multiple statements in then body
-      });
-      await runner.step(13, __run, async (runner, __run) => {
+        });
+        await runner.step(13, __run, async (runner, __run) => {
 __stack.locals.condition = true;
-      });
-      await runner.ifElse(14, __run, [
+        });
+        await runner.ifElse(14, __run, [
 
   {
     condition: async (__run) => __stack.locals.condition,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.a = 1;
-            });
+              });
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.b = 2;
-            });
+              });
 await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.c = 3;
-            });
+              });
     },
   },
 
 ]);
-      await runner.step(15, __run, async (runner, __run) => {
+        await runner.step(15, __run, async (runner, __run) => {
 //  Multiple statements in both then and else bodies
-      });
-      await runner.step(16, __run, async (runner, __run) => {
+        });
+        await runner.step(16, __run, async (runner, __run) => {
 __stack.locals.value = false;
-      });
-      await runner.ifElse(17, __run, [
+        });
+        await runner.ifElse(17, __run, [
 
   {
     condition: async (__run) => __stack.locals.value,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.x = 10;
-            });
+              });
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.y = 20;
-            });
+              });
     },
   },
 
 ]);
-      await runner.step(18, __run, async (runner, __run) => {
+        await runner.step(18, __run, async (runner, __run) => {
 //  Basic else
-      });
-      await runner.ifElse(19, __run, [
+        });
+        await runner.ifElse(19, __run, [
 
   {
     condition: async (__run) => __stack.locals.flag,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.result = `yes`;
-            });
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.result = `no`;
-          });
+            });
 });
-      await runner.step(20, __run, async (runner, __run) => {
+        await runner.step(20, __run, async (runner, __run) => {
 //  else if chain
-      });
-      await runner.ifElse(21, __run, [
+        });
+        await runner.ifElse(21, __run, [
 
   {
     condition: async (__run) => __eq(__stack.locals.a, 1),
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.result = `one`;
-            });
+              });
     },
   },
 
@@ -387,38 +388,38 @@ __stack.locals.result = `one`;
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.result = `two`;
-            });
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.result = `other`;
-          });
+            });
 });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(22, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(22, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -430,11 +431,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

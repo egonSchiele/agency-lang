@@ -100,6 +100,7 @@ import { ImportResolutionError, formatImportResolutionError } from "@/importReso
 import { importKind } from "@/importPaths.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
+import type { Platform } from "@/host/host.js";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import process from "process";
@@ -216,6 +217,17 @@ type CliDependencies = {
   resolveMcpCommand?: () => string[];
   launchAgent?: typeof agent;
 };
+
+/** One spelling of `--platform` for every command that offers it. */
+const DESC_PLATFORM =
+  "Check the program against this platform's capabilities (node or browser; default node). An effect that needs a capability the platform lacks is a compile error";
+
+function parsePlatform(value: string): Platform {
+  if (value === "node" || value === "browser") {
+    return value;
+  }
+  throw new InvalidArgumentError("Expected node or browser.");
+}
 
 /** One spelling of `--refuse-splices` for every command that offers it. */
 const DESC_REFUSE_SPLICES =
@@ -373,6 +385,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("-w, --watch", "Watch for changes and recompile")
     .option("--strict", "Fail on any fatal type error (typechecker.strict)")
     .option("--refuse-splices", DESC_REFUSE_SPLICES)
+    .option("--platform <platform>", DESC_PLATFORM, parsePlatform)
     .option(
       "--max-tool-call-rounds <n>",
       "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
@@ -392,12 +405,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
           watch?: boolean;
           strict?: boolean;
           refuseSplices?: boolean;
+          platform?: Platform;
           maxToolCallRounds?: number;
           maxToolResultChars?: number;
         },
       ) => {
         const config = applyCliFlags(getConfig(), {
           strict: opts.strict,
+          platform: opts.platform,
           refuseSplices: opts.refuseSplices,
           maxToolCallRounds: opts.maxToolCallRounds,
           maxToolResultChars: opts.maxToolResultChars,
@@ -1380,6 +1395,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--agency-only",
       "Compile each tested file through the closure validator: anything in its imports that is not Agency source is refused and the file fails",
     )
+    .option(
+      "--check-capabilities",
+      "Fail a case that asked the host for fileRead, fileWrite, network, or subprocess when no effect it raised is tagged @capabilities with that name",
+    )
     .option("--refuse-splices", DESC_REFUSE_SPLICES)
     .option(
       "--json",
@@ -1410,6 +1429,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           maxCost?: string;
           maxTime?: string;
           agencyOnly?: boolean;
+          checkCapabilities?: boolean;
           refuseSplices?: boolean;
           json?: boolean;
         },
@@ -1436,6 +1456,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
               }) ?? undefined,
             budget: resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime }),
             agencyOnly: opts.agencyOnly ?? false,
+            checkCapabilities: opts.checkCapabilities ?? false,
             output,
           };
         } catch (e) {
@@ -1647,142 +1668,149 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[inputs...]", "Paths to .agency input files")
     .option("--strict", "Enable strict types (untyped variables are errors)")
     .option("--refuse-splices", DESC_REFUSE_SPLICES)
-    .action(async (inputs: string[], opts: { strict?: boolean; refuseSplices?: boolean }) => {
-      // `strictTypes`, not `strict`: this command computes its own exit code
-      // and never reaches the compile-path gate, so `strict` would be inert
-      // here — and an inert setting that looks meaningful is a trap. Applied
-      // before runTypeCheck closes over `config`, since applyCliFlags copies.
-      const config = applyCliFlags(getConfig(), {
-        strictTypes: opts.strict,
-        refuseSplices: opts.refuseSplices,
-      });
-      let hasErrors = false;
-      // Files that reach the same bad import repeat its error.
-      const printed: string[] = [];
-      const reportOnce = (line: string): void => {
-        if (!printed.includes(line)) {
-          console.error(line);
-        }
-        printed.push(line);
-        hasErrors = true;
-      };
-      const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
-        // Stdin has no path, so it is checked at a temporary one. Its
-        // relative imports cannot resolve there; std:: imports can.
-        const absPath = filePath ? path.resolve(filePath) : undefined;
-        // `keepGoing`: a bad import is reported and the rest of the file is
-        // still checked. Nothing here runs the program, so `import test` is
-        // honored the way the editor honors it.
-        const { prepared, problems } = withSourcePath(contents, absPath, (sourcePath) => {
-          const prepared = prepareProgram(contents, sourcePath, config, {
-            symbolTable,
-            keepGoing: true,
-            allowTestImports: true,
-            // Nothing piped in can resolve `./helper.agency`, so reporting it
-            // would fail a file that passes when named on the command line.
-            ignoreRelativeImports: absPath === undefined,
-          });
-          // Stdin is checked at a temporary path. An import error carries
-          // that path, and it means nothing to the reader.
-          const problems = prepared.diagnostics
-            .map((found) => describeDiagnostic(found, absPath))
-            .map((line) => (absPath ? line : line.replaceAll(sourcePath, "<stdin>")));
-          return { prepared, problems };
+    .option("--platform <platform>", DESC_PLATFORM, parsePlatform)
+    .action(
+      async (
+        inputs: string[],
+        opts: { strict?: boolean; refuseSplices?: boolean; platform?: Platform },
+      ) => {
+        // `strictTypes`, not `strict`: this command computes its own exit code
+        // and never reaches the compile-path gate, so `strict` would be inert
+        // here — and an inert setting that looks meaningful is a trap. Applied
+        // before runTypeCheck closes over `config`, since applyCliFlags copies.
+        const config = applyCliFlags(getConfig(), {
+          strictTypes: opts.strict,
+          refuseSplices: opts.refuseSplices,
+          platform: opts.platform,
         });
-        problems.forEach(reportOnce);
-        // Checking past a splice that did not expand would report every name
-        // it was going to generate as undefined.
-        const spliceFailed = prepared.diagnostics.some((found) => found.stage === "splice");
-        if (!prepared.ok || spliceFailed) {
+        let hasErrors = false;
+        // Files that reach the same bad import repeat its error.
+        const printed: string[] = [];
+        const reportOnce = (line: string): void => {
+          if (!printed.includes(line)) {
+            console.error(line);
+          }
+          printed.push(line);
+          hasErrors = true;
+        };
+        const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
+          // Stdin has no path, so it is checked at a temporary one. Its
+          // relative imports cannot resolve there; std:: imports can.
+          const absPath = filePath ? path.resolve(filePath) : undefined;
+          // `keepGoing`: a bad import is reported and the rest of the file is
+          // still checked. Nothing here runs the program, so `import test` is
+          // honored the way the editor honors it.
+          const { prepared, problems } = withSourcePath(contents, absPath, (sourcePath) => {
+            const prepared = prepareProgram(contents, sourcePath, config, {
+              symbolTable,
+              keepGoing: true,
+              allowTestImports: true,
+              // Nothing piped in can resolve `./helper.agency`, so reporting it
+              // would fail a file that passes when named on the command line.
+              ignoreRelativeImports: absPath === undefined,
+            });
+            // Stdin is checked at a temporary path. An import error carries
+            // that path, and it means nothing to the reader.
+            const problems = prepared.diagnostics
+              .map((found) => describeDiagnostic(found, absPath))
+              .map((line) => (absPath ? line : line.replaceAll(sourcePath, "<stdin>")));
+            return { prepared, problems };
+          });
+          problems.forEach(reportOnce);
+          // Checking past a splice that did not expand would report every name
+          // it was going to generate as undefined.
+          const spliceFailed = prepared.diagnostics.some((found) => found.stage === "splice");
+          if (!prepared.ok || spliceFailed) {
+            return;
+          }
+          const { program: parsedProgram, info } = prepared;
+          const checked = typeCheck(parsedProgram, config, info).errors;
+          // Stdin was checked at a temporary path, which is gone by now, and
+          // which no relative import could ever resolve against. Reporting one
+          // would fail a file that passes when named on the command line.
+          const errors = absPath
+            ? checked
+            : checked
+                .filter(
+                  (error) =>
+                    typeof error.params.module !== "string" ||
+                    importKind(error.params.module) !== "local",
+                )
+                .map((error) => ({ ...error, file: undefined }));
+          if (errors.length > 0) {
+            console.error(formatErrors(errors));
+            const hint = formatDiagnosticsHint(errors);
+            if (hint) console.error(hint);
+            if (errors.some((e) => e.severity === "error")) {
+              hasErrors = true;
+            }
+          } else {
+            console.log("No type errors found.");
+          }
+        };
+        const sources = resolveInputSources(inputs);
+        if (sources === null) {
           return;
         }
-        const { program: parsedProgram, info } = prepared;
-        const checked = typeCheck(parsedProgram, config, info).errors;
-        // Stdin was checked at a temporary path, which is gone by now, and
-        // which no relative import could ever resolve against. Reporting one
-        // would fail a file that passes when named on the command line.
-        const errors = absPath
-          ? checked
-          : checked
-              .filter(
-                (error) =>
-                  typeof error.params.module !== "string" ||
-                  importKind(error.params.module) !== "local",
-              )
-              .map((error) => ({ ...error, file: undefined }));
-        if (errors.length > 0) {
-          console.error(formatErrors(errors));
-          const hint = formatDiagnosticsHint(errors);
-          if (hint) console.error(hint);
-          if (errors.some((e) => e.severity === "error")) {
-            hasErrors = true;
+        // Build one SymbolTable seeded from EVERY file source, not just the
+        // first. `SymbolTable.build` accepts an array of entrypoints and crawls
+        // reachable files (imports + stdlib) from each, deduping via its visited
+        // set. Seeding from only the first file leaves files whose imports are
+        // unreachable from it unable to resolve those imports: the imported
+        // functions/types become `any` (unresolved agency imports are fail-open),
+        // so real cross-file type errors are SILENTLY MISSED, and interrupt-effect
+        // metadata is dropped. Seeding from every file makes typechecking of the
+        // whole directory complete. The symbol table stays file-keyed, so adding
+        // more entrypoints never merges or pollutes across files.
+        const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
+        // A bad import (a re-export of a name the source lacks, an uninstalled
+        // pkg::) is a user error: print its message once, not a stack trace.
+        const reportImportError = (error: unknown, file?: string): void => {
+          if (!(error instanceof ImportResolutionError)) throw error;
+          reportOnce(formatImportResolutionError(error, file));
+        };
+        // One shared table for every file. When an input file's own imports
+        // break the build, that file is reported and dropped, and the table is
+        // rebuilt for the rest. When the bad import is in a file the inputs only
+        // reach through imports, the shared build cannot succeed, so each file
+        // builds its own table; the ones that reach the bad file repeat the
+        // same error, which is printed once.
+        const dropped: string[] = [];
+        let remaining = filePaths;
+        let sharedTable: SymbolTable | undefined;
+        while (remaining.length > 0 && sharedTable === undefined) {
+          try {
+            sharedTable = SymbolTable.build(remaining, config);
+          } catch (error) {
+            reportImportError(error);
+            const bad = (error as ImportResolutionError).file;
+            if (bad === undefined || !remaining.includes(bad)) {
+              break;
+            }
+            dropped.push(bad);
+            remaining = remaining.filter((file) => file !== bad);
           }
-        } else {
-          console.log("No type errors found.");
         }
-      };
-      const sources = resolveInputSources(inputs);
-      if (sources === null) {
-        return;
-      }
-      // Build one SymbolTable seeded from EVERY file source, not just the
-      // first. `SymbolTable.build` accepts an array of entrypoints and crawls
-      // reachable files (imports + stdlib) from each, deduping via its visited
-      // set. Seeding from only the first file leaves files whose imports are
-      // unreachable from it unable to resolve those imports: the imported
-      // functions/types become `any` (unresolved agency imports are fail-open),
-      // so real cross-file type errors are SILENTLY MISSED, and interrupt-effect
-      // metadata is dropped. Seeding from every file makes typechecking of the
-      // whole directory complete. The symbol table stays file-keyed, so adding
-      // more entrypoints never merges or pollutes across files.
-      const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
-      // A bad import (a re-export of a name the source lacks, an uninstalled
-      // pkg::) is a user error: print its message once, not a stack trace.
-      const reportImportError = (error: unknown, file?: string): void => {
-        if (!(error instanceof ImportResolutionError)) throw error;
-        reportOnce(formatImportResolutionError(error, file));
-      };
-      // One shared table for every file. When an input file's own imports
-      // break the build, that file is reported and dropped, and the table is
-      // rebuilt for the rest. When the bad import is in a file the inputs only
-      // reach through imports, the shared build cannot succeed, so each file
-      // builds its own table; the ones that reach the bad file repeat the
-      // same error, which is printed once.
-      const dropped: string[] = [];
-      let remaining = filePaths;
-      let sharedTable: SymbolTable | undefined;
-      while (remaining.length > 0 && sharedTable === undefined) {
-        try {
-          sharedTable = SymbolTable.build(remaining, config);
-        } catch (error) {
-          reportImportError(error);
-          const bad = (error as ImportResolutionError).file;
-          if (bad === undefined || !remaining.includes(bad)) {
-            break;
+        for (const src of sources) {
+          if (src.kind === "stdin") {
+            runTypeCheck(await readSource(src));
+            continue;
           }
-          dropped.push(bad);
-          remaining = remaining.filter((file) => file !== bad);
+          const filePath = path.resolve(src.path);
+          if (dropped.includes(filePath)) {
+            continue;
+          }
+          const contents = await readSource(src);
+          try {
+            const table = sharedTable ?? SymbolTable.build([filePath], config);
+            runTypeCheck(contents, src.path, table);
+          } catch (error) {
+            reportImportError(error, src.path);
+          }
         }
-      }
-      for (const src of sources) {
-        if (src.kind === "stdin") {
-          runTypeCheck(await readSource(src));
-          continue;
-        }
-        const filePath = path.resolve(src.path);
-        if (dropped.includes(filePath)) {
-          continue;
-        }
-        const contents = await readSource(src);
-        try {
-          const table = sharedTable ?? SymbolTable.build([filePath], config);
-          runTypeCheck(contents, src.path, table);
-        } catch (error) {
-          reportImportError(error, src.path);
-        }
-      }
-      if (hasErrors) process.exit(1);
-    });
+        if (hasErrors) process.exit(1);
+      },
+    );
 
   program
     .command("explain")

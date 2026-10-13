@@ -89,7 +89,9 @@ Search the web. Returns a list of results with title, url, and description.
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L26))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L27))
 
 ### tavilySearch
 
@@ -127,4 +129,6 @@ Get a free Tavily key (no credit card) at https://tavily.com.
 
 **Throws:** `std::tavilySearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L70))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L72))

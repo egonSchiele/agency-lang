@@ -195,6 +195,7 @@ type Preflight = {
     and the locked flag after the approval, because the note can change during
     the approval window. Those re-checks are the belt and braces; this check is
     what makes the error precede the interrupt. */
+@capabilities(subprocess)
 def preflight(id: string, folder: string | null): Result<Preflight> {
   const meta = try _preflightNote(id)
   if (isFailure(meta)) {
@@ -209,6 +210,7 @@ def preflight(id: string, folder: string | null): Result<Preflight> {
   return meta
 }
 
+@capabilities(subprocess)
 export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
   """
   Create a note in the Notes app and return it, including its new id.
@@ -242,6 +244,7 @@ export def createNote(title: string, body: string, folder: string = "Agency Note
   }
 }
 
+@capabilities(subprocess)
 export def appendToNote(id: string, body: string, folder?: string): Result<Note> raises <std::notes::append> {
   """
   Append Markdown to an existing note. Get the id from listNotes or searchNotes.
@@ -272,6 +275,7 @@ export def appendToNote(id: string, body: string, folder?: string): Result<Note>
   }
 }
 
+@capabilities(subprocess)
 export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
   """
   Read a note's contents as plain text. Get the id from listNotes or searchNotes.
@@ -294,6 +298,7 @@ export idempotent def readNote(id: string, folder?: string): Result<NoteContent>
   return try _readNote(id, folder)
 }
 
+@capabilities(subprocess)
 export idempotent def searchNotes(query: string, folder?: string): Result<Note[]> raises <std::notes::search> {
   """
   Search notes by their text and return matching notes' metadata, without their
@@ -313,6 +318,7 @@ export idempotent def searchNotes(query: string, folder?: string): Result<Note[]
   return try _searchNotes(query, folder)
 }
 
+@capabilities(subprocess)
 export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::notes::list> {
   """
   List notes' metadata, without their contents.
@@ -329,6 +335,7 @@ export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::no
   return try _listNotes(folder)
 }
 
+@capabilities(subprocess)
 export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> {
   """
   List the folders in the Notes app, with a count of the notes in each.
@@ -341,6 +348,7 @@ export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> 
   return try _listFolders()
 }
 
+@capabilities(subprocess)
 export def deleteNote(id: string, folder?: string): Result<null> raises <std::notes::delete> {
   """
   Delete a note. It moves to the Recently Deleted folder, where it stays for

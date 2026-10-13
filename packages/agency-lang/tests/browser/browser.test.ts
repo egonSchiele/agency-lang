@@ -53,7 +53,9 @@ describe("the browser bundle", () => {
     expect(printed).toEqual([
       "hello from the browser",
       "GREETING is hi from the page",
-      expect.stringMatching(/^read refused: .*fileRead/),
+      // Refused when `read` is entered, by its @capabilities tag, before
+      // its body runs and before the `with approve` handler is asked.
+      "read refused: read needs the fileRead capability, which the browser host does not have. Calling read again will fail the same way.",
     ]);
   });
 });

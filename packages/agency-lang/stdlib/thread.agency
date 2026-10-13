@@ -227,6 +227,7 @@ export def handBack(message: string) {
 // viewFile sends a file's bytes to a model provider. That is a different
 // permission from std::readImage, which reads the bytes into a variable.
 // Approving one never authorizes the other.
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::viewFile { dir: string, filename: string }
 

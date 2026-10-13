@@ -37,12 +37,15 @@ cloud, and record from the microphone.
 */
 
 // Local playback (macOS `say`). Distinct capability + effect from cloud TTS.
+@capabilities(fileRead, fileWrite, subprocess)
 effect std::say { textLength: number }
+@capabilities(fileRead, fileWrite, subprocess, terminal)
 effect std::record {}
 // Cloud speech-to-text. The destination is the active cloud speech provider,
 // which a custom LLM client may route anywhere — the payload states the
 // REQUESTED provider (may be "" for automatic) and configured model, not a
 // resolved destination.
+@capabilities(fileRead, llm)
 effect std::transcribe {
   requestedProvider: string,
   configuredModel: string,
@@ -50,6 +53,7 @@ effect std::transcribe {
 }
 // Cloud text-to-speech. A DISTINCT effect from local `std::say`: approving one
 // never authorizes the other.
+@capabilities(fileRead, fileWrite, llm)
 effect std::synthesizeSpeech {
   requestedProvider: string,
   configuredModel: string,
@@ -60,6 +64,7 @@ effect std::synthesizeSpeech {
 // from cloud `std::synthesizeSpeech`: approving one never approves the other.
 // `outputFile` is the real path that will be written, or "" for a temp file.
 // `format` is the format that will be written: wav, mp3, m4a, or pcm.
+@capabilities(fileRead, fileWrite, llm, subprocess)
 effect std::localSpeech {
   model: string,
   voice: string,

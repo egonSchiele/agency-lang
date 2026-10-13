@@ -38,10 +38,13 @@ import { fetchJSON } from "std::http"
   `~/.agency/oauth/{name}.json`, encrypted at rest when a key is available.
 */
 
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(name)
 effect std::authorize { name: string, authUrl: string, scopes: string }
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(name)
 effect std::getAccessToken { name: string }
+@capabilities(fileRead, fileWrite)
 @always(name)
 effect std::revokeAuth { name: string }
 

@@ -176,12 +176,14 @@ export type CommentInfo = {
 
 // @always(owner, repo): an "approve always" answer pins to one repository
 // instead of every repository the token can reach.
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prGet {
   owner: string;
   repo: string;
   number: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prList {
   owner: string;
@@ -191,12 +193,14 @@ effect std::github::prList {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prDiff {
   owner: string;
   repo: string;
   number: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prFiles {
   owner: string;
@@ -205,6 +209,7 @@ effect std::github::prFiles {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewList {
   owner: string;
@@ -213,6 +218,7 @@ effect std::github::prReviewList {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewCommentList {
   owner: string;
@@ -221,6 +227,7 @@ effect std::github::prReviewCommentList {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prChecks {
   owner: string;
@@ -229,12 +236,14 @@ effect std::github::prChecks {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueGet {
   owner: string;
   repo: string;
   number: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueList {
   owner: string;
@@ -244,6 +253,7 @@ effect std::github::issueList {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCommentList {
   owner: string;
@@ -252,6 +262,7 @@ effect std::github::issueCommentList {
   perPage: number;
   page: number
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueSearch {
   owner: string;
@@ -262,6 +273,7 @@ effect std::github::issueSearch {
 }
 
 // Write effects carry the text about to be posted, so the approver sees it.
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewComment {
   owner: string;
@@ -271,6 +283,7 @@ effect std::github::prReviewComment {
   line: number;
   body: string
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReview {
   owner: string;
@@ -280,6 +293,7 @@ effect std::github::prReview {
   body: string;
   comments: ReviewComment[]
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prApprove {
   owner: string;
@@ -287,6 +301,7 @@ effect std::github::prApprove {
   number: number;
   body: string
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCreate {
   owner: string;
@@ -296,6 +311,7 @@ effect std::github::issueCreate {
   labels: string[];
   assignees: string[]
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueComment {
   owner: string;
@@ -303,6 +319,7 @@ effect std::github::issueComment {
   number: number;
   body: string
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueUpdate {
   owner: string;
@@ -311,6 +328,7 @@ effect std::github::issueUpdate {
   state: string;
   reason: string
 }
+@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueLabel {
   owner: string;

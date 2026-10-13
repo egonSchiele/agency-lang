@@ -41,6 +41,7 @@ import { format } from "std::date"
   ```
 */
 
+@capabilities(network)
 effect std::bluesky { op: string, query: string, since: number, limit: number }
 
 static const BSKY_BASE = "https://public.api.bsky.app/xrpc"

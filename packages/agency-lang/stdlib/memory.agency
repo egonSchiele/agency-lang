@@ -68,10 +68,15 @@ export type MemoryConfig = {
   embeddings?: { model: string | undefined; provider: string | undefined }
 }
 
+@capabilities(fileRead, fileWrite)
 effect std::memory::enableMemory { dir: string }
+@capabilities
 effect std::memory::disableMemory {}
+@capabilities(fileRead, fileWrite, llm)
 effect std::memory::remember { contentLength: number }
+@capabilities(fileRead, llm)
 effect std::memory::recall { query: string }
+@capabilities(fileRead, fileWrite, llm)
 effect std::memory::forget { query: string }
 
 /** Useful for branching in user code (`if (isMemoryActive()) { ... }`)

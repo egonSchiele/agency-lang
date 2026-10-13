@@ -17,6 +17,7 @@ import { _weather } from "agency-lang/stdlib-lib/weather.js"
   CC BY 4.0, for non-commercial use.
 */
 
+@capabilities(network)
 effect std::weather { location: string, units: string }
 
 type WeatherResult = {

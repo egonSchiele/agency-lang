@@ -41,6 +41,7 @@ import { env } from "std::system"
   ```
 */
 
+@capabilities(network)
 effect std::fred { seriesId: string }
 
 /** A single FRED observation. `value` is null when FRED reports the value as missing ("."). */

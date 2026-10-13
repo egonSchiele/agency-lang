@@ -110,6 +110,7 @@ const META_FILE = "meta.json"
 
 // One approval covers the scan; the reads that fulfil it use the
 // non-interrupt primitive, as std::skills does.
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
@@ -118,6 +119,7 @@ effect std::toolbox::scan {
 // runTool's use count. Its own effect, so a policy can approve the
 // stdlib's record without approving any std::write to meta.json. The
 // approval covers the write that fulfils it.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::recordUse {
   dir: string;
@@ -131,6 +133,7 @@ effect std::toolbox::recordUse {
 // approval covers the write that fulfils it. `root` is the toolbox root,
 // so "approve always here" pins the toolbox rather than one draft's
 // staging directory, whose name carries a random number.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::writeFile {
   root: string;
@@ -141,6 +144,7 @@ effect std::toolbox::writeFile {
 
 // The staging directory for one draft, created before the draft is
 // written. Same scope as the writes that go into it.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::createStaging {
   root: string;
@@ -150,6 +154,7 @@ effect std::toolbox::createStaging {
 
 // The staging directory of a draft that was not saved, removed with
 // everything in it.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStaging {
   root: string;
@@ -159,6 +164,7 @@ effect std::toolbox::removeStaging {
 
 // One file in a draft's staging directory, removed when a revision stops
 // being testable and the previous round's tests must not ship with it.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStagedFile {
   root: string;
@@ -174,6 +180,7 @@ export type Unresolved = {
   reason: string
 }
 
+@capabilities
 effect std::toolbox::review {
   name: string;
   stagingDir: string;
@@ -199,6 +206,7 @@ effect std::toolbox::review {
 
 // Every publish into a toolbox raises this, whether the source came from
 // the design loop or from the caller. `dir` is the toolbox root.
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::save {
   dir: string;

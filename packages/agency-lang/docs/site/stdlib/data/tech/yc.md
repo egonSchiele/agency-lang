@@ -60,7 +60,7 @@ export type Company = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L39))
 
 ### YcMeta
 
@@ -76,20 +76,21 @@ export type YcMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L63))
 
 ## Effects
 
 ### std::yc
 
 ```ts
+@capabilities(network)
 effect std::yc {
   op: string;
   query: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L30))
 
 ## Functions
 
@@ -114,7 +115,7 @@ Fetch the YC companies in a batch. Returns each company's id, name, one-liner, b
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L178))
 
 ### ycIndustry
 
@@ -139,7 +140,7 @@ Fetch the YC companies in an industry. Returns each company's profile. An unknow
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L190))
 
 ### ycTag
 
@@ -162,7 +163,7 @@ Fetch the YC companies with a tag. Returns each company's profile. An unknown ta
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L202))
 
 ### ycList
 
@@ -188,7 +189,7 @@ Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-fou
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L214))
 
 ### ycMeta
 
@@ -203,4 +204,4 @@ Fetch the YC directory metadata: the available batch, industry, and tag slugs pl
 
 **Throws:** `std::yc`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/yc.agency#L232))

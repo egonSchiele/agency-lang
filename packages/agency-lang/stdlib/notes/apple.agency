@@ -150,16 +150,22 @@ export type NoteContent = {
   modified: string
 }
 
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::create { account: string, folder: string, title: string, folderCreated: boolean }
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::append { account: string, folder: string, title: string, id: string }
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::read   { account: string, folder: string, title: string, id: string }
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::search { account: string, folder: string, query: string }
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::list   { account: string, folder: string }
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::delete { account: string, folder: string, title: string, id: string }
 

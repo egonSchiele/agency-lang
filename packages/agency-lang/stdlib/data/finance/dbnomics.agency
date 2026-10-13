@@ -25,6 +25,7 @@ import { connectorFetch } from "std::data/connector"
   ```
 */
 
+@capabilities(network)
 effect std::dbnomics { provider: string, dataset: string, series: string }
 
 /** A single DBnomics observation. `period` is a label like "2025-01"; `value` may be null. */

@@ -21,18 +21,20 @@ Read and write the system clipboard.
 ### std::clipboardCopy
 
 ```ts
+@capabilities(subprocess)
 effect std::clipboardCopy {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L16))
 
 ### std::clipboardPaste
 
 ```ts
+@capabilities(subprocess)
 effect std::clipboardPaste {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L18))
 
 ## Functions
 
@@ -54,7 +56,7 @@ Copy text to the system clipboard.
 
 **Throws:** `std::clipboardCopy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L20))
 
 ### paste
 
@@ -68,4 +70,4 @@ Read text from the system clipboard and return it.
 
 **Throws:** `std::clipboardPaste`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L33))

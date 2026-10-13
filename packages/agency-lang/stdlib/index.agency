@@ -33,28 +33,33 @@ import {
 // `std::agency`. Their canonical payload is `{ dir, filename }`, the file
 // identity a policy keys on. Individual raise sites may add per-call extras
 // like content, mode, and offset.
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::read {
   dir: string;
   filename: string
 }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::write {
   dir: string;
   filename: string
 }
+@capabilities(fileRead, env, llm, subprocess)
 @alwaysUnder(dir)
 effect std::readImage {
   dir: string;
   filename: string
 }
 
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::readBinary {
   dir: string;
   filename: string
 }
 
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::writeBinary {
   dir: string;

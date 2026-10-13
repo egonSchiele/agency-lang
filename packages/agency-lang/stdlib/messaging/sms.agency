@@ -20,6 +20,7 @@ type SmsResult = {
   status: string
 }
 
+@capabilities(network)
 @always(to)
 effect std::sendSms { to: string }
 

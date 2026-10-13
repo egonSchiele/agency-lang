@@ -22,6 +22,7 @@ Search the web from Agency code, backed by the Brave Search API
 ### std::search
 
 ```ts
+@capabilities(network)
 effect std::search {
   query: string;
   count: number;
@@ -32,11 +33,12 @@ effect std::search {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L24))
 
 ### std::tavilySearch
 
 ```ts
+@capabilities(network)
 effect std::tavilySearch {
   query: string;
   count: number;
@@ -45,7 +47,7 @@ effect std::tavilySearch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L26))
 
 ## Functions
 
@@ -89,7 +91,7 @@ Search the web. Returns a list of results with title, url, and description.
 
 **Throws:** `std::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L28))
 
 ### tavilySearch
 
@@ -127,4 +129,4 @@ Get a free Tavily key (no credit card) at https://tavily.com.
 
 **Throws:** `std::tavilySearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/search.agency#L72))

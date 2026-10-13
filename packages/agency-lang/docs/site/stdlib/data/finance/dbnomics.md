@@ -42,7 +42,7 @@ export type DbnomicsObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L32))
 
 ### DbnomicsSeries
 
@@ -60,13 +60,14 @@ export type DbnomicsSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L38))
 
 ## Effects
 
 ### std::dbnomics
 
 ```ts
+@capabilities(network)
 effect std::dbnomics {
   provider: string;
   dataset: string;
@@ -74,7 +75,7 @@ effect std::dbnomics {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L29))
 
 ## Functions
 
@@ -109,4 +110,4 @@ Fetch a macroeconomic time-series from DBnomics by its provider/dataset/series c
 
 **Throws:** `std::dbnomics`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/dbnomics.agency#L97))

@@ -27,6 +27,7 @@ import { connectorFetch, connectorError, clampLimit } from "std::data/connector"
   ```
 */
 
+@capabilities(network)
 effect std::hackernews { op: string, query: string }
 
 static const HN_BASE = "https://hacker-news.firebaseio.com/v0"

@@ -22,33 +22,36 @@ Search Wikipedia and read article summaries or full text from Agency code.
 ### std::wikipedia::search
 
 ```ts
+@capabilities(network)
 effect std::wikipedia::search {
   query: string;
   limit: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L37))
 
 ### std::wikipedia::summary
 
 ```ts
+@capabilities(network)
 effect std::wikipedia::summary {
   title: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L39))
 
 ### std::wikipedia::article
 
 ```ts
+@capabilities(network)
 effect std::wikipedia::article {
   title: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
 
 ## Functions
 
@@ -74,7 +77,7 @@ Search Wikipedia for articles matching a query. Each result has a title, descrip
 
 **Throws:** `std::wikipedia::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L43))
 
 ### summary
 
@@ -96,7 +99,7 @@ Get a summary of a Wikipedia article. Returns the title, description, intro extr
 
 **Throws:** `std::wikipedia::summary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L58))
 
 ### article
 
@@ -118,4 +121,4 @@ Get the full text of a Wikipedia article. Returns the title, plain-text content,
 
 **Throws:** `std::wikipedia::article`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L71))

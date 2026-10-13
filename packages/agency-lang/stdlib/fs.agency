@@ -32,15 +32,21 @@ type EditResult = {
   edits: number
 }
 
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::edit { dir: string, filename: string, edits: Edit[], before: string, after: string }
+@capabilities(fileRead, fileWrite)
 effect std::applyPatch { patch: string; files: string[] }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::mkdir { dir: string }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(src, dest)
 effect std::copy { src: string, dest: string }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(src, dest)
 effect std::move { src: string, dest: string }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(target)
 effect std::remove { target: string }
 

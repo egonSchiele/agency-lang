@@ -40,6 +40,7 @@ export type ExecResult = {
   exitCode: number
 }
 
+@capabilities(fileRead, subprocess)
 @always(command, subcommand)
 effect std::exec {
   command: string;
@@ -49,6 +50,7 @@ effect std::exec {
   timeout: number;
   stdin: string
 }
+@capabilities(fileRead, subprocess)
 @always(command, cwd)
 effect std::bash {
   command: string;
@@ -56,12 +58,14 @@ effect std::bash {
   timeout: number;
   stdin: string
 }
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::ls {
   dir: string;
   recursive: boolean;
   maxResults: number
 }
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::grep {
   pattern: string;
@@ -73,6 +77,7 @@ effect std::grep {
   filesOnly: boolean;
   invert: boolean
 }
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::glob {
   pattern: string;

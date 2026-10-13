@@ -94,39 +94,56 @@ export type GitStash = { ref: string; description: string }
 // explicit `cwd` as given, never joining it to the agent working directory.
 
 // Read effects
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::status     { cwd: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::log        { cwd: string, ref: string, path: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::diff       { cwd: string, ref: string, ref2: string, staged: boolean, path: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::show       { cwd: string, ref: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchList { cwd: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::remoteList { cwd: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::blame      { cwd: string, path: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashList  { cwd: string }
 // Write effects
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::add          { cwd: string, paths: string[], all: boolean }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::commit       { cwd: string, message: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::checkout     { cwd: string, target: string, force: boolean }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::switch       { cwd: string, branch: string, create: boolean }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchCreate { cwd: string, branch: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchDelete { cwd: string, branch: string, force: boolean }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPush    { cwd: string, message: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPop     { cwd: string }
+@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::restore      { cwd: string, paths: string[], staged: boolean }
 

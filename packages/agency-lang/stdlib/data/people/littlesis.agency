@@ -36,6 +36,7 @@ import { connectorFetch } from "std::data/connector"
   ```
 */
 
+@capabilities(network)
 effect std::littlesis { op: string, query: string }
 
 static const LITTLESIS_BASE = "https://littlesis.org/api"

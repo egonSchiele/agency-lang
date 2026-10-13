@@ -217,11 +217,13 @@ The returned tool is `read` partially applied with `dir: dir`. Its
 description lists every available skill so the LLM knows which
 `location` to pass back as `filename`.
 */
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::skills::skillsDir {
   dir: string;
   layout: "flat" | "standard"
 }
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::skills::commandsDir {
   dir: string
@@ -404,6 +406,7 @@ export def scanSkillsSubdirs(
   return success(out)
 }
 
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::skills::save {
   dir: string;
@@ -522,6 +525,7 @@ type SkillDraft = {
 
 const ACCEPT = "accept"
 
+@capabilities
 effect std::skills::review {
   dir: string;
   name: string;

@@ -28,6 +28,7 @@ import { keys } from "std::object"
   ```
 */
 
+@capabilities(network)
 effect std::usaspending { op: string, query: string }
 
 static const USA_BASE = "https://api.usaspending.gov"

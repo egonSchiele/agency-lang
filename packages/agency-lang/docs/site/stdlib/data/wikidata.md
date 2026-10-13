@@ -48,7 +48,7 @@ export type Entity = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L48))
 
 ### EntityDetail
 
@@ -69,20 +69,21 @@ export type EntityDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L58))
 
 ## Effects
 
 ### std::wikidata
 
 ```ts
+@capabilities(network)
 effect std::wikidata {
   op: string;
   query: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L35))
 
 ## Functions
 
@@ -113,7 +114,7 @@ Search Wikidata for entities by name. Returns matches with QID, label, descripti
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L219))
 
 ### wikidataEntity
 
@@ -139,7 +140,7 @@ Fetch one Wikidata entity by its QID. Returns the English label, description, al
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L233))
 
 ### wikidataQuery
 
@@ -165,4 +166,4 @@ Run a SPARQL query against the Wikidata Query Service and return rows (each a ma
 
 **Throws:** `std::wikidata`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L245))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/wikidata.agency#L246))

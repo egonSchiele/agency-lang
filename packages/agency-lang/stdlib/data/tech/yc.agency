@@ -26,6 +26,7 @@ import { keys } from "std::object"
   ```
 */
 
+@capabilities(network)
 effect std::yc { op: string, query: string }
 
 static const YC_BASE = "https://yc-oss.github.io/api"

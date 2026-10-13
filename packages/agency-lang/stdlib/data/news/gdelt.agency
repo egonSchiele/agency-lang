@@ -28,6 +28,7 @@ import { connectorFetch } from "std::data/connector"
   ```
 */
 
+@capabilities(network)
 effect std::gdelt { query: string }
 
 /** One news article returned by GDELT. `seenDate` is GDELT's `YYYYMMDDTHHMMSSZ` string. */

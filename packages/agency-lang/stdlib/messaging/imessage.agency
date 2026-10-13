@@ -18,6 +18,7 @@ type IMessageResult = {
   sent: boolean
 }
 
+@capabilities(subprocess)
 @always(to)
 effect std::sendIMessage { to: string }
 

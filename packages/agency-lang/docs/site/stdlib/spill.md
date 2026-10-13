@@ -39,12 +39,13 @@ Saving one long tool output to the spill directory.
 
 ```ts
 /** Saving one long tool output to the spill directory. */
+@capabilities(fileRead, fileWrite)
 effect std::spill::write {
   filename: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L54))
 
 ### std::spill::read
 
@@ -52,12 +53,13 @@ Reading or searching one saved output file.
 
 ```ts
 /** Reading or searching one saved output file. */
+@capabilities(fileRead, fileWrite)
 effect std::spill::read {
   filename: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L58))
 
 ## Constants
 
@@ -81,7 +83,7 @@ The directory saved tool output lives in.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L60))
 
 ### keepOutput
 
@@ -109,7 +111,7 @@ What the model gets back for a command's output.
 
 **Throws:** `std::spill::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L67))
 
 ### readSpill
 
@@ -139,7 +141,7 @@ Read a saved tool-output file, named in a "full output saved as" notice. Returns
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L104))
 
 ### grepSpill
 
@@ -169,4 +171,4 @@ Search a saved tool-output file for a regular expression. Each match comes back 
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L122))

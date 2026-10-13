@@ -53,16 +53,19 @@ import { VERSION } from "agency-lang/stdlib-lib/version.js"
 // `std::read`/`std::write` are the shared file-access effects (also raised by
 // `std::read`/`std::write` in `std::index`), so their reads and writes here stay
 // governed by the same file policy. The canonical payload is `{ dir, filename }`.
+@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::read {
   dir: string;
   filename: string
 }
+@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::write {
   dir: string;
   filename: string
 }
+@capabilities(subprocess, fileWrite)
 effect std::run {
   moduleId: string;
   node: string;

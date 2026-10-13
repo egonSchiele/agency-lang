@@ -51,12 +51,17 @@ type CalendarEvent = {
   htmlLink: string
 }
 
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(clientId)
 effect std::authorizeCalendar { clientId: string }
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(calendarId)
 effect std::listEvents { maxResults: number, calendarId: string, query: string }
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 effect std::createEvent { summary: string, start: string, end: string, description: string, location: string }
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 effect std::updateEvent { eventId: string, summary: string, start: string, end: string }
+@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(calendarId)
 effect std::deleteEvent { eventId: string, calendarId: string }
 

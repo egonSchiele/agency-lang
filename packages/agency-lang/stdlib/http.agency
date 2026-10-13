@@ -21,10 +21,13 @@ import {
   _fetchMarkdown,
 } from "agency-lang/stdlib-lib/http.js"
 
+@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetch { baseUrl: string, path: string, method: string }
+@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
+@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
 

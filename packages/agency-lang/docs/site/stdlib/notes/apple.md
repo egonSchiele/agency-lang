@@ -172,6 +172,7 @@ export type NoteContent = {
 ### std::notes::create
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::create {
   account: string;
@@ -181,11 +182,12 @@ effect std::notes::create {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L155))
 
 ### std::notes::append
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::append {
   account: string;
@@ -195,11 +197,12 @@ effect std::notes::append {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L158))
 
 ### std::notes::read
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::read {
   account: string;
@@ -209,11 +212,12 @@ effect std::notes::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L161))
 
 ### std::notes::search
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::search {
   account: string;
@@ -222,11 +226,12 @@ effect std::notes::search {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L164))
 
 ### std::notes::list
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::list {
   account: string;
@@ -234,11 +239,12 @@ effect std::notes::list {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L167))
 
 ### std::notes::delete
 
 ```ts
+@capabilities(subprocess)
 @always(folder)
 effect std::notes::delete {
   account: string;
@@ -248,7 +254,7 @@ effect std::notes::delete {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L170))
 
 ## Functions
 
@@ -280,7 +286,7 @@ Create a note in the Notes app and return it, including its new id.
 
 **Throws:** `std::notes::create`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L212))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L218))
 
 ### appendToNote
 
@@ -310,7 +316,7 @@ Append Markdown to an existing note. Get the id from listNotes or searchNotes.
 
 **Throws:** `std::notes::append`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L245))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L251))
 
 ### readNote
 
@@ -337,7 +343,7 @@ Read a note's contents as plain text. Get the id from listNotes or searchNotes.
 
 **Throws:** `std::notes::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L281))
 
 ### searchNotes
 
@@ -365,7 +371,7 @@ Search notes by their text and return matching notes' metadata, without their
 
 **Throws:** `std::notes::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L303))
 
 ### listNotes
 
@@ -389,7 +395,7 @@ List notes' metadata, without their contents.
 
 **Throws:** `std::notes::list`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L322))
 
 ### listFolders
 
@@ -403,7 +409,7 @@ List the folders in the Notes app, with a count of the notes in each.
 
 **Throws:** `std::notes::list`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L332))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L338))
 
 ### deleteNote
 
@@ -431,4 +437,4 @@ Delete a note. It moves to the Recently Deleted folder, where it stays for
 
 **Throws:** `std::notes::delete`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L344))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/notes/apple.agency#L350))

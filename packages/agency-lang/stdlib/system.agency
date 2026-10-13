@@ -28,14 +28,20 @@ open URLs, and read from stdin.
   ```
 */
 
+@capabilities(fileRead, subprocess)
 effect std::screenshot { filepath: string }
+@capabilities
 effect std::exit { code: number }
+@capabilities(env)
 @always(name)
 effect std::env { name: string }
+@capabilities(env)
 @always(name)
 effect std::setEnv { name: string, value: string }
+@capabilities(subprocess)
 @always(host)
 effect std::openUrl { url: string, host: string }
+@capabilities(subprocess)
 effect std::notify { title: string, body: string }
 
 export def notify(title: string, message: string): boolean {

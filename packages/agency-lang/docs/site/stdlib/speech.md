@@ -25,24 +25,27 @@ cloud, and record from the microphone.
 ### std::say
 
 ```ts
+@capabilities(fileRead, fileWrite, subprocess)
 effect std::say {
   textLength: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L41))
 
 ### std::record
 
 ```ts
+@capabilities(fileRead, fileWrite, subprocess, terminal)
 effect std::record {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L43))
 
 ### std::transcribe
 
 ```ts
+@capabilities(fileRead, llm)
 effect std::transcribe {
   requestedProvider: string;
   configuredModel: string;
@@ -50,11 +53,12 @@ effect std::transcribe {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L49))
 
 ### std::synthesizeSpeech
 
 ```ts
+@capabilities(fileRead, fileWrite, llm)
 effect std::synthesizeSpeech {
   requestedProvider: string;
   configuredModel: string;
@@ -63,11 +67,12 @@ effect std::synthesizeSpeech {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L57))
 
 ### std::localSpeech
 
 ```ts
+@capabilities(fileRead, fileWrite, llm, subprocess)
 effect std::localSpeech {
   model: string;
   voice: string;
@@ -77,7 +82,7 @@ effect std::localSpeech {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L68))
 
 ## Functions
 
@@ -115,7 +120,7 @@ Speak text aloud locally using the operating system's text-to-speech
 
 **Throws:** `std::say`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L94))
 
 ### record
 
@@ -154,7 +159,7 @@ is not subject to the `allowedPaths` allow-list.
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L131))
 
 ### transcribe
 
@@ -203,7 +208,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L149))
 
 ### speak
 
@@ -260,7 +265,7 @@ and statelog apply.
 
 **Throws:** `std::synthesizeSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L202))
 
 ### speakLocal
 
@@ -316,4 +321,4 @@ Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 
 **Throws:** `std::localSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L266))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L271))

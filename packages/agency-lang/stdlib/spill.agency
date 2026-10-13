@@ -50,9 +50,11 @@ static const PREVIEW_CHARS = 700
 static const PREVIEW_LINE_LEN = 200
 
 /** Saving one long tool output to the spill directory. */
+@capabilities(fileRead, fileWrite)
 effect std::spill::write { filename: string }
 
 /** Reading or searching one saved output file. */
+@capabilities(fileRead, fileWrite)
 effect std::spill::read { filename: string }
 
 export def spillDir(): string {

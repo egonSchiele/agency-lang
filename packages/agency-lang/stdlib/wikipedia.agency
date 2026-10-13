@@ -33,8 +33,11 @@ type WikiArticle = {
   url: string
 }
 
+@capabilities(network)
 effect std::wikipedia::search { query: string, limit: number }
+@capabilities(network)
 effect std::wikipedia::summary { title: string }
+@capabilities(network)
 effect std::wikipedia::article { title: string }
 
 export def search(query: string, limit: number = 5): WikiSearchResult[] {

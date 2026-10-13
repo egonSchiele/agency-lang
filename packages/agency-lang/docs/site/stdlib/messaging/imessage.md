@@ -22,13 +22,14 @@ Send an iMessage from Agency code via the macOS Messages app. Works on
 ### std::sendIMessage
 
 ```ts
+@capabilities(subprocess)
 @always(to)
 effect std::sendIMessage {
   to: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L23))
 
 ## Functions
 
@@ -65,4 +66,4 @@ Only works on macOS with Messages.app signed in to iMessage. No API key required
 
 **Throws:** `std::sendIMessage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/imessage.agency#L26))

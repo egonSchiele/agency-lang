@@ -103,6 +103,7 @@ import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions, _v
 // One effect for the five functions, because all five do the same thing
 // to the file: read it once and hand it to a local model. The task and
 // the model are in the payload for a policy that wants them.
+@capabilities(fileRead, network)
 @alwaysUnder(dir)
 effect std::vision { dir: string, filename: string, task: string, model: string }
 

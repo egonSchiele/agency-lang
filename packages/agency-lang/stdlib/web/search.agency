@@ -20,7 +20,9 @@ type SearchResult = {
   description: string
 }
 
+@capabilities(network)
 effect std::search { query: string, count: number, country: string, searchLang: string, safesearch: string, freshness: string }
+@capabilities(network)
 effect std::tavilySearch { query: string, count: number, searchDepth: string, topic: string }
 
 export def search(

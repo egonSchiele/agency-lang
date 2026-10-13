@@ -2,6 +2,7 @@ import {
   interruptForm,
   raiseForm,
   afterResume,
+  pausedInside,
   taggedNode,
   hasInterrupts,
   approve,
@@ -45,6 +46,22 @@ if (hasInterrupts(paused.data)) {
   resumed.handlerOutput = hostC.state.output;
 }
 
+// The pause is inside the tagged function, after a person approved its
+// interrupt on a full host. The resume on a smaller host replays the node,
+// enters runIt again, and is refused there, so "ran ls" never appears.
+const fullE = memoryHost();
+const pausedInsideRun = await pausedInside({ host: fullE });
+let resumedInside = { data: "no interrupt surfaced" };
+if (hasInterrupts(pausedInsideRun.data)) {
+  const hostE = noSubprocess();
+  resumedInside = await respondToInterrupts(
+    pausedInsideRun.data,
+    pausedInsideRun.data.map(() => approve()),
+    { invocation: { host: hostE } },
+  );
+  resumedInside.output = hostE.state.output;
+}
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -59,6 +76,8 @@ writeFileSync(
       afterResumeOutput: resumed.handlerOutput ?? [],
       taggedNode: nodeResult.success === false ? "failed: " + nodeResult.error : nodeResult,
       taggedNodeOutput: hostD.state.output,
+      pausedInside: resumedInside.data,
+      pausedInsideOutput: resumedInside.output ?? [],
     },
     null,
     2,

@@ -55,7 +55,7 @@ describe("the browser bundle", () => {
       "GREETING is hi from the page",
       // Refused when `read` is entered, by its @capabilities tag, before
       // its body runs and before the `with approve` handler is asked.
-      "read refused: read needs the fileRead capability, which the browser host does not have. No tool call can supply it.",
+      "read refused: read needs the fileRead capability, which the browser host does not have. Calling read again will fail the same way.",
     ]);
   });
 });

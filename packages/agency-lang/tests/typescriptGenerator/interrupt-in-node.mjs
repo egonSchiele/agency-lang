@@ -389,11 +389,11 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "foo2", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-    __stack.args["age"] = __state.data.age;
-  }
   return await __enterCallable(__run, "foo2", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+      __stack.args["age"] = __state.data.age;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,
@@ -518,10 +518,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "sayHi", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
   return await __enterCallable(__run, "sayHi", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

@@ -589,10 +589,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "sayHi", "interrupt-2-deep-in-function.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "sayHi", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
   return await __enterCallable(__run, "sayHi", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

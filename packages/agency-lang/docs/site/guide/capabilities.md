@@ -36,10 +36,10 @@ The tag does two things:
 - **Refusing before anyone is asked.** When a program runs on a host that lacks a capability, a function that needs it is refused the moment it is called, before its body runs, before any handler runs, and before a person is asked to approve anything. The call returns a failure:
 
   ```
-  exists needs the fileRead capability, which the browser host does not have. No tool call can supply it.
+  exists needs the fileRead capability, which the browser host does not have. Calling exists again will fail the same way.
   ```
 
-  A model that called the function as a tool sees the same text, and the last sentence tells it not to try again with other arguments.
+  A model that called the function as a tool sees the same text, and the last sentence tells it that another call will not help.
 
 Capabilities add to handlers and policies and replace neither:
 

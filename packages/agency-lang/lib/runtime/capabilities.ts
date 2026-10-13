@@ -12,11 +12,6 @@
 import { requireCapabilities, UnsupportedOnHostError, type Capability } from "../host/host.js";
 import type { Run } from "./asyncContext.js";
 import { runtimeFailure, type ResultFailure } from "./result.js";
-import { capabilityLogWriter } from "./capabilityLog.js";
-
-/** The sentence added for a model that called the function as a tool, so it
- *  does not try again with other arguments. */
-const NO_RETRY = "No tool call can supply it.";
 
 /**
  * Run `body` if the run's host has every capability in `capabilities`,
@@ -25,7 +20,8 @@ const NO_RETRY = "No tool call can supply it.";
  * (docs/dev/compiler/codegen-run-parameter.md). The failure is the
  * host's own refusal, converted the way the generated catch converts one
  * thrown inside a body, so a refusal at entry and a refusal from inside the
- * host read the same and log the same.
+ * host read the same and log the same, with one sentence added that says
+ * calling again will not help.
  *
  * The body never begins, so its `pushHandler` calls never run, and no
  * handler is skipped by a partial run. This is the argument
@@ -33,9 +29,9 @@ const NO_RETRY = "No tool call can supply it.";
  * the same reason: a call that never started cannot raise an effect past an
  * unregistered handler.
  *
- * When the host's settings name a capability log (`agency test
- * --check-capabilities`), this is also where a callable's `enter` and
- * `exit` lines are written. The exit is written in a `finally`, so a body
+ * When the host has an `onCallable` (the test runner's host does, for
+ * `agency test --check-capabilities`), this is also where it hears that a
+ * callable started and ended. The exit is reported in a `finally`, so a body
  * that throws, fails, or is aborted still leaves the runner's stack; a
  * missed exit would cover every later host use in the case.
  */
@@ -48,17 +44,21 @@ export async function enterCallable<T>(
 ): Promise<T> {
   const failure = refusalAtEntry(run, name, capabilities);
   if (failure !== null) {
+    // On a resume, the saved frames of this call and everything below it
+    // are for a body that will not run. Drop them, or the next call would
+    // claim them. See StateStack.discardPausedChainFor.
+    run.stack.discardPausedChainFor(name);
     return refused(run, failure);
   }
-  const write = capabilityLogWriter(run.ctx.host);
-  if (write === null) {
+  const report = run.ctx.host.onCallable;
+  if (report === undefined) {
     return body(run);
   }
-  write({ kind: "enter", name, capabilities });
+  report({ kind: "enter", name, capabilities });
   try {
     return await body(run);
   } finally {
-    write({ kind: "exit", name });
+    report({ kind: "exit", name });
   }
 }
 
@@ -76,7 +76,9 @@ export function refusalAtEntry(
     if (!(error instanceof UnsupportedOnHostError)) {
       throw error;
     }
-    error.message = `${error.message} ${NO_RETRY}`;
+    // One more sentence, for a model that called the function as a tool and
+    // for a person reading the failure: nothing about the call was wrong.
+    error.message = `${error.message} Calling ${name} again will fail the same way.`;
     run.log.error({ errorType: "runtimeError", message: error.message, functionName: name });
     return runtimeFailure(error, { functionName: name });
   }

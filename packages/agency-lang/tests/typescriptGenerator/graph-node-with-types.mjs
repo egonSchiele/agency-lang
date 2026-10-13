@@ -188,10 +188,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "greet", "graph-node-with-types.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "graph-node-with-types.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
   return await __enterCallable(__run, "greet", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["name"] = __state.data.name;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

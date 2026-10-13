@@ -295,10 +295,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "processGreeting", "multipleNodes.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["msg"] = __state.data.msg;
-  }
   return await __enterCallable(__run, "processGreeting", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["msg"] = __state.data.msg;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

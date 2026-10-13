@@ -3097,6 +3097,9 @@ export class TypeScriptBuilder {
     // consequence, matching JS default parameters: explicitly passing
     // undefined/omitting both take the default, whereas a def's __UNSET
     // preserves an explicit undefined. null does NOT take the default.
+    // The parameter defaults run inside the guarded callable below, after
+    // the host check: a default is an expression and may call a function.
+    const entryStmts: TsNode[] = [];
     if (parameters.length > 0) {
       const paramStmts = parameters.map((p) => {
         const incoming = $(ts.runtime.state).prop("data").prop(p.name).done();
@@ -3109,7 +3112,7 @@ export class TypeScriptBuilder {
           : incoming;
         return ts.assign($(ts.stack("args")).index(ts.str(p.name)).done(), value);
       });
-      stmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
+      entryStmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
     }
 
     // Body wrapped in try-catch so node errors return failure instead
@@ -3210,7 +3213,9 @@ export class TypeScriptBuilder {
             ts.runtime.run,
             ts.str(nodeName),
             ts.arr(capabilities.map((capability) => ts.str(capability))),
-            ts.arrowFn([{ name: "__run" }], ts.statements([guardedBody]), { async: true }),
+            ts.arrowFn([{ name: "__run" }], ts.statements([...entryStmts, guardedBody]), {
+              async: true,
+            }),
             ts.arrowFn(
               [{ name: "__run" }, { name: "__failure" }],
               ts.statements([

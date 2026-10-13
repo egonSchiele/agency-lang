@@ -187,10 +187,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "analyzeData", "skill.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "skill.agency", scopeName: "analyzeData", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["input"] = __state.data.input;
-  }
   return await __enterCallable(__run, "analyzeData", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["input"] = __state.data.input;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

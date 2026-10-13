@@ -187,10 +187,10 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "rewindCheckpoint.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  if (!__state.isResume) {
-    __stack.args["message"] = __state.data.message;
-  }
   return await __enterCallable(__run, "main", [], async (__run) => {
+    if (!__state.isResume) {
+      __stack.args["message"] = __state.data.message;
+    }
     try {
       await __withChildRun(__run, {
         ctx: __ctx,

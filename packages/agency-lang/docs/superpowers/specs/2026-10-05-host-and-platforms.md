@@ -1071,11 +1071,11 @@ as its failure before its body runs, before any handler the body would
 push is pushed, and before any interrupt is raised:
 
 ```
-exists needs the fileRead capability, which the browser host does not have. No tool call can supply it.
+exists needs the fileRead capability, which the browser host does not have. Calling exists again will fail the same way.
 ```
 
-The last sentence is for a model that called the function as a tool, so
-it does not try again with other arguments. The failure is converted the
+The last sentence is for a model that called the function as a tool and
+for a person reading the failure: another call will not help. The failure is converted the
 way the generated catch converts an error thrown inside a body, so a
 refusal at entry and a refusal from inside the host read the same and
 write the same statelog event.

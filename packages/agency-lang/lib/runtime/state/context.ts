@@ -570,7 +570,7 @@ export class RuntimeContext<T> {
     execCtx.jsonMemoryConfig = this.jsonMemoryConfig;
     execCtx.memoryManagerCache = {};
     if (this.jsonMemoryConfig) {
-      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, this.host));
+      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig, execCtx.host));
     }
 
     return execCtx;

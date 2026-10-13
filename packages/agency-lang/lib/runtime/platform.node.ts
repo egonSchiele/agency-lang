@@ -1,9 +1,10 @@
 // The runtime hooks that differ by platform and are not the host's
 // business: loading provider modules from disk, the coverage collector, the
-// statelog client's log file, and resolving a local model. The runtime imports this file as "#platform", an
-// entry in the "imports" field of package.json that resolves here by
-// default and to platform.browser.ts under the "browser" condition. Each
-// export here has the same name and type there.
+// statelog client's log file, and resolving a local model. The runtime
+// imports this file as "#platform", an entry in the "imports" field of
+// package.json that resolves here by default and to platform.browser.ts
+// under the "browser" condition. Each export here has the same name and
+// type there.
 
 import { appendFileSync, mkdirSync } from "fs";
 import path from "path";

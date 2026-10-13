@@ -5,8 +5,7 @@
 // Everything reaches the process through the default host's
 // `system.parentChannel()`, so this file imports no Node module and a
 // program can reach it on any platform; without a channel the senders
-// throw, as they always did. The parent side, which forks the child, is
-// ipc.ts.
+// throw. The parent side, which forks the child, is ipc.ts.
 
 import { nanoid } from "nanoid";
 import { defaultHost } from "#default-host";

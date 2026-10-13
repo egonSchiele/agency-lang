@@ -137,8 +137,8 @@ export function appendReplyMarker(
  *  immediately before each attachment part. A path source was read into
  *  base64 when the tool queued it, so the persistent thread never re-reads
  *  a file that may later be deleted or edited; url/base64/provider sources
- *  pass through. Never throws: a path harvest let through (it cannot) is
- *  reported as a text part. */
+ *  pass through. Never throws: a path source, which harvest does not let
+ *  through, becomes a text part. */
 export function buildReplyUserMessage(harvested: HarvestedReplyAttachment[]): unknown[] {
   const parts: unknown[] = [];
   for (const entry of harvested) {

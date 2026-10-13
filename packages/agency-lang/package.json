@@ -66,8 +66,11 @@
       "require": "./dist/lib/index.js"
     },
     "./runtime": {
+      "browser": {
+        "types": "./dist/lib/runtime/browser.d.ts",
+        "default": "./dist/lib/runtime/browser.js"
+      },
       "types": "./dist/lib/runtime/index.d.ts",
-      "browser": "./dist/lib/runtime/browser.js",
       "import": "./dist/lib/runtime/index.js",
       "require": "./dist/lib/runtime/index.js"
     },

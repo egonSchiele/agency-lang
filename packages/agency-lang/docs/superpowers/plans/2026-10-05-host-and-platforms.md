@@ -39,7 +39,8 @@ left ships as a few large PRs, each one topic, in dependency order.
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
 | F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | merged, #1191 |
 | F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | merged, #1192 |
-| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; the refusal at the raise | 17, 18 | open |
+| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; the refusal at the raise | 17, 18 | open, #1193 |
+| F4 | The tag moves from effects to functions and nodes: a third propagation view, AG3029 from `capabilitiesByFunction`, `enterCallable` and the refusal at function entry, the stack-based `--check-capabilities`, 239 function tags in the stdlib, a `Needs:` line in `agency doc`. Plan: `2026-10-13-capabilities-on-functions.md` | 17, 18 | open, on top of F3 |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -242,6 +243,43 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR F4 learned
+
+1. **A module-wide tag leaks through imports.** The first plan had a tag
+   at the top of a file that applied to every function in it. `std::shell`
+   would have carried `fileRead, subprocess`, and `std::skills` imports
+   `exists` from it, so every stdlib agent would have needed `subprocess`
+   on the browser for a function that only stats a file. The tag is on
+   functions and nodes only.
+2. **The propagation pass took a third view with no new propagation
+   code.** `EffectView` became three functions (`readBody`, `readOwn`,
+   `writeBack`), and the capabilities view is one more entry in
+   `EFFECT_VIEWS`. The type checker's walk gained a seed parameter the
+   same way.
+3. **Nodes do not go through `AgencyFunction.invoke`.** A node body is an
+   arrow handed to `graph.node`, so its runtime check is a call to
+   `__enterCallable` that codegen wraps around the body. The run-parameter
+   fixture test caught the first version, whose callbacks did not declare
+   `__run`.
+4. **The host already had the check.** `requireCapabilities` in
+   `lib/host/host.ts` is the one function that reads `host.capabilities`,
+   and calling it from `enterCallable` gave the entry refusal the host's
+   own message and statelog event for free. The first plan would have
+   written a second loop and a second message.
+5. **The stdlib coverage test found a real gap.** Written as a fixpoint
+   over the compiler's own call edges (`callSummaries`) for "reaches a
+   `stdlib-lib` helper", it reported `runWrite` in `std::safeBash/actions`,
+   which calls `_write` directly and raised nothing, and 41 functions that
+   reach a pure helper, now on the allow list with a sentence per group.
+6. **`--check-capabilities` can now check `env` and `terminal`.** F3 left
+   them out because `print` raised nothing. With the stack replay, a use
+   inside `print` is covered by `print`'s own `terminal` tag, so only `llm`
+   is left out.
+7. **`silentHostUse` was not needed.** The thirteen test files that carried
+   it were agents whose startup scans the bundled docs through
+   `std::skills`; with the scans tagged `fileRead` and the stack replay,
+   the uses are covered and the field is gone.
 
 ### What PR F3 learned
 

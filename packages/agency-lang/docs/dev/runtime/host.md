@@ -36,7 +36,7 @@ The host has two kinds of part.
 
 `system` also holds what a process does rather than knows: `exit(code)`, which `lib/runtime/exitProcess.ts` calls after the pending log requests are sent; `setTitle(title)`, the process name `ps` shows; `parentChannel()`, the IPC channel to the parent when Agency forked this process for a subprocess run (null otherwise), which the callback and usage forwarders send on; and `onExit(fn)`, for the coverage collector's write at the end. These are per process, not per run, so a caller asks `defaultHost()` for them.
 
-`PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree. An effect declaration names the capabilities its function needs with the `@capabilities` tag; the compiler checks them against the platform (`--platform`), and the runtime refuses a raise the run's host cannot serve before any handler is asked. `docs/dev/language/capabilities.md` has both.
+`PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree. A function or node names the capabilities it needs with the `@capabilities` tag; the compiler checks them against the platform (`--platform`), and the runtime refuses the call the moment the function is entered, before its body and before any handler is asked. `docs/dev/language/capabilities.md` has both.
 
 ### `env` and `settings` read the same variables
 

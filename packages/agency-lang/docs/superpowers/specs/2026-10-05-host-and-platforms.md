@@ -884,47 +884,71 @@ Phase 7 measures the bundle size.
 
 ## 6. Capabilities in the language
 
-### Declaring what an effect needs
+### Declaring what a function needs
 
 ```
 @capabilities(fileRead)
-@alwaysUnder(dir)
-effect std::read {
-  dir: string;
-  filename: string
+export def exists(path: string): boolean {
+  return _exists(path)
 }
 ```
 
-`@capabilities` is a tag on an effect declaration. It takes zero or more
-capability names. An effect that needs two writes
-`@capabilities(fileRead, subprocess)`.
+`@capabilities` is a tag on a `def` or a `node`. It names what the
+function asks the host for, from the fixed list of seven. A function that
+needs two writes `@capabilities(fileRead, subprocess)`.
 
-The names are bare words from the fixed list of seven. The compiler owns
-the list. Users cannot add to it, because a capability is a part of the
-`Host` type. A name the compiler does not know is an error:
+The names are bare words from the fixed list. The compiler owns the list.
+Users cannot add to it, because a capability is a part of the `Host` type.
+A name the compiler does not know is an error:
 
 ```
-error: unknown capability 'flies'. Did you mean 'fileRead'?
+error: Unknown capability 'flies' on 'load'. Did you mean 'fileRead'?
 ```
 
 The names mean something only inside the tag. A program can still name a
 variable `network` or `terminal`.
 
-Effect declarations already carry tags, and
-`lib/typeChecker/effectPayloadCheck.ts` already validates `@alwaysUnder`
-on them. The new check sits beside it.
+**What a function needs is its own tag plus what the functions it calls
+need.** A wrapper needs no tag:
 
-**An effect with no tag needs nothing and works on every host.** This is
-right for an effect a user declares and raises in plain Agency code.
+```
+def hasNotes(): boolean {
+  return exists("notes.txt")    // needs fileRead, through exists
+}
+```
 
-**Every `std::` effect must carry the tag.** An effect that needs nothing
-writes `@capabilities()`; the formatter keeps the parentheses a tag was
-written with. A test enforces this, the way `lib/prelude.test.ts` checks
-prelude names. The stdlib has 143 effect declarations.
+The compiler computes the union through the pass it already uses for
+effects (`docs/dev/compiler/effect-propagation.md`), as a third view
+beside the two effect views. It follows a tool handed to `llm`, a
+function passed on, and a function received as a parameter, across files
+and through re-exports.
 
-An effect whose behaviour on a host is undecided is tagged with what its
-code uses today. `std::memory::recall` reads the disk, so it is tagged
-`fileRead`.
+**A function with no tag declares nothing of its own**, so a program that
+adds no tags is unchanged. A user's own TypeScript file is reached through
+an Agency function that calls it, and the user tags that function.
+
+**Effects carry no tag.** A capability is a fact about code: this code
+asks the host to read a file. An effect is a question for a person: may
+this file be read? The first draft of this design put the tag on the
+effect declaration, and a function that raised no effect then had nowhere
+to say what it needed. `@capabilities` above an `effect` is an error whose
+message says to move it to the function that raises the effect.
+
+**The tag goes nowhere else.** A tag on a module, an import, a type, a
+constant, or standing alone is an error. A module-wide tag was tried and
+withdrawn: a tag on `std::shell` reached `std::skills` through one
+imported function, `exists`, and made every stdlib agent need
+`subprocess`. One place to look is the rule.
+
+**Every `std::` function that reaches the host carries the tag**, or sits
+on a short list in `lib/stdlibCapabilities.test.ts` of functions that call
+a helper and need nothing (`range`, the `std::date` and `std::path`
+functions, and the like). The test reads the propagation pass's own
+answer, so a tag the pass cannot see fails there first.
+
+**Top-level code is not checked.** A `static const` initializer that
+calls a TypeScript helper directly has no function to carry a tag. The
+host refuses it at module load, which is what happens today.
 
 ### Checking a tag against the code
 
@@ -933,26 +957,28 @@ compares them.
 
 `makeHost` takes an optional `onUse` callback, which it calls with the
 host function's name and its capability each time a function from
-`NEEDS` runs. For each test, the Agency test runner records two lists:
-the capabilities the host was asked for, and the capabilities on the tags
-of the effects the test raised. A capability in the first list and
-missing from the second fails the test, and the message names the host
-function and the effects.
+`NEEDS` runs. The one helper every callable starts through,
+`enterCallable` in `lib/runtime/capabilities.ts`, writes a line when a
+function or node is entered, with its own tag, and one when it exits. For
+each test, the Agency test runner replays the lines: a host use is covered
+when some function that has entered and not yet exited declares the
+capability. A use with no such function fails the test, and the message
+names the host function, the capability, and the innermost function that
+was running.
 
 The runner starts each test in a subprocess, so a callback cannot cross
 to it. A switch in `default.node.ts`, read through `settings`, turns
 recording on and names a file the child appends to. The runner reads the
 file when the child exits.
 
-`terminal` is left out of the check, because `print` and `input` raise
-no effect and nearly every test prints. The check covers `fileRead`,
-`fileWrite`, `network`, and `subprocess`. Any use of those should come
-from a function that raised an effect. A use that did not is one of the
-functions in "Functions that use the host and raise nothing", and the
-check is how phase 8 finds them.
+`llm` is left out of the check, because both platforms have it and a
+model call is made by `llm()`, which is not a function a tag can sit on.
+The other six are checked.
 
-The check sees only what the existing tests run. It does not prove a tag
-is complete.
+Concurrent branches interleave their lines, so the stack is really the
+set of every in-flight function, and a use is covered if any of them
+declares the capability. The errors this produces are false passes. The
+check sees only what the tests run. It does not prove a tag complete.
 
 ### The rename
 
@@ -996,43 +1022,41 @@ emits.
 
 ### The check
 
-The compiler already knows which effects each function can raise, across
-files. `docs/dev/compiler/effect-propagation.md` describes how. That
-analysis also follows a function handed to `llm` as a tool, a function
-stored in a variable, and a function made with `.partial`.
+The compiler already knows what each function needs, across files, from
+the capabilities view of the effect propagation pass. The type checker
+runs the same walk over its own scopes, so it can add what it learns from
+a function reference resolved through a type.
 
 The compiler looks at every node and every exported function in the files
-it is compiling. It reads the type checker's list,
-`interruptEffectsByFunction`, which is the list `agency policy gen`
-reads. The symbol table's own list is weaker: it cannot see a function
-stored in a variable or received as a parameter. If a function can raise
-an effect that needs a capability the platform lacks, compiling fails
-with a new diagnostic:
+it is compiling and reads the type checker's list,
+`capabilitiesByFunction`. If a function needs a capability the platform
+lacks, compiling fails with a new diagnostic, and the lines after it show
+the calls from the node to the function whose own tag carries the
+capability:
 
 ```
-error: node 'main' raises 'std::read', which needs the fileRead capability.
-The browser platform does not have it.
+error AG3029: Node 'main' needs the fileRead capability, which the browser platform does not have.
   main calls loadNotes (notes.agency:12)
-  loadNotes calls read (notes.agency:4)
+  loadNotes calls read from std::index (notes.agency:4), which needs fileRead
 ```
 
-The effect lists hold no call path. `lib/analysis/interrupts.ts` has the
-call graph and costs about fifteen times as much to run. The compiler
-runs it only after the cheap check has found a violation.
+The call path is built from the per-file call graph the checker already
+has, following the file's own functions and stopping at the first
+imported one, named by its module.
 
 A handler does not change the result. A file read wrapped in
 `with approve` is still refused, because approving it would not make it
 work.
 
 The prelude needs no special case. Every file imports `read`, and a
-program carries `std::read` only if it calls `read`.
+program needs `fileRead` only if it calls `read`.
 
-The check does not cover `llm` yet. A call to `llm` raises no effect, so
-there is nothing to tag. Both platforms have the capability, and a host
-without it refuses the call at run time.
+The check does not cover `llm`. Both platforms have the capability, and a
+host without it refuses the call at run time.
 
-A TypeScript file that the program imports is invisible to the check. If
-it imports `fs`, the bundler reports it.
+A TypeScript file that the program imports is invisible to the check
+unless an Agency function that calls it is tagged. If it imports `fs`,
+the bundler reports it.
 
 ### Refusing before the approval prompt
 
@@ -1040,75 +1064,47 @@ it imports `fs`, the bundler reports it.
 another check, a user could approve a read and then see the host refuse
 it.
 
-When an interrupt is raised, the runtime calls `requireCapabilities` with
-the effect's tagged capabilities and the run's host. If the host lacks
-one, the interrupt is rejected before any handler or person is asked. The
-program sees the same result as for any rejected interrupt, with a reason
-that names the capability. The tags reach the runtime the same way the
-`@alwaysUnder` scopes do.
+Every function and node starts through one helper, `enterCallable`. It
+calls `requireCapabilities` on the run's host with the function's own
+tag. If the host lacks one, the function returns the host's own refusal
+as its failure before its body runs, before any handler the body would
+push is pushed, and before any interrupt is raised:
+
+```
+exists needs the fileRead capability, which the browser host does not have. No tool call can supply it.
+```
+
+The last sentence is for a model that called the function as a tool, so
+it does not try again with other arguments. The failure is converted the
+way the generated catch converts an error thrown inside a body, so a
+refusal at entry and a refusal from inside the host read the same and
+write the same statelog event.
+
+A function reached through a chain of calls is checked when it is
+entered, so the transitive list is a compile-time matter only. A resume
+replays the node from the top and enters the call that was in progress
+again, so a checkpoint taken on a full host and resumed on a smaller one
+is refused at the function.
 
 Agency already has one way to refuse an effect, which is a handler that
 rejects. A handler that the runtime installs at the root would use that
-one mechanism. This spec uses a check at the raise instead, for one
-reason. Handlers are not part of a checkpoint, so every path that
-restores a run would have to install the root handler again, and a path
-that forgot would let the effect through to the approval prompt. The
-check reads `ctx.host`, which every restored run already has.
+one mechanism. This spec uses a check at function entry instead. Handlers
+are not part of a checkpoint, so every path that restores a run would
+have to install the root handler again, and a path that forgot would let
+the effect through to the approval prompt. The check reads `ctx.host`,
+which every restored run already has.
 
 ### Functions that use the host and raise nothing
 
-Some exported stdlib functions call a helper that uses the host and raise
-no effect, so they have nothing to tag. A rough scan found 87 candidates.
-Many are false matches, because the scan flags any helper in a file that
-also imports Node. `range` and `keys` are examples. The real ones
-include:
-
-- `stat`, `exists`, and `which` in `std::shell`
-- `cwd`, `args`, `isTTY`, `readStdin`, and `setTitle` in `std::system`
-- `print` and `input` in the prelude
-- the model management functions in `std::agency/local`
-- `readProjectMcpConfig` in `std::mcp`
-
-Phase 8 goes through the list. Each function gets one of three answers.
-
-1. **It uses a part every host provides.** `cwd` and `args` are in this
-   group.
-2. **It should have raised an effect all along.** It gets one, and the
-   effect is tagged.
-3. **It stays as it is.** A host without the capability refuses it at run
-   time.
-
-### Imports that only work on one platform (follow-up)
-
-A few stdlib modules cannot work without Node for a reason other than
-their effects. `std::ui` drives a terminal in raw mode. `std::agency/local`
-manages model files and server processes. `std::agency` compiles Agency
-code. A TypeScript file a program imports can reach `fs` the same way.
-Today the compiler does not see any of this; the bundler reports the `fs`
-import when the program is built for the browser.
-
-PR F3 tried a list of Node-only module names in the compiler, derived from
-the lint rule's Node-only array by a test, and took it out: a second list
-to keep in step, and one that said nothing about a user's own imports.
-
-The replacement is a tag on an import statement, in a later PR:
-
-```
-@platform(node)
-import { repl } from "std::ui"
-
-@capabilities(network)
-import { search } from "./search.ts"
-```
-
-The compiler reads it the way it reads an effect's tag. `@platform` names
-the platforms the import works on; `@capabilities` names what the imported
-code uses directly, for a TypeScript file that calls `fetch` itself rather
-than `host.network`. Under `--platform browser`, an import tagged for Node
-alone is an error at the import, and the capabilities on an import join
-the effect check. The stdlib tags its own `stdlib-lib` imports, which is
-where the Node-only modules come from, so the list is in the source that
-needs it.
+Some stdlib functions call a helper that uses the host and raise no
+effect. In the first draft they had nothing to tag. Now each carries its
+own tag: `stat`, `exists` (`fileRead`) and `which` (`subprocess`) in
+`std::shell`; `isTTY`, `readStdin`, `print`, and `input` (`terminal`);
+`isKeyringAvailable` (`subprocess`); the skills scans (`fileRead`); the
+functions of `std::agency/local`, `std::mcp`, and `std::ui`, which the
+first draft kept on a list of Node-only modules. `cwd`, `args`,
+`setTitle`, `sleep`, and `std::date` use parts every host provides and
+carry nothing.
 
 ## 7. The browser entry point
 

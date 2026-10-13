@@ -8,7 +8,7 @@ The Agency compiler can be configured using an `agency.json` file in your projec
 
 - **`verbose`** (boolean): Enable verbose logging during compilation
 - **`outDir`** (string): Output directory for compiled TypeScript files
-- **`platform`** (`"node"` or `"browser"`, default `"node"`): The platform the program is checked against. Compiling for the browser fails on a node or exported function that can raise an effect needing a capability the browser lacks, such as `std::read` and `fileRead`. The flag `--platform` on `compile` and `typecheck` sets it for one run.
+- **`platform`** (`"node"` or `"browser"`, default `"node"`): The platform the program is checked against. Compiling for the browser fails on a node or exported function that needs a capability the browser lacks, such as `read` and `fileRead`. The flag `--platform` on `compile` and `typecheck` sets it for one run.
 
 ### Type Checker
 

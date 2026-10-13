@@ -166,6 +166,35 @@ Two limits, both on the quiet side. What a handler decides is not read, so a
 blind spots under "What the walk cannot see" apply too. In both cases the
 runtime error remains.
 
+## The third view: capabilities
+
+The pass runs a third time for what each callable needs from the host
+(`docs/dev/language/capabilities.md`). The seed is not a raise but the
+function's own `@capabilities` tag, which `classifySymbols` writes onto
+`sym.capabilities`, and the fixpoint unions it over the same call edges, so
+a wrapper around `read` needs `fileRead` without a tag of its own.
+
+```
+@capabilities(fileRead)
+export def exists(path: string): boolean { ... }
+
+def hasNotes(): boolean {
+  return exists("notes.txt")    // capabilities: [fileRead]
+}
+```
+
+A view is three functions: `readBody` (which facts to take from a body),
+`readOwn` (the labels the crawl already put on the symbol), and `writeBack`.
+The two effect views wrap their labels as `{ effect }`; the capabilities
+view stores plain names. Adding the view touched no propagation code.
+
+The type checker runs the same walk over its scopes in
+`analyzeCapabilitiesFromScopes`, seeded from `capabilitiesByFunction` for
+imports and from the tags for the file's own functions, and the invariant
+below holds for it: the checker may find more than the pass, and may not
+find fewer.
+`lib/analysis/effectsOracle.test.ts` checks that too.
+
 ## Which tree each side sees
 
 The symbol table walks trees straight from the parser. The type checker walks

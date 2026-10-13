@@ -71,6 +71,7 @@ export type MemoryHostOptions = {
   operatingSystem?: OperatingSystem;
   clock?: FakeClock;
   onUse?: MakeHostArgs["onUse"];
+  onCallable?: MakeHostArgs["onCallable"];
 };
 
 export type MemoryHost = Host & { state: MemoryHostState };
@@ -97,6 +98,7 @@ export function memoryHost(options: MemoryHostOptions = {}): MemoryHost {
     name: "memory",
     capabilities: options.capabilities ?? [...CAPABILITIES],
     onUse: options.onUse,
+    onCallable: options.onCallable,
     parts: {
       files: memoryFiles(state, cwd),
       network: memoryNetwork(options),

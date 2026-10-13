@@ -80,7 +80,7 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 
 `requireCapabilities(host, needed, what)` is the one function that reads `host.capabilities`. Code that needs a capability but calls no host function, such as a model call needing `llm`, calls it.
 
-`makeHost` also takes `onUse`, which it calls with the function's name and its capability before any capability function runs. The test runner uses it to record which capabilities a test used.
+`makeHost` also takes `onUse`, which it calls with the function's name and its capability before any capability function runs, and `onCallable`, which `enterCallable` calls when a function or node starts and ends. The test runner's host has both, so it can attribute each host use to the functions that were running (`docs/dev/language/capabilities.md`). Both are decided when the host is built; nothing a program does at run time turns them on.
 
 ## The hosts
 

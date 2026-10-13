@@ -542,122 +542,137 @@ async function runSingleTest(
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
   const relativeSourceFilePath = sourceFilePath;
   const capabilityLog = options.checkCapabilities ? newCapabilityLogFile() : null;
-  let result: { data: any; stdout: string; stderr: string };
   try {
-    result = await executeNodeAsync({
-      ...(capabilityLog ? { env: { [CAPABILITY_LOG_SETTING]: capabilityLog } } : {}),
-      config,
-      agencyFile: relativeSourceFilePath,
-      nodeName: testCase.nodeName,
-      hasArgs,
-      argsString: testCase.input ?? "",
-      allowTestImports: true,
-      sandboxAgentHome: true,
-      // The precompile pass in test() already compiled this source (with
-      // allowTestImports enforcement); reuse the sibling .js instead of
-      // recompiling for every test case.
-      preferCompiled: true,
-      interruptHandlers: testCase.interruptHandlers,
-      timeoutMs,
-      signal,
-      llmMocks: testCase.llmMocks,
-      fakeClock: testCase.fakeClock,
-      useTestLLMProvider: testCase.useTestLLMProvider,
-      argv: testCase.argv,
-      fetchMocks,
-      rootCarriers: { policy: options.policy, budget: options.budget },
-    });
-    if (result.stdout) log(result.stdout.trimEnd());
-    if (result.stderr) log(result.stderr.trimEnd(), "stderr");
-  } catch (e) {
-    if (isAbortError(e)) {
-      // Don't print a failure — the suite-abort summary will explain.
-      return { status: "aborted" };
+    return await runCaseOnce(capabilityLog);
+  } finally {
+    if (capabilityLog) {
+      removeCapabilityLog(capabilityLog);
     }
-    if (isTimeoutError(e)) {
-      const feedback = `Test exceeded ${formatTimeout(timeoutMs)} timeout`;
+  }
+
+  async function runCaseOnce(capabilityLog: string | null): Promise<CaseOutcome> {
+    let result: { data: any; stdout: string; stderr: string };
+    try {
+      result = await executeNodeAsync({
+        ...(capabilityLog ? { env: { [CAPABILITY_LOG_SETTING]: capabilityLog } } : {}),
+        config,
+        agencyFile: relativeSourceFilePath,
+        nodeName: testCase.nodeName,
+        hasArgs,
+        argsString: testCase.input ?? "",
+        allowTestImports: true,
+        sandboxAgentHome: true,
+        // The precompile pass in test() already compiled this source (with
+        // allowTestImports enforcement); reuse the sibling .js instead of
+        // recompiling for every test case.
+        preferCompiled: true,
+        interruptHandlers: testCase.interruptHandlers,
+        timeoutMs,
+        signal,
+        llmMocks: testCase.llmMocks,
+        fakeClock: testCase.fakeClock,
+        useTestLLMProvider: testCase.useTestLLMProvider,
+        argv: testCase.argv,
+        fetchMocks,
+        rootCarriers: { policy: options.policy, budget: options.budget },
+      });
+      if (result.stdout) log(result.stdout.trimEnd());
+      if (result.stderr) log(result.stderr.trimEnd(), "stderr");
+    } catch (e) {
+      if (isAbortError(e)) {
+        // Don't print a failure — the suite-abort summary will explain.
+        return { status: "aborted" };
+      }
+      if (isTimeoutError(e)) {
+        const feedback = `Test exceeded ${formatTimeout(timeoutMs)} timeout`;
+        log(color.red(`  ✗ ${feedback}`));
+        return { status: "failed", feedback };
+      }
+      exitIfSignal(e);
+      const feedback = `Test execution error: ${e}`;
       log(color.red(`  ✗ ${feedback}`));
       return { status: "failed", feedback };
     }
-    exitIfSignal(e);
-    const feedback = `Test execution error: ${e}`;
-    log(color.red(`  ✗ ${feedback}`));
-    return { status: "failed", feedback };
-  }
 
-  let testPassed = true;
-  const feedback: string[] = [];
-  const baseName = relativeSourceFilePath.replace(".agency", "");
-  if (capabilityLog) {
-    const { uncovered } = checkCapabilityLog(parseCapabilityLog(readCapabilityLog(capabilityLog)));
-    if (uncovered.length === 0) {
-      log(color.green("  ✓ Capability tags cover every host use"));
-    } else {
-      for (const problem of uncovered) {
-        log(color.red(`  ✗ ${problem}`));
+    let testPassed = true;
+    const feedback: string[] = [];
+    const baseName = relativeSourceFilePath.replace(".agency", "");
+    if (capabilityLog) {
+      const { uncovered, outside } = checkCapabilityLog(
+        parseCapabilityLog(readCapabilityLog(capabilityLog)),
+      );
+      for (const note of outside) {
+        log(color.yellow(`  ⚠ ${note}`));
       }
-      feedback.push(...uncovered);
-      testPassed = false;
-    }
-  }
-  for (const criterion of testCase.evaluationCriteria) {
-    if (criterion.type === "exact") {
-      const verdict = exactVerdict(result.data, testCase.expectedOutput, {
-        rawStringFallback: true,
-        colorize: true,
-      });
-      if (verdict.pass) {
-        log(color.green("  ✓ Exact match passed"));
+      if (uncovered.length === 0) {
+        log(color.green("  ✓ Capability tags cover every host use"));
       } else {
-        log(color.red("  ✗ Exact match failed"));
-        log(verdict.feedback);
-        // The same diff without terminal colors, for the report.
-        const plain = exactVerdict(result.data, testCase.expectedOutput, {
-          rawStringFallback: true,
-        });
-        if (!plain.pass) feedback.push(plain.feedback);
+        for (const problem of uncovered) {
+          log(color.red(`  ✗ ${problem}`));
+        }
+        feedback.push(...uncovered);
         testPassed = false;
       }
-    } else if (criterion.type === "llmJudge") {
-      const actual = JSON.stringify(result.data) || "undefined";
-      try {
-        const judgeResult = await executeJudgeAsync(baseName, {
-          actualOutput: actual,
-          expectedOutput: testCase.expectedOutput,
-          judgePrompt: criterion.judgePrompt,
+    }
+    for (const criterion of testCase.evaluationCriteria) {
+      if (criterion.type === "exact") {
+        const verdict = exactVerdict(result.data, testCase.expectedOutput, {
+          rawStringFallback: true,
+          colorize: true,
         });
-        if (judgeResult.stdout) log(judgeResult.stdout.trimEnd());
-        if (judgeResult.stderr) log(judgeResult.stderr.trimEnd(), "stderr");
-        const passed = judgeResult.score >= criterion.desiredAccuracy;
-        if (passed) {
-          log(
-            color.green(
-              `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
-            ),
-          );
-          log(`    Reasoning: ${judgeResult.reasoning}`);
+        if (verdict.pass) {
+          log(color.green("  ✓ Exact match passed"));
         } else {
-          log(
-            color.red(
-              `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
-            ),
-          );
-          log(`    Reasoning: ${judgeResult.reasoning}`);
-          log(`    Actual Output:\n${actual}`);
-          feedback.push(
-            `LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy}): ${judgeResult.reasoning}`,
-          );
+          log(color.red("  ✗ Exact match failed"));
+          log(verdict.feedback);
+          // The same diff without terminal colors, for the report.
+          const plain = exactVerdict(result.data, testCase.expectedOutput, {
+            rawStringFallback: true,
+          });
+          if (!plain.pass) feedback.push(plain.feedback);
           testPassed = false;
         }
-      } catch (e) {
-        log(color.red(`  ✗ LLM Judge error: ${e}`));
-        feedback.push(`LLM Judge error: ${e}`);
-        testPassed = false;
+      } else if (criterion.type === "llmJudge") {
+        const actual = JSON.stringify(result.data) || "undefined";
+        try {
+          const judgeResult = await executeJudgeAsync(baseName, {
+            actualOutput: actual,
+            expectedOutput: testCase.expectedOutput,
+            judgePrompt: criterion.judgePrompt,
+          });
+          if (judgeResult.stdout) log(judgeResult.stdout.trimEnd());
+          if (judgeResult.stderr) log(judgeResult.stderr.trimEnd(), "stderr");
+          const passed = judgeResult.score >= criterion.desiredAccuracy;
+          if (passed) {
+            log(
+              color.green(
+                `  ✓ LLM Judge passed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
+            );
+            log(`    Reasoning: ${judgeResult.reasoning}`);
+          } else {
+            log(
+              color.red(
+                `  ✗ LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy})`,
+              ),
+            );
+            log(`    Reasoning: ${judgeResult.reasoning}`);
+            log(`    Actual Output:\n${actual}`);
+            feedback.push(
+              `LLM Judge failed (score: ${judgeResult.score}/${criterion.desiredAccuracy}): ${judgeResult.reasoning}`,
+            );
+            testPassed = false;
+          }
+        } catch (e) {
+          log(color.red(`  ✗ LLM Judge error: ${e}`));
+          feedback.push(`LLM Judge error: ${e}`);
+          testPassed = false;
+        }
       }
     }
+    if (testPassed) return { status: "passed" };
+    return { status: "failed", feedback: feedback.join("\n") };
   }
-  if (testPassed) return { status: "passed" };
-  return { status: "failed", feedback: feedback.join("\n") };
 }
 
 function newCapabilityLogFile(): string {
@@ -665,17 +680,18 @@ function newCapabilityLogFile(): string {
   return path.join(dir, "log.txt");
 }
 
-/** The log's text, or nothing when the subprocess never wrote one, and
- *  the file and its directory removed either way. */
+/** The log's text, or nothing when the subprocess never wrote one. */
 function readCapabilityLog(file: string): string {
-  let text = "";
   try {
-    text = fs.readFileSync(file, "utf-8");
+    return fs.readFileSync(file, "utf-8");
   } catch {
-    text = "";
+    return "";
   }
+}
+
+/** Remove the log and its directory, whichever way the case ended. */
+function removeCapabilityLog(file: string): void {
   fs.rmSync(path.dirname(file), { recursive: true, force: true });
-  return text;
 }
 
 function collectTestFiles(inputPath: string): string[] {

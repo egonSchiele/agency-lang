@@ -42,7 +42,7 @@ describe("checkCapabilityLog", () => {
         { kind: "exit", name: "write" },
         { kind: "exit", name: "main" },
       ]),
-    ).toEqual({ uncovered: [] });
+    ).toEqual({ uncovered: [], outside: [] });
   });
 
   it("covers a use through an outer function's tag", () => {
@@ -54,7 +54,7 @@ describe("checkCapabilityLog", () => {
         { kind: "exit", name: "helper" },
         { kind: "exit", name: "skillsDir" },
       ]),
-    ).toEqual({ uncovered: [] });
+    ).toEqual({ uncovered: [], outside: [] });
   });
 
   it("names the host function, the capability, and the innermost function", () => {
@@ -70,18 +70,24 @@ describe("checkCapabilityLog", () => {
       uncovered: [
         "files.writeText used the fileWrite capability inside read, whose tag does not name it",
       ],
+      outside: [],
     });
   });
 
   it("stops covering once the function has exited", () => {
     expect(
       checkCapabilityLog([
+        { kind: "enter", name: "write", capabilities: ["fileRead", "fileWrite"] },
         { kind: "enter", name: "read", capabilities: ["fileRead"] },
         { kind: "exit", name: "read" },
         { kind: "use", functionName: "files.readText", capability: "fileRead" },
+        { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
+        { kind: "exit", name: "write" },
+        { kind: "use", functionName: "files.readText", capability: "fileRead" },
       ]),
     ).toEqual({
-      uncovered: ["files.readText used the fileRead capability outside any function"],
+      uncovered: [],
+      outside: ["files.readText used the fileRead capability outside any function"],
     });
   });
 
@@ -94,23 +100,37 @@ describe("checkCapabilityLog", () => {
         { kind: "use", functionName: "files.list", capability: "fileRead" },
         { kind: "exit", name: "walk" },
       ]),
-    ).toEqual({ uncovered: [] });
+    ).toEqual({ uncovered: [], outside: [] });
   });
 
-  it("checks terminal and env, and leaves llm out", () => {
-    expect(CHECKED_CAPABILITIES).toContain("terminal");
+  it("checks env, and leaves llm and terminal out", () => {
     expect(CHECKED_CAPABILITIES).toContain("env");
+    expect(CHECKED_CAPABILITIES).toContain("fileRead");
     expect(CHECKED_CAPABILITIES).not.toContain("llm");
+    expect(CHECKED_CAPABILITIES).not.toContain("terminal");
     expect(
       checkCapabilityLog([
         { kind: "enter", name: "main", capabilities: [] },
         { kind: "use", functionName: "llm.complete", capability: "llm" },
-        { kind: "use", functionName: "terminal.print", capability: "terminal" },
+        { kind: "use", functionName: "terminal.size", capability: "terminal" },
+        { kind: "use", functionName: "env.get", capability: "env" },
       ]),
     ).toEqual({
-      uncovered: [
-        "terminal.print used the terminal capability inside main, whose tag does not name it",
-      ],
+      uncovered: ["env.get used the env capability inside main, whose tag does not name it"],
+      outside: [],
+    });
+  });
+
+  it("reports a use outside any function as a note, not a failure", () => {
+    expect(
+      checkCapabilityLog([
+        { kind: "enter", name: "main", capabilities: [] },
+        { kind: "exit", name: "main" },
+        { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
+      ]),
+    ).toEqual({
+      uncovered: [],
+      outside: ["files.writeText used the fileWrite capability outside any function"],
     });
   });
 });

@@ -346,6 +346,9 @@ export type Host = {
   name: string;
   /** What this host has. Only `requireCapabilities` reads it. */
   capabilities: Capability[];
+  /** See `MakeHostArgs.onCallable`. Absent on every host but the test
+   *  runner's. */
+  onCallable?: (event: CallableEvent) => void;
   files: HostFiles;
   network: HostNetwork;
   subprocess: HostSubprocess;
@@ -415,6 +418,12 @@ export class UnsupportedOnHostError extends Error {
   }
 }
 
+/** A function or node starting, with what its `@capabilities` tag names,
+ *  or ending. `enterCallable` (lib/runtime/capabilities.ts) reports both
+ *  to the host's `onCallable`, when it has one. */
+export type CallableEvent =
+  { kind: "enter"; name: string; capabilities: Capability[] } | { kind: "exit"; name: string };
+
 export type MakeHostArgs = {
   name: string;
   capabilities: Capability[];
@@ -423,6 +432,12 @@ export type MakeHostArgs = {
    *  capability before any capability function runs. The test runner uses
    *  it to record which capabilities a test used. */
   onUse?: (functionName: string, capability: Capability) => void;
+  /** Called when a function or node starts and when it ends. The test
+   *  runner uses it with `onUse` to attribute each host use to the
+   *  functions that were running. Decided once, when the host is built,
+   *  so a program cannot turn it on or point it somewhere by changing a
+   *  setting at run time. */
+  onCallable?: (event: CallableEvent) => void;
 };
 
 /**
@@ -437,7 +452,7 @@ export type MakeHostArgs = {
  * same code with a shorter list.
  */
 export function makeHost(args: MakeHostArgs): Host {
-  const { name, capabilities, parts, onUse } = args;
+  const { name, capabilities, parts, onUse, onCallable } = args;
   for (const capability of capabilities) {
     if (!CAPABILITIES.includes(capability)) {
       throw new Error(`Unknown capability "${capability}" for the ${name} host.`);
@@ -460,6 +475,7 @@ export function makeHost(args: MakeHostArgs): Host {
   return {
     name,
     capabilities: [...capabilities],
+    onCallable,
     files: built.files as HostFiles,
     network: built.network as HostNetwork,
     subprocess: built.subprocess as HostSubprocess,

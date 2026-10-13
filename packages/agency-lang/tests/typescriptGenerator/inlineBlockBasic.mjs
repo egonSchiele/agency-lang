@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -365,27 +365,28 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "inlineBlockBasic.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "inlineBlockBasic.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.results = await __call(__run, twice, {
-          type: "named",
-          positionalArgs: [],
-          namedArgs: {},
-          blockArg: __AgencyFunction.create({ name: "__block_0", module: "inlineBlockBasic.agency", fn: async (__run: __Run) => {
-            const __bsetup = setupFunction(__run);
+            type: "named",
+            positionalArgs: [],
+            namedArgs: {},
+            blockArg: __AgencyFunction.create({ name: "__block_0", module: "inlineBlockBasic.agency", fn: async (__run: __Run) => {
+              const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
@@ -421,60 +422,60 @@ throw __blockError;
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
 __bsetup.stateStack.pop();
 }
-          }, params: [], toolDefinition: null }, __toolRegistry)
-        });
+            }, params: [], toolDefinition: null }, __toolRegistry)
+          });
 if (hasInterrupts(__stack.locals.results)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.results
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.results
+            })
+            return;
+          }
 if (isAborted(__stack.locals.results)) {
-          throw __stack.locals.results.toError()
-        }
-      });
-      await runner.step(2, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.results]
+            throw __stack.locals.results.toError()
+          }
         });
+        await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [__stack.locals.results]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(3, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
+            throw __funcResult.toError()
+          }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(3, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -486,11 +487,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

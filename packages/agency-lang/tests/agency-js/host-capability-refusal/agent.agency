@@ -1,20 +1,23 @@
-// An effect the browser host cannot serve. The program runs on a memory
-// host without the subprocess capability, so every raise is rejected before
-// any handler runs; the handlers below print when they run, and the test
-// reads the host's output to check they never did. Both forms are here:
-// the statement, and the assignment that expects a value.
-@capabilities(subprocess)
+// Functions the browser host cannot serve, by their @capabilities tag. The
+// program runs on a memory host without the subprocess capability, so each
+// tagged function is refused when it is entered, before its body runs and
+// before any handler is asked; the handlers below print when they run, and
+// the test reads the host's output to check they never did. Both raise
+// forms are here, the statement and the assignment that expects a value,
+// so the refusal is seen to come before either.
 effect app::shell { command: string }
 
 // An effect that needs nothing, for the resume case: it surfaces, the
-// test answers it, and the tagged raise after it is still refused.
+// test answers it, and the tagged function after it is still refused.
 effect app::goAhead {}
 
+@capabilities(subprocess)
 def runIt(command: string): Result<string> {
   interrupt app::shell("run ${command}?", { command: command })
   return success("ran ${command}")
 }
 
+@capabilities(subprocess)
 def askIt(): Result<string> {
   const answer = interrupt app::shell("which command?", { command: "ls" })
   return success("got ${answer}")
@@ -59,4 +62,11 @@ export node afterResume(): string {
     return approve()
   }
   return seen
+}
+
+// A node carries the tag the same way, and is refused when it starts.
+@capabilities(subprocess)
+export node taggedNode(): string {
+  print("tagged node ran")
+  return "ran"
 }

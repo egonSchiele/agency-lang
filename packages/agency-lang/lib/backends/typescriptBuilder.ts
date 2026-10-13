@@ -230,8 +230,8 @@ function walkMarkTopLevel(value: unknown): unknown {
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
-  /** One `__registerAlwaysScope(...)` or `__registerEffectCapabilities(...)`
-   *  per tagged effect declaration. */
+  /** One `__registerAlwaysScope(...)` per effect declaration with an
+   *  `@always` tag. */
   private alwaysScopeRegistrations: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
   /**
@@ -655,22 +655,13 @@ export class TypeScriptBuilder {
         return this.processTypeAlias(node);
       case "effectDeclaration": {
         // The payload type is compile-time only. What a declaration
-        // contributes at runtime is its tags: an @always scope and the
-        // @capabilities list, each one registration at module JS-load. The
-        // typechecker already validated them.
+        // contributes at runtime is its @always scope, one registration at
+        // module JS-load. The typechecker already validated the tag.
         const { fields } = readAlwaysScope(node.tags);
         if (fields.length > 0) {
           this.alwaysScopeRegistrations.push(
             ts.raw(
               `__registerAlwaysScope(${JSON.stringify(node.effect)}, ${JSON.stringify(fields)});`,
-            ),
-          );
-        }
-        const { capabilities } = readCapabilities(node.tags);
-        if (capabilities.length > 0) {
-          this.alwaysScopeRegistrations.push(
-            ts.raw(
-              `__registerEffectCapabilities(${JSON.stringify(node.effect)}, ${JSON.stringify(capabilities)});`,
             ),
           );
         }
@@ -2517,6 +2508,13 @@ export class TypeScriptBuilder {
       );
       createProps.markers = ts.obj(markerProps);
     }
+    // What the function's own @capabilities tag names, checked against the
+    // run's host at every entry (lib/runtime/capabilities.ts). Emitted only
+    // when the tag names something.
+    const { capabilities } = readCapabilities(node.tags);
+    if (capabilities.length > 0) {
+      createProps.capabilities = ts.arr(capabilities.map((capability) => ts.str(capability)));
+    }
     const createCall = $.id("__AgencyFunction")
       .prop("create")
       .call([ts.obj(createProps), ts.id("__toolRegistry")])
@@ -3121,67 +3119,63 @@ export class TypeScriptBuilder {
     // enforced via `checkCallbackBodyInterrupts`), so the hooks are
     // fire-and-forget. The post-body halted check covers ordinary
     // user-code interrupts.
-    stmts.push(
-      ts.tryCatch(
-        ts.statements([
-          // Body-level ALS frame (defense-in-depth). The onNodeStart
-          // hook and user body go inside the wrap. The post-body
-          // halted check and onNodeEnd hook stay outside: the wrap's
-          // inner callback may bare-`return` from `runner.halt(...)`
-          // emissions, and we want the outer node arrow to keep
-          // running into the halted check / onNodeEnd / final return.
-          //
-          // `stack:` carries the StateStack (not the current State
-          // frame) — matches what the now-pruned `const __stateStack =
-          // __state.ctx.stateStack;` line used to bind, so
-          // `__stateStack()` reads inside the wrap return a real
-          // StateStack rather than a per-frame State.
-          ts.withAlsFrame({
-            ctx: ts.id("__ctx"),
-            stack: ts.raw("__ctx.stateStack"),
-            threads: $(ts.id("__setupData")).prop("threads").done(),
-            body: [
-              ts.runnerHookStep({
-                id: onNodeStartId,
-                body: [ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) })],
-              }),
-              ...bodyCode,
-            ],
-          }),
-          ts.raw("if (runner.halted) return runner.haltResult;"),
-          ts.runnerHookStep({
-            id: onNodeEndId,
-            body: [
-              ts.callHook("onNodeEnd", {
-                nodeName: ts.str(nodeName),
-                data: ts.id("undefined"),
-              }),
-            ],
-          }),
-          ts.return(
-            ts.obj({
-              messages: ts.runtime.threads,
+    const guardedBody = ts.tryCatch(
+      ts.statements([
+        // Body-level ALS frame (defense-in-depth). The onNodeStart
+        // hook and user body go inside the wrap. The post-body
+        // halted check and onNodeEnd hook stay outside: the wrap's
+        // inner callback may bare-`return` from `runner.halt(...)`
+        // emissions, and we want the outer node arrow to keep
+        // running into the halted check / onNodeEnd / final return.
+        //
+        // `stack:` carries the StateStack (not the current State
+        // frame) — matches what the now-pruned `const __stateStack =
+        // __state.ctx.stateStack;` line used to bind, so
+        // `__stateStack()` reads inside the wrap return a real
+        // StateStack rather than a per-frame State.
+        ts.withAlsFrame({
+          ctx: ts.id("__ctx"),
+          stack: ts.raw("__ctx.stateStack"),
+          threads: $(ts.id("__setupData")).prop("threads").done(),
+          body: [
+            ts.runnerHookStep({
+              id: onNodeStartId,
+              body: [ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) })],
+            }),
+            ...bodyCode,
+          ],
+        }),
+        ts.raw("if (runner.halted) return runner.haltResult;"),
+        ts.runnerHookStep({
+          id: onNodeEndId,
+          body: [
+            ts.callHook("onNodeEnd", {
+              nodeName: ts.str(nodeName),
               data: ts.id("undefined"),
             }),
-          ),
-        ]),
-        ts.statements([
-          ts.if(
-            ts.raw("__error instanceof RunControlSignal"),
-            ts.statements([ts.throw("__error")]),
-          ),
-          // All aborts — cancellations (Esc / abort) AND guard trips — are a
-          // single AgencyAbort carrying an AbortCause and must propagate
-          // untouched rather than be logged + converted to a Failure here.
-          // One rung replaces the old GuardExceededError + isAbortError
-          // ladder. Mirrors the function catch template.
-          ts.if(ts.raw("__error instanceof AgencyAbort"), ts.statements([ts.throw("__error")])),
-          // Surface the underlying exception via logger + statelog
-          // before converting to a Failure. Mirrors the function catch
-          // template; see the recordAlwaysScoped bug in
-          // https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
-          ts.raw(
-            `{
+          ],
+        }),
+        ts.return(
+          ts.obj({
+            messages: ts.runtime.threads,
+            data: ts.id("undefined"),
+          }),
+        ),
+      ]),
+      ts.statements([
+        ts.if(ts.raw("__error instanceof RunControlSignal"), ts.statements([ts.throw("__error")])),
+        // All aborts — cancellations (Esc / abort) AND guard trips — are a
+        // single AgencyAbort carrying an AbortCause and must propagate
+        // untouched rather than be logged + converted to a Failure here.
+        // One rung replaces the old GuardExceededError + isAbortError
+        // ladder. Mirrors the function catch template.
+        ts.if(ts.raw("__error instanceof AgencyAbort"), ts.statements([ts.throw("__error")])),
+        // Surface the underlying exception via logger + statelog
+        // before converting to a Failure. Mirrors the function catch
+        // template; see the recordAlwaysScoped bug in
+        // https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
+        ts.raw(
+          `{
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -3193,17 +3187,38 @@ export class TypeScriptBuilder {
                 functionName: ${JSON.stringify(nodeName)},
               });
             }`,
-          ),
-          ts.return(
-            ts.obj({
-              messages: ts.runtime.threads,
-              data: ts.raw(
-                `runtimeFailure(__error, { functionName: ${JSON.stringify(nodeName)} })`,
-              ),
-            }),
-          ),
-        ]),
-        "__error",
+        ),
+        ts.return(
+          ts.obj({
+            messages: ts.runtime.threads,
+            data: ts.raw(`runtimeFailure(__error, { functionName: ${JSON.stringify(nodeName)} })`),
+          }),
+        ),
+      ]),
+      "__error",
+    );
+
+    // The host is checked before the body, in the one helper every callable
+    // starts through (lib/runtime/capabilities.ts). A node the run's host
+    // cannot serve returns the refusal as its result, the way the catch
+    // below returns a crash.
+    const { capabilities } = readCapabilities(node.tags);
+    stmts.push(
+      ts.return(
+        ts.await(
+          ts.call(ts.id("__enterCallable"), [
+            ts.runtime.run,
+            ts.str(nodeName),
+            ts.arr(capabilities.map((capability) => ts.str(capability))),
+            ts.arrowFn([{ name: "__run" }], ts.statements([guardedBody]), { async: true }),
+            ts.arrowFn(
+              [{ name: "__run" }, { name: "__failure" }],
+              ts.statements([
+                ts.return(ts.obj({ messages: ts.runtime.threads, data: ts.id("__failure") })),
+              ]),
+            ),
+          ]),
+        ),
       ),
     );
 

@@ -139,7 +139,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "93018b5d35499f5f4d69b81538dbd7e33531421c44cd7d3bc6450e85b3091c12");
+__registerModuleFingerprint("index.agency", "57bb5f6de8e888d1e279366170f6b5a8493e587cc0323071363e673a0d2e0e73");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);

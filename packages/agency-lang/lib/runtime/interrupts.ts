@@ -45,8 +45,6 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { sendInterruptToParent } from "./ipcChild.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
-import { recordRaise } from "./capabilityLog.js";
-import { refuseUnservable } from "./effectCapabilities.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 import { TRACE_ID_ENV } from "../config/config.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -632,18 +630,10 @@ export async function interruptWithHandlers<T = any>(
   },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   assertUsable(run, "raise an interrupt");
-  recordRaise(run.ctx.host, effect);
   const stack = opts?.stack ?? run.stack;
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;
   const interruptId = nanoid();
-  // The raise is the one point that knows both the effect and the run's
-  // host, so this is where an effect tagged with a capability the host
-  // lacks is refused, before any handler or person is asked.
-  const refused = refuseUnservable(run, interruptId, interruptObj);
-  if (refused !== null) {
-    return refused;
-  }
   // The origin dispatch of the distributed chain: gatherChainOutcome walks
   // the local segment and — in IPC mode — consults the parent and merges
   // (the same walk every relay hop performs in handleInterruptMessage).

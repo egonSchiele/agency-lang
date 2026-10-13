@@ -8,9 +8,9 @@
 import type { Clock } from "../runtime/clock.js";
 import type { LogLevel } from "../logger.js";
 
-/** The seven things a host may lack or refuse. An effect declaration names
- *  the ones its function needs with the `@capabilities(...)` tag, and the
- *  compiler checks them against the platform being compiled for. */
+/** The seven things a host may lack or refuse. A function or node names
+ *  the ones it needs with the `@capabilities(...)` tag, and the compiler
+ *  checks them against the platform being compiled for. */
 export const CAPABILITIES = [
   "fileRead",
   "fileWrite",

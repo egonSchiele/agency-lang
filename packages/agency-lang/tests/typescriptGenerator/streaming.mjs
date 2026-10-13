@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -187,124 +187,125 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "foo", "streaming.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "streaming.agency", scopeName: "foo", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "foo", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
+            name: "onNodeStart",
+            data: {
+              nodeName: "foo"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.response = await runPrompt(__run, {
+            prompt: `Generate a response word by word`,
+            messages: __run.threads.getOrCreateActive(),
+            clientConfig: {
+              "stream": true
+            },
+            maxToolCallRounds: 10,
+            removedTools: __self.__removedTools,
+            destructiveSink: __self,
+            checkpointInfo: runner.getCheckpointInfo()
+          });
+// halt if this is an interrupt
+if (hasInterrupts(__stack.locals.response)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __run.threads,
+              data: __stack.locals.response
+            })
+            return;
+          }
+        });
+        await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [__stack.locals.response]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
+        });
+        await runner.step(3, __run, async (runner, __run) => {
+__self.__removedTools = __self.__removedTools || [];
+__stack.locals.response2 = await runPrompt(__run, {
+            prompt: `Generate a response word by word, but with a different model`,
+            messages: __run.threads.getOrCreateActive(),
+            clientConfig: {
+              "model": `gemini-2.5-flash-lite`,
+              "stream": true
+            },
+            maxToolCallRounds: 10,
+            removedTools: __self.__removedTools,
+            destructiveSink: __self,
+            checkpointInfo: runner.getCheckpointInfo()
+          });
+// halt if this is an interrupt
+if (hasInterrupts(__stack.locals.response2)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              messages: __run.threads,
+              data: __stack.locals.response2
+            })
+            return;
+          }
+        });
+        await runner.step(4, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [__stack.locals.response2]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
+        });
+      })
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(5, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
           data: {
-            nodeName: "foo"
+            nodeName: "foo",
+            data: undefined
           }
         })
       });
-      await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.response = await runPrompt(__run, {
-          prompt: `Generate a response word by word`,
-          messages: __run.threads.getOrCreateActive(),
-          clientConfig: {
-            "stream": true
-          },
-          maxToolCallRounds: 10,
-          removedTools: __self.__removedTools,
-          destructiveSink: __self,
-          checkpointInfo: runner.getCheckpointInfo()
-        });
-// halt if this is an interrupt
-if (hasInterrupts(__stack.locals.response)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            messages: __run.threads,
-            data: __stack.locals.response
-          })
-          return;
-        }
-      });
-      await runner.step(2, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.response]
-        });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-      await runner.step(3, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.response2 = await runPrompt(__run, {
-          prompt: `Generate a response word by word, but with a different model`,
-          messages: __run.threads.getOrCreateActive(),
-          clientConfig: {
-            "model": `gemini-2.5-flash-lite`,
-            "stream": true
-          },
-          maxToolCallRounds: 10,
-          removedTools: __self.__removedTools,
-          destructiveSink: __self,
-          checkpointInfo: runner.getCheckpointInfo()
-        });
-// halt if this is an interrupt
-if (hasInterrupts(__stack.locals.response2)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            messages: __run.threads,
-            data: __stack.locals.response2
-          })
-          return;
-        }
-      });
-      await runner.step(4, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.response2]
-        });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(5, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "foo",
-          data: undefined
-        }
-      })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -316,11 +317,17 @@ await callHook(__run, {
                 functionName: "foo",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "foo" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "foo" })
+      data: __failure
     };
-  }
+  });
 })
 export async function foo({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

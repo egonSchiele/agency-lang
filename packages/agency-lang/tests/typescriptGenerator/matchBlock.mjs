@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -187,49 +187,50 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "matchBlock.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 //  Test match blocks (pattern matching)
 //  Simple match with string literals
-      });
-      await runner.step(2, __run, async (runner, __run) => {
+        });
+        await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.action = `start`;
-      });
-      await runner.ifElse(3, __run, [
+        });
+        await runner.ifElse(3, __run, [
 
   {
     condition: async (__run) => __stack.locals.action === `start`,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Starting...`]
-              });
+                  type: "positional",
+                  args: [`Starting...`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -238,21 +239,21 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Stopping...`]
-              });
+                  type: "positional",
+                  args: [`Stopping...`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -261,58 +262,29 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Restarting...`]
-              });
+                  type: "positional",
+                  args: [`Restarting...`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(3, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-              type: "positional",
-              args: [`Unknown action`]
-            });
-if (hasInterrupts(__funcResult)) {
-              await __run.ctx.pendingPromises.awaitAll()
-              runner.halt({
-                ...__state,
-                data: __funcResult
-              })
-              return;
-            }
-if (isAborted(__funcResult)) {
-              throw __funcResult.toError()
-            }
-          });
-});
-      await runner.step(4, __run, async (runner, __run) => {
-//  Match with number literals
-      });
-      await runner.step(5, __run, async (runner, __run) => {
-__stack.locals.statusCode = 200;
-      });
-      await runner.ifElse(6, __run, [
-
-  {
-    condition: async (__run) => __stack.locals.statusCode === 200,
-    body: async (runner, __run) => {
-await runner.step(0, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
                 type: "positional",
-                args: [`OK`]
+                args: [`Unknown action`]
               });
 if (hasInterrupts(__funcResult)) {
                 await __run.ctx.pendingPromises.awaitAll()
@@ -326,6 +298,35 @@ if (isAborted(__funcResult)) {
                 throw __funcResult.toError()
               }
             });
+});
+        await runner.step(4, __run, async (runner, __run) => {
+//  Match with number literals
+        });
+        await runner.step(5, __run, async (runner, __run) => {
+__stack.locals.statusCode = 200;
+        });
+        await runner.ifElse(6, __run, [
+
+  {
+    condition: async (__run) => __stack.locals.statusCode === 200,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+                  type: "positional",
+                  args: [`OK`]
+                });
+if (hasInterrupts(__funcResult)) {
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
+if (isAborted(__funcResult)) {
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -334,21 +335,21 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Not Found`]
-              });
+                  type: "positional",
+                  args: [`Not Found`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -357,8 +358,29 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
+                  type: "positional",
+                  args: [`Internal Server Error`]
+                });
+if (hasInterrupts(__funcResult)) {
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
+if (isAborted(__funcResult)) {
+                  throw __funcResult.toError()
+                }
+              });
+    },
+  },
+
+], async (runner, __run) => {
+await runner.step(3, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
                 type: "positional",
-                args: [`Internal Server Error`]
+                args: [`Unknown status`]
               });
 if (hasInterrupts(__funcResult)) {
                 await __run.ctx.pendingPromises.awaitAll()
@@ -372,45 +394,24 @@ if (isAborted(__funcResult)) {
                 throw __funcResult.toError()
               }
             });
-    },
-  },
-
-], async (runner, __run) => {
-await runner.step(3, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-              type: "positional",
-              args: [`Unknown status`]
-            });
-if (hasInterrupts(__funcResult)) {
-              await __run.ctx.pendingPromises.awaitAll()
-              runner.halt({
-                ...__state,
-                data: __funcResult
-              })
-              return;
-            }
-if (isAborted(__funcResult)) {
-              throw __funcResult.toError()
-            }
-          });
 });
-      await runner.step(7, __run, async (runner, __run) => {
+        await runner.step(7, __run, async (runner, __run) => {
 //  Match with variable assignment in body
-      });
-      await runner.step(8, __run, async (runner, __run) => {
+        });
+        await runner.step(8, __run, async (runner, __run) => {
 __stack.locals.grade = `A`;
-      });
-      await runner.step(9, __run, async (runner, __run) => {
+        });
+        await runner.step(9, __run, async (runner, __run) => {
 __stack.locals.points = 0;
-      });
-      await runner.ifElse(10, __run, [
+        });
+        await runner.ifElse(10, __run, [
 
   {
     condition: async (__run) => __stack.locals.grade === `A`,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.a = 100;
-            });
+              });
     },
   },
 
@@ -419,7 +420,7 @@ __stack.locals.a = 100;
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.b = 85;
-            });
+              });
     },
   },
 
@@ -428,7 +429,7 @@ __stack.locals.b = 85;
     body: async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.c = 70;
-            });
+              });
     },
   },
 
@@ -437,43 +438,43 @@ __stack.locals.c = 70;
     body: async (runner, __run) => {
 await runner.step(3, __run, async (runner, __run) => {
 __stack.locals.d = 55;
-            });
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.e = 0;
-          });
+            });
 });
-      await runner.step(11, __run, async (runner, __run) => {
+        await runner.step(11, __run, async (runner, __run) => {
 //  Match with function calls in body
-      });
-      await runner.step(12, __run, async (runner, __run) => {
+        });
+        await runner.step(12, __run, async (runner, __run) => {
 __stack.locals.level = `debug`;
-      });
-      await runner.ifElse(13, __run, [
+        });
+        await runner.ifElse(13, __run, [
 
   {
     condition: async (__run) => __stack.locals.level === `debug`,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Debug mode enabled`]
-              });
+                  type: "positional",
+                  args: [`Debug mode enabled`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -482,21 +483,21 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Info level logging`]
-              });
+                  type: "positional",
+                  args: [`Info level logging`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -505,21 +506,21 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Warning level`]
-              });
+                  type: "positional",
+                  args: [`Warning level`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
@@ -528,39 +529,39 @@ if (isAborted(__funcResult)) {
     body: async (runner, __run) => {
 await runner.step(3, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-                type: "positional",
-                args: [`Error level`]
-              });
+                  type: "positional",
+                  args: [`Error level`]
+                });
 if (hasInterrupts(__funcResult)) {
-                await __run.ctx.pendingPromises.awaitAll()
-                runner.halt({
-                  ...__state,
-                  data: __funcResult
-                })
-                return;
-              }
+                  await __run.ctx.pendingPromises.awaitAll()
+                  runner.halt({
+                    ...__state,
+                    data: __funcResult
+                  })
+                  return;
+                }
 if (isAborted(__funcResult)) {
-                throw __funcResult.toError()
-              }
-            });
+                  throw __funcResult.toError()
+                }
+              });
     },
   },
 
 ]);
-      await runner.step(14, __run, async (runner, __run) => {
+        await runner.step(14, __run, async (runner, __run) => {
 //  Match with array results
-      });
-      await runner.step(15, __run, async (runner, __run) => {
+        });
+        await runner.step(15, __run, async (runner, __run) => {
 __stack.locals.resultType = `array`;
-      });
-      await runner.ifElse(16, __run, [
+        });
+        await runner.ifElse(16, __run, [
 
   {
     condition: async (__run) => __stack.locals.resultType === `array`,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.data1 = [1, 2, 3];
-            });
+              });
     },
   },
 
@@ -569,35 +570,35 @@ __stack.locals.data1 = [1, 2, 3];
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.data2 = {
-                "x": 1,
-                "y": 2
-              };
-            });
+                  "x": 1,
+                  "y": 2
+                };
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.data3 = [];
-          });
+            });
 });
-      await runner.step(17, __run, async (runner, __run) => {
+        await runner.step(17, __run, async (runner, __run) => {
 //  Match with object results
-      });
-      await runner.step(18, __run, async (runner, __run) => {
+        });
+        await runner.step(18, __run, async (runner, __run) => {
 __stack.locals.format = `json`;
-      });
-      await runner.ifElse(19, __run, [
+        });
+        await runner.ifElse(19, __run, [
 
   {
     condition: async (__run) => __stack.locals.format === `xml`,
     body: async (runner, __run) => {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.output1 = {
-                "type": `xml`,
-                "ext": `.xml`
-              };
-            });
+                  "type": `xml`,
+                  "ext": `.xml`
+                };
+              });
     },
   },
 
@@ -606,10 +607,10 @@ __stack.locals.output1 = {
     body: async (runner, __run) => {
 await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.output2 = {
-                "type": `json`,
-                "ext": `.json`
-              };
-            });
+                  "type": `json`,
+                  "ext": `.json`
+                };
+              });
     },
   },
 
@@ -618,44 +619,44 @@ __stack.locals.output2 = {
     body: async (runner, __run) => {
 await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.output3 = {
-                "type": `csv`,
-                "ext": `.csv`
-              };
-            });
+                  "type": `csv`,
+                  "ext": `.csv`
+                };
+              });
     },
   },
 
 ], async (runner, __run) => {
 await runner.step(3, __run, async (runner, __run) => {
 __stack.locals.output4 = {
-              "type": `unknown`,
-              "ext": ``
-            };
-          });
+                "type": `unknown`,
+                "ext": ``
+              };
+            });
 });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(20, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(20, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -667,11 +668,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

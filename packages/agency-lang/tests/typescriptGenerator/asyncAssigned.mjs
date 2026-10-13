@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -350,91 +350,92 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "asyncAssigned.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncAssigned.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.branchStep(1, __run, "1", async (runner, __run) => {
+if ((__stack.branches && __stack.branches["1"])) {
+            __forked = __stack.branches["1"].stack;
+            __forked.deserializeMode()
+          } else {
+            __forked = __run.ctx.forkStack();
+          }
+__stack.branches = (__stack.branches || {});
+__stack.branches["1"] = {
+            stack: __forked
+          };
+__stack.locals.x = __withRun(__detachedRun(__run, {
+            stack: __forked
+          }), (__run) => __call(__run, compute, {
+            type: "positional",
+            args: [5]
+          }));
+__self.__pendingKey_x = __run.ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+        });
+        await runner.branchStep(2, __run, "2", async (runner, __run) => {
+if ((__stack.branches && __stack.branches["2"])) {
+            __forked = __stack.branches["2"].stack;
+            __forked.deserializeMode()
+          } else {
+            __forked = __run.ctx.forkStack();
+          }
+__stack.branches = (__stack.branches || {});
+__stack.branches["2"] = {
+            stack: __forked
+          };
+__stack.locals.y = __withRun(__detachedRun(__run, {
+            stack: __forked
+          }), (__run) => __call(__run, compute, {
+            type: "positional",
+            args: [10]
+          }));
+__self.__pendingKey_y = __run.ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
+        });
+        await runner.step(3, __run, async (runner, __run) => {
+await __run.ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+        });
+        await runner.step(4, __run, async (runner, __run) => {
+runner.halt({
+            messages: __run.threads,
+            data: [__stack.locals.x, __stack.locals.y]
+          })
+return;
+        });
+      })
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(5, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
           data: {
-            nodeName: "main"
+            nodeName: "main",
+            data: undefined
           }
         })
       });
-      await runner.branchStep(1, __run, "1", async (runner, __run) => {
-if ((__stack.branches && __stack.branches["1"])) {
-          __forked = __stack.branches["1"].stack;
-          __forked.deserializeMode()
-        } else {
-          __forked = __run.ctx.forkStack();
-        }
-__stack.branches = (__stack.branches || {});
-__stack.branches["1"] = {
-          stack: __forked
-        };
-__stack.locals.x = __withRun(__detachedRun(__run, {
-          stack: __forked
-        }), (__run) => __call(__run, compute, {
-          type: "positional",
-          args: [5]
-        }));
-__self.__pendingKey_x = __run.ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
-      });
-      await runner.branchStep(2, __run, "2", async (runner, __run) => {
-if ((__stack.branches && __stack.branches["2"])) {
-          __forked = __stack.branches["2"].stack;
-          __forked.deserializeMode()
-        } else {
-          __forked = __run.ctx.forkStack();
-        }
-__stack.branches = (__stack.branches || {});
-__stack.branches["2"] = {
-          stack: __forked
-        };
-__stack.locals.y = __withRun(__detachedRun(__run, {
-          stack: __forked
-        }), (__run) => __call(__run, compute, {
-          type: "positional",
-          args: [10]
-        }));
-__self.__pendingKey_y = __run.ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
-      });
-      await runner.step(3, __run, async (runner, __run) => {
-await __run.ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
-      });
-      await runner.step(4, __run, async (runner, __run) => {
-runner.halt({
-          messages: __run.threads,
-          data: [__stack.locals.x, __stack.locals.y]
-        })
-return;
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(5, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
-      })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -446,11 +447,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

@@ -2,6 +2,7 @@ import {
   interruptForm,
   raiseForm,
   afterResume,
+  taggedNode,
   hasInterrupts,
   approve,
   respondToInterrupts,
@@ -11,8 +12,9 @@ import { writeFileSync } from "fs";
 
 const noSubprocess = () => memoryHost({ capabilities: ["env", "terminal", "llm"] });
 
-// Both forms, interrupt and raise: rejected at the raise with the
-// capability named, and the handler never runs (it would have printed).
+// Both forms, interrupt and raise: the tagged function is refused when it
+// is entered, with the capability named, and the handler never runs (it
+// would have printed).
 const hostA = noSubprocess();
 const interruptResult = (await interruptForm({ host: hostA })).data;
 const hostB = noSubprocess();
@@ -23,9 +25,13 @@ const raiseResult = (await raiseForm({ host: hostB })).data;
 const hostFull = memoryHost();
 const fullResult = (await interruptForm({ host: hostFull })).data;
 
+// A tagged node is refused when it starts, and its body never prints.
+const hostD = noSubprocess();
+const nodeResult = (await taggedNode({ host: hostD })).data;
+
 // The checkpoint is taken on a host that has everything; the resume runs
-// on one that lacks subprocess, and the tagged raise after the resume is
-// still refused.
+// on one that lacks subprocess. The resume replays the node and enters the
+// tagged function again, so it is refused there.
 const full = memoryHost();
 const paused = await afterResume({ host: full });
 let resumed = { data: "no interrupt surfaced" };
@@ -51,6 +57,8 @@ writeFileSync(
       raiseFormOutput: hostB.state.output,
       afterResume: resumed.data,
       afterResumeOutput: resumed.handlerOutput ?? [],
+      taggedNode: nodeResult.success === false ? "failed: " + nodeResult.error : nodeResult,
+      taggedNodeOutput: hostD.state.output,
     },
     null,
     2,

@@ -1,10 +1,12 @@
 {
-  "interruptForm": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
+  "interruptForm": "failed: runIt needs the subprocess capability, which the memory host does not have. No tool call can supply it.",
   "interruptFormOutput": [],
   "onFullHost": "ran ls",
   "onFullHostOutput": ["handler ran for app::shell\n"],
-  "raiseForm": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
+  "raiseForm": "failed: askIt needs the subprocess capability, which the memory host does not have. No tool call can supply it.",
   "raiseFormOutput": [],
-  "afterResume": "failed: app::shell needs the subprocess capability, which the memory host does not have.",
-  "afterResumeOutput": []
+  "afterResume": "failed: runIt needs the subprocess capability, which the memory host does not have. No tool call can supply it.",
+  "afterResumeOutput": [],
+  "taggedNode": "failed: taggedNode needs the subprocess capability, which the memory host does not have. No tool call can supply it.",
+  "taggedNodeOutput": []
 }

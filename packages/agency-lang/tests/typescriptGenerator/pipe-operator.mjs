@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -671,170 +671,171 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "pipe-operator.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await success(5);
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_0
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_0)) {
+            throw __stack.locals.__hoist_0.toError()
+          }
+        });
+        await runner.step(2, __run, async (runner, __run) => {
+__stack.locals.__pipe_0 = __stack.locals.__hoist_0;
+        });
+        __stack.locals.r1 = await runner.pipe(3, __run, __stack.locals.__pipe_0, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+        await runner.step(4, __run, async (runner, __run) => {
+__stack.locals.__hoist_1 = await success(5);
+if (hasInterrupts(__stack.locals.__hoist_1)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_1
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_1)) {
+            throw __stack.locals.__hoist_1.toError()
+          }
+        });
+        await runner.step(5, __run, async (runner, __run) => {
+__stack.locals.__pipe_1 = __stack.locals.__hoist_1;
+        });
+        __stack.locals.r2 = await runner.pipe(6, __run, __stack.locals.__pipe_1, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, multiply, "partial", {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            a: 10
+          }
+        }), {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+        await runner.step(7, __run, async (runner, __run) => {
+__stack.locals.__hoist_2 = await success(10);
+if (hasInterrupts(__stack.locals.__hoist_2)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_2
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_2)) {
+            throw __stack.locals.__hoist_2.toError()
+          }
+        });
+        await runner.step(8, __run, async (runner, __run) => {
+__stack.locals.__pipe_2 = __stack.locals.__hoist_2;
+        });
+        __stack.locals.__pipe_2 = await runner.pipe(9, __run, __stack.locals.__pipe_2, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+        __stack.locals.r3 = await runner.pipe(10, __run, __stack.locals.__pipe_2, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, multiply, "partial", {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            a: 3
+          }
+        }), {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+        await runner.step(11, __run, async (runner, __run) => {
+__stack.locals.__hoist_3 = await failure(`nope`);
+if (hasInterrupts(__stack.locals.__hoist_3)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_3
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_3)) {
+            throw __stack.locals.__hoist_3.toError()
+          }
+        });
+        await runner.step(12, __run, async (runner, __run) => {
+__stack.locals.__pipe_3 = __stack.locals.__hoist_3;
+        });
+        __stack.locals.r4 = await runner.pipe(13, __run, __stack.locals.__pipe_3, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+        await runner.step(14, __run, async (runner, __run) => {
+__stack.locals.__hoist_4 = await success(10);
+if (hasInterrupts(__stack.locals.__hoist_4)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_4
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_4)) {
+            throw __stack.locals.__hoist_4.toError()
+          }
+        });
+        await runner.step(15, __run, async (runner, __run) => {
+__stack.locals.__pipe_4 = __stack.locals.__hoist_4;
+        });
+        __stack.locals.r5 = await runner.pipe(16, __run, __stack.locals.__pipe_4, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, safeDivide, "partial", {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            b: 2
+          }
+        }), {
+          type: "positional",
+          args: [__pipeArg]
+        }))(__pipeValue));
+      })
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(17, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
           data: {
-            nodeName: "main"
+            nodeName: "main",
+            data: undefined
           }
         })
       });
-      await runner.step(1, __run, async (runner, __run) => {
-__stack.locals.__hoist_0 = await success(5);
-if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_0
-          })
-          return;
-        }
-if (isAborted(__stack.locals.__hoist_0)) {
-          throw __stack.locals.__hoist_0.toError()
-        }
-      });
-      await runner.step(2, __run, async (runner, __run) => {
-__stack.locals.__pipe_0 = __stack.locals.__hoist_0;
-      });
-      __stack.locals.r1 = await runner.pipe(3, __run, __stack.locals.__pipe_0, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-      await runner.step(4, __run, async (runner, __run) => {
-__stack.locals.__hoist_1 = await success(5);
-if (hasInterrupts(__stack.locals.__hoist_1)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_1
-          })
-          return;
-        }
-if (isAborted(__stack.locals.__hoist_1)) {
-          throw __stack.locals.__hoist_1.toError()
-        }
-      });
-      await runner.step(5, __run, async (runner, __run) => {
-__stack.locals.__pipe_1 = __stack.locals.__hoist_1;
-      });
-      __stack.locals.r2 = await runner.pipe(6, __run, __stack.locals.__pipe_1, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, multiply, "partial", {
-        type: "named",
-        positionalArgs: [],
-        namedArgs: {
-          a: 10
-        }
-      }), {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-      await runner.step(7, __run, async (runner, __run) => {
-__stack.locals.__hoist_2 = await success(10);
-if (hasInterrupts(__stack.locals.__hoist_2)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_2
-          })
-          return;
-        }
-if (isAborted(__stack.locals.__hoist_2)) {
-          throw __stack.locals.__hoist_2.toError()
-        }
-      });
-      await runner.step(8, __run, async (runner, __run) => {
-__stack.locals.__pipe_2 = __stack.locals.__hoist_2;
-      });
-      __stack.locals.__pipe_2 = await runner.pipe(9, __run, __stack.locals.__pipe_2, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-      __stack.locals.r3 = await runner.pipe(10, __run, __stack.locals.__pipe_2, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, multiply, "partial", {
-        type: "named",
-        positionalArgs: [],
-        namedArgs: {
-          a: 3
-        }
-      }), {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-      await runner.step(11, __run, async (runner, __run) => {
-__stack.locals.__hoist_3 = await failure(`nope`);
-if (hasInterrupts(__stack.locals.__hoist_3)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_3
-          })
-          return;
-        }
-if (isAborted(__stack.locals.__hoist_3)) {
-          throw __stack.locals.__hoist_3.toError()
-        }
-      });
-      await runner.step(12, __run, async (runner, __run) => {
-__stack.locals.__pipe_3 = __stack.locals.__hoist_3;
-      });
-      __stack.locals.r4 = await runner.pipe(13, __run, __stack.locals.__pipe_3, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, double, {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-      await runner.step(14, __run, async (runner, __run) => {
-__stack.locals.__hoist_4 = await success(10);
-if (hasInterrupts(__stack.locals.__hoist_4)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.__hoist_4
-          })
-          return;
-        }
-if (isAborted(__stack.locals.__hoist_4)) {
-          throw __stack.locals.__hoist_4.toError()
-        }
-      });
-      await runner.step(15, __run, async (runner, __run) => {
-__stack.locals.__pipe_4 = __stack.locals.__hoist_4;
-      });
-      __stack.locals.r5 = await runner.pipe(16, __run, __stack.locals.__pipe_4, async (__pipeValue, __run) => (async (__pipeArg) => await __call(__run, await __callMethod(__run, safeDivide, "partial", {
-        type: "named",
-        positionalArgs: [],
-        namedArgs: {
-          b: 2
-        }
-      }), {
-        type: "positional",
-        args: [__pipeArg]
-      }))(__pipeValue));
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(17, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
-      })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -846,11 +847,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

@@ -53,12 +53,9 @@ describe("the browser bundle", () => {
     expect(printed).toEqual([
       "hello from the browser",
       "GREETING is hi from the page",
-      // Refused before the `with approve` handler is asked. `read` resolves
-      // the path through the host before it raises, so the refusal comes
-      // from files.locate; a function that raises first is refused at the
-      // raise, by its @capabilities tag, with std::read in place of the
-      // host function.
-      expect.stringMatching(/^read refused: .*needs the fileRead capability/),
+      // Refused when `read` is entered, by its @capabilities tag, before
+      // its body runs and before the `with approve` handler is asked.
+      "read refused: read needs the fileRead capability, which the browser host does not have. No tool call can supply it.",
     ]);
   });
 });

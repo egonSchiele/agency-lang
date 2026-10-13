@@ -24,7 +24,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __registerEffectCapabilities,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope, __enterCallable,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
@@ -499,221 +499,222 @@ let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "schemaParamInjection.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
-  try {
-    await __withChildRun(__run, {
-      ctx: __ctx,
-      stack: __ctx.stateStack,
-      threads: __setupData.threads
-    }, "its body", async (__run) => {
-      await runner.hook(0, __run, async (__run) => {
+  return await __enterCallable(__run, "main", [], async (__run) => {
+    try {
+      await __withChildRun(__run, {
+        ctx: __ctx,
+        stack: __ctx.stateStack,
+        threads: __setupData.threads
+      }, "its body", async (__run) => {
+        await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
-          name: "onNodeStart",
-          data: {
-            nodeName: "main"
-          }
-        })
-      });
-      await runner.step(1, __run, async (runner, __run) => {
+            name: "onNodeStart",
+            data: {
+              nodeName: "main"
+            }
+          })
+        });
+        await runner.step(1, __run, async (runner, __run) => {
 //  LHS-annotation injection — Schema<any> inside parseValue receives
 //  z.array(z.number()) synthesized from `number[]`.
-      });
-      await runner.step(2, __run, async (runner, __run) => {
+        });
+        await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.nums = await __call(__run, parseValue, {
-          type: "named",
-          positionalArgs: [`[1,2,3]`],
-          namedArgs: {
-            s: new Schema(z.array(z.number()))
+            type: "named",
+            positionalArgs: [`[1,2,3]`],
+            namedArgs: {
+              s: new Schema(z.array(z.number()))
+            }
+          });
+if (hasInterrupts(__stack.locals.nums)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.nums
+            })
+            return;
+          }
+if (isAborted(__stack.locals.nums)) {
+            throw __stack.locals.nums.toError()
           }
         });
-if (hasInterrupts(__stack.locals.nums)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.nums
-          })
-          return;
-        }
-if (isAborted(__stack.locals.nums)) {
-          throw __stack.locals.nums.toError()
-        }
-      });
-      await runner.step(3, __run, async (runner, __run) => {
+        await runner.step(3, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.nums]
-        });
+            type: "positional",
+            args: [__stack.locals.nums]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
+            throw __funcResult.toError()
+          }
 //  `any` LHS — degenerate but valid: injects `z.any()`. No assertion
 //  about runtime shape, just verifies it compiles.
-      });
-      await runner.step(4, __run, async (runner, __run) => {
+        });
+        await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.anything = await __call(__run, parseValue, {
-          type: "named",
-          positionalArgs: [`42`],
-          namedArgs: {
-            s: new Schema(z.any())
+            type: "named",
+            positionalArgs: [`42`],
+            namedArgs: {
+              s: new Schema(z.any())
+            }
+          });
+if (hasInterrupts(__stack.locals.anything)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.anything
+            })
+            return;
+          }
+if (isAborted(__stack.locals.anything)) {
+            throw __stack.locals.anything.toError()
           }
         });
-if (hasInterrupts(__stack.locals.anything)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.anything
-          })
-          return;
-        }
-if (isAborted(__stack.locals.anything)) {
-          throw __stack.locals.anything.toError()
-        }
-      });
-      await runner.step(5, __run, async (runner, __run) => {
+        await runner.step(5, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.anything]
-        });
+            type: "positional",
+            args: [__stack.locals.anything]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
+            throw __funcResult.toError()
+          }
 //  `!` validation on the LHS: injection still fires with the bare
 //  type. `!` triggers a separate runtime validation pass at the
 //  assignment site; the injected schema and the validator schema are
 //  built from the same LHS type, so they agree.
-      });
-      await runner.step(6, __run, async (runner, __run) => {
+        });
+        await runner.step(6, __run, async (runner, __run) => {
 __stack.locals.validated = await __call(__run, parseValue, {
-          type: "named",
-          positionalArgs: [`[1,2,3]`],
-          namedArgs: {
-            s: new Schema(z.array(z.number()))
+            type: "named",
+            positionalArgs: [`[1,2,3]`],
+            namedArgs: {
+              s: new Schema(z.array(z.number()))
+            }
+          });
+if (hasInterrupts(__stack.locals.validated)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.validated
+            })
+            return;
+          }
+if (isAborted(__stack.locals.validated)) {
+            throw __stack.locals.validated.toError()
+          }
+__stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.number()));
+        });
+        await runner.step(7, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
+            type: "positional",
+            args: [__stack.locals.validated]
+          });
+if (hasInterrupts(__funcResult)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
+//  Explicit override: the user-supplied schema wins, no injection.
+        });
+        await runner.step(8, __run, async (runner, __run) => {
+__stack.locals.explicit = await __call(__run, parseValue, {
+            type: "positional",
+            args: [`[1,2,3]`, new Schema(z.any())]
+          });
+if (hasInterrupts(__stack.locals.explicit)) {
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.explicit
+            })
+            return;
+          }
+if (isAborted(__stack.locals.explicit)) {
+            throw __stack.locals.explicit.toError()
           }
         });
-if (hasInterrupts(__stack.locals.validated)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.validated
-          })
-          return;
-        }
-if (isAborted(__stack.locals.validated)) {
-          throw __stack.locals.validated.toError()
-        }
-__stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.number()));
-      });
-      await runner.step(7, __run, async (runner, __run) => {
+        await runner.step(9, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.validated]
-        });
+            type: "positional",
+            args: [__stack.locals.explicit]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-//  Explicit override: the user-supplied schema wins, no injection.
-      });
-      await runner.step(8, __run, async (runner, __run) => {
-__stack.locals.explicit = await __call(__run, parseValue, {
-          type: "positional",
-          args: [`[1,2,3]`, new Schema(z.any())]
-        });
-if (hasInterrupts(__stack.locals.explicit)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.explicit
-          })
-          return;
-        }
-if (isAborted(__stack.locals.explicit)) {
-          throw __stack.locals.explicit.toError()
-        }
-      });
-      await runner.step(9, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, print, {
-          type: "positional",
-          args: [__stack.locals.explicit]
-        });
-if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
-if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
+            throw __funcResult.toError()
+          }
 //  Bare expression statement — no LHS, no return position, no injection.
 //  The Schema param is omitted; the function would fail at runtime
 //  because s is undefined. This case exists to lock in "no spooky
 //  injection without a clear context."
-      });
-      await runner.step(10, __run, async (runner, __run) => {
-const __funcResult = await __call(__run, parseValue, {
-          type: "positional",
-          args: [`[1,2,3]`]
         });
+        await runner.step(10, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, parseValue, {
+            type: "positional",
+            args: [`[1,2,3]`]
+          });
 if (hasInterrupts(__funcResult)) {
-          await __run.ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+            await __run.ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __funcResult
+            })
+            return;
+          }
 if (isAborted(__funcResult)) {
-          throw __funcResult.toError()
-        }
-      });
-    })
-    if (runner.halted) return runner.haltResult;
-    await runner.hook(11, __run, async (__run) => {
-await callHook(__run, {
-        name: "onNodeEnd",
-        data: {
-          nodeName: "main",
-          data: undefined
-        }
+            throw __funcResult.toError()
+          }
+        });
       })
-    });
-    return {
-      messages: __run.threads,
-      data: undefined
-    };
-  } catch (__error) {
-    if (__error instanceof RunControlSignal) {
-      throw __error
-    }
-    if (__error instanceof AgencyAbort) {
-      throw __error
-    }
-    {
+      if (runner.halted) return runner.haltResult;
+      await runner.hook(11, __run, async (__run) => {
+await callHook(__run, {
+          name: "onNodeEnd",
+          data: {
+            nodeName: "main",
+            data: undefined
+          }
+        })
+      });
+      return {
+        messages: __run.threads,
+        data: undefined
+      };
+    } catch (__error) {
+      if (__error instanceof RunControlSignal) {
+        throw __error
+      }
+      if (__error instanceof AgencyAbort) {
+        throw __error
+      }
+      {
               const __errMsg = __error instanceof Error ? __error.message : String(__error);
               const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
               const __log = __createLogger(__ctx.logLevel, __ctx.host.settings);
@@ -725,11 +726,17 @@ await callHook(__run, {
                 functionName: "main",
               });
             }
+      return {
+        messages: __run.threads,
+        data: runtimeFailure(__error, { functionName: "main" })
+      };
+    }
+  }, (__run, __failure) => {
     return {
       messages: __run.threads,
-      data: runtimeFailure(__error, { functionName: "main" })
+      data: __failure
     };
-  }
+  });
 })
 export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({

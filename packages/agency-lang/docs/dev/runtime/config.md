@@ -143,6 +143,14 @@ that merges another config **over** the CLI-derived one cancels it. That is how
 CLI intent, and a subprocess re-derives its own config, so a flag has to be
 forwarded to it explicitly.
 
+### `--platform`
+
+`platform` names the platform the program is checked against, `node` by
+default or `browser`. It turns on the capability check and changes nothing in
+the emitted code; see `docs/dev/language/capabilities.md`. `compile` and
+`typecheck` take the flag. `run` always runs on Node and does not. `pack` keeps
+its own `--target node`, because it can only produce a Node bundle today.
+
 ## Flags that are NOT config
 
 Not every flag becomes a setting, and forcing one to be a setting is a mistake.
@@ -249,6 +257,7 @@ those for the full per-field commentary.
 | `outDir` | `string` | Output directory for compiled files |
 | `distDir` | `string` | Directory of pre-compiled JS. The debugger imports from here instead of compiling on the fly. |
 | `allowNonAgencyGenerators` | `boolean` | Let a compile-time splice generator import JavaScript. Off by default, because a generator that reaches an npm package is unchecked. See [`docs/dev/language/splices.md`](../language/splices.md). |
+| `platform` | `"node" \| "browser"` | The platform to check the program against (default: `node`). An effect that needs a capability the platform lacks, or an import of a Node-only stdlib module, is a compile error. See [`docs/dev/language/capabilities.md`](../language/capabilities.md). |
 | `instrument` | `boolean` | Emit `debugStep()` instrumentation in compiled output (default: true) |
 | `debugger` | `boolean` | Inert. `agency debug` sets it, but nothing reads it. `instrument` is the flag that controls `debugStep()` emission. |
 

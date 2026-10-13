@@ -1,5 +1,4 @@
 {
-  "silentHostUse": "a memory block persists its frame when it ends, with no interrupt",
   "tests": [
     {
       "nodeName": "main",

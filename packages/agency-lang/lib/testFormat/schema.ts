@@ -97,7 +97,6 @@ const SANDBOX_REFUSED_FILE_FIELDS = [
   "skipOnCI",
   "skipUnlessPlatform",
   "skipReason",
-  "silentHostUse",
 ] as const;
 const SANDBOX_REFUSED_CASE_FIELDS = [
   "llmMocks",
@@ -287,12 +286,6 @@ const fullFileSchema = z.strictObject({
   skipUnlessPlatform: z.enum(PLATFORM_NAMES).optional(),
   skipReason: z.string().optional(),
   defaultTimeoutMs: z.number().optional(),
-  /** Why `agency test --check-capabilities` must not fail this file: its
-   *  cases call a function that uses the host and raises nothing on
-   *  purpose (docs/dev/language/capabilities.md names them), so a host use
-   *  the raised effects' tags do not cover is expected. The runner prints
-   *  the check's findings as notes instead. */
-  silentHostUse: z.string().optional(),
 });
 
 export type FullTestCase = z.infer<typeof fullCaseSchema>;
@@ -319,7 +312,6 @@ const EVAL_HARNESS_REFUSED_FILE_FIELDS = [
   "skipUnlessPlatform",
   "skipReason",
   "expectedCompileError",
-  "silentHostUse",
 ] as const;
 const EVAL_HARNESS_REFUSED_CASE_FIELDS = [
   "interruptHandlers",

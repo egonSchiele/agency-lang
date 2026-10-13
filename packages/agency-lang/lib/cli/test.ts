@@ -33,9 +33,8 @@ import { CompileClosureError } from "../compiler/compileClosure.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { resolveFetchMocks, writeFetchMocksTempFile } from "./fetchMockResolve.js";
-import { checkCapabilityLog, effectCapabilitiesFor } from "./capabilityCheck.js";
+import { checkCapabilityLog } from "./capabilityCheck.js";
 import { CAPABILITY_LOG_SETTING, parseCapabilityLog } from "../runtime/capabilityLog.js";
-import type { Capability } from "../host/host.js";
 import {
   parseTestFileFull,
   resolveSourceFile,
@@ -423,8 +422,8 @@ export type TestRunOptions = {
   budget?: { maxCost?: string; maxTime?: string };
   /** Compile each tested file through the closure validator. */
   agencyOnly?: boolean;
-  /** Fail a case that asked the host for a capability no raised effect is
-   *  tagged with. See lib/cli/capabilityCheck.ts. */
+  /** Fail a case that asked the host for a capability no running
+   *  function's tag names. See lib/cli/capabilityCheck.ts. */
   checkCapabilities?: boolean;
   output: TestOutput;
 };
@@ -539,7 +538,6 @@ async function runSingleTest(
   signal: AbortSignal,
   log: Logger,
   options: TestRunOptions,
-  silentHostUse: string | undefined,
 ): Promise<CaseOutcome> {
   const hasArgs = testCase.input !== undefined && testCase.input !== "";
   const relativeSourceFilePath = sourceFilePath;
@@ -591,26 +589,14 @@ async function runSingleTest(
   const feedback: string[] = [];
   const baseName = relativeSourceFilePath.replace(".agency", "");
   if (capabilityLog) {
-    const checked = checkCapabilityLog(
-      parseCapabilityLog(readCapabilityLog(capabilityLog)),
-      effectCapabilitiesCached(sourceFilePath, config),
-    );
-    for (const note of checked.silentUses) {
-      log(color.yellow(`  ⚠ ${note}`));
-    }
-    if (silentHostUse !== undefined) {
-      for (const note of checked.wrongTags) {
-        log(color.yellow(`  ⚠ ${note} (silentHostUse: ${silentHostUse})`));
-      }
-      checked.wrongTags = [];
-    }
-    if (checked.wrongTags.length === 0) {
+    const { uncovered } = checkCapabilityLog(parseCapabilityLog(readCapabilityLog(capabilityLog)));
+    if (uncovered.length === 0) {
       log(color.green("  ✓ Capability tags cover every host use"));
     } else {
-      for (const problem of checked.wrongTags) {
+      for (const problem of uncovered) {
         log(color.red(`  ✗ ${problem}`));
       }
-      feedback.push(...checked.wrongTags);
+      feedback.push(...uncovered);
       testPassed = false;
     }
   }
@@ -692,18 +678,6 @@ function readCapabilityLog(file: string): string {
   return text;
 }
 
-// The tags do not change while a run of the runner lasts, and building a
-// symbol table per case would compile the stdlib again for every one.
-const effectCapabilitiesByFile: Record<string, Record<string, Capability[]>> = {};
-
-function effectCapabilitiesCached(
-  file: string,
-  config: AgencyConfig,
-): Record<string, Capability[]> {
-  effectCapabilitiesByFile[file] ??= effectCapabilitiesFor(file, config);
-  return effectCapabilitiesByFile[file];
-}
-
 function collectTestFiles(inputPath: string): string[] {
   const fileStats = fs.statSync(inputPath);
   if (!fileStats.isDirectory()) {
@@ -736,7 +710,6 @@ async function runTestWithRetries(
   signal: AbortSignal,
   log: Logger,
   options: TestRunOptions,
-  silentHostUse: string | undefined,
 ): Promise<CaseOutcome & { attempts: number }> {
   const maxAttempts = (testCase.retry ?? 0) + 1;
   let outcome: CaseOutcome = { status: "failed" };
@@ -756,7 +729,6 @@ async function runTestWithRetries(
         signal,
         log,
         options,
-        silentHostUse,
       );
       if (outcome.status === "passed" || outcome.status === "aborted") break;
     } catch (e) {
@@ -1132,7 +1104,6 @@ async function runCases(args: {
       suite.abortController.signal,
       log,
       options,
-      tests.silentHostUse,
     );
     const durationMs = performance.now() - startTime;
 

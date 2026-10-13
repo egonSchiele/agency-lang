@@ -1,95 +1,116 @@
 import { describe, it, expect } from "vitest";
-import { checkCapabilityLog, effectCapabilitiesFor } from "./capabilityCheck.js";
+import { checkCapabilityLog, CHECKED_CAPABILITIES } from "./capabilityCheck.js";
 import { formatCapabilityLogLine, parseCapabilityLog } from "../runtime/capabilityLog.js";
-import { resolveAgencyImportPath } from "../importPaths.js";
-import type { Capability } from "../host/host.js";
 
 describe("the capability log", () => {
-  it("round-trips use and raise lines", () => {
+  it("round-trips use, enter, and exit lines", () => {
     const text = [
+      formatCapabilityLogLine({ kind: "enter", name: "main", capabilities: [] }),
+      formatCapabilityLogLine({ kind: "enter", name: "read", capabilities: ["fileRead"] }),
       formatCapabilityLogLine({
         kind: "use",
         functionName: "files.readText",
         capability: "fileRead",
       }),
-      formatCapabilityLogLine({ kind: "raise", effect: "std::read" }),
+      formatCapabilityLogLine({ kind: "exit", name: "read" }),
+      formatCapabilityLogLine({
+        kind: "enter",
+        name: "write",
+        capabilities: ["fileRead", "fileWrite"],
+      }),
       "half-written",
       "",
     ].join("\n");
     expect(parseCapabilityLog(text)).toEqual([
+      { kind: "enter", name: "main", capabilities: [] },
+      { kind: "enter", name: "read", capabilities: ["fileRead"] },
       { kind: "use", functionName: "files.readText", capability: "fileRead" },
-      { kind: "raise", effect: "std::read" },
+      { kind: "exit", name: "read" },
+      { kind: "enter", name: "write", capabilities: ["fileRead", "fileWrite"] },
     ]);
   });
 });
 
 describe("checkCapabilityLog", () => {
-  const tags: Record<string, Capability[]> = {
-    "std::read": ["fileRead"],
-    "std::write": ["fileRead", "fileWrite"],
-  };
-
-  it("passes when a raised effect is tagged with every checked use", () => {
+  it("passes when a running function declares every checked use", () => {
     expect(
-      checkCapabilityLog(
-        [
-          { kind: "raise", effect: "std::write" },
-          { kind: "use", functionName: "files.fixedRoot", capability: "fileRead" },
-          { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
-        ],
-        tags,
-      ),
-    ).toEqual({ wrongTags: [], silentUses: [] });
+      checkCapabilityLog([
+        { kind: "enter", name: "main", capabilities: [] },
+        { kind: "enter", name: "write", capabilities: ["fileRead", "fileWrite"] },
+        { kind: "use", functionName: "files.fixedRoot", capability: "fileRead" },
+        { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
+        { kind: "exit", name: "write" },
+        { kind: "exit", name: "main" },
+      ]),
+    ).toEqual({ uncovered: [] });
   });
 
-  it("names the host functions and the raised effects on a wrong tag", () => {
+  it("covers a use through an outer function's tag", () => {
     expect(
-      checkCapabilityLog(
-        [
-          { kind: "raise", effect: "std::read" },
-          { kind: "use", functionName: "files.readText", capability: "fileRead" },
-          { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
-          { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
-        ],
-        tags,
-      ),
+      checkCapabilityLog([
+        { kind: "enter", name: "skillsDir", capabilities: ["fileRead"] },
+        { kind: "enter", name: "helper", capabilities: [] },
+        { kind: "use", functionName: "files.readText", capability: "fileRead" },
+        { kind: "exit", name: "helper" },
+        { kind: "exit", name: "skillsDir" },
+      ]),
+    ).toEqual({ uncovered: [] });
+  });
+
+  it("names the host function, the capability, and the innermost function", () => {
+    expect(
+      checkCapabilityLog([
+        { kind: "enter", name: "read", capabilities: ["fileRead"] },
+        { kind: "use", functionName: "files.readText", capability: "fileRead" },
+        { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
+        { kind: "use", functionName: "files.writeText", capability: "fileWrite" },
+        { kind: "exit", name: "read" },
+      ]),
     ).toEqual({
-      wrongTags: [
-        "files.writeText used the fileWrite capability, and no raised effect is tagged with it (raised: std::read)",
+      uncovered: [
+        "files.writeText used the fileWrite capability inside read, whose tag does not name it",
       ],
-      silentUses: [],
     });
   });
 
-  it("reports a use with no raise as silent, not as a wrong tag", () => {
+  it("stops covering once the function has exited", () => {
     expect(
-      checkCapabilityLog(
-        [{ kind: "use", functionName: "subprocess.run", capability: "subprocess" }],
-        tags,
-      ),
+      checkCapabilityLog([
+        { kind: "enter", name: "read", capabilities: ["fileRead"] },
+        { kind: "exit", name: "read" },
+        { kind: "use", functionName: "files.readText", capability: "fileRead" },
+      ]),
     ).toEqual({
-      wrongTags: [],
-      silentUses: ["subprocess.run used the subprocess capability, and no effect was raised"],
+      uncovered: ["files.readText used the fileRead capability outside any function"],
     });
   });
 
-  it("ignores terminal, env, and llm uses", () => {
+  it("pops the innermost frame with the name, so recursion unwinds in order", () => {
     expect(
-      checkCapabilityLog(
-        [
-          { kind: "use", functionName: "terminal.print", capability: "terminal" },
-          { kind: "use", functionName: "env.get", capability: "env" },
-        ],
-        tags,
-      ),
-    ).toEqual({ wrongTags: [], silentUses: [] });
+      checkCapabilityLog([
+        { kind: "enter", name: "walk", capabilities: ["fileRead"] },
+        { kind: "enter", name: "walk", capabilities: ["fileRead"] },
+        { kind: "exit", name: "walk" },
+        { kind: "use", functionName: "files.list", capability: "fileRead" },
+        { kind: "exit", name: "walk" },
+      ]),
+    ).toEqual({ uncovered: [] });
   });
-});
 
-describe("effectCapabilitiesFor", () => {
-  it("reads the stdlib tags through a file's import closure", () => {
-    const tags = effectCapabilitiesFor(resolveAgencyImportPath("std::index", process.cwd()), {});
-    expect(tags["std::read"]).toEqual(["fileRead"]);
-    expect(tags["std::write"]).toEqual(["fileRead", "fileWrite"]);
+  it("checks terminal and env, and leaves llm out", () => {
+    expect(CHECKED_CAPABILITIES).toContain("terminal");
+    expect(CHECKED_CAPABILITIES).toContain("env");
+    expect(CHECKED_CAPABILITIES).not.toContain("llm");
+    expect(
+      checkCapabilityLog([
+        { kind: "enter", name: "main", capabilities: [] },
+        { kind: "use", functionName: "llm.complete", capability: "llm" },
+        { kind: "use", functionName: "terminal.print", capability: "terminal" },
+      ]),
+    ).toEqual({
+      uncovered: [
+        "terminal.print used the terminal capability inside main, whose tag does not name it",
+      ],
+    });
   });
 });

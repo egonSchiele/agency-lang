@@ -1,4 +1,5 @@
 {
+  "silentHostUse": "the agent scans the bundled docs and skills at startup with no interrupt (docsSkill, agentSkill)",
   "tests": [
     { "nodeName": "shippedSkillsResolveAndList", "description": "a shipped skills directory resolves and lists its files", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "nestedAgentSkillsResolve", "description": "a nested agent skills directory resolves", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },

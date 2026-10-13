@@ -1,4 +1,5 @@
 {
+  "silentHostUse": "the agent scans the bundled docs and skills at startup with no interrupt (docsSkill, agentSkill)",
   "tests": [
     {"nodeName": "oracleAnswers", "description": "the oracle returns its analysis as a success Result", "input": "", "expectedOutput": "\"the plan is sound, proceed\"", "evaluationCriteria": [{"type": "exact"}], "useTestLLMProvider": true, "llmMocks": [{"return": "the plan is sound, proceed"}]},
     {"nodeName": "explorerAnswers", "description": "the explorer returns its survey as a success Result", "input": "", "expectedOutput": "\"the parsers are combinator-based\"", "evaluationCriteria": [{"type": "exact"}], "useTestLLMProvider": true, "llmMocks": [{"return": "the parsers are combinator-based"}]},

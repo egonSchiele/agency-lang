@@ -96,10 +96,12 @@ before many raises, and both platforms have `llm`.
 A case that raised no effect at all and still used the host is one of the
 functions in the next section. Deciding such a function is separate from
 checking a tag, so the runner prints it as a note and the case passes. A test
-file whose cases mix such a function with an unrelated raise (the review
-agent scans the bundled docs at startup, then reads an environment
-variable) says so in a `silentHostUse` field of its `.test.json`, with the
-reason, and the runner prints the check's findings for that file as notes.
+file whose cases mix such a function with an unrelated raise says so in a
+`silentHostUse` field of its `.test.json`, with the reason, and the runner
+prints the check's findings for that file as notes. Thirteen files carry
+it: twelve run an agent that scans the bundled docs and skills at startup
+and then reads an environment variable, and one ends a `memory` block,
+which persists its frame.
 
 The check sees only what the tests run. It does not prove a tag complete.
 The agency tests run with the flag in CI (`.github/workflows/test.yml`).

@@ -1,4 +1,5 @@
 {
+  "silentHostUse": "the agent scans the bundled docs and skills at startup with no interrupt (docsSkill, agentSkill)",
   "sourceFile": "plannerReject.agency",
   "tests": [
     { "nodeName": "rejectReturnsRejectedWithoutRunning", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }

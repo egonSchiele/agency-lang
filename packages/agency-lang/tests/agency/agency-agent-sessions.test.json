@@ -1,4 +1,5 @@
 {
+  "silentHostUse": "the agent scans the bundled docs and skills at startup with no interrupt (docsSkill, agentSkill)",
   "tests": [
     {
       "nodeName": "slug",

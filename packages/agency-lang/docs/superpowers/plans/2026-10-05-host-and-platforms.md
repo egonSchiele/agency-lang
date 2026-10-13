@@ -263,7 +263,9 @@ does.
    first await), so a case that calls a deliberately silent function
    (the docs scan) and also raises an unrelated effect looks like a wrong
    tag. The runner reports a case that raised nothing as a note, and a
-   test file can say `silentHostUse` with the reason; one file needed it.
+   test file can say `silentHostUse` with the reason; thirteen files
+   needed it, nearly all agent tests whose startup scans the bundled
+   docs. CI found twelve of them: the local run covered 62 files.
    A full attribution would mean recording the frame's scope name at the
    raise and at the call, which `stack.scopeName` has but the host cannot
    reach.

@@ -23,10 +23,10 @@ import {
 
 type EffectMap = Record<string, InterruptEffect[]>;
 
-/** The diagnostics the platform setting turns on. The compile path treats
- *  them as fatal whether or not the type checker was asked for. */
+/** The diagnostic the platform setting turns on. The compile path treats
+ *  it as fatal whether or not the type checker was asked for. */
 export function isPlatformDiagnostic(error: TypeCheckError): boolean {
-  return error.name === "platformLacksCapability" || error.name === "nodeOnlyModule";
+  return error.name === "platformLacksCapability";
 }
 type CapabilityMap = Record<string, Capability[]>;
 

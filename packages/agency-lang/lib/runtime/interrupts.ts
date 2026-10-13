@@ -46,8 +46,7 @@ import { isIpcMode } from "./subprocessRunInfo.js";
 import { sendInterruptToParent } from "./ipcChild.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
 import { recordRaise } from "./capabilityLog.js";
-import { missingCapabilityFor } from "./effectCapabilities.js";
-import type { Capability } from "../host/host.js";
+import { refuseUnservable } from "./effectCapabilities.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
 import { TRACE_ID_ENV } from "../config/config.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -612,30 +611,6 @@ function renderVerdict(
   return [intr];
 }
 
-/** The rejection for an effect tagged with a capability the host lacks,
- *  with the same statelog events as a handler's rejection so a trace
- *  shows the interrupt and who settled it. */
-function refuseForHost(
-  run: Run,
-  interruptId: string,
-  interruptObj: InterruptInfo,
-  capability: Capability,
-): Rejected {
-  const { effect, message, data } = interruptObj;
-  const host = run.ctx.host;
-  run.log.interruptThrown({ interruptId, interruptData: data });
-  run.log.interruptResolved({
-    interruptId,
-    outcome: "rejected",
-    resolvedBy: "host",
-    interrupt: { effect, message, data },
-  });
-  return {
-    type: "reject",
-    value: `${effect} needs the ${capability} capability, which the ${host.name} host does not have.`,
-  };
-}
-
 export async function interruptWithHandlers<T = any>(
   run: Run,
   effect: string,
@@ -662,14 +637,12 @@ export async function interruptWithHandlers<T = any>(
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;
   const interruptId = nanoid();
-  // An effect the run's host cannot serve is rejected here, before any
-  // handler or person is asked: approving it would only let the function
-  // fail at the host. This is a check at the raise and not a handler the
-  // runtime installs, because handlers are not part of a checkpoint and a
-  // restore path that forgot to install one would let the effect through.
-  const missing = missingCapabilityFor(run.ctx.host, effect);
-  if (missing !== null) {
-    return refuseForHost(run, interruptId, interruptObj, missing);
+  // The raise is the one point that knows both the effect and the run's
+  // host, so this is where an effect tagged with a capability the host
+  // lacks is refused, before any handler or person is asked.
+  const refused = refuseUnservable(run, interruptId, interruptObj);
+  if (refused !== null) {
+    return refused;
   }
   // The origin dispatch of the distributed chain: gatherChainOutcome walks
   // the local segment and — in IPC mode — consults the parent and merges

@@ -12,6 +12,9 @@
  */
 
 import type { Capability, Host } from "../host/host.js";
+import type { Run } from "./asyncContext.js";
+import type { Rejected } from "./types.js";
+import type { InterruptInfo } from "./interrupts.js";
 
 // Null prototype: effect names are user-controlled strings.
 const capabilities: Record<string, Capability[]> = Object.create(null);
@@ -58,4 +61,41 @@ export function missingCapabilityFor(host: Host, effect: string): Capability | n
     }
   }
   return null;
+}
+
+/**
+ * The rejection for a raise of an effect the run's host cannot serve, or
+ * null when the host can. `interruptWithHandlers` calls this before it
+ * consults any handler: approving the effect would only let the function
+ * fail at the host, so nobody is asked. The statelog events are the ones
+ * a handler's rejection writes, so a trace shows the interrupt and who
+ * settled it.
+ *
+ * This reads `ctx.host`, which every restored run has. A root handler
+ * installed by the runtime would have done the same, and was set aside
+ * because handlers are not part of a checkpoint: a restore path that
+ * forgot to install it again would let the effect through.
+ */
+export function refuseUnservable(
+  run: Run,
+  interruptId: string,
+  interruptObj: InterruptInfo,
+): Rejected | null {
+  const host = run.ctx.host;
+  const capability = missingCapabilityFor(host, interruptObj.effect);
+  if (capability === null) {
+    return null;
+  }
+  const { effect, message, data } = interruptObj;
+  run.log.interruptThrown({ interruptId, interruptData: data });
+  run.log.interruptResolved({
+    interruptId,
+    outcome: "rejected",
+    resolvedBy: "host",
+    interrupt: { effect, message, data },
+  });
+  return {
+    type: "reject",
+    value: `${effect} needs the ${capability} capability, which the ${host.name} host does not have.`,
+  };
 }

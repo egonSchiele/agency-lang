@@ -41,7 +41,8 @@ export function parseCapabilityLog(text: string): CapabilityLogEntry[] {
 
 // One sink per file, so a run that raises many effects opens the file's
 // directory once.
-const sinks: Record<string, (line: string) => void> = {};
+// Null prototype: the path is a setting, which a program can set.
+const sinks: Record<string, (line: string) => void> = Object.create(null);
 
 /** Append a raise to the capability log, when the host's settings name
  *  one. Every other run does nothing here. */

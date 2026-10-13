@@ -307,3 +307,14 @@ Two declarations of the same effect carry `@capabilities` tags that name differe
 A `@capabilities` tag ended up on something other than an effect declaration, such as a function, a type, or an import. The tag says what an effect needs from the host; nothing else carries it.
 
 **How to fix:** move the tag so it sits directly above the `effect` line it describes.
+
+<a id="ag3029"></a>
+
+## AG3029 — &#123;kind&#125; '&#123;name&#125;' raises '&#123;effect&#125;', which needs the &#123;capability&#125; capability. The &#123;platform&#125; platform does not have it.
+&#123;path&#125;
+
+*Default severity: error.*
+
+The program is being compiled for a platform (`--platform`, or `platform` in agency.json) that lacks a capability one of its effects needs. The lines after the message show the calls from the node or exported function to the function that raises the effect. The browser platform, for example, has no `fileRead`, so a node that calls `read` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
+
+**How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.

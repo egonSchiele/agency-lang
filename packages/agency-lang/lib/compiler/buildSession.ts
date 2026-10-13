@@ -26,6 +26,7 @@ import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
+import { isPlatformDiagnostic } from "@/typeChecker/platformCheck.js";
 import {
   agencyImportTargets,
   buildCompiledClosure,
@@ -636,9 +637,15 @@ function runTypecheck(
   verbose: boolean,
 ): void {
   const tc = config.typechecker;
-  if (!tc?.enabled && !tc?.strict) return;
+  const checkerAsked = tc?.enabled === true || tc?.strict === true;
+  // Compiling for another platform runs the checker for the platform
+  // check alone: its findings are always fatal, and when nothing else
+  // asked for the checker, nothing else is printed.
+  const platformAsked = (config.platform ?? "node") !== "node";
+  if (!checkerAsked && !platformAsked) return;
   const tcStartTime = performance.now();
-  const { errors } = typeCheck(liftedProgram, config, info);
+  const found = typeCheck(liftedProgram, config, info).errors;
+  const errors = checkerAsked ? found : found.filter(isPlatformDiagnostic);
   const tcEndTime = performance.now();
   logTime({
     label: `Type checked ${absoluteInputFile}`,
@@ -648,11 +655,13 @@ function runTypecheck(
   });
   if (errors.length === 0) return;
   const hint = formatDiagnosticsHint(errors);
-  if (tc?.strict) {
+  const fatal = errors.some(
+    (e) => e.severity === "error" && (tc?.strict === true || isPlatformDiagnostic(e)),
+  );
+  if (fatal) {
     console.error(formatErrors(errors));
     if (hint) console.error(hint);
-    const hasFatal = errors.some((e) => e.severity === "error");
-    if (hasFatal) process.exit(1);
+    process.exit(1);
   } else {
     console.warn(formatErrors(errors));
     // warn-mode output is warnings-first; a hint only fires on error severity

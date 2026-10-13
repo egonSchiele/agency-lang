@@ -336,6 +336,10 @@ effect app::sync { path: string }
 
 **How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
 
+  platformLacksCapability: `The program is being compiled for a platform (\`--platform\`, or \`platform\` in agency.json) that lacks a capability one of its effects needs. The lines after the message show the calls from the node or exported function to the function that raises the effect. The browser platform, for example, has no \`fileRead\`, so a node that calls \`read\` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
+
+**How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.`,
+
   effectDataMissing: `The effect declares a payload, but this \`raise\`/\`interrupt\` supplied none. A declared payload is required at the raise site.
 
 **How to fix:** pass the data the effect expects.`,

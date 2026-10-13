@@ -87,6 +87,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3026](effects.md#ag3026) | @capabilities appears more than once on effect '&#123;effect&#125;'. |
 | [AG3027](effects.md#ag3027) | Conflicting @capabilities for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree. |
 | [AG3028](effects.md#ag3028) | @capabilities is only valid on an effect declaration. |
+| [AG3029](effects.md#ag3029) | &#123;kind&#125; '&#123;name&#125;' raises '&#123;effect&#125;', which needs the &#123;capability&#125; capability. The &#123;platform&#125; platform does not have it. &#123;path&#125; |
 
 ## Names, scope, and reserved words
 

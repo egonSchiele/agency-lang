@@ -492,6 +492,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "@capabilities is only valid on an effect declaration.",
   },
+  platformLacksCapability: {
+    code: "AG3029",
+    severity: "error",
+    message:
+      "{kind} '{name}' raises '{effect}', which needs the {capability} capability. The {platform} platform does not have it.\n{path}",
+  },
   effectDataMissing: {
     code: "AG3005",
     severity: "error",

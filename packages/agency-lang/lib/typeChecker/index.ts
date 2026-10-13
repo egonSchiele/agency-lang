@@ -46,7 +46,12 @@ import { checkTemplateNames } from "./templateNames.js";
 import { checkTopLevelStatements } from "./topLevelStatements.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { declareFinalizeBinders } from "./finalizeBinder.js";
-import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
+import {
+  checkEffectPayloads,
+  buildEffectRegistry,
+  buildEffectCapabilities,
+} from "./effectPayloadCheck.js";
+import { checkPlatformCapabilities } from "./platformCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { isNonTemplatedStdlib } from "../importPaths.js";
 import * as path from "node:path";
@@ -336,6 +341,18 @@ export class TypeChecker {
 
     // Check interrupt payloads against `effect` declarations (shared registry).
     checkEffectPayloads(scopes, ctx, effectRegistry);
+
+    // Every node and exported function against the platform's capabilities
+    // (config.platform). Nothing to do for Node, which has all of them.
+    if ((this.config.platform ?? "node") !== "node") {
+      checkPlatformCapabilities(
+        scopes,
+        interruptEffectsByFunction,
+        interruptCallGraph,
+        buildEffectCapabilities(ctx),
+        ctx,
+      );
+    }
 
     // Match exhaustiveness over closed value types.
     checkMatchExhaustiveness(scopes, ctx);

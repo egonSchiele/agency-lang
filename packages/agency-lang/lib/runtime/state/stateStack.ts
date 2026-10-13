@@ -1,6 +1,6 @@
 import type { Guard, GuardExceededError, GuardJSON } from "../guard.js";
 import type { HandlerEntry } from "../types.js";
-import type { ReplyAttachmentPart } from "../replyAttachments.js";
+import type { QueuedReplyAttachment } from "../replyAttachments.js";
 import { guardFromJSON, TimeGuard } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
@@ -445,16 +445,16 @@ export class StateStack {
    *  so queues cannot mix; the entry lives in `other`, which serializes,
    *  so a mid-round interrupt cannot drop it. The tool loop drains it at
    *  invocation completion — see lib/runtime/replyAttachments.ts. */
-  queueReplyAttachment(part: ReplyAttachmentPart): void {
+  queueReplyAttachment(entry: QueuedReplyAttachment): void {
     this.other.pendingReplyAttachments ??= [];
-    (this.other.pendingReplyAttachments as ReplyAttachmentPart[]).push(part);
+    (this.other.pendingReplyAttachments as QueuedReplyAttachment[]).push(entry);
   }
 
   /** Drain (return and clear) the attachments queued on this stack by
    *  queueReplyAttachment. Called by the tool loop exactly once per tool
    *  invocation, at completion. */
-  drainPendingReplyAttachments(): ReplyAttachmentPart[] {
-    const queued = (this.other.pendingReplyAttachments ?? []) as ReplyAttachmentPart[];
+  drainPendingReplyAttachments(): QueuedReplyAttachment[] {
+    const queued = (this.other.pendingReplyAttachments ?? []) as QueuedReplyAttachment[];
     delete this.other.pendingReplyAttachments;
     return queued;
   }

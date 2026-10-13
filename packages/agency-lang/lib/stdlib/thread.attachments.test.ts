@@ -107,7 +107,8 @@ describe("_attachToReply", () => {
     );
     const queued = frame.stack.drainPendingReplyAttachments();
     expect(queued).toHaveLength(1);
-    expect(queued[0].source).toEqual({
+    expect(queued[0].unreadable).toBeUndefined();
+    expect(queued[0].part.source).toEqual({
       kind: "base64",
       base64: Buffer.from([1, 2, 3, 4]).toString("base64"),
       mimeType: "image/png",
@@ -116,13 +117,34 @@ describe("_attachToReply", () => {
     expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
   });
 
-  it("queues a path it cannot read as it is, for harvest to report", async () => {
+  it("queues a missing path as it is, with the reason for harvest to report", async () => {
     const frame = frameWith(1);
     await withRun(frame, () =>
       _attachToReply({ type: "image", source: { kind: "path", path: "/pics/missing.png" } }),
     );
     const queued = frame.stack.drainPendingReplyAttachments();
-    expect(queued[0].source).toEqual({ kind: "path", path: "/pics/missing.png" });
+    expect(queued).toEqual([
+      {
+        part: { type: "image", source: { kind: "path", path: "/pics/missing.png" } },
+        unreadable: "file not found",
+      },
+    ]);
+  });
+
+  it("refuses a file over the size limit from its stat, without reading it", async () => {
+    const frame = frameWith(1, { "/pics/huge.png": new Uint8Array(21 * 1024 * 1024) });
+    const readBytes = vi.spyOn(frame.ctx.host.files, "readBytes");
+    await withRun(frame, () =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/pics/huge.png" } }),
+    );
+    const queued = frame.stack.drainPendingReplyAttachments();
+    expect(queued).toEqual([
+      {
+        part: { type: "image", source: { kind: "path", path: "/pics/huge.png" } },
+        unreadable: "too large to attach (over 20 MB)",
+      },
+    ]);
+    expect(readBytes).not.toHaveBeenCalled();
   });
 
   it("drops with a statelog error outside a tool call (never throws)", async () => {

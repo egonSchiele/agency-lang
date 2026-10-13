@@ -16,19 +16,22 @@ import {
   buildReplyUserMessage,
   appendReplyMarker,
   type HarvestedReplyAttachment,
+  type QueuedReplyAttachment,
   type ReplyAttachmentPart,
 } from "./replyAttachments.js";
 import { MAX_REPLY_ATTACHMENTS_PER_CALL } from "../config/config.js";
 
 /** An image part the way the bridge queues one: a path source already
  *  read into base64 (lib/stdlib/thread.ts, `_attachToReply`). */
-function imagePart(bytes = 1): ReplyAttachmentPart {
+function imagePart(bytes = 1): QueuedReplyAttachment {
   return {
-    type: "image",
-    source: {
-      kind: "base64",
-      base64: Buffer.alloc(bytes).toString("base64"),
-      mimeType: "image/png",
+    part: {
+      type: "image",
+      source: {
+        kind: "base64",
+        base64: Buffer.alloc(bytes).toString("base64"),
+        mimeType: "image/png",
+      },
     },
   };
 }
@@ -141,7 +144,9 @@ describe("harvestReplyAttachments", () => {
     // ~21 MB decoded → over the 20 MB cap. Base64 length ≈ bytes * 4/3.
     const big = "A".repeat(Math.ceil((21 * 1024 * 1024 * 4) / 3));
     const marker = harvestReplyAttachments({
-      queued: [{ type: "image", source: { kind: "base64", base64: big, mimeType: "image/png" } }],
+      queued: [
+        { part: { type: "image", source: { kind: "base64", base64: big, mimeType: "image/png" } } },
+      ],
       runnerState,
       model: "m",
       toolName: "t",
@@ -163,7 +168,7 @@ describe("harvestReplyAttachments", () => {
 
   it("caps the per-call total with a visible skip marker", () => {
     const runnerState: Record<string, any> = {};
-    const queued: ReplyAttachmentPart[] = [];
+    const queued: QueuedReplyAttachment[] = [];
     for (let i = 0; i < MAX_REPLY_ATTACHMENTS_PER_CALL + 1; i++) {
       queued.push(imagePart());
     }
@@ -177,12 +182,31 @@ describe("harvestReplyAttachments", () => {
   it("skips a path the bridge could not read, with an honest marker", () => {
     const runnerState: Record<string, any> = {};
     const marker = harvestReplyAttachments({
-      queued: [{ type: "image", source: { kind: "path", path: "/nonexistent-tra/missing.png" } }],
+      queued: [
+        { part: { type: "image", source: { kind: "path", path: "/nonexistent-tra/missing.png" } } },
+      ],
       runnerState,
       model: "m",
       toolName: "t",
     });
     expect(marker).toBe("\n\n[attachment img_1 skipped: file not found]");
+    expect(runnerState.replyAttachments).toEqual([]);
+  });
+
+  it("reports the reason the bridge gave for a path it did not read", () => {
+    const runnerState: Record<string, any> = {};
+    const marker = harvestReplyAttachments({
+      queued: [
+        {
+          part: { type: "image", source: { kind: "path", path: "/pics/huge.png" } },
+          unreadable: "too large to attach (over 20 MB)",
+        },
+      ],
+      runnerState,
+      model: "m",
+      toolName: "t",
+    });
+    expect(marker).toBe("\n\n[attachment img_1 skipped: too large to attach (over 20 MB)]");
     expect(runnerState.replyAttachments).toEqual([]);
   });
 });

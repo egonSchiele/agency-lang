@@ -22,6 +22,15 @@ import { success, failure, isSuccess, type ResultValue } from "./result.js";
  *  file part — the same shapes `image()` / `file()` (std::thread) build. */
 export type ReplyAttachmentPart = ImagePart | FilePart;
 
+/** What a tool queues: the part, and for a path source the bridge could
+ *  not read into bytes, the reason harvest puts in the skip marker. */
+export type QueuedReplyAttachment = { part: ReplyAttachmentPart; unreadable?: string };
+
+/** The skip reasons for a path source, decided by the bridge when the
+ *  tool queues it and reported by harvest. */
+export const SKIP_NOT_FOUND = "file not found";
+export const SKIP_TOO_LARGE = "too large to attach (over 20 MB)";
+
 export type HarvestedReplyAttachment = {
   id: string;
   toolName: string;
@@ -52,10 +61,11 @@ function estimatedBytes(part: ReplyAttachmentPart): number | null {
  *  exactly what smoltalk's own send-time gate does with `config.model`, so
  *  this pre-check can never disagree with send. */
 function gateReplyAttachment(
-  part: ReplyAttachmentPart,
+  queued: QueuedReplyAttachment,
   acceptedSoFar: number,
   model: unknown,
 ): ResultValue {
+  const part = queued.part;
   const modality = part.type === "image" ? "image" : "pdf";
   const modalityWord = part.type === "image" ? "image" : "PDF";
   // Tri-state on purpose: only an explicit catalog `false` drops the
@@ -64,15 +74,18 @@ function gateReplyAttachment(
   if (modelSupportsInputModality(model as any, modality) === false) {
     return failure(`the current model has no ${modalityWord} input`);
   }
+  // The bridge reads a path source when the tool queues it and queues
+  // the bytes, or the reason it did not. Caught at harvest so the tool
+  // result carries an honest skip marker.
+  if (queued.unreadable !== undefined) {
+    return failure(queued.unreadable);
+  }
   if (part.source.kind === "path") {
-    // The bridge reads a path source when the tool queues it and queues
-    // the bytes; a path still here is one it could not read. Caught at
-    // harvest so the tool result carries an honest skip marker.
-    return failure("file not found");
+    return failure(SKIP_NOT_FOUND);
   }
   const bytes = estimatedBytes(part);
   if (bytes !== null && bytes > MAX_REPLY_ATTACHMENT_BYTES) {
-    return failure("too large to attach (over 20 MB)");
+    return failure(SKIP_TOO_LARGE);
   }
   if (acceptedSoFar >= MAX_REPLY_ATTACHMENTS_PER_CALL) {
     return failure(
@@ -88,7 +101,7 @@ function gateReplyAttachment(
  *  of the tool loop, so it executes exactly once per tool call, including
  *  across interrupt/resume. */
 export function harvestReplyAttachments(args: {
-  queued: ReplyAttachmentPart[];
+  queued: QueuedReplyAttachment[];
   runnerState: Record<string, any>;
   model: unknown;
   toolName: string;
@@ -103,11 +116,11 @@ export function harvestReplyAttachments(args: {
   const buffer = runnerState[BUFFER_KEY] as HarvestedReplyAttachment[];
 
   const lines: string[] = [];
-  for (const part of queued) {
+  for (const entry of queued) {
     const id = `img_${++runnerState[COUNTER_KEY]}`;
-    const gate = gateReplyAttachment(part, buffer.length, model);
+    const gate = gateReplyAttachment(entry, buffer.length, model);
     if (isSuccess(gate)) {
-      buffer.push({ id, toolName, part });
+      buffer.push({ id, toolName, part: entry.part });
       lines.push(`[attached ${id} — delivered in the user message following these tool results]`);
     } else {
       lines.push(`[attachment ${id} skipped: ${gate.error}]`);

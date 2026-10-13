@@ -15,7 +15,12 @@ import type { Host } from "../host/host.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { encodeBase64 } from "./base64.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
-import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
+import {
+  SKIP_NOT_FOUND,
+  SKIP_TOO_LARGE,
+  type QueuedReplyAttachment,
+  type ReplyAttachmentPart,
+} from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
@@ -261,8 +266,8 @@ export function _audioAttachment(
  *
  *  A path source is read here, through the host, and queued as base64,
  *  so the queue holds the bytes the tool meant and no later step reads
- *  the disk. A path that cannot be read is queued as it is, and harvest
- *  reports it as not found. */
+ *  the disk. A path that is missing or over the size limit is queued
+ *  with the reason, which harvest puts in the skip marker. */
 export async function _attachToReply(attachment: unknown): Promise<void> {
   const frame = currentRunOrNone();
   if (!frame?.stack) {
@@ -282,27 +287,39 @@ export async function _attachToReply(attachment: unknown): Promise<void> {
 }
 
 /** The part with a path source read into base64, or the part as it is
- *  for every other source and for a path that cannot be read. */
+ *  for every other source. The size is checked from `stat` before the
+ *  read, so a tool pointing at a huge file costs nothing to refuse. A
+ *  path that is missing, not a file, or too large keeps its path source
+ *  and carries the reason. */
 async function inlinePathSource(
   host: Host,
   part: ReplyAttachmentPart,
-): Promise<ReplyAttachmentPart> {
+): Promise<QueuedReplyAttachment> {
   if (part.source.kind !== "path") {
-    return part;
+    return { part };
   }
   const filePath = part.source.path;
   let bytes: Uint8Array;
   try {
     const located = await host.files.wholePath(filePath);
+    const stat = await host.files.stat(located.root, located.target);
+    if (stat === null || stat.kind !== "file") {
+      return { part, unreadable: SKIP_NOT_FOUND };
+    }
+    if (stat.size > MAX_REPLY_ATTACHMENT_BYTES) {
+      return { part, unreadable: SKIP_TOO_LARGE };
+    }
     bytes = await host.files.readBytes(located.root, located.target);
   } catch {
-    return part;
+    return { part, unreadable: SKIP_NOT_FOUND };
   }
   const mimeType =
     part.source.mimeType ??
     MIME_TYPES[path.extname(filePath).toLowerCase()] ??
     (part.type === "image" ? "image/png" : "application/pdf");
-  return { ...part, source: { kind: "base64", base64: encodeBase64(bytes), mimeType } };
+  return {
+    part: { ...part, source: { kind: "base64", base64: encodeBase64(bytes), mimeType } },
+  };
 }
 
 /** Backs `std::thread.endTurn`. Marks the current tool invocation so the

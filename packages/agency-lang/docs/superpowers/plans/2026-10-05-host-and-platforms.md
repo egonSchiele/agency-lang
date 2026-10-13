@@ -289,6 +289,13 @@ does.
    highlight.js part shrinks to tens of KB by importing
    `highlight.js/lib/core` and registering the languages Agency
    highlights, or by moving `syntaxHighlight` out of the prelude.
+8. **Moving a read also moves its guards.** The reply attachment read
+   went from harvest to the bridge, and the `fs.statSync` size check
+   that harvest did before reading did not go with it: the first draft
+   read the whole file, encoded it, and only then let harvest measure
+   the base64. Review caught it. The bridge now checks `host.files.stat`
+   before `readBytes`, and the queue entry carries the skip reason, so
+   harvest reports "too large" and not "file not found".
 
 ### What PR F1 learned
 

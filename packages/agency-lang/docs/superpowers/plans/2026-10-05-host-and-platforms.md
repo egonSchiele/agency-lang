@@ -280,10 +280,15 @@ does.
 6. **`fixedPath` is not for reading a file a tool named.** It refuses a
    link anywhere in the spelling, and `/tmp` is one on macOS. `wholePath`
    is the read of a program-chosen path: the real parent, plus the name.
-7. **The bundle is 3.3 MB unminified.** By module count, highlight.js
-   (193 files, through `std::syntax` and the markdown renderer) and zod
-   (88) are most of it; an app that minifies and tree-shakes will see
-   less.
+7. **The bundle is 3.4 MB unminified, 2.0 MB minified, 525 KB minified
+   and gzipped.** By bytes: highlight.js 1,471 KB (every grammar it ships,
+   because `lib/stdlib/syntax.ts` imports its full entry and `std::index`
+   re-exports `syntaxHighlight`, so every program carries it), zod 528 KB
+   (zod 4's full entry), `lib/runtime` 440 KB, parse5 341 KB (through
+   tarsec's markdown parser), the compiled `stdlib/index.js` 180 KB. The
+   highlight.js part shrinks to tens of KB by importing
+   `highlight.js/lib/core` and registering the languages Agency
+   highlights, or by moving `syntaxHighlight` out of the prelude.
 
 ### What PR F1 learned
 

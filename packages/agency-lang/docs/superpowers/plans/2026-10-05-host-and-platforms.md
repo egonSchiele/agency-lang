@@ -38,8 +38,8 @@ left ships as a few large PRs, each one topic, in dependency order.
 | E1 | Platform, working directory, and home directory reads move to `host.system`; env reads by name to `host.settings` | Task 35 (part) | merged, #1188 |
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
 | F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | merged, #1191 |
-| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | open |
-| F3 | The `@capabilities` tag on every `std::` effect, checked against the code; `--platform` and the config field; the compile-time check; Node-only stdlib modules; refusing before the prompt | 17, 18 | |
+| F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | merged, #1192 |
+| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; AG7009 for the sixteen Node-only stdlib modules; the refusal at the raise | 17, 18 | open |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -242,6 +242,48 @@ does.
    builds the `FileSink`; Task 20 moves that behind `host.files`, and until
    then `traceWriter.ts` stays on the waiting list for that import and for
    `path`.
+
+### What PR F3 learned
+
+1. **A tag with no arguments is written bare.** The formatter writes any
+   tag with no arguments as `@name`, and `make` formats the stdlib, so
+   `@capabilities()` from the spec became `@capabilities` in the files.
+   The parser accepts both.
+2. **The stdlib has 143 effects, not 300.** Seventeen of them are
+   `std::git::*` and eighteen `std::github::*`; the spec's estimate counted
+   something else.
+3. **A tag is the whole function, not the code after the raise.** The
+   runtime check records every host call a test made and compares it with
+   the tags of the effects raised, with no way to tell a call before the
+   raise from one after. So the github effects carry `subprocess` and
+   `env` for the `git remote` and `gh auth token` fallbacks, and every
+   write carries `fileRead` for the root it resolves first.
+4. **The check cannot attribute a host call to a function.** The host's
+   `onUse` has no run (`currentRun()` is only right before a function's
+   first await), so a case that calls a deliberately silent function
+   (the docs scan) and also raises an unrelated effect looks like a wrong
+   tag. The runner reports a case that raised nothing as a note, and a
+   test file can say `silentHostUse` with the reason; one file needed it.
+   A full attribution would mean recording the frame's scope name at the
+   raise and at the call, which `stack.scopeName` has but the host cannot
+   reach.
+5. **The checker does not follow a call through a variable.** `const f =
+   read; f("a")` reaches no effect list; passing `f` on does. That is a
+   limit of effect propagation, recorded in its doc, and the plan's test
+   for "a function stored in a variable" became the passed-on form.
+6. **`read` is refused before it raises.** It resolves its path through
+   the host first, so on the browser host `files.locate` refuses it and
+   the raise-time check never sees `std::read`. The raise-time check
+   matters for the functions that raise first (`exec`, `bash`, `env`,
+   the network effects), where it keeps the approval prompt from being
+   asked for work that would then fail.
+7. **`pack` and `bundle` do not take `--platform`.** `pack` has
+   `--target node` and can only produce a Node bundle; `bundle` is the
+   trace bundle command. The flag is on `compile` and `typecheck`.
+8. **The compile path gates the checker on `typechecker.enabled`.**
+   `--platform browser` has to run it anyway, so `runTypecheck` runs the
+   checker for the platform findings alone when nothing else asked, and
+   treats them as fatal in warn mode too.
 
 ### What PR F2 learned
 

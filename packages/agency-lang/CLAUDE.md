@@ -221,6 +221,7 @@ Other process docs:
 ### Language semantics and syntax features
 
 - `docs/dev/language/agency-function.md` — The wrapper codegen emits around every Agency `def`. Covers tool metadata, argument resolution, and block arguments.
+- `docs/dev/language/capabilities.md` — The `@capabilities` tag on an effect declaration: the seven names, the diagnostics, how the stdlib tags were decided, `agency test --check-capabilities` and the capability log, the functions that use the host and raise nothing, `--platform` and the compile-time check with its call path, the Node-only stdlib modules, and the refusal at the raise before any handler is asked.
 - `docs/dev/language/closures-and-lambdas.md` — Why Agency has blocks and first-class functions but no lambdas, and what makes adding them hard.
 - `docs/dev/language/effect-patterns.md` — Naming an interrupt effect in a `match` arm and destructuring its payload, how it lowers, and its limits.
 - `docs/dev/language/handoff-functions.md` — `handoff def`: a function that continues its caller's conversation when called as a tool, the marker and resume messages that replace its tool-call bookkeeping, the one-per-round rule, and `endTurn` and `handBack`: how a tool ends the caller's `llm()` call or replaces the hand-back message, which marks count, the fallbacks, and the `scope` argument.

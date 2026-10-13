@@ -918,9 +918,10 @@ on them. The new check sits beside it.
 right for an effect a user declares and raises in plain Agency code.
 
 **Every `std::` effect must carry the tag.** An effect that needs nothing
-writes `@capabilities()`. A test enforces this, the way
-`lib/prelude.test.ts` checks prelude names. The stdlib has about 300
-effect declarations.
+writes `@capabilities`, with no parentheses, which is how the formatter
+writes a tag with no arguments. A test enforces this, the way
+`lib/prelude.test.ts` checks prelude names. The stdlib has 143 effect
+declarations.
 
 An effect whose behaviour on a host is undecided is tagged with what its
 code uses today. `std::memory::recall` reads the disk, so it is tagged
@@ -968,8 +969,10 @@ one is read before it changes.
 agency compile --platform browser app.agency
 ```
 
-`compile`, `typecheck`, `bundle`, and `pack` take the flag. `run`
-always runs on Node and does not.
+`compile` and `typecheck` take the flag. `run` always runs on Node and
+does not. `pack` keeps its `--target node`, because it can only produce a
+Node bundle, and `bundle` is the trace bundle command, so neither takes
+it.
 
 The same setting can go in `agency.json`:
 

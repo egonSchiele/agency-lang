@@ -36,7 +36,7 @@ The host has two kinds of part.
 
 `system` also holds what a process does rather than knows: `exit(code)`, which `lib/runtime/exitProcess.ts` calls after the pending log requests are sent; `setTitle(title)`, the process name `ps` shows; `parentChannel()`, the IPC channel to the parent when Agency forked this process for a subprocess run (null otherwise), which the callback and usage forwarders send on; and `onExit(fn)`, for the coverage collector's write at the end. These are per process, not per run, so a caller asks `defaultHost()` for them.
 
-`PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree.
+`PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree. An effect declaration names the capabilities its function needs with the `@capabilities` tag; the compiler checks them against the platform (`--platform`), and the runtime refuses a raise the run's host cannot serve before any handler is asked. `docs/dev/language/capabilities.md` has both.
 
 ### `env` and `settings` read the same variables
 
@@ -128,7 +128,7 @@ A test of a helper that runs a fixed program mocks `lib/host/node/nodeSubprocess
 
 `lib/host/node/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`, and `lib/host/default.browser.ts` one that returns a plain `browserHost`. The runtime imports `#default-host`, an entry in the `imports` field of `package.json` that resolves to the Node file by default and to the browser file under the `browser` condition, which esbuild applies when it bundles with `--platform=browser`. `running-without-node.md` explains the mechanism and the three places that have to know about each entry. An app in a browser that wants the program to see its own variables and terminal passes a `browserHost` of its own: the generated `main({ host })` forwards it through `InvocationOptions`.
 
-`default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, read once per process, which becomes the host's network part (`fetchMock` in `lib/runtime/fetchMock.ts`); the global `fetch` is left alone. `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
+`default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, read once per process, which becomes the host's network part (`fetchMock` in `lib/runtime/fetchMock.ts`); the global `fetch` is left alone. `AGENCY_CAPABILITY_LOG` names a file the host appends a line to for every capability function it runs, through `makeHost`'s `onUse`, which is how `agency test --check-capabilities` compares the `@capabilities` tags with the code (`docs/dev/language/capabilities.md`). `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
 
 ## How code reaches the host
 

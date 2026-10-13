@@ -257,7 +257,7 @@ those for the full per-field commentary.
 | `outDir` | `string` | Output directory for compiled files |
 | `distDir` | `string` | Directory of pre-compiled JS. The debugger imports from here instead of compiling on the fly. |
 | `allowNonAgencyGenerators` | `boolean` | Let a compile-time splice generator import JavaScript. Off by default, because a generator that reaches an npm package is unchecked. See [`docs/dev/language/splices.md`](../language/splices.md). |
-| `platform` | `"node" \| "browser"` | The platform to check the program against (default: `node`). An effect that needs a capability the platform lacks, or an import of a Node-only stdlib module, is a compile error. See [`docs/dev/language/capabilities.md`](../language/capabilities.md). |
+| `platform` | `"node" \| "browser"` | The platform to check the program against (default: `node`). An effect that needs a capability the platform lacks is a compile error. See [`docs/dev/language/capabilities.md`](../language/capabilities.md). |
 | `instrument` | `boolean` | Emit `debugStep()` instrumentation in compiled output (default: true) |
 | `debugger` | `boolean` | Inert. `agency debug` sets it, but nothing reads it. `instrument` is the flag that controls `debugStep()` emission. |
 

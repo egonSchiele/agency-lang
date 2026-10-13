@@ -39,7 +39,7 @@ left ships as a few large PRs, each one topic, in dependency order.
 | E2 | Module fingerprints without `statSync` | 14 (Task 31) | merged, #1189 |
 | F1 | `WAITING` 39 → 6: the `lib/host/node/` rename, `env.all()` for a child's environment, random bytes through the host, terminal size and colour on `host.terminal`, exit and IPC through `host.system`, `readAll`, `setTitle`, and `locate`, a `NODE_ONLY` reason for 38 files, and the reach lint's import check made to work | Task 35 | merged, #1191 |
 | F2 | The browser platform: `browserHost`, `default.browser.ts`, `lib/runtime/browser.ts` over `portable.ts`, `#platform`, the nine seams cut, the six `WAITING` files moved, the exceptions lists deleted, the bundle check and the headless smoke test in CI, and the smoltalk and tarsec stand-ins | 15 | merged, #1192 |
-| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; AG7009 for the sixteen Node-only stdlib modules; the refusal at the raise | 17, 18 | open |
+| F3 | The `@capabilities` tag on every `std::` effect, checked against the code with `agency test --check-capabilities`; `platform` in the config and `--platform` on `compile` and `typecheck`; AG3029 with the call path; the refusal at the raise | 17, 18 | open |
 
 The headings below keep their stage numbers, so a task can still be
 named by them. Keep one commit per stage inside a PR, in the order the
@@ -245,10 +245,12 @@ does.
 
 ### What PR F3 learned
 
-1. **A tag with no arguments is written bare.** The formatter writes any
-   tag with no arguments as `@name`, and `make` formats the stdlib, so
-   `@capabilities()` from the spec became `@capabilities` in the files.
-   The parser accepts both.
+1. **The formatter dropped the parentheses of an empty tag.** It wrote
+   every tag with no arguments as `@name`, and `make` formats the stdlib,
+   so `@capabilities()` would not have survived a build. The parser now
+   records whether the parentheses were written, and the formatter keeps
+   them, so the docs show `@capabilities()` for an effect that needs
+   nothing.
 2. **The stdlib has 143 effects, not 300.** Seventeen of them are
    `std::git::*` and eighteen `std::github::*`; the spec's estimate counted
    something else.
@@ -286,6 +288,11 @@ does.
    `--platform browser` has to run it anyway, so `runTypecheck` runs the
    checker for the platform findings alone when nothing else asked, and
    treats them as fatal in warn mode too.
+9. **A list of Node-only stdlib modules in the compiler did not survive
+   review.** Task 42 as written was a second list kept in step by a test,
+   and it said nothing about a user's own TypeScript imports. It came out
+   again; the bundler reports those imports today, and the spec records a
+   tag on import statements as the follow-up.
 
 ### What PR F2 learned
 

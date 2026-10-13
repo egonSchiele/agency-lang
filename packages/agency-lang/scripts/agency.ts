@@ -220,7 +220,7 @@ type CliDependencies = {
 
 /** One spelling of `--platform` for every command that offers it. */
 const DESC_PLATFORM =
-  "Check the program against this platform's capabilities (node or browser; default node). An effect that needs a capability the platform lacks, or an import of a Node-only stdlib module, is a compile error";
+  "Check the program against this platform's capabilities (node or browser; default node). An effect that needs a capability the platform lacks is a compile error";
 
 function parsePlatform(value: string): Platform {
   if (value === "node" || value === "browser") {

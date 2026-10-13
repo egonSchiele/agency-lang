@@ -90,13 +90,3 @@ A `static` initializer calls a function that can raise an interrupt. A static in
 This is the same problem as writing `interrupt` directly in the initializer, one call away.
 
 **How to fix:** move the call into a node body, or answer the interrupt where it is raised: `static const home = env("HOME") with approve`.
-
-<a id="ag7009"></a>
-
-## AG7009 — '&#123;module&#125;' works only on Node. The &#123;platform&#125; platform cannot import it.
-
-*Default severity: error.*
-
-The program imports a standard library module that only works on Node, and it is being compiled for another platform (`--platform`, or `platform` in agency.json). `std::ui` drives a terminal in raw mode; `std::agency` compiles and runs Agency code in a child process; `std::agency/local` manages model files and server processes. None of these raise an effect, so the per-effect capability check cannot catch them, and the compiler refuses the import instead.
-
-**How to fix:** take the import out of the program for that platform, or compile for Node.

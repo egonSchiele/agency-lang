@@ -17,13 +17,12 @@ an effect's function asks the host for, so the compiler can refuse a program
 before it is run on a platform that cannot serve it, and the runtime can
 refuse a raise before anyone is asked to approve it.
 
-The user-facing description is the "What an effect needs from the host"
-section of `docs/site/guide/effects.md`. This doc is for changing the
+The user-facing description is `docs/site/guide/capabilities.md`. This doc is for changing the
 mechanism.
 
 ## The tag
 
-`lib/utils/capabilitiesTag.ts` reads the tag: `readCapabilities(tags)`
+`lib/typeChecker/capabilitiesTag.ts` reads the tag: `readCapabilities(tags)`
 returns whether a `@capabilities` tag is present, the names it carries, and
 any problems. The parser needs nothing new; a tag is a tag, and the
 preprocessor attaches it to the effect declaration like `@alwaysUnder`.
@@ -42,14 +41,16 @@ beside the `@always` checks:
   guide shows.
 - The tag sits above an effect declaration and nothing else (AG3028).
 
-A tag with no names is written `@capabilities`. That is how the formatter
-writes any tag with no arguments, and `make` formats the stdlib, so
-`@capabilities()` would not survive a build. The names mean something only
-inside the tag: a program can name a variable `network`.
+A tag with no names is written `@capabilities()`. The parser records
+whether a tag's parentheses were written (`parentheses` on the `Tag`
+node), and the formatter writes them back, so `make`, which formats the
+stdlib, keeps the spelling; a bare `@capabilities` means the same thing.
+The names mean something only inside the tag: a program can name a
+variable `network`.
 
 **Every `std::` effect carries the tag.** `lib/stdlibCapabilities.test.ts`
 parses every stdlib file and fails on an untagged one. An effect whose
-function calls nothing on the host writes `@capabilities`; seven do
+function calls nothing on the host writes `@capabilities()`; seven do
 (`std::question`, `std::agents::planApprove`, `std::aws::s3::presignGet`,
 `std::exit`, `std::memory::disableMemory`, `std::toolbox::review`,
 `std::skills::review`).
@@ -98,13 +99,15 @@ functions in the next section. Deciding such a function is separate from
 checking a tag, so the runner prints it as a note and the case passes. A test
 file whose cases mix such a function with an unrelated raise says so in a
 `silentHostUse` field of its `.test.json`, with the reason, and the runner
-prints the check's findings for that file as notes. Thirteen files carry
-it: twelve run an agent that scans the bundled docs and skills at startup
-and then reads an environment variable, and one ends a `memory` block,
-which persists its frame.
+prints the check's findings for that file as notes. The files that carry
+it run an agent that scans the bundled docs and skills at startup and
+then reads an environment variable, or end a `memory` block, which
+persists its frame.
 
 The check sees only what the tests run. It does not prove a tag complete.
 The agency tests run with the flag in CI (`.github/workflows/test.yml`).
+`CHECKED_CAPABILITIES` is every name in `CAPABILITIES` minus the three
+above, so a new capability is checked unless someone leaves it out.
 
 ## Functions that use the host and raise nothing
 
@@ -114,9 +117,9 @@ nothing to tag. Each one has one of three answers:
 1. **It uses a part every host provides**, so there is nothing to refuse:
    `cwd`, `args`, `setTitle` (`host.system`), `sleep` and `std::date`
    (`host.clock`), `spillDir` (`host.system`).
-2. **It should have raised an effect all along.** None has been given one
-   in this round; a new effect changes what a user is asked to approve and
-   is decided per function.
+2. **It should have raised an effect all along.** None has one yet; a new
+   effect changes what a user is asked to approve and is decided per
+   function.
 3. **It stays as it is, and a host without the capability refuses it at
    run time** with an `UnsupportedOnHostError` that becomes the call's
    failure: `stat`, `exists`, and `which` in `std::shell`; `isTTY`,
@@ -173,29 +176,26 @@ Node 'main' raises 'std::read', which needs the fileRead capability. The browser
   loadNotes calls read from std::index (notes.agency:4), which raises std::read
 ```
 
-A function called through a variable it was assigned to (`const f = read;
-f("a")`) is a limit of effect propagation itself
-(`docs/dev/compiler/effect-propagation.md`): the checker does not follow
-it, so the compile-time check does not either. The runtime refusal still
-holds.
+The checker does not follow a call through a variable the function was
+assigned to (`const f = read; f("a")`), a limit of effect propagation
+(`docs/dev/compiler/effect-propagation.md`), so the compile-time check
+does not see it either. The runtime refusal still holds.
 
 `compile` runs the checker for this check alone when the platform asks for
 it (`runTypecheck` in `lib/compiler/buildSession.ts`): when nothing else
 asked for the checker, only the platform findings are printed, and they are
 fatal whether or not `typechecker.strict` is set.
 
-### Node-only stdlib modules
+### What the check does not cover
 
-A few stdlib modules import a TypeScript helper on the `NODE_ONLY` list in
-`eslint.node-exceptions.mjs`, so no browser bundle can hold them, and most
-of their functions raise no effect for the per-effect check to see.
-`NODE_ONLY_STDLIB_MODULES` in `lib/typeChecker/nodeOnlyModules.ts` names
-them, and importing one when the platform is not `node` is AG7009 on the
-import line. `nodeOnlyModules.test.ts` derives the list from the stdlib
-sources and the lint list and fails when the two differ. It is the direct
-imports only; a module that reaches a Node-only helper through another
-stdlib module is the bundler's to report, as is any TypeScript file a
-program imports.
+A stdlib module that only works on Node for a reason other than its
+effects (`std::ui` drives a terminal in raw mode, `std::agency/local`
+manages server processes) is not caught here, since most of its functions
+raise nothing. Nor is a TypeScript file the program imports that reaches
+`fs` itself. Both are reported when the program is bundled for the
+browser, which is where the `fs` import fails today. A tag on an import
+statement would let the compiler report them first; the spec's section 6
+records that as follow-up work.
 
 ## Refusing before the approval prompt
 
@@ -207,20 +207,21 @@ call at module load (`lib/backends/typescriptBuilder.ts`, the
 checkpointed; a resume re-imports the modules and re-registers.
 
 `interruptWithHandlers` (`lib/runtime/interrupts.ts`) calls
-`missingCapabilityFor(run.ctx.host, effect)` before it consults any
-handler. When a capability is missing, the raise is rejected with the same
-result a handler's rejection gives, and a reason that names the capability
-and the host: `std::exec needs the subprocess capability, which the browser
-host does not have.` The statelog events are the ones a handler's rejection
-writes, with `resolvedBy: "host"`. For an effect the host serves, nothing
-changes: every handler runs and can still reject.
+`refuseUnservable` (in `effectCapabilities.ts`) before it consults any
+handler. The raise is the one point that knows both the effect and the
+run's host. When a capability is missing, the raise is rejected with the
+same result a handler's rejection gives, and a reason that names the
+capability and the host: `std::exec needs the subprocess capability, which
+the browser host does not have.` The statelog events are the ones a
+handler's rejection writes, with `resolvedBy: "host"`. For an effect the
+host serves, nothing changes: every handler runs and can still reject.
 
-The runtime does this with a check at the raise. A handler installed by
-the runtime would have been the other way, and it was set aside because
-handlers are not part of a checkpoint: every path that restores a run
-would have to install the root handler again, and one that forgot would
-let the effect through to the approval prompt. The check reads `ctx.host`,
-which every restored run has. `tests/agency-js/host-capability-refusal`
+A handler installed by the runtime at the root would have been the other
+way to refuse. It was set aside because handlers are not part of a
+checkpoint: every path that restores a run would have to install the root
+handler again, and one that forgot would let the effect through to the
+approval prompt. The check reads `ctx.host`, which every restored run
+has. `tests/agency-js/host-capability-refusal`
 runs both forms of a raise on a memory host without `subprocess`, checks
 the handler never ran, and resumes a checkpoint taken on a full host onto
 one without the capability.
@@ -229,11 +230,10 @@ one without the capability.
 
 | File | What |
 | --- | --- |
-| `lib/utils/capabilitiesTag.ts` | reads the tag; the closest-name suggestion |
+| `lib/typeChecker/capabilitiesTag.ts` | reads the tag; the closest-name suggestion |
 | `lib/typeChecker/effectPayloadCheck.ts` | the tag diagnostics and `buildEffectCapabilities` |
 | `lib/typeChecker/platformCheck.ts` | AG3029 and the call path |
-| `lib/typeChecker/nodeOnlyModules.ts` | AG7009 and `NODE_ONLY_STDLIB_MODULES` |
 | `lib/compiler/buildSession.ts` | `runTypecheck`, which runs the check for `compile` |
-| `lib/runtime/effectCapabilities.ts` | the runtime registry and `missingCapabilityFor` |
+| `lib/runtime/effectCapabilities.ts` | the runtime registry and `refuseUnservable` |
 | `lib/runtime/capabilityLog.ts`, `lib/cli/capabilityCheck.ts` | `--check-capabilities` |
 | `lib/stdlibCapabilities.test.ts` | every `std::` effect is tagged |

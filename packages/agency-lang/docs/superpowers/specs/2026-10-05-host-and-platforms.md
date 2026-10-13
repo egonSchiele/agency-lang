@@ -918,10 +918,9 @@ on them. The new check sits beside it.
 right for an effect a user declares and raises in plain Agency code.
 
 **Every `std::` effect must carry the tag.** An effect that needs nothing
-writes `@capabilities`, with no parentheses, which is how the formatter
-writes a tag with no arguments. A test enforces this, the way
-`lib/prelude.test.ts` checks prelude names. The stdlib has 143 effect
-declarations.
+writes `@capabilities()`; the formatter keeps the parentheses a tag was
+written with. A test enforces this, the way `lib/prelude.test.ts` checks
+prelude names. The stdlib has 143 effect declarations.
 
 An effect whose behaviour on a host is undecided is tagged with what its
 code uses today. `std::memory::recall` reads the disk, so it is tagged
@@ -1079,17 +1078,37 @@ Phase 8 goes through the list. Each function gets one of three answers.
 3. **It stays as it is.** A host without the capability refuses it at run
    time.
 
-### Stdlib modules that are Node-only as a whole
+### Imports that only work on one platform (follow-up)
 
-A few stdlib modules cannot work without Node, and their functions raise
-no effect. `std::ui` drives a terminal in raw mode. `std::agency/local`
+A few stdlib modules cannot work without Node for a reason other than
+their effects. `std::ui` drives a terminal in raw mode. `std::agency/local`
 manages model files and server processes. `std::agency` compiles Agency
-code.
+code. A TypeScript file a program imports can reach `fs` the same way.
+Today the compiler does not see any of this; the bundler reports the `fs`
+import when the program is built for the browser.
 
-The compiler keeps a list of these module names in TypeScript. Importing
-one when the platform is `browser` is a compile error. This adds no
-syntax to the language. A test derives the list from the lint rule's
-Node-only array, as section 3 describes.
+PR F3 tried a list of Node-only module names in the compiler, derived from
+the lint rule's Node-only array by a test, and took it out: a second list
+to keep in step, and one that said nothing about a user's own imports.
+
+The replacement is a tag on an import statement, in a later PR:
+
+```
+@platform(node)
+import { repl } from "std::ui"
+
+@capabilities(network)
+import { search } from "./search.ts"
+```
+
+The compiler reads it the way it reads an effect's tag. `@platform` names
+the platforms the import works on; `@capabilities` names what the imported
+code uses directly, for a TypeScript file that calls `fetch` itself rather
+than `host.network`. Under `--platform browser`, an import tagged for Node
+alone is an error at the import, and the capabilities on an import join
+the effect check. The stdlib tags its own `stdlib-lib` imports, which is
+where the Node-only modules come from, so the list is in the source that
+needs it.
 
 ## 7. The browser entry point
 

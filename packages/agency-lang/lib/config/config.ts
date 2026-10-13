@@ -80,8 +80,7 @@ export interface AgencyConfig {
    * `"browser"`. It turns on a check and changes nothing in the code the
    * compiler emits: a node or exported function that can raise an effect
    * tagged with a capability the platform lacks (`PLATFORM_CAPABILITIES`
-   * in lib/host/host.ts) fails to compile, and so does an import of a
-   * stdlib module that only works on Node. `--platform` on `compile` and
+   * in lib/host/host.ts) fails to compile. `--platform` on `compile` and
    * `typecheck` sets it. See docs/dev/language/capabilities.md.
    */
   platform?: Platform;

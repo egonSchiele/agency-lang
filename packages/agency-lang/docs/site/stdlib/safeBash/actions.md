@@ -237,9 +237,9 @@ Run a command string through bash and return what it printed.
 
 **Throws:** `std::spill::write`
 
-**Needs:** `fileRead`, `fileWrite`
+**Needs:** `fileRead`, `subprocess`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
 
 ### runWrite
 
@@ -264,4 +264,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L161))

@@ -173,7 +173,7 @@ export def registerLocalProvider() {
   _registerLocalProvider()
 }
 
-@capabilities(fileRead)
+@capabilities(fileRead, fileWrite, network)
 export def registerLocalModel(value: string, cacheDir: string = ""): string {
   """
   Register the provider and ensure the model is downloaded. Returns the local

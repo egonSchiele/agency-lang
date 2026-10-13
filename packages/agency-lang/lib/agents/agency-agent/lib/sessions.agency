@@ -45,6 +45,7 @@ export def newSessionId(): string {
 }
 
 /** Every saved session for this directory, most recently saved first. */
+@capabilities(fileRead)
 export def listSessions(): SessionRecord[] {
   return _listSessions(projectDir())
 }
@@ -62,6 +63,7 @@ export def findSession(id: string): SessionRecord | null {
 }
 
 /** Write the session's checkpoint and record files. */
+@capabilities(fileRead, fileWrite)
 export def saveSession(record: SessionRecord, checkpoint: any): Result {
   const error = _saveSession(projectDir(), record, checkpoint)
   if (error != "") {
@@ -72,6 +74,7 @@ export def saveSession(record: SessionRecord, checkpoint: any): Result {
 
 /** The saved checkpoint, parsed, or null when the file is missing or
   malformed. */
+@capabilities(fileRead)
 export def readCheckpointFile(id: string): any {
   return _readCheckpointFile(projectDir(), id)
 }

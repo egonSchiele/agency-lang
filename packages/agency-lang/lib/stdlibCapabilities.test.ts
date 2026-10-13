@@ -63,7 +63,6 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "walk",
     "renderForCli",
     "renderForHtml",
-    "render",
     "tag",
     "setTags",
     "getTags",

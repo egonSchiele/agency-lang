@@ -349,7 +349,7 @@ Register the provider and ensure the model is downloaded. Returns the local
 
 **Returns:** `string`
 
-**Needs:** `fileRead`
+**Needs:** `fileRead`, `fileWrite`, `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L177))
 

@@ -469,6 +469,7 @@ export def box(
   }
 }
 
+@capabilities(terminal)
 export def render(
   node: LayoutNode,
   color: "auto" | boolean = "auto",

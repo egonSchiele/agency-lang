@@ -1332,7 +1332,7 @@ def requestSchemaOf(settings: DraftSettings): Result<Json> {
   return success(ran.value.data)
 }
 
-@capabilities(fileRead)
+@capabilities(fileRead, fileWrite)
 def saveTool(
   root: string,
   name: string,

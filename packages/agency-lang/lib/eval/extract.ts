@@ -237,8 +237,7 @@ function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): 
     resolvedByRaw === "handler" ||
     resolvedByRaw === "user" ||
     resolvedByRaw === "policy" ||
-    resolvedByRaw === "ipc" ||
-    resolvedByRaw === "host"
+    resolvedByRaw === "ipc"
       ? resolvedByRaw
       : null;
   return {

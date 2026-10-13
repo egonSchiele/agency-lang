@@ -175,7 +175,7 @@ export type InterruptEntry = {
    *  and PR #735 may say "passed" where they mean "unresolved" — the short
    *  window where the extractor mapped no-decision to "passed". */
   outcome: "approved" | "rejected" | "propagated" | "passed" | "unresolved";
-  resolvedBy: "handler" | "user" | "policy" | "ipc" | "host" | null;
+  resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
   thrownAtMs: number | null;
   resolvedAtMs: number | null;
 };

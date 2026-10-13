@@ -512,6 +512,7 @@ export def setPolicy(path: string, policy: Policy) {
  * when the path is trusted. Otherwise restrict it to a known
  * directory like `["/home/you/.myapp"]`.
  */
+@capabilities(fileRead, fileWrite)
 export def writePolicyFile(
   path: string,
   policy: Policy,
@@ -624,6 +625,7 @@ def maybeFlush() {
  * show the user what their file lacks and add it when they say so.
  * Neither runs on its own, and nothing is added without being asked for.
  */
+@capabilities(fileRead)
 export def missingPolicyRules(base: Policy): Policy {
   """
   The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by effect. An effect the active policy already decides with a rule that has no `match` is left out, because a rule added after it could never match.
@@ -634,6 +636,7 @@ export def missingPolicyRules(base: Policy): Policy {
   return _missingPolicyRules(_policy ?? {}, base)
 }
 
+@capabilities(fileRead, fileWrite)
 export def addPolicyRules(additions: Policy) {
   """
   Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. When the write fails, the active policy is left as it was and the failure is returned. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.

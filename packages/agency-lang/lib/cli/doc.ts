@@ -18,6 +18,7 @@ import { TypescriptPreprocessor, strandedTags } from "@/preprocessors/typescript
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import type { InterruptEffect } from "@/symbolTable.js";
+import type { Capability } from "@/host/host.js";
 import { heading, codeFence, bold, markdownTable, section } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
 import { HIDDEN_TAG, isHidden } from "@/utils/hiddenTag.js";
@@ -408,9 +409,11 @@ function generateDocForFile(
   // We intentionally ignore type errors here — the doc command should produce
   // output even for files that don't fully type-check.
   let interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
+  let capabilitiesByFunction: Record<string, Capability[]> = {};
   try {
     const result = typeCheck(program, ctx.config, info);
     interruptEffectsByFunction = result.interruptEffectsByFunction;
+    capabilitiesByFunction = result.capabilitiesByFunction;
   } catch {
     // Fall back to no interrupt info if the type checker crashes.
   }
@@ -456,10 +459,20 @@ function generateDocForFile(
   if (constantSection) sections.push(constantSection);
 
   const functions = Object.values(info.functionDefinitions);
-  const functionSection = generateFunctionSection(functions, ctx, interruptEffectsByFunction);
+  const functionSection = generateFunctionSection(
+    functions,
+    ctx,
+    interruptEffectsByFunction,
+    capabilitiesByFunction,
+  );
   if (functionSection) sections.push(functionSection);
 
-  const nodeSection = generateNodeSection(info.graphNodes, ctx, interruptEffectsByFunction);
+  const nodeSection = generateNodeSection(
+    info.graphNodes,
+    ctx,
+    interruptEffectsByFunction,
+    capabilitiesByFunction,
+  );
   if (nodeSection) sections.push(nodeSection);
   const generatedOutput = postprocessDoc(sections.join("\n\n") + "\n");
   fs.writeFileSync(outputPath, generatedOutput);
@@ -688,10 +701,20 @@ function formatThrows(kinds: InterruptEffect[] | undefined): string | null {
   return `${bold("Throws:")} ${formatted}`;
 }
 
+/** What a function needs from the host, its own `@capabilities` tag and
+ *  those of everything it calls. The transitive list, since that is what a
+ *  reader choosing a platform wants to know. */
+function formatNeeds(capabilities: Capability[] | undefined): string | null {
+  if (!capabilities || capabilities.length === 0) return null;
+  const formatted = capabilities.map((capability) => "`" + capability + "`").join(", ");
+  return `${bold("Needs:")} ${formatted}`;
+}
+
 function generateFunctionSection(
   fns: FunctionDefinition[],
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  capabilitiesByFunction: Record<string, Capability[]>,
 ): string | null {
   const visible = fns.filter((fn) =>
     isDocumented(declaredName(fn.functionName), fn.exported, fn.tags),
@@ -707,6 +730,7 @@ function generateFunctionSection(
       generateParamTable(fn.parameters, ctx),
       fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(fn.functionName)]),
+      formatNeeds(capabilitiesByFunction[declaredName(fn.functionName)]),
       sourceLink(fn.loc, ctx),
     );
   });
@@ -717,6 +741,7 @@ function generateNodeSection(
   nodes: GraphNodeDefinition[],
   ctx: DocContext,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+  capabilitiesByFunction: Record<string, Capability[]>,
 ): string | null {
   const visible = nodes.filter((node) =>
     isDocumented(declaredName(node.nodeName), node.exported, node.tags),
@@ -732,6 +757,7 @@ function generateNodeSection(
       generateParamTable(node.parameters, ctx),
       node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
       formatThrows(interruptEffectsByFunction[declaredName(node.nodeName)]),
+      formatNeeds(capabilitiesByFunction[declaredName(node.nodeName)]),
       sourceLink(node.loc, ctx),
     );
   });

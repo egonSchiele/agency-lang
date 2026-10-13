@@ -104,7 +104,9 @@ Turn one piece of text into an embedding vector.
 
 **Returns:** `Result<Embedding>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L50))
+**Needs:** `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L51))
 
 ### embedMany
 
@@ -141,7 +143,9 @@ Turn a list of texts into embedding vectors in one call, one vector per text in 
 
 **Returns:** `Result<Embeddings>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L75))
+**Needs:** `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L77))
 
 ### cosineSimilarity
 
@@ -163,4 +167,4 @@ Compare two embedding vectors. Returns a number from -1 to 1, where 1 means the 
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L98))

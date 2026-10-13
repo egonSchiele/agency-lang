@@ -21,13 +21,10 @@ import {
   _fetchMarkdown,
 } from "agency-lang/stdlib-lib/http.js"
 
-@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetch { baseUrl: string, path: string, method: string }
-@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
-@capabilities(network)
 @always(method, baseUrl)
 effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
 
@@ -39,6 +36,7 @@ export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 */
+@capabilities(network)
 export def fetch(
   baseUrl: string,
   path: string = "",
@@ -70,6 +68,7 @@ export def fetch(
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 */
+@capabilities(network)
 export def fetchJSON(
   baseUrl: string,
   path: string = "",
@@ -101,6 +100,7 @@ export def fetchJSON(
   abort surfaces as an AgencyCancelledError that propagates out of the
   surrounding `try`.
 */
+@capabilities(network)
 export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = [], method: HttpMethod = "GET", body: Record<string, any> | string | null = null): Result {
   """
   Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.

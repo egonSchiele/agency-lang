@@ -103,7 +103,6 @@ import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions, _v
 // One effect for the five functions, because all five do the same thing
 // to the file: read it once and hand it to a local model. The task and
 // the model are in the payload for a policy that wants them.
-@capabilities(fileRead, network)
 @alwaysUnder(dir)
 effect std::vision { dir: string, filename: string, task: string, model: string }
 
@@ -141,6 +140,7 @@ export type Tag = {
   score: number,
 }
 
+@capabilities(fileRead, network)
 export idempotent def detectObjects(
   path: string,
   labels: string[],
@@ -171,6 +171,7 @@ export idempotent def detectObjects(
   return try _detectObjects(file.value.image, labels, model, threshold)
 }
 
+@capabilities(fileRead, network)
 export idempotent def tagImage(
   path: string,
   model: string,
@@ -202,6 +203,7 @@ export idempotent def tagImage(
   return try _tagImage(file.value.image, model, threshold, limit)
 }
 
+@capabilities(fileRead, network)
 export idempotent def captionImage(
   path: string,
   model: string,
@@ -236,6 +238,7 @@ each other, the two remotes 0.57, and a cat against a remote at most
 and neither have pen-and-ink drawings. Rather than pick a cut-off,
 compare each box with crops of your own things and of other things, and
 keep the nearer side: the module doc comment shows how. */
+@capabilities(fileRead, network)
 export idempotent def embedImage(
   path: string,
   model: string,
@@ -265,6 +268,7 @@ export idempotent def embedImage(
   return try _embedImage(file.value.image, model, boxes)
 }
 
+@capabilities(fileRead, network)
 export idempotent def findRegions(
   path: string,
   model: string,

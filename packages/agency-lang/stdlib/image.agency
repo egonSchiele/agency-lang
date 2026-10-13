@@ -34,7 +34,6 @@ persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
 // the file and where it goes: the provider and model the default client
 // resolves, and the base URL given for openai-compat or litellm ("" when
 // none was). An "always" answer pins both the folder and the model.
-@capabilities(fileRead, llm)
 @alwaysUnder(dir)
 @always(model)
 effect std::uploadImage { dir: string, filename: string, provider: string, model: string, baseUrl: string }
@@ -43,14 +42,12 @@ effect std::uploadImage { dir: string, filename: string, provider: string, model
 // real spellings, since one approval is for "read this, write that". An
 // "always" answer pins both folders, as std::copy does, so a rule saved
 // for one crop cannot read an image from anywhere else.
-@capabilities(fileRead, fileWrite, env, subprocess)
 @alwaysUnder(dir, outDir)
 effect std::cropImage { dir: string, filename: string, outDir: string, outFilename: string }
 
 // Laying several images out on one canvas. Every input is listed the way
 // applyPatch lists the files a patch touches. No "always" tag, as with
 // applyPatch: a list of inputs cannot be pinned to one folder.
-@capabilities(fileRead, fileWrite, env, subprocess)
 effect std::pasteImages { files: string[], outDir: string, outFilename: string }
 
 /** A region of an image, normalized to 0..1 with the origin at the top
@@ -75,6 +72,7 @@ export type GeneratedImage = {
 
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 
+@capabilities(fileRead, llm)
 export def generateImage(
   prompt: string,
   model: string = "",
@@ -159,6 +157,7 @@ Each model has its own default strength with a mask, which can differ
 from its default without one. Z-Image Turbo's goes from 0.6 to 1.0, and
 1.0 draws the white part from scratch, keeping nothing of what was
 there. Pass a lower strength to keep some of it. */
+@capabilities(fileRead, subprocess, env, llm)
 export def generateImageLocal(
   prompt: string,
   model: string,
@@ -272,6 +271,7 @@ export def generateImageLocal(
   )
 }
 
+@capabilities(fileRead, fileWrite, subprocess, env)
 export def cropImage(
   path: string,
   box: ImageBox,
@@ -308,6 +308,7 @@ export def cropImage(
   return try _cropImage(real.value, box, out.value, pad, square)
 }
 
+@capabilities(fileRead, subprocess, env, llm)
 export idempotent def imageSize(path: string): Result<ImageSize> raises <std::readImage> {
   """
   The width and height of an image in pixels.
@@ -325,6 +326,7 @@ export idempotent def imageSize(path: string): Result<ImageSize> raises <std::re
   return try _imageSize(real.value)
 }
 
+@capabilities(fileRead, fileWrite, subprocess, env)
 export def pasteImages(
   paths: string[],
   outPath: string,

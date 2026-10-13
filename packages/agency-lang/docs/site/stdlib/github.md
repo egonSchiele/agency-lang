@@ -232,7 +232,6 @@ export type CommentInfo = {
 ### std::github::prGet
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prGet {
   owner: string;
@@ -241,12 +240,11 @@ effect std::github::prGet {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L180))
 
 ### std::github::prList
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prList {
   owner: string;
@@ -258,12 +256,11 @@ effect std::github::prList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L188))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L186))
 
 ### std::github::prDiff
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prDiff {
   owner: string;
@@ -272,12 +269,11 @@ effect std::github::prDiff {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L195))
 
 ### std::github::prFiles
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prFiles {
   owner: string;
@@ -288,12 +284,11 @@ effect std::github::prFiles {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L205))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L201))
 
 ### std::github::prReviewList
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewList {
   owner: string;
@@ -304,12 +299,11 @@ effect std::github::prReviewList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L209))
 
 ### std::github::prReviewCommentList
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewCommentList {
   owner: string;
@@ -320,12 +314,11 @@ effect std::github::prReviewCommentList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L217))
 
 ### std::github::prChecks
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prChecks {
   owner: string;
@@ -336,12 +329,11 @@ effect std::github::prChecks {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L225))
 
 ### std::github::issueGet
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueGet {
   owner: string;
@@ -350,12 +342,11 @@ effect std::github::issueGet {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L233))
 
 ### std::github::issueList
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueList {
   owner: string;
@@ -367,12 +358,11 @@ effect std::github::issueList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L239))
 
 ### std::github::issueCommentList
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCommentList {
   owner: string;
@@ -383,12 +373,11 @@ effect std::github::issueCommentList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L258))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L248))
 
 ### std::github::issueSearch
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueSearch {
   owner: string;
@@ -399,12 +388,11 @@ effect std::github::issueSearch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L267))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L256))
 
 ### std::github::prReviewComment
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewComment {
   owner: string;
@@ -416,12 +404,11 @@ effect std::github::prReviewComment {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L278))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L266))
 
 ### std::github::prReview
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReview {
   owner: string;
@@ -433,12 +420,11 @@ effect std::github::prReview {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L288))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L275))
 
 ### std::github::prApprove
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prApprove {
   owner: string;
@@ -448,12 +434,11 @@ effect std::github::prApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L298))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L284))
 
 ### std::github::issueCreate
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCreate {
   owner: string;
@@ -465,12 +450,11 @@ effect std::github::issueCreate {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L306))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L291))
 
 ### std::github::issueComment
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueComment {
   owner: string;
@@ -480,12 +464,11 @@ effect std::github::issueComment {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L300))
 
 ### std::github::issueUpdate
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueUpdate {
   owner: string;
@@ -496,12 +479,11 @@ effect std::github::issueUpdate {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L324))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L307))
 
 ### std::github::issueLabel
 
 ```ts
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueLabel {
   owner: string;
@@ -511,7 +493,7 @@ effect std::github::issueLabel {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L333))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L315))
 
 ## Functions
 
@@ -542,7 +524,9 @@ Read one pull request: title, state, author, branches, and body.
 
 **Throws:** `std::github::prGet`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L344))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L327))
 
 ### ghPrList
 
@@ -580,7 +564,9 @@ List pull requests. Each item has no change counts; ghPrGet returns those.
 
 **Throws:** `std::github::prList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L365))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L349))
 
 ### ghPrDiff
 
@@ -610,7 +596,9 @@ Read the full unified diff of a pull request as one string. GitHub refuses
 
 **Throws:** `std::github::prDiff`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L396))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L381))
 
 ### ghPrFiles
 
@@ -645,7 +633,9 @@ List the files a pull request changes, with per-file add/delete counts and patch
 
 **Throws:** `std::github::prFiles`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L418))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L404))
 
 ### ghPrReviews
 
@@ -680,7 +670,9 @@ List the reviews on a pull request: verdicts, authors, and bodies.
 
 **Throws:** `std::github::prReviewList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L447))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L434))
 
 ### ghPrReviewComments
 
@@ -715,7 +707,9 @@ List the inline review comments on a pull request, with file and line.
 
 **Throws:** `std::github::prReviewCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L476))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L464))
 
 ### ghPrChecks
 
@@ -750,7 +744,9 @@ List the CI check runs on the head commit of a pull request.
 
 **Throws:** `std::github::prChecks`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L505))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L494))
 
 ### ghIssueGet
 
@@ -780,7 +776,9 @@ Read one issue: title, state, author, labels, and body. Fails if the number
 
 **Throws:** `std::github::issueGet`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L534))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L524))
 
 ### ghIssueList
 
@@ -821,7 +819,9 @@ List issues, optionally filtered by labels. GitHub counts pull requests
 
 **Throws:** `std::github::issueList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L556))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L547))
 
 ### ghIssueComments
 
@@ -856,7 +856,9 @@ List the comments on an issue.
 
 **Throws:** `std::github::issueCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L590))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L582))
 
 ### ghIssueSearch
 
@@ -892,7 +894,9 @@ Search issues and pull requests in one repository. The query must not
 
 **Throws:** `std::github::issueSearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L619))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L612))
 
 ### ghPrReviewComment
 
@@ -937,7 +941,9 @@ Post one inline review comment on a line of a pull request. For several
 
 **Throws:** `std::github::prReviewComment`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L652))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L646))
 
 ### ghPrReview
 
@@ -977,7 +983,9 @@ Submit a review on a pull request: a verdict, an overall body, and any
 
 **Throws:** `std::github::prReview`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L705))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L700))
 
 ### ghPrApprove
 
@@ -1010,7 +1018,9 @@ Approve a pull request. This is a formal review approval that can satisfy
 
 **Throws:** `std::github::prApprove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L740))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L736))
 
 ### ghIssueCreate
 
@@ -1048,7 +1058,9 @@ Create an issue.
 
 **Throws:** `std::github::issueCreate`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L767))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L764))
 
 ### ghIssueComment
 
@@ -1080,7 +1092,9 @@ Post a comment on an issue or pull request.
 
 **Throws:** `std::github::issueComment`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L798))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L796))
 
 ### ghIssueClose
 
@@ -1112,7 +1126,9 @@ Close an issue or pull request.
 
 **Throws:** `std::github::issueUpdate`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L824))
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L823))
 
 ### ghIssueLabel
 
@@ -1143,5 +1159,7 @@ Add labels to an issue or pull request. Returns the full label list after the ch
 **Returns:** `string[]`
 
 **Throws:** `std::github::issueLabel`
+
+**Needs:** `fileRead`, `network`, `subprocess`, `env`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L851))

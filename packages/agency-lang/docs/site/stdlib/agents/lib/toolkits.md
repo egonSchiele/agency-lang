@@ -50,6 +50,8 @@ Tell the user what you are doing. Use this tool often to update the user on what
 
 **Returns:** `string`
 
+**Needs:** `terminal`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L91))
 
 ### communicationTools

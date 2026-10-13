@@ -53,19 +53,16 @@ import { VERSION } from "agency-lang/stdlib-lib/version.js"
 // `std::read`/`std::write` are the shared file-access effects (also raised by
 // `std::read`/`std::write` in `std::index`), so their reads and writes here stay
 // governed by the same file policy. The canonical payload is `{ dir, filename }`.
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::read {
   dir: string;
   filename: string
 }
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::write {
   dir: string;
   filename: string
 }
-@capabilities(subprocess, fileWrite)
 effect std::run {
   moduleId: string;
   node: string;
@@ -105,6 +102,7 @@ export type TypeCheckReport = {
   warnings: TypeCheckDiagnostic[]
 }
 
+@capabilities(fileRead)
 export idempotent def compile(source: string, dir: string = "", strict: boolean = false): Result {
   """
   Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules and `.agency` files inside `dir`. TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and compile-time splices are refused anywhere in the import closure.
@@ -127,6 +125,7 @@ For `maxDepth`, if an ancestor process has a lower maxDepth,
 the lower value is used. For example, if a parent process has maxDepth=3
 and a child process has maxDepth=5, maxDepth=3 is used.
  */
+@capabilities(fileWrite, subprocess)
 export def run(
   compiled: CompiledProgram,
   node: string,
@@ -227,6 +226,7 @@ export def run(
 will apply to the child process. Any callbacks in scope will also apply.
 Exceeding a resource limit kills the subprocess and returns a `limit_exceeded` failure.
 */
+@capabilities(fileRead)
 export def runFile(
   dir: string,
   filename: string,
@@ -315,6 +315,7 @@ is a whole-call failure: fix the input and call again. A case failing —
 wrong value, rejected interrupt, per-case limit — is a `pass: false` entry
 in a success report, and never stops the batch. `maxCost` guards the WHOLE
 call, in the same limit_exceeded shape as run()'s other limits. */
+@capabilities(fileRead)
 export def test(
   dir: string,
   filename: string,
@@ -457,6 +458,7 @@ export def test(
   return guarded
 }
 
+@capabilities(fileRead)
 export def testFile(
   dir: string,
   filename: string,
@@ -567,6 +569,7 @@ code whose danger depends on that code, so its failures reach a
 tool-calling model as the neutral, re-callable tier. Each attempt
 re-raises std::run and the child's own effects re-prompt.
 */
+@capabilities(fileRead)
 export def runCode(
   source: string,
   node: string = "main",
@@ -634,6 +637,7 @@ source string. With `dir`, the source is checked as if it were a file in
 `dir`, so its relative imports resolve against the files there, the way
 `typecheckFile` resolves them. Nothing is written to `dir`.
 */
+@capabilities(fileRead)
 export idempotent def typecheck(
   source: string,
   ignoreCodes: string[] = [],
@@ -676,6 +680,7 @@ export idempotent def typecheck(
 /** Per-exported-symbol effect lists, keyed by node/function name. */
 export type EffectsByExport = Record<string, string[]>
 
+@capabilities(fileRead)
 export idempotent def getEffects(source: string): Result<EffectsByExport> {
   """
   Map each exported node and function in the source to the list of
@@ -739,6 +744,7 @@ type FilterImportsResult = {
   filtered: boolean
 }
 
+@capabilities(fileRead)
 export idempotent def typecheckFile(dir: string, filename: string): Result {
   """
   Type-check an Agency file on disk. The file is read from dir/filename,
@@ -785,6 +791,7 @@ export idempotent def parseAST(source: string): Result<AST> {
 /** Output is canonical formatter output (the same style as `pnpm run fmt`):
   the formatter preserves comments (they live in the AST as nodes) but
   normalizes whitespace and formatting. */
+@capabilities(fileRead, fileWrite)
 export def writeAST(
   ast: AST,
   dir: string,
@@ -839,6 +846,7 @@ export type HoleInfo = {
   origin: string | null
 }
 
+@capabilities(fileRead)
 export def loadTemplate(dir: string, filename: string): Result<Code> {
   """
   Load an Agency file containing holes as a template.
@@ -922,6 +930,7 @@ export idempotent def parseStatements(source: string): Result<Code> {
 
 /** Read and write happen inside the same interrupt, so approving it approves both.
   If the file is already formatted, no write occurs and its mtime is preserved. */
+@capabilities(fileRead, fileWrite)
 export idempotent def formatFile(dir: string, filename: string): Result {
   """
   Format an Agency file in place using the standard Agency formatter.

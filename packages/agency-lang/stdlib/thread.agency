@@ -183,6 +183,7 @@ export def audio(
   return _audioAttachment(source, filename, mimeType, base64)
 }
 
+@capabilities(fileRead)
 export def attachToReply(attachment: Attachment) {
   """
   Queue an attachment to be shown to the model after the current tool
@@ -227,10 +228,10 @@ export def handBack(message: string) {
 // viewFile sends a file's bytes to a model provider. That is a different
 // permission from std::readImage, which reads the bytes into a variable.
 // Approving one never authorizes the other.
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::viewFile { dir: string, filename: string }
 
+@capabilities(fileRead)
 export def viewFile(path: string): Result<string> {
   """
   Show an image or PDF file to yourself. The file is attached to the

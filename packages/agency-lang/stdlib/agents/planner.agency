@@ -30,7 +30,6 @@ export def buildTools(): any[] {
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
   capability envelope can be shown and approved. Reject halts and fails. */
-@capabilities()
 effect std::agents::planApprove {
   plan: string;
   source: string;

@@ -188,7 +188,7 @@ Read-only git effects, auto-approvable.
 export effectSet GitRead = <std::git::status, std::git::log, std::git::diff, std::git::show, std::git::branchList, std::git::remoteList, std::git::blame, std::git::stashList>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L134))
 
 ### GitWrite
 
@@ -199,7 +199,7 @@ Mutating git effects, should prompt.
 export effectSet GitWrite = <std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L136))
 
 ### Git
 
@@ -210,26 +210,24 @@ All git effects.
 export effectSet Git = <GitRead, GitWrite>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L138))
 
 ## Effects
 
 ### std::git::status
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::status {
   cwd: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L98))
 
 ### std::git::log
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::log {
   cwd: string;
@@ -238,12 +236,11 @@ effect std::git::log {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L100))
 
 ### std::git::diff
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::diff {
   cwd: string;
@@ -254,12 +251,11 @@ effect std::git::diff {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L102))
 
 ### std::git::show
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::show {
   cwd: string;
@@ -267,36 +263,33 @@ effect std::git::show {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L104))
 
 ### std::git::branchList
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchList {
   cwd: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L106))
 
 ### std::git::remoteList
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::remoteList {
   cwd: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L108))
 
 ### std::git::blame
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::blame {
   cwd: string;
@@ -304,24 +297,22 @@ effect std::git::blame {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L110))
 
 ### std::git::stashList
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashList {
   cwd: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L112))
 
 ### std::git::add
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::add {
   cwd: string;
@@ -330,12 +321,11 @@ effect std::git::add {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L115))
 
 ### std::git::commit
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::commit {
   cwd: string;
@@ -343,12 +333,11 @@ effect std::git::commit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L117))
 
 ### std::git::checkout
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::checkout {
   cwd: string;
@@ -357,12 +346,11 @@ effect std::git::checkout {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L119))
 
 ### std::git::switch
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::switch {
   cwd: string;
@@ -371,12 +359,11 @@ effect std::git::switch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L121))
 
 ### std::git::branchCreate
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchCreate {
   cwd: string;
@@ -384,12 +371,11 @@ effect std::git::branchCreate {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L123))
 
 ### std::git::branchDelete
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchDelete {
   cwd: string;
@@ -398,12 +384,11 @@ effect std::git::branchDelete {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L125))
 
 ### std::git::stashPush
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPush {
   cwd: string;
@@ -411,24 +396,22 @@ effect std::git::stashPush {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L127))
 
 ### std::git::stashPop
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPop {
   cwd: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L129))
 
 ### std::git::restore
 
 ```ts
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::restore {
   cwd: string;
@@ -437,7 +420,7 @@ effect std::git::restore {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L131))
 
 ## Functions
 
@@ -462,7 +445,9 @@ True when `cwd` is inside a git work tree. Never fails: a directory that is not
 
 **Throws:** `std::git::status`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L170))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L154))
 
 ### gitStatus
 
@@ -484,7 +469,9 @@ Show the working-tree status: current branch, ahead/behind counts, and
 
 **Throws:** `std::git::status`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L182))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L167))
 
 ### gitLog
 
@@ -528,7 +515,9 @@ Show commit history as structured commits.
 
 **Throws:** `std::git::log`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L195))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L181))
 
 ### gitDiff
 
@@ -569,7 +558,9 @@ Show a diff as a structured per-file summary plus the raw unified patch.
 
 **Throws:** `std::git::diff`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L220))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L207))
 
 ### gitShow
 
@@ -593,7 +584,9 @@ Show a commit as a structured per-file summary plus the raw patch. Line
 
 **Throws:** `std::git::show`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L241))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L229))
 
 ### gitBranchList
 
@@ -614,7 +607,9 @@ List local branches with their current-marker, upstream, and sha.
 
 **Throws:** `std::git::branchList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L253))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L242))
 
 ### gitRemoteList
 
@@ -635,7 +630,9 @@ List configured remotes with their fetch/push URLs.
 
 **Throws:** `std::git::remoteList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L263))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L253))
 
 ### gitBlame
 
@@ -664,7 +661,9 @@ Show line-by-line authorship for a file.
 
 **Throws:** `std::git::blame`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L273))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L264))
 
 ### gitStashList
 
@@ -685,7 +684,9 @@ List stashes with their ref and description.
 
 **Throws:** `std::git::stashList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L285))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L277))
 
 ### gitAdd
 
@@ -721,7 +722,9 @@ Stage changes for commit.
 
 **Throws:** `std::git::add`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L300))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L293))
 
 ### gitCommit
 
@@ -744,7 +747,9 @@ Create a commit from the staged changes.
 
 **Throws:** `std::git::commit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L318))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L312))
 
 ### gitCheckout
 
@@ -775,7 +780,9 @@ Bind `force: false` via `.partial()` to forbid discarding local changes.
 
 **Throws:** `std::git::checkout`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L332))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L327))
 
 ### gitSwitch
 
@@ -804,7 +811,9 @@ Switch to a branch.
 
 **Throws:** `std::git::switch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L350))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L346))
 
 ### gitBranchCreate
 
@@ -830,7 +839,9 @@ Create a new branch at HEAD (does not switch to it).
 
 **Throws:** `std::git::branchCreate`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L364))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L361))
 
 ### gitBranchDelete
 
@@ -865,7 +876,9 @@ Guardrails: bind `force: false` and/or a `protectedBranches` list via
 
 **Throws:** `std::git::branchDelete`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L380))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L378))
 
 ### gitStashPush
 
@@ -891,7 +904,9 @@ Stash the working-tree changes.
 
 **Throws:** `std::git::stashPush`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L401))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L400))
 
 ### gitStashPop
 
@@ -911,6 +926,8 @@ Apply and drop the most recent stash.
 **Returns:** `string`
 
 **Throws:** `std::git::stashPop`
+
+**Needs:** `fileRead`, `subprocess`, `env`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L414))
 
@@ -947,4 +964,6 @@ Restore files to a previous state.
 
 **Throws:** `std::git::restore`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L428))
+**Needs:** `fileRead`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L429))

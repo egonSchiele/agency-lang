@@ -78,6 +78,7 @@ export def resolveModelName(value: string): string {
   return _resolveModelName(value)
 }
 
+@capabilities(fileRead, fileWrite, network)
 export def downloadModel(value: string, cacheDir: string = ""): string {
   """
   Download a model and return its local .gguf path, or the model directory
@@ -90,6 +91,7 @@ export def downloadModel(value: string, cacheDir: string = ""): string {
   return _downloadModel(value, cacheDir)
 }
 
+@capabilities(fileRead)
 export def listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   """
   List downloaded models: .gguf files and MLX model directories.
@@ -99,6 +101,7 @@ export def listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   return _listDownloadedModels(cacheDir)
 }
 
+@capabilities(fileRead)
 export def listModelNames(): ModelName[] {
   """
   List usable short names: curated built-ins and your aliases.
@@ -106,6 +109,7 @@ export def listModelNames(): ModelName[] {
   return _listModelNames()
 }
 
+@capabilities(fileRead, fileWrite)
 export def aliasModel(name: string, uri: string): string {
   """
   Add a short-name alias for a model URI
@@ -117,6 +121,7 @@ export def aliasModel(name: string, uri: string): string {
   return _aliasModel(name, uri)
 }
 
+@capabilities(fileRead, fileWrite)
 export def unaliasModel(name: string): string {
   """
   Remove a short-name alias.
@@ -127,6 +132,7 @@ export def unaliasModel(name: string): string {
   return _unaliasModel(name).file
 }
 
+@capabilities(fileRead, fileWrite)
 export def removeModel(name: string, cacheDir: string = ""): bool {
   """
   Delete a downloaded GGUF file from the models directory. This is what
@@ -167,6 +173,7 @@ export def registerLocalProvider() {
   _registerLocalProvider()
 }
 
+@capabilities(fileRead)
 export def registerLocalModel(value: string, cacheDir: string = ""): string {
   """
   Register the provider and ensure the model is downloaded. Returns the local
@@ -180,6 +187,7 @@ export def registerLocalModel(value: string, cacheDir: string = ""): string {
   return _registerLocalModel(value, cacheDir)
 }
 
+@capabilities(fileRead, terminal)
 export def printLocalCatalog() {
   """
   Print the usable-model catalog (curated names + your aliases) as an
@@ -208,6 +216,7 @@ export type RefreshResult = {
   modelCount: number
 }
 
+@capabilities(network)
 export def mlxServerModels(baseUrl: string = ""): string[] | null {
   """
   The models the MLX server is serving, or null if no server is running.
@@ -220,6 +229,7 @@ export def mlxServerModels(baseUrl: string = ""): string[] | null {
   return _mlxServerModels(baseUrl)
 }
 
+@capabilities(network)
 export def mlxServerRunning(baseUrl: string = ""): boolean {
   """
   Whether an MLX server answers at the base URL. The same probe as
@@ -231,6 +241,7 @@ export def mlxServerRunning(baseUrl: string = ""): boolean {
 }
 
 /** Same operation as the `agency local refresh` CLI command. */
+@capabilities(fileRead, fileWrite, network)
 export def refreshCatalog(url: string = ""): RefreshResult {
   """
   Fetch the remote model catalog and update the `source:"remote"` aliases in

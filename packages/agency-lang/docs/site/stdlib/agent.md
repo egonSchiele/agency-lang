@@ -17,13 +17,12 @@ list to track multi-step work across turns.
 ### std::question
 
 ```ts
-@capabilities()
 effect std::question {
   prompt: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L19))
 
 ## Functions
 
@@ -43,7 +42,7 @@ Add a new todo to the list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L23))
 
 ### todoUpdate
 
@@ -62,7 +61,7 @@ Update the status of a todo by id.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L31))
 
 ### todoWrite
 
@@ -80,7 +79,7 @@ Replace the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L47))
 
 ### todoList
 
@@ -92,7 +91,7 @@ Return the current todo list.
 
 **Returns:** `Todo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L55))
 
 ### question
 
@@ -120,4 +119,4 @@ so it can be used anywhere (eg a web server) instead of just the CLI.
 
 **Throws:** `std::question`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agent.agency#L66))

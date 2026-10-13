@@ -28,22 +28,17 @@ open URLs, and read from stdin.
   ```
 */
 
-@capabilities(fileRead, subprocess)
 effect std::screenshot { filepath: string }
-@capabilities()
 effect std::exit { code: number }
-@capabilities(env)
 @always(name)
 effect std::env { name: string }
-@capabilities(env)
 @always(name)
 effect std::setEnv { name: string, value: string }
-@capabilities(subprocess)
 @always(host)
 effect std::openUrl { url: string, host: string }
-@capabilities(subprocess)
 effect std::notify { title: string, body: string }
 
+@capabilities(subprocess)
 export def notify(title: string, message: string): boolean {
   """
   Show a native OS notification. Returns true if the notification was sent.
@@ -60,6 +55,7 @@ export def notify(title: string, message: string): boolean {
 
 /** Ctrl-C, a race loss, or a time-guard abort interrupts an in-progress
 screencapture. */
+@capabilities(fileRead, subprocess)
 export def screenshot(
   filepath: string,
   x: number = -1,
@@ -117,6 +113,7 @@ export def cwd(): string {
 /** Raises std::env, so a handler or policy can allow or deny the read.
  *  Returns a Failure when denied, which the declared type cannot express —
  *  that is what `env` below checks for. */
+@capabilities(env)
 def requestEnvRead(name: string): string | null {
   return interrupt std::env("Are you sure you want to read this environment variable?", {
     name: name
@@ -141,6 +138,7 @@ export idempotent def env(name: string): string | null {
   return value
 }
 
+@capabilities(env)
 export def setEnv(name: string, value: string): Result {
   """
   Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
@@ -155,6 +153,7 @@ export def setEnv(name: string, value: string): Result {
   return try _setEnv(name, value)
 }
 
+@capabilities(terminal)
 export def isTTY(): boolean {
   """
   Return true if standard input is connected to a terminal. Returns false when stdin is piped or redirected from a file. Use this to detect non-interactive invocations (e.g. `echo "hi" | my-agent`) and adjust output accordingly.
@@ -162,6 +161,7 @@ export def isTTY(): boolean {
   return _isTTY()
 }
 
+@capabilities(terminal)
 export def readStdin(): string {
   """
   Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
@@ -177,6 +177,7 @@ def urlHost(url: string): string {
 
 /** macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 `open` subprocess. */
+@capabilities(subprocess)
 export def openUrl(url: string): Result {
   """
   Open a URL in the user's default browser.

@@ -62,7 +62,9 @@ Read the mcpServers block from the project agency.json under `dir`.
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L36))
 
 ### mergeMcpServers
 
@@ -84,7 +86,7 @@ Merge global and project mcpServers configs (project wins on collision).
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L41))
 
 ### loadMcpTools
 
@@ -104,7 +106,9 @@ Load gated MCP tools for every server in `merged`. Returns [] when the
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L45))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L47))
 
 ### loadMcpToolsWithStatus
 
@@ -126,4 +130,6 @@ Like loadMcpTools, but also returns a per-server status map for /mcp.
 
 **Returns:** [McpLoadResult](#mcploadresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L54))

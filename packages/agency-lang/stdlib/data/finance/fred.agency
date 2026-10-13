@@ -41,7 +41,6 @@ import { env } from "std::system"
   ```
 */
 
-@capabilities(network)
 effect std::fred { seriesId: string }
 
 /** A single FRED observation. `value` is null when FRED reports the value as missing ("."). */
@@ -176,6 +175,7 @@ def fredInfoFinalize(fetchResult: any): Result {
 // std::env is in the raises clauses below even though both reads are
 // approved at the site: `with approve` answers the interrupt at runtime,
 // it does not discharge the effect.
+@capabilities(network)
 export def fredSeries(seriesId: string, observationStart: string = "", observationEnd: string = "", frequency: FredFrequency | null = null, units: FredUnits | null = null, limit: number = 0): Result<FredSeries> raises <std::fred, std::env, std::http::fetchJSON> {
   """
   Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE" for the
@@ -204,6 +204,7 @@ export def fredSeries(seriesId: string, observationStart: string = "", observati
   return fredObservationsFinalize(seriesId, result)
 }
 
+@capabilities(network)
 export def fredSeriesInfo(seriesId: string): Result<FredSeriesInfo> raises <std::fred, std::env, std::http::fetchJSON> {
   """
   Fetch metadata about a FRED series by its id: its human title, display units, frequency, and

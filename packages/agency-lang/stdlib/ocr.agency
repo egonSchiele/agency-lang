@@ -26,7 +26,6 @@ import { dirname, basename } from "std::path"
 import { image } from "std::thread"
 
 // Local recognition. The file never leaves the machine.
-@capabilities(fileRead, fileWrite, subprocess)
 @alwaysUnder(dir)
 effect std::ocr { dir: string, filename: string }
 
@@ -34,7 +33,6 @@ effect std::ocr { dir: string, filename: string }
 // or the run's default, and a custom LLM client may route it anywhere,
 // so the payload states the REQUESTED provider and configured model,
 // the same as std::transcribe. Approving std::ocr never authorizes this.
-@capabilities(fileRead, llm)
 effect std::ocrCloud {
   requestedProvider: string,
   configuredModel: string,
@@ -60,6 +58,7 @@ export type TextBlock = {
 
 static const OCR_INSTRUCTION = "Transcribe all text in this image exactly as written, preserving line breaks. Return only the text."
 
+@capabilities(fileRead, fileWrite, subprocess)
 export def readTextBlocks(
   path: string,
   language: string = "",
@@ -112,6 +111,7 @@ export def readText(
   return success(lines.join("\n"))
 }
 
+@capabilities(fileRead, llm)
 export def readTextWithModel(
   path: string,
   model: string = "",

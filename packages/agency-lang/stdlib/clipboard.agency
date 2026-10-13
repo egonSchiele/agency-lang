@@ -12,11 +12,10 @@ import { _copy, _paste } from "agency-lang/stdlib-lib/clipboard.js"
   ```
 */
 
-@capabilities(subprocess)
 effect std::clipboardCopy {}
-@capabilities(subprocess)
 effect std::clipboardPaste {}
 
+@capabilities(subprocess)
 export def copy(text: string) {
   """
   Copy text to the system clipboard.
@@ -30,6 +29,7 @@ export def copy(text: string) {
   }
 }
 
+@capabilities(subprocess)
 export def paste(): string {
   """
   Read text from the system clipboard and return it.

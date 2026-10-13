@@ -17,7 +17,6 @@ import { _weather } from "agency-lang/stdlib-lib/weather.js"
   CC BY 4.0, for non-commercial use.
 */
 
-@capabilities(network)
 effect std::weather { location: string, units: string }
 
 type WeatherResult = {
@@ -48,6 +47,7 @@ type WeatherResult = {
   Open-Meteo (https://open-meteo.com) provides the weather data, licensed
   under CC BY 4.0. Free API usage is for non-commercial purposes only.
 */
+@capabilities(network)
 export def weather(location: string, units: "imperial" | "metric" = "imperial"): Result {
   """
   Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a text description.

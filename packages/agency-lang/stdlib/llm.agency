@@ -142,10 +142,10 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
 
 // Loading a provider module runs its JavaScript in this process, so the
 // load is gated like any other effect. The payload names the real path.
-@capabilities(fileRead)
 @always(path)
 effect std::llm::registerProvider { path: string }
 
+@capabilities(fileRead)
 export def registerProviderModule(path: string): Result {
   """
   Load a provider module by path at runtime and register its custom provider
@@ -209,7 +209,6 @@ export def modelSupportsInput(model: string, modality: string): boolean | null {
 
 // `std::read` is also declared in the prelude. A module that raises an
 // effect declares it itself. The payload is `{ dir, filename }`.
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::read {
   dir: string;
@@ -225,6 +224,7 @@ effect std::read {
 // is resolved relative to the working directory, or used as-is if absolute.
 // The interrupt names the real spelling of the file, and the read refuses a
 // link planted in that spelling afterwards.
+@capabilities(fileRead)
 export def loadModelData(path: string): Result<number> {
   """
   Load model data from a JSON file (the shape `agency models refresh`

@@ -25,7 +25,6 @@ Tools for editing files and managing directories: apply text edits and
 ### std::edit
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::edit {
   dir: string;
@@ -36,36 +35,33 @@ effect std::edit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L36))
 
 ### std::applyPatch
 
 ```ts
-@capabilities(fileRead, fileWrite)
 effect std::applyPatch {
   patch: string;
   files: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L37))
 
 ### std::mkdir
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::mkdir {
   dir: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L39))
 
 ### std::copy
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(src, dest)
 effect std::copy {
   src: string;
@@ -73,12 +69,11 @@ effect std::copy {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L41))
 
 ### std::move
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(src, dest)
 effect std::move {
   src: string;
@@ -86,19 +81,18 @@ effect std::move {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L43))
 
 ### std::remove
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(target)
 effect std::remove {
   target: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L45))
 
 ## Functions
 
@@ -142,7 +136,9 @@ whole interrupt object, so the contents are at `data.data.before` /
 
 **Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L59))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L54))
 
 ### applyPatch
 
@@ -166,7 +162,9 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L100))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L96))
 
 ### mkdir
 
@@ -196,7 +194,9 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L121))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L118))
 
 ### copy
 
@@ -229,7 +229,9 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L145))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L143))
 
 ### move
 
@@ -262,7 +264,9 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L176))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L175))
 
 ### remove
 
@@ -291,5 +295,7 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 **Returns:** `Result`
 
 **Throws:** `std::remove`
+
+**Needs:** `fileRead`, `fileWrite`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L207))

@@ -123,7 +123,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L112))
 
 ### Detection
 
@@ -141,7 +141,7 @@ export type Detection = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L121))
 
 ### Region
 
@@ -160,7 +160,7 @@ export type Region = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L131))
 
 ### Tag
 
@@ -174,14 +174,13 @@ export type Tag = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L138))
 
 ## Effects
 
 ### std::vision
 
 ```ts
-@capabilities(fileRead, network)
 @alwaysUnder(dir)
 effect std::vision {
   dir: string;
@@ -191,7 +190,7 @@ effect std::vision {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L107))
 
 ## Functions
 
@@ -228,6 +227,8 @@ Find the named things in an image with a local detector and return
 **Returns:** `Result<Detection[]>`
 
 **Throws:** `std::vision`
+
+**Needs:** `fileRead`, `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L144))
 
@@ -266,7 +267,9 @@ Describe an image as booru tags with a local tagger: "1girl, glasses,
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L174))
+**Needs:** `fileRead`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L175))
 
 ### captionImage
 
@@ -297,7 +300,9 @@ Write a sentence about an image with a local model. Runs on this
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L205))
+**Needs:** `fileRead`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L207))
 
 ### embedImage
 
@@ -340,7 +345,9 @@ keep the nearer side: the module doc comment shows how.
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L239))
+**Needs:** `fileRead`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L242))
 
 ### findRegions
 
@@ -376,4 +383,6 @@ Box every thing in an image with a local model, with no names: for
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L268))
+**Needs:** `fileRead`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L272))

@@ -77,7 +77,7 @@ export type Unresolved = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L172))
 
 ### ModuleFacts
 
@@ -92,7 +92,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L211))
 
 ### ToolMeta
 
@@ -118,7 +118,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L221))
 
 ### ToolEntry
 
@@ -137,26 +137,24 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L234))
 
 ## Effects
 
 ### std::toolbox::scan
 
 ```ts
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L114))
 
 ### std::toolbox::recordUse
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::recordUse {
   dir: string;
@@ -164,12 +162,11 @@ effect std::toolbox::recordUse {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L122))
 
 ### std::toolbox::writeFile
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::writeFile {
   root: string;
@@ -179,12 +176,11 @@ effect std::toolbox::writeFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L135))
 
 ### std::toolbox::createStaging
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::createStaging {
   root: string;
@@ -193,12 +189,11 @@ effect std::toolbox::createStaging {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L145))
 
 ### std::toolbox::removeStaging
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStaging {
   root: string;
@@ -207,12 +202,11 @@ effect std::toolbox::removeStaging {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L154))
 
 ### std::toolbox::removeStagedFile
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStagedFile {
   root: string;
@@ -222,12 +216,11 @@ effect std::toolbox::removeStagedFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L163))
 
 ### std::toolbox::review
 
 ```ts
-@capabilities()
 effect std::toolbox::review {
   name: string;
   stagingDir: string;
@@ -252,12 +245,11 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L177))
 
 ### std::toolbox::save
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::save {
   dir: string;
@@ -267,7 +259,7 @@ effect std::toolbox::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L203))
 
 ## Functions
 
@@ -296,7 +288,9 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L427))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L423))
 
 ### designTool
 
@@ -357,7 +351,9 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`, `std::toolbox::removeStagedFile`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1734))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1736))
 
 ### writeTool
 
@@ -409,7 +405,9 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1797))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1799))
 
 ### runTool
 
@@ -442,4 +440,6 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1849))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1853))

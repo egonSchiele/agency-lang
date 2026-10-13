@@ -40,7 +40,6 @@ export type ExecResult = {
   exitCode: number
 }
 
-@capabilities(fileRead, subprocess)
 @always(command, subcommand)
 effect std::exec {
   command: string;
@@ -50,7 +49,6 @@ effect std::exec {
   timeout: number;
   stdin: string
 }
-@capabilities(fileRead, subprocess)
 @always(command, cwd)
 effect std::bash {
   command: string;
@@ -58,14 +56,12 @@ effect std::bash {
   timeout: number;
   stdin: string
 }
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::ls {
   dir: string;
   recursive: boolean;
   maxResults: number
 }
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::grep {
   pattern: string;
@@ -77,7 +73,6 @@ effect std::grep {
   filesOnly: boolean;
   invert: boolean
 }
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::glob {
   pattern: string;
@@ -85,6 +80,7 @@ effect std::glob {
   maxResults: number
 }
 
+@capabilities(fileRead, subprocess)
 export def exec(
   command: string,
   args: string[] = [],
@@ -149,6 +145,7 @@ export def exec(
  * shell command string itself, so prefer running an executable directly with
  * structured arguments when capability narrowing matters.
  */
+@capabilities(fileRead, subprocess)
 export def bash(
   command: string,
   cwd: string = "",
@@ -198,6 +195,7 @@ type LsEntry = {
   size: number
 }
 
+@capabilities(fileRead)
 export idempotent def ls(
   dir: string = ".",
   recursive: boolean = false,
@@ -246,6 +244,7 @@ who writes grep-style letters gets a search or a message naming the parameter
 to use, never a RegExp constructor error. The rule table is in
 `lib/stdlib/grepQuery.ts`.
 */
+@capabilities(fileRead)
 export idempotent def grep(
   pattern: string,
   dir: string = ".",
@@ -305,6 +304,7 @@ export idempotent def grep(
   return try _grep(root.value, ".", query, maxResults, allowedPaths, respectGitignore)
 }
 
+@capabilities(fileRead)
 export idempotent def glob(
   pattern: string,
   dir: string = ".",
@@ -344,6 +344,7 @@ type StatInfo = {
   modifiedMs: number
 }
 
+@capabilities(fileRead)
 export def stat(
   filename: string,
   dir: string = "",
@@ -367,6 +368,7 @@ export def stat(
   return _stat(dir, filename, allowedPaths)
 }
 
+@capabilities(fileRead)
 export def exists(
   filename: string,
   dir: string = "",
@@ -390,6 +392,7 @@ export def exists(
   return _exists(dir, filename, allowedPaths)
 }
 
+@capabilities(subprocess)
 export def which(command: string): string {
   """
   Locate an executable in PATH and return its absolute path, or an empty string if not found. On Windows, also tries PATHEXT extensions.

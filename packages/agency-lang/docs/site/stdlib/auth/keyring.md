@@ -30,7 +30,6 @@ Store and retrieve secrets in the operating system's keyring, so API keys
 ### std::setSecret
 
 ```ts
-@capabilities(subprocess)
 @always(service, key)
 effect std::setSecret {
   key: string;
@@ -38,12 +37,11 @@ effect std::setSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L26))
 
 ### std::getSecret
 
 ```ts
-@capabilities(subprocess)
 @always(service, key)
 effect std::getSecret {
   key: string;
@@ -51,12 +49,11 @@ effect std::getSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L28))
 
 ### std::deleteSecret
 
 ```ts
-@capabilities(subprocess)
 @always(service, key)
 effect std::deleteSecret {
   key: string;
@@ -64,7 +61,7 @@ effect std::deleteSecret {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L30))
 
 ## Functions
 
@@ -92,7 +89,9 @@ Store a secret in the system keyring, overwriting any existing value for the sam
 
 **Throws:** `std::setSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L35))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L33))
 
 ### getSecret
 
@@ -116,7 +115,9 @@ Retrieve a secret from the system keyring. Returns the secret value, or null if 
 
 **Throws:** `std::getSecret`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L53))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L52))
 
 ### deleteSecret
 
@@ -140,6 +141,8 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 
 **Throws:** `std::deleteSecret`
 
+**Needs:** `subprocess`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L68))
 
 ### isKeyringAvailable
@@ -152,4 +155,6 @@ Check if the system keyring is available on this platform. Returns true on macOS
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L85))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/keyring.agency#L86))

@@ -36,41 +36,35 @@ import {
   _s3PresignGet,
  } from "agency-lang/stdlib-lib/aws/s3.js"
 
-@capabilities(network)
 effect std::aws::s3::get {
   bucket: string;
   key: string;
   region: string
 }
 
-@capabilities(network)
 effect std::aws::s3::getBinary {
   bucket: string;
   key: string;
   region: string
 }
 
-@capabilities(network)
 effect std::aws::s3::put {
   bucket: string;
   key: string;
   region: string
 }
 
-@capabilities(network)
 effect std::aws::s3::putBinary {
   bucket: string;
   key: string;
   region: string
 }
 
-@capabilities(network)
 effect std::aws::s3::createBucket {
   bucket: string;
   region: string
 }
 
-@capabilities()
 effect std::aws::s3::presignGet {
   bucket: string;
   key: string;
@@ -93,6 +87,7 @@ export type S3CreateBucketResult = {
   location: string
 }
 
+@capabilities(network)
 export def s3Get(
   bucket: string,
   key: string,
@@ -113,6 +108,7 @@ export def s3Get(
   return try _s3Get(bucket, key, region)
 }
 
+@capabilities(network)
 export def s3GetBinary(
   bucket: string,
   key: string,
@@ -133,6 +129,7 @@ export def s3GetBinary(
   return try _s3GetBinary(bucket, key, region)
 }
 
+@capabilities(network)
 export def s3Put(
   bucket: string,
   key: string,
@@ -159,6 +156,7 @@ export def s3Put(
   }
 }
 
+@capabilities(network)
 export def s3PutBinary(
   bucket: string,
   key: string,
@@ -212,6 +210,7 @@ export def s3PresignGet(
   return try _s3PresignGet(bucket, key, expiresIn, region)
 }
 
+@capabilities(network)
 export def createBucket(
   bucket: string,
   region: string = "",

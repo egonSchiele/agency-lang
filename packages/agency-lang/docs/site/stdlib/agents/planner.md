@@ -20,7 +20,6 @@ Raised before a generated plan-agent runs, so the plan, source, and
 ```ts
 /** Raised before a generated plan-agent runs, so the plan, source, and
   capability envelope can be shown and approved. Reject halts and fails. */
-@capabilities()
 effect std::agents::planApprove {
   plan: string;
   source: string;
@@ -28,7 +27,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L33))
 
 ## Functions
 
@@ -63,7 +62,7 @@ Build the code-generation instruction: emit a program whose node main
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L67))
 
 ### renderEffects
 
@@ -82,7 +81,7 @@ Human-readable capability envelope for the approval prompt, or an
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L95))
 
 ### runApproved
 
@@ -112,7 +111,9 @@ Gate generated code behind user approval, then run it: shows the plan,
 
 **Throws:** `std::agents::planApprove`, `std::run`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L187))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L186))
 
 ### plannerAgent
 
@@ -164,4 +165,6 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Throws:** `std::guard`, `std::agents::planApprove`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L225))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L224))

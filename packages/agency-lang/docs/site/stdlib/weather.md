@@ -25,14 +25,13 @@ Look up current weather for a city or zip code, and convert between
 ### std::weather
 
 ```ts
-@capabilities(network)
 effect std::weather {
   location: string;
   units: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L20))
 
 ## Functions
 
@@ -68,6 +67,8 @@ Usage from Agency code:
 **Returns:** `Result`
 
 **Throws:** `std::weather`
+
+**Needs:** `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L51))
 

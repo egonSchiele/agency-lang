@@ -50,7 +50,7 @@ export type Award = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L47))
 
 ### Executive
 
@@ -64,7 +64,7 @@ export type Executive = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L60))
 
 ### AwardDetail
 
@@ -90,21 +90,20 @@ export type AwardDetail = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L66))
 
 ## Effects
 
 ### std::usaspending
 
 ```ts
-@capabilities(network)
 effect std::usaspending {
   op: string;
   query: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L31))
 
 ## Functions
 
@@ -146,6 +145,8 @@ Search U.S. federal awards. Returns each award's id, recipient, amount, awarding
 
 **Throws:** `std::usaspending`, `std::http::fetchJSON`
 
+**Needs:** `network`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L217))
 
 ### usaspendingAward
@@ -172,4 +173,6 @@ Fetch full detail for one federal award. Returns amount, recipient and UEI, awar
 
 **Throws:** `std::usaspending`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L240))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/usaspending.agency#L241))

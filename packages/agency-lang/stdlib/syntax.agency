@@ -135,6 +135,7 @@ export def highlight(
   return _syntaxHighlight(code, language, theme)
 }
 
+@capabilities(terminal)
 export def diff(
   oldText: string,
   newText: string,

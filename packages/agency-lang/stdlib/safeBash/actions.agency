@@ -156,6 +156,7 @@ export def runBash(command: string, cwd: string): Result<string> {
   return success(out)
 }
 
+@capabilities(fileRead, fileWrite)
 export def runWrite(exec: WriteExec): Result<string> {
   """
   Perform the write a redirected echo asked for. Returns the empty string,

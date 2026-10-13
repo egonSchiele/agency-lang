@@ -44,7 +44,6 @@ Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your
 ### std::authorize
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(name)
 effect std::authorize {
   name: string;
@@ -53,31 +52,29 @@ effect std::authorize {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L42))
 
 ### std::getAccessToken
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(name)
 effect std::getAccessToken {
   name: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L44))
 
 ### std::revokeAuth
 
 ```ts
-@capabilities(fileRead, fileWrite)
 @always(name)
 effect std::revokeAuth {
   name: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L46))
 
 ## Functions
 
@@ -124,7 +121,9 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L51))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L49))
 
 ### getAccessToken
 
@@ -146,7 +145,9 @@ Get a valid OAuth access token for a previously authorized provider. Refreshes t
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L81))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L80))
 
 ### isAuthorized
 
@@ -165,6 +166,8 @@ Check whether OAuth tokens are stored for a provider. Returns true if tokens exi
 | name | `string` |  |
 
 **Returns:** `boolean`
+
+**Needs:** `fileRead`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L94))
 
@@ -188,4 +191,6 @@ Delete stored OAuth tokens for a provider. Re-authorization is required before t
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L103))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L104))

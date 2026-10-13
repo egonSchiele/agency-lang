@@ -40,7 +40,6 @@ type EmailResult = {
   provider: string
 }
 
-@capabilities(network)
 @always(to)
 effect std::sendEmail {
   from: string;
@@ -49,6 +48,7 @@ effect std::sendEmail {
 }
 
 /** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
+@capabilities(network)
 export def sendWithResend(
   from: string,
   to: string,
@@ -105,6 +105,7 @@ export def sendWithResend(
 }
 
 /** Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly. */
+@capabilities(network)
 export def sendWithSendGrid(
   from: string,
   to: string,
@@ -161,6 +162,7 @@ export def sendWithSendGrid(
 }
 
 /** Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint. */
+@capabilities(network)
 export def sendWithMailgun(
   from: string,
   to: string,

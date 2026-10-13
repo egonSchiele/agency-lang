@@ -49,20 +49,19 @@ export type NewsArticle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L34))
 
 ## Effects
 
 ### std::gdelt
 
 ```ts
-@capabilities(network)
 effect std::gdelt {
   query: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L31))
 
 ## Functions
 
@@ -96,5 +95,7 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 **Returns:** `Result<NewsArticle[]>`
 
 **Throws:** `std::gdelt`, `std::http::fetchJSON`
+
+**Needs:** `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/news/gdelt.agency#L83))

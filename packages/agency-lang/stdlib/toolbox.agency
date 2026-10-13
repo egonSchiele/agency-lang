@@ -110,7 +110,6 @@ const META_FILE = "meta.json"
 
 // One approval covers the scan; the reads that fulfil it use the
 // non-interrupt primitive, as std::skills does.
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
@@ -119,7 +118,6 @@ effect std::toolbox::scan {
 // runTool's use count. Its own effect, so a policy can approve the
 // stdlib's record without approving any std::write to meta.json. The
 // approval covers the write that fulfils it.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::recordUse {
   dir: string;
@@ -133,7 +131,6 @@ effect std::toolbox::recordUse {
 // approval covers the write that fulfils it. `root` is the toolbox root,
 // so "approve always here" pins the toolbox rather than one draft's
 // staging directory, whose name carries a random number.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::writeFile {
   root: string;
@@ -144,7 +141,6 @@ effect std::toolbox::writeFile {
 
 // The staging directory for one draft, created before the draft is
 // written. Same scope as the writes that go into it.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::createStaging {
   root: string;
@@ -154,7 +150,6 @@ effect std::toolbox::createStaging {
 
 // The staging directory of a draft that was not saved, removed with
 // everything in it.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStaging {
   root: string;
@@ -164,7 +159,6 @@ effect std::toolbox::removeStaging {
 
 // One file in a draft's staging directory, removed when a revision stops
 // being testable and the previous round's tests must not ship with it.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(root)
 effect std::toolbox::removeStagedFile {
   root: string;
@@ -180,7 +174,6 @@ export type Unresolved = {
   reason: string
 }
 
-@capabilities()
 effect std::toolbox::review {
   name: string;
   stagingDir: string;
@@ -206,7 +199,6 @@ effect std::toolbox::review {
 
 // Every publish into a toolbox raises this, whether the source came from
 // the design loop or from the caller. `dir` is the toolbox root.
-@capabilities(fileRead, fileWrite)
 @alwaysUnder(dir)
 effect std::toolbox::save {
   dir: string;
@@ -273,6 +265,7 @@ const EMPTY_MODULE: ModuleFacts = {
 // process cwd.
 // The real spelling of the toolbox directory, so every scan and save
 // interrupt names the directory the reads and writes will use.
+@capabilities(fileRead)
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
     return failure("dir must name the toolbox directory; got an empty string")
@@ -294,6 +287,7 @@ def factsOf(exported: ExportInfo): ModuleFacts {
 
 // `root` is the toolbox directory the scan interrupt named and `name` the
 // tool's directory under it, so a linked tool directory is refused.
+@capabilities(fileRead)
 def moduleFacts(root: string, name: string): Result<ModuleFacts> {
   const source = try _read(root, "${name}/${IMPL_FILE}", 0, 0)
   if (source is failure) {
@@ -325,6 +319,7 @@ type MetaFile = {
 // A missing meta.json is the default record. A present one that cannot be
 // read, is not JSON, or has a field of the wrong type is a failure, so a
 // corrupt file never passes as a healthy tool.
+@capabilities(fileRead)
 def metaFacts(root: string, name: string): Result<ToolMeta> {
   if (!exists("${name}/${META_FILE}", root)) {
     return success(DEFAULT_META)
@@ -424,6 +419,7 @@ def toolNames(root: string): Result<string[]> {
   return success(map(filter(entries.value, isToolDir), \entry -> entry.name))
 }
 
+@capabilities(fileRead)
 export idempotent def listTools(
   dir: string = "~/.agency-agent/tools",
 ): Result<ToolEntry[]> {
@@ -931,6 +927,7 @@ def reviewSource(source: string, settings: DraftSettings): Result<Review> {
 // interrupt carries the directory in the real spelling, and the write
 // that fulfils it uses that same spelling, as `recordUse` does for the
 // use count.
+@capabilities(fileRead, fileWrite)
 def writeToolFile(
   settings: DraftSettings,
   filename: string,
@@ -953,6 +950,7 @@ def writeToolFile(
 
 // Create this draft's staging directory. Raised before it exists, so the
 // payload carries the path the toolbox built, not a resolved one.
+@capabilities(fileRead, fileWrite)
 def makeStagingDir(root: string, dir: string, name: string): Result {
   return interrupt std::toolbox::createStaging("Are you sure you want to create this staging directory?", {
     root: root,
@@ -964,6 +962,7 @@ def makeStagingDir(root: string, dir: string, name: string): Result {
   }
 }
 
+@capabilities(fileRead, fileWrite)
 def removeStagingDir(root: string, dir: string, name: string): Result {
   return interrupt std::toolbox::removeStaging("Are you sure you want to remove this staging directory?", {
     root: root,
@@ -975,6 +974,7 @@ def removeStagingDir(root: string, dir: string, name: string): Result {
   }
 }
 
+@capabilities(fileRead, fileWrite)
 def removeStagedFile(
   root: string,
   dir: string,
@@ -1299,6 +1299,7 @@ def askUser(
 // The save gate. Both entry points publish through here, so a policy
 // that matches std::toolbox::save sees every tool that enters a toolbox.
 // Data carried on the approval is not consulted.
+@capabilities(fileRead, fileWrite)
 def askToSave(
   root: string,
   name: string,
@@ -1331,6 +1332,7 @@ def requestSchemaOf(settings: DraftSettings): Result<Json> {
   return success(ran.value.data)
 }
 
+@capabilities(fileRead)
 def saveTool(
   root: string,
   name: string,
@@ -1833,6 +1835,7 @@ export def writeTool(
 
 // ---- running a tool ----
 
+@capabilities(fileRead, fileWrite)
 def recordUse(root: string, name: string, meta: ToolMeta): Result {
   return interrupt std::toolbox::recordUse("Record one use of this tool in its ${META_FILE}?", {
     dir: "${root}/${name}",
@@ -1846,6 +1849,7 @@ def recordUse(root: string, name: string, meta: ToolMeta): Result {
   return try _write(root, "${name}/${META_FILE}", JSON.stringify(used, null, 2), "overwrite")
 }
 
+@capabilities(fileRead)
 export def runTool(
   name: string,
   request: Json,

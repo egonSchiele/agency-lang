@@ -30,7 +30,6 @@ import { env } from "std::system"
   ```
 */
 
-@capabilities(network)
 effect std::edgar { company: string }
 
 /** One SEC filing. `url` links directly to the primary document. */
@@ -132,6 +131,7 @@ def edgarSubmissionsFinalize(cik10: string, formType: string, limit: number, fet
   }
 }
 
+@capabilities(network)
 export def edgarFilingsByCik(cik: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a company by its CIK (Central Index Key). Returns filings with
@@ -150,6 +150,7 @@ export def edgarFilingsByCik(cik: string, formType: string = "", limit: number =
   return edgarSubmissionsFinalize(cik10, formType, limit, result)
 }
 
+@capabilities(network)
 export def edgarFilings(ticker: string, formType: string = "", limit: number = 20): Result<Filing[]> raises <std::edgar, std::http::fetchJSON> {
   """
   List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AAPL").

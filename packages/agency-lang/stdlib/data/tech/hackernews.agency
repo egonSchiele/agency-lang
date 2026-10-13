@@ -27,7 +27,6 @@ import { connectorFetch, connectorError, clampLimit } from "std::data/connector"
   ```
 */
 
-@capabilities(network)
 effect std::hackernews { op: string, query: string }
 
 static const HN_BASE = "https://hacker-news.firebaseio.com/v0"
@@ -251,6 +250,7 @@ def storiesFromFetch(idsResult: any, limit: number): Result<Story[]> raises <std
   }
 }
 
+@capabilities(network)
 export def hnStories(list: string = "top", limit: number = 30): Result<Story[]> raises <std::hackernews, std::http::fetchJSON> {
   """
   Fetch a Hacker News story list and hydrate the top items into full stories (title, url, author,
@@ -270,6 +270,7 @@ export def hnStories(list: string = "top", limit: number = 30): Result<Story[]> 
   return storiesFromFetch(idsResult, clampLimit(limit, 100))
 }
 
+@capabilities(network)
 export def hnItem(id: number): Result<Item> raises <std::hackernews, std::http::fetchJSON> {
   """
   Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its text, author,
@@ -282,6 +283,7 @@ export def hnItem(id: number): Result<Item> raises <std::hackernews, std::http::
   return itemFinalize(result)
 }
 
+@capabilities(network)
 export def hnUser(username: string): Result<User> raises <std::hackernews, std::http::fetchJSON> {
   """
   Fetch a Hacker News user's public profile: karma, account age, about text, and submitted item
@@ -294,6 +296,7 @@ export def hnUser(username: string): Result<User> raises <std::hackernews, std::
   return userFinalize(result)
 }
 
+@capabilities(network)
 export def hnSearch(query: string, sort: string = "relevance", tags: string = "story", limit: number = 20): Result<Story[]> raises <std::hackernews, std::http::fetchJSON> {
   """
   Search Hacker News stories by keyword via the Algolia index. Returns matching stories (title,

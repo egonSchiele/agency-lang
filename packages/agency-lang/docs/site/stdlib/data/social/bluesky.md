@@ -54,7 +54,7 @@ Result ordering for `bskySearch`.
 export type BskySort = "latest" | "top"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L50))
 
 ### Post
 
@@ -80,7 +80,7 @@ export type Post = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L55))
 
 ### Profile
 
@@ -99,14 +99,13 @@ export type Profile = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L69))
 
 ## Effects
 
 ### std::bluesky
 
 ```ts
-@capabilities(network)
 effect std::bluesky {
   op: string;
   query: string;
@@ -115,7 +114,7 @@ effect std::bluesky {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L44))
 
 ## Functions
 
@@ -151,6 +150,8 @@ Search Bluesky posts by keyword. Returns matching posts with author, text,
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
+**Needs:** `network`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L252))
 
 ### bskyAuthorFeed
@@ -179,7 +180,9 @@ Fetch a Bluesky account's recent posts, newest first. Returns posts with
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L268))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L269))
 
 ### bskyProfile
 
@@ -204,4 +207,6 @@ Fetch a Bluesky account's public profile: display name, description, and
 
 **Throws:** `std::bluesky`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L282))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/social/bluesky.agency#L284))

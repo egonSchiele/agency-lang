@@ -25,14 +25,13 @@ Run browser automation tasks described in plain language via the Browser Use
 ### std::browserUse
 
 ```ts
-@capabilities(network)
 effect std::browserUse {
   task: string;
   model: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L26))
 
 ## Functions
 
@@ -75,5 +74,7 @@ Run a browser automation task described in natural language via the Browser Use 
 **Returns:** `Result`
 
 **Throws:** `std::browserUse`
+
+**Needs:** `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/web/browser.agency#L29))

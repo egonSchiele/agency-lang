@@ -42,19 +42,17 @@ Read and write Google Calendar events from Agency code. Authorizes once
 ### std::authorizeCalendar
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(clientId)
 effect std::authorizeCalendar {
   clientId: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L55))
 
 ### std::listEvents
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(calendarId)
 effect std::listEvents {
   maxResults: number;
@@ -63,12 +61,11 @@ effect std::listEvents {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L57))
 
 ### std::createEvent
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 effect std::createEvent {
   summary: string;
   start: string;
@@ -78,12 +75,11 @@ effect std::createEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L58))
 
 ### std::updateEvent
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 effect std::updateEvent {
   eventId: string;
   summary: string;
@@ -92,12 +88,11 @@ effect std::updateEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L59))
 
 ### std::deleteEvent
 
 ```ts
-@capabilities(fileRead, fileWrite, network, subprocess, env)
 @always(calendarId)
 effect std::deleteEvent {
   eventId: string;
@@ -105,7 +100,7 @@ effect std::deleteEvent {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L61))
 
 ## Functions
 
@@ -131,7 +126,9 @@ Authorize access to Google Calendar. Opens a browser for the user to sign in and
 
 **Throws:** `std::authorizeCalendar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L68))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L64))
 
 ### isCalendarAuthorized
 
@@ -143,7 +140,9 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L82))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L79))
 
 ### listEvents
 
@@ -179,7 +178,9 @@ List upcoming events from Google Calendar. Returns an array of events, each with
 
 **Throws:** `std::listEvents`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L89))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L87))
 
 ### createEvent
 
@@ -218,7 +219,9 @@ Create a new event on Google Calendar. Returns the created event.
 
 **Throws:** `std::createEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L114))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L113))
 
 ### updateEvent
 
@@ -260,6 +263,8 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 
 **Throws:** `std::updateEvent`
 
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L145))
 
 ### deleteEvent
@@ -284,4 +289,6 @@ Delete an event from Google Calendar by its event ID. Returns { deleted: true } 
 
 **Throws:** `std::deleteEvent`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L177))
+**Needs:** `fileRead`, `fileWrite`, `network`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/calendar.agency#L178))

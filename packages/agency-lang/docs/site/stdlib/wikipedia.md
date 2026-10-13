@@ -22,36 +22,33 @@ Search Wikipedia and read article summaries or full text from Agency code.
 ### std::wikipedia::search
 
 ```ts
-@capabilities(network)
 effect std::wikipedia::search {
   query: string;
   limit: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L36))
 
 ### std::wikipedia::summary
 
 ```ts
-@capabilities(network)
 effect std::wikipedia::summary {
   title: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L37))
 
 ### std::wikipedia::article
 
 ```ts
-@capabilities(network)
 effect std::wikipedia::article {
   title: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L38))
 
 ## Functions
 
@@ -77,7 +74,9 @@ Search Wikipedia for articles matching a query. Each result has a title, descrip
 
 **Throws:** `std::wikipedia::search`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L43))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L41))
 
 ### summary
 
@@ -99,7 +98,9 @@ Get a summary of a Wikipedia article. Returns the title, description, intro extr
 
 **Throws:** `std::wikipedia::summary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L58))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L57))
 
 ### article
 
@@ -120,5 +121,7 @@ Get the full text of a Wikipedia article. Returns the title, plain-text content,
 **Returns:** `WikiArticle`
 
 **Throws:** `std::wikipedia::article`
+
+**Needs:** `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/wikipedia.agency#L71))

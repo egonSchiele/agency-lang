@@ -56,7 +56,7 @@ export type FredObservation = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L47))
 
 ### FredSeries
 
@@ -73,7 +73,7 @@ export type FredSeries = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L54))
 
 ### FredSeriesInfo
 
@@ -92,7 +92,7 @@ export type FredSeriesInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L61))
 
 ### FredUnits
 
@@ -112,7 +112,7 @@ export type FredUnits =
   | "log"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L77))
 
 ### FredFrequency
 
@@ -139,20 +139,19 @@ export type FredFrequency =
   | "wesun"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L81))
 
 ## Effects
 
 ### std::fred
 
 ```ts
-@capabilities(network)
 effect std::fred {
   seriesId: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L44))
 
 ## Functions
 
@@ -197,6 +196,8 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 
 **Throws:** `std::fred`, `std::env`, `std::http::fetchJSON`
 
+**Needs:** `network`, `env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L179))
 
 ### fredSeriesInfo
@@ -222,4 +223,6 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 
 **Throws:** `std::fred`, `std::env`, `std::http::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L207))
+**Needs:** `network`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L208))

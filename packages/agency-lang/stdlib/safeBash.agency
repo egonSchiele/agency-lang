@@ -189,6 +189,7 @@ def tildeModeFor(word: Word): string {
   extract the literal target, resolve it (quote-aware tilde, strict
   symlink walk), and return the payload both plan sides derive from. Any
   failure sends the whole command to the broad std::bash question. */
+@capabilities(fileRead)
 def prepareRedirectWrite(redirect: Redirect, cwd: string, content: string): Result<WritePayload> {
   if (redirect.fd != null) {
     return failure("redirect with an explicit file descriptor")
@@ -975,6 +976,7 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   return success(null)
 }
 
+@capabilities(fileRead, fileWrite, subprocess, env)
 def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   """
   Raise one effect.

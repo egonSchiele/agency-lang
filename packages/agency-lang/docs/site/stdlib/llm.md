@@ -101,19 +101,17 @@ export type HostedModelInfo = {
 ### std::llm::registerProvider
 
 ```ts
-@capabilities(fileRead)
 @always(path)
 effect std::llm::registerProvider {
   path: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L146))
 
 ### std::read
 
 ```ts
-@capabilities(fileRead)
 @alwaysUnder(dir)
 effect std::read {
   dir: string;
@@ -121,7 +119,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L213))
 
 ## Functions
 
@@ -212,6 +210,8 @@ Return the first provider in `order` whose API-key environment variable
 
 **Throws:** `std::env`
 
+**Needs:** `env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L113))
 
 ### registerProviderModule
@@ -234,6 +234,8 @@ Load a provider module by path at runtime and register its custom provider
 **Returns:** `Result`
 
 **Throws:** `std::llm::registerProvider`
+
+**Needs:** `fileRead`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L149))
 
@@ -318,5 +320,7 @@ Load model data from a JSON file (the shape `agency models refresh`
 **Returns:** `Result<number>`
 
 **Throws:** `std::read`
+
+**Needs:** `fileRead`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L228))

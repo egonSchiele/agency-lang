@@ -50,13 +50,12 @@ static const PREVIEW_CHARS = 700
 static const PREVIEW_LINE_LEN = 200
 
 /** Saving one long tool output to the spill directory. */
-@capabilities(fileRead, fileWrite)
 effect std::spill::write { filename: string }
 
 /** Reading or searching one saved output file. */
-@capabilities(fileRead, fileWrite)
 effect std::spill::read { filename: string }
 
+@capabilities(fileRead)
 export def spillDir(): string {
   """
   The directory saved tool output lives in.
@@ -85,6 +84,7 @@ export def keepOutput(text: string, exitCode: number): string raises <std::spill
   return spillNotice(text, saved.value, exitCode)
 }
 
+@capabilities(fileRead, fileWrite)
 def saveOutput(text: string): Result<string> raises <std::spill::write> {
   """
   Save one output under a fresh name and return the name. The name is
@@ -101,6 +101,7 @@ def saveOutput(text: string): Result<string> raises <std::spill::write> {
   return success(filename)
 }
 
+@capabilities(fileRead, fileWrite)
 export idempotent def readSpill(
   filename: string,
   offset: number = 0,
@@ -119,6 +120,7 @@ export idempotent def readSpill(
   return try _readSpill(filename, offset, limit)
 }
 
+@capabilities(fileRead, fileWrite)
 export idempotent def grepSpill(
   pattern: string,
   filename: string,

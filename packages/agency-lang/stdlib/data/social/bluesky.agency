@@ -41,7 +41,6 @@ import { format } from "std::date"
   ```
 */
 
-@capabilities(network)
 effect std::bluesky { op: string, query: string, since: number, limit: number }
 
 static const BSKY_BASE = "https://public.api.bsky.app/xrpc"
@@ -249,6 +248,7 @@ def profileFinalize(fetchResult: any): Result<Profile> {
   }
 }
 
+@capabilities(network)
 export idempotent def bskySearch(query: string, sort: BskySort = "latest", since: number = 0, limit: number = 25): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
   """
   Search Bluesky posts by keyword. Returns matching posts with author, text,
@@ -265,6 +265,7 @@ export idempotent def bskySearch(query: string, sort: BskySort = "latest", since
   return searchFinalize(result)
 }
 
+@capabilities(network)
 export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result<Post[]> raises <std::bluesky, std::http::fetchJSON> {
   """
   Fetch a Bluesky account's recent posts, newest first. Returns posts with
@@ -279,6 +280,7 @@ export idempotent def bskyAuthorFeed(handle: string, limit: number = 30): Result
   return feedFinalize(result)
 }
 
+@capabilities(network)
 export idempotent def bskyProfile(handle: string): Result<Profile> raises <std::bluesky, std::http::fetchJSON> {
   """
   Fetch a Bluesky account's public profile: display name, description, and

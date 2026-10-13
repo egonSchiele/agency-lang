@@ -28,6 +28,8 @@ Return the web-search tools whose API key is set, or an empty array when
 
 **Throws:** `std::env`
 
+**Needs:** `env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L53))
 
 ### hostedSearchTools
@@ -67,5 +69,7 @@ Return the names of the web-search providers whose API key is set, for
 **Returns:** `string[]`
 
 **Throws:** `std::env`
+
+**Needs:** `env`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L75))

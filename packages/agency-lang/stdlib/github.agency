@@ -176,14 +176,12 @@ export type CommentInfo = {
 
 // @always(owner, repo): an "approve always" answer pins to one repository
 // instead of every repository the token can reach.
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prGet {
   owner: string;
   repo: string;
   number: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prList {
   owner: string;
@@ -193,14 +191,12 @@ effect std::github::prList {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prDiff {
   owner: string;
   repo: string;
   number: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prFiles {
   owner: string;
@@ -209,7 +205,6 @@ effect std::github::prFiles {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewList {
   owner: string;
@@ -218,7 +213,6 @@ effect std::github::prReviewList {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewCommentList {
   owner: string;
@@ -227,7 +221,6 @@ effect std::github::prReviewCommentList {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prChecks {
   owner: string;
@@ -236,14 +229,12 @@ effect std::github::prChecks {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueGet {
   owner: string;
   repo: string;
   number: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueList {
   owner: string;
@@ -253,7 +244,6 @@ effect std::github::issueList {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCommentList {
   owner: string;
@@ -262,7 +252,6 @@ effect std::github::issueCommentList {
   perPage: number;
   page: number
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueSearch {
   owner: string;
@@ -273,7 +262,6 @@ effect std::github::issueSearch {
 }
 
 // Write effects carry the text about to be posted, so the approver sees it.
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReviewComment {
   owner: string;
@@ -283,7 +271,6 @@ effect std::github::prReviewComment {
   line: number;
   body: string
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prReview {
   owner: string;
@@ -293,7 +280,6 @@ effect std::github::prReview {
   body: string;
   comments: ReviewComment[]
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::prApprove {
   owner: string;
@@ -301,7 +287,6 @@ effect std::github::prApprove {
   number: number;
   body: string
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueCreate {
   owner: string;
@@ -311,7 +296,6 @@ effect std::github::issueCreate {
   labels: string[];
   assignees: string[]
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueComment {
   owner: string;
@@ -319,7 +303,6 @@ effect std::github::issueComment {
   number: number;
   body: string
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueUpdate {
   owner: string;
@@ -328,7 +311,6 @@ effect std::github::issueUpdate {
   state: string;
   reason: string
 }
-@capabilities(fileRead, env, network, subprocess)
 @always(owner, repo)
 effect std::github::issueLabel {
   owner: string;
@@ -341,6 +323,7 @@ effect std::github::issueLabel {
 // Every function checks its arguments and resolves owner/repo BEFORE raising,
 // so the payload shows exactly the request that will be sent.
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrGet(
   number: number,
   owner: string = "",
@@ -362,6 +345,7 @@ export idempotent def ghPrGet(
   return _ghPrGet(number, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrList(
   state: PrState = "open",
   base: string = "",
@@ -393,6 +377,7 @@ export idempotent def ghPrList(
   return _ghPrList(state, base, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrDiff(
   number: number,
   owner: string = "",
@@ -415,6 +400,7 @@ export idempotent def ghPrDiff(
   return _ghPrDiff(number, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrFiles(
   number: number,
   perPage: number = 100,
@@ -444,6 +430,7 @@ export idempotent def ghPrFiles(
   return _ghPrFiles(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrReviews(
   number: number,
   perPage: number = 30,
@@ -473,6 +460,7 @@ export idempotent def ghPrReviews(
   return _ghPrReviews(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrReviewComments(
   number: number,
   perPage: number = 30,
@@ -502,6 +490,7 @@ export idempotent def ghPrReviewComments(
   return _ghPrReviewComments(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghPrChecks(
   number: number,
   perPage: number = 30,
@@ -531,6 +520,7 @@ export idempotent def ghPrChecks(
   return _ghPrChecks(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghIssueGet(
   number: number,
   owner: string = "",
@@ -553,6 +543,7 @@ export idempotent def ghIssueGet(
   return _ghIssueGet(number, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghIssueList(
   state: IssueState = "open",
   labels: string[] = [],
@@ -587,6 +578,7 @@ export idempotent def ghIssueList(
   return _ghIssueList(state, labels, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghIssueComments(
   number: number,
   perPage: number = 30,
@@ -616,6 +608,7 @@ export idempotent def ghIssueComments(
   return _ghIssueComments(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export idempotent def ghIssueSearch(
   query: string,
   perPage: number = 30,
@@ -649,6 +642,7 @@ export idempotent def ghIssueSearch(
 // ---- Writes ----------------------------------------------------------------
 // The mutation sits in a destructive block, so a retry never repeats it.
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghPrReviewComment(
   number: number,
   path: string,
@@ -702,6 +696,7 @@ export def ghPrReviewComment(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghPrReview(
   number: number,
   event: ReviewEvent = "COMMENT",
@@ -737,6 +732,7 @@ export def ghPrReview(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghPrApprove(
   number: number,
   body: string = "",
@@ -764,6 +760,7 @@ export def ghPrApprove(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghIssueCreate(
   title: string,
   body: string,
@@ -795,6 +792,7 @@ export def ghIssueCreate(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghIssueComment(
   number: number,
   body: string,
@@ -821,6 +819,7 @@ export def ghIssueComment(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghIssueClose(
   number: number,
   reason: CloseReason = "completed",
@@ -848,6 +847,7 @@ export def ghIssueClose(
   }
 }
 
+@capabilities(fileRead, network, subprocess, env)
 export def ghIssueLabel(
   number: number,
   labels: string[],

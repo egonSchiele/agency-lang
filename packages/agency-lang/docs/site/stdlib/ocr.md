@@ -42,7 +42,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L45))
 
 ### TextBlock
 
@@ -57,14 +57,13 @@ export type TextBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L53))
 
 ## Effects
 
 ### std::ocr
 
 ```ts
-@capabilities(fileRead, fileWrite, subprocess)
 @alwaysUnder(dir)
 effect std::ocr {
   dir: string;
@@ -72,12 +71,11 @@ effect std::ocr {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L30))
 
 ### std::ocrCloud
 
 ```ts
-@capabilities(fileRead, llm)
 effect std::ocrCloud {
   requestedProvider: string;
   configuredModel: string;
@@ -86,7 +84,7 @@ effect std::ocrCloud {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L36))
 
 ## Functions
 
@@ -121,7 +119,9 @@ Recognize the text in an image with macOS Vision and return each line
 
 **Throws:** `std::ocr`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L63))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L62))
 
 ### readText
 
@@ -153,7 +153,9 @@ Recognize the text in an image with macOS Vision and return it as one
 
 **Throws:** `std::ocr`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L91))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L90))
 
 ### readTextWithModel
 
@@ -190,5 +192,7 @@ Send an image to a vision model and return the text it reads. The
 **Returns:** `Result<string>`
 
 **Throws:** `std::ocrCloud`
+
+**Needs:** `fileRead`, `llm`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ocr.agency#L115))

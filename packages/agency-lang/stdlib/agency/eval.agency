@@ -82,6 +82,7 @@ export type EvalRecord = {
   The nested arrays (threads, events, interrupts, errors, incomplete) are loosely
   typed because their schemas are large and evolve independently. Consumers can
   JSON-inspect as needed. */
+@capabilities(fileRead)
 export def evalExtract(statelogPath: string): EvalRecord {
   """
   Extract a structured eval record from a statelog file. Returns the same record `agency eval extract` writes to disk, but directly, so eval pipelines composed in Agency can inspect or judge it without going through a temporary file.
@@ -116,6 +117,7 @@ export type PairwiseVerdict = {
   matter: judge LLMs slightly prefer one position over the other, so
   high-precision callers should invoke twice with swapped order and reconcile the
   verdicts. */
+@capabilities(fileRead, llm)
 export def evalJudge(
   goal: string,
   recordPathA: string,
@@ -175,6 +177,7 @@ export type SuiteVerdict = {
   perInput: InputVerdict[]
 }
 
+@capabilities(fileRead, llm)
 export def evalJudgeSuite(
   runA: string,
   runB: string,

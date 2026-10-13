@@ -79,7 +79,7 @@ export type SkippedAlias = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L201))
 
 ### RefreshResult
 
@@ -99,7 +99,7 @@ export type RefreshResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L208))
 
 ## Functions
 
@@ -159,7 +159,9 @@ Download a model and return its local .gguf path, or the model directory
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L81))
+**Needs:** `fileRead`, `fileWrite`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L82))
 
 ### listDownloadedModels
 
@@ -179,7 +181,9 @@ List downloaded models: .gguf files and MLX model directories.
 
 **Returns:** `DownloadedModel[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L93))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L95))
 
 ### listModelNames
 
@@ -191,7 +195,9 @@ List usable short names: curated built-ins and your aliases.
 
 **Returns:** `ModelName[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L102))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L105))
 
 ### aliasModel
 
@@ -214,7 +220,9 @@ Add a short-name alias for a model URI
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L109))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L113))
 
 ### unaliasModel
 
@@ -235,7 +243,9 @@ Remove a short-name alias.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L120))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L125))
 
 ### removeModel
 
@@ -259,7 +269,9 @@ Delete a downloaded GGUF file from the models directory. This is what
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L130))
+**Needs:** `fileRead`, `fileWrite`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L136))
 
 ### localModelBackend
 
@@ -280,7 +292,7 @@ Which engine runs a model: "llama-cpp" for GGUF files, "mlx" for MLX
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L148))
 
 ### mlxServedName
 
@@ -302,7 +314,7 @@ The model name to send to the MLX server for this model: the repo id for
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L158))
 
 ### registerLocalProvider
 
@@ -312,7 +324,7 @@ registerLocalProvider()
 
 Register the llama-cpp provider so local models can be used for LLM calls.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L169))
 
 ### registerLocalModel
 
@@ -337,7 +349,9 @@ Register the provider and ensure the model is downloaded. Returns the local
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L170))
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L177))
 
 ### printLocalCatalog
 
@@ -348,7 +362,9 @@ printLocalCatalog()
 Print the usable-model catalog (curated names + your aliases) as an
     aligned table, the same listing as `agency local alias list`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L183))
+**Needs:** `fileRead`, `terminal`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L191))
 
 ### mlxServerModels
 
@@ -371,7 +387,9 @@ The models the MLX server is serving, or null if no server is running.
 
 **Returns:** `string[] | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L211))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L220))
 
 ### mlxServerRunning
 
@@ -392,7 +410,9 @@ Whether an MLX server answers at the base URL. The same probe as
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L223))
+**Needs:** `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L233))
 
 ### refreshCatalog
 
@@ -420,4 +440,6 @@ Same operation as the `agency local refresh` CLI command.
 
 **Returns:** [RefreshResult](#refreshresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L234))
+**Needs:** `fileRead`, `fileWrite`, `network`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L245))

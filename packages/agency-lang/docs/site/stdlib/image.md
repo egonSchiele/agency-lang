@@ -43,7 +43,7 @@ export type ImageBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L55))
 
 ### ImageSize
 
@@ -57,7 +57,7 @@ export type ImageSize = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L63))
 
 ### GeneratedImage
 
@@ -68,7 +68,7 @@ export type GeneratedImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L68))
 
 ### ImageQuality
 
@@ -76,7 +76,7 @@ export type GeneratedImage = {
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L73))
 
 ### LocalImage
 
@@ -88,14 +88,13 @@ export type LocalImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L135))
 
 ## Effects
 
 ### std::uploadImage
 
 ```ts
-@capabilities(fileRead, llm)
 @alwaysUnder(dir)
 @always(model)
 effect std::uploadImage {
@@ -107,12 +106,11 @@ effect std::uploadImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L39))
 
 ### std::cropImage
 
 ```ts
-@capabilities(fileRead, fileWrite, env, subprocess)
 @alwaysUnder(dir, outDir)
 effect std::cropImage {
   dir: string;
@@ -122,12 +120,11 @@ effect std::cropImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L46))
 
 ### std::pasteImages
 
 ```ts
-@capabilities(fileRead, fileWrite, env, subprocess)
 effect std::pasteImages {
   files: string[];
   outDir: string;
@@ -135,7 +132,7 @@ effect std::pasteImages {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L51))
 
 ## Functions
 
@@ -189,7 +186,9 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Throws:** `std::uploadImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L78))
+**Needs:** `fileRead`, `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L76))
 
 ### generateImageLocal
 
@@ -322,7 +321,9 @@ there. Pass a lower strength to keep some of it.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L162))
+**Needs:** `fileRead`, `subprocess`, `env`, `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L161))
 
 ### cropImage
 
@@ -361,6 +362,8 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L275))
 
 ### imageSize
@@ -383,7 +386,9 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L311))
+**Needs:** `fileRead`, `subprocess`, `env`, `llm`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L312))
 
 ### pasteImages
 
@@ -416,4 +421,6 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L328))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L330))

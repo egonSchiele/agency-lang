@@ -23,41 +23,37 @@ open URLs, and read from stdin.
 ### std::screenshot
 
 ```ts
-@capabilities(fileRead, subprocess)
 effect std::screenshot {
   filepath: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L31))
 
 ### std::exit
 
 ```ts
-@capabilities()
 effect std::exit {
   code: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L32))
 
 ### std::env
 
 ```ts
-@capabilities(env)
 @always(name)
 effect std::env {
   name: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L34))
 
 ### std::setEnv
 
 ```ts
-@capabilities(env)
 @always(name)
 effect std::setEnv {
   name: string;
@@ -65,12 +61,11 @@ effect std::setEnv {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L36))
 
 ### std::openUrl
 
 ```ts
-@capabilities(subprocess)
 @always(host)
 effect std::openUrl {
   url: string;
@@ -78,19 +73,18 @@ effect std::openUrl {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L38))
 
 ### std::notify
 
 ```ts
-@capabilities(subprocess)
 effect std::notify {
   title: string;
   body: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L39))
 
 ## Functions
 
@@ -116,7 +110,9 @@ Show a native OS notification. Returns true if the notification was sent.
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L47))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L42))
 
 ### screenshot
 
@@ -156,7 +152,9 @@ screencapture.
 
 **Throws:** `std::screenshot`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L63))
+**Needs:** `fileRead`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L59))
 
 ### exit
 
@@ -175,7 +173,7 @@ Terminate the process with the given exit code. Use with caution. This skips any
 
 **Throws:** `std::exit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L88))
 
 ### args
 
@@ -187,7 +185,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L99))
 
 ### cwd
 
@@ -199,7 +197,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L106))
 
 ### env
 
@@ -222,7 +220,9 @@ Read an environment variable. Returns null if the variable is not set, or if
 
 **Throws:** `std::env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L127))
+**Needs:** `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L124))
 
 ### setEnv
 
@@ -246,7 +246,9 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L144))
+**Needs:** `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L142))
 
 ### isTTY
 
@@ -258,7 +260,9 @@ Return true if standard input is connected to a terminal. Returns false when std
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L158))
+**Needs:** `terminal`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L157))
 
 ### readStdin
 
@@ -269,6 +273,8 @@ readStdin(): string
 Read all of standard input until EOF and return it as a string. Blocks until the input stream closes. Intended for non-interactive invocations where the user pipes input into the program.
 
 **Returns:** `string`
+
+**Needs:** `terminal`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L165))
 
@@ -295,7 +301,9 @@ macOS-only. Ctrl-C, a race loss, or a time-guard abort kills the in-flight
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L180))
+**Needs:** `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L181))
 
 ### setTitle
 
@@ -315,4 +323,4 @@ Set the process title (as shown in system monitors, `ps` output, and the termina
 
 **Returns:** `void`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/system.agency#L195))

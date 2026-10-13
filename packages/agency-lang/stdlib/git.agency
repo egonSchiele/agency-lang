@@ -94,56 +94,39 @@ export type GitStash = { ref: string; description: string }
 // explicit `cwd` as given, never joining it to the agent working directory.
 
 // Read effects
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::status     { cwd: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::log        { cwd: string, ref: string, path: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::diff       { cwd: string, ref: string, ref2: string, staged: boolean, path: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::show       { cwd: string, ref: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchList { cwd: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::remoteList { cwd: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::blame      { cwd: string, path: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashList  { cwd: string }
 // Write effects
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::add          { cwd: string, paths: string[], all: boolean }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::commit       { cwd: string, message: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::checkout     { cwd: string, target: string, force: boolean }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::switch       { cwd: string, branch: string, create: boolean }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchCreate { cwd: string, branch: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::branchDelete { cwd: string, branch: string, force: boolean }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPush    { cwd: string, message: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::stashPop     { cwd: string }
-@capabilities(fileRead, env, subprocess)
 @alwaysUnder(cwd)
 effect std::git::restore      { cwd: string, paths: string[], staged: boolean }
 
@@ -167,6 +150,7 @@ def repoDir(cwd: string): string {
 
 // ---- Reads -----------------------------------------------------------------
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitIsRepo(cwd: string = ""): boolean raises <std::git::status> {
   """
   True when `cwd` is inside a git work tree. Never fails: a directory that is not
@@ -179,6 +163,7 @@ export idempotent def gitIsRepo(cwd: string = ""): boolean raises <std::git::sta
   return _gitIsRepo(dir)
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """
   Show the working-tree status: current branch, ahead/behind counts, and
@@ -192,6 +177,7 @@ export idempotent def gitStatus(cwd: string = ""): GitStatus raises <std::git::s
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may query. */
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitLog(
   n: number = 20, oneline: boolean = false, path: string = "",
   ref: string = "", author: string = "", allowedPaths: string[] = [],
@@ -217,6 +203,7 @@ export idempotent def gitLog(
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may diff. */
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitDiff(
   ref: string = "", ref2: string = "", staged: boolean = false,
   path: string = "", allowedPaths: string[] = [], cwd: string = "",
@@ -238,6 +225,7 @@ export idempotent def gitDiff(
   return parseDiff(_gitRun(dir, diffArgs({ ref: ref, ref2: ref2, staged: staged, path: path })))
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff raises <std::git::show> {
   """
   Show a commit as a structured per-file summary plus the raw patch. Line
@@ -250,6 +238,7 @@ export idempotent def gitShow(ref: string = "HEAD", cwd: string = ""): GitDiff r
   return parseDiff(_gitRun(dir, showArgs({ ref: ref })))
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitBranchList(cwd: string = ""): GitBranch[] raises <std::git::branchList> {
   """
   List local branches with their current-marker, upstream, and sha.
@@ -260,6 +249,7 @@ export idempotent def gitBranchList(cwd: string = ""): GitBranch[] raises <std::
   return parseBranchList(_gitRun(dir, branchListArgs()))
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::git::remoteList> {
   """
   List configured remotes with their fetch/push URLs.
@@ -270,6 +260,7 @@ export idempotent def gitRemoteList(cwd: string = ""): GitRemote[] raises <std::
   return parseRemoteList(_gitRun(dir, remoteListArgs()))
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitBlame(path: string, ref: string = "", cwd: string = ""): BlameLine[] raises <std::git::blame> {
   """
   Show line-by-line authorship for a file.
@@ -282,6 +273,7 @@ export idempotent def gitBlame(path: string, ref: string = "", cwd: string = "")
   return parseBlame(_gitRun(dir, blameArgs({ path: path, ref: ref })))
 }
 
+@capabilities(fileRead, subprocess, env)
 export idempotent def gitStashList(cwd: string = ""): GitStash[] raises <std::git::stashList> {
   """
   List stashes with their ref and description.
@@ -297,6 +289,7 @@ export idempotent def gitStashList(cwd: string = ""): GitStash[] raises <std::gi
 /** `all` and `allowedPaths` are developer guardrails: bind `all: false` and/or
     a prefix list for `allowedPaths` via `.partial()` before handing this to an
     agent. */
+@capabilities(fileRead, subprocess, env)
 export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
   """
   Stage changes for commit.
@@ -315,6 +308,7 @@ export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: stri
   }
 }
 
+@capabilities(fileRead, subprocess, env)
 export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
@@ -329,6 +323,7 @@ export def gitCommit(message: string, cwd: string = ""): string raises <std::git
 }
 
 /** Bind `force: false` via `.partial()` to forbid discarding local changes. */
+@capabilities(fileRead, subprocess, env)
 export def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
   """
   Check out a branch, commit, or path.
@@ -347,6 +342,7 @@ export def gitCheckout(target: string, force: boolean = false, cwd: string = "")
   }
 }
 
+@capabilities(fileRead, subprocess, env)
 export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
   """
   Switch to a branch.
@@ -361,6 +357,7 @@ export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""):
   }
 }
 
+@capabilities(fileRead, subprocess, env)
 export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
   """
   Create a new branch at HEAD (does not switch to it).
@@ -377,6 +374,7 @@ export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std
 
 /** Guardrails: bind `force: false` and/or a `protectedBranches` list via
     `.partial()` before handing this to an agent. */
+@capabilities(fileRead, subprocess, env)
 export def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
   """
   Delete a local branch.
@@ -398,6 +396,7 @@ export def gitBranchDelete(branch: string, force: boolean = false, protectedBran
   }
 }
 
+@capabilities(fileRead, subprocess, env)
 export def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
   """
   Stash the working-tree changes.
@@ -411,6 +410,7 @@ export def gitStashPush(message: string = "", cwd: string = ""): string raises <
   }
 }
 
+@capabilities(fileRead, subprocess, env)
 export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
   """
   Apply and drop the most recent stash.
@@ -425,6 +425,7 @@ export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may restore. */
+@capabilities(fileRead, subprocess, env)
 export def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
   """
   Restore files to a previous state.

@@ -708,6 +708,7 @@ def _addTextInput(
  * For static UI or first-paint scenarios. For interactive UI, use
  * `runLoop`.
  */
+@capabilities(terminal)
 export def renderOnce(tree: Element) {
   """
   Render a single Element tree to the screen and return immediately.
@@ -723,6 +724,7 @@ export def renderOnce(tree: Element) {
  * Use sparingly; prefer `runLoop` for anything beyond a single
  * blocking prompt.
  */
+@capabilities(terminal)
 export def readKey(): KeyEvent {
   """
   Read one key from the terminal, blocking until a key is pressed.
@@ -749,6 +751,7 @@ export def readKey(): KeyEvent {
  * @param isDone       - Pure (state) -> boolean. Loop exits when true.
  * @param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
  */
+@capabilities(terminal)
 export def runLoop(
   initialState: any,
   render: any,
@@ -867,6 +870,7 @@ type ReplState = {
 // clears it around `_runLoop`.
 let _activeRepl: any = null
 
+@capabilities(terminal)
 export def pushMessage(message: string) {
   """
   Append a message to the active REPL transcript. It renders on the
@@ -886,6 +890,7 @@ export def pushMessage(message: string) {
   _triggerRender()
 }
 
+@capabilities(terminal)
 export def clearMessages() {
   """
   Remove all messages from the active REPL transcript. Use it for an
@@ -908,6 +913,7 @@ export def clearMessages() {
  * When a `repl()` owns the screen, use an in-TUI modal prompt instead.
  * Non-TTY output has no fallback, so the caller must script around it.
  */
+@capabilities(terminal)
 export def select(
   message: string,
   items: ChoiceItem[],
@@ -932,6 +938,7 @@ export def select(
 /**
  * Raises if a `repl()` owns the screen or if stdout is not a TTY.
  */
+@capabilities(terminal)
 export def autocomplete(
   message: string,
   items: ChoiceItem[],
@@ -966,6 +973,7 @@ export def autocomplete(
  * Bind `validate` via `.partial()` before handing `prompt` to an LLM as
  * a tool so the LLM cannot override the constraint.
  */
+@capabilities(terminal)
 export def prompt(
   message: string,
   initial: string = "",
@@ -990,6 +998,7 @@ export def prompt(
 /**
  * Raises if a `repl()` owns the screen or if stdout is not a TTY.
  */
+@capabilities(terminal)
 export def confirm(message: string, initial: boolean = false): Result<boolean> {
   """
   Ask the user a yes/no question. Returns `success(true)`,
@@ -1030,6 +1039,7 @@ def indent(str: string): string {
  * surface its approve/reject menus through the active REPL without
  * fighting the input bar.
  */
+@capabilities(terminal)
 export def chooseOption(
   title: string,
   body: string,
@@ -1789,6 +1799,7 @@ def _replIsDone(state: ReplState): boolean {
  * keys but currently leaks one pinned runtime checkpoint per render,
  * so prefer the event-driven default.
  */
+@capabilities(terminal)
 export def repl(
   status: any,
   onSubmit: any,

@@ -26,7 +26,6 @@ import { keys } from "std::object"
   ```
 */
 
-@capabilities(network)
 effect std::yc { op: string, query: string }
 
 static const YC_BASE = "https://yc-oss.github.io/api"
@@ -175,6 +174,7 @@ def metaFinalize(fetchResult: any): Result<YcMeta> {
   }
 }
 
+@capabilities(network)
 export def ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
   Fetch the YC companies in a batch. Returns each company's id, name, one-liner, batch, status,
@@ -187,6 +187,7 @@ export def ycBatch(batch: string): Result<Company[]> raises <std::yc, std::http:
   return companiesFinalize(result)
 }
 
+@capabilities(network)
 export def ycIndustry(industry: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
   Fetch the YC companies in an industry. Returns each company's profile. An unknown industry
@@ -199,6 +200,7 @@ export def ycIndustry(industry: string): Result<Company[]> raises <std::yc, std:
   return companiesFinalize(result)
 }
 
+@capabilities(network)
 export def ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
   Fetch the YC companies with a tag. Returns each company's profile. An unknown tag returns a
@@ -211,6 +213,7 @@ export def ycTag(tag: string): Result<Company[]> raises <std::yc, std::http::fet
   return companiesFinalize(result)
 }
 
+@capabilities(network)
 export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std::http::fetchJSON> {
   """
   Fetch a curated YC company list: "top", "all", "hiring", "nonprofit", "women-founded",
@@ -229,6 +232,7 @@ export def ycList(list: string = "top"): Result<Company[]> raises <std::yc, std:
   return companiesFinalize(result)
 }
 
+@capabilities(network)
 export def ycMeta(): Result<YcMeta> raises <std::yc, std::http::fetchJSON> {
   """
   Fetch the YC directory metadata: the available batch, industry, and tag slugs plus the

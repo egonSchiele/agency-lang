@@ -68,15 +68,10 @@ export type MemoryConfig = {
   embeddings?: { model: string | undefined; provider: string | undefined }
 }
 
-@capabilities(fileRead, fileWrite)
 effect std::memory::enableMemory { dir: string }
-@capabilities()
 effect std::memory::disableMemory {}
-@capabilities(fileRead, fileWrite, llm)
 effect std::memory::remember { contentLength: number }
-@capabilities(fileRead, llm)
 effect std::memory::recall { query: string }
-@capabilities(fileRead, fileWrite, llm)
 effect std::memory::forget { query: string }
 
 /** Useful for branching in user code (`if (isMemoryActive()) { ... }`)
@@ -132,6 +127,7 @@ export def getMemoryId(): string {
  *  Branch-scoped: a fork/race branch inherits the config active at fork
  *  time, and enabling/disabling inside a branch stays local to that
  *  branch. */
+@capabilities(fileRead, fileWrite)
 export def enableMemory(config: MemoryConfig) {
   """
   Turn memory on for the current execution branch using `config`. The
@@ -163,6 +159,7 @@ export def disableMemory() {
   _disableMemory()
 }
 
+@capabilities(fileRead, fileWrite)
 export def memory(config: MemoryConfig, block: () -> any = null): Result {
   """
   Run `block` with `config` as the active memory configuration, then
@@ -186,6 +183,7 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
   return result
 }
 
+@capabilities(fileRead, fileWrite, llm)
 export def remember(content: string) {
   """
   Extract structured facts (entities, observations, and relations) from
@@ -216,6 +214,7 @@ export def remember(content: string) {
   }
 }
 
+@capabilities(fileRead, llm)
 export def recall(query: string): string {
   """
   Retrieve relevant facts from the knowledge graph as a formatted
@@ -234,6 +233,7 @@ export def recall(query: string): string {
   return _recall(query)
 }
 
+@capabilities(fileRead, fileWrite, llm)
 export def forget(query: string) {
   """
   Soft-delete facts matching the query from the knowledge graph. Data is

@@ -23,14 +23,13 @@ Send SMS text messages from Agency code via Twilio. Set `TWILIO_ACCOUNT_SID`,
 ### std::sendSms
 
 ```ts
-@capabilities(network)
 @always(to)
 effect std::sendSms {
   to: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L24))
 
 ## Functions
 
@@ -75,5 +74,7 @@ Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` env
 **Returns:** `Result`
 
 **Throws:** `std::sendSms`
+
+**Needs:** `network`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/messaging/sms.agency#L28))

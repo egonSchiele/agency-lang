@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
-import { readAlwaysScope } from "../utils/alwaysTag.js";
-import { readCapabilities } from "../utils/capabilitiesTag.js";
+import { readAlwaysScope } from "../typeChecker/alwaysTag.js";
+import { readCapabilities } from "../typeChecker/capabilitiesTag.js";
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";

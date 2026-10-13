@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { parseAgency } from "./parser.js";
 import { effectDeclarationsWithTags } from "./utils/tagsAbove.js";
-import { readCapabilities } from "./utils/capabilitiesTag.js";
+import { readCapabilities } from "./typeChecker/capabilitiesTag.js";
 
 function agencyFilesUnder(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

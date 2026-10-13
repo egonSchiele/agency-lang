@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { closestCapability, readCapabilities, sameCapabilities } from "./capabilitiesTag.js";
 import { parseAgency } from "../parser.js";
-import { effectDeclarationsWithTags } from "./tagsAbove.js";
+import { effectDeclarationsWithTags } from "../utils/tagsAbove.js";
 
 function tagsOf(src: string) {
   const parsed = parseAgency(src);

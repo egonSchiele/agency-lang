@@ -300,6 +300,42 @@ effect app::x { a: string, b: string }
 
 **How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
 
+  capabilityUnknown: `A \`@capabilities\` tag names something that is not a capability. The names are fixed: \`fileRead\`, \`fileWrite\`, \`network\`, \`subprocess\`, \`env\`, \`terminal\`, and \`llm\`. Each one is a part of the host that a platform may lack, so a program cannot add to the list.
+
+\`\`\`
+@capabilities(flies)
+effect app::load { path: string }
+\`\`\`
+
+**How to fix:** write the name the message suggests, \`@capabilities(fileRead)\` here.`,
+
+  capabilitiesBadArgument: `Each argument to \`@capabilities\` must be a bare capability name. Strings, calls, and other expressions are not names.
+
+\`\`\`
+@capabilities("fileRead")
+effect app::load { path: string }
+\`\`\`
+
+**How to fix:** write \`@capabilities(fileRead)\`.`,
+
+  capabilitiesRepeatedTag: `\`@capabilities\` appears more than once on one effect declaration. It may appear once; list every capability in that one tag.
+
+\`\`\`
+@capabilities(fileRead)
+@capabilities(network)
+effect app::sync { path: string }
+\`\`\`
+
+**How to fix:** merge them: \`@capabilities(fileRead, network)\`.`,
+
+  capabilitiesConflict: `Two declarations of the same effect carry \`@capabilities\` tags that name different capabilities. An effect needs one thing from the host wherever it is declared, so every tagged declaration must agree. A declaration with no tag inherits the tagged ones and is fine.
+
+**How to fix:** make the tags the same, or drop the tag from the declaration that was only repeating the effect.`,
+
+  capabilitiesStrayTag: `A \`@capabilities\` tag ended up on something other than an effect declaration, such as a function, a type, or an import. The tag says what an effect needs from the host; nothing else carries it.
+
+**How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
+
   effectDataMissing: `The effect declares a payload, but this \`raise\`/\`interrupt\` supplied none. A declared payload is required at the raise site.
 
 **How to fix:** pass the data the effect expects.`,

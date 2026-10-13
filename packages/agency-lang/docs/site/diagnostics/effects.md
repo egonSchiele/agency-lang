@@ -241,3 +241,69 @@ Two tagged declarations of the same effect disagree about which fields an "appro
 An `@always` or `@alwaysUnder` tag ended up on something other than an effect declaration, such as a function, a type, or an import. These tags only describe an effect's approval scope.
 
 **How to fix:** move the tag so it sits directly above the `effect` line it describes.
+
+<a id="ag3024"></a>
+
+## AG3024 — Unknown capability '&#123;name&#125;' on effect '&#123;effect&#125;'. Did you mean '&#123;suggestion&#125;'? The capabilities are &#123;known&#125;.
+
+*Default severity: error.*
+
+A `@capabilities` tag names something that is not a capability. The names are fixed: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`. Each one is a part of the host that a platform may lack, so a program cannot add to the list.
+
+```
+@capabilities(flies)
+effect app::load { path: string }
+```
+
+**How to fix:** write the name the message suggests, `@capabilities(fileRead)` here.
+
+<a id="ag3025"></a>
+
+## AG3025 — @capabilities arguments must be bare capability names (effect '&#123;effect&#125;').
+
+*Default severity: error.*
+
+Each argument to `@capabilities` must be a bare capability name. Strings, calls, and other expressions are not names.
+
+```
+@capabilities("fileRead")
+effect app::load { path: string }
+```
+
+**How to fix:** write `@capabilities(fileRead)`.
+
+<a id="ag3026"></a>
+
+## AG3026 — @capabilities appears more than once on effect '&#123;effect&#125;'.
+
+*Default severity: error.*
+
+`@capabilities` appears more than once on one effect declaration. It may appear once; list every capability in that one tag.
+
+```
+@capabilities(fileRead)
+@capabilities(network)
+effect app::sync { path: string }
+```
+
+**How to fix:** merge them: `@capabilities(fileRead, network)`.
+
+<a id="ag3027"></a>
+
+## AG3027 — Conflicting @capabilities for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree.
+
+*Default severity: error.*
+
+Two declarations of the same effect carry `@capabilities` tags that name different capabilities. An effect needs one thing from the host wherever it is declared, so every tagged declaration must agree. A declaration with no tag inherits the tagged ones and is fine.
+
+**How to fix:** make the tags the same, or drop the tag from the declaration that was only repeating the effect.
+
+<a id="ag3028"></a>
+
+## AG3028 — @capabilities is only valid on an effect declaration.
+
+*Default severity: error.*
+
+A `@capabilities` tag ended up on something other than an effect declaration, such as a function, a type, or an import. The tag says what an effect needs from the host; nothing else carries it.
+
+**How to fix:** move the tag so it sits directly above the `effect` line it describes.

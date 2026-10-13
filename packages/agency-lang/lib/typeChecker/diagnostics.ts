@@ -465,6 +465,33 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "@{tag} is only valid on an effect declaration.",
   },
+  capabilityUnknown: {
+    code: "AG3024",
+    severity: "error",
+    message:
+      "Unknown capability '{name}' on effect '{effect}'. Did you mean '{suggestion}'? The capabilities are {known}.",
+  },
+  capabilitiesBadArgument: {
+    code: "AG3025",
+    severity: "error",
+    message: "@capabilities arguments must be bare capability names (effect '{effect}').",
+  },
+  capabilitiesRepeatedTag: {
+    code: "AG3026",
+    severity: "error",
+    message: "@capabilities appears more than once on effect '{effect}'.",
+  },
+  capabilitiesConflict: {
+    code: "AG3027",
+    severity: "error",
+    message:
+      "Conflicting @capabilities for effect '{effect}'. All tagged declarations of an effect must agree.",
+  },
+  capabilitiesStrayTag: {
+    code: "AG3028",
+    severity: "error",
+    message: "@capabilities is only valid on an effect declaration.",
+  },
   effectDataMissing: {
     code: "AG3005",
     severity: "error",

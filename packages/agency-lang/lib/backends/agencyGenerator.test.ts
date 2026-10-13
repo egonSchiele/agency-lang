@@ -1565,4 +1565,20 @@ describe("effect declaration tags", () => {
       "@always(name)\n@alwaysUnder(dir)\neffect app::x {\n  name: string;\n  dir: string\n}\n";
     expect(formatSource(src)).toBe(src);
   });
+
+  it("keeps a @capabilities tag beside an @alwaysUnder tag", () => {
+    const src =
+      "@capabilities(fileRead, subprocess)\n@alwaysUnder(dir)\neffect app::x {\n  dir: string\n}\n";
+    expect(formatSource(src)).toBe(src);
+  });
+
+  it("writes a @capabilities tag with no names without parentheses", () => {
+    // The spelling the stdlib uses for an effect that needs nothing.
+    expect(formatSource("@capabilities()\neffect app::x {}\n")).toBe(
+      "@capabilities\neffect app::x {}\n",
+    );
+    expect(formatSource("@capabilities\neffect app::x {}\n")).toBe(
+      "@capabilities\neffect app::x {}\n",
+    );
+  });
 });

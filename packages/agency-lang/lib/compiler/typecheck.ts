@@ -227,6 +227,34 @@ export function getEffectsFromFile(filePath: string, config: AgencyConfig = {}):
   return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute, config);
 }
 
+/**
+ * What each exported node or function of a file on disk needs from the host,
+ * as the type checker computes it. The oracle test compares this with the
+ * symbol table's own answer (`lib/analysis/effectsOracle.test.ts`); nothing
+ * in production calls it.
+ */
+export function getCapabilitiesFromFile(
+  filePath: string,
+  config: AgencyConfig = {},
+): Record<string, string[]> {
+  const absolute = path.resolve(filePath);
+  return runCheckerPipeline(
+    fs.readFileSync(absolute, "utf-8"),
+    absolute,
+    config,
+    ({ checkResult, symbolTable, syntheticPath }) => {
+      const out: Record<string, string[]> = {};
+      const fileSymbols = symbolTable.getFile(syntheticPath) ?? {};
+      for (const [name, sym] of Object.entries(fileSymbols)) {
+        const isCallable = sym.kind === "function" || sym.kind === "node";
+        if (!isCallable || !sym.exported) continue;
+        out[name] = [...(checkResult.capabilitiesByFunction[name] ?? [])].sort();
+      }
+      return out;
+    },
+  );
+}
+
 function effectsVia(
   source: string,
   sourcePath: string | undefined,

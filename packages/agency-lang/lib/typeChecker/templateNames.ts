@@ -285,6 +285,7 @@ function isolatedContext(program: AgencyProgram, config: AgencyConfig): TypeChec
     importedFunctions: unit.importedFunctions,
     jsImportedNames: unit.jsImportedNames,
     interruptEffectsByFunction: {},
+    capabilitiesByFunction: {},
     errors: [],
     inferredReturnTypes: {},
     inferringReturnType: new Set<string>(),

@@ -304,7 +304,7 @@ effect app::x { a: string, b: string }
 
 \`\`\`
 @capabilities(flies)
-effect app::load { path: string }
+def load(path: string): string { ... }
 \`\`\`
 
 **How to fix:** write the name the message suggests, \`@capabilities(fileRead)\` here.`,
@@ -313,30 +313,35 @@ effect app::load { path: string }
 
 \`\`\`
 @capabilities("fileRead")
-effect app::load { path: string }
+def load(path: string): string { ... }
 \`\`\`
 
 **How to fix:** write \`@capabilities(fileRead)\`.`,
 
-  capabilitiesRepeatedTag: `\`@capabilities\` appears more than once on one effect declaration. It may appear once; list every capability in that one tag.
+  capabilitiesRepeatedTag: `\`@capabilities\` appears more than once on one function or node. It may appear once; list every capability in that one tag.
 
 \`\`\`
 @capabilities(fileRead)
 @capabilities(network)
-effect app::sync { path: string }
+def sync(path: string): string { ... }
 \`\`\`
 
 **How to fix:** merge them: \`@capabilities(fileRead, network)\`.`,
 
-  capabilitiesConflict: `Two declarations of the same effect carry \`@capabilities\` tags that name different capabilities. An effect needs one thing from the host wherever it is declared, so every tagged declaration must agree. A declaration with no tag inherits the tagged ones and is fine.
+  capabilitiesConflict: `RETIRED. The \`@capabilities\` tag used to sit on effect declarations, and two declarations of one effect could carry tags that disagreed. The tag now sits on a \`def\` or a \`node\`, where one declaration has one tag, so there is nothing left to disagree.
 
-**How to fix:** make the tags the same, or drop the tag from the declaration that was only repeating the effect.`,
+**How to fix:** nothing. If you suppressed it with \`// @tc-ignore AG3027\`, remove the suppression.`,
 
-  capabilitiesStrayTag: `A \`@capabilities\` tag ended up on something other than an effect declaration, such as a function, a type, or an import. The tag says what an effect needs from the host; nothing else carries it.
+  capabilitiesStrayTag: `A \`@capabilities\` tag ended up on something other than a function or a node: an effect declaration, a type, a constant, a bare call, or nothing at all. The tag says what a function needs from the host, and only a \`def\` or a \`node\` carries it. A wrapper that calls a tagged function needs no tag of its own; it inherits the need through the call.
 
-**How to fix:** move the tag so it sits directly above the \`effect\` line it describes.`,
+\`\`\`
+@capabilities(subprocess)
+effect app::shell { command: string }
+\`\`\`
 
-  platformLacksCapability: `The program is being compiled for a platform (\`--platform\`, or \`platform\` in agency.json) that lacks a capability one of its effects needs. The lines after the message show the calls from the node or exported function to the function that raises the effect. The browser platform, for example, has no \`fileRead\`, so a node that calls \`read\` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
+**How to fix:** move the tag so it sits directly above the \`def\` or \`node\` that asks the host for the capability. For an effect, that is the function that raises it.`,
+
+  platformLacksCapability: `The program is being compiled for a platform (\`--platform\`, or \`platform\` in agency.json) that lacks a capability one of its functions needs. A function needs what its own \`@capabilities\` tag names and what the functions it calls need. The lines after the message show the calls from the node or exported function to the function whose tag carries the capability. The browser platform, for example, has no \`fileRead\`, so a node that calls \`read\` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
 
 **How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.`,
 

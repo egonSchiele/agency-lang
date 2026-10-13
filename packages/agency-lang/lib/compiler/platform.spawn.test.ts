@@ -36,9 +36,11 @@ describe.skipIf(!fs.existsSync(CLI))("--platform on compile and typecheck", () =
     const { code, stderr } = await agency("compile", "--platform", "browser", file);
     expect(code).toBe(1);
     expect(stderr).toContain("AG3029");
-    expect(stderr).toContain("The browser platform does not have it.");
     expect(stderr).toContain(
-      "main calls read from std::index (reads.agency:2), which raises std::read",
+      "Node 'main' needs the fileRead capability, which the browser platform does not have.",
+    );
+    expect(stderr).toContain(
+      "main calls read from std::index (reads.agency:2), which needs fileRead",
     );
   });
 

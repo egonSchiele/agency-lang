@@ -1,14 +1,17 @@
 import type { Tag } from "../types/tag.js";
-import type { Expression } from "../types.js";
+import type { AgencyNode, Expression } from "../types.js";
+import type { FunctionDefinition } from "../types/function.js";
+import type { GraphNodeDefinition } from "../types/graphNode.js";
 import { CAPABILITIES, type Capability } from "../host/host.js";
 import { levenshtein } from "../levenshtein.js";
-import { sameCapabilities } from "../runtime/effectCapabilities.js";
-export { sameCapabilities };
+import { declaredName } from "../types/hole.js";
+import { tagsAbove } from "../utils/tagsAbove.js";
 
-/** `@capabilities(fileRead, subprocess)` on an effect declaration names
- *  what the host must have for the effect's function to work. The names
- *  come from `CAPABILITIES` in lib/host/host.ts; nothing else is allowed.
- *  An effect with no tag needs nothing. See docs/dev/language/capabilities.md. */
+/** `@capabilities(fileRead, subprocess)` on a `def` or a `node` names what
+ *  the host must have for that function to work. The names come from
+ *  `CAPABILITIES` in lib/host/host.ts; nothing else is allowed. A function
+ *  with no tag declares nothing of its own, and what it needs is then only
+ *  what the functions it calls need. See docs/dev/language/capabilities.md. */
 export const CAPABILITIES_TAG = "capabilities";
 
 export type CapabilitiesProblemKind = "badArgument" | "repeatedTag" | "unknownName";
@@ -96,4 +99,48 @@ export function readCapabilities(tags: Tag[] = []): CapabilitiesRead {
     problems.push({ kind: "repeatedTag", loc: capabilityTags[1].loc });
   }
   return { tagged: capabilityTags.length > 0, capabilities, problems };
+}
+
+export type CallableDeclaration = FunctionDefinition | GraphNodeDefinition;
+
+/** One `def` or `node`, with the tags written above it and the tags the
+ *  preprocessor may already have attached, in one list. */
+export type TaggedCallable = { name: string; node: CallableDeclaration; tags: Tag[] };
+
+export function callableName(node: CallableDeclaration): string {
+  return declaredName(node.type === "function" ? node.functionName : node.nodeName);
+}
+
+/**
+ * Every function and node in the program, each with its tags. The symbol
+ * table and the type checker see the raw parse tree, where a tag is still a
+ * sibling node above its declaration, so the tags are read with `tagsAbove`
+ * and joined with any the preprocessor attached. A copy; nothing is
+ * mutated.
+ */
+export function callablesWithTags(nodes: AgencyNode[]): TaggedCallable[] {
+  return tagsAbove(nodes)
+    .filter(
+      (entry): entry is { node: CallableDeclaration; tags: Tag[] } =>
+        entry.node?.type === "function" || entry.node?.type === "graphNode",
+    )
+    .map((entry) => ({
+      name: callableName(entry.node),
+      node: entry.node,
+      tags: [...(entry.node.tags ?? []), ...entry.tags],
+    }));
+}
+
+/** The capabilities each function or node declares with its own tag, by
+ *  name. A function with no tag is not listed. */
+export function ownCapabilities(nodes: AgencyNode[]): Record<string, Capability[]> {
+  // Null prototype: the keys are names the user wrote.
+  const own: Record<string, Capability[]> = Object.create(null);
+  for (const { name, tags } of callablesWithTags(nodes)) {
+    const read = readCapabilities(tags);
+    if (read.tagged) {
+      own[name] = read.capabilities;
+    }
+  }
+  return own;
 }

@@ -469,34 +469,35 @@ export const DIAGNOSTICS = {
     code: "AG3024",
     severity: "error",
     message:
-      "Unknown capability '{name}' on effect '{effect}'. Did you mean '{suggestion}'? The capabilities are {known}.",
+      "Unknown capability '{name}' on '{callable}'. Did you mean '{suggestion}'? The capabilities are {known}.",
   },
   capabilitiesBadArgument: {
     code: "AG3025",
     severity: "error",
-    message: "@capabilities arguments must be bare capability names (effect '{effect}').",
+    message: "@capabilities arguments must be bare capability names (on '{callable}').",
   },
   capabilitiesRepeatedTag: {
     code: "AG3026",
     severity: "error",
-    message: "@capabilities appears more than once on effect '{effect}'.",
+    message: "@capabilities appears more than once on '{callable}'.",
   },
   capabilitiesConflict: {
     code: "AG3027",
     severity: "error",
+    retired: true,
     message:
-      "Conflicting @capabilities for effect '{effect}'. All tagged declarations of an effect must agree.",
+      "RETIRED: the @capabilities tag moved from effect declarations to functions, where one declaration has one tag, so two declarations of an effect can no longer disagree.",
   },
   capabilitiesStrayTag: {
     code: "AG3028",
     severity: "error",
-    message: "@capabilities is only valid on an effect declaration.",
+    message: "@capabilities goes on a def or a node.{hint}",
   },
   platformLacksCapability: {
     code: "AG3029",
     severity: "error",
     message:
-      "{kind} '{name}' raises '{effect}', which needs the {capability} capability. The {platform} platform does not have it.\n{path}",
+      "{kind} '{name}' needs the {capability} capability, which the {platform} platform does not have.\n{path}",
   },
   effectDataMissing: {
     code: "AG3005",

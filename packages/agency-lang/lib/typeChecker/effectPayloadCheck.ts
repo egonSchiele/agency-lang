@@ -23,14 +23,6 @@ import {
 } from "./alwaysTag.js";
 import type { AlwaysProblemKind, AlwaysTagProblem } from "./alwaysTag.js";
 import { sameScopedFields, type ScopedField } from "../runtime/alwaysScope.js";
-import {
-  isCapabilitiesTag,
-  readCapabilities,
-  sameCapabilities,
-  type CapabilitiesRead,
-  type CapabilitiesTagProblem,
-} from "./capabilitiesTag.js";
-import { CAPABILITIES, type Capability } from "../host/host.js";
 import { synthType } from "./synthesizer.js";
 import { isAssignable } from "./assignability.js";
 
@@ -81,34 +73,10 @@ export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, Obj
     reportSameFileDuplicates(effect, entries, ctx);
     const merged = mergePayload(effect, entries, ctx);
     ctx.errors.push(...alwaysScopeDiagnostics(effect, entries, merged));
-    ctx.errors.push(...capabilitiesDiagnostics(effect, entries));
     if (merged) registry[effect] = merged;
   }
   ctx.errors.push(...strayAlwaysTagDiagnostics(ctx));
-  ctx.errors.push(...strayCapabilitiesTagDiagnostics(ctx));
   return registry;
-}
-
-/**
- * What each effect needs from the host, from the `@capabilities` tags on
- * its declarations across the import closure. An effect with no tagged
- * declaration needs nothing and is not listed. Reports nothing; the
- * diagnostics come from `buildEffectRegistry`.
- */
-export function buildEffectCapabilities(ctx: TypeCheckerContext): Record<string, Capability[]> {
-  const capabilities: Record<string, Capability[]> = Object.create(null);
-  for (const { decl } of collectDeclarations(ctx)) {
-    const read = readCapabilities(decl.tags);
-    if (!read.tagged) {
-      continue;
-    }
-    const known = capabilities[decl.effect] ?? [];
-    capabilities[decl.effect] = [
-      ...known,
-      ...read.capabilities.filter((capability) => !known.includes(capability)),
-    ];
-  }
-  return capabilities;
 }
 
 /** Prefer the import closure (ambient); fall back to the current program's
@@ -356,70 +324,4 @@ function strayAlwaysTagDiagnostics(ctx: TypeCheckerContext): TypeCheckError[] {
   return tagsAbove(ctx.programNodes)
     .flatMap(strayAlwaysTags)
     .map((tag) => diagnostic("alwaysStrayTag", { tag: tag.name }, tag.loc ?? null));
-}
-
-type CapabilitiesDecl = { decl: EffectDeclaration; read: CapabilitiesRead };
-
-function capabilitiesProblemDiagnostic(
-  effect: string,
-  one: CapabilitiesDecl,
-  problem: CapabilitiesTagProblem,
-): TypeCheckError {
-  const loc = problem.loc ?? one.decl.loc ?? null;
-  if (problem.kind === "unknownName") {
-    return diagnostic(
-      "capabilityUnknown",
-      {
-        name: problem.name ?? "",
-        effect,
-        suggestion: problem.suggestion ?? "",
-        known: CAPABILITIES.join(", "),
-      },
-      loc,
-    );
-  }
-  if (problem.kind === "repeatedTag") {
-    return diagnostic("capabilitiesRepeatedTag", { effect }, loc);
-  }
-  return diagnostic("capabilitiesBadArgument", { effect }, loc);
-}
-
-/**
- * Diagnostics for the @capabilities tag across every declaration of one
- * effect. As with @always, only tagged declarations take part, so a user's
- * untagged `effect std::read {...}` inherits the stdlib's tag. Among the
- * tagged ones: every argument is a known capability name, the tag appears
- * once, and all of them agree.
- */
-function capabilitiesDiagnostics(effect: string, entries: DeclEntry[]): TypeCheckError[] {
-  const tagged: CapabilitiesDecl[] = entries
-    .map((entry) => ({ decl: entry.decl, read: readCapabilities(entry.decl.tags) }))
-    .filter((one) => one.read.tagged);
-  const problems = tagged.flatMap((one) =>
-    one.read.problems.map((problem) => capabilitiesProblemDiagnostic(effect, one, problem)),
-  );
-  const [first, ...rest] = tagged;
-  const conflicts =
-    first === undefined
-      ? []
-      : rest
-          .filter((one) => !sameCapabilities(first.read.capabilities, one.read.capabilities))
-          .map((one) => diagnostic("capabilitiesConflict", { effect }, one.decl.loc ?? null));
-  return [...problems, ...conflicts];
-}
-
-/** A @capabilities tag anywhere but directly above an effect declaration,
- *  found the same two ways as a stray @always tag. */
-function strayCapabilitiesTags(entry: NodeWithTagsAbove): Tag[] {
-  if (entry.node?.type === "effectDeclaration") {
-    return [];
-  }
-  const attached = (entry.node as { tags?: Tag[] } | null)?.tags ?? [];
-  return [...entry.tags, ...attached].filter(isCapabilitiesTag);
-}
-
-function strayCapabilitiesTagDiagnostics(ctx: TypeCheckerContext): TypeCheckError[] {
-  return tagsAbove(ctx.programNodes)
-    .flatMap(strayCapabilitiesTags)
-    .map((tag) => diagnostic("capabilitiesStrayTag", {}, tag.loc ?? null));
 }

@@ -244,7 +244,7 @@ An `@always` or `@alwaysUnder` tag ended up on something other than an effect de
 
 <a id="ag3024"></a>
 
-## AG3024 — Unknown capability '&#123;name&#125;' on effect '&#123;effect&#125;'. Did you mean '&#123;suggestion&#125;'? The capabilities are &#123;known&#125;.
+## AG3024 — Unknown capability '&#123;name&#125;' on '&#123;callable&#125;'. Did you mean '&#123;suggestion&#125;'? The capabilities are &#123;known&#125;.
 
 *Default severity: error.*
 
@@ -252,14 +252,14 @@ A `@capabilities` tag names something that is not a capability. The names are fi
 
 ```
 @capabilities(flies)
-effect app::load { path: string }
+def load(path: string): string { ... }
 ```
 
 **How to fix:** write the name the message suggests, `@capabilities(fileRead)` here.
 
 <a id="ag3025"></a>
 
-## AG3025 — @capabilities arguments must be bare capability names (effect '&#123;effect&#125;').
+## AG3025 — @capabilities arguments must be bare capability names (on '&#123;callable&#125;').
 
 *Default severity: error.*
 
@@ -267,54 +267,49 @@ Each argument to `@capabilities` must be a bare capability name. Strings, calls,
 
 ```
 @capabilities("fileRead")
-effect app::load { path: string }
+def load(path: string): string { ... }
 ```
 
 **How to fix:** write `@capabilities(fileRead)`.
 
 <a id="ag3026"></a>
 
-## AG3026 — @capabilities appears more than once on effect '&#123;effect&#125;'.
+## AG3026 — @capabilities appears more than once on '&#123;callable&#125;'.
 
 *Default severity: error.*
 
-`@capabilities` appears more than once on one effect declaration. It may appear once; list every capability in that one tag.
+`@capabilities` appears more than once on one function or node. It may appear once; list every capability in that one tag.
 
 ```
 @capabilities(fileRead)
 @capabilities(network)
-effect app::sync { path: string }
+def sync(path: string): string { ... }
 ```
 
 **How to fix:** merge them: `@capabilities(fileRead, network)`.
 
-<a id="ag3027"></a>
-
-## AG3027 — Conflicting @capabilities for effect '&#123;effect&#125;'. All tagged declarations of an effect must agree.
-
-*Default severity: error.*
-
-Two declarations of the same effect carry `@capabilities` tags that name different capabilities. An effect needs one thing from the host wherever it is declared, so every tagged declaration must agree. A declaration with no tag inherits the tagged ones and is fine.
-
-**How to fix:** make the tags the same, or drop the tag from the declaration that was only repeating the effect.
-
 <a id="ag3028"></a>
 
-## AG3028 — @capabilities is only valid on an effect declaration.
+## AG3028 — @capabilities goes on a def or a node.&#123;hint&#125;
 
 *Default severity: error.*
 
-A `@capabilities` tag ended up on something other than an effect declaration, such as a function, a type, or an import. The tag says what an effect needs from the host; nothing else carries it.
+A `@capabilities` tag ended up on something other than a function or a node: an effect declaration, a type, a constant, a bare call, or nothing at all. The tag says what a function needs from the host, and only a `def` or a `node` carries it. A wrapper that calls a tagged function needs no tag of its own; it inherits the need through the call.
 
-**How to fix:** move the tag so it sits directly above the `effect` line it describes.
+```
+@capabilities(subprocess)
+effect app::shell { command: string }
+```
+
+**How to fix:** move the tag so it sits directly above the `def` or `node` that asks the host for the capability. For an effect, that is the function that raises it.
 
 <a id="ag3029"></a>
 
-## AG3029 — &#123;kind&#125; '&#123;name&#125;' raises '&#123;effect&#125;', which needs the &#123;capability&#125; capability. The &#123;platform&#125; platform does not have it.
+## AG3029 — &#123;kind&#125; '&#123;name&#125;' needs the &#123;capability&#125; capability, which the &#123;platform&#125; platform does not have.
 &#123;path&#125;
 
 *Default severity: error.*
 
-The program is being compiled for a platform (`--platform`, or `platform` in agency.json) that lacks a capability one of its effects needs. The lines after the message show the calls from the node or exported function to the function that raises the effect. The browser platform, for example, has no `fileRead`, so a node that calls `read` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
+The program is being compiled for a platform (`--platform`, or `platform` in agency.json) that lacks a capability one of its functions needs. A function needs what its own `@capabilities` tag names and what the functions it calls need. The lines after the message show the calls from the node or exported function to the function whose tag carries the capability. The browser platform, for example, has no `fileRead`, so a node that calls `read` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
 
 **How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.

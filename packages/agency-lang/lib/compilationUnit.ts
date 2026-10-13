@@ -22,6 +22,7 @@ import type {
   SymbolTable,
 } from "./symbolTable.js";
 import { collectTypeAliasTags } from "./symbolTable.js";
+import type { Capability } from "./host/host.js";
 import { walkNodes } from "./utils/node.js";
 import { functionContainsDestructiveBlock } from "./backends/functionContainsDestructiveBlock.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
@@ -141,6 +142,9 @@ export type CompilationUnit = {
   interruptEffectsByFunction?: Record<string, InterruptEffect[]>;
   /** Same keys, but only the effects nothing inside the callable answers. */
   unansweredEffectsByFunction?: Record<string, InterruptEffect[]>;
+  /** Same keys: what each callable needs from the host, its own
+   *  `@capabilities` tag unioned over everything it calls. */
+  capabilitiesByFunction?: Record<string, Capability[]>;
   /** Symbol table used to build this unit. Forwarded so downstream
    *  consumers (e.g. the typechecker) can use it for cross-file lookups
    *  like resolving the file a function/node lives in. Optional because
@@ -340,8 +344,9 @@ export function buildCompilationUnit(
     pullTransitiveAliases(unit, symbolTable, aliasSeeds);
 
     const callables = callablesVisibleFrom(unit, symbolTable, fromFile);
-    unit.interruptEffectsByFunction = effectTable(callables, "interruptEffects");
-    unit.unansweredEffectsByFunction = effectTable(callables, "unansweredEffects");
+    unit.interruptEffectsByFunction = fieldTable(callables, "interruptEffects");
+    unit.unansweredEffectsByFunction = fieldTable(callables, "unansweredEffects");
+    unit.capabilitiesByFunction = fieldTable(callables, "capabilities");
     unit.symbolTable = symbolTable;
   }
 
@@ -483,17 +488,19 @@ function callablesVisibleFrom(
     .map((entry) => ({ localName: entry.localName, symbol: entry.symbol }));
 }
 
-function effectTable(
+/** One field of every visible callable's symbol, keyed by the name the
+ *  file calls it. A callable whose symbol lacks the field is left out. */
+function fieldTable<K extends "interruptEffects" | "unansweredEffects" | "capabilities">(
   callables: VisibleCallable[],
-  field: "interruptEffects" | "unansweredEffects",
-): Record<string, InterruptEffect[]> {
+  field: K,
+): Record<string, NonNullable<(FunctionSymbol | NodeSymbol)[K]>> {
   // Null prototype: keys are names the user wrote, and readers index the
   // table with a called name such as `hasOwnProperty`.
-  const table: Record<string, InterruptEffect[]> = Object.create(null);
+  const table: Record<string, NonNullable<(FunctionSymbol | NodeSymbol)[K]>> = Object.create(null);
   for (const { localName, symbol } of callables) {
-    const effects = symbol[field];
-    if (effects) {
-      table[localName] = effects;
+    const value = symbol[field];
+    if (value) {
+      table[localName] = value;
     }
   }
   return table;

@@ -12,7 +12,14 @@ import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { GraphNodeDefinition } from "../types/graphNode.js";
-import type { FunctionSymbol, NodeSymbol, ResolvedImport, SymbolTable } from "../symbolTable.js";
+import type {
+  FunctionSymbol,
+  InterruptEffect,
+  NodeSymbol,
+  ResolvedImport,
+  SymbolTable,
+} from "../symbolTable.js";
+import type { Capability } from "../host/host.js";
 
 export type PropagationNode = {
   effects: string[];
@@ -122,19 +129,49 @@ export function propagateEffects(
  * `interruptEffects` is everything a callable can raise. `unansweredEffects`
  * leaves out a raise or a call that sits inside a handler in the body it is
  * written in, so `def home() { return env("HOME") with approve }` raises
- * `std::env` in the first view and nothing in the second.
+ * `std::env` in the first view and nothing in the second. `capabilities` is
+ * what a callable needs from the host: seeded from its own `@capabilities`
+ * tag, which the crawl wrote on the symbol, and unioned over everything it
+ * calls, so a wrapper around `read` needs `fileRead` without a tag of its
+ * own (docs/dev/language/capabilities.md).
+ *
+ * A view says how to read one body, how to read a symbol's own labels, and
+ * how to write the propagated list back. The labels are strings in every
+ * view; the effect views wrap them as `{ effect }` on the symbol.
  */
 type EffectView = {
-  field: "interruptEffects" | "unansweredEffects";
   readBody: (body: AgencyNode[]) => BodyFacts;
+  /** The labels the crawl already put on the symbol, before propagation. */
+  readOwn: (sym: FunctionSymbol | NodeSymbol) => string[];
+  writeBack: (sym: FunctionSymbol | NodeSymbol, labels: string[]) => void;
 };
 
-const EVERYTHING_RAISED: EffectView = { field: "interruptEffects", readBody: collectBodyFacts };
-const UNANSWERED_ONLY: EffectView = {
-  field: "unansweredEffects",
-  readBody: collectUnansweredFacts,
+const asEffects = (labels: string[]): InterruptEffect[] => labels.map((effect) => ({ effect }));
+const effectNames = (effects: InterruptEffect[] | undefined): string[] =>
+  (effects ?? []).map((entry) => entry.effect);
+
+const EVERYTHING_RAISED: EffectView = {
+  readBody: collectBodyFacts,
+  readOwn: (sym) => effectNames(sym.interruptEffects),
+  writeBack: (sym, labels) => {
+    sym.interruptEffects = asEffects(labels);
+  },
 };
-const EFFECT_VIEWS: EffectView[] = [EVERYTHING_RAISED, UNANSWERED_ONLY];
+const UNANSWERED_ONLY: EffectView = {
+  readBody: collectUnansweredFacts,
+  readOwn: (sym) => effectNames(sym.unansweredEffects),
+  writeBack: (sym, labels) => {
+    sym.unansweredEffects = asEffects(labels);
+  },
+};
+const CAPABILITIES_NEEDED: EffectView = {
+  readBody: collectBodyFacts,
+  readOwn: (sym) => sym.capabilities ?? [],
+  writeBack: (sym, labels) => {
+    sym.capabilities = labels as Capability[];
+  },
+};
+const EFFECT_VIEWS: EffectView[] = [EVERYTHING_RAISED, UNANSWERED_ONLY, CAPABILITIES_NEEDED];
 
 function buildSummaries(
   table: SymbolTable,
@@ -200,7 +237,7 @@ function directEffectsOf(
 ): string[] {
   const sym = table.getFile(file)?.[name];
   if (!sym || (sym.kind !== "function" && sym.kind !== "node")) return [];
-  return (sym[view.field] ?? []).map((entry) => entry.effect);
+  return view.readOwn(sym);
 }
 
 function writeBack(
@@ -213,7 +250,7 @@ function writeBack(
     // origin's answer rather than an empty one.
     const summary = summaryAt(summaries, originOf(table, { file, name }));
     if (!summary) continue;
-    sym[view.field] = summary.effects.map((effect) => ({ effect }));
+    view.writeBack(sym, summary.effects);
   }
 }
 
@@ -311,6 +348,29 @@ export function callableNamesIn(
     .filter((resolved) => resolved.symbol.kind === "function" || resolved.symbol.kind === "node")
     .map((resolved) => resolved.localName);
   return unique([...local, ...imported]);
+}
+
+/** One callable of `programs`: where it lives and the keys of everything it
+ *  calls, resolved through imports and re-exports. */
+export type CallSummary = Origin & { calleeKeys: string[] };
+
+/**
+ * The call edges of every callable in `programs`, keyed by `summaryKey`. For a
+ * check that needs who calls whom and nothing else, such as the stdlib test
+ * that every function reaching a host helper carries a tag; it runs its own
+ * fixpoint over these with `propagateToFixpoint` instead of resolving names
+ * again.
+ */
+export function callSummaries(
+  table: SymbolTable,
+  programs: Record<string, AgencyProgram>,
+): Record<string, CallSummary> {
+  return buildSummaries(table, programs, EVERYTHING_RAISED);
+}
+
+/** The key `callSummaries` files a callable under. */
+export function summaryKey(origin: Origin): string {
+  return keyOf(origin);
 }
 
 /**

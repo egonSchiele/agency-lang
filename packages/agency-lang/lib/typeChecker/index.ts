@@ -1,6 +1,7 @@
 import { color } from "@/utils/termcolors.js";
 import type { CompilationUnit, ImportedFunctionSignature } from "../compilationUnit.js";
 import type { InterruptEffect } from "../symbolTable.js";
+import type { Capability } from "../host/host.js";
 import {
   GLOBAL_SCOPE_KEY,
   ScopedTypeAliases,
@@ -30,6 +31,7 @@ import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
 import {
   analyzeInterruptsFromScopes,
+  analyzeCapabilitiesFromScopes,
   buildInterruptCallGraph,
   checkUnhandledInterruptWarnings,
   checkCallbackBodyInterrupts,
@@ -46,12 +48,9 @@ import { checkTemplateNames } from "./templateNames.js";
 import { checkTopLevelStatements } from "./topLevelStatements.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { declareFinalizeBinders } from "./finalizeBinder.js";
-import {
-  checkEffectPayloads,
-  buildEffectRegistry,
-  buildEffectCapabilities,
-} from "./effectPayloadCheck.js";
+import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import { checkPlatformCapabilities } from "./platformCheck.js";
+import { checkCapabilitiesTags } from "./capabilitiesCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { isNonTemplatedStdlib } from "../importPaths.js";
 import * as path from "node:path";
@@ -92,6 +91,7 @@ export class TypeChecker {
   private jsImportedNames: Record<string, true> = {};
   private interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
   private unansweredEffectsByFunction: Record<string, InterruptEffect[]> = {};
+  private capabilitiesByFunction: Record<string, Capability[]> = {};
   private symbolTable?: SymbolTable;
   private currentFile?: string;
   private errors: TypeCheckError[] = [];
@@ -121,6 +121,7 @@ export class TypeChecker {
     this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptEffectsByFunction = resolved.interruptEffectsByFunction ?? {};
     this.unansweredEffectsByFunction = resolved.unansweredEffectsByFunction ?? {};
+    this.capabilitiesByFunction = resolved.capabilitiesByFunction ?? {};
     this.symbolTable = resolved.symbolTable;
     this.currentFile = resolved.fromFile;
     this.sourceText = resolved.sourceText;
@@ -150,6 +151,7 @@ export class TypeChecker {
       importedFunctions: this.importedFunctions,
       jsImportedNames: this.jsImportedNames,
       interruptEffectsByFunction: this.interruptEffectsByFunction,
+      capabilitiesByFunction: this.capabilitiesByFunction,
       symbolTable: this.symbolTable,
       currentFile: this.currentFile,
       errors: this.errors,
@@ -286,6 +288,9 @@ export class TypeChecker {
     // consumer passes below). Moved ahead of flow/checkScopes so the handler-param
     // refinement can run before field-access checking.
     const interruptEffectsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
+    // The same walk for what each callable needs from the host, seeded from
+    // its own @capabilities tag instead of its raises.
+    const capabilitiesByFunction = analyzeCapabilitiesFromScopes(scopes, ctx);
 
     // Build the ambient effect→payload registry ONCE and share it with both
     // the handler-param refinement (below) and checkEffectPayloads below. Building
@@ -342,16 +347,13 @@ export class TypeChecker {
     // Check interrupt payloads against `effect` declarations (shared registry).
     checkEffectPayloads(scopes, ctx, effectRegistry);
 
+    // The @capabilities tag: known names, once, on a def or a node.
+    checkCapabilitiesTags(ctx);
+
     // Every node and exported function against the platform's capabilities
     // (config.platform). Nothing to do for Node, which has all of them.
     if ((this.config.platform ?? "node") !== "node") {
-      checkPlatformCapabilities(
-        scopes,
-        interruptEffectsByFunction,
-        interruptCallGraph,
-        buildEffectCapabilities(ctx),
-        ctx,
-      );
+      checkPlatformCapabilities(scopes, capabilitiesByFunction, interruptCallGraph, ctx);
     }
 
     // Match exhaustiveness over closed value types.
@@ -424,6 +426,7 @@ export class TypeChecker {
       errors: this.applySuppressions(this.deduplicateErrors()),
       scopes,
       interruptEffectsByFunction,
+      capabilitiesByFunction,
       interruptCallGraph,
       flowEnv: ctx.flowEnv,
     };

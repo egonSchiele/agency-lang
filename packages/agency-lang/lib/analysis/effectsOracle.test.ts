@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { SymbolTable } from "../symbolTable.js";
-import { getEffectsFromFile } from "../compiler/typecheck.js";
+import { getCapabilitiesFromFile, getEffectsFromFile } from "../compiler/typecheck.js";
 import { analyzeInterrupts } from "./interrupts.js";
 import { makeAgencyTempDir } from "../utils/agencyTempDir.js";
 import { safeDeleteDirectory } from "../utils.js";
@@ -84,5 +84,63 @@ describe("the new pass agrees with the type-check-everything analysis", () => {
     const sites = analyzeInterrupts(main, {}).sites.map((result) => result.site.effect);
     expect(sites).toContain("std::read");
     expect(symbolTableEffects(main, "main")).toEqual(["std::read"]);
+  });
+});
+
+/** The symbol table's answer for what `name` needs from the host, after the
+ *  capabilities view of the propagation pass has run. */
+function symbolTableCapabilities(entry: string, name: string): string[] {
+  const table = SymbolTable.build(entry, {});
+  const sym = table.getFile(path.resolve(entry))?.[name];
+  return sym && (sym.kind === "function" || sym.kind === "node")
+    ? [...(sym.capabilities ?? [])].sort()
+    : [];
+}
+
+/**
+ * The capabilities view runs over the same call edges as the effect views,
+ * and the type checker runs its own walk over its scopes. The two must agree
+ * on what a function needs when the need arises inside the file under test.
+ */
+describe("the two analyses agree on capabilities that arise in one file", () => {
+  const cases: { label: string; source: string }[] = [
+    {
+      label: "a tagged helper reached by a plain call",
+      source: `@capabilities(network)\nexport def helper(): string {\n  return "x"\n}\nexport def caller(): string {\n  return helper()\n}\n`,
+    },
+    {
+      label: "a two-hop local chain to a tagged function",
+      source: `@capabilities(subprocess, env)\nexport def inner(): string {\n  return "x"\n}\nexport def middle(): string {\n  return inner()\n}\nexport def caller(): string {\n  return middle()\n}\n`,
+    },
+    {
+      label: "a tag on the caller itself joined with one it reaches",
+      source: `@capabilities(network)\nexport def helper(): string {\n  return "x"\n}\n@capabilities(terminal)\nexport def caller(): string {\n  return helper()\n}\n`,
+    },
+  ];
+
+  for (const { label, source } of cases) {
+    it(`agrees on ${label}`, () => {
+      const entry = path.join(dir, "main.agency");
+      fs.writeFileSync(entry, source, "utf-8");
+      const fromTypeChecker = getCapabilitiesFromFile(entry)["caller"] ?? [];
+      expect(symbolTableCapabilities(entry, "caller")).toEqual(fromTypeChecker);
+      expect(fromTypeChecker.length).toBeGreaterThan(0);
+    });
+  }
+
+  it("carries a need across a file boundary", () => {
+    fs.writeFileSync(
+      path.join(dir, "helper.agency"),
+      `@capabilities(network)\nexport def h(): string {\n  return "x"\n}\n`,
+      "utf-8",
+    );
+    const main = path.join(dir, "main.agency");
+    fs.writeFileSync(
+      main,
+      `import { h } from "./helper.agency"\nexport def caller(): string {\n  return h()\n}\n`,
+      "utf-8",
+    );
+    expect(symbolTableCapabilities(main, "caller")).toEqual(["network"]);
+    expect(getCapabilitiesFromFile(main)["caller"]).toEqual(["network"]);
   });
 });

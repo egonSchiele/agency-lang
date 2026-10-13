@@ -1,18 +1,19 @@
 // The platform check: when a program is compiled for a platform that lacks
 // a capability (`platform` in the config, `--platform` on the command
-// line), every node and every exported function is checked against the
-// `@capabilities` tags of the effects it can raise. A violation is AG3029,
-// with the calls from the node to the raise. The check changes nothing in
-// the emitted code. See docs/dev/language/capabilities.md.
+// line), every node and every exported function is checked against what it
+// needs from the host: its own `@capabilities` tag and the tags of
+// everything it calls. A violation is AG3029, with the calls from the node
+// to the function whose tag carries the capability. The check changes
+// nothing in the emitted code. See docs/dev/language/capabilities.md.
 
 import path from "path";
 import type { AgencyNode } from "../types.js";
 import type { Capability } from "../host/host.js";
 import { PLATFORM_CAPABILITIES } from "../host/host.js";
-import type { InterruptEffect } from "../symbolTable.js";
 import { walkNodes } from "../utils/node.js";
 import { getStdlibDir, stdlibModuleName } from "../importPaths.js";
 import { diagnostic } from "./diagnostics.js";
+import { ownCapabilities } from "./capabilitiesTag.js";
 import type { ScopeInfo, TypeCheckError, TypeCheckerContext } from "./types.js";
 import {
   qualifyName,
@@ -21,50 +22,46 @@ import {
   type InterruptCallGraph,
 } from "./interruptAnalysis.js";
 
-type EffectMap = Record<string, InterruptEffect[]>;
+type CapabilityMap = Record<string, Capability[]>;
 
 /** The diagnostic the platform setting turns on. The compile path treats
  *  it as fatal whether or not the type checker was asked for. */
 export function isPlatformDiagnostic(error: TypeCheckError): boolean {
   return error.name === "platformLacksCapability";
 }
-type CapabilityMap = Record<string, Capability[]>;
 
 export function checkPlatformCapabilities(
   scopes: ScopeInfo[],
-  interruptEffectsByFunction: EffectMap,
+  capabilitiesByFunction: CapabilityMap,
   callGraph: InterruptCallGraph,
-  effectCapabilities: CapabilityMap,
   ctx: TypeCheckerContext,
 ): void {
   const platform = ctx.config.platform ?? "node";
   const available = PLATFORM_CAPABILITIES[platform];
+  const own = ownCapabilities(ctx.programNodes);
   for (const info of scopes) {
     const kind = entryKind(info.name, ctx);
     if (kind === null) {
       continue;
     }
-    for (const { effect } of interruptEffectsByFunction[info.name] ?? []) {
-      for (const capability of effectCapabilities[effect] ?? []) {
-        if (available.includes(capability)) {
-          continue;
-        }
-        const loc = ctx.nodeDefs[info.name]?.loc ?? ctx.functionDefs[info.name]?.loc ?? null;
-        ctx.errors.push(
-          diagnostic(
-            "platformLacksCapability",
-            {
-              kind,
-              name: info.name,
-              effect,
-              capability,
-              platform,
-              path: callPath(info, effect, scopes, interruptEffectsByFunction, callGraph, ctx),
-            },
-            loc,
-          ),
-        );
+    for (const capability of capabilitiesByFunction[info.name] ?? []) {
+      if (available.includes(capability)) {
+        continue;
       }
+      const loc = ctx.nodeDefs[info.name]?.loc ?? ctx.functionDefs[info.name]?.loc ?? null;
+      ctx.errors.push(
+        diagnostic(
+          "platformLacksCapability",
+          {
+            kind,
+            name: info.name,
+            capability,
+            platform,
+            path: callPath(info, capability, scopes, capabilitiesByFunction, own, callGraph, ctx),
+          },
+          loc,
+        ),
+      );
     }
   }
 }
@@ -83,17 +80,19 @@ function entryKind(name: string, ctx: TypeCheckerContext): "Node" | "Function" |
 }
 
 /**
- * The calls from `start` to the raise of `effect`, one per line, found by
- * following the call graph through the file's own functions and stopping
- * at the first imported one. A function value the graph cannot follow
- * (a function stored in a variable) ends the path with a line that says
- * so. Built only for a violation, since it walks bodies for positions.
+ * The calls from `start` to the function whose own tag carries
+ * `capability`, one per line, found by following the call graph through
+ * the file's own functions and stopping at the first imported one. A
+ * function value the graph cannot follow (a function stored in a variable)
+ * ends the path with a line that says so. Built only for a violation,
+ * since it walks bodies for positions.
  */
 function callPath(
   start: ScopeInfo,
-  effect: string,
+  capability: Capability,
   scopes: ScopeInfo[],
-  effects: EffectMap,
+  needs: CapabilityMap,
+  own: CapabilityMap,
   callGraph: InterruptCallGraph,
   ctx: TypeCheckerContext,
 ): string {
@@ -102,17 +101,16 @@ function callPath(
   let current: ScopeInfo | undefined = start;
   while (current !== undefined && !visited.includes(current.name)) {
     visited.push(current.name);
-    const raise = raiseSite(current, effect);
-    if (raise !== null) {
-      lines.push(`  ${current.name} raises ${effect} (${where(current.file, raise)})`);
+    if ((own[current.name] ?? []).includes(capability)) {
+      lines.push(`  ${current.name} is tagged ${capability} (${where(current.file, null)})`);
       return lines.join("\n");
     }
     const entry: CallGraphFunction | undefined = callGraph[qualifyName(current.file, current.name)];
     const callee: CallEdge | undefined = entry?.callEdges.find((edge: CallEdge) =>
-      (effects[edge.calleeName] ?? []).some((raised) => raised.effect === effect),
+      (needs[edge.calleeName] ?? []).includes(capability),
     );
     if (callee === undefined) {
-      lines.push(`  ${current.name} can raise ${effect} through a function value`);
+      lines.push(`  ${current.name} needs ${capability} through a function value`);
       return lines.join("\n");
     }
     const call = callSite(current, callee.calleeName);
@@ -123,7 +121,7 @@ function callPath(
       const origin = ctx.importedFunctions[callee.calleeName]?.originFile;
       const from = origin === undefined ? "" : ` from ${moduleName(origin)}`;
       lines.push(
-        `  ${current.name} calls ${callee.calleeName}${from} (${where(current.file, call)}), which raises ${effect}`,
+        `  ${current.name} calls ${callee.calleeName}${from} (${where(current.file, call)}), which needs ${capability}`,
       );
       return lines.join("\n");
     }
@@ -136,15 +134,6 @@ function callPath(
 /** Whether a scope is a function or node of the file, not a nested block. */
 function entryScope(info: ScopeInfo, ctx: TypeCheckerContext): boolean {
   return ctx.functionDefs[info.name] !== undefined || ctx.nodeDefs[info.name] !== undefined;
-}
-
-function raiseSite(info: ScopeInfo, effect: string): AgencyNode | null {
-  for (const { node } of walkNodes(info.body)) {
-    if (node.type === "interruptStatement" && node.effect === effect) {
-      return node;
-    }
-  }
-  return null;
 }
 
 /** The first call of `name` in the body, or the first mention of it as a

@@ -19,8 +19,7 @@ import { applyRestoreSignal } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
-import { loadProviderModules } from "./providerModules.js";
-import { ensureConfiguredLocalProvider } from "./localProvider.js";
+import { loadConfiguredProviders } from "#platform";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { TRACE_ID_ENV } from "../config/config.js";
@@ -195,8 +194,7 @@ async function initFreshExecCtx(
   // Register custom/local LLM providers before any user code or llm() call.
   // Process-global + idempotent (see loadProviderModules), so it is safe and
   // cheap to call on every fresh run.
-  await loadProviderModules(execCtx);
-  await ensureConfiguredLocalProvider(execCtx);
+  await loadConfiguredProviders(execCtx);
   await runInBootstrapFrame(execCtx, (run) => __initAllRegistered(run));
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, (run) => initializeGlobals(run));

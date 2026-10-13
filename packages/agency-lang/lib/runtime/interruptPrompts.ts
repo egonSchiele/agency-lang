@@ -5,7 +5,7 @@
 // runPolicyHandler also depending on this leaf. runPolicyHandler re-exports
 // these names so existing imports keep resolving.
 
-import readline from "readline";
+import { defaultHost } from "#default-host";
 import { color } from "@/utils/termcolors.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
@@ -62,7 +62,7 @@ function queuePrompt<T>(fn: () => Promise<T>): Promise<T> {
 // reject (fail-closed) when stdin is not a TTY rather than hanging. Exported
 // so the non-TTY fallback is unit-testable.
 export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
-  if (!process.stdin.isTTY) return "reject";
+  if (!defaultHost().terminal.isInteractive()) return "reject";
   return queuePrompt(async () =>
     parsePromptAnswer(
       await askLine(
@@ -77,7 +77,7 @@ export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
 // the question, and the typed line becomes the approval value. Same non-TTY
 // fail-closed contract as terminalPrompt.
 export async function terminalValuePrompt(intr: Intr): Promise<InterruptResponse> {
-  if (!process.stdin.isTTY) return reject();
+  if (!defaultHost().terminal.isInteractive()) return reject();
   return queuePrompt(async () =>
     parseValueAnswer(await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `)),
   );
@@ -119,17 +119,6 @@ export function formatInterruptPrompt(intr: Intr): string {
 // promise unsettled forever — the process would die with an "unsettled
 // top-level await" instead of a decision — so it resolves to "" (which every
 // caller parses to a safe reject).
-async function askLine(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return await new Promise((resolve) => {
-      rl.once("close", () => resolve(""));
-      rl.question(question, resolve);
-    });
-  } finally {
-    rl.close();
-  }
+function askLine(question: string): Promise<string> {
+  return defaultHost().terminal.readLine(question);
 }

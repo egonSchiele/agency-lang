@@ -7,7 +7,7 @@
  * or none."
  *
  * `MemoryFrame` carries:
- *  - `configKey`: the absolute, mkdir'd dir. Used both as the
+ *  - `configKey`: the absolute dir, in its real spelling. Used both as the
  *    storage location (passed to `getOrCreateStore`) AND as the
  *    cache key for per-execCtx `MemoryManager` lookup. Two pushes
  *    of the same `configKey` are deduped by
@@ -17,9 +17,11 @@
  *    needs the auxiliary fields (model, autoExtract, compaction,
  *    embeddings) that don't participate in identity.
  *
- * The constructor owns the policy ("resolve dir against
- * `process.cwd()`, mkdir-p, realpath") — the same string in
- * `agency.json` and in code lands at the same physical store.
+ * The constructor owns the policy ("expand `~`, resolve against the
+ * working directory, take the real spelling") — the same string in
+ * `agency.json` and in code lands at the same physical store. The
+ * directory is made by the store on its first write, since a frame is
+ * made inside createExecutionContext, which has no await.
  *
  * `MemoryFrame.equals` is static (not an instance method) on
  * purpose: frames survive a JSON round-trip through StateStack
@@ -30,11 +32,8 @@
  * `new MemoryFrame(...)` instances and JSON-restored plain shapes,
  * which is what we need because checkpoint restore is real.
  */
-import path from "node:path";
-// The synchronous file operations of nodeHost, not host.files: a frame is
-// made inside createExecutionContext, which has no await.
-import os from "node:os";
-import { mkdir, root, _realDir } from "../../host/node/nodeFiles.js";
+import path from "#path";
+import type { Host } from "../../host/host.js";
 import { expandPath } from "../../stdlib/expandPath.js";
 import type { MemoryConfig } from "./types.js";
 
@@ -42,7 +41,7 @@ export class MemoryFrame {
   readonly configKey: string;
   readonly config: MemoryConfig;
 
-  constructor(config: MemoryConfig) {
+  constructor(config: MemoryConfig, host: Pick<Host, "system">) {
     if (!config.dir || config.dir.trim() === "") {
       throw new Error("enableMemory: `dir` is required and must be non-empty.");
     }
@@ -51,10 +50,9 @@ export class MemoryFrame {
     // does (see `resolveDir`). Without this, `path.resolve` treats `~`
     // as a literal character and silently creates a `~` directory
     // under cwd (issue #230).
-    const expanded = expandPath(config.dir, os.homedir());
-    const resolved = path.resolve(process.cwd(), expanded);
-    mkdir(root(resolved), ".");
-    this.configKey = _realDir(resolved);
+    const expanded = expandPath(config.dir, host.system.homeDir());
+    const resolved = path.resolve(host.system.cwd(), expanded);
+    this.configKey = host.system.realDir(resolved);
     this.config = config;
   }
 

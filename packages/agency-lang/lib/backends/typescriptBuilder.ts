@@ -4511,6 +4511,8 @@ export class TypeScriptBuilder {
                   invocation: ts.obj({
                     config: ts.id("__invocationConfig"),
                     traceId: ts.id("__invocationTraceId"),
+                    policy: ts.id("__invocationPolicy"),
+                    host: ts.id("__invocationHost"),
                   }),
                   input: ts.id("__invocationInput"),
                   abortSignal: ts.id("__invocationAbortSignal"),

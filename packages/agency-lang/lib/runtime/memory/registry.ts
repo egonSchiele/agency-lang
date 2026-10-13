@@ -60,10 +60,9 @@ let stores: StoreEntry[] = [];
 
 /**
  * Return the `FileMemoryStore` for `absDir` over `files`, the file part
- * of the host that enabled memory, creating it on first call. The
- * directory itself must already exist (callers route through
- * `MemoryFrame`'s constructor, which mkdir-p's before reaching here).
- * Every execution context of one host shares the store for a directory.
+ * of the host that enabled memory, creating it on first call. The store
+ * makes the directory on its first write. Every execution context of one
+ * host shares the store for a directory.
  */
 export function getOrCreateStore(
   files: HostFiles,

@@ -163,7 +163,8 @@ export type HostTerminal = {
   /** Write text to standard error, with no newline added. */
   writeErr(text: string): void;
   /** Show `prompt` and read one line. Rejects with the signal's reason when
-   *  `signal` aborts while waiting. */
+   *  `signal` aborts while waiting, and resolves with "" when standard
+   *  input ends first. */
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   /** Everything on standard input until it ends, as text. */
   readAll(): Promise<string>;
@@ -195,6 +196,17 @@ export type HostSystem = {
   processId(): number;
   /** The directory of the module whose `import.meta.url` is given. */
   moduleDir(moduleUrl: string): string;
+  /** Where the agency-lang package is installed, for the files it ships
+   *  (the stdlib, its docs, the agents' skills and prompts) and for policy
+   *  patterns that name them; null where the package is bundled into the
+   *  program, as in a browser. */
+  installDir(): string | null;
+  /** The real spelling of a directory, the way file effects spell the
+   *  paths in their payloads: links resolved through the part that exists,
+   *  the rest as written, so a directory not made yet is spelled the way
+   *  it will be. Synchronous, because the policy directories are resolved
+   *  while a context is built. */
+  realDir(dir: string): string;
   /** Whether the module whose `import.meta.url` is given is the one the
    *  process was started with. A compiled program runs its `main` node only
    *  when this is true. */
@@ -215,6 +227,9 @@ export type HostSystem = {
 
 export type ParentChannel = {
   send(message: unknown): void;
+  /** Hand every message from the parent to `listener` until the returned
+   *  function is called. */
+  onMessage(listener: (message: unknown) => void): () => void;
 };
 
 /** How the runtime reads what it needs for itself and reports what it must.

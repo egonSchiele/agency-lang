@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { _imageAttachment, _fileAttachment, _attachToReply } from "./thread.js";
 import { withRun } from "../runtime/asyncContext.js";
 import { StateStack } from "../runtime/state/stateStack.js";
+import { memoryHost } from "../host/memoryHost.js";
 
 describe("_imageAttachment", () => {
   it("classifies a plain path", () => {
@@ -89,32 +90,68 @@ describe("_fileAttachment", () => {
 });
 
 describe("_attachToReply", () => {
-  function frameWith(toolDepth: number) {
+  function frameWith(toolDepth: number, files: Record<string, Uint8Array> = {}) {
     const stack = new StateStack();
     const ctx = {
       isInsideToolCall: () => toolDepth > 0,
       statelogClient: { error: vi.fn() },
+      host: memoryHost({ files }),
     };
     return { ctx, stack, log: ctx.statelogClient } as any;
   }
 
-  it("queues onto the frame's stack.other when inside a tool call", () => {
-    const frame = frameWith(1);
-    withRun(frame, () => {
-      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
-    });
+  it("reads a path source through the host and queues the bytes as base64", async () => {
+    const frame = frameWith(1, { "/pics/x.png": new Uint8Array([1, 2, 3, 4]) });
+    await withRun(frame, () =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/pics/x.png" } }),
+    );
     const queued = frame.stack.drainPendingReplyAttachments();
     expect(queued).toHaveLength(1);
-    expect(queued[0].source.path).toBe("/tmp/x.png");
+    expect(queued[0].unreadable).toBeUndefined();
+    expect(queued[0].part.source).toEqual({
+      kind: "base64",
+      base64: Buffer.from([1, 2, 3, 4]).toString("base64"),
+      mimeType: "image/png",
+    });
     // Drain clears: a second drain is empty.
     expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
   });
 
-  it("drops with a statelog error outside a tool call (never throws)", () => {
+  it("queues a missing path as it is, with the reason for harvest to report", async () => {
+    const frame = frameWith(1);
+    await withRun(frame, () =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/pics/missing.png" } }),
+    );
+    const queued = frame.stack.drainPendingReplyAttachments();
+    expect(queued).toEqual([
+      {
+        part: { type: "image", source: { kind: "path", path: "/pics/missing.png" } },
+        unreadable: "file not found",
+      },
+    ]);
+  });
+
+  it("refuses a file over the size limit from its stat, without reading it", async () => {
+    const frame = frameWith(1, { "/pics/huge.png": new Uint8Array(21 * 1024 * 1024) });
+    const readBytes = vi.spyOn(frame.ctx.host.files, "readBytes");
+    await withRun(frame, () =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/pics/huge.png" } }),
+    );
+    const queued = frame.stack.drainPendingReplyAttachments();
+    expect(queued).toEqual([
+      {
+        part: { type: "image", source: { kind: "path", path: "/pics/huge.png" } },
+        unreadable: "too large to attach (over 20 MB)",
+      },
+    ]);
+    expect(readBytes).not.toHaveBeenCalled();
+  });
+
+  it("drops with a statelog error outside a tool call (never throws)", async () => {
     const frame = frameWith(0);
-    withRun(frame, () => {
-      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } });
-    });
+    await withRun(frame, () =>
+      _attachToReply({ type: "image", source: { kind: "path", path: "/tmp/x.png" } }),
+    );
     expect(frame.stack.drainPendingReplyAttachments()).toEqual([]);
     expect(frame.ctx.statelogClient.error).toHaveBeenCalledTimes(1);
   });

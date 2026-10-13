@@ -1,6 +1,6 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
-import * as fs from "fs";
-import path from "#path";
+import { defaultHost } from "#default-host";
+import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
@@ -148,7 +148,9 @@ export class StatelogClient {
   private traceId: string;
   private apiKey: string;
   private projectId: string;
-  private logFile?: string;
+  /** Appends one line to the configured log file, synchronously, so a test
+   *  can read the file right after an awaited event. Null without a file. */
+  private logFileSink: ((line: string) => void) | null = null;
   private enabled: boolean = true;
   // Whether the remote http sink is usable. A configured host with no
   // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
@@ -183,7 +185,6 @@ export class StatelogClient {
     this.projectId = projectId;
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
-    this.logFile = config.logFile;
     this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     this.metadata = config.metadata;
@@ -221,14 +222,13 @@ export class StatelogClient {
       }
     }
 
-    // If a logFile is configured, ensure the parent directory exists.
-    // We don't truncate here — each run uses its own runId as traceId,
-    // so multiple runs writing to the same file are still distinguishable.
-    if (this.logFile) {
+    // The file is not truncated: each run uses its own runId as traceId,
+    // so several runs writing to the same file are still told apart.
+    if (config.logFile) {
       try {
-        fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
+        this.logFileSink = openLineSink(config.logFile);
       } catch (err) {
-        if (this.debugMode) console.warn(`StatelogClient: failed to ensure logFile dir: ${err}`);
+        if (this.debugMode) console.warn(`StatelogClient: failed to open logFile: ${err}`);
       }
     }
   }
@@ -1573,7 +1573,7 @@ export class StatelogClient {
     }
 
     // We need either a host (remote / stdout) or a logFile to do anything.
-    if (!this.host && !this.logFile) {
+    if (!this.host && this.logFileSink === null) {
       return;
     }
 
@@ -1610,11 +1610,10 @@ export class StatelogClient {
       data,
     });
 
-    // File sink: append one JSON object per line. Done synchronously
-    // so tests can read the file immediately after an awaited event.
-    if (this.logFile) {
+    // File sink: one JSON object per line.
+    if (this.logFileSink !== null) {
       try {
-        fs.appendFileSync(this.logFile, postBody + "\n");
+        this.logFileSink(postBody);
       } catch (err) {
         if (this.debugMode) console.error("StatelogClient: failed to append to logFile:", err);
       }
@@ -1662,7 +1661,7 @@ export function getStatelogClient(config: {
   const statelogConfig = {
     host: config.host,
     traceId: config.traceId || nanoid(),
-    apiKey: process.env.STATELOG_API_KEY || "",
+    apiKey: defaultHost().settings.read("STATELOG_API_KEY") || "",
     projectId: config.projectId,
     debugMode: config.debugMode || false,
     observability: config.observability,

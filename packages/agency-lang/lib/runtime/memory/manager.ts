@@ -31,7 +31,7 @@ import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
 import { projectProviderTokenUsage } from "../invocationUsage.js";
 import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
-import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
+import { resolveLocalEmbeddingModel } from "#platform";
 
 /**
  * The part of a run memory reads: the context it accounts into, the
@@ -480,7 +480,7 @@ export class MemoryManager {
     }
     try {
       return {
-        model: await _resolveLocalEmbeddingModel(target.provider!, target.model),
+        model: await resolveLocalEmbeddingModel(target.provider!, target.model),
         provider: target.provider,
       };
     } catch (err) {

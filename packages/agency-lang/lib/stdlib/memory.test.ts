@@ -163,7 +163,7 @@ describe("std::memory enable/disable/block", () => {
         await callHelper(_enableMemory, { dir: dirB });
         const frames = execCtx.stateStack.other.memoryFrames as any[];
         expect(frames.length).toBe(2);
-        expect(frames[1].configKey).toBe(fs.realpathSync(dirB));
+        expect(frames[1].configKey).toBe(path.join(fs.realpathSync(tmpRoot), "b"));
       }),
     );
   });
@@ -181,7 +181,7 @@ describe("std::memory enable/disable/block", () => {
         callHelper(_disableMemory);
         const frames = execCtx.stateStack.other.memoryFrames as any[];
         expect(frames.length).toBe(1);
-        expect(frames[0].configKey).toBe(fs.realpathSync(dirA));
+        expect(frames[0].configKey).toBe(path.join(fs.realpathSync(tmpRoot), "a"));
       }),
     );
   });
@@ -207,7 +207,7 @@ describe("std::memory enable/disable/block", () => {
     const json = execCtx.stateStack.toJSON();
     const restored = StateStack.fromJSON(json);
     const top = restored.activeMemoryFrame();
-    expect(top?.configKey).toBe(fs.realpathSync(dirA));
+    expect(top?.configKey).toBe(path.join(fs.realpathSync(tmpRoot), "a"));
     expect(top?.config).toEqual(richConfig);
   });
 

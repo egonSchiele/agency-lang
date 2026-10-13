@@ -4,8 +4,12 @@ import { FakeClock } from "../clock.js";
 import { nodeHost } from "../../host/node/nodeHost.js";
 import { resolveInvocation } from "../invocationOptions.js";
 import type { Host } from "../../host/host.js";
+import { memoryHost } from "../../host/memoryHost.js";
+import type { MemoryConfig } from "../memory/types.js";
 
-function makeCtx(args: { host?: Host; clock?: FakeClock } = {}): RuntimeContext<any> {
+function makeCtx(
+  args: { host?: Host; clock?: FakeClock; memory?: MemoryConfig } = {},
+): RuntimeContext<any> {
   return new RuntimeContext({
     statelogConfig: {
       host: "https://example.com",
@@ -17,6 +21,7 @@ function makeCtx(args: { host?: Host; clock?: FakeClock } = {}): RuntimeContext<
     dirname: "/tmp",
     host: args.host,
     clock: args.clock,
+    memory: args.memory,
   });
 }
 
@@ -59,6 +64,14 @@ describe("a host for one invocation", () => {
     const resolved = resolveInvocation({ kind: "fresh", options: { host } });
     const execCtx = await ctx.createExecutionContext(resolved);
     expect(execCtx.host).toBe(host);
+  });
+
+  it("the memory frame from agency.json is resolved against the invocation host", async () => {
+    const ctx = makeCtx({ memory: { dir: "./mem" } });
+    const host = memoryHost({ cwd: "/app" });
+    const resolved = resolveInvocation({ kind: "fresh", options: { host } });
+    const execCtx = await ctx.createExecutionContext(resolved);
+    expect(execCtx.stateStack.activeMemoryFrame()?.configKey).toBe("/app/mem");
   });
 
   it("a second run with no host uses the default", async () => {

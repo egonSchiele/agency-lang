@@ -5,9 +5,8 @@ import type { HostSettings } from "../host/host.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import { CheckpointError, type RestoreSignal } from "./errors.js";
-import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import type { Policy } from "./policy.js";
-import { loadProviderModules } from "./providerModules.js";
+import { loadConfiguredProviders } from "#platform";
 import { assertCodeUnchanged } from "./referencedModules.js";
 import { reinstallRootBudget } from "./rootBudget.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
@@ -151,8 +150,7 @@ export async function restoreForResume(
   }
   assertCodeUnchanged(checkpoint.moduleFingerprints);
   installRunPolicyHandler(execCtx, request.policy);
-  await loadProviderModules(execCtx);
-  await ensureConfiguredLocalProvider(execCtx);
+  await loadConfiguredProviders(execCtx);
 
   execCtx._restoreCount++;
   execCtx.rootLog.checkpointRestored({

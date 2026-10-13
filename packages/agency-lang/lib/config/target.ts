@@ -1,7 +1,22 @@
 import * as fs from "fs";
 import * as path from "path";
-import { loadConfigSafe, validateConfig, type ConfigResult } from "./config.js";
+import { validateConfig, type ConfigResult } from "./config.js";
 import { mergeConfig } from "./merge.js";
+
+/** Load exactly one config file. A missing file is an empty config. For a
+ *  project directory, use readConfig below. */
+export function loadConfigSafe(configPath: string): ConfigResult {
+  if (!fs.existsSync(configPath)) {
+    return { config: {} };
+  }
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return validateConfig(raw, configPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { config: {}, error: `Error loading config from ${configPath}: ${message}` };
+  }
+}
 
 export const CONFIG_FILE = "agency.json";
 /** Per-developer overrides, kept out of git. Merged over CONFIG_FILE. */

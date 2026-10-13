@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import fs from "fs";
 import {
   CAPABILITIES,
   FILE_WRITE_FUNCTIONS,
@@ -283,6 +284,13 @@ describe("nodeHost", () => {
       restore("NO_COLOR");
       restore("FORCE_COLOR");
     }
+  });
+
+  it("knows where the package is installed and spells a directory the real way", () => {
+    const system = nodeHost().system;
+    expect(system.installDir()).toBe(process.cwd());
+    expect(system.realDir(process.cwd())).toBe(fs.realpathSync(process.cwd()));
+    expect(system.realDir("/no-such-dir/x")).toBe("/no-such-dir/x");
   });
 
   it("has a parent channel only when process.send exists", () => {

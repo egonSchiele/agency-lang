@@ -1,16 +1,13 @@
-// Files the browser entry point can reach that still use Node.
+// The files of the runtime and the stdlib that are Node-only for good.
 //
 // The lint rule in eslint.config.js bans Node modules and Node globals in
-// every file a browser bundle of the runtime would contain. The first two
-// lists are the exceptions. Together they only ever get shorter: a file
-// leaves WAITING when its Node use moves into the host, and nothing joins
-// NODE_ONLY without a reason beside it. The spec is
-// docs/superpowers/specs/2026-10-05-host-and-platforms.md.
+// every file a browser bundle of the runtime would contain; the files here
+// are exempt, and nothing joins the list without a reason beside it. The
+// spec is docs/superpowers/specs/2026-10-05-host-and-platforms.md.
 //
-// scripts/lint-browser-reach.mjs reads all three lists. It walks the
-// imports of the runtime and the stdlib without entering a listed file,
-// and fails when a file it reaches is not covered by the rule, or imports
-// a file on NODE_ONLY that REACHES_NODE_ONLY does not name.
+// scripts/lint-browser-reach.mjs reads the list too. It bundles the browser
+// entry point and the stdlib without entering a listed file, and fails when
+// a file it reaches is not covered by the rule, or imports a listed file.
 
 /** Node-only for good, each with the reason. An entry is a file, or a
  *  directory glob such as lib/host/node/** for every file under it.
@@ -28,9 +25,10 @@ export const NODE_ONLY = {
   "lib/runtime/cliInterruptResolution.ts":
     "the command line's endpoint for interrupts nothing handled",
   "lib/runtime/coverageCollector.ts": "tooling: writes coverage files",
-  "lib/runtime/interruptPrompts.ts": "asks a person at a terminal to approve an interrupt",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
+  "lib/runtime/platform.node.ts":
+    "the Node side of #platform: provider modules from disk, the coverage collector, local models",
   "lib/runtime/providerModules.ts": "loads provider modules from disk",
   "lib/runtime/subprocess-bootstrap.ts": "the child end of ipc.ts",
   "lib/runtime/template/**":
@@ -83,41 +81,3 @@ export const NODE_ONLY = {
   "lib/utils/path.node.ts":
     "Node path; the browser condition of #path picks path.portable.ts",
 };
-
-/** Imports of a Node-only file by a file the browser can reach, as
- *  importer: targets. Each is a seam the browser entry point
- *  (lib/runtime/browser.ts) has to cut, by a host function or a
- *  per-platform file; until then the Node bundle needs the import. The
- *  reach lint fails on an import of a Node-only file this does not name,
- *  and on a named one that is gone, so this list only gets shorter. */
-export const REACHES_NODE_ONLY = {
-  "lib/runtime/agency.ts": ["lib/runtime/ipc.ts"],
-  "lib/runtime/interrupts.ts": ["lib/runtime/ipc.ts"],
-  "lib/runtime/memory/manager.ts": ["lib/stdlib/localModels.ts"],
-  "lib/runtime/node.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
-  "lib/runtime/resumeSetup.ts": ["lib/runtime/localProvider.ts", "lib/runtime/providerModules.ts"],
-  "lib/runtime/runPolicyHandler.ts": ["lib/runtime/interruptPrompts.ts"],
-  "lib/runtime/state/context.ts": ["lib/runtime/coverageCollector.ts"],
-};
-
-/** Files whose Node use has not moved into the host yet. Each is imported
- *  by a file the browser can reach, so none can be Node-only; what each
- *  one needs is beside it. Sorted. */
-export const WAITING = [
-  // loadConfigSafe reads agency.json with fs; the runtime needs only the
-  // schema, the defaults, and readConfigOverrides
-  "lib/config/config.ts",
-  // the package root and the agents directory, found with fs, createRequire,
-  // and import.meta.url; policyDirs.ts needs them
-  "lib/importPaths.ts",
-  // a memory frame's directory is made synchronously in
-  // createExecutionContext, through nodeFiles.ts
-  "lib/runtime/memory/frame.ts",
-  // reads an attachment by path in a synchronous prompt-runner callback
-  "lib/runtime/replyAttachments.ts",
-  // realpaths the policy directories once, by design
-  "lib/runtime/policyDirs.ts",
-  // the debug log file is written with fs; STATELOG_API_KEY is read from
-  // process.env
-  "lib/statelogClient.ts",
-];

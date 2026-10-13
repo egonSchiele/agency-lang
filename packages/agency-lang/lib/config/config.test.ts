@@ -3,11 +3,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { AgencyConfig } from "./config.js";
+import { loadConfigSafe } from "./target.js";
 import {
   AgencyConfigSchema,
   applyCliFlags,
   CONFIG_OVERRIDES_ENV,
-  loadConfigSafe,
   readConfigOverrides,
   redactConfigSecrets,
   SECRET_CONFIG_PATHS,

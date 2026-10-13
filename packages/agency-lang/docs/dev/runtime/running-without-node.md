@@ -42,14 +42,15 @@ When you are deciding about a Node feature, go through these steps:
 
 ## Where the targets may differ
 
-The plan is for the targets to differ in five places and nowhere else. The first three are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the other two.
+The targets differ in six places and nowhere else. The first five are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the last.
 
 | What differs | Where it lives |
 | --- | --- |
 | Hashing, where Node's OpenSSL is about nine times faster than JavaScript | One pair of files, `lib/utils/sha256.node.ts` and `sha256.portable.ts`, chosen by the `#sha256` entry in the `imports` field of `package.json` |
 | Path arithmetic, where Node's `path` follows the platform's rules | One pair of files, `lib/utils/path.node.ts` (Node's `path`) and `path.portable.ts` (`path-browserify`, Node's own POSIX `path.js`), chosen by the `#path` entry. See [Paths](#paths) |
 | Platform calls, such as reading a file or an environment variable | The host, `lib/host/`. One pair of files, `default.node.ts` and `default.browser.ts`, chosen by the `#default-host` entry, each of which builds the host of its platform. See [host.md](host.md) |
-| Which runtime modules are included | One entry point for the browser beside `lib/runtime/index.ts` |
+| Which runtime modules are included | `lib/runtime/browser.ts` beside `lib/runtime/index.ts`, chosen by the `browser` condition of `agency-lang/runtime`; both re-export `lib/runtime/portable.ts`. See [host.md](host.md), "The browser" |
+| The runtime's own hooks that need the disk or a local model | One pair of files, `lib/runtime/platform.node.ts` and `platform.browser.ts`, chosen by the `#platform` entry |
 | Which stdlib modules exist | The `@capabilities` tag on each effect, which makes a browser build of a program that raises a file effect a compile error |
 
 Generated code has one shape for both targets. The runtime is built once.
@@ -157,8 +158,7 @@ The `--external:smoltalk` flag matters. The context module imports the thread st
 
 ## What is left
 
-- The runtime imports Node modules in many other files. Each needs the sorting described under [The rule](#the-rule).
-- smoltalk, the library every model call goes through, imports `fs`, `path`, and `url`. The thread store imports smoltalk, so almost every runtime module reaches them.
-- The generated header reaches Node only through the host, but most of the runtime and the stdlib still read `process`, `fs`, and `path` directly. `eslint.node-exceptions.mjs` lists those files.
-- The last two places under [Where the targets may differ](#where-the-targets-may-differ) are not built.
+- smoltalk, the library every model call goes through, imports `fs`, `path`, and `url`. The thread store imports smoltalk, so almost every runtime module reaches them. Until smoltalk ships a browser build, a browser bundle points `smoltalk` at a stand-in with esbuild's `--alias`, the way `scripts/bundle-browser-smoke.mjs` does; a program in a browser cannot call a model yet.
+- tarsec and typestache reach for `process` when they load. The same bundle gives them an empty one.
+- The last place under [Where the targets may differ](#where-the-targets-may-differ) is not built.
 - The callbacks given to `agency.withHandler`, `withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with` are not handed a handle. Such a callback can call `agency.*` on its first line and not after an `await`.

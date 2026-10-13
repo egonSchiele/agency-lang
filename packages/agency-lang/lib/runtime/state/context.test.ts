@@ -153,7 +153,7 @@ describe("RuntimeContext memory frames", () => {
     const jsonManager = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(jsonManager).toBeDefined();
 
-    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }, execCtx.host));
     const aManager = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(aManager).toBeDefined();
     expect(aManager).not.toBe(jsonManager);
@@ -165,10 +165,10 @@ describe("RuntimeContext memory frames", () => {
   it("manager cache survives push/pop/push (pop back returns the cached A)", async () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }, execCtx.host));
     const a1 = execCtx.getActiveMemoryManager(execCtx.stateStack);
 
-    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirB }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirB }, execCtx.host));
     const b = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(b).not.toBe(a1);
 

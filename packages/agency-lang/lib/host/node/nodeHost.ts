@@ -10,6 +10,9 @@ import readline from "readline";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
 import { consoleLogSink } from "../../logger.js";
+import { getPackageRoot } from "../../importPaths.js";
+import { rootPath } from "../roots.js";
+import { root } from "./nodeFiles.js";
 import { nodeFilesPart, type NodeFilesOptions } from "./nodeFilesPart.js";
 import { nodeSubprocess } from "./nodeSubprocess.js";
 import { realClock, type Clock } from "../../runtime/clock.js";
@@ -144,13 +147,22 @@ const nodeTerminal: HostTerminal = {
     return new Promise<string>((resolve, reject) => {
       // Readline holds stdin exclusively, so a blocked read after Ctrl-C or
       // a race-loser abort would otherwise sit there forever.
+      // Standard input ended (a pipe ran dry, or Ctrl-D): there is no line.
+      const onClose = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve("");
+      };
       const onAbort = () => {
+        // Closing the interface fires "close" too; that is not an end of
+        // input.
+        rl.removeListener("close", onClose);
         try {
           rl.close();
         } catch {}
         reject(signal?.reason);
       };
       signal?.addEventListener("abort", onAbort, { once: true });
+      rl.once("close", onClose);
       const ask = () => {
         const askedAt = Date.now();
         rl.question(prompt, (answer: string) => {
@@ -173,6 +185,7 @@ const nodeTerminal: HostTerminal = {
             return;
           }
           signal?.removeEventListener("abort", onAbort);
+          rl.removeListener("close", onClose);
           rl.close();
           resolve(answer);
         });
@@ -223,6 +236,20 @@ const nodeSystem: HostSystem = {
   processId: () => process.pid,
   moduleDir: (moduleUrl) => path.dirname(fileURLToPath(moduleUrl)),
   isMainModule: (moduleUrl) => process.argv[1] === fileURLToPath(moduleUrl),
+  installDir: () => {
+    try {
+      return getPackageRoot();
+    } catch {
+      return null;
+    }
+  },
+  realDir: (dir) => {
+    try {
+      return rootPath(root(dir));
+    } catch {
+      return dir;
+    }
+  },
   exit: (code) => process.exit(code),
   setTitle: (title) => {
     process.title = title;
@@ -236,6 +263,12 @@ const nodeSystem: HostSystem = {
     return {
       send: (message) => {
         send.call(process, message);
+      },
+      onMessage: (listener) => {
+        process.on("message", listener);
+        return () => {
+          process.removeListener("message", listener);
+        };
       },
     };
   },

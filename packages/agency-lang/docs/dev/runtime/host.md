@@ -32,6 +32,8 @@ The host has two kinds of part.
 
 `system` is where a helper learns about the platform: `operatingSystem()` (`macos`, `linux`, `windows`, `wsl`, or `unknown`; on Node, WSL is told from Linux by reading `/proc/version` once), `cwd()`, `homeDir()`, `tempDir()`, `moduleDir(import.meta.url)` for a file that ships beside a module, and the rest. A helper that picks a program by platform, such as the keyring over `security` or `secret-tool`, reads `operatingSystem()` and never `process.platform`; `expandPath(p, homeDir)` takes the home directory from `system.homeDir()`, and `resolveCwdPath(host, p)` the working directory from `system.cwd()`.
 
+`system.installDir()` is where the agency-lang package is installed, for the files it ships (the stdlib's docs, skills, and prompts) and for policy patterns that name them; null where the package is bundled into the program, as in a browser. `system.realDir(dir)` is a directory's real spelling, the way a file effect spells the paths in its payload: links resolved through the part that exists, the rest as written. It is synchronous because the policy directories are resolved while a context is built, and a memory frame takes its key from it for the same reason.
+
 `system` also holds what a process does rather than knows: `exit(code)`, which `lib/runtime/exitProcess.ts` calls after the pending log requests are sent; `setTitle(title)`, the process name `ps` shows; `parentChannel()`, the IPC channel to the parent when Agency forked this process for a subprocess run (null otherwise), which the callback and usage forwarders send on; and `onExit(fn)`, for the coverage collector's write at the end. These are per process, not per run, so a caller asks `defaultHost()` for them.
 
 `PLATFORM_CAPABILITIES` is the capabilities of each platform. Node has all seven; the browser has `network`, `env`, `terminal`, and `llm`. The compiler and the default host of each platform both read it, so they cannot disagree.
@@ -85,9 +87,10 @@ Agency turns an error thrown inside a function into a failure result, so a progr
 | Host | File | Capabilities | What it is built from |
 | --- | --- | --- | --- |
 | `nodeHost` | `lib/host/node/nodeHost.ts` | all seven | `process`, `os`, `readline`, `crypto`, the real clock |
+| `browserHost` | `lib/host/browserHost.ts` | `network`, `env`, `terminal`, `llm` | the page's `fetch` and `crypto`, the real clock, and what the app passed: variables, a terminal, a working directory; the console without |
 | `memoryHost` | `lib/host/memoryHost.ts` | whatever the test asks for; all seven by default | an object of files, recorded output, scripted input lines, an object of variables, `FakeClock` |
 
-Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
+Each is a function that returns a `Host`. `nodeHost` takes `{ capabilities, clock, files, onUse }`, all optional; `files.seams` is the test hook the symlink battery uses. `browserHost` takes `{ capabilities, variables, terminal, fetch, cwd, onUse }`, all optional; its `terminal.readLine` refuses, since a page has no line to read, and `system.exit` throws, since a page cannot end its process. `memoryHost` takes `{ capabilities, files, variables, inputLines, cwd, homeDir, installDir, operatingSystem, clock, onUse }` and returns the host with a `state` the test reads afterwards: the files, what was printed, what was logged.
 
 ### The file part
 
@@ -123,7 +126,7 @@ A test of a helper that runs a fixed program mocks `lib/host/node/nodeSubprocess
 
 ### The default host
 
-`lib/host/node/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`. The runtime imports it as `#default-host`, an entry in the `imports` field of `package.json` that resolves to this file under the `default` condition. `running-without-node.md` explains the mechanism and the three places that have to know about each entry.
+`lib/host/node/default.node.ts` exports `defaultHost()`, which returns a `nodeHost`, and `lib/host/default.browser.ts` one that returns a plain `browserHost`. The runtime imports `#default-host`, an entry in the `imports` field of `package.json` that resolves to the Node file by default and to the browser file under the `browser` condition, which esbuild applies when it bundles with `--platform=browser`. `running-without-node.md` explains the mechanism and the three places that have to know about each entry. An app in a browser that wants the program to see its own variables and terminal passes a `browserHost` of its own: the generated `main({ host })` forwards it through `InvocationOptions`.
 
 `default.node.ts` is the one place that reads the environment variables the test runner uses to ask for a double of part of the host. `AGENCY_FAKE_CLOCK=1` gives the host a `FakeClock`. `AGENCY_FETCH_MOCKS_FILE` names a file of scripted responses, read once per process, which becomes the host's network part (`fetchMock` in `lib/runtime/fetchMock.ts`); the global `fetch` is left alone. `AGENCY_LLM_MOCKS` is about the `LLMClient`, and `RuntimeContext` reads it.
 
@@ -177,19 +180,23 @@ Two runs in one process can have different hosts, which is what lets a test give
 
 A file the browser can reach may not import a Node module or use the globals `process`, `Buffer`, `__dirname`, `__filename`, `require`, or `setImmediate`. The rule is in `eslint.config.js`, over the files in `BROWSER_FILES`: `lib/runtime`, `lib/stdlib`, `lib/simplemachine`, `lib/host`, and the files outside them the runtime imports.
 
-`eslint.node-exceptions.mjs` lists the files that fail it:
+`eslint.node-exceptions.mjs` lists the files that are exempt, `NODE_ONLY`, with the reason beside each entry. An entry is a file, or a directory glob: `lib/host/node/**` covers `nodeHost` and the files it is built from, which live there so that one entry names them all; `lib/runtime/template/**` covers the template files, which run the compiler. The files that run a child process, load modules from disk, or run a local model are listed one by one. Nothing joins the list without a reason, and a file a browser-reachable file imports cannot join it at all: the reach lint refuses the import.
 
-- `NODE_ONLY` is for good, with the reason beside each entry. An entry is a file, or a directory glob: `lib/host/node/**` covers `nodeHost` and the files it is built from, which live there so that one entry names them all. The files that run a child process, prompt at a terminal, or load modules from disk are listed one by one.
-- `WAITING` is for a file whose Node use has not moved into the host yet, with what it needs beside it. It only gets shorter. A file here is imported by one the browser can reach, which is why it cannot simply be Node-only.
-- `REACHES_NODE_ONLY` is the imports of a Node-only file by a file the browser can reach, such as `interrupts.ts` importing `ipc.ts`. Each is a seam the browser entry point has to cut. It only gets shorter too.
+`scripts/lint-browser-reach.mjs`, which `lint:structure` runs, bundles `lib/runtime/browser.ts` and the stdlib with esbuild, stopping at every listed file, and fails when the bundle reaches a file `BROWSER_FILES` does not cover, or when a reached file imports one on `NODE_ONLY`. The `#` names are left unresolved in that bundle, since the browser condition picks another file for each, so an import by one is never reported; an import of the Node file by its own path is. `node scripts/lint-browser-reach.mjs --list` prints what it reached.
 
-`scripts/lint-browser-reach.mjs`, which `lint:structure` runs, bundles the runtime and the stdlib with esbuild, stopping at every listed file, and fails when the bundle reaches a file `BROWSER_FILES` does not cover, or when a reached file imports one on `NODE_ONLY` that `REACHES_NODE_ONLY` does not name (or names but is gone). `lib/runtime/index.ts` is exempt from the second check: it is Node's entry point, and the browser has its own. The `#` names are left unresolved in that bundle, since the browser condition picks another file for each, so an import by one is never reported; an import of the Node file by its own path is. `node scripts/lint-browser-reach.mjs --list` prints what it reached.
+### The browser
+
+`lib/runtime/browser.ts` is the runtime's entry point in a browser bundle: `agency-lang/runtime` resolves to it under the `browser` condition. Everything both platforms share is in `lib/runtime/portable.ts`; `index.ts` (Node) and `browser.ts` each re-export it and add what differs. For the four header names Node's entry takes from a Node-only file (`_runFor`, `runCliEntry`, `resolveCliInterrupts`, `__codeLiteral`), `browser.ts` exports a stand-in that throws `UnsupportedOnHostError`, and for `path` and `os` a portable twin. `lib/runtime/browser.test.ts` reads the header's import list and derives from `NODE_ONLY` exactly which names must be replaced.
+
+A few of the runtime's own hooks differ by platform and are not the host's business, because they are about Agency's machinery rather than what the platform offers: loading provider modules from disk, the coverage collector, the statelog client's log file, and resolving a local model. They are behind `#platform`, resolved like `#default-host`: `lib/runtime/platform.node.ts` does each, `platform.browser.ts` does nothing where nothing is configured and refuses otherwise, and `platform.ts` holds the types both share.
+
+`scripts/bundle-browser-smoke.mjs` compiles `tests/browser/hello.agency` and bundles it with esbuild for the browser, and fails when the bundle still imports a Node module. `tests/browser/browser.test.ts` (`pnpm run test:browser`, the Browser workflow in CI) runs that bundle in headless Chromium with a `browserHost` whose terminal records output, and checks what the program printed, down to the refusal of its file read. Three dependencies need a stand-in for that bundle, each under `tests/browser/shims`: smoltalk imports `fs`, `path`, and `url` (a change in the smoltalk repo), and tarsec and typestache reach for `process` at load.
 
 ## Adding a function to the host
 
 1. Add it to the part's type in `host.ts`.
 2. Implement it in every host. `makeHost` builds a granted part from what the host passed, so a host that forgets the function fails the first call of it, and the shared tests under `lib/host` cover every function of every host.
-3. Call it through `run.ctx.host` or `currentHost()`, and take the file off `WAITING` when nothing Node is left in it.
+3. Call it through `run.ctx.host` or `currentHost()`.
 
 A function goes on the host when its answer depends on the platform. Joining two path strings does not; it belongs in a portable module. Reading the time does, and so does reading a variable.
 

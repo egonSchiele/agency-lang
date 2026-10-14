@@ -94,20 +94,40 @@ function schemaIssues(message: string): SchemaIssue[] | null {
   if (!Array.isArray(parsed)) {
     return null;
   }
-  const isIssue = (item: any) =>
-    item !== null && typeof item === "object" && "code" in item && Array.isArray(item.path);
   if (!parsed.every(isIssue)) {
     return null;
   }
   return parsed as SchemaIssue[];
 }
 
+/** True when `item` has the shape of one schema-library issue, including
+ *  the issues nested inside a union's options. */
+function isIssue(item: any): boolean {
+  if (item === null || typeof item !== "object") {
+    return false;
+  }
+  if (!("code" in item) || !Array.isArray(item.path)) {
+    return false;
+  }
+  if ("values" in item && !Array.isArray(item.values)) {
+    return false;
+  }
+  if (!("errors" in item)) {
+    return true;
+  }
+  return (
+    Array.isArray(item.errors) &&
+    item.errors.every((option: unknown) => Array.isArray(option) && option.every(isIssue))
+  );
+}
+
 /** The value found by following `path` into `value`, or undefined when the
- *  path leads nowhere. */
+ *  path leads nowhere. Only the value's own fields count, so a missing
+ *  `constructor` field is not read from the object's prototype. */
 function valueAt(value: unknown, path: IssuePath): unknown {
   let current: unknown = value;
   for (const key of path) {
-    if (current === null || typeof current !== "object") {
+    if (current === null || typeof current !== "object" || !Object.hasOwn(current, key)) {
       return undefined;
     }
     current = (current as Record<string | number, unknown>)[key];

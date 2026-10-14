@@ -166,6 +166,35 @@ describe("__invalidArgument", () => {
         'Argument "repeatRule" of scheduleTask must be RepeatRule, but received the text "every friday".',
       );
     });
+
+    it("does not report a field the value inherits from its prototype", () => {
+      const tagged = z.union([
+        z.object({ constructor: z.literal("a") }),
+        z.object({ constructor: z.literal("b") }),
+      ]);
+      const result = __invalidArgument({
+        functionName: "pick",
+        paramName: "choice",
+        typeText: "Choice",
+        value: {},
+        failure: refused({}, tagged),
+      });
+      expect(result.error).toBe(
+        'Argument "choice" of pick must be Choice, but received an object. Problems: constructor: expected one of "a", "b".',
+      );
+    });
+  });
+
+  it("treats a validator message shaped like a broken union issue as the validator's", () => {
+    const message = '[{"code":"invalid_union","path":[],"message":"bad","errors":[["x"]]}]';
+    const result = __invalidArgument({
+      functionName: "setTags",
+      paramName: "tags",
+      typeText: "Tags",
+      value: {},
+      failure: failure(message),
+    });
+    expect(result.error).toBe(`Argument "tags" of setTags was refused: ${message}`);
   });
 
   it("passes a validator's own message through", () => {

@@ -37,6 +37,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 | short-circuit right sides | opaque | may never execute |
 | if-expression branches | hoisted within, never across | an if-expression lowers to an `ifElse` whose branches are statement bodies, so a temp lands inside the branch it belongs to. `hoistPositions.test.ts` pins this against the pass |
 | a checked cast, `x as T!` | becomes a temp, under the same rules as a call | a `@validate` validator is an Agency function and can pause |
+| a `!` parameter check | not the pass's job: the check runs inside the function's step 0 | the check is emitted by codegen, not written in the source, so no statement exists to lift; step 0 runs once and a resume skips it. See the "step 0" section of `docs/dev/language/validation-annotations.md` |
 | pipe stages | opaque | already memoized per step and failure-gated |
 | pipe input | hoist | evaluated inline at statement level, outside the memoization |
 | `with`/`static` wrapped statements | opaque | hoisting out would cross the approval region; the slot holds exactly one statement |

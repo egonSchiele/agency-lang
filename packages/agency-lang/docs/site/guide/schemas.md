@@ -53,7 +53,7 @@ function greet(name: string!, age: number!) {
 }
 ```
 
-If any of these parameters fails to validate, the function returns immediately with a `failure`. The body does not run, so nothing after it happens either: no interrupt is raised and no work is done.
+If any of these parameters fails to validate, the function returns immediately with a `failure`. The body does not run, so nothing after it happens either: no interrupt is raised and no work is done. The checks run once per call. If the function pauses on an interrupt and resumes later, the resume does not run them again, and the body sees the values the first check produced.
 
 This matters most when a model calls the function as a tool. In your own code the type checker catches a wrong argument before the program runs. A model's tool call is not type checked, and models do get arguments wrong. Take this function:
 

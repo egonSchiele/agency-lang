@@ -190,7 +190,38 @@ A file the browser can reach may not import a Node module or use the globals `pr
 
 A few of the runtime's own hooks differ by platform and are not the host's business, because they are about Agency's machinery rather than what the platform offers: loading provider modules from disk, the coverage collector, the statelog client's log file, and resolving a local model. They are behind `#platform`, resolved like `#default-host`: `lib/runtime/platform.node.ts` does each, `platform.browser.ts` does nothing where nothing is configured and refuses otherwise, and `platform.ts` holds the types both share.
 
-`scripts/bundle-browser-smoke.mjs` compiles `tests/browser/hello.agency` and bundles it with esbuild for the browser, and fails when the bundle still imports a Node module. `tests/browser/browser.test.ts` (`pnpm run test:browser`, the Browser workflow in CI) runs that bundle in headless Chromium with a `browserHost` whose terminal records output, and checks what the program printed, down to the refusal of its file read. Three dependencies need a stand-in for that bundle, each under `tests/browser/shims`: smoltalk imports `fs`, `path`, and `url` (a change in the smoltalk repo), and tarsec and typestache reach for `process` at load.
+`scripts/bundle-browser-smoke.mjs` compiles `tests/browser/hello.agency` and `tests/browser/ask.agency` and bundles them with esbuild for the browser, and fails when the bundle still imports a Node module. `tests/browser/browser.test.ts` (`pnpm run test:browser`, the Browser workflow in CI) runs that bundle in headless Chromium with a `browserHost` whose terminal records output, and checks what the program printed, down to the refusal of its file read. A second case calls a hosted model from the page with the key the page passed in `variables`, and is skipped without `OPENAI_API_KEY`; a third builds a host without the `llm` capability and checks that the call is refused. The header comment of the smoke script lists what the bundle still needs from the bundler: two externals for `@anthropic-ai/sdk`, an alias for ollama, and the `process` and `child_process` stand-ins under `tests/browser/shims` that tarsec and typestache need at load.
+
+#### What an app writes
+
+An app that runs a compiled program in a page needs three things. The host, built from what the app has: its API keys as `variables`, and where printed text should go. The node, called with that host. And a bundle built for the browser.
+
+```ts
+import { browserHost } from "agency-lang/host-lib/browserHost.js";
+import { main } from "./main.js"; // the compiled program
+
+const host = browserHost({
+  variables: { OPENAI_API_KEY: keyFromTheApp },
+  terminal: { print: (values) => show(values.join(" ")) },
+});
+const result = await main({ host });
+```
+
+`result.data` is what the node returned, or a failure when it crashed or a host refused it. The keys reach the model call through the host's settings; see [running-without-node.md](running-without-node.md), "Model calls from a browser".
+
+The bundle is the part an app author cannot guess, so here is the esbuild command `tests/browser/entry.mjs` is built with, minus the test-only flags:
+
+```sh
+esbuild app.js --bundle --platform=browser --format=esm \
+  --external:node:fs --external:node:path \
+  --alias:ollama=ollama/browser \
+  --alias:process=./shims/process.mjs \
+  --alias:child_process=./shims/child_process.mjs \
+  --inject:./shims/process.mjs \
+  --outfile=bundle.js
+```
+
+The two externals are for `@anthropic-ai/sdk`, which imports them dynamically on a path that never runs when a key is passed. The ollama alias sends one import in smoltalk to ollama's browser build. The two shims are copies of `tests/browser/shims/process.mjs`, a `process` with an empty environment, and `tests/browser/shims/child_process.mjs`, an `execSync` that throws; tarsec and typestache read `process` when they load, and tarsec imports `execSync` for tracing it never does in a page. `scripts/bundle-browser-smoke.mjs` says why each flag is there, and is the place to check when a dependency changes.
 
 ## Adding a function to the host
 

@@ -4,7 +4,8 @@
 # for the browser, which fails on any Node import left in the runtime, and
 # the same bundle run in headless Chromium (docs/dev/runtime/host.md, "The
 # browser"). `make ci` first, because the check compiles with the built
-# compiler and bundles the built runtime.
+# compiler and bundles the built runtime. One case calls a hosted model
+# from the page with OPENAI_API_KEY, and is skipped when the key is absent.
 name: Browser
 
 on:
@@ -35,3 +36,5 @@ jobs:
         working-directory: packages/agency-lang
       - run: pnpm run test:browser
         working-directory: packages/agency-lang
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

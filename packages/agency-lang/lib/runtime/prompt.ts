@@ -1,3 +1,4 @@
+import { requireCapabilities } from "../host/host.js";
 import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON, UserContentInput, redactAttachments } from "smoltalk";
 import { createLogger, type Logger } from "../logger.js";
@@ -29,7 +30,7 @@ import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
-import type { PromptConfig } from "./llmClient.js";
+import { withHostKeys, type PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
 import { BranchRunner, PromptBailout, PromptRunner } from "./promptRunner.js";
@@ -546,6 +547,11 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     return "";
   }
 
+  // A model call needs the `llm` capability, and calls no host function
+  // that would check it, so it is checked here. A host built without it
+  // refuses before anything is sent or recorded.
+  requireCapabilities(run.ctx.host, ["llm"], "llm");
+
   // `run` is the run the `llm()` call site runs under. Everything in this
   // function outside a tool-call branch runs under it. Each tool call gets
   // its own branch run from `pr.parallel`.
@@ -714,13 +720,14 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     stackSmolDefaults.replyLimits,
     restClientConfig.replyLimits,
   );
-  const clientConfig = withLocalDefaults(
-    ctx.getSmoltalkConfig(stackSmolDefaults, {
-      ...restClientConfig,
-      ...(replyLimits === undefined ? {} : { replyLimits }),
-    }),
-    ctx.getSmoltalkConfig().model,
-  );
+  const merged = ctx.getSmoltalkConfig(stackSmolDefaults, {
+    ...restClientConfig,
+    ...(replyLimits === undefined ? {} : { replyLimits }),
+  });
+  // The host's API keys go under everything else, so a key from agency.json
+  // or the call wins. See `withHostKeys`.
+  const hosted = withLocalDefaults(merged, ctx.getSmoltalkConfig().model);
+  const clientConfig = withHostKeys(ctx.host.settings, hosted);
 
   // Cap on characters of a single tool result fed back to the LLM. The
   // full result is still cached for Agency code via `setResultOnBranch`;

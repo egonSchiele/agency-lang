@@ -4,7 +4,7 @@ This doc records the goals for running Agency outside Node, the rule that follow
 
 Read this before you propose a change that makes Agency behave differently on Node and in a browser.
 
-This doc does not make Agency run in a browser. The runtime still imports `fs`, `path`, and other Node modules. See [What is left](#what-is-left).
+A compiled program runs in a browser today, and calls a hosted model from there: `tests/browser/browser.test.ts` runs one in headless Chromium. [host.md](host.md), "The browser", has what an app writes to do the same. What remains is listed under [What is left](#what-is-left).
 
 ## Goals
 
@@ -42,7 +42,7 @@ When you are deciding about a Node feature, go through these steps:
 
 ## Where the targets may differ
 
-The targets differ in six places and nowhere else. The first five are built. `docs/superpowers/specs/2026-10-05-host-and-platforms.md` designs the last.
+The targets differ in six places and nowhere else. All six are built; `docs/superpowers/specs/2026-10-05-host-and-platforms.md` is the design.
 
 | What differs | Where it lives |
 | --- | --- |
@@ -51,7 +51,7 @@ The targets differ in six places and nowhere else. The first five are built. `do
 | Platform calls, such as reading a file or an environment variable | The host, `lib/host/`. One pair of files, `default.node.ts` and `default.browser.ts`, chosen by the `#default-host` entry, each of which builds the host of its platform. See [host.md](host.md) |
 | Which runtime modules are included | `lib/runtime/browser.ts` beside `lib/runtime/index.ts`, chosen by the `browser` condition of `agency-lang/runtime`; both re-export `lib/runtime/portable.ts`. See [host.md](host.md), "The browser" |
 | The runtime's own hooks that need the disk or a local model | One pair of files, `lib/runtime/platform.node.ts` and `platform.browser.ts`, chosen by the `#platform` entry |
-| Which stdlib modules exist | The `@capabilities` tag on each effect, which makes a browser build of a program that raises a file effect a compile error |
+| Which stdlib functions a program may call | The `@capabilities` tag on a function or node, which makes a browser build of a program that reads a file a compile error, and refuses the call at function entry when a host built without the capability runs it anyway. See [../language/capabilities.md](../language/capabilities.md) |
 
 Generated code has one shape for both targets. The runtime is built once.
 
@@ -154,11 +154,18 @@ npx esbuild dist/lib/runtime/asyncContext.js --bundle --platform=browser \
 
 It bundles, and no Agency file in the bundle imports a Node module. Before this decision the same command failed on `node:async_hooks`.
 
-The `--external:smoltalk` flag matters. The context module imports the thread store, which imports smoltalk, and smoltalk imports `fs`, `path`, and `url`. Without the flag the bundle fails on those. That is the next reliance on Node to sort.
+The `--external:smoltalk` flag mattered at the time. The context module imports the thread store, which imports smoltalk, and smoltalk then imported `fs`, `path`, and `url`. smoltalk 0.17.0 bundles for the browser, and the flag is gone from `scripts/bundle-browser-smoke.mjs`, which bundles the whole runtime with smoltalk inside.
+
+## Model calls from a browser
+
+smoltalk reads API keys with its own `env()`, which on Node is `process.env` and in a browser answers nothing. So the runtime passes the keys itself: `withHostKeys` in `lib/runtime/llmClient.ts` reads each provider's variable (`OPENAI_API_KEY`, `GEMINI_API_KEY`, and the rest of `PROVIDER_KEY_VARIABLES`) through the run's `host.settings` and puts the ones that are set under the config of every text, embedding, and image call. A key from `agency.json` or the call wins over the host's. On Node `settings.read` is `process.env`, so nothing changes there. In a browser the app passes `variables: { OPENAI_API_KEY }` to `browserHost`, and the key arrives the same way.
+
+The generated header also reads those variables, through the module's default host, when the module loads, and bakes `""` for each one it does not find. In a page that is every slot, because the app's variables arrive later on the host it passes to the node. `withHostKeys` treats an empty slot as unset for that reason.
+
+A model call needs the `llm` capability. `runPrompt` checks it with `requireCapabilities` before anything is sent, so a host built without `llm` refuses the call, and the program sees a failed call with the usual message.
 
 ## What is left
 
-- smoltalk, the library every model call goes through, imports `fs`, `path`, and `url`. The thread store imports smoltalk, so almost every runtime module reaches them. Until smoltalk ships a browser build, a browser bundle points `smoltalk` at a stand-in with esbuild's `--alias`, the way `scripts/bundle-browser-smoke.mjs` does; a program in a browser cannot call a model yet.
-- tarsec and typestache reach for `process` when they load. The same bundle gives them an empty one.
-- The last place under [Where the targets may differ](#where-the-targets-may-differ) is not built.
 - The callbacks given to `agency.withHandler`, `withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with` are not handed a handle. Such a callback can call `agency.*` on its first line and not after an `await`.
+
+Nothing else about the browser is open. Two dependencies of smoltalk still need help from the bundler, and `scripts/bundle-browser-smoke.mjs` records both: `@anthropic-ai/sdk` imports `node:fs` and `node:path` dynamically on its credential path, which a bundle marks external and which never runs when a key is passed, and smoltalk's `embed/ollama.js` imports ollama's Node build by name, which an alias sends to the browser build until smoltalk fixes the import. tarsec and typestache reach for `process` when they load, and the same bundle gives them an empty one.

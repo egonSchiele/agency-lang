@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { createRequire } from "module";
+import path from "path";
+import { memoryHost } from "../host/memoryHost.js";
 import {
   SmolError,
   SmolContentPolicyError,
@@ -8,7 +12,14 @@ import {
   SmolOverloadedError,
   SmolAuthError,
 } from "smoltalk";
-import { SmoltalkClient, toSmolConfig } from "./llmClient.js";
+import {
+  PROVIDER_KEY_VARIABLES,
+  SmoltalkClient,
+  apiKeysFromSettings,
+  toSmolConfig,
+} from "./llmClient.js";
+
+const require = createRequire(import.meta.url);
 
 describe("SmoltalkClient.normalizeError", () => {
   const client = new SmoltalkClient();
@@ -133,5 +144,33 @@ describe("toSmolConfig — logprobs pass-through", () => {
       logprobs: { top: 2 },
     } as any);
     expect(smol.logprobs).toEqual({ top: 2 });
+  });
+});
+
+describe("apiKeysFromSettings", () => {
+  it("fills a slot for each key the host holds and skips the rest", () => {
+    const host = memoryHost({ variables: { GEMINI_API_KEY: "g-1", OPENAI_API_KEY: "o-1" } });
+    expect(apiKeysFromSettings(host.settings)).toEqual({ google: "g-1", openAi: "o-1" });
+  });
+
+  it("leaves out a variable that is empty", () => {
+    const host = memoryHost({ variables: { GEMINI_API_KEY: "" } });
+    expect(apiKeysFromSettings(host.settings)).toEqual({});
+  });
+
+  // smoltalk's resolveApiKey (dist/util/provider.js) pairs each slot with
+  // the variable it falls back to: `k?.google || env("GEMINI_API_KEY")`.
+  // Read those pairs out of the installed copy, so a provider smoltalk adds
+  // or renames shows up here as a failing test.
+  it("names the same variables as smoltalk's resolveApiKey", () => {
+    // `require.resolve("smoltalk")` is dist/index.js; provider.js is beside it.
+    const providerFile = path.join(path.dirname(require.resolve("smoltalk")), "util/provider.js");
+    const source = readFileSync(providerFile, "utf8");
+    const pairs: Record<string, string> = {};
+    for (const match of source.matchAll(/k\?\.(\w+) \|\| env\("(\w+)"\)/g)) {
+      pairs[match[1]] = match[2];
+    }
+    expect(Object.keys(pairs).length).toBeGreaterThan(0);
+    expect(PROVIDER_KEY_VARIABLES).toEqual(pairs);
   });
 });

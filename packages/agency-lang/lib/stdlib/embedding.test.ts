@@ -8,6 +8,7 @@ import type { EmbedConfig, EmbedResult } from "../runtime/llmClient.js";
 import type { Result } from "smoltalk";
 import { vi } from "vitest";
 import { _resolveLocalEmbeddingModel } from "./localModels.js";
+import { memoryHost } from "../host/memoryHost.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 vi.mock("./localModels.js", async (importOriginal) => {
@@ -54,6 +55,8 @@ function frame(stack: StateStack, client: unknown, events: unknown[] = []) {
       llmClient: client,
       statelogClient: log,
       invocationUsage: new InvocationUsageMeter(),
+      // A host with no keys, so the config carries only what the call set.
+      host: memoryHost(),
     },
     log,
     stack,

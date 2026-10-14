@@ -204,18 +204,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("value" in __overrides) {
-    value = __overrides["value"];
-    __stack.args["value"] = value;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -236,6 +224,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("value" in __overrides) {
+            value = __overrides["value"];
+            __stack.args["value"] = value;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.value))
@@ -359,22 +357,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("label" in __overrides) {
-    label = __overrides["label"];
-    __stack.args["label"] = label;
-  }
-  if ("when" in __overrides) {
-    when = __overrides["when"];
-    __stack.args["when"] = when;
-  }
-
-}
 
   const __paramChecks = {
     when: {
@@ -412,6 +394,25 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("label" in __overrides) {
+            label = __overrides["label"];
+            __stack.args["label"] = label;
+          }
+          if ("when" in __overrides) {
+            when = __overrides["when"];
+            __stack.args["when"] = when;
+          }
+          const __overriddenChecks = ["when"].filter((name) => name in __overrides);
+          await __checkParams(__run, runner, __stack, "schedule", __paramChecks, __overriddenChecks)
+          if (runner.halted) {
+            return;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await success(`${__stack.args.label}:${__stack.args.when}`))

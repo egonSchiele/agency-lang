@@ -2199,11 +2199,10 @@ export class TypeScriptBuilder {
   }
 
   /** `await __checkParams(__run, runner, __stack, "name", __paramChecks, names)`
-   *  followed by the halted return, or nothing when `names` is empty. */
-  private checkParamsCall(functionName: string, names: string[]): TsNode[] {
-    if (names.length === 0) {
-      return [];
-    }
+   *  followed by the halted return. `names` is the literal list of `!`
+   *  parameter names, or an expression that evaluates to a subset of it. */
+  private checkParamsCall(functionName: string, names: string[] | TsNode): TsNode[] {
+    const namesNode = Array.isArray(names) ? ts.arr(names.map((name) => ts.str(name))) : names;
     return [
       ts.awaitCall(ts.id("__checkParams"), [
         ts.runtime.run,
@@ -2211,33 +2210,79 @@ export class TypeScriptBuilder {
         ts.id("__stack"),
         ts.str(functionName),
         ts.id("__paramChecks"),
-        ts.arr(names.map((name) => ts.str(name))),
+        namesNode,
       ]),
       ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
     ];
   }
 
-  private buildResultCheckpointSetup(
+  private buildResultCheckpointSetup(): TsNode {
+    return ts.raw(renderResultCheckpointSetup.default({}));
+  }
+
+  /**
+   * The argument overrides a resume can carry (`agency resume --arg`, a
+   * served `/resume`, or `restore(cp, { args })`): when the pending
+   * overrides name this frame, write each one into the parameter and its
+   * stack slot, then check the overridden `!` parameters through
+   * `__checkParams`. Emitted just after step 0, inside the body wrap. It
+   * has to be inside the `try` so the frame pop in the `finally` still
+   * runs when a check fails, and inside the wrap so a failed check halts
+   * the same way step 0 does. A resume skips step 0, which is why the
+   * checks cannot live there alone.
+   *
+   * Guarded by `!runner.halted`: when step 0 halted on a bad argument,
+   * nothing more should run. The only way to reach that guard with an
+   * override pending is a resume from a pause taken before step 0
+   * finished; the override is then left unconsumed, and that is harmless,
+   * since a pending override only ever matches by module and scope name.
+   */
+  private argOverridesBlock(
     functionName: string,
     parameters: FunctionParameter[],
+    checkedNames: string[],
   ): TsNode {
-    let paramsStr = "";
-    parameters.forEach((p) => {
-      paramsStr += `  if (${JSON.stringify(p.name)} in __overrides) {
-    ${p.name} = __overrides[${JSON.stringify(p.name)}];
-    __stack.args[${JSON.stringify(p.name)}] = ${p.name};
-  }
-`;
-    });
-    // moduleId/scopeName used to be threaded into the result-entry
-    // `createPinned` call. That call is now skipped (see template); the
-    // template only consumes `paramsStr` for the arg-override block.
-    void functionName;
-    const str = renderResultCheckpointSetup.default({
-      paramsStr,
-    });
-
-    return ts.raw(str);
+    const overridden = (name: TsNode): TsNode => ts.binOp(name, "in", ts.id("__overrides"));
+    const writes = parameters.map((param) =>
+      ts.if(
+        overridden(ts.str(param.name)),
+        ts.statements([
+          ts.assign(ts.id(param.name), ts.index(ts.id("__overrides"), ts.str(param.name))),
+          ts.assign($(ts.stack("args")).index(ts.str(param.name)).done(), ts.id(param.name)),
+        ]),
+      ),
+    );
+    const checks: TsNode[] =
+      checkedNames.length === 0
+        ? []
+        : [
+            ts.constDecl(
+              "__overriddenChecks",
+              ts.methodCall(ts.arr(checkedNames.map((name) => ts.str(name))), "filter", [
+                ts.arrowFn([{ name: "name" }], overridden(ts.id("name"))),
+              ]),
+            ),
+            ...this.checkParamsCall(functionName, ts.id("__overriddenChecks")),
+          ];
+    const pending = ts.prop(ts.id("__ctx"), "_pendingArgOverrides");
+    const pendingField = (field: string): TsNode => ts.prop(pending, field, { optional: true });
+    const matches = ts.binOp(
+      ts.binOp(pendingField("moduleId"), "===", ts.stack("moduleId")),
+      "&&",
+      ts.binOp(pendingField("scopeName"), "===", ts.stack("scopeName")),
+    );
+    return ts.if(
+      ts.not(ts.prop(ts.id("runner"), "halted")),
+      ts.if(
+        matches,
+        ts.statements([
+          ts.constDecl("__overrides", ts.prop(pending, "values")),
+          ts.assign(pending, ts.id("undefined")),
+          ...writes,
+          ...checks,
+        ]),
+      ),
+    );
   }
 
   /**
@@ -2332,7 +2377,7 @@ export class TypeScriptBuilder {
     );
 
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
-    setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
+    setupStmts.push(this.buildResultCheckpointSetup());
 
     // The `!` parameter checks, as a table the runtime reads: one entry per
     // checked parameter, with the validation `validateExpr` chose for its
@@ -2359,7 +2404,7 @@ export class TypeScriptBuilder {
         id: 0,
         body: [
           ...checkedParamStores,
-          ...this.checkParamsCall(functionName, checkedNames),
+          ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
           this.tracking.init(!!opts.inDestructiveFunction),
           ts.callHook("onFunctionStart", {
             functionName: ts.str(functionName),
@@ -2390,7 +2435,11 @@ export class TypeScriptBuilder {
             ctx: ts.id("__ctx"),
             stack: $(ts.id("__setupData")).prop("stateStack").done(),
             threads: $(ts.id("__setupData")).prop("threads").done(),
-            body: [...onFunctionStartHook, ...bodyCode],
+            body: [
+              ...onFunctionStartHook,
+              this.argOverridesBlock(functionName, parameters, checkedNames),
+              ...bodyCode,
+            ],
           }),
           // if (runner.halted) { if (isFailure(runner.haltResult)) { <stamp>; }
           //   return runner.haltResult; }

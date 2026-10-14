@@ -206,26 +206,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("name" in __overrides) {
-    name = __overrides["name"];
-    __stack.args["name"] = name;
-  }
-  if ("greeting" in __overrides) {
-    greeting = __overrides["greeting"];
-    __stack.args["greeting"] = greeting;
-  }
-  if ("punctuation" in __overrides) {
-    punctuation = __overrides["punctuation"];
-    __stack.args["punctuation"] = punctuation;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -248,6 +228,24 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+          if ("greeting" in __overrides) {
+            greeting = __overrides["greeting"];
+            __stack.args["greeting"] = greeting;
+          }
+          if ("punctuation" in __overrides) {
+            punctuation = __overrides["punctuation"];
+            __stack.args["punctuation"] = punctuation;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.args.greeting + ` ${__stack.args.name}${__stack.args.punctuation}`)

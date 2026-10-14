@@ -204,18 +204,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("age" in __overrides) {
-    age = __overrides["age"];
-    __stack.args["age"] = age;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -236,6 +224,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("age" in __overrides) {
+            age = __overrides["age"];
+            __stack.args["age"] = age;
+          }
+        }
+      }
       await runner.ifElse(1, __run, [
 
   {

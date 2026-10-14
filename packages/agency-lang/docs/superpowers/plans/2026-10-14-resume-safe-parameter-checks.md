@@ -412,11 +412,15 @@ Run the Task 1 tests and `tests/agency/casts/` and
    test under `tests/agency/result/` is skipped. This is the first live
    test of the function-argument override path. `lib/runtime/resumeSetup.test.ts`
    only checks that the pending record is set.
-4. Add one agency-js case under `tests/agency-js/interrupts/` that resumes
-   through `resumeCliFromCheckpoint` with `overrides: { args }` carrying
-   an invalid `!` value and expects the failure. `agency resume` is the
-   path a user actually types, and it reaches the block through
-   `restoreForResume` rather than `applyRestoreSignal`.
+4. Add a case to `lib/cli/resume.spawn.test.ts` that resumes through
+   `agency resume --arg` with a valid override carrying an extra key, and
+   again with an invalid value, and reads the printed argument and the
+   failure. `agency resume` is the path a user actually types, and it
+   reaches the block through `restoreForResume` rather than
+   `applyRestoreSignal`. It cannot be an agency-js test: the responders a
+   compiled module exports (`respondToInterrupts` and its serve twin) take
+   local overrides only, so an `args` key there is just a local named
+   `args`.
 
 Run `make fixtures`. This time every fixture changes, because every
 function emits the override block. In the fixtures of functions without

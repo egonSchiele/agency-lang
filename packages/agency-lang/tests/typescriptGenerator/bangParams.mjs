@@ -203,18 +203,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("data" in __overrides) {
-    data = __overrides["data"];
-    __stack.args["data"] = data;
-  }
-
-}
 
   const __paramChecks = {
     data: {
@@ -246,6 +234,21 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("data" in __overrides) {
+            data = __overrides["data"];
+            __stack.args["data"] = data;
+          }
+          const __overriddenChecks = ["data"].filter((name) => name in __overrides);
+          await __checkParams(__run, runner, __stack, "process", __paramChecks, __overriddenChecks)
+          if (runner.halted) {
+            return;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
           type: "positional",

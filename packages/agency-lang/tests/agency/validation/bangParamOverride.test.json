@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "validOverride",
+      "description": "An overridden bang argument is checked, so its unknown key is dropped, and a plain override still applies",
+      "input": "",
+      "expectedOutput": "{\"spec\":{\"type\":\"daily\"},\"note\":\"second\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "invalidOverride",
+      "description": "An invalid overridden bang argument is refused and the body does not run",
+      "input": "",
+      "expectedOutput": "[false,\"Argument \\\"spec\\\" of planBadly must be { type: \\\"daily\\\" }, but received the text \\\"nope\\\".\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

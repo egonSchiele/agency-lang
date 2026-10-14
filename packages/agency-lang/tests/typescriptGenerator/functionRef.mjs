@@ -204,18 +204,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("name" in __overrides) {
-    name = __overrides["name"];
-    __stack.args["name"] = name;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -236,6 +224,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(`hi ${__stack.args.name}`)
@@ -352,18 +350,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("x" in __overrides) {
-    x = __overrides["x"];
-    __stack.args["x"] = x;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -384,6 +370,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("x" in __overrides) {
+            x = __overrides["x"];
+            __stack.args["x"] = x;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
@@ -501,22 +497,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("items" in __overrides) {
-    items = __overrides["items"];
-    __stack.args["items"] = items;
-  }
-  if ("transform" in __overrides) {
-    transform = __overrides["transform"];
-    __stack.args["transform"] = transform;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -538,6 +518,20 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("items" in __overrides) {
+            items = __overrides["items"];
+            __stack.args["items"] = items;
+          }
+          if ("transform" in __overrides) {
+            transform = __overrides["transform"];
+            __stack.args["transform"] = transform;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.result = [];
       });

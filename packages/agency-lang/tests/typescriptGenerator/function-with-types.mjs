@@ -205,22 +205,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("x" in __overrides) {
-    x = __overrides["x"];
-    __stack.args["x"] = x;
-  }
-  if ("y" in __overrides) {
-    y = __overrides["y"];
-    __stack.args["y"] = y;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -242,6 +226,20 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("x" in __overrides) {
+            x = __overrides["x"];
+            __stack.args["x"] = x;
+          }
+          if ("y" in __overrides) {
+            y = __overrides["y"];
+            __stack.args["y"] = y;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {
@@ -386,18 +384,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("name" in __overrides) {
-    name = __overrides["name"];
-    __stack.args["name"] = name;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -418,6 +404,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt(__run, {
@@ -553,22 +549,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("count" in __overrides) {
-    count = __overrides["count"];
-    __stack.args["count"] = count;
-  }
-  if ("label" in __overrides) {
-    label = __overrides["label"];
-    __stack.args["label"] = label;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -590,6 +570,20 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("count" in __overrides) {
+            count = __overrides["count"];
+            __stack.args["count"] = count;
+          }
+          if ("label" in __overrides) {
+            label = __overrides["label"];
+            __stack.args["label"] = label;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt(__run, {
@@ -731,18 +725,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("items" in __overrides) {
-    items = __overrides["items"];
-    __stack.args["items"] = items;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -763,6 +745,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("items" in __overrides) {
+            items = __overrides["items"];
+            __stack.args["items"] = items;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {
@@ -897,18 +889,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("value" in __overrides) {
-    value = __overrides["value"];
-    __stack.args["value"] = value;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -929,6 +909,16 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("value" in __overrides) {
+            value = __overrides["value"];
+            __stack.args["value"] = value;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {

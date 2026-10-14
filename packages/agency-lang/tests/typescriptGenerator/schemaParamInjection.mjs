@@ -210,22 +210,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("input" in __overrides) {
-    input = __overrides["input"];
-    __stack.args["input"] = input;
-  }
-  if ("s" in __overrides) {
-    s = __overrides["s"];
-    __stack.args["s"] = s;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -247,6 +231,20 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+          if ("input" in __overrides) {
+            input = __overrides["input"];
+            __stack.args["input"] = input;
+          }
+          if ("s" in __overrides) {
+            s = __overrides["s"];
+            __stack.args["s"] = s;
+          }
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __callMethod(__run, __stack.args.s, "parseJSON", {
@@ -372,14 +370,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -398,6 +388,12 @@ await callHook(__run, {
           }
         })
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = undefined;
+        }
+      }
       await runner.step(1, __run, async (runner, __run) => {
 //  Return-position injection: outer return type provides the hint.
       });

@@ -1,3 +1,43 @@
+## Oct 13 2026 — v0.29.0
+
+### Language
+
+#### Hosts and capabilities
+The biggest change in this release overall is the addition of the concept of hosts and capabilities. Instead of just compiling to Agency to JS to run on Node, it can now be compiled to run on different hosts. The first two hosts to start are Node.js and the browser. Each host is supposed to implement different capabilities, such as how that host reads and writes files, makes network calls, etc. This way, Agency code can run on different platforms that have different capabilities. For example, the browser isn't able to read and write files or touch the file system in any way.
+
+
+- **The `@capabilities` tag.** A function or node can say capabilities it needs in order to be able to do its work. For example, if you are writing a function that writes a file, you may want to specify the fileWrite capability. Supported capabilities are: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`.
+
+Specifying a capability for a function means that the type checker will warn you if you are using a function on a platform that doesn't support that capability. It doesn't do anything else. It doesn't enforce anything, for example. It just means that if you are using a capability on a platform that doesn't support it, you will find out at compile time instead of runtime. If you don't tag your functions with the `@capabilities` tag, the only thing that will happen is that if you try to write a file while running agency in the browser (for example), you will find out that that code cannot run at runtime, when it tries to call the file write function defined for that host.
+
+### Runtime
+
+- **Agency programs run in the browser.** A compiled program bundles for the browser, and `agency-lang/runtime` has a browser build.
+- **Hosts.** A run now gets files, environment variables, the terminal, the network, subprocesses, and the clock through a host. When you run a node from TypeScript, you can pass your own host with the `host` option.
+- The runtime no longer uses `AsyncLocalStorage`. This was needed to make Agency work in the browser.
+- Compiled programs import only `agency-lang/runtime`, not the compiler.
+- The interrupt prompt prints to stdout, and it no longer hangs when stdin closes before you answer.
+
+### Standard Library
+
+- **Breaking — `std::capabilities` is now `std::effectSets`.**
+- `edit` and `applyPatch` can no longer interleave with another branch's write to the same file. Editing a file that does not exist now says "no such file".
+- A `.gitignore` that is a symlink in a directory above the search root is now ignored instead of followed.
+
+### CLI
+
+- **`agency compile --platform browser`** (or `"platform": "browser"` in `agency.json`) fails when a node or exported function needs a capability the browser lacks, and shows the chain of calls that leads there.
+- **`agency test --check-capabilities`** fails a test when the code used part of the machine that no running function declared.
+- `agency doc` prints a `Needs:` line with the capabilities a function needs.
+
+### Local models
+
+- **`agency-lang/local`.** A TypeScript program can list local models and call `generateImage`, `detectObjects`, `tagImage`, `captionImage`, `embedImage`, and `findRegions` without an `.agency` file.
+- **`serve()` from TypeScript.** Start the local server, then `load`, `unload`, `cancel`, `status`, and `close` each model on it.
+- **`--lazy`.** `agency local serve a --lazy b` loads `b` on its first request. When memory is short, it stops the lazy model that has been idle longest, or answers 503 if nothing can be stopped.
+- **Cancel and shut down over HTTP.** `POST /v1/agency/cancel` ends every request on one model, `POST /v1/agency/shutdown` stops the server, and `GET /v1/agency/status` lists the models. These routes answer only requests made to `127.0.0.1` or `localhost`.
+- Model processes now exit when the server dies, even if it was killed with SIGKILL.
+
 ## Oct 3 2026 — v0.27.0
 
 ### Language

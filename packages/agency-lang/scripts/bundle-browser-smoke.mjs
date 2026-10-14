@@ -12,8 +12,10 @@
 //   `await import("node:path")` on its credential path
 //   (lib/credentials/credential-chain.mjs and three files beside it), taken
 //   when no API key is passed. Those two specifiers are left external, and
-//   the check below allows them only as dynamic imports, which never run
-//   when a key is passed.
+//   the check below allows them only as dynamic imports. A page can never
+//   reach them: smoltalk throws "Anthropic API key is required" before it
+//   constructs the SDK, and with a key the SDK never enters its credential
+//   chain.
 // - smoltalk's embed/ollama.js imports "ollama" by name, where the rest of
 //   smoltalk goes through its "#ollama" entry and gets ollama's browser
 //   build. The alias sends that import to the browser build too. Drop it

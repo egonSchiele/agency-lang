@@ -5,6 +5,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { AgencyConfig } from "@/config/config.js";
+import { PROVIDER_KEY_VARIABLES } from "@/runtime/llmClient.js";
 
 // Codegen wiring: API keys are emitted into smoltalkDefaults under a nested
 // `apiKey` map (and base URLs under `baseUrl`), each falling back to its
@@ -58,12 +59,14 @@ describe("smoltalkDefaults codegen", () => {
     expect(out).toContain("sk-ant-test");
   });
 
-  it("emits the hosted providers' apiKey env fallbacks", () => {
+  it("emits a slot for every provider in PROVIDER_KEY_VARIABLES, and no other", () => {
+    // The header and the runtime's withHostKeys read the same table, so a
+    // provider added to one is read by the other.
     const out = generate(PROGRAM);
-    expect(out).toContain("OPENROUTER_API_KEY");
-    expect(out).toContain("DEEPINFRA_API_KEY");
-    expect(out).toContain("LITELLM_API_KEY");
-    expect(out).toContain("OPENAI_COMPAT_API_KEY");
+    for (const [slot, variable] of Object.entries(PROVIDER_KEY_VARIABLES)) {
+      expect(out).toMatch(new RegExp(`${slot}: __host\\.settings\\.read\\("${variable}"\\)`));
+    }
+    expect(out).not.toMatch(/ollama: __host/);
   });
 
   it("emits a baseUrl map with litellm/openai-compat env fallbacks", () => {

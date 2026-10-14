@@ -3,6 +3,7 @@ import { userMessage, assistantMessage, systemMessage, toolMessage } from "smolt
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
 import { nodeHost } from "../../host/node/nodeHost.js";
+import { memoryHost } from "../../host/memoryHost.js";
 
 const files = nodeHost().files;
 import { StatelogClient } from "../../statelogClient.js";
@@ -106,6 +107,72 @@ describe("MemoryManager", () => {
       llmClient: mockLlmClient(),
     });
     expect(manager.getMemoryId(testRun())).toBe("default");
+  });
+
+  // The run's host holds the API keys, the same as for an llm() call: a
+  // page's keys arrive on the host it passes to the node, after the
+  // defaults were baked. A key in the defaults wins over the host's.
+  it("sends the run's host's keys with its text and embed calls", async () => {
+    const client = mockLlmClient();
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(files, tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
+      llmClient: client,
+      smoltalkDefaults: { apiKey: { openAi: "o-baked", google: "" } },
+    });
+    const ctx = new RuntimeContext<GraphState>({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: "/project",
+      host: memoryHost({ variables: { GEMINI_API_KEY: "g-host", OPENAI_API_KEY: "o-host" } }),
+    });
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
+      await (manager as any)._embed(run, "hello");
+      await (manager as any)._text(run, "hello");
+    });
+    const expected = { openAi: "o-baked", google: "g-host" };
+    expect((client.embed as any).mock.calls[0][1].apiKey).toEqual(expected);
+    expect((client.text as any).mock.calls[0][0].apiKey).toEqual(expected);
+  });
+
+  it("refuses a text or embed call on a host without the llm capability", async () => {
+    const client = mockLlmClient();
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(files, tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
+      llmClient: client,
+    });
+    const ctx = new RuntimeContext<GraphState>({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: "/project",
+      host: memoryHost({ capabilities: ["fileRead", "fileWrite", "network", "env", "terminal"] }),
+    });
+    const message = "memory needs the llm capability, which the memory host does not have.";
+    await expect(
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+        (manager as any)._embed(run, "hello"),
+      ),
+    ).rejects.toThrow(message);
+    await expect(
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+        (manager as any)._text(run, "hello"),
+      ),
+    ).rejects.toThrow(message);
+    expect(client.embed).not.toHaveBeenCalled();
+    expect(client.text).not.toHaveBeenCalled();
   });
 
   it("accounts a priced embedding that returns no vectors, then throws the no-vector error", async () => {

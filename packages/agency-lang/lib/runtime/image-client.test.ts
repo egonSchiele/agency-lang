@@ -7,6 +7,9 @@ import { StateStack } from "./state/stateStack.js";
 import { CostGuard } from "./guard.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
 import { asRootRun, callHelper } from "./__tests__/testHelpers.js";
+import { memoryHost } from "../host/memoryHost.js";
+import type { Host } from "../host/host.js";
+import type { ImageConfig, ImageInput } from "./llmClient.js";
 
 // Note: SmoltalkClient.image's `{ model: DEFAULT_IMAGE_MODEL, ...config }` spread
 // (default applied only when config sets no model) is trivial by construction and
@@ -38,14 +41,30 @@ function underRun<T>(run: Run, fn: (run: Run) => T): T {
   return withRun(run, asRootRun(fn));
 }
 
-function imageFrame(stack: StateStack) {
-  const client = new DeterministicClient([]);
+/** The deterministic client, recording the config of each image call. */
+class RecordingImageClient extends DeterministicClient {
+  configs: Partial<ImageConfig>[] = [];
+
+  async image(input: ImageInput, config?: Partial<ImageConfig>) {
+    this.configs.push(config ?? {});
+    return super.image(input, config);
+  }
+}
+
+function imageFrame(
+  stack: StateStack,
+  host: Host = memoryHost(),
+  client = new RecordingImageClient([]),
+) {
   const log = { imageGeneration: () => {} };
   return {
     ctx: {
       llmClient: client,
       statelogClient: log,
       invocationUsage: new InvocationUsageMeter(),
+      // A host with no keys unless the test gives one, so the config
+      // carries only what the call set.
+      host,
     },
     log,
     stack,
@@ -72,6 +91,31 @@ describe("deterministic image cost/guard path (regression)", () => {
       await expect(
         callHelper(_generateImage, "x", "", "", "", "", [], "", ""),
       ).rejects.toBeTruthy();
+    });
+  });
+});
+
+describe("the host's keys on an image call", () => {
+  const host = memoryHost({ variables: { OPENAI_API_KEY: "o-host", GEMINI_API_KEY: "g-host" } });
+
+  it("sends the host's keys when the call passes none", async () => {
+    const client = new RecordingImageClient([]);
+    await underRun(imageFrame(new StateStack(), host, client), async () => {
+      await callHelper(_generateImage, "a red bike", "", "", "", "", [], "", "");
+    });
+    expect(client.configs[0].apiKey).toEqual({ openAi: "o-host", google: "g-host" });
+  });
+
+  it("lets a key the call passed win over the host's", async () => {
+    const client = new RecordingImageClient([]);
+    await underRun(imageFrame(new StateStack(), host, client), async () => {
+      await callHelper(_generateImage, "a red bike", "", "", "", "", [], "k-call", "");
+    });
+    expect(client.configs[0].apiKey).toEqual({
+      openAi: "k-call",
+      google: "k-call",
+      liteLlm: "k-call",
+      openAiCompat: "k-call",
     });
   });
 });

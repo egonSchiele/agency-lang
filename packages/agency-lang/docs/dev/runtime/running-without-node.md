@@ -160,9 +160,11 @@ The `--external:smoltalk` flag mattered at the time. The context module imports 
 
 smoltalk reads API keys with its own `env()`, which on Node is `process.env` and in a browser answers nothing. So the runtime passes the keys itself: `withHostKeys` in `lib/runtime/llmClient.ts` reads each provider's variable (`OPENAI_API_KEY`, `GEMINI_API_KEY`, and the rest of `PROVIDER_KEY_VARIABLES`) through the run's `host.settings` and puts the ones that are set under the config of every text, embedding, and image call. A key from `agency.json` or the call wins over the host's. On Node `settings.read` is `process.env`, so nothing changes there. In a browser the app passes `variables: { OPENAI_API_KEY }` to `browserHost`, and the key arrives the same way.
 
-The generated header also reads those variables, through the module's default host, when the module loads, and bakes `""` for each one it does not find. In a page that is every slot, because the app's variables arrive later on the host it passes to the node. `withHostKeys` treats an empty slot as unset for that reason.
+The generated header reads the same table (`buildSmoltalkDefaults` in `lib/backends/typescriptBuilder.ts` emits one slot per entry), through the module's default host, when the module loads, and bakes `""` for each one it does not find. In a page that is every slot, because the app's variables arrive later on the host it passes to the node. `withHostKeys` treats an empty slot as unset for that reason.
 
-A model call needs the `llm` capability. `runPrompt` checks it with `requireCapabilities` before anything is sent, so a host built without `llm` refuses the call, and the program sees a failed call with the usual message.
+The memory manager's own text and embedding calls go through `withHostKeys` too, with the run's host, since it is built from the context both platforms share.
+
+A model call needs the `llm` capability. `runPrompt` and the memory manager check it with `requireCapabilities` before anything is sent, so a host built without `llm` refuses the call, and the program sees a failed call with the usual message.
 
 ## What is left
 

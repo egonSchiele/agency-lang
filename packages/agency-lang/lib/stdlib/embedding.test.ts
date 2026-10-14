@@ -9,6 +9,7 @@ import type { Result } from "smoltalk";
 import { vi } from "vitest";
 import { _resolveLocalEmbeddingModel } from "./localModels.js";
 import { memoryHost } from "../host/memoryHost.js";
+import type { Host } from "../host/host.js";
 import { asRootRun, callHelper } from "../runtime/__tests__/testHelpers.js";
 
 vi.mock("./localModels.js", async (importOriginal) => {
@@ -48,15 +49,21 @@ function fakeClient(
   return { client, calls };
 }
 
-function frame(stack: StateStack, client: unknown, events: unknown[] = []) {
+function frame(
+  stack: StateStack,
+  client: unknown,
+  events: unknown[] = [],
+  host: Host = memoryHost(),
+) {
   const log = { embedCompletion: (e: unknown) => events.push(e) };
   return {
     ctx: {
       llmClient: client,
       statelogClient: log,
       invocationUsage: new InvocationUsageMeter(),
-      // A host with no keys, so the config carries only what the call set.
-      host: memoryHost(),
+      // A host with no keys unless the test gives one, so the config
+      // carries only what the call set.
+      host,
     },
     log,
     stack,
@@ -110,6 +117,25 @@ describe("_embedTexts", () => {
         openAiCompat: "http://localhost:11434",
       },
     });
+  });
+
+  it("sends the host's keys when the call passes none", async () => {
+    const host = memoryHost({ variables: { GEMINI_API_KEY: "g-host" } });
+    const { client, calls } = fakeClient();
+    await underRun(frame(new StateStack(), client, [], host), () =>
+      callHelper(_embedTexts, ["x"], "", "", 0, "", ""),
+    );
+    expect(calls[0].config).toEqual({ apiKey: { google: "g-host" } });
+  });
+
+  it("lets a key the call passed win over the host's", async () => {
+    const host = memoryHost({ variables: { GEMINI_API_KEY: "g-host", OPENAI_API_KEY: "o-host" } });
+    const { client, calls } = fakeClient();
+    await underRun(frame(new StateStack(), client, [], host), () =>
+      callHelper(_embedTexts, ["x"], "", "", 0, "k-call", ""),
+    );
+    expect(calls[0].config?.apiKey?.google).toBe("k-call");
+    expect(calls[0].config?.apiKey?.openAi).toBe("k-call");
   });
 
   it("forwards model and dimensions when set", async () => {

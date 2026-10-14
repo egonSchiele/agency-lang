@@ -1,40 +1,34 @@
 import type { Run } from "./asyncContext.js";
 import { __invalidArgument } from "./invalidArgument.js";
-import { isFailure } from "./result.js";
+import { failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue } from "./result.js";
 
-/** One `!` parameter's check, as the generated code describes it: the type
- *  text for the failure message, and the validation the compiler chose for
- *  the type (a schema check, or the walk that also runs `@validate`
- *  functions). */
+/** One `!` parameter's check: the type text for the failure message, and
+ *  the validation the compiler chose for the type. */
 export type ParamCheck = {
   typeText: string;
   validate: (run: Run, value: unknown) => Promise<ResultValue> | ResultValue;
 };
 
-/** The checks of one function, by parameter name. A function with no `!`
- *  parameter emits no table. */
+/** The checks of one function, by parameter name. */
 export type ParamChecks = Record<string, ParamCheck>;
 
-/** What `__checkParams` needs from a Runner: the halt, and nothing else. */
 export type HaltingRunner = {
   halt(result: unknown): void;
 };
 
-/** What it needs from the function's frame: the argument slots. */
 export type ArgFrame = {
   args: Record<string, unknown>;
 };
 
 /**
- * Check the named `!` parameters of a function, in order, reading each raw
+ * Check the named `!` parameters of a function in order, reading each raw
  * argument from the frame and writing the checked value back.
  *
- * A check that fails halts the runner with the invalid-argument failure and
- * stops: later parameters are not checked, and the ones before it keep
- * their checked values. The generated code calls this inside step 0, so a
- * resume whose counter is past step 0 never runs the checks again, and it
- * calls it once more for the parameters a resume overrode.
+ * A check that fails halts the runner with the invalid-argument failure
+ * and stops: later parameters are not checked. A validator that raised an
+ * interrupt comes back as neither success nor failure; a parameter check
+ * cannot pause, so that halts with a failure too.
  */
 export async function __checkParams(
   run: Run,
@@ -48,6 +42,10 @@ export async function __checkParams(
     const check = checks[name];
     const raw = frame.args[name];
     const outcome = await check.validate(run, raw);
+    if (isSuccess(outcome)) {
+      frame.args[name] = outcome.value;
+      continue;
+    }
     if (isFailure(outcome)) {
       runner.halt(
         __invalidArgument({
@@ -60,6 +58,11 @@ export async function __checkParams(
       );
       return;
     }
-    frame.args[name] = outcome.value;
+    runner.halt(
+      failure(
+        `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} raised an interrupt, and a parameter check cannot pause. Check the value with a cast on its own line before the call.`,
+      ),
+    );
+    return;
   }
 }

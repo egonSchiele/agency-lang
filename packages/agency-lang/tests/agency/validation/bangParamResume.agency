@@ -1,7 +1,6 @@
-// A `!` parameter check runs once per call, not once per entry. When the
-// function pauses on an interrupt and resumes, the resume skips the check
-// and keeps the checked value, instead of running the validator again and
-// taking a frame that belongs to another function.
+// A `!` parameter check runs once per call. When the function pauses on an
+// interrupt and resumes, the resume skips the check and keeps the checked
+// value.
 
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
@@ -48,7 +47,7 @@ def messageOf(result: any): string {
   return "no failure"
 }
 
-// Pauses in a callee, so the saved frames after this one belong to `ask`.
+// Pauses in a callee.
 def schedule(when: Stamp!): Result<string> {
   ask("schedule")
   return success(when)
@@ -60,8 +59,7 @@ node once() {
   return [result.value, getMutable("stamp", 0)]
 }
 
-// The type has no `@validate`, so the check is a plain schema check. zod
-// drops the unknown key, and the body must see the stripped value after
+// zod drops the unknown key, and the body must see the stripped value after
 // the resume too.
 def plan(spec: { type: "daily" }!): Result<{ type: "daily" }> {
   ask("plan")
@@ -74,7 +72,7 @@ node checkedValue() {
   return result.value
 }
 
-// Pauses in its own body, so there is no saved frame after this one.
+// Pauses in its own body.
 def scheduleHere(when: Stamp!): Result<string> {
   interrupt test::confirm("Go ahead?", { tag: "here" })
   return success(when)
@@ -143,6 +141,39 @@ node destructiveRefused() {
     return [getMutable("wipeRan", false), result.destructiveRan, result.error]
   }
   return "no failure"
+}
+
+def askFirst(value: string): Result<string> {
+  interrupt test::confirm("ok to validate?", { tag: "validator" })
+  return success(value)
+}
+
+@validate(askFirst)
+type Asked = string
+
+def scheduleAsked(when: Asked!): Result<string> {
+  setMutable("askedBodyRan", true)
+  return success(when)
+}
+
+// A validator that raises an interrupt cannot pause a parameter check. The
+// call fails instead of running the body on an unchecked value.
+node validatorRaises() {
+  setMutable("askedBodyRan", false)
+  const result = scheduleAsked("09:00")
+  return [getMutable("askedBodyRan", false), messageOf(result)]
+}
+
+// A default may name an earlier parameter. It reads the argument as given,
+// before the check.
+def collect(n: number!, xs: number[] = [n]): Result<number[]> {
+  ask("collect")
+  return success(xs)
+}
+
+node defaultNamesChecked() {
+  const result = collect(7)
+  return result.value
 }
 
 node inForkBranches() {

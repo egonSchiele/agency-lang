@@ -283,8 +283,8 @@ private to `validateChain.ts`.
 ## Where a `!` parameter is checked: step 0
 
 A function checks its `!` parameters inside step 0, the `runner.hook(0, ...)`
-that also fires `onFunctionStart`. The generated code for a function with
-one checked parameter looks like this, shortened:
+that also fires `onFunctionStart`. Shortened, the generated code for a
+function with one plain and one checked parameter is:
 
 ```ts
 __stack.args["label"] = label;          // a plain parameter: stored on every entry
@@ -307,7 +307,7 @@ try {
       await callHook(__run, { name: "onFunctionStart", ... });
     });
     if (!runner.halted) {
-      // ...the argument overrides a resume carries, see below...
+      // the argument overrides a resume carries, see below
     }
     await runner.step(1, ...);          // the body starts here
   });
@@ -320,101 +320,80 @@ try {
 }
 ```
 
-The table describes the checks. It has one entry per `!` parameter,
-holding the type text for the failure message and the validation
-`validateExpr` chose for the type, which is `__validateType` for a plain
-schema check and `__validateChainRecursive` when the type reaches a
-`@validate` tag. `__checkParams` in `lib/runtime/paramChecks.ts` runs them.
-It reads each named argument from the frame, runs its `validate`, halts
-the runner with the `__invalidArgument` failure on the first miss, and
-stores the checked value back into the frame on each pass. The body's
-steps see the halt and skip, and the usual exit returns the failure.
+`__paramChecks` has one entry per `!` parameter: the type text for the
+failure message, and the validation `validateExpr` chose for the type
+(`__validateType` for a plain schema check, `__validateChainRecursive`
+when the type reaches a `@validate` tag). `__checkParams` in
+`lib/runtime/paramChecks.ts` runs the named checks in order. It reads each
+argument from the frame, halts the runner with the `__invalidArgument`
+failure on the first miss, and stores the checked value back on each
+pass. The body's steps see the halt and skip, and the function returns
+the failure.
 
 ### Why step 0
 
-A `@validate` function is an Agency function. When it runs it claims a
-frame from the state stack, and on a resume replay the stack hands out the
-saved frames in order. The checks used to run in the function's preamble,
-outside every step, so a resume ran them again. If the function had paused
-inside a callee, the next saved frame belonged to that callee, the
-validator claimed it, and the run stopped with
+A `@validate` function is an Agency function, so it claims a frame from
+the state stack when it runs. On a resume the stack hands out the saved
+frames in order. A check that ran outside every step would run on every
+resume, and when the function had paused inside a callee, the validator
+would claim that callee's saved frame and the run would stop with
 `Resume desync: function "check" tried to claim the saved state of "ask"`.
-If the function had paused in its own body instead, the validator got a
-fresh frame and simply ran twice, which is why the bug was easy to miss.
+Step 0 runs once and is skipped by any resume whose counter is past it,
+so a validator never runs twice for one call.
 
-Step 0 is the one unit of a function that runs once and is skipped by any
-resume whose counter is past it. Putting the checks there means a resume
-never re-runs a validator. The store of a `!` argument moves into step 0
-with its check, because a check can change the value: zod drops unknown
-keys, so `{ "type": "daily", "extra": 1 }` is stored as `{ "type": "daily" }`.
-If a resume stored the raw argument again and skipped the check, the body
-would read a value the first run never saw. A plain parameter keeps its
-store in the preamble, on every entry.
+The store of a `!` argument is inside step 0 with its check because a
+check can change the value: zod drops unknown keys, so
+`{ "type": "daily", "extra": 1 }` is stored as `{ "type": "daily" }`. A
+resume keeps the checked value the frame was saved with. A plain
+parameter is stored in the preamble on every entry. A default that names
+an earlier parameter reads the argument as given, before its check.
 
-All the checks share one hook rather than one per parameter. One hook per
-parameter would push the body's step ids up, and with them the source map
-and every fixture of a function with a `!` parameter. The case that would
-benefit, a validator that pauses, is not supported yet (see below), so step
-0 stays one unit.
+The destructive flag is set after the checks. A `destructive def` commits
+its whole body at entry, but a refused argument never enters, so the
+failure leaves with `destructiveRan` false. The exit stamp reads the flag
+with `?? false` because a halt from step 0 happens before the flag is set.
 
-The destructive flag is set inside step 0 after the checks. A `destructive
-def` commits its whole body at entry, but a refused argument never enters,
-so its failure must leave with `destructiveRan` false. The exit stamp reads
-the flag with `?? false` because a halt from step 0 happens before the flag
-is set.
-
-The `onFunctionStart` hook reports the arguments from the bare parameter
-identifiers, so it reports the raw values, not the checked ones. That is
-what it reported before the checks moved.
+`onFunctionStart` reports the arguments as given, not the checked values.
 
 ### Overridden arguments are checked after step 0
 
 A resume can replace a paused function's arguments: `agency resume --arg`
 through `restoreForResume`, and `restore(cp, { args })` through
-`applyRestoreSignal`. Both leave the new values in `_pendingArgOverrides`
-on the execution context, keyed by module and scope name, and the function
-that matches consumes them when it re-enters. That block sits just after
-step 0, inside the body wrap. After writing each override into the
-parameter and its stack slot, it calls `__checkParams` with the names of
-the overridden `!` parameters, so an override is checked and stored the
-same way a fresh argument is.
+`applyRestoreSignal`. Both leave the values in `_pendingArgOverrides` on
+the execution context, keyed by module and scope name, and the matching
+function consumes them when it re-enters. That block sits just after step
+0, inside the body wrap. After writing each override into the parameter
+and its stack slot, it calls `__checkParams` with the names of the
+overridden `!` parameters.
 
 The block is inside the `try` so the frame pop in the `finally` still
 runs when a check fails, and inside the body wrap so a failed check halts
-the runner the same way step 0 does. Running a validator there is safe:
-an override always targets the last frame on the stack, which belongs to
-the function that paused, so no saved frame comes after it and the
-validator gets a fresh one.
+the runner the same way step 0 does. An override always targets the last
+frame on the stack, the function that paused, so no saved frame comes
+after it and a validator run here gets a fresh frame.
 
-The block is guarded by `if (!runner.halted)`, so nothing runs after step
-0 refused an argument. The only way to reach that guard with an override
-pending is a resume from a pause taken before step 0 finished, in which
-case the override is left unconsumed. A pending override only ever
-matches by module and scope name, and the next resume of the same frame
-carries its own, so the stale one does no harm.
-
-The responders a compiled module exports, `respondToInterrupts` and its
-serve twin, take local overrides only. An `args` key passed to them is a
-local named `args`. Argument overrides reach a function through `agency
-resume` and `restore` alone.
+The block is skipped when step 0 halted. The responders a compiled module
+exports, `respondToInterrupts` and its serve twin, take local overrides
+only; argument overrides reach a function through `agency resume` and
+`restore`.
 
 ### A validator that pauses
 
-A validator that raises an interrupt is supported from a checked cast,
-`x as T!`, and is not supported from a `!` parameter check. For a cast,
+A checked cast, `x as T!`, supports a validator that raises an interrupt:
 the hoist pass puts the cast on its own step, the assignment's interrupt
-guard halts with the validator's interrupts, and on resume the step
-re-runs and the validator re-enters its own saved frame. From a parameter
-check, `__validateChainRecursive` hands the interrupt list back as if it
-were a failure, and `__invalidArgument` has no message to read from it.
+guard halts with the interrupts, and on resume the step re-runs and the
+validator re-enters its own saved frame. A `!` parameter check does not.
+`__checkParams` gets the interrupt list back, and halts with a failure
+that says the parameter could not be checked and points at a cast on its
+own line.
 
-Step 0 is where that support would go, since a pause inside it leaves
-the counter at 0 and the hook re-runs on resume. The walk runs a type's
-validators one after another in plain TypeScript, so if the second
-pauses, the resume re-runs the first, which has no saved frame, and it
-claims the second's. That hole exists for casts too. An override check
-that paused would leave the raw value in the frame with the override
-already consumed. Each needs its own tests before the support is added.
+Adding the support would go through step 0, since a pause inside it
+leaves the counter at 0 and the hook re-runs on resume. Two gaps have to
+close first. The walk runs a type's validators one after another in plain
+TypeScript, so when the second pauses, the resume re-runs the first,
+which has no saved frame, and it claims the second's; casts have the same
+gap. And an override check that paused would leave the raw value in the
+frame with the override already consumed.
 
 ---
 

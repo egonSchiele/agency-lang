@@ -63,6 +63,21 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "validatorRaises",
+      "description": "A validator that raises an interrupt fails the call instead of running the body unchecked",
+      "input": "",
+      "expectedOutput": "[false,\"Argument \\\"when\\\" of scheduleAsked could not be checked: a validator for Asked raised an interrupt, and a parameter check cannot pause. Check the value with a cast on its own line before the call.\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "defaultNamesChecked",
+      "description": "A default that names an earlier checked parameter sees the argument, across a resume",
+      "input": "",
+      "expectedOutput": "[7]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
       "nodeName": "inForkBranches",
       "description": "Two parallel branches that each pause inside a function with a bang parameter resume with one validator run each",
       "input": "",

@@ -2221,21 +2221,13 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * The argument overrides a resume can carry (`agency resume --arg`, a
-   * served `/resume`, or `restore(cp, { args })`): when the pending
-   * overrides name this frame, write each one into the parameter and its
-   * stack slot, then check the overridden `!` parameters through
-   * `__checkParams`. Emitted just after step 0, inside the body wrap. It
-   * has to be inside the `try` so the frame pop in the `finally` still
-   * runs when a check fails, and inside the wrap so a failed check halts
-   * the same way step 0 does. A resume skips step 0, which is why the
-   * checks cannot live there alone.
-   *
-   * Guarded by `!runner.halted`: when step 0 halted on a bad argument,
-   * nothing more should run. The only way to reach that guard with an
-   * override pending is a resume from a pause taken before step 0
-   * finished; the override is then left unconsumed, and that is harmless,
-   * since a pending override only ever matches by module and scope name.
+   * The argument overrides a resume can carry (`agency resume --arg` or
+   * `restore(cp, { args })`): when the pending overrides name this frame,
+   * write each one into the parameter and its stack slot, then check the
+   * overridden `!` parameters. Emitted just after step 0, inside the body
+   * wrap: inside the `try` so the `finally` still pops the frame when a
+   * check fails, and inside the wrap so a failed check halts the same way
+   * step 0 does. Skipped when step 0 halted.
    */
   private argOverridesBlock(
     functionName: string,
@@ -2353,10 +2345,9 @@ export class TypeScriptBuilder {
       ts.time("__funcStartTime"),
     ];
 
-    // Param assignments to stack. A plain parameter is stored here, on every
-    // entry. A `!` parameter is stored inside step 0 with its check (see
-    // `checkedParamStores` below), so a resume that skips step 0 keeps the
-    // checked value the frame was saved with instead of the raw argument.
+    // A plain parameter is stored here, on every entry. A `!` parameter is
+    // stored inside step 0 with its check, so a resume that skips step 0
+    // keeps the checked value the frame was saved with.
     const checkedParamStores: TsNode[] = [];
     for (const param of parameters) {
       const store = this.paramStore(param);
@@ -2379,10 +2370,8 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup());
 
-    // The `!` parameter checks, as a table the runtime reads: one entry per
-    // checked parameter, with the validation `validateExpr` chose for its
-    // type. `__checkParams` runs them, halts on the first failure, and
-    // stores the checked values. See docs/dev/language/validation-annotations.md.
+    // The `!` parameter checks, as a table `__checkParams` reads. See the
+    // "step 0" section of docs/dev/language/validation-annotations.md.
     const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
     const checkedNames = checkedParams.map((param) => param.name);
     if (checkedParams.length > 0) {
@@ -2390,15 +2379,11 @@ export class TypeScriptBuilder {
     }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
-    // Step 0 is `runner.hook(0, ...)`, which runs once and is skipped by a
-    // resume whose counter is past it. It stores and checks the `!`
-    // parameters, sets the destructive flag, and fires onFunctionStart.
-    // The checks go first because a validator is an Agency function that
-    // claims a frame: outside a step it would run again on every resume
-    // and claim a frame that belongs to a still-paused callee. The
-    // destructive flag is set after the checks, so a refused argument
-    // leaves the failure's destructiveRan false. See
-    // DestructiveTracking.init() and docs/dev/language/validation-annotations.md.
+    // Step 0 runs once and is skipped by a resume whose counter is past it.
+    // It stores and checks the `!` parameters (a validator claims a frame,
+    // so it must not run again on a resume), sets the destructive flag
+    // after the checks so a refused argument leaves destructiveRan false,
+    // and fires onFunctionStart.
     const onFunctionStartHook: TsNode[] = [
       ts.runnerHookStep({
         id: 0,

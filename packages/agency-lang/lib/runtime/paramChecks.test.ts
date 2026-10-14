@@ -91,6 +91,24 @@ describe("__checkParams", () => {
     expect(seen).toEqual([run]);
   });
 
+  it("halts with a failure when a validator raised an interrupt", async () => {
+    const runner = stubRunner();
+    const frame = { args: { when: "09:00" } };
+    const interrupts = [{ message: "ok?", effect: "test::check" }];
+    const checks: ParamChecks = {
+      when: {
+        typeText: "Stamp",
+        validate: () => interrupts as unknown as ReturnType<ParamChecks[string]["validate"]>,
+      },
+    };
+    await __checkParams(run, runner, frame, "schedule", checks, ["when"]);
+    const halted = runner.halts[0];
+    expect(isFailure(halted) && halted.error).toContain(
+      'Argument "when" of schedule could not be checked: a validator for Stamp raised an interrupt',
+    );
+    expect(frame.args).toEqual({ when: "09:00" });
+  });
+
   it("words a @validate refusal as a refusal", async () => {
     const runner = stubRunner();
     const frame = { args: { amount: -5 } };

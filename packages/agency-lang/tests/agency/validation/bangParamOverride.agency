@@ -11,7 +11,6 @@ def messageOf(result: any): string {
 }
 
 // On its first run, takes a checkpoint and restores it with new arguments.
-// The restore re-enters this function with the overrides pending.
 def plan(spec: { type: "daily" }!, note: string): Result<{ spec: { type: "daily" }, note: string }> {
   const cp = checkpoint()
   if (getMutable("planRestores", 0) == 0) {

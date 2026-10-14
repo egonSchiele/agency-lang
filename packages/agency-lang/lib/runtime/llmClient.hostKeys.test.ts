@@ -42,7 +42,7 @@ describe("withHostKeys", () => {
   });
 
   it("returns the config as is when the host holds no key", () => {
-    const config = { model: "m" };
+    const config: { model: string; apiKey?: Record<string, string> } = { model: "m" };
     expect(withHostKeys(memoryHost().settings, config)).toBe(config);
   });
 });

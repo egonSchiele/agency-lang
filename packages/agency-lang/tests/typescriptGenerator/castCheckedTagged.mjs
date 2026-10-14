@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -190,7 +190,6 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["value"] = value;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "castCheckedTagged.agency", scopeName: "isPositive", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -225,6 +224,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -258,7 +258,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }
@@ -358,7 +358,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "castCheckedTagged.agency", scopeName: "neighbor", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -389,6 +388,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -406,7 +406,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }
@@ -494,7 +494,6 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["first"] = first;
   __stack.args["second"] = second;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "castCheckedTagged.agency", scopeName: "both", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -533,6 +532,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -553,7 +553,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }

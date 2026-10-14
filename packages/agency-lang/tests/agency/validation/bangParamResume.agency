@@ -130,6 +130,21 @@ node failsBeforeBody() {
   return [getMutable("bodyRan", false), messageOf(result)]
 }
 
+// A destructive def commits at entry, but a refused argument never enters.
+destructive def wipe(amount: Count!): Result<string> {
+  setMutable("wipeRan", true)
+  return success("wiped ${amount}")
+}
+
+node destructiveRefused() {
+  setMutable("wipeRan", false)
+  const result = wipe(-1)
+  if (isFailure(result)) {
+    return [getMutable("wipeRan", false), result.destructiveRan, result.error]
+  }
+  return "no failure"
+}
+
 node inForkBranches() {
   setMutable("stamp", 0)
   parallel {

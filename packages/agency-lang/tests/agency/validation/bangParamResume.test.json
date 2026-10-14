@@ -56,6 +56,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "destructiveRefused",
+      "description": "A refused argument of a destructive def leaves destructiveRan false and the body unrun",
+      "input": "",
+      "expectedOutput": "[false,false,\"Argument \\\"amount\\\" of wipe was refused: expected -1 to be > 0\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "inForkBranches",
       "description": "Two parallel branches that each pause inside a function with a bang parameter resume with one validator run each",
       "input": "",

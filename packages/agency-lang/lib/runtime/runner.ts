@@ -589,6 +589,13 @@ export class Runner {
    * fire-and-forget. The substep counter advances after `bodyFn`
    * resolves so resume re-entries (after a deeper interrupt or debug
    * pause) skip the hook instead of re-firing it.
+   *
+   * A function's step 0 also stores and checks its `!` parameters before
+   * firing onFunctionStart (see `__checkParams`). The skip on re-entry is
+   * what keeps a `@validate` function from running again on a resume and
+   * claiming a frame that belongs to a paused callee. A validator that
+   * raises an interrupt from there is not supported yet: the check hands
+   * the interrupt list back as a failure.
    */
   async hook(id: number, run: Run, bodyFn: (run: Run) => Promise<void>): Promise<void> {
     this.beforeStep();

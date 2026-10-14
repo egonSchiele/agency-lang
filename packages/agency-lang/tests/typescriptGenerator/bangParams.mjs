@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -189,8 +189,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __stack.args["data"] = data;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParams.agency", scopeName: "process", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -218,24 +216,25 @@ if (
 
 }
 
-  try {
-    const __vr_data = __validateType(__stack.args["data"], z.number());
-    if (!__vr_data.success) {
-      return __invalidArgument({
-        functionName: "process",
-        paramName: "data",
-        typeText: "number",
-        value: __stack.args["data"],
-        failure: __vr_data
-      });
+  const __paramChecks = {
+    data: {
+      typeText: "number",
+      validate: async (__run: __Run, value: unknown) => __validateType(value, z.number())
     }
-    __stack.args["data"] = __vr_data.value;
+  };
+  try {
     await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__stack.args["data"] = data;
+await __checkParams(__run, runner, __stack, "process", __paramChecks, ["data"])
+if (runner.halted) {
+          return;
+        }
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -270,7 +269,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }

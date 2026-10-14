@@ -2159,6 +2159,64 @@ export class TypeScriptBuilder {
    * For Result-returning functions: emit a pinned checkpoint at function entry
    * and a preamble that applies arg overrides on restore (for result.retry()).
    */
+  /** `__stack.args["name"] = name`, with the default applied when the
+   *  argument was left unset. */
+  private paramStore(param: FunctionParameter): TsNode {
+    const stackTarget = $(ts.stack("args")).index(ts.str(param.name)).done();
+    if (!param.defaultValue) {
+      return ts.assign(stackTarget, ts.id(param.name));
+    }
+    return ts.assign(
+      stackTarget,
+      ts.ternary(
+        ts.binOp(ts.id(param.name), "===", ts.id("__UNSET")),
+        this.processNode(param.defaultValue),
+        ts.id(param.name),
+      ),
+    );
+  }
+
+  /** The `__paramChecks` table: `{ name: { typeText, validate: (__run, value) => ... } }`
+   *  for each `!` parameter. `validate` wraps the expression `validateExpr`
+   *  emits for the parameter's type, so the schema fast path and the
+   *  `@validate` walk both go through the one runtime helper. */
+  private paramChecksTable(checkedParams: FunctionParameter[]): TsNode {
+    const entries: Record<string, TsNode> = {};
+    for (const param of checkedParams) {
+      entries[param.name] = ts.obj({
+        typeText: ts.str(formatTypeHint(param.typeHint!)),
+        validate: ts.arrowFn(
+          [
+            { name: "__run", typeAnnotation: "__Run" },
+            { name: "value", typeAnnotation: "unknown" },
+          ],
+          this.validateExpr(param.typeHint!, ts.id("value")),
+          { async: true },
+        ),
+      });
+    }
+    return ts.obj(entries);
+  }
+
+  /** `await __checkParams(__run, runner, __stack, "name", __paramChecks, names)`
+   *  followed by the halted return, or nothing when `names` is empty. */
+  private checkParamsCall(functionName: string, names: string[]): TsNode[] {
+    if (names.length === 0) {
+      return [];
+    }
+    return [
+      ts.awaitCall(ts.id("__checkParams"), [
+        ts.runtime.run,
+        ts.id("runner"),
+        ts.id("__stack"),
+        ts.str(functionName),
+        ts.id("__paramChecks"),
+        ts.arr(names.map((name) => ts.str(name))),
+      ]),
+      ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
+    ];
+  }
+
   private buildResultCheckpointSetup(
     functionName: string,
     parameters: FunctionParameter[],
@@ -2191,7 +2249,6 @@ export class TypeScriptBuilder {
     functionName: string;
     parameters: FunctionParameter[];
     bodyCode: TsNode[];
-    skipHooks?: boolean;
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
     /** The def's compiled finalize (FinalizeCodegen.compileScope). The
@@ -2200,7 +2257,7 @@ export class TypeScriptBuilder {
      *  goes in the catch template. */
     finalize: CompiledScopeFinalize;
   }): TsNode[] {
-    const { functionName, parameters, bodyCode, skipHooks } = opts;
+    const { functionName, parameters, bodyCode } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
     const args = parameters.map((p) => p.name);
 
@@ -2248,34 +2305,22 @@ export class TypeScriptBuilder {
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.run])),
       ),
 
-      ...(skipHooks ? [] : [ts.time("__funcStartTime")]),
+      ts.time("__funcStartTime"),
     ];
 
-    // Param assignments to stack
+    // Param assignments to stack. A plain parameter is stored here, on every
+    // entry. A `!` parameter is stored inside step 0 with its check (see
+    // `checkedParamStores` below), so a resume that skips step 0 keeps the
+    // checked value the frame was saved with instead of the raw argument.
+    const checkedParamStores: TsNode[] = [];
     for (const param of parameters) {
-      const stackTarget = $(ts.stack("args")).index(ts.str(param.name)).done();
-      if (param.defaultValue) {
-        const defaultNode = this.processNode(param.defaultValue);
-        setupStmts.push(
-          ts.assign(
-            stackTarget,
-            ts.ternary(
-              ts.binOp(ts.id(param.name), "===", ts.id("__UNSET")),
-              defaultNode,
-              ts.id(param.name),
-            ),
-          ),
-        );
+      const store = this.paramStore(param);
+      if (param.validated && param.typeHint) {
+        checkedParamStores.push(store);
       } else {
-        setupStmts.push(ts.assign(stackTarget, ts.id(param.name)));
+        setupStmts.push(store);
       }
     }
-
-    // __self.__destructiveRan init — see DestructiveTracking.init(). Read the
-    // flag from opts (threaded from processFunctionDefinition): by the time this
-    // runs the scope-manager flag has already been restored, so reading it here
-    // would always see false.
-    setupStmts.push(this.tracking.init(!!opts.inDestructiveFunction));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2289,66 +2334,47 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
 
-    // Validation guards for parameters with ! (bang) syntax.
-    // Placed inside the try block so the finally cleanup (stateStack.pop) always runs.
-    const validationGuards: TsNode[] = [];
-    for (const param of parameters) {
-      if (param.validated && param.typeHint) {
-        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
-        const vrName = `__vr_${param.name}`;
-        const vrId = ts.id(vrName);
-        validationGuards.push(
-          ts.constDecl(vrName, this.validateExpr(param.typeHint, stackArg)),
-          ts.if(
-            ts.not(ts.prop(vrId, "success")),
-            ts.return(
-              ts.invalidArgument({
-                functionName,
-                paramName: param.name,
-                typeText: formatTypeHint(param.typeHint),
-                value: stackArg,
-                failure: vrId,
-              }),
-            ),
-          ),
-          ts.assign(stackArg, ts.prop(vrId, "value")),
-        );
-      }
+    // The `!` parameter checks, as a table the runtime reads: one entry per
+    // checked parameter, with the validation `validateExpr` chose for its
+    // type. `__checkParams` runs them, halts on the first failure, and
+    // stores the checked values. See docs/dev/language/validation-annotations.md.
+    const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
+    const checkedNames = checkedParams.map((param) => param.name);
+    if (checkedParams.length > 0) {
+      setupStmts.push(ts.constDecl("__paramChecks", this.paramChecksTable(checkedParams)));
     }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
-    // onFunctionStart fires inside the try at substep id 0 as a wrapped
-    // `await runner.hook(0, async () => await callHook(...))`. The
-    // runner.hook wrapper gives the hook substep-counter idempotency so
-    // it fires exactly once across resume cycles (without it the function
-    // would re-fire onFunctionStart on every resume). Callback bodies
-    // cannot raise interrupts (statically forbidden by the typechecker —
-    // see `checkCallbackBodyInterrupts`).
-    const onFunctionStartHook: TsNode[] = skipHooks
-      ? []
-      : [
-          ts.runnerHookStep({
-            id: 0,
-            body: [
-              ts.callHook("onFunctionStart", {
-                functionName: ts.str(functionName),
-                args: ts.obj(argsObj),
-                moduleId: ts.str(this.moduleId),
-              }),
-            ],
+    // Step 0 is `runner.hook(0, ...)`, which runs once and is skipped by a
+    // resume whose counter is past it. It stores and checks the `!`
+    // parameters, sets the destructive flag, and fires onFunctionStart.
+    // The checks go first because a validator is an Agency function that
+    // claims a frame: outside a step it would run again on every resume
+    // and claim a frame that belongs to a still-paused callee. The
+    // destructive flag is set after the checks, so a refused argument
+    // leaves the failure's destructiveRan false. See
+    // DestructiveTracking.init() and docs/dev/language/validation-annotations.md.
+    const onFunctionStartHook: TsNode[] = [
+      ts.runnerHookStep({
+        id: 0,
+        body: [
+          ...checkedParamStores,
+          ...this.checkParamsCall(functionName, checkedNames),
+          this.tracking.init(!!opts.inDestructiveFunction),
+          ts.callHook("onFunctionStart", {
+            functionName: ts.str(functionName),
+            args: ts.obj(argsObj),
+            moduleId: ts.str(this.moduleId),
           }),
-        ];
+        ],
+      }),
+    ];
     if (opts.finalize.decl !== undefined) {
       setupStmts.push(opts.finalize.decl);
     }
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
-          // Validation guards stay OUTSIDE the agencyStore.run wrap:
-          // they emit `return __vr_x` for failures, and we need that
-          // value to escape the outer function, not just the inner
-          // async callback.
-          ...validationGuards,
           ...hoistedAliases,
           // Body-level ALS frame (defense-in-depth). Today every
           // callback site re-seeds ALS via Runner.runInScope, but the
@@ -2394,21 +2420,17 @@ export class TypeScriptBuilder {
         // without an outer agencyStore.run wrap).
         ts.statements([
           ts.raw("__run.stack.pop()"),
-          ...(skipHooks
-            ? []
-            : [
-                ts.if(
-                  ts.id("__functionCompleted"),
-                  ts.callHook("onFunctionEnd", {
-                    functionName: ts.str(functionName),
-                    timeTaken: $(ts.id("performance"))
-                      .prop("now")
-                      .call()
-                      .minus(ts.id("__funcStartTime"))
-                      .done(),
-                  }),
-                ),
-              ]),
+          ts.if(
+            ts.id("__functionCompleted"),
+            ts.callHook("onFunctionEnd", {
+              functionName: ts.str(functionName),
+              timeTaken: $(ts.id("performance"))
+                .prop("now")
+                .call()
+                .minus(ts.id("__funcStartTime"))
+                .done(),
+            }),
+          ),
         ]),
       ),
     );
@@ -2462,7 +2484,6 @@ export class TypeScriptBuilder {
       functionName,
       parameters,
       bodyCode: compiledFinalize.bodyCode,
-      skipHooks: false,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
       finalize: compiledFinalize,

@@ -562,11 +562,10 @@ export const ts = {
    * per-scope frame.
    *
    * NOTE: `return` statements inside the wrapped body escape only the
-   * inner async callback, not the outer function. Validation guards
-   * that return a non-`undefined` value (e.g. `return __vr_x` for a
-   * validation failure) must stay outside the wrap so the outer
-   * function actually returns the value to its caller. The bare
-   * `return;` emitted by `runnerHalt` is fine: after the callback
+   * inner async callback, not the outer function. Nothing inside the
+   * wrap returns a value: a `!` parameter check that fails halts the
+   * runner from step 0 (see `__checkParams`), and the bare `return;`
+   * emitted by `runnerHalt` is fine, because after the callback
    * returns, the outer `if (runner.halted) return runner.haltResult;`
    * check picks up the halted result.
    */

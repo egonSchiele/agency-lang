@@ -345,8 +345,9 @@ In `buildFunctionBody` in `lib/backends/typescriptBuilder.ts`:
    each checked value is stored; the first check fails, the runner is
    halted with the `__invalidArgument` failure, no later `validate` is
    called, and the earlier values are already stored; only the named
-   parameters are checked; a name with no table entry is skipped; a
-   `validate` that returns the value unchanged still stores it.
+   parameters are checked; the run reaches each check; a `@validate`
+   refusal is worded as a refusal. The override block only ever names
+   `!` parameters, so the helper has no case for a missing entry.
 3. Emit the `__paramChecks` table before the `try` for functions with a
    `!` parameter, built from `validateExpr` per parameter. Emit the call
    and the `if (runner.halted) { return; }` at the top of the
@@ -364,10 +365,19 @@ In `buildFunctionBody` in `lib/backends/typescriptBuilder.ts`:
    with `when: Stamp! = "..."` and one plain parameter, so a fixture pins
    where the default's ternary and each store land.
 
-Run `make fixtures`. Only the fixtures of functions with `!` parameters
-should change, such as `tests/typescriptGenerator/bangParams.mjs` and
-`genericAliasValidation.mjs`, plus the new one. Read the diff of each. Any
-other changed fixture means something moved that should not have.
+Run `make fixtures`. Every fixture changes, for three reasons that each
+show as one line in a function without `!` parameters: the header imports
+`__checkParams`, the destructive flag's init moves into step 0, and the
+exit stamp reads the flag with `?? false`. The init moves because a
+`destructive def` commits at entry, and a refused argument must leave the
+failure's `destructiveRan` false; with the check now inside step 0, the
+init has to come after it, and the stamp has to tolerate a halt before
+it. Read the diff of `function.mjs` to see exactly those three lines, and
+the diff of `bangParams.mjs` and the new fixture for the table and the
+step 0 call. Anything else means something moved that should not have.
+Add `destructiveRefused` to the Task 1 file: a `destructive def` with a
+`!` parameter, refused, returning the body flag, `destructiveRan`, and
+the message.
 
 Run the Task 1 tests and `tests/agency/casts/` and
 `tests/agency/validator-predicates.agency`.

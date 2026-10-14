@@ -234,7 +234,9 @@ def plain(id: string): string {
     // Unconditional per function: the tool loop can set the flag at runtime
     // in any llm()-calling function, so both must always be present.
     expect(body).toContain("__self.__destructiveRan = __self.__destructiveRan ?? false");
-    expect(body).toContain("stampFailureBoundary(runner.haltResult, __self.__destructiveRan)");
+    expect(body).toContain(
+      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)",
+    );
     // The old machinery is gone.
     expect(body).not.toContain("__retryable");
   });

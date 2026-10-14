@@ -1,0 +1,140 @@
+// A `!` parameter check runs once per call, not once per entry. When the
+// function pauses on an interrupt and resumes, the resume skips the check
+// and keeps the checked value, instead of running the validator again and
+// taking a frame that belongs to another function.
+
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+effect test::confirm { tag: string }
+
+def count(key: string) {
+  setMutable(key, getMutable(key, 0) + 1)
+}
+
+def checkStamp(value: string): Result<string> {
+  count("stamp")
+  return success(value)
+}
+
+@validate(checkStamp)
+type Stamp = string
+
+def checkLabel(value: string): Result<string> {
+  count("label")
+  return success(value)
+}
+
+@validate(checkLabel)
+type Label = string
+
+def checkPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("expected ${value} to be > 0")
+}
+
+@validate(checkPositive)
+type Count = number
+
+def ask(tag: string) {
+  interrupt test::confirm("Go ahead?", { tag: tag })
+}
+
+def messageOf(result: any): string {
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "no failure"
+}
+
+// Pauses in a callee, so the saved frames after this one belong to `ask`.
+def schedule(when: Stamp!): Result<string> {
+  ask("schedule")
+  return success(when)
+}
+
+node once() {
+  setMutable("stamp", 0)
+  const result = schedule("2026-10-16T09:00:00")
+  return [result.value, getMutable("stamp", 0)]
+}
+
+// The type has no `@validate`, so the check is a plain schema check. zod
+// drops the unknown key, and the body must see the stripped value after
+// the resume too.
+def plan(spec: { type: "daily" }!): Result<{ type: "daily" }> {
+  ask("plan")
+  return success(spec)
+}
+
+node checkedValue() {
+  const raw: any = { type: "daily", extra: 1 }
+  const result = plan(raw)
+  return result.value
+}
+
+// Pauses in its own body, so there is no saved frame after this one.
+def scheduleHere(when: Stamp!): Result<string> {
+  interrupt test::confirm("Go ahead?", { tag: "here" })
+  return success(when)
+}
+
+node bodyRaise() {
+  setMutable("stamp", 0)
+  const result = scheduleHere("2026-10-16T09:00:00")
+  return [result.value, getMutable("stamp", 0)]
+}
+
+def scheduleDefault(when: Stamp! = "2026-10-16T09:00:00"): Result<string> {
+  ask("default")
+  return success(when)
+}
+
+node withDefault() {
+  setMutable("stamp", 0)
+  const result = scheduleDefault()
+  return [result.value, getMutable("stamp", 0)]
+}
+
+def scheduleLabelled(label: string, when: Stamp!): Result<string> {
+  ask("mixed")
+  return success("${label}:${when}")
+}
+
+node mixedParams() {
+  const result = scheduleLabelled("standup", "09:00")
+  return result.value
+}
+
+def scheduleTwo(label: Label!, when: Stamp!): Result<string> {
+  ask("two")
+  return success("${label}:${when}")
+}
+
+node twoValidated() {
+  setMutable("stamp", 0)
+  setMutable("label", 0)
+  const result = scheduleTwo("standup", "09:00")
+  return [result.value, getMutable("label", 0), getMutable("stamp", 0)]
+}
+
+def setCount(amount: Count!): Result<string> {
+  setMutable("bodyRan", true)
+  return success("set ${amount}")
+}
+
+node failsBeforeBody() {
+  setMutable("bodyRan", false)
+  const result = setCount(-5)
+  return [getMutable("bodyRan", false), messageOf(result)]
+}
+
+node inForkBranches() {
+  setMutable("stamp", 0)
+  parallel {
+    let first = schedule("09:00")
+    let second = schedule("10:00")
+  }
+  return [first.value, second.value, getMutable("stamp", 0)]
+}

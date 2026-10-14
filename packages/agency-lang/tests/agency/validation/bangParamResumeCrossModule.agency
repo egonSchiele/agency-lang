@@ -1,0 +1,20 @@
+// A `!` parameter whose type and validator live in other modules is
+// checked once across a resume, and refused with the usual message.
+
+import { schedule } from "./bangParamResumeCrossModule-lib.agency"
+import { readStampRuns, resetStampRuns } from "./bangParamResumeCrossModule-types.agency"
+
+node resumes() {
+  resetStampRuns()
+  const result = schedule("09:00")
+  return [result.value, readStampRuns()]
+}
+
+node refuses() {
+  const bad: any = 7
+  const result = schedule(bad)
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "no failure"
+}

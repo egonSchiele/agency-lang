@@ -1,0 +1,67 @@
+{
+  "tests": [
+    {
+      "nodeName": "once",
+      "description": "A validator runs once when the function pauses in a callee and resumes",
+      "input": "",
+      "expectedOutput": "[\"2026-10-16T09:00:00\",1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "checkedValue",
+      "description": "The body sees the checked value after a resume, not the raw argument",
+      "input": "",
+      "expectedOutput": "{\"type\":\"daily\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "bodyRaise",
+      "description": "A validator runs once when the function pauses in its own body and resumes",
+      "input": "",
+      "expectedOutput": "[\"2026-10-16T09:00:00\",1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "withDefault",
+      "description": "A defaulted bang parameter keeps its default and is checked once across a resume",
+      "input": "",
+      "expectedOutput": "[\"2026-10-16T09:00:00\",1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "mixedParams",
+      "description": "A plain parameter and a bang parameter both survive a resume",
+      "input": "",
+      "expectedOutput": "\"standup:09:00\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "twoValidated",
+      "description": "Both validators of two bang parameters run once across a resume",
+      "input": "",
+      "expectedOutput": "[\"standup:09:00\",1,1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "failsBeforeBody",
+      "description": "A failed check returns the failure without running the body",
+      "input": "",
+      "expectedOutput": "[false,\"Argument \\\"amount\\\" of setCount was refused: expected -5 to be > 0\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "inForkBranches",
+      "description": "Two parallel branches that each pause inside a function with a bang parameter resume with one validator run each",
+      "input": "",
+      "expectedOutput": "[\"09:00\",\"10:00\",2]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }, { "action": "approve" }]
+    }
+  ]
+}

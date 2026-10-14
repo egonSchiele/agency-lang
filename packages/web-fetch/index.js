@@ -59,7 +59,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -127,7 +129,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "46e9179dca844d7c096c7bf05cc762abcdcfd66be5ff28b3e77a7f0d804bb67e");
+__registerModuleFingerprint("index.agency", "8557b148bee206e0e7cd51927b3dc43cf58cc57325f0306936a4924bddb1b972");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -188,25 +190,8 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
   __stack.args["url"] = url;
   __stack.args["maxChars"] = maxChars === __UNSET ? 2e4 : maxChars;
   __stack.args["timeout"] = timeout === __UNSET ? 15e3 : timeout;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("url" in __overrides) {
-      url = __overrides["url"];
-      __stack.args["url"] = url;
-    }
-    if ("maxChars" in __overrides) {
-      maxChars = __overrides["maxChars"];
-      __stack.args["maxChars"] = maxChars;
-    }
-    if ("timeout" in __overrides) {
-      timeout = __overrides["timeout"];
-      __stack.args["timeout"] = timeout;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -214,6 +199,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -227,6 +213,24 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("url" in __overrides) {
+            url = __overrides["url"];
+            __stack.args["url"] = url;
+          }
+          if ("maxChars" in __overrides) {
+            maxChars = __overrides["maxChars"];
+            __stack.args["maxChars"] = maxChars;
+          }
+          if ("timeout" in __overrides) {
+            timeout = __overrides["timeout"];
+            __stack.args["timeout"] = timeout;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, fetchPageImpl, {
@@ -241,7 +245,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

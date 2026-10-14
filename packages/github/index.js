@@ -71,7 +71,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -139,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "57bb5f6de8e888d1e279366170f6b5a8493e587cc0323071363e673a0d2e0e73");
+__registerModuleFingerprint("index.agency", "d5f7ae4a412aaff622d1953cc3edd0762607cdeadf57ede6b72d22ec3af77694");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -202,33 +204,8 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("name" in __overrides) {
-      name = __overrides["name"];
-      __stack.args["name"] = name;
-    }
-    if ("from" in __overrides) {
-      from = __overrides["from"];
-      __stack.args["from"] = from;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -236,6 +213,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -251,6 +229,32 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+          if ("from" in __overrides) {
+            from = __overrides["from"];
+            __stack.args["from"] = from;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, createBranchImpl, {
@@ -268,7 +272,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -374,29 +378,8 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "deleteBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("name" in __overrides) {
-      name = __overrides["name"];
-      __stack.args["name"] = name;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -404,6 +387,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -418,6 +402,28 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, deleteBranchImpl, {
@@ -434,7 +440,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -533,29 +539,8 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "branchExists", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("name" in __overrides) {
-      name = __overrides["name"];
-      __stack.args["name"] = name;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -563,6 +548,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -577,6 +563,28 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("name" in __overrides) {
+            name = __overrides["name"];
+            __stack.args["name"] = name;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, branchExistsImpl, {
@@ -593,7 +601,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -694,37 +702,8 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
   __stack.args["authorEmail"] = authorEmail === __UNSET ? `` : authorEmail;
   __stack.args["push"] = push === __UNSET ? true : push;
   __stack.args["branch"] = branch === __UNSET ? `` : branch;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commitFiles", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("message" in __overrides) {
-      message = __overrides["message"];
-      __stack.args["message"] = message;
-    }
-    if ("files" in __overrides) {
-      files = __overrides["files"];
-      __stack.args["files"] = files;
-    }
-    if ("authorName" in __overrides) {
-      authorName = __overrides["authorName"];
-      __stack.args["authorName"] = authorName;
-    }
-    if ("authorEmail" in __overrides) {
-      authorEmail = __overrides["authorEmail"];
-      __stack.args["authorEmail"] = authorEmail;
-    }
-    if ("push" in __overrides) {
-      push = __overrides["push"];
-      __stack.args["push"] = push;
-    }
-    if ("branch" in __overrides) {
-      branch = __overrides["branch"];
-      __stack.args["branch"] = branch;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -732,6 +711,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -748,6 +728,36 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("message" in __overrides) {
+            message = __overrides["message"];
+            __stack.args["message"] = message;
+          }
+          if ("files" in __overrides) {
+            files = __overrides["files"];
+            __stack.args["files"] = files;
+          }
+          if ("authorName" in __overrides) {
+            authorName = __overrides["authorName"];
+            __stack.args["authorName"] = authorName;
+          }
+          if ("authorEmail" in __overrides) {
+            authorEmail = __overrides["authorEmail"];
+            __stack.args["authorEmail"] = authorEmail;
+          }
+          if ("push" in __overrides) {
+            push = __overrides["push"];
+            __stack.args["push"] = push;
+          }
+          if ("branch" in __overrides) {
+            branch = __overrides["branch"];
+            __stack.args["branch"] = branch;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, commitFilesImpl, {
@@ -766,7 +776,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -884,49 +894,8 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "openPullRequest", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("title" in __overrides) {
-      title = __overrides["title"];
-      __stack.args["title"] = title;
-    }
-    if ("body" in __overrides) {
-      body = __overrides["body"];
-      __stack.args["body"] = body;
-    }
-    if ("head" in __overrides) {
-      head2 = __overrides["head"];
-      __stack.args["head"] = head2;
-    }
-    if ("base" in __overrides) {
-      base = __overrides["base"];
-      __stack.args["base"] = base;
-    }
-    if ("draft" in __overrides) {
-      draft = __overrides["draft"];
-      __stack.args["draft"] = draft;
-    }
-    if ("labels" in __overrides) {
-      labels = __overrides["labels"];
-      __stack.args["labels"] = labels;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -934,6 +903,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -953,6 +923,48 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("title" in __overrides) {
+            title = __overrides["title"];
+            __stack.args["title"] = title;
+          }
+          if ("body" in __overrides) {
+            body = __overrides["body"];
+            __stack.args["body"] = body;
+          }
+          if ("head" in __overrides) {
+            head2 = __overrides["head"];
+            __stack.args["head"] = head2;
+          }
+          if ("base" in __overrides) {
+            base = __overrides["base"];
+            __stack.args["base"] = base;
+          }
+          if ("draft" in __overrides) {
+            draft = __overrides["draft"];
+            __stack.args["draft"] = draft;
+          }
+          if ("labels" in __overrides) {
+            labels = __overrides["labels"];
+            __stack.args["labels"] = labels;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, openPullRequestImpl, {
@@ -974,7 +986,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1110,37 +1122,8 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listPullRequests", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("state" in __overrides) {
-      state = __overrides["state"];
-      __stack.args["state"] = state;
-    }
-    if ("base" in __overrides) {
-      base = __overrides["base"];
-      __stack.args["base"] = base;
-    }
-    if ("head" in __overrides) {
-      head2 = __overrides["head"];
-      __stack.args["head"] = head2;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -1148,6 +1131,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1164,6 +1148,36 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("state" in __overrides) {
+            state = __overrides["state"];
+            __stack.args["state"] = state;
+          }
+          if ("base" in __overrides) {
+            base = __overrides["base"];
+            __stack.args["base"] = base;
+          }
+          if ("head" in __overrides) {
+            head2 = __overrides["head"];
+            __stack.args["head"] = head2;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, listPullRequestsImpl, {
@@ -1182,7 +1196,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1296,33 +1310,8 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnPullRequest", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("number" in __overrides) {
-      number = __overrides["number"];
-      __stack.args["number"] = number;
-    }
-    if ("body" in __overrides) {
-      body = __overrides["body"];
-      __stack.args["body"] = body;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -1330,6 +1319,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1345,6 +1335,32 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("number" in __overrides) {
+            number = __overrides["number"];
+            __stack.args["number"] = number;
+          }
+          if ("body" in __overrides) {
+            body = __overrides["body"];
+            __stack.args["body"] = body;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, commentOnPullRequestImpl, {
@@ -1362,7 +1378,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1469,33 +1485,8 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "addLabel", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("number" in __overrides) {
-      number = __overrides["number"];
-      __stack.args["number"] = number;
-    }
-    if ("labels" in __overrides) {
-      labels = __overrides["labels"];
-      __stack.args["labels"] = labels;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -1503,6 +1494,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1518,6 +1510,32 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("number" in __overrides) {
+            number = __overrides["number"];
+            __stack.args["number"] = number;
+          }
+          if ("labels" in __overrides) {
+            labels = __overrides["labels"];
+            __stack.args["labels"] = labels;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, addLabelImpl, {
@@ -1535,7 +1553,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1643,37 +1661,8 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "requestReview", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("number" in __overrides) {
-      number = __overrides["number"];
-      __stack.args["number"] = number;
-    }
-    if ("reviewers" in __overrides) {
-      reviewers = __overrides["reviewers"];
-      __stack.args["reviewers"] = reviewers;
-    }
-    if ("teamReviewers" in __overrides) {
-      teamReviewers = __overrides["teamReviewers"];
-      __stack.args["teamReviewers"] = teamReviewers;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -1681,6 +1670,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1697,6 +1687,36 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("number" in __overrides) {
+            number = __overrides["number"];
+            __stack.args["number"] = number;
+          }
+          if ("reviewers" in __overrides) {
+            reviewers = __overrides["reviewers"];
+            __stack.args["reviewers"] = reviewers;
+          }
+          if ("teamReviewers" in __overrides) {
+            teamReviewers = __overrides["teamReviewers"];
+            __stack.args["teamReviewers"] = teamReviewers;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, requestReviewImpl, {
@@ -1715,7 +1735,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1829,33 +1849,8 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listIssues", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("state" in __overrides) {
-      state = __overrides["state"];
-      __stack.args["state"] = state;
-    }
-    if ("labels" in __overrides) {
-      labels = __overrides["labels"];
-      __stack.args["labels"] = labels;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -1863,6 +1858,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1878,6 +1874,32 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("state" in __overrides) {
+            state = __overrides["state"];
+            __stack.args["state"] = state;
+          }
+          if ("labels" in __overrides) {
+            labels = __overrides["labels"];
+            __stack.args["labels"] = labels;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, listIssuesImpl, {
@@ -1895,7 +1917,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -2002,33 +2024,8 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnIssue", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("number" in __overrides) {
-      number = __overrides["number"];
-      __stack.args["number"] = number;
-    }
-    if ("body" in __overrides) {
-      body = __overrides["body"];
-      __stack.args["body"] = body;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -2036,6 +2033,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -2051,6 +2049,32 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("number" in __overrides) {
+            number = __overrides["number"];
+            __stack.args["number"] = number;
+          }
+          if ("body" in __overrides) {
+            body = __overrides["body"];
+            __stack.args["body"] = body;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, commentOnIssueImpl, {
@@ -2068,7 +2092,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -2176,37 +2200,8 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createIssue", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("title" in __overrides) {
-      title = __overrides["title"];
-      __stack.args["title"] = title;
-    }
-    if ("body" in __overrides) {
-      body = __overrides["body"];
-      __stack.args["body"] = body;
-    }
-    if ("labels" in __overrides) {
-      labels = __overrides["labels"];
-      __stack.args["labels"] = labels;
-    }
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -2214,6 +2209,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -2230,6 +2226,36 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("title" in __overrides) {
+            title = __overrides["title"];
+            __stack.args["title"] = title;
+          }
+          if ("body" in __overrides) {
+            body = __overrides["body"];
+            __stack.args["body"] = body;
+          }
+          if ("labels" in __overrides) {
+            labels = __overrides["labels"];
+            __stack.args["labels"] = labels;
+          }
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, createIssueImpl, {
@@ -2248,7 +2274,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -2360,25 +2386,8 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "defaultBranch", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("owner" in __overrides) {
-      owner = __overrides["owner"];
-      __stack.args["owner"] = owner;
-    }
-    if ("repo" in __overrides) {
-      repo = __overrides["repo"];
-      __stack.args["repo"] = repo;
-    }
-    if ("token" in __overrides) {
-      token = __overrides["token"];
-      __stack.args["token"] = token;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -2386,6 +2395,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -2399,6 +2409,24 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
           }
         });
       });
+      if (!runner.halted) {
+        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+          const __overrides = __ctx._pendingArgOverrides.values;
+          __ctx._pendingArgOverrides = void 0;
+          if ("owner" in __overrides) {
+            owner = __overrides["owner"];
+            __stack.args["owner"] = owner;
+          }
+          if ("repo" in __overrides) {
+            repo = __overrides["repo"];
+            __stack.args["repo"] = repo;
+          }
+          if ("token" in __overrides) {
+            token = __overrides["token"];
+            __stack.args["token"] = token;
+          }
+        }
+      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, defaultBranchImpl, {
@@ -2414,7 +2442,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

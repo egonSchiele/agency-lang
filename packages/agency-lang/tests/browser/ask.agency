@@ -1,0 +1,8 @@
+// The program the browser model-call test bundles and runs. One llm()
+// call, answered by a hosted model with the key the page passed to
+// browserHost. The node takes the model and provider so the test picks a
+// cheap model, and so the provider baked in from agency.json does not
+// decide which key is needed.
+node ask(model: string, provider: string): string {
+  return llm("Reply with the single word pong and nothing else.", { model: model, provider: provider })
+}

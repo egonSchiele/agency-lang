@@ -5,7 +5,13 @@ import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
 // One image type surface — imported from llmClient.ts, not smoltalk directly.
-import type { ImageConfig, ImageGenResult, ImageInput, ImageRef } from "../runtime/llmClient.js";
+import {
+  withHostKeys,
+  type ImageConfig,
+  type ImageGenResult,
+  type ImageInput,
+  type ImageRef,
+} from "../runtime/llmClient.js";
 import { mlxBaseUrl } from "./mlxServerModels.js";
 import { checkLocalImageArgs, localImageSettings, type LocalGeneratedImage } from "./mlxImage.js";
 import { explainNoServer } from "./localRequest.js";
@@ -174,17 +180,21 @@ export async function _generateImage(
   const run = currentRun();
   // Declarative config. n:1 is explicit so a provider default of >1 can never
   // silently drop images.
-  const config: Partial<ImageConfig> = omitEmpty({
-    model,
-    provider,
-    size,
-    quality: (quality || undefined) as ImageConfig["quality"] | undefined,
-    n: 1,
-    apiKey: apiKey
-      ? { openAi: apiKey, google: apiKey, liteLlm: apiKey, openAiCompat: apiKey }
-      : undefined,
-    baseUrl: baseUrl ? { liteLlm: baseUrl, openAiCompat: baseUrl } : undefined,
-  });
+  // The host's keys go under the key the call passed. See `withHostKeys`.
+  const config: Partial<ImageConfig> = withHostKeys(
+    run.ctx.host.settings,
+    omitEmpty({
+      model,
+      provider,
+      size,
+      quality: (quality || undefined) as ImageConfig["quality"] | undefined,
+      n: 1,
+      apiKey: apiKey
+        ? { openAi: apiKey, google: apiKey, liteLlm: apiKey, openAiCompat: apiKey }
+        : undefined,
+      baseUrl: baseUrl ? { liteLlm: baseUrl, openAiCompat: baseUrl } : undefined,
+    }),
+  );
   let input: ImageInput;
   try {
     input = await buildInput(run.ctx.host, prompt, images);

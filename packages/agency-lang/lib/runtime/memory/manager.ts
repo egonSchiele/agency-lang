@@ -25,7 +25,8 @@ import { MEMORY_COMPACTION_DEFAULT_THRESHOLD } from "../../constants.js";
 import { createLogger, type Logger, type LogLevel, type LogSink } from "../../logger.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
-import type { LLMClient } from "../llmClient.js";
+import { withHostKeys, type LLMClient } from "../llmClient.js";
+import { requireCapabilities } from "../../host/host.js";
 import type { Run } from "../asyncContext.js";
 import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
 import { projectProviderTokenUsage } from "../invocationUsage.js";
@@ -262,14 +263,18 @@ export class MemoryManager {
     const spanId = run.log?.startSpan("llmCall");
     const startTime = performance.now();
     try {
+      // The run's host decides the keys, and whether a model may be called
+      // at all, the same as for an llm() call. See `withHostKeys`.
+      requireCapabilities(run.ctx.host, ["llm"], "memory");
+      const config = withHostKeys(run.ctx.host.settings, {
+        ...this.smoltalkDefaults,
+        messages: [smoltalk.userMessage(prompt)],
+        model,
+        moduleId: run.callsite?.moduleId,
+        ...(options?.responseFormat ? { responseFormat: options.responseFormat } : {}),
+      });
       const result = await meteredMemoryDispatch(run, "completion", () =>
-        this.llmClient.text({
-          ...this.smoltalkDefaults,
-          messages: [smoltalk.userMessage(prompt)],
-          model,
-          moduleId: run.callsite?.moduleId,
-          ...(options?.responseFormat ? { responseFormat: options.responseFormat } : {}),
-        } as any),
+        this.llmClient.text(config as any),
       );
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
@@ -340,15 +345,17 @@ export class MemoryManager {
     const spanId = run.log?.startSpan("embedding");
     const startTime = performance.now();
     try {
+      requireCapabilities(run.ctx.host, ["llm"], "memory");
+      const config = withHostKeys(run.ctx.host.settings, {
+        model: options?.model,
+        // Pass the provider explicitly so smoltalk routes to the right embed
+        // endpoint even when the model name doesn't imply it (e.g. ollama).
+        provider: options?.provider,
+        apiKey: this.smoltalkDefaults.apiKey,
+        baseUrl: this.smoltalkDefaults.baseUrl,
+      });
       const result = await meteredMemoryDispatch(run, "embedding", () =>
-        this.llmClient.embed(text, {
-          model: options?.model,
-          // Pass the provider explicitly so smoltalk routes to the right embed
-          // endpoint even when the model name doesn't imply it (e.g. ollama).
-          provider: options?.provider,
-          apiKey: this.smoltalkDefaults.apiKey,
-          baseUrl: this.smoltalkDefaults.baseUrl,
-        }),
+        this.llmClient.embed(text, config),
       );
       const timeTaken = performance.now() - startTime;
       if (!result.success) {

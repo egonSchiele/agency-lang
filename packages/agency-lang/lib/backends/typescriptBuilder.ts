@@ -82,6 +82,7 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { NewExpression } from "../types/newExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
+import { PROVIDER_KEY_VARIABLES } from "../runtime/llmClient.js";
 import { escape } from "../utils.js";
 import { mergeConfig } from "../config/merge.js";
 import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/builtins.js";
@@ -4232,33 +4233,21 @@ export class TypeScriptBuilder {
       baseUrlFields.mlx = ts.str(cfg.client.baseUrl.mlx);
     }
 
+    // API keys are nested under `apiKey`, one slot per provider in
+    // `PROVIDER_KEY_VARIABLES`, the table the runtime reads the same keys
+    // from at call time. A key written in agency.json is baked; the rest
+    // fall back to the variable, read through the host when the module
+    // loads. `ollama` is not in the table: it uses OLLAMA_HOST, not a key.
+    const configuredKeys = (cfg.client?.apiKey ?? {}) as Record<string, string | undefined>;
+    const apiKeyFields: Record<string, TsNode> = {};
+    for (const slot of Object.keys(PROVIDER_KEY_VARIABLES)) {
+      const configured = configuredKeys[slot];
+      apiKeyFields[slot] = configured
+        ? ts.str(configured)
+        : ts.binOp(ts.env(PROVIDER_KEY_VARIABLES[slot]), "||", ts.str(""));
+    }
     const smoltalkFields: Record<string, TsNode> = {
-      // API keys are nested under `apiKey`, each falling back to its
-      // conventional env var. `ollama` is intentionally omitted — it uses
-      // OLLAMA_HOST (not an API key).
-      apiKey: ts.obj({
-        openAi: cfg.client?.apiKey?.openAi
-          ? ts.str(cfg.client.apiKey.openAi)
-          : ts.binOp(ts.env("OPENAI_API_KEY"), "||", ts.str("")),
-        google: cfg.client?.apiKey?.google
-          ? ts.str(cfg.client.apiKey.google)
-          : ts.binOp(ts.env("GEMINI_API_KEY"), "||", ts.str("")),
-        anthropic: cfg.client?.apiKey?.anthropic
-          ? ts.str(cfg.client.apiKey.anthropic)
-          : ts.binOp(ts.env("ANTHROPIC_API_KEY"), "||", ts.str("")),
-        openRouter: cfg.client?.apiKey?.openRouter
-          ? ts.str(cfg.client.apiKey.openRouter)
-          : ts.binOp(ts.env("OPENROUTER_API_KEY"), "||", ts.str("")),
-        deepInfra: cfg.client?.apiKey?.deepInfra
-          ? ts.str(cfg.client.apiKey.deepInfra)
-          : ts.binOp(ts.env("DEEPINFRA_API_KEY"), "||", ts.str("")),
-        liteLlm: cfg.client?.apiKey?.liteLlm
-          ? ts.str(cfg.client.apiKey.liteLlm)
-          : ts.binOp(ts.env("LITELLM_API_KEY"), "||", ts.str("")),
-        openAiCompat: cfg.client?.apiKey?.openAiCompat
-          ? ts.str(cfg.client.apiKey.openAiCompat)
-          : ts.binOp(ts.env("OPENAI_COMPAT_API_KEY"), "||", ts.str("")),
-      }),
+      apiKey: ts.obj(apiKeyFields),
       baseUrl: ts.obj(baseUrlFields),
       model: ts.str(cfg.client?.defaultModel || DEFAULT_MODEL),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),

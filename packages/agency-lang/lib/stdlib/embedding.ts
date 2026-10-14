@@ -2,7 +2,7 @@ import { currentRun } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 // One embedding type surface — imported from llmClient.ts, not smoltalk directly.
-import type { EmbedConfig } from "../runtime/llmClient.js";
+import { withHostKeys, type EmbedConfig } from "../runtime/llmClient.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { _resolveLocalEmbeddingModel } from "./localModels.js";
 
@@ -78,13 +78,17 @@ export async function _embedTexts(
     }
   }
 
-  const config: Partial<EmbedConfig> = omitEmpty({
-    model: resolvedModel,
-    provider,
-    dimensions,
-    apiKey: apiKey ? keyForEveryProvider(apiKey) : undefined,
-    baseUrl: baseUrl ? baseUrlForEveryProvider(baseUrl) : undefined,
-  });
+  // The host's keys go under the key the call passed. See `withHostKeys`.
+  const config: Partial<EmbedConfig> = withHostKeys(
+    ctx.host.settings,
+    omitEmpty({
+      model: resolvedModel,
+      provider,
+      dimensions,
+      apiKey: apiKey ? keyForEveryProvider(apiKey) : undefined,
+      baseUrl: baseUrl ? baseUrlForEveryProvider(baseUrl) : undefined,
+    }),
+  );
 
   const start = performance.now();
   const result = await meteredDispatch(ctx, stack, "embedding", () =>

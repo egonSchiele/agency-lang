@@ -2,6 +2,7 @@ import type { Message, PromptResult, Result, SmolConfig, StreamChunk } from "smo
 import * as smoltalk from "smoltalk";
 import type { ZodType } from "zod";
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_IMAGE_MODEL } from "../constants.js";
+import type { HostSettings } from "../host/host.js";
 
 export type ToolDefinition = {
   name: string;
@@ -197,6 +198,69 @@ export type LLMClient = {
    *  status- and `kind`-based classification. */
   normalizeError?(err: unknown): NormalizedLLMError;
 };
+
+/** The variable each provider's API key is read from, by the slot it
+ *  fills in smoltalk's `apiKey` map. The same table smoltalk's own
+ *  `resolveApiKey` keeps (`lib/util/provider.ts` there); the test in
+ *  `llmClient.test.ts` reads that file and checks the two agree. The
+ *  runtime reads these through the host so a browser page, where smoltalk's
+ *  own `env()` answers nothing, gets its keys from the variables the app
+ *  passed to `browserHost`. */
+export const PROVIDER_KEY_VARIABLES: Record<string, string> = {
+  openAi: "OPENAI_API_KEY",
+  google: "GEMINI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  openRouter: "OPENROUTER_API_KEY",
+  deepInfra: "DEEPINFRA_API_KEY",
+  liteLlm: "LITELLM_API_KEY",
+  openAiCompat: "OPENAI_COMPAT_API_KEY",
+  groq: "GROQ_API_KEY",
+  typesafe: "TYPESAFE_API_KEY",
+};
+
+/** The keys the host's settings hold, as smoltalk's `apiKey` map. A
+ *  variable that is unset or empty leaves its slot out, so a key the
+ *  caller passed is never shadowed by nothing. */
+export function apiKeysFromSettings(settings: HostSettings): NonNullable<SmolConfig["apiKey"]> {
+  const keys: Record<string, string> = {};
+  for (const slot of Object.keys(PROVIDER_KEY_VARIABLES)) {
+    const value = settings.read(PROVIDER_KEY_VARIABLES[slot]);
+    if (value) {
+      keys[slot] = value;
+    }
+  }
+  return keys;
+}
+
+/** `config` with the run's host's keys underneath its own: a key from
+ *  agency.json or the call wins over the host's. Every model call goes
+ *  through this with the run's host before it reaches the client, so a
+ *  browser page's keys, which smoltalk's own `env()` cannot see, arrive the
+ *  same way a Node process's environment does.
+ *
+ *  An empty slot in `config.apiKey` counts as unset. The generated header
+ *  reads the same variables through the module's default host when the
+ *  module loads and bakes `""` for each one it does not find; in a page
+ *  that is every slot, since the app's variables arrive later, on the host
+ *  it passes to the node. The config is returned as is when the host holds
+ *  no key. */
+export function withHostKeys<T extends { apiKey?: SmolConfig["apiKey"] }>(
+  settings: HostSettings,
+  config: T,
+): T {
+  const hostKeys = apiKeysFromSettings(settings);
+  if (Object.keys(hostKeys).length === 0) {
+    return config;
+  }
+  const own: Record<string, string> = {};
+  for (const slot of Object.keys(config.apiKey ?? {})) {
+    const value = config.apiKey?.[slot];
+    if (value) {
+      own[slot] = value;
+    }
+  }
+  return { ...config, apiKey: { ...hostKeys, ...own } };
+}
 
 export class SmoltalkClient implements LLMClient {
   // Cancellation on the text paths follows the same contract as transcribe/

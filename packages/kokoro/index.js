@@ -40,6 +40,7 @@ import {
   stampFailureBoundary,
   __tryCall,
   __eq,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -66,7 +67,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -134,7 +137,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "43af96b152af8ae3a1e84c890710c4224171fdb17d665af4858d8537ae4f65bf");
+__registerModuleFingerprint("index.agency", "08b9f2f9d71ba2d06e04da1e93385ffbb3fdfb62da89722ad7cfd68814ad1e80");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -194,17 +197,12 @@ async function __realOutput_impl(__run, outputFile) {
   }
   let __funcStartTime = performance.now();
   __stack.args["outputFile"] = outputFile;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["outputFile"]);
+  if (__overridden !== void 0) {
+    outputFile = __stack.args["outputFile"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("outputFile" in __overrides) {
-      outputFile = __overrides["outputFile"];
-      __stack.args["outputFile"] = outputFile;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -212,6 +210,7 @@ async function __realOutput_impl(__run, outputFile) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -287,7 +286,7 @@ async function __realOutput_impl(__run, outputFile) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -369,45 +368,19 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
   __stack.args["allowedPaths"] = allowedPaths === __UNSET ? [] : allowedPaths;
   __stack.args["format"] = format === __UNSET ? `` : format;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["text", "outputFile", "voice", "model", "speed", "allowedPaths", "format", "modelsDir"]);
+  if (__overridden !== void 0) {
+    text = __stack.args["text"];
+    outputFile = __stack.args["outputFile"];
+    voice = __stack.args["voice"];
+    model = __stack.args["model"];
+    speed = __stack.args["speed"];
+    allowedPaths = __stack.args["allowedPaths"];
+    format = __stack.args["format"];
+    modelsDir = __stack.args["modelsDir"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("text" in __overrides) {
-      text = __overrides["text"];
-      __stack.args["text"] = text;
-    }
-    if ("outputFile" in __overrides) {
-      outputFile = __overrides["outputFile"];
-      __stack.args["outputFile"] = outputFile;
-    }
-    if ("voice" in __overrides) {
-      voice = __overrides["voice"];
-      __stack.args["voice"] = voice;
-    }
-    if ("model" in __overrides) {
-      model = __overrides["model"];
-      __stack.args["model"] = model;
-    }
-    if ("speed" in __overrides) {
-      speed = __overrides["speed"];
-      __stack.args["speed"] = speed;
-    }
-    if ("allowedPaths" in __overrides) {
-      allowedPaths = __overrides["allowedPaths"];
-      __stack.args["allowedPaths"] = allowedPaths;
-    }
-    if ("format" in __overrides) {
-      format = __overrides["format"];
-      __stack.args["format"] = format;
-    }
-    if ("modelsDir" in __overrides) {
-      modelsDir = __overrides["modelsDir"];
-      __stack.args["modelsDir"] = modelsDir;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -415,6 +388,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -569,7 +543,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -703,21 +677,13 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
   let __funcStartTime = performance.now();
   __stack.args["model"] = model === __UNSET ? `fp32` : model;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["model", "modelsDir"]);
+  if (__overridden !== void 0) {
+    model = __stack.args["model"];
+    modelsDir = __stack.args["modelsDir"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "download", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("model" in __overrides) {
-      model = __overrides["model"];
-      __stack.args["model"] = model;
-    }
-    if ("modelsDir" in __overrides) {
-      modelsDir = __overrides["modelsDir"];
-      __stack.args["modelsDir"] = modelsDir;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -725,6 +691,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -816,7 +783,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -900,13 +867,9 @@ async function __voices_impl(__run) {
     await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  __takeArgOverrides(__ctx, __stack, []);
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -914,6 +877,7 @@ async function __voices_impl(__run) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -934,7 +898,7 @@ async function __voices_impl(__run) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

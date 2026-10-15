@@ -44,6 +44,7 @@ import {
   isFailure,
   stampFailureBoundary,
   __tryCall,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -70,7 +71,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -138,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "85c38c609a9d804d38133343cd02d098fd69cdb8963c376b9773f63f1eaa3944");
+__registerModuleFingerprint("index.agency", "c66c63c26f47988a2b669e368ede5c890e55972069d7df126cbb83e8376c6820");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -235,61 +238,23 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
   __stack.args["seed"] = seed === __UNSET ? 1 : seed;
   __stack.args["samplePrompts"] = samplePrompts === __UNSET ? [] : samplePrompts;
   __stack.args["sampleEvery"] = sampleEvery === __UNSET ? 250 : sampleEvery;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["imagesDir", "trigger", "base", "outPath", "steps", "rank", "learningRate", "resolution", "flip", "seed", "samplePrompts", "sampleEvery"]);
+  if (__overridden !== void 0) {
+    imagesDir = __stack.args["imagesDir"];
+    trigger = __stack.args["trigger"];
+    base = __stack.args["base"];
+    outPath = __stack.args["outPath"];
+    steps = __stack.args["steps"];
+    rank = __stack.args["rank"];
+    learningRate = __stack.args["learningRate"];
+    resolution = __stack.args["resolution"];
+    flip = __stack.args["flip"];
+    seed = __stack.args["seed"];
+    samplePrompts = __stack.args["samplePrompts"];
+    sampleEvery = __stack.args["sampleEvery"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "trainLora", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("imagesDir" in __overrides) {
-      imagesDir = __overrides["imagesDir"];
-      __stack.args["imagesDir"] = imagesDir;
-    }
-    if ("trigger" in __overrides) {
-      trigger = __overrides["trigger"];
-      __stack.args["trigger"] = trigger;
-    }
-    if ("base" in __overrides) {
-      base = __overrides["base"];
-      __stack.args["base"] = base;
-    }
-    if ("outPath" in __overrides) {
-      outPath = __overrides["outPath"];
-      __stack.args["outPath"] = outPath;
-    }
-    if ("steps" in __overrides) {
-      steps = __overrides["steps"];
-      __stack.args["steps"] = steps;
-    }
-    if ("rank" in __overrides) {
-      rank = __overrides["rank"];
-      __stack.args["rank"] = rank;
-    }
-    if ("learningRate" in __overrides) {
-      learningRate = __overrides["learningRate"];
-      __stack.args["learningRate"] = learningRate;
-    }
-    if ("resolution" in __overrides) {
-      resolution = __overrides["resolution"];
-      __stack.args["resolution"] = resolution;
-    }
-    if ("flip" in __overrides) {
-      flip = __overrides["flip"];
-      __stack.args["flip"] = flip;
-    }
-    if ("seed" in __overrides) {
-      seed = __overrides["seed"];
-      __stack.args["seed"] = seed;
-    }
-    if ("samplePrompts" in __overrides) {
-      samplePrompts = __overrides["samplePrompts"];
-      __stack.args["samplePrompts"] = samplePrompts;
-    }
-    if ("sampleEvery" in __overrides) {
-      sampleEvery = __overrides["sampleEvery"];
-      __stack.args["sampleEvery"] = sampleEvery;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -297,6 +262,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -438,7 +404,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -609,17 +575,12 @@ async function __loraInfo_impl(__run, path2) {
   }
   let __funcStartTime = performance.now();
   __stack.args["path"] = path2;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["path"]);
+  if (__overridden !== void 0) {
+    path2 = __stack.args["path"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "loraInfo", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("path" in __overrides) {
-      path2 = __overrides["path"];
-      __stack.args["path"] = path2;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -627,6 +588,7 @@ async function __loraInfo_impl(__run, path2) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -753,7 +715,7 @@ async function __loraInfo_impl(__run, path2) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

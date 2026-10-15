@@ -33,6 +33,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -59,7 +60,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -127,7 +130,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "2594b3deeb919b3ac9b5ee4c9d680da576a2dd068a49e13146c64e2cf78f2fc1");
+__registerModuleFingerprint("index.agency", "6fc7940e788d4c08789723a3f84d98c33129271135ed30680c2aeddb3ec41bd8");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -187,21 +190,13 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
   let __funcStartTime = performance.now();
   __stack.args["serverName"] = serverName;
   __stack.args["onOAuthRequired"] = onOAuthRequired === __UNSET ? null : onOAuthRequired;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["serverName", "onOAuthRequired"]);
+  if (__overridden !== void 0) {
+    serverName = __stack.args["serverName"];
+    onOAuthRequired = __stack.args["onOAuthRequired"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "mcp", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("serverName" in __overrides) {
-      serverName = __overrides["serverName"];
-      __stack.args["serverName"] = serverName;
-    }
-    if ("onOAuthRequired" in __overrides) {
-      onOAuthRequired = __overrides["onOAuthRequired"];
-      __stack.args["onOAuthRequired"] = onOAuthRequired;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -209,6 +204,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -232,7 +228,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

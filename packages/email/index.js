@@ -34,6 +34,7 @@ import {
   isFailure,
   stampFailureBoundary,
   __tryCall,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -60,7 +61,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -128,7 +131,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "dad2a76ae09d3e32d8d88d40207a6b7afb2ff545a6862e82a98556498d37bd79");
+__registerModuleFingerprint("index.agency", "c391592531f3016bc2e44ffb53137161dc35767bf772937cd281b68257bfc75f");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -199,65 +202,24 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
   __stack.args["secure"] = secure === __UNSET ? false : secure;
   __stack.args["user"] = user === __UNSET ? `` : user;
   __stack.args["pass"] = pass2 === __UNSET ? `` : pass2;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["from", "to", "subject", "html", "text", "cc", "bcc", "replyTo", "host", "port", "secure", "user", "pass"]);
+  if (__overridden !== void 0) {
+    from = __stack.args["from"];
+    to = __stack.args["to"];
+    subject = __stack.args["subject"];
+    html = __stack.args["html"];
+    text = __stack.args["text"];
+    cc = __stack.args["cc"];
+    bcc = __stack.args["bcc"];
+    replyTo = __stack.args["replyTo"];
+    host = __stack.args["host"];
+    port = __stack.args["port"];
+    secure = __stack.args["secure"];
+    user = __stack.args["user"];
+    pass2 = __stack.args["pass"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "sendEmail", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("from" in __overrides) {
-      from = __overrides["from"];
-      __stack.args["from"] = from;
-    }
-    if ("to" in __overrides) {
-      to = __overrides["to"];
-      __stack.args["to"] = to;
-    }
-    if ("subject" in __overrides) {
-      subject = __overrides["subject"];
-      __stack.args["subject"] = subject;
-    }
-    if ("html" in __overrides) {
-      html = __overrides["html"];
-      __stack.args["html"] = html;
-    }
-    if ("text" in __overrides) {
-      text = __overrides["text"];
-      __stack.args["text"] = text;
-    }
-    if ("cc" in __overrides) {
-      cc = __overrides["cc"];
-      __stack.args["cc"] = cc;
-    }
-    if ("bcc" in __overrides) {
-      bcc = __overrides["bcc"];
-      __stack.args["bcc"] = bcc;
-    }
-    if ("replyTo" in __overrides) {
-      replyTo = __overrides["replyTo"];
-      __stack.args["replyTo"] = replyTo;
-    }
-    if ("host" in __overrides) {
-      host = __overrides["host"];
-      __stack.args["host"] = host;
-    }
-    if ("port" in __overrides) {
-      port = __overrides["port"];
-      __stack.args["port"] = port;
-    }
-    if ("secure" in __overrides) {
-      secure = __overrides["secure"];
-      __stack.args["secure"] = secure;
-    }
-    if ("user" in __overrides) {
-      user = __overrides["user"];
-      __stack.args["user"] = user;
-    }
-    if ("pass" in __overrides) {
-      pass2 = __overrides["pass"];
-      __stack.args["pass"] = pass2;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -265,6 +227,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -317,7 +280,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

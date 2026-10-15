@@ -1,0 +1,15 @@
+// A function with a `!` parameter of a type declared in another module.
+// It imports the type only, not the validator behind it.
+
+import { Stamp } from "./bangParamResumeCrossModule-types.agency"
+
+effect test::confirm { tag: string }
+
+def ask() {
+  interrupt test::confirm("Go ahead?", { tag: "cross" })
+}
+
+export def schedule(when: Stamp!): Result<string> {
+  ask()
+  return success(when)
+}

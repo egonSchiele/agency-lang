@@ -74,6 +74,25 @@ node main() {
 }
 `;
 
+const CHECKED_FUNCTION_SOURCE = `def plan(spec: { type: "daily" }!): Result<string> {
+  const id = checkpoint()
+  print("CHECKPOINT_BEGIN")
+  printJSON(getCheckpoint(id))
+  print("CHECKPOINT_END")
+  print("CHECKED_SPEC:" + JSON.stringify(spec))
+  return success("planned")
+}
+
+node main() {
+  const planned = plan({ type: "daily" })
+  if (isFailure(planned)) {
+    print("CHECKED_FAILURE:" + planned.error)
+  } else {
+    print("CHECKED_VALUE:" + planned.value)
+  }
+}
+`;
+
 function checkpointFrom(output: string): string {
   const match = output.match(/CHECKPOINT_BEGIN\s*([\s\S]*?)\s*CHECKPOINT_END/);
   expect(match).not.toBeNull();
@@ -207,6 +226,41 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
 
       expect(resumed.code, resumed.stderr).toBe(0);
       expect(resumed.stdout).toContain("NESTED_FUNCTION_VALUE:after");
+    } finally {
+      removeTemp(dir);
+    }
+  }, 120_000);
+
+  it("applies an overridden bang argument as given, without checking it (#1198)", async () => {
+    const dir = mkdtempSync(path.join(process.cwd(), ".agency-resume-spawn-"));
+    try {
+      writeFileSync(path.join(dir, "agent.agency"), CHECKED_FUNCTION_SOURCE);
+      const fresh = await invoke(dir, ["run", "agent.agency"]);
+      expect(fresh.code, fresh.stderr).toBe(0);
+      writeFileSync(path.join(dir, "checkpoint.json"), checkpointFrom(fresh.stdout));
+
+      const valid = await invoke(dir, [
+        "resume",
+        "checkpoint.json",
+        "agent.agency",
+        "--arg",
+        'spec={"type":"daily","extra":1}',
+      ]);
+      expect(valid.code, valid.stderr).toBe(0);
+      expect(valid.stdout).toContain("CHECKED_VALUE:planned");
+      // The check did not run again: the key zod would drop is still there.
+      expect(valid.stdout).toContain('CHECKED_SPEC:{"type":"daily","extra":1}');
+
+      const invalid = await invoke(dir, [
+        "resume",
+        "checkpoint.json",
+        "agent.agency",
+        "--arg",
+        'spec="nope"',
+      ]);
+      expect(invalid.code, invalid.stderr).toBe(0);
+      expect(invalid.stdout).toContain('CHECKED_SPEC:"nope"');
+      expect(invalid.stdout).toContain("CHECKED_VALUE:planned");
     } finally {
       removeTemp(dir);
     }

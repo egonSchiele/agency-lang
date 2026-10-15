@@ -1,0 +1,14 @@
+def isStamp(value: string): Result<string> {
+  return success(value)
+}
+
+@validate(isStamp)
+type Stamp = string
+
+def schedule(label: string, when: Stamp! = "2026-10-16T09:00:00"): Result<string> {
+  return success("${label}:${when}")
+}
+
+node main() {
+  return schedule("standup")
+}

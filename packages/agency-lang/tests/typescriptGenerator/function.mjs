@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -189,7 +189,7 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  __takeArgOverrides(__ctx, __stack, [])
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -204,14 +204,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -220,6 +212,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -235,7 +228,7 @@ __stack.locals.foo = 1;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }
@@ -323,7 +316,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["a", "b"]);
+  if (__overridden !== undefined) {
+    a = __stack.args["a"];
+    b = __stack.args["b"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "add", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -338,22 +335,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("a" in __overrides) {
-    a = __overrides["a"];
-    __stack.args["a"] = a;
-  }
-  if ("b" in __overrides) {
-    b = __overrides["b"];
-    __stack.args["b"] = b;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -362,6 +343,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -380,7 +362,7 @@ await callHook(__run, {
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }

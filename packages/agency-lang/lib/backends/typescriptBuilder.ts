@@ -228,6 +228,14 @@ function walkMarkTopLevel(value: unknown): unknown {
   return out;
 }
 
+/** A parameter the function checks at entry: declared with `!` and given a
+ *  type to check against. The checks table, the preamble store, and the
+ *  step-0 names list all have to agree on this set, and `__checkParams`
+ *  throws when they do not, so it is decided in one place. */
+function isCheckedParam(param: FunctionParameter): boolean {
+  return param.validated === true && param.typeHint !== undefined;
+}
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -1018,15 +1026,41 @@ export class TypeScriptBuilder {
    * which runs Zod parse + the validator chain at each level.
    */
   private validateExpr(t: VariableType, value: TsNode): TsNode {
+    const check = this.validationFor(t);
+    return check.kind === "schema"
+      ? ts.validateType(value, check.schema)
+      : ts.validateChainRecursive(value, check.descriptor);
+  }
+
+  /** `__schemaCheck(() => <zod schema>)` or `__descriptorCheck(() => <descriptor>)`
+   *  for a `!` parameter of type `t`: the same choice `validateExpr` makes,
+   *  as a check the parameter table keeps. */
+  private paramCheckValidate(t: VariableType): TsNode {
+    const check = this.validationFor(t);
+    return check.kind === "schema"
+      ? ts.call(ts.id("__schemaCheck"), [ts.arrowFn([], check.schema)])
+      : ts.call(ts.id("__descriptorCheck"), [ts.arrowFn([], check.descriptor)]);
+  }
+
+  /** The one decision behind every `!` site, whether a checked cast or a
+   *  parameter: a type that reaches no `@validate(...)` tag is checked by
+   *  a zod schema alone, and a type that does is walked with a descriptor
+   *  that runs zod and the validator chain at each level. The two emitters
+   *  above only differ in how they wrap the result. */
+  private validationFor(
+    t: VariableType,
+  ): { kind: "schema"; schema: TsNode } | { kind: "descriptor"; descriptor: TsNode } {
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
     if (!typeRunsValidators(t, aliasesFull)) {
       const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
-      return ts.validateType(value, ts.raw(zodSchema));
+      return { kind: "schema", schema: ts.raw(zodSchema) };
     }
-    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
-    return ts.validateChainRecursive(value, descriptor);
+    return {
+      kind: "descriptor",
+      descriptor: buildValidationDescriptor(resolved, aliases, aliasesFull),
+    };
   }
 
   // ------- Proper IR node methods -------
@@ -2159,27 +2193,112 @@ export class TypeScriptBuilder {
    * For Result-returning functions: emit a pinned checkpoint at function entry
    * and a preamble that applies arg overrides on restore (for result.retry()).
    */
-  private buildResultCheckpointSetup(
-    functionName: string,
-    parameters: FunctionParameter[],
-  ): TsNode {
-    let paramsStr = "";
-    parameters.forEach((p) => {
-      paramsStr += `  if (${JSON.stringify(p.name)} in __overrides) {
-    ${p.name} = __overrides[${JSON.stringify(p.name)}];
-    __stack.args[${JSON.stringify(p.name)}] = ${p.name};
+  /** The preamble store of a `!` parameter: `paramStore`, skipped when the
+   *  frame already holds the slot. A fresh frame is empty, so the first
+   *  entry stores the argument as given and step 0 replaces it with the
+   *  checked value. A resume re-enters with the saved frame, and the saved
+   *  slot holds the checked value, which the argument as given must not
+   *  overwrite: a zod check drops unknown keys, so the two can differ. */
+  private checkedParamStore(param: FunctionParameter): TsNode {
+    const hasSlot = ts.methodCall(ts.id("Object"), "hasOwn", [
+      ts.stack("args"),
+      ts.str(param.name),
+    ]);
+    return ts.if(ts.not(hasSlot), ts.statements([this.paramStore(param)]));
   }
-`;
-    });
-    // moduleId/scopeName used to be threaded into the result-entry
-    // `createPinned` call. That call is now skipped (see template); the
-    // template only consumes `paramsStr` for the arg-override block.
-    void functionName;
-    const str = renderResultCheckpointSetup.default({
-      paramsStr,
-    });
 
-    return ts.raw(str);
+  /** `__stack.args["name"] = name`, with the default applied when the
+   *  argument was left unset. */
+  private paramStore(param: FunctionParameter): TsNode {
+    const stackTarget = $(ts.stack("args")).index(ts.str(param.name)).done();
+    if (!param.defaultValue) {
+      return ts.assign(stackTarget, ts.id(param.name));
+    }
+    return ts.assign(
+      stackTarget,
+      ts.ternary(
+        ts.binOp(ts.id(param.name), "===", ts.id("__UNSET")),
+        this.processNode(param.defaultValue),
+        ts.id(param.name),
+      ),
+    );
+  }
+
+  /** A function's `!` parameter checks, emitted once at module level as
+   *  `const __name_paramChecks = { name: { typeText, validate: __schemaCheck(() => ...) } }`.
+   *  `validate` is `__schemaCheck` for a type that runs no validator and
+   *  `__descriptorCheck` for one that reaches a `@validate` tag, the same
+   *  split `validateExpr` makes for a checked cast. Both build the schema or
+   *  descriptor on the first check and keep it. Empty when the function has
+   *  no `!` parameter. */
+  private paramChecksDecl(functionName: string, parameters: FunctionParameter[]): TsNode[] {
+    const checkedParams = parameters.filter(isCheckedParam);
+    if (checkedParams.length === 0) return [];
+    return [ts.constDecl(this.paramChecksName(functionName), this.paramChecksTable(checkedParams))];
+  }
+
+  private paramChecksTable(checkedParams: FunctionParameter[]): TsNode {
+    const entries: Record<string, TsNode> = {};
+    for (const param of checkedParams) {
+      entries[param.name] = ts.obj({
+        typeText: ts.str(formatTypeHint(param.typeHint!)),
+        validate: this.paramCheckValidate(param.typeHint!),
+      });
+    }
+    return ts.obj(entries);
+  }
+
+  /** The module-level name of a function's `!` parameter checks table. */
+  private paramChecksName(functionName: string): string {
+    return `__${functionName}_paramChecks`;
+  }
+
+  /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
+   *  followed by the halted return. */
+  private checkParamsCall(functionName: string, names: string[]): TsNode[] {
+    return [
+      ts.awaitCall(ts.id("__checkParams"), [
+        ts.runtime.run,
+        ts.id("runner"),
+        ts.id("__stack"),
+        ts.str(functionName),
+        ts.id(this.paramChecksName(functionName)),
+        ts.arr(names.map((name) => ts.str(name))),
+      ]),
+      ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
+    ];
+  }
+
+  private buildResultCheckpointSetup(): TsNode {
+    return ts.raw(renderResultCheckpointSetup.default({}));
+  }
+
+  /**
+   * The argument overrides a resume can carry (`agency resume --arg` or
+   * `restore(cp, { args })`). `__takeArgOverrides` writes the ones that
+   * name this frame into the argument slots and returns their names, or
+   * `undefined` when none were pending. The parameter locals are then
+   * re-read from the slots, since `onFunctionStart` reports them. Emitted
+   * in the preamble, after the stores and before step 0, in every
+   * function, so overrides addressed to a function with no parameters are
+   * still consumed. An override is checked only when step 0 runs on this
+   * entry; see "Overridden arguments" in
+   * docs/dev/language/validation-annotations.md.
+   */
+  private takeArgOverrides(parameters: FunctionParameter[]): TsNode[] {
+    const take = ts.call(ts.id("__takeArgOverrides"), [
+      ts.id("__ctx"),
+      ts.id("__stack"),
+      ts.arr(parameters.map((param) => ts.str(param.name))),
+    ]);
+    if (parameters.length === 0) return [take];
+    const reads = parameters.map((param) =>
+      ts.assign(ts.id(param.name), $(ts.stack("args")).index(ts.str(param.name)).done()),
+    );
+    return [
+      ts.constDecl("__overridden", take),
+      ts.if(ts.binOp(ts.id("__overridden"), "!==", ts.id("undefined")), ts.statements(reads)),
+    ];
   }
 
   /**
@@ -2191,7 +2310,6 @@ export class TypeScriptBuilder {
     functionName: string;
     parameters: FunctionParameter[];
     bodyCode: TsNode[];
-    skipHooks?: boolean;
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
     /** The def's compiled finalize (FinalizeCodegen.compileScope). The
@@ -2200,7 +2318,7 @@ export class TypeScriptBuilder {
      *  goes in the catch template. */
     finalize: CompiledScopeFinalize;
   }): TsNode[] {
-    const { functionName, parameters, bodyCode, skipHooks } = opts;
+    const { functionName, parameters, bodyCode } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
     const args = parameters.map((p) => p.name);
 
@@ -2248,34 +2366,20 @@ export class TypeScriptBuilder {
         ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.run])),
       ),
 
-      ...(skipHooks ? [] : [ts.time("__funcStartTime")]),
+      ts.time("__funcStartTime"),
     ];
 
-    // Param assignments to stack
+    // Every parameter is stored here, before any step, so a checkpoint
+    // taken at function entry has a complete frame. A plain parameter is
+    // stored on every entry. A `!` parameter is stored on the first entry
+    // only: step 0 replaces the slot with the checked value, and a resume
+    // keeps the checked value the frame was saved with.
     for (const param of parameters) {
-      const stackTarget = $(ts.stack("args")).index(ts.str(param.name)).done();
-      if (param.defaultValue) {
-        const defaultNode = this.processNode(param.defaultValue);
-        setupStmts.push(
-          ts.assign(
-            stackTarget,
-            ts.ternary(
-              ts.binOp(ts.id(param.name), "===", ts.id("__UNSET")),
-              defaultNode,
-              ts.id(param.name),
-            ),
-          ),
-        );
-      } else {
-        setupStmts.push(ts.assign(stackTarget, ts.id(param.name)));
-      }
+      setupStmts.push(
+        isCheckedParam(param) ? this.checkedParamStore(param) : this.paramStore(param),
+      );
     }
-
-    // __self.__destructiveRan init — see DestructiveTracking.init(). Read the
-    // flag from opts (threaded from processFunctionDefinition): by the time this
-    // runs the scope-manager flag has already been restored, so reading it here
-    // would always see false.
-    setupStmts.push(this.tracking.init(!!opts.inDestructiveFunction));
+    setupStmts.push(...this.takeArgOverrides(parameters));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2287,68 +2391,39 @@ export class TypeScriptBuilder {
     );
 
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
-    setupStmts.push(this.buildResultCheckpointSetup(functionName, parameters));
+    setupStmts.push(this.buildResultCheckpointSetup());
 
-    // Validation guards for parameters with ! (bang) syntax.
-    // Placed inside the try block so the finally cleanup (stateStack.pop) always runs.
-    const validationGuards: TsNode[] = [];
-    for (const param of parameters) {
-      if (param.validated && param.typeHint) {
-        const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
-        const vrName = `__vr_${param.name}`;
-        const vrId = ts.id(vrName);
-        validationGuards.push(
-          ts.constDecl(vrName, this.validateExpr(param.typeHint, stackArg)),
-          ts.if(
-            ts.not(ts.prop(vrId, "success")),
-            ts.return(
-              ts.invalidArgument({
-                functionName,
-                paramName: param.name,
-                typeText: formatTypeHint(param.typeHint),
-                value: stackArg,
-                failure: vrId,
-              }),
-            ),
-          ),
-          ts.assign(stackArg, ts.prop(vrId, "value")),
-        );
-      }
-    }
+    // The names of the `!` parameters, checked from step 0 against the
+    // module-level table `paramChecksDecl` emits. See the "step 0" section
+    // of docs/dev/language/validation-annotations.md.
+    const checkedNames = parameters.filter(isCheckedParam).map((param) => param.name);
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
-    // onFunctionStart fires inside the try at substep id 0 as a wrapped
-    // `await runner.hook(0, async () => await callHook(...))`. The
-    // runner.hook wrapper gives the hook substep-counter idempotency so
-    // it fires exactly once across resume cycles (without it the function
-    // would re-fire onFunctionStart on every resume). Callback bodies
-    // cannot raise interrupts (statically forbidden by the typechecker —
-    // see `checkCallbackBodyInterrupts`).
-    const onFunctionStartHook: TsNode[] = skipHooks
-      ? []
-      : [
-          ts.runnerHookStep({
-            id: 0,
-            body: [
-              ts.callHook("onFunctionStart", {
-                functionName: ts.str(functionName),
-                args: ts.obj(argsObj),
-                moduleId: ts.str(this.moduleId),
-              }),
-            ],
+    // Step 0 runs once and is skipped by a resume whose counter is past it.
+    // It checks the `!` parameters (a validator claims a frame, so it must
+    // not run again on a resume), sets the destructive flag after the
+    // checks so a refused argument leaves destructiveRan false, and fires
+    // onFunctionStart.
+    const onFunctionStartHook: TsNode[] = [
+      ts.runnerHookStep({
+        id: 0,
+        body: [
+          ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
+          this.tracking.init(!!opts.inDestructiveFunction),
+          ts.callHook("onFunctionStart", {
+            functionName: ts.str(functionName),
+            args: ts.obj(argsObj),
+            moduleId: ts.str(this.moduleId),
           }),
-        ];
+        ],
+      }),
+    ];
     if (opts.finalize.decl !== undefined) {
       setupStmts.push(opts.finalize.decl);
     }
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
-          // Validation guards stay OUTSIDE the agencyStore.run wrap:
-          // they emit `return __vr_x` for failures, and we need that
-          // value to escape the outer function, not just the inner
-          // async callback.
-          ...validationGuards,
           ...hoistedAliases,
           // Body-level ALS frame (defense-in-depth). Today every
           // callback site re-seeds ALS via Runner.runInScope, but the
@@ -2394,21 +2469,17 @@ export class TypeScriptBuilder {
         // without an outer agencyStore.run wrap).
         ts.statements([
           ts.raw("__run.stack.pop()"),
-          ...(skipHooks
-            ? []
-            : [
-                ts.if(
-                  ts.id("__functionCompleted"),
-                  ts.callHook("onFunctionEnd", {
-                    functionName: ts.str(functionName),
-                    timeTaken: $(ts.id("performance"))
-                      .prop("now")
-                      .call()
-                      .minus(ts.id("__funcStartTime"))
-                      .done(),
-                  }),
-                ),
-              ]),
+          ts.if(
+            ts.id("__functionCompleted"),
+            ts.callHook("onFunctionEnd", {
+              functionName: ts.str(functionName),
+              timeTaken: $(ts.id("performance"))
+                .prop("now")
+                .call()
+                .minus(ts.id("__funcStartTime"))
+                .done(),
+            }),
+          ),
         ]),
       ),
     );
@@ -2462,7 +2533,6 @@ export class TypeScriptBuilder {
       functionName,
       parameters,
       bodyCode: compiledFinalize.bodyCode,
-      skipHooks: false,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
       finalize: compiledFinalize,
@@ -2471,6 +2541,7 @@ export class TypeScriptBuilder {
     const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
     });
+    const paramChecks = this.paramChecksDecl(functionName, parameters);
 
     // Build AgencyFunction.create() params metadata
     // Include all params (including block-typed) so .partial() can bind them by name.
@@ -2529,7 +2600,7 @@ export class TypeScriptBuilder {
     // on AgencyFunction.create above still records the true visibility.
     const exportedConst = ts.export(constDecl);
 
-    return ts.statements([funcDecl, exportedConst]);
+    return ts.statements([...paramChecks, funcDecl, exportedConst]);
   }
 
   private processStatement(node: AgencyNode): TsNode {

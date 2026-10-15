@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "resumes",
+      "description": "A validator from another module runs once across a resume",
+      "input": "",
+      "expectedOutput": "[\"09:00\",1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "refuses",
+      "description": "A bang parameter of an imported type is refused with the usual message",
+      "input": "",
+      "expectedOutput": "\"Argument \\\"when\\\" of schedule must be Stamp, but received the number 7.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

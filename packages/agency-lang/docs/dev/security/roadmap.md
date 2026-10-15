@@ -158,6 +158,16 @@ with the caller holding only an id plus replay protection on that id — see
 "who can change it" in `docs/dev/hosting/how-hosted-serving-works.md`. Not
 filed yet.
 
+A `!` parameter's argument slot is one of those locals. Since #1197 the
+check runs inside the function's step 0, which a resume skips, so a slot
+edited in the checkpoint reaches the body unchecked. Before that the slot
+was re-checked on every entry, but the re-check desynced the stack when
+the validator was an Agency function, so it only ever held for zod-only
+types. The same goes for an argument override a resume carries (#1198).
+Re-checking on resume would need the validator to run on a scratch stack
+so it claims no saved frame. See "An edited checkpoint is not re-checked"
+in `docs/dev/language/validation-annotations.md`.
+
 ### B3. The sandbox flags do not imply a policy (#970)
 
 <https://github.com/egonSchiele/agency-lang/issues/970>. `--agency-only`

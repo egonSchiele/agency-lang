@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -193,7 +193,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["c"] = c;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["c"]);
+  if (__overridden !== undefined) {
+    c = __stack.args["c"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0008.agency", scopeName: "toDigit", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -208,18 +211,6 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (
-  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
-  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
-) {
-  const __overrides = __ctx._pendingArgOverrides.values;
-  __ctx._pendingArgOverrides = undefined;
-  if ("c" in __overrides) {
-    c = __overrides["c"];
-    __stack.args["c"] = c;
-  }
-
-}
 
   try {
     await __withChildRun(__run, {
@@ -228,6 +219,7 @@ if (
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
+__self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -373,7 +365,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }

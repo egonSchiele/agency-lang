@@ -57,9 +57,9 @@ describe("DestructiveTracking", () => {
     );
   });
 
-  it("exitStamp() folds the flag into the halt result", () => {
+  it("exitStamp() folds the flag into the halt result, false when step 0 never set it", () => {
     expect(printTs(bareTracker().exitStamp()).trim()).toBe(
-      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan)",
+      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)",
     );
   });
 

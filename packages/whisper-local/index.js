@@ -33,6 +33,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -59,7 +60,9 @@ const __globalCtx = new RuntimeContext({
       openRouter: __host.settings.read("OPENROUTER_API_KEY") || "",
       deepInfra: __host.settings.read("DEEPINFRA_API_KEY") || "",
       liteLlm: __host.settings.read("LITELLM_API_KEY") || "",
-      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || ""
+      openAiCompat: __host.settings.read("OPENAI_COMPAT_API_KEY") || "",
+      groq: __host.settings.read("GROQ_API_KEY") || "",
+      typesafe: __host.settings.read("TYPESAFE_API_KEY") || ""
     },
     baseUrl: {
       liteLlm: __host.settings.read("LITELLM_BASE_URL") || "",
@@ -127,7 +130,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "547509db176c1acabfc23e5572b679c141d1bcafc6f9bd48b50e02e315e26d4a");
+__registerModuleFingerprint("index.agency", "037788f497a075adbc375bf6dbd21c4f9825db6e870ba8ef78a0b8b9d4f6a454");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -188,25 +191,14 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
   __stack.args["filepath"] = filepath;
   __stack.args["language"] = language === __UNSET ? `` : language;
   __stack.args["model"] = model === __UNSET ? `base.en` : model;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["filepath", "language", "model"]);
+  if (__overridden !== void 0) {
+    filepath = __stack.args["filepath"];
+    language = __stack.args["language"];
+    model = __stack.args["model"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-    const __overrides = __ctx._pendingArgOverrides.values;
-    __ctx._pendingArgOverrides = void 0;
-    if ("filepath" in __overrides) {
-      filepath = __overrides["filepath"];
-      __stack.args["filepath"] = filepath;
-    }
-    if ("language" in __overrides) {
-      language = __overrides["language"];
-      __stack.args["language"] = language;
-    }
-    if ("model" in __overrides) {
-      model = __overrides["model"];
-      __stack.args["model"] = model;
-    }
-  }
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -214,6 +206,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -238,7 +231,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

@@ -280,6 +280,166 @@ private to `validateChain.ts`.
 
 ---
 
+## Where a `!` parameter is checked: step 0
+
+A function checks its `!` parameters inside step 0, the `runner.hook(0, ...)`
+that also fires `onFunctionStart`. Shortened, the generated code for a
+function with one plain and one checked parameter is:
+
+```ts
+const __schedule_paramChecks = {        // once per module, next to the function
+  when: {
+    typeText: "Stamp",
+    validate: __descriptorCheck(() => ({ kind: "ref", get: () => (Stamp as any).__agency_descriptor })),
+  },
+};
+async function __schedule_impl(__run: __Run, label: string, when: string) {
+  ...
+  __stack.args["label"] = label;        // a plain parameter: stored on every entry
+  if (!Object.hasOwn(__stack.args, "when")) {
+    __stack.args["when"] = when;        // a `!` parameter: stored on the first entry
+  }
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["label", "when"]);
+  if (__overridden !== undefined) {     // a resume's --arg or restore(cp, { args })
+    label = __stack.args["label"];
+    when = __stack.args["when"];
+  }
+  ...
+  try {
+    await __withChildRun(..., async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+        await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, ["when"]);
+        if (runner.halted) {
+          return;
+        }
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        await callHook(__run, { name: "onFunctionStart", ... });
+      });
+      await runner.step(1, ...);        // the body starts here
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+      }
+      return runner.haltResult;
+    }
+  }
+}
+```
+
+The checks table has one entry per `!` parameter: the type text for the
+failure message, and the check for the type. `__schemaCheck` wraps a zod
+schema for a type that runs no validator, and `__descriptorCheck` wraps a
+descriptor for a type that reaches a `@validate` tag, the same split
+`validateExpr` makes for a checked cast. The table is declared once at
+module level, and each check builds its schema or descriptor the first
+time it runs and keeps it. `__checkParams` in
+`lib/runtime/paramChecks.ts` runs the named checks in order. It reads each
+argument from the frame, halts the runner with the `__invalidArgument`
+failure on the first miss, and stores the checked value back on each
+pass. The body's steps see the halt and skip, and the function returns
+the failure.
+
+### Why step 0
+
+A `@validate` function is an Agency function, so it claims a frame from
+the state stack when it runs. On a resume the stack hands out the saved
+frames in order. A check that ran outside every step would run on every
+resume, and when the function had paused inside a callee, the validator
+would claim that callee's saved frame and the run would stop with
+`Resume desync: function "check" tried to claim the saved state of "ask"`.
+Step 0 runs once and is skipped by any resume whose counter is past it,
+so a validator never runs twice for one call.
+
+Every argument is stored in the preamble, before any step, so a
+checkpoint taken at function entry (a pause requested while the function
+is being entered, or a guard trip at hook 0) holds a complete frame for
+the debugger, the logs viewer, and `restore(cp, { args })`. A plain
+parameter is stored on every entry. A `!` parameter is stored only when
+the frame has no slot for it yet, because a check can change the value:
+zod drops unknown keys, so `{ "type": "daily", "extra": 1 }` becomes
+`{ "type": "daily" }` in step 0. A fresh frame is empty, so the first
+entry stores the argument as given. A resume re-enters with the saved
+frame, whose slot holds the checked value, and the argument as given
+must not overwrite it. A default that names an earlier parameter reads
+the argument as given, before its check.
+
+The destructive flag is set after the checks. A `destructive def` commits
+its whole body at entry, but a refused argument never enters, so the
+failure leaves with `destructiveRan` false. The exit stamp reads the flag
+with `?? false` because a halt from step 0 happens before the flag is set.
+
+`onFunctionStart` reports the arguments as given, not the checked values.
+
+### Overridden arguments are applied as given
+
+A resume can replace a paused function's arguments: `agency resume --arg`
+through `restoreForResume`, and `restore(cp, { args })` through
+`applyRestoreSignal`. Both leave the values in `_pendingArgOverrides` on
+the execution context, keyed by module and scope name. When the function
+re-enters, `__takeArgOverrides` in `lib/runtime/argOverrides.ts` writes
+the overrides that name a parameter into the argument slots, clears the
+pending overrides, and returns the overridden names. It runs in the
+preamble of every function, before step 0.
+
+An overridden `!` argument is not checked, except in one case. A resume
+skips step 0, so the body sees the override as given: `restore(cp, {
+args: { spec: "nope" } })` inside `plan(spec: { type: "daily" }!)` puts
+`"nope"` in `spec`. The one case that is checked is a frame that paused
+before step 0 ran (`runner.hook` can pause or trip a guard before it
+reads the counter), because the override is written first and step 0
+then checks it. The gap is #1198. Checking in place after step 0 was
+tried and dropped: a `@validate` function run during a resume replay
+claims the paused callee's saved frame, and a failed check leaves that
+callee chain queued. Restarting the function with the new arguments
+would throw away the interrupt approval the resume carries. The issue
+records the option left, a validator run on a scratch stack.
+
+The responders a compiled module exports, `respondToInterrupts` and its
+serve twin, take local overrides only; argument overrides reach a
+function through `agency resume` and `restore`.
+
+### An edited checkpoint is not re-checked
+
+Before step 0 existed, every entry re-ran a `!` check on the argument as
+given, so a checkpoint whose argument slot had been edited by hand was
+checked again on resume. That re-run is what desynced the stack whenever
+the validator was an Agency function, so it only ever held for types
+checked by zod alone. Now a resume keeps the saved slot and skips step 0,
+so an edited slot reaches the body unchecked, like every other local in
+the frame. The guard for an edited checkpoint is its signature
+(`docs/dev/runtime/checkpoint-integrity.md`); the gap is recorded under
+B2 in `docs/dev/security/roadmap.md`.
+
+### A validator that pauses
+
+A checked cast, `x as T!`, supports a validator that raises an interrupt:
+the hoist pass puts the cast on its own step, the assignment's interrupt
+guard halts with the interrupts, and on resume the step re-runs and the
+validator re-enters its own saved frame. A `!` parameter check does not.
+`__checkParams` gets the interrupt list back, and halts with a failure
+that says the parameter could not be checked and points at a cast on its
+own line.
+
+A validator that was aborted is different. When the user cancels or a
+guard trips while a `@validate` function is running, the walk hands back
+an `AbortedResult`, not a failure. `__checkParams` rethrows it as the
+abort exception, so the function's catch turns it back into an aborted
+result and the abort travels up as it would from any other step. A
+checked cast does the same with `isAborted` right after its interrupt
+guard. Treating the abort as a failed check would report the parameter
+as invalid and let the current step keep running on a stopped run.
+
+Adding the support would go through step 0, since a pause inside it
+leaves the counter at 0 and the hook re-runs on resume. Two gaps have to
+close first. The walk runs a type's validators one after another in plain
+TypeScript, so when the second pauses, the resume re-runs the first,
+which has no saved frame, and it claims the second's; casts have the same
+gap. And an override check that paused would leave the raw value in the
+frame with the override already consumed.
+
+---
+
 ## Validator dispatch
 
 A validator is either an Agency `def` (`AgencyFunction`) or a plain JS
@@ -406,6 +566,8 @@ since `.meta()`'s semantics only matter at runtime.
 | `lib/backends/typescriptGenerator/tagArgToTs.ts`                                      | prints a tag argument as a TS source string                            |
 | `lib/backends/typescriptBuilder.ts`                                                    | emits `(Alias as any).__agency_descriptor = ...` and `!`-site validation calls |
 | `lib/runtime/validateChain.ts`                                                        | `__validateChain` / `__validateChainRecursive` / the predicate-contract check |
+| `lib/runtime/paramChecks.ts`                                                          | `__checkParams`: runs a function's `!` parameter checks from step 0, halts on the first miss, stores the checked values; `__schemaCheck` and `__descriptorCheck`, the memoized checks the table holds |
+| `lib/runtime/argOverrides.ts`                                                         | `__takeArgOverrides`: writes a resume's argument overrides into the frame before step 0 and returns the overridden names                             |
 | `lib/runtime/invalidArgument.ts`                                                      | `__invalidArgument`: rewords a failed `!` parameter so a model calling the function as a tool can correct it |
 | `stdlib/validation.agency`                                                            | the pre-baked validators and the annotated aliases (`Email`, `NumberInRange`, …) |
 

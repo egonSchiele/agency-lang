@@ -397,29 +397,6 @@ export const ts = {
   },
 
   /**
-   * `__invalidArgument({ functionName, paramName, typeText, value, failure })`:
-   * the failure a function returns when a validated (`!`) parameter does not
-   * fit, reworded so a model calling the function as a tool can correct it.
-   */
-  invalidArgument(arg: {
-    functionName: string;
-    paramName: string;
-    typeText: string;
-    value: TsNode;
-    failure: TsNode;
-  }): TsCall {
-    return ts.call(ts.id("__invalidArgument"), [
-      ts.obj({
-        functionName: ts.str(arg.functionName),
-        paramName: ts.str(arg.paramName),
-        typeText: ts.str(arg.typeText),
-        value: arg.value,
-        failure: arg.failure,
-      }),
-    ]);
-  },
-
-  /**
    * `await __validateChainRecursive(__run, value, <descriptor>)` — used at
    * `!` sites whose resolved type carries at least one `@validate(...)` tag
    * anywhere in the tree. The descriptor is a TS expression built via
@@ -562,11 +539,10 @@ export const ts = {
    * per-scope frame.
    *
    * NOTE: `return` statements inside the wrapped body escape only the
-   * inner async callback, not the outer function. Validation guards
-   * that return a non-`undefined` value (e.g. `return __vr_x` for a
-   * validation failure) must stay outside the wrap so the outer
-   * function actually returns the value to its caller. The bare
-   * `return;` emitted by `runnerHalt` is fine: after the callback
+   * inner async callback, not the outer function. Nothing inside the
+   * wrap returns a value: a `!` parameter check that fails halts the
+   * runner from step 0 (see `__checkParams`), and the bare `return;`
+   * emitted by `runnerHalt` is fine, because after the callback
    * returns, the outer `if (runner.halted) return runner.haltResult;`
    * check picks up the halted result.
    */

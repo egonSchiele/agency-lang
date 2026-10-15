@@ -38,10 +38,11 @@ export class DestructiveTracking {
    *  ever computing `x || undefined`. */
   init(inDestructiveFunction: boolean): TsNode {
     // A `destructive def` commits its whole body: set the flag true at entry.
-    // `init()` runs AFTER argument binding, so an arg-binding failure that halts
-    // before it stays retryable (`neverStarted`). A non-destructive function
-    // keeps the `?? false` default so an externally set value (decision-8, or a
-    // `destructive { }` region's flip) is preserved.
+    // `init()` runs inside step 0, after the `!` parameter checks, so a
+    // refused argument halts before it and the failure leaves with
+    // destructiveRan false. A non-destructive function keeps the `?? false`
+    // default so an externally set value (decision-8, or a `destructive { }`
+    // region's flip) is preserved.
     return ts.assign(
       ts.self("__destructiveRan"),
       inDestructiveFunction
@@ -54,9 +55,11 @@ export class DestructiveTracking {
    *  expression the function-exit halt check embeds to fold this activation's
    *  flag into a departing failure. */
   exitStamp(): TsNode {
+    // A `!` parameter check that fails halts before `init()` has run, so
+    // the slot can be unset here.
     return ts.call(ts.id("stampFailureBoundary"), [
       ts.prop(ts.id("runner"), "haltResult"),
-      ts.self("__destructiveRan"),
+      ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
     ]);
   }
 

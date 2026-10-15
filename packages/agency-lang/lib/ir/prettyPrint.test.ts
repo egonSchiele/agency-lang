@@ -135,6 +135,11 @@ describe("prettyPrint", () => {
     expect(printTs(fn)).toBe("(x) => {\n  return x + 1;\n}");
   });
 
+  it("TsArrowFn object literal body is parenthesized", () => {
+    const fn = ts.arrowFn([], ts.obj({ kind: ts.str("ref") }));
+    expect(printTs(fn)).toBe('() => ({\n  kind: "ref"\n})');
+  });
+
   it("TsArrowFn async", () => {
     const fn = ts.arrowFn([], ts.call(ts.id("fetch"), []), { async: true });
     expect(printTs(fn)).toBe("async () => fetch()");

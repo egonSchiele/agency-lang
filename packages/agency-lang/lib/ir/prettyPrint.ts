@@ -101,7 +101,11 @@ export function printTs(node: TsNode, indent = 0): string {
         const body = printBody(node.body, indent);
         return `${prefix}${params}${ret} => {\n${body}\n${ind(indent)}}`;
       }
-      return `${prefix}${params}${ret} => ${printTs(node.body, indent)}`;
+      // An object literal as the expression body must be wrapped, or
+      // `() => { "kind": "ref" }` parses as a block.
+      const body = printTs(node.body, indent);
+      const expr = node.body.kind === "objectLiteral" ? `(${body})` : body;
+      return `${prefix}${params}${ret} => ${expr}`;
     }
 
     case "call": {

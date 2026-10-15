@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { __checkParams } from "./paramChecks.js";
+import { __checkParams, __descriptorCheck, __schemaCheck } from "./paramChecks.js";
 import type { ParamChecks } from "./paramChecks.js";
 import { failure, isFailure, success } from "./result.js";
 import { __validateType } from "./schema.js";
@@ -18,6 +18,30 @@ const number: ParamChecks[string] = {
   typeText: "number",
   validate: (_run, value) => __validateType(value, z.number()),
 };
+
+describe("__schemaCheck and __descriptorCheck", () => {
+  it("builds the schema once and checks every value against it", async () => {
+    let builds = 0;
+    const validate = __schemaCheck(() => {
+      builds += 1;
+      return z.number();
+    });
+    expect(await validate(run, 1)).toEqual(success(1));
+    expect(isFailure(await validate(run, "x"))).toBe(true);
+    expect(builds).toBe(1);
+  });
+
+  it("builds the descriptor once", async () => {
+    let builds = 0;
+    const validate = __descriptorCheck(() => {
+      builds += 1;
+      return { kind: "leaf", schema: z.string(), validators: [] };
+    });
+    expect(await validate(run, "a")).toEqual(success("a"));
+    expect(await validate(run, "b")).toEqual(success("b"));
+    expect(builds).toBe(1);
+  });
+});
 
 describe("__checkParams", () => {
   it("stores every checked value when every check passes", async () => {
@@ -124,7 +148,7 @@ describe("__checkParams", () => {
     await __checkParams(run, runner, frame, "schedule", checks, ["when"]);
     const halted = runner.halts[0];
     expect(isFailure(halted) && halted.error).toBe(
-      'Argument "when" of schedule could not be checked: a validator for Stamp returned the boolean true instead of a success or a failure.',
+      'Argument "when" of schedule could not be checked: a validator for Stamp returned true instead of a success or a failure.',
     );
     expect(frame.args).toEqual({ when: "09:00" });
   });

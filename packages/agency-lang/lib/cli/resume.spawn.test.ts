@@ -231,7 +231,7 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
     }
   }, 120_000);
 
-  it("checks an overridden bang argument before the function body sees it", async () => {
+  it("applies an overridden bang argument as given, without checking it (#1198)", async () => {
     const dir = mkdtempSync(path.join(process.cwd(), ".agency-resume-spawn-"));
     try {
       writeFileSync(path.join(dir, "agent.agency"), CHECKED_FUNCTION_SOURCE);
@@ -248,8 +248,8 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
       ]);
       expect(valid.code, valid.stderr).toBe(0);
       expect(valid.stdout).toContain("CHECKED_VALUE:planned");
-      // The check ran: zod dropped the key the override smuggled in.
-      expect(valid.stdout).toContain('CHECKED_SPEC:{"type":"daily"}');
+      // The check did not run again: the key zod would drop is still there.
+      expect(valid.stdout).toContain('CHECKED_SPEC:{"type":"daily","extra":1}');
 
       const invalid = await invoke(dir, [
         "resume",
@@ -259,9 +259,8 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
         'spec="nope"',
       ]);
       expect(invalid.code, invalid.stderr).toBe(0);
-      expect(invalid.stdout).toContain(
-        'CHECKED_FAILURE:Argument "spec" of plan must be { type: "daily" }, but received the text "nope".',
-      );
+      expect(invalid.stdout).toContain('CHECKED_SPEC:"nope"');
+      expect(invalid.stdout).toContain("CHECKED_VALUE:planned");
     } finally {
       removeTemp(dir);
     }

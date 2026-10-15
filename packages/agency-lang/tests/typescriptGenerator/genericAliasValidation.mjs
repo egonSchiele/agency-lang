@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -180,7 +180,7 @@ __functionRefReviver.registry = __toolRegistry;
 const __process_paramChecks = {
   c: {
     typeText: "Container<number>",
-    validate: async (__run: __Run, value: unknown) => __validateType(value, z.object({ "value": z.number() }))
+    validate: __schemaCheck(() => z.object({ "value": z.number() }))
   }
 };
 async function __process_impl(__run: __Run, c: Container<number>) {
@@ -218,7 +218,6 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
-  let __entryChecked = false;
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -230,7 +229,6 @@ await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["
 if (runner.halted) {
           return;
         }
-__entryChecked = true;
 __self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
@@ -243,12 +241,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted && __overridden !== undefined && !__entryChecked) {
-        await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["c"].filter((name) => __overridden.includes(name)))
-        if (runner.halted) {
-          return;
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
           type: "positional",

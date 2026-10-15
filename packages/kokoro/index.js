@@ -137,7 +137,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "9a795b2ec6092ca6b37ccecdcc7b0f50c9c1f48f21be6e59b314bcd42e2eb2ca");
+__registerModuleFingerprint("index.agency", "08b9f2f9d71ba2d06e04da1e93385ffbb3fdfb62da89722ad7cfd68814ad1e80");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -867,6 +867,7 @@ async function __voices_impl(__run) {
     await __initializeGlobals(__run);
   }
   let __funcStartTime = performance.now();
+  __takeArgOverrides(__ctx, __stack, []);
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {

@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -326,12 +326,12 @@ type Stamp = z.infer<typeof Stamp>;
 const __schedule_paramChecks = {
   when: {
     typeText: "Stamp",
-    validate: async (__run: __Run, value: unknown) => await __validateChainRecursive(__run, value, {
+    validate: __descriptorCheck(() => ({
       "kind": "ref",
       "get": () => {
         return (Stamp as any).__agency_descriptor;
       }
-    })
+    }))
   }
 };
 async function __schedule_impl(__run: __Run, label: string, when: Stamp | typeof __UNSET = __UNSET) {
@@ -371,7 +371,6 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
-  let __entryChecked = false;
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -383,7 +382,6 @@ await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, 
 if (runner.halted) {
           return;
         }
-__entryChecked = true;
 __self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
@@ -397,12 +395,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted && __overridden !== undefined && !__entryChecked) {
-        await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, ["when"].filter((name) => __overridden.includes(name)))
-        if (runner.halted) {
-          return;
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await success(`${__stack.args.label}:${__stack.args.when}`))

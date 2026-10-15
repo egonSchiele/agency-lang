@@ -1029,6 +1029,21 @@ export class TypeScriptBuilder {
     return ts.validateChainRecursive(value, descriptor);
   }
 
+  /** `__schemaCheck(() => <zod schema>)` or `__descriptorCheck(() => <descriptor>)`
+   *  for a `!` parameter of type `t`: the same choice `validateExpr` makes,
+   *  as a check the parameter table keeps. */
+  private paramCheckValidate(t: VariableType): TsNode {
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    const resolved = resolveTypeDeep(t, aliasesFull);
+    const aliases = this.scopes.visibleTypeAliases();
+    if (!typeRunsValidators(t, aliasesFull)) {
+      const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
+      return ts.call(ts.id("__schemaCheck"), [ts.arrowFn([], ts.raw(zodSchema))]);
+    }
+    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
+    return ts.call(ts.id("__descriptorCheck"), [ts.arrowFn([], descriptor)]);
+  }
+
   // ------- Proper IR node methods -------
 
   private processComment(node: AgencyComment): TsNode {
@@ -2191,13 +2206,12 @@ export class TypeScriptBuilder {
   }
 
   /** A function's `!` parameter checks, emitted once at module level as
-   *  `const __name_paramChecks = { name: { typeText, validate: (__run, value) => ... } }`.
-   *  `validate` wraps the expression `validateExpr` emits for the
-   *  parameter's type, so the schema fast path and the `@validate` walk both
-   *  go through the one runtime helper. The schema or descriptor inside the
-   *  arrow is built when the check runs, as it was when the table sat inside
-   *  the function, so a type alias declared below the function still
-   *  resolves. Empty when the function has no `!` parameter. */
+   *  `const __name_paramChecks = { name: { typeText, validate: __schemaCheck(() => ...) } }`.
+   *  `validate` is `__schemaCheck` for a type that runs no validator and
+   *  `__descriptorCheck` for one that reaches a `@validate` tag, the same
+   *  split `validateExpr` makes for a checked cast. Both build the schema or
+   *  descriptor on the first check and keep it. Empty when the function has
+   *  no `!` parameter. */
   private paramChecksDecl(functionName: string, parameters: FunctionParameter[]): TsNode[] {
     const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
     if (checkedParams.length === 0) return [];
@@ -2209,14 +2223,7 @@ export class TypeScriptBuilder {
     for (const param of checkedParams) {
       entries[param.name] = ts.obj({
         typeText: ts.str(formatTypeHint(param.typeHint!)),
-        validate: ts.arrowFn(
-          [
-            { name: "__run", typeAnnotation: "__Run" },
-            { name: "value", typeAnnotation: "unknown" },
-          ],
-          this.validateExpr(param.typeHint!, ts.id("value")),
-          { async: true },
-        ),
+        validate: this.paramCheckValidate(param.typeHint!),
       });
     }
     return ts.obj(entries);
@@ -2228,10 +2235,8 @@ export class TypeScriptBuilder {
   }
 
   /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
-   *  followed by the halted return. `names` is the literal list of `!`
-   *  parameter names, or an expression that evaluates to a subset of it. */
-  private checkParamsCall(functionName: string, names: string[] | TsNode): TsNode[] {
-    const namesNode = Array.isArray(names) ? ts.arr(names.map((name) => ts.str(name))) : names;
+   *  followed by the halted return. */
+  private checkParamsCall(functionName: string, names: string[]): TsNode[] {
     return [
       ts.awaitCall(ts.id("__checkParams"), [
         ts.runtime.run,
@@ -2239,7 +2244,7 @@ export class TypeScriptBuilder {
         ts.id("__stack"),
         ts.str(functionName),
         ts.id(this.paramChecksName(functionName)),
-        namesNode,
+        ts.arr(names.map((name) => ts.str(name))),
       ]),
       ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
     ];
@@ -2255,17 +2260,19 @@ export class TypeScriptBuilder {
    * name this frame into the argument slots and returns their names, or
    * `undefined` when none were pending. The parameter locals are then
    * re-read from the slots, since `onFunctionStart` reports them. Emitted
-   * in the preamble, after the stores and before step 0, so a frame that
-   * paused at entry checks the overridden value in step 0. Empty when the
-   * function has no parameters.
+   * in the preamble, after the stores and before step 0, in every
+   * function, so overrides addressed to a function with no parameters are
+   * still consumed. An override is checked only when step 0 runs on this
+   * entry; see "Overridden arguments" in
+   * docs/dev/language/validation-annotations.md.
    */
   private takeArgOverrides(parameters: FunctionParameter[]): TsNode[] {
-    if (parameters.length === 0) return [];
     const take = ts.call(ts.id("__takeArgOverrides"), [
       ts.id("__ctx"),
       ts.id("__stack"),
       ts.arr(parameters.map((param) => ts.str(param.name))),
     ]);
+    if (parameters.length === 0) return [take];
     const reads = parameters.map((param) =>
       ts.assign(ts.id(param.name), $(ts.stack("args")).index(ts.str(param.name)).done()),
     );
@@ -2273,34 +2280,6 @@ export class TypeScriptBuilder {
       ts.constDecl("__overridden", take),
       ts.if(ts.binOp(ts.id("__overridden"), "!==", ts.id("undefined")), ts.statements(reads)),
     ];
-  }
-
-  /**
-   * The check of the overridden `!` parameters when step 0 did not run
-   * on this entry: a resume whose counter is past step 0 skips it, and
-   * the overrides were written after the frame was saved. Emitted just
-   * after step 0, inside the body wrap, so a failed check halts the same
-   * way step 0 does and the `finally` still pops the frame. Skipped when
-   * step 0 halted. Empty when the function has no `!` parameter.
-   */
-  private overriddenChecks(functionName: string, checkedNames: string[]): TsNode[] {
-    if (checkedNames.length === 0) return [];
-    const toCheck = ts.methodCall(ts.arr(checkedNames.map((name) => ts.str(name))), "filter", [
-      ts.arrowFn(
-        [{ name: "name" }],
-        ts.methodCall(ts.id("__overridden"), "includes", [ts.id("name")]),
-      ),
-    ]);
-    const condition = ts.binOp(
-      ts.binOp(
-        ts.not(ts.prop(ts.id("runner"), "halted")),
-        "&&",
-        ts.binOp(ts.id("__overridden"), "!==", ts.id("undefined")),
-      ),
-      "&&",
-      ts.not(ts.id("__entryChecked")),
-    );
-    return [ts.if(condition, ts.statements(this.checkParamsCall(functionName, toCheck)))];
   }
 
   /**
@@ -2401,11 +2380,6 @@ export class TypeScriptBuilder {
     const checkedNames = parameters
       .filter((param) => param.validated && param.typeHint)
       .map((param) => param.name);
-    // Set by step 0 once the checks passed, so the override check after it
-    // knows whether this entry ran step 0 or skipped it.
-    if (checkedNames.length > 0) {
-      setupStmts.push(ts.letDecl("__entryChecked", ts.bool(false)));
-    }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // Step 0 runs once and is skipped by a resume whose counter is past it.
@@ -2417,12 +2391,7 @@ export class TypeScriptBuilder {
       ts.runnerHookStep({
         id: 0,
         body: [
-          ...(checkedNames.length === 0
-            ? []
-            : [
-                ...this.checkParamsCall(functionName, checkedNames),
-                ts.assign(ts.id("__entryChecked"), ts.bool(true)),
-              ]),
+          ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
           this.tracking.init(!!opts.inDestructiveFunction),
           ts.callHook("onFunctionStart", {
             functionName: ts.str(functionName),
@@ -2453,11 +2422,7 @@ export class TypeScriptBuilder {
             ctx: ts.id("__ctx"),
             stack: $(ts.id("__setupData")).prop("stateStack").done(),
             threads: $(ts.id("__setupData")).prop("threads").done(),
-            body: [
-              ...onFunctionStartHook,
-              ...this.overriddenChecks(functionName, checkedNames),
-              ...bodyCode,
-            ],
+            body: [...onFunctionStartHook, ...bodyCode],
           }),
           // if (runner.halted) { if (isFailure(runner.haltResult)) { <stamp>; }
           //   return runner.haltResult; }

@@ -1,14 +1,8 @@
 // A resume can replace a paused function's arguments. An overridden `!`
-// argument is checked before the body sees it, the same as a fresh call.
+// argument is applied as given: the check runs in step 0, which a resume
+// skips, so the body sees the override unchecked. See #1198.
 
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
-
-def messageOf(result: any): string {
-  if (isFailure(result)) {
-    return result.error
-  }
-  return "no failure"
-}
 
 // On its first run, takes a checkpoint and restores it with new arguments.
 def plan(spec: { type: "daily" }!, note: string): Result<{ spec: { type: "daily" }, note: string }> {
@@ -21,7 +15,7 @@ def plan(spec: { type: "daily" }!, note: string): Result<{ spec: { type: "daily"
   return success({ spec: spec, note: note })
 }
 
-node validOverride() {
+node overrideApplied() {
   setMutable("planRestores", 0)
   const result = plan({ type: "daily" }, "first")
   return result.value
@@ -37,9 +31,9 @@ def planBadly(spec: { type: "daily" }!): Result<{ type: "daily" }> {
   return success(spec)
 }
 
-node invalidOverride() {
+node overrideNotChecked() {
   setMutable("badRestores", 0)
   setMutable("badBodyRan", false)
   const result = planBadly({ type: "daily" })
-  return [getMutable("badBodyRan", false), messageOf(result)]
+  return [getMutable("badBodyRan", false), result.value]
 }

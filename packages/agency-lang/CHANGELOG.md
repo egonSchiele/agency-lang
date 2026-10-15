@@ -1,3 +1,8 @@
+## Oct 15 2026 — v0.30.0
+
+- When a tool call fails because argument validation failed, give a more descriptive message to the LLM. Right now, we just say something generic, like "expected object." With this change, we say exactly what the schema of the object is.
+- There was an issue with functions that had argument validation with custom validators. Those functions didn't resume correctly after an interrupt, because the validation would run again and grab the wrong frame off the stack. With this change, the validation no longer reruns after resuming.
+
 ## Oct 13 2026 — v0.29.0
 
 ### Language

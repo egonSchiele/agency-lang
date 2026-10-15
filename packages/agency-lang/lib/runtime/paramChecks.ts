@@ -1,4 +1,6 @@
 import type { z } from "zod";
+import { isAborted } from "./abortedResult.js";
+import type { AbortedResult } from "./abortedResult.js";
 import type { Run } from "./asyncContext.js";
 import { hasInterrupts } from "./interrupts.js";
 import type { Interrupt } from "./interrupts.js";
@@ -9,9 +11,10 @@ import { __validateType } from "./schema.js";
 import { __validateChainRecursive } from "./validateChain.js";
 import type { TypeValidationDescriptor } from "./validateChain.js";
 
-/** What a validation hands back: the checked value, a failure, or the
- *  interrupts a `@validate` function raised. */
-export type CheckOutcome = ResultValue | Interrupt[];
+/** What a validation hands back: the checked value, a failure, the
+ *  interrupts a `@validate` function raised, or the abort that stopped
+ *  the validator (a cancel or a guard trip). */
+export type CheckOutcome = ResultValue | Interrupt[] | AbortedResult;
 
 /** One `!` parameter's check: the type text for the failure message, and
  *  the validation the compiler chose for the type. */
@@ -56,6 +59,11 @@ export type ArgFrame = {
  * interrupt comes back as an interrupt list; a parameter check cannot
  * pause, so that halts with a failure too. So does anything else a
  * validator written in TypeScript might hand back.
+ *
+ * A validator that was aborted (the user cancelled, or a guard tripped)
+ * comes back as an `AbortedResult`. That is not a failed check: the abort
+ * is rethrown as the exception the function's catch turns back into an
+ * aborted result, the same way a checked cast rethrows it.
  */
 export async function __checkParams(
   run: Run,
@@ -89,6 +97,9 @@ export async function __checkParams(
         }),
       );
       return;
+    }
+    if (isAborted(outcome)) {
+      throw outcome.toError();
     }
     if (hasInterrupts(outcome)) {
       runner.halt(

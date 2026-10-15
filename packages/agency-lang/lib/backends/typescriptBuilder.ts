@@ -228,6 +228,14 @@ function walkMarkTopLevel(value: unknown): unknown {
   return out;
 }
 
+/** A parameter the function checks at entry: declared with `!` and given a
+ *  type to check against. The checks table, the preamble store, and the
+ *  step-0 names list all have to agree on this set, and `__checkParams`
+ *  throws when they do not, so it is decided in one place. */
+function isCheckedParam(param: FunctionParameter): boolean {
+  return param.validated === true && param.typeHint !== undefined;
+}
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -1018,30 +1026,41 @@ export class TypeScriptBuilder {
    * which runs Zod parse + the validator chain at each level.
    */
   private validateExpr(t: VariableType, value: TsNode): TsNode {
-    const aliasesFull = this.scopes.visibleTypeAliasesFull();
-    const resolved = resolveTypeDeep(t, aliasesFull);
-    const aliases = this.scopes.visibleTypeAliases();
-    if (!typeRunsValidators(t, aliasesFull)) {
-      const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
-      return ts.validateType(value, ts.raw(zodSchema));
-    }
-    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
-    return ts.validateChainRecursive(value, descriptor);
+    const check = this.validationFor(t);
+    return check.kind === "schema"
+      ? ts.validateType(value, check.schema)
+      : ts.validateChainRecursive(value, check.descriptor);
   }
 
   /** `__schemaCheck(() => <zod schema>)` or `__descriptorCheck(() => <descriptor>)`
    *  for a `!` parameter of type `t`: the same choice `validateExpr` makes,
    *  as a check the parameter table keeps. */
   private paramCheckValidate(t: VariableType): TsNode {
+    const check = this.validationFor(t);
+    return check.kind === "schema"
+      ? ts.call(ts.id("__schemaCheck"), [ts.arrowFn([], check.schema)])
+      : ts.call(ts.id("__descriptorCheck"), [ts.arrowFn([], check.descriptor)]);
+  }
+
+  /** The one decision behind every `!` site, whether a checked cast or a
+   *  parameter: a type that reaches no `@validate(...)` tag is checked by
+   *  a zod schema alone, and a type that does is walked with a descriptor
+   *  that runs zod and the validator chain at each level. The two emitters
+   *  above only differ in how they wrap the result. */
+  private validationFor(
+    t: VariableType,
+  ): { kind: "schema"; schema: TsNode } | { kind: "descriptor"; descriptor: TsNode } {
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
     if (!typeRunsValidators(t, aliasesFull)) {
       const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
-      return ts.call(ts.id("__schemaCheck"), [ts.arrowFn([], ts.raw(zodSchema))]);
+      return { kind: "schema", schema: ts.raw(zodSchema) };
     }
-    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
-    return ts.call(ts.id("__descriptorCheck"), [ts.arrowFn([], descriptor)]);
+    return {
+      kind: "descriptor",
+      descriptor: buildValidationDescriptor(resolved, aliases, aliasesFull),
+    };
   }
 
   // ------- Proper IR node methods -------
@@ -2213,7 +2232,7 @@ export class TypeScriptBuilder {
    *  descriptor on the first check and keep it. Empty when the function has
    *  no `!` parameter. */
   private paramChecksDecl(functionName: string, parameters: FunctionParameter[]): TsNode[] {
-    const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
+    const checkedParams = parameters.filter(isCheckedParam);
     if (checkedParams.length === 0) return [];
     return [ts.constDecl(this.paramChecksName(functionName), this.paramChecksTable(checkedParams))];
   }
@@ -2357,7 +2376,7 @@ export class TypeScriptBuilder {
     // keeps the checked value the frame was saved with.
     for (const param of parameters) {
       setupStmts.push(
-        param.validated && param.typeHint ? this.checkedParamStore(param) : this.paramStore(param),
+        isCheckedParam(param) ? this.checkedParamStore(param) : this.paramStore(param),
       );
     }
     setupStmts.push(...this.takeArgOverrides(parameters));
@@ -2377,9 +2396,7 @@ export class TypeScriptBuilder {
     // The names of the `!` parameters, checked from step 0 against the
     // module-level table `paramChecksDecl` emits. See the "step 0" section
     // of docs/dev/language/validation-annotations.md.
-    const checkedNames = parameters
-      .filter((param) => param.validated && param.typeHint)
-      .map((param) => param.name);
+    const checkedNames = parameters.filter(isCheckedParam).map((param) => param.name);
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // Step 0 runs once and is skipped by a resume whose counter is past it.

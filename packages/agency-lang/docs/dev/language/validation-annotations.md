@@ -421,6 +421,15 @@ validator re-enters its own saved frame. A `!` parameter check does not.
 that says the parameter could not be checked and points at a cast on its
 own line.
 
+A validator that was aborted is different. When the user cancels or a
+guard trips while a `@validate` function is running, the walk hands back
+an `AbortedResult`, not a failure. `__checkParams` rethrows it as the
+abort exception, so the function's catch turns it back into an aborted
+result and the abort travels up as it would from any other step. A
+checked cast does the same with `isAborted` right after its interrupt
+guard. Treating the abort as a failed check would report the parameter
+as invalid and let the current step keep running on a stopped run.
+
 Adding the support would go through step 0, since a pause inside it
 leaves the counter at 0 and the hook re-runs on resume. Two gaps have to
 close first. The walk runs a type's validators one after another in plain

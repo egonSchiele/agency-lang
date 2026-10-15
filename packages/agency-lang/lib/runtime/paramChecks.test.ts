@@ -6,6 +6,9 @@ import { failure, isFailure, success } from "./result.js";
 import { __validateType } from "./schema.js";
 import { interrupt } from "./interrupts.js";
 import type { Run } from "./asyncContext.js";
+import { AbortedResult } from "./abortedResult.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { State } from "./state/stateStack.js";
 
 const run = {} as Run;
 
@@ -150,6 +153,32 @@ describe("__checkParams", () => {
     expect(isFailure(halted) && halted.error).toBe(
       'Argument "when" of schedule could not be checked: a validator for Stamp returned true instead of a success or a failure.',
     );
+    expect(frame.args).toEqual({ when: "09:00" });
+  });
+
+  it("rethrows an abort instead of halting with a failure", async () => {
+    const runner = stubRunner();
+    const frame = { args: { when: "09:00" } };
+    const cause = makeAbortCause({
+      kind: "guardTrip",
+      dimension: "cost",
+      limit: 1,
+      spent: 2,
+      guardId: "g1",
+    });
+    const aborted = AbortedResult.fromError(
+      undefined,
+      new AgencyCancelledError("trip", cause),
+      new State(),
+      "checkStamp",
+    );
+    const checks: ParamChecks = {
+      when: { typeText: "Stamp", validate: () => aborted },
+    };
+    await expect(
+      __checkParams(run, runner, frame, "schedule", checks, ["when"]),
+    ).rejects.toBeInstanceOf(AgencyAbort);
+    expect(runner.halts).toEqual([]);
     expect(frame.args).toEqual({ when: "09:00" });
   });
 

@@ -118,7 +118,7 @@ try {
       }
       await callHook(__run, { name: "onFunctionStart", ... });
     });
-    // ...argument overrides from a resume are applied and checked here...
+    // ...argument overrides from a resume are applied here...
     await runner.step(1, ...);
     ...
   });
@@ -169,56 +169,33 @@ The checks now depend on step 0 existing. `buildFunctionBody` has a
 `skipHooks` option that would drop step 0, and nothing in `lib/` sets it.
 Remove the option, so the checks cannot be dropped with it.
 
-### Argument overrides are checked where they are applied
+### Argument overrides are applied as given
 
 A resume can replace a paused function's arguments. Two places do this:
 `agency resume` through `restoreForResume`, and `restore(cp, { args })`
-through `applyRestoreSignal`. Both go through `_pendingArgOverrides` in
-`resultCheckpointSetup.mustache`, which writes the new values into
-`__stack.args`.
+through `applyRestoreSignal`. Both go through `_pendingArgOverrides` on
+the execution context.
 
-Today the overrides are applied just before the checks, so they get
-checked. With the checks in step 0, a resume skips them. The overrides
-would go unchecked.
+The first version of this change checked an overridden `!` argument in
+place, with a second `__checkParams` call just after step 0. That was
+dropped. A `@validate` function run during a resume replay claims the
+paused callee's saved frame, which is the desync this change exists to
+fix, and a failed check left that callee chain queued. Restarting the
+function with the new arguments instead would throw away the interrupt
+approval the resume carries.
 
-The override block moves to just after step 0, inside the body wrap. After
-writing the overrides, it calls `__checkParams` with the names of the
-overridden `!` parameters, so they are checked and stored the same way
-step 0 checks a fresh call.
-
-The block has to be inside the `try`, so the frame pop in the `finally`
-still runs when a check fails, and inside the body wrap, so a failed check
-can halt the same way step 0 does and share its emitter. After step 0 is
-the first place that satisfies both. The position is not about the value:
-the override block assigns the JavaScript parameter as well as the stack
-slot, so even if step 0 ran again after an override, it would store the
-overridden value, not the original.
-
-The whole block moves, for every parameter. For a parameter without `!`,
-nothing between the old place and the new one reads the overridden value
-on a resume, because a resume skips step 0.
-
-Running a validator here is safe. An override always targets the last
-frame on the stack, which belongs to the function that raised the
-interrupt. No frame is saved after it, so a validator gets a fresh frame.
-
-The override block must not run after step 0 halted. Wrap it in
-`if (!runner.halted)`. When that guard skips the block, the pending
-override is left unconsumed. That can only happen on a resume from a pause
-taken before step 0 finished, and a stale override is matched by module
-and scope name, so it is harmless. Say so in the doc from Task 4, so the
-guard is not read as a bug later.
-
-`resultCheckpointSetup.mustache` holds both the `let __resultCheckpointId`
-line and the override block. The interrupt templates reference that
-variable, so it stays at the top of the function. Split the template in
-two: the variable stays in `resultCheckpointSetup.mustache`, and the
-override block moves to a new `argOverrides.mustache` that is rendered
-after step 0.
+So the overrides are written and not checked, which is what they were
+before this change too. `__takeArgOverrides` in `lib/runtime/argOverrides.ts`
+writes them into the argument slots in the preamble, before step 0, and
+returns the overridden names. A frame that paused before step 0 ran gets
+its override checked, because step 0 runs again on that entry. Every
+other resume sees the override as given. The gap is #1198; the dev doc
+section "Overridden arguments are applied as given" records the option
+left, a validator run on a scratch stack.
 
 ### One runtime helper runs the checks
 
-Step 0 and the override block run the same sequence: validate a
+Step 0 runs one sequence per parameter: validate a
 parameter, halt with the invalid-argument failure if it fails, store the
 checked value if it passes. That sequence does not belong in generated
 code, which is neither type-checked nor unit-tested. It goes in the
@@ -236,8 +213,7 @@ the names to check. For each name in order it reads the raw value from
 `__stack.args`, calls the entry's `validate`, and on failure halts the
 runner with `__invalidArgument` and returns without checking the rest.
 On success it stores the checked value back into `__stack.args`. Step 0
-calls it with every `!` parameter name. The override block calls it with
-the overridden `!` parameter names only. Both call sites are one line,
+calls it with every `!` parameter name. The call site is one line,
 followed by `if (runner.halted) { return; }`.
 
 The helper gets a vitest file, `lib/runtime/paramChecks.test.ts`, with
@@ -346,8 +322,8 @@ In `buildFunctionBody` in `lib/backends/typescriptBuilder.ts`:
    halted with the `__invalidArgument` failure, no later `validate` is
    called, and the earlier values are already stored; only the named
    parameters are checked; the run reaches each check; a `@validate`
-   refusal is worded as a refusal. The override block only ever names
-   `!` parameters, so the helper has no case for a missing entry.
+   refusal is worded as a refusal; a name with no entry in the table
+   throws, naming the parameter, since both are written by the compiler.
 3. Emit the `__paramChecks` table before the `try` for functions with a
    `!` parameter, built from `validateExpr` per parameter. Emit the call
    and the `if (runner.halted) { return; }` at the top of the
@@ -382,7 +358,13 @@ the message.
 Run the Task 1 tests and `tests/agency/casts/` and
 `tests/agency/validator-predicates.agency`.
 
-### Task 3: check overridden arguments
+### Task 3: apply overridden arguments before step 0
+
+The first draft of this task checked the overridden `!` arguments in a
+second `__checkParams` call after step 0. That was dropped; see
+"Argument overrides are applied as given" above. What stays is the move
+of the override block into the runtime, and the tests, which now pin
+that an override is applied as given.
 
 1. Split `resultCheckpointSetup.mustache` as described in the design.
    The `__resultCheckpointId` line stays before the `try`. The
@@ -423,7 +405,7 @@ Run the Task 1 tests and `tests/agency/casts/` and
    `args`.
 
 Run `make fixtures`. This time every fixture changes, because every
-function emits the override block. In the fixtures of functions without
+function with parameters calls `__takeArgOverrides`. In the fixtures of functions without
 `!` parameters, the move must be the only change. Keep this commit
 separate from Task 2's, so each fixture diff has one explanation.
 

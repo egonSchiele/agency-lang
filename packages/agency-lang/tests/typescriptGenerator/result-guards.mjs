@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -190,6 +190,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["r"] = r;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["r"]);
+  if (__overridden !== undefined) {
+    r = __stack.args["r"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -224,16 +228,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("r" in __overrides) {
-            r = __overrides["r"];
-            __stack.args["r"] = r;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.__hoist_0 = await isSuccess(__stack.args.r);
 if (hasInterrupts(__stack.locals.__hoist_0)) {

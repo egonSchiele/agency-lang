@@ -112,6 +112,23 @@ describe("__checkParams", () => {
     expect(frame.args).toEqual({ when: "09:00" });
   });
 
+  it("halts with a plain failure when a validator returns something that is not a Result", async () => {
+    const runner = stubRunner();
+    const frame = { args: { when: "09:00" } };
+    const checks: ParamChecks = {
+      when: {
+        typeText: "Stamp",
+        validate: () => true as unknown as ReturnType<ParamChecks[string]["validate"]>,
+      },
+    };
+    await __checkParams(run, runner, frame, "schedule", checks, ["when"]);
+    const halted = runner.halts[0];
+    expect(isFailure(halted) && halted.error).toBe(
+      'Argument "when" of schedule could not be checked: a validator for Stamp returned the boolean true instead of a success or a failure.',
+    );
+    expect(frame.args).toEqual({ when: "09:00" });
+  });
+
   it("throws naming the parameter when the names list has no check", async () => {
     const runner = stubRunner();
     const frame = { args: { count: 3 } };

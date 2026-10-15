@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -194,6 +194,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["a", "b"]);
+  if (__overridden !== undefined) {
+    a = __stack.args["a"];
+    b = __stack.args["b"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -229,20 +234,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("a" in __overrides) {
-            a = __overrides["a"];
-            __stack.args["a"] = a;
-          }
-          if ("b" in __overrides) {
-            b = __overrides["b"];
-            __stack.args["b"] = b;
-          }
-        }
-      }
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -348,6 +339,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["name"]);
+  if (__overridden !== undefined) {
+    name = __stack.args["name"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -382,16 +377,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("name" in __overrides) {
-            name = __overrides["name"];
-            __stack.args["name"] = name;
-          }
-        }
-      }
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -490,6 +475,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["width"] = width;
   __stack.args["height"] = height;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["width", "height"]);
+  if (__overridden !== undefined) {
+    width = __stack.args["width"];
+    height = __stack.args["height"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -525,20 +515,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("width" in __overrides) {
-            width = __overrides["width"];
-            __stack.args["width"] = width;
-          }
-          if ("height" in __overrides) {
-            height = __overrides["height"];
-            __stack.args["height"] = height;
-          }
-        }
-      }
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -680,12 +656,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-        }
-      }
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -807,12 +777,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-        }
-      }
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {

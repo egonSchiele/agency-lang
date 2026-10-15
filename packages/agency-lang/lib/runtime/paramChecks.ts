@@ -1,4 +1,5 @@
 import type { Run } from "./asyncContext.js";
+import { hasInterrupts } from "./interrupts.js";
 import type { Interrupt } from "./interrupts.js";
 import { __invalidArgument } from "./invalidArgument.js";
 import { failure, isFailure, isSuccess } from "./result.js";
@@ -32,9 +33,16 @@ export type ArgFrame = {
  *
  * A check that fails halts the runner with the invalid-argument failure
  * and stops: later parameters are not checked. A validator that raised an
- * interrupt comes back as neither success nor failure; a parameter check
- * cannot pause, so that halts with a failure too.
+ * interrupt comes back as an interrupt list; a parameter check cannot
+ * pause, so that halts with a failure too. So does anything else a
+ * validator written in TypeScript might hand back.
  */
+function describeOutcome(outcome: unknown): string {
+  if (outcome === undefined) return "nothing";
+  if (outcome === null) return "null";
+  return `the ${typeof outcome} ${JSON.stringify(outcome)}`;
+}
+
 export async function __checkParams(
   run: Run,
   runner: HaltingRunner,
@@ -68,9 +76,17 @@ export async function __checkParams(
       );
       return;
     }
+    if (hasInterrupts(outcome)) {
+      runner.halt(
+        failure(
+          `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} raised an interrupt, and a parameter check cannot pause. Check the value with a cast on its own line before the call.`,
+        ),
+      );
+      return;
+    }
     runner.halt(
       failure(
-        `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} raised an interrupt, and a parameter check cannot pause. Check the value with a cast on its own line before the call.`,
+        `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} returned ${describeOutcome(outcome)} instead of a success or a failure.`,
       ),
     );
     return;

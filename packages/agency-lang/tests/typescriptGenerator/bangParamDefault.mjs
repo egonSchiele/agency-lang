@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -190,6 +190,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["value"] = value;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["value"]);
+  if (__overridden !== undefined) {
+    value = __stack.args["value"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParamDefault.agency", scopeName: "isStamp", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -224,16 +228,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("value" in __overrides) {
-            value = __overrides["value"];
-            __stack.args["value"] = value;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.value))
@@ -357,6 +351,11 @@ let __functionCompleted = false;
   if (!Object.hasOwn(__stack.args, "when")) {
     __stack.args["when"] = (when === __UNSET ? (`2026-10-16T09:00:00`) : (when));
   }
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["label", "when"]);
+  if (__overridden !== undefined) {
+    label = __stack.args["label"];
+    when = __stack.args["when"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParamDefault.agency", scopeName: "schedule", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -372,6 +371,7 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
+  let __entryChecked = false;
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -383,6 +383,7 @@ await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, 
 if (runner.halted) {
           return;
         }
+__entryChecked = true;
 __self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
@@ -396,23 +397,10 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("label" in __overrides) {
-            label = __overrides["label"];
-            __stack.args["label"] = label;
-          }
-          if ("when" in __overrides) {
-            when = __overrides["when"];
-            __stack.args["when"] = when;
-          }
-          const __overriddenChecks = ["when"].filter((name) => name in __overrides);
-          await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, __overriddenChecks)
-          if (runner.halted) {
-            return;
-          }
+      if (!runner.halted && __overridden !== undefined && !__entryChecked) {
+        await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, ["when"].filter((name) => __overridden.includes(name)))
+        if (runner.halted) {
+          return;
         }
       }
       await runner.step(1, __run, async (runner, __run) => {

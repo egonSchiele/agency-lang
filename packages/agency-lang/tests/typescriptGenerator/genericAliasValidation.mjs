@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -199,6 +199,10 @@ let __functionCompleted = false;
   if (!Object.hasOwn(__stack.args, "c")) {
     __stack.args["c"] = c;
   }
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["c"]);
+  if (__overridden !== undefined) {
+    c = __stack.args["c"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "process", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -214,6 +218,7 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
+  let __entryChecked = false;
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -225,6 +230,7 @@ await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["
 if (runner.halted) {
           return;
         }
+__entryChecked = true;
 __self.__destructiveRan = __self.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
@@ -237,19 +243,10 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("c" in __overrides) {
-            c = __overrides["c"];
-            __stack.args["c"] = c;
-          }
-          const __overriddenChecks = ["c"].filter((name) => name in __overrides);
-          await __checkParams(__run, runner, __stack, "process", __process_paramChecks, __overriddenChecks)
-          if (runner.halted) {
-            return;
-          }
+      if (!runner.halted && __overridden !== undefined && !__entryChecked) {
+        await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["c"].filter((name) => __overridden.includes(name)))
+        if (runner.halted) {
+          return;
         }
       }
       await runner.step(1, __run, async (runner, __run) => {

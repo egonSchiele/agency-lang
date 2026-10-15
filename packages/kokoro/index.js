@@ -40,6 +40,7 @@ import {
   stampFailureBoundary,
   __tryCall,
   __eq,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -136,7 +137,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "154f0bd425d5c80526b5cb9f385bb656073d7ab032dcc81507aab22c65f72b44");
+__registerModuleFingerprint("index.agency", "9a795b2ec6092ca6b37ccecdcc7b0f50c9c1f48f21be6e59b314bcd42e2eb2ca");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -196,6 +197,10 @@ async function __realOutput_impl(__run, outputFile) {
   }
   let __funcStartTime = performance.now();
   __stack.args["outputFile"] = outputFile;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["outputFile"]);
+  if (__overridden !== void 0) {
+    outputFile = __stack.args["outputFile"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -217,16 +222,6 @@ async function __realOutput_impl(__run, outputFile) {
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("outputFile" in __overrides) {
-            outputFile = __overrides["outputFile"];
-            __stack.args["outputFile"] = outputFile;
-          }
-        }
-      }
       await runner.ifElse(1, __run2, [
         {
           condition: async (__run3) => __eq(__stack.args.outputFile, ``),
@@ -373,6 +368,17 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
   __stack.args["allowedPaths"] = allowedPaths === __UNSET ? [] : allowedPaths;
   __stack.args["format"] = format === __UNSET ? `` : format;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["text", "outputFile", "voice", "model", "speed", "allowedPaths", "format", "modelsDir"]);
+  if (__overridden !== void 0) {
+    text = __stack.args["text"];
+    outputFile = __stack.args["outputFile"];
+    voice = __stack.args["voice"];
+    model = __stack.args["model"];
+    speed = __stack.args["speed"];
+    allowedPaths = __stack.args["allowedPaths"];
+    format = __stack.args["format"];
+    modelsDir = __stack.args["modelsDir"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -401,44 +407,6 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("text" in __overrides) {
-            text = __overrides["text"];
-            __stack.args["text"] = text;
-          }
-          if ("outputFile" in __overrides) {
-            outputFile = __overrides["outputFile"];
-            __stack.args["outputFile"] = outputFile;
-          }
-          if ("voice" in __overrides) {
-            voice = __overrides["voice"];
-            __stack.args["voice"] = voice;
-          }
-          if ("model" in __overrides) {
-            model = __overrides["model"];
-            __stack.args["model"] = model;
-          }
-          if ("speed" in __overrides) {
-            speed = __overrides["speed"];
-            __stack.args["speed"] = speed;
-          }
-          if ("allowedPaths" in __overrides) {
-            allowedPaths = __overrides["allowedPaths"];
-            __stack.args["allowedPaths"] = allowedPaths;
-          }
-          if ("format" in __overrides) {
-            format = __overrides["format"];
-            __stack.args["format"] = format;
-          }
-          if ("modelsDir" in __overrides) {
-            modelsDir = __overrides["modelsDir"];
-            __stack.args["modelsDir"] = modelsDir;
-          }
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __stack.locals.audioFormat = await __call(__run3, _validateSpeakArgs, {
           type: "positional",
@@ -709,6 +677,11 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
   let __funcStartTime = performance.now();
   __stack.args["model"] = model === __UNSET ? `fp32` : model;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["model", "modelsDir"]);
+  if (__overridden !== void 0) {
+    model = __stack.args["model"];
+    modelsDir = __stack.args["modelsDir"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "download", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -731,20 +704,6 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("model" in __overrides) {
-            model = __overrides["model"];
-            __stack.args["model"] = model;
-          }
-          if ("modelsDir" in __overrides) {
-            modelsDir = __overrides["modelsDir"];
-            __stack.args["modelsDir"] = modelsDir;
-          }
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __stack.locals.status = await __call(__run3, _modelStatus, {
           type: "positional",
@@ -927,12 +886,6 @@ async function __voices_impl(__run) {
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, _voices, {

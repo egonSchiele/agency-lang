@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -191,6 +191,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __stack.args["age"] = age;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["name", "age"]);
+  if (__overridden !== undefined) {
+    name = __stack.args["name"];
+    age = __stack.args["age"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -226,20 +231,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("name" in __overrides) {
-            name = __overrides["name"];
-            __stack.args["name"] = name;
-          }
-          if ("age" in __overrides) {
-            age = __overrides["age"];
-            __stack.args["age"] = age;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 // Resume path: check for a response by interruptId
 const __response = __run.ctx.getInterruptResponse(__self.__interruptId_1);
@@ -391,6 +382,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __stack.args["age"] = age;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["name", "age"]);
+  if (__overridden !== undefined) {
+    name = __stack.args["name"];
+    age = __stack.args["age"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -426,20 +422,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("name" in __overrides) {
-            name = __overrides["name"];
-            __stack.args["name"] = name;
-          }
-          if ("age" in __overrides) {
-            age = __overrides["age"];
-            __stack.args["age"] = age;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 await __call(__run, print, {
           type: "positional",

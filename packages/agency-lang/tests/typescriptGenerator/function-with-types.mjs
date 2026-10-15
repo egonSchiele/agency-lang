@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -191,6 +191,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
   __stack.args["y"] = y;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["x", "y"]);
+  if (__overridden !== undefined) {
+    x = __stack.args["x"];
+    y = __stack.args["y"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -226,20 +231,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("x" in __overrides) {
-            x = __overrides["x"];
-            __stack.args["x"] = x;
-          }
-          if ("y" in __overrides) {
-            y = __overrides["y"];
-            __stack.args["y"] = y;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {
@@ -370,6 +361,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["name"]);
+  if (__overridden !== undefined) {
+    name = __stack.args["name"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -404,16 +399,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("name" in __overrides) {
-            name = __overrides["name"];
-            __stack.args["name"] = name;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt(__run, {
@@ -535,6 +520,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["count"] = count;
   __stack.args["label"] = label;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["count", "label"]);
+  if (__overridden !== undefined) {
+    count = __stack.args["count"];
+    label = __stack.args["label"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -570,20 +560,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("count" in __overrides) {
-            count = __overrides["count"];
-            __stack.args["count"] = count;
-          }
-          if ("label" in __overrides) {
-            label = __overrides["label"];
-            __stack.args["label"] = label;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt(__run, {
@@ -711,6 +687,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["items"] = items;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["items"]);
+  if (__overridden !== undefined) {
+    items = __stack.args["items"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -745,16 +725,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("items" in __overrides) {
-            items = __overrides["items"];
-            __stack.args["items"] = items;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {
@@ -875,6 +845,10 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["value"] = value;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["value"]);
+  if (__overridden !== undefined) {
+    value = __stack.args["value"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -909,16 +883,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("value" in __overrides) {
-            value = __overrides["value"];
-            __stack.args["value"] = value;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt(__run, {

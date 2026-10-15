@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -192,6 +192,12 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
   __stack.args["punctuation"] = (punctuation === __UNSET ? (`!`) : (punctuation));
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["name", "greeting", "punctuation"]);
+  if (__overridden !== undefined) {
+    name = __stack.args["name"];
+    greeting = __stack.args["greeting"];
+    punctuation = __stack.args["punctuation"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "namedArgsReorder.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -228,24 +234,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("name" in __overrides) {
-            name = __overrides["name"];
-            __stack.args["name"] = name;
-          }
-          if ("greeting" in __overrides) {
-            greeting = __overrides["greeting"];
-            __stack.args["greeting"] = greeting;
-          }
-          if ("punctuation" in __overrides) {
-            punctuation = __overrides["punctuation"];
-            __stack.args["punctuation"] = punctuation;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.args.greeting + ` ${__stack.args.name}${__stack.args.punctuation}`)

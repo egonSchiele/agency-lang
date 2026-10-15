@@ -33,6 +33,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -129,7 +130,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "72deda385b4ada6b0010292ba7b06a744e691a9bac0b4e6258840165ede57c47");
+__registerModuleFingerprint("index.agency", "c7753a1407834f19b210e02496085bebc4af659e29e279635328809a32a08656");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -190,6 +191,12 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
   __stack.args["filepath"] = filepath;
   __stack.args["language"] = language === __UNSET ? `` : language;
   __stack.args["model"] = model === __UNSET ? `base.en` : model;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["filepath", "language", "model"]);
+  if (__overridden !== void 0) {
+    filepath = __stack.args["filepath"];
+    language = __stack.args["language"];
+    model = __stack.args["model"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -213,24 +220,6 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("filepath" in __overrides) {
-            filepath = __overrides["filepath"];
-            __stack.args["filepath"] = filepath;
-          }
-          if ("language" in __overrides) {
-            language = __overrides["language"];
-            __stack.args["language"] = language;
-          }
-          if ("model" in __overrides) {
-            model = __overrides["model"];
-            __stack.args["model"] = model;
-          }
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, transcribeImpl, {

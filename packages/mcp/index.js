@@ -33,6 +33,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -129,7 +130,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "7a033fecc09ef74dd4b0a8ef22d1cf8015f323d6a7cbab8230c9e9c64e182f62");
+__registerModuleFingerprint("index.agency", "e23a68484eebf4593bd7dabf8f4dc6fef7dbe616046a6b907ac34849aa5bb971");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -189,6 +190,11 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
   let __funcStartTime = performance.now();
   __stack.args["serverName"] = serverName;
   __stack.args["onOAuthRequired"] = onOAuthRequired === __UNSET ? null : onOAuthRequired;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["serverName", "onOAuthRequired"]);
+  if (__overridden !== void 0) {
+    serverName = __stack.args["serverName"];
+    onOAuthRequired = __stack.args["onOAuthRequired"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "mcp", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -211,20 +217,6 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("serverName" in __overrides) {
-            serverName = __overrides["serverName"];
-            __stack.args["serverName"] = serverName;
-          }
-          if ("onOAuthRequired" in __overrides) {
-            onOAuthRequired = __overrides["onOAuthRequired"];
-            __stack.args["onOAuthRequired"] = onOAuthRequired;
-          }
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, mcpImpl, {

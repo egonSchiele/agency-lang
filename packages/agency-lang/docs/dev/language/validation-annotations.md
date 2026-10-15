@@ -300,7 +300,13 @@ async function __schedule_impl(__run: __Run, label: string, when: string) {
   if (!Object.hasOwn(__stack.args, "when")) {
     __stack.args["when"] = when;        // a `!` parameter: stored on the first entry
   }
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["label", "when"]);
+  if (__overridden !== undefined) {     // a resume's --arg or restore(cp, { args })
+    label = __stack.args["label"];
+    when = __stack.args["when"];
+  }
   ...
+  let __entryChecked = false;
   try {
     await __withChildRun(..., async (__run) => {
       await runner.hook(0, __run, async (__run) => {
@@ -308,11 +314,15 @@ async function __schedule_impl(__run: __Run, label: string, when: string) {
         if (runner.halted) {
           return;
         }
+        __entryChecked = true;
         __self.__destructiveRan = __self.__destructiveRan ?? false;
         await callHook(__run, { name: "onFunctionStart", ... });
       });
-      if (!runner.halted) {
-        // the argument overrides a resume carries, see below
+      if (!runner.halted && __overridden !== undefined && !__entryChecked) {
+        await __checkParams(..., ["when"].filter((name) => __overridden.includes(name)));
+        if (runner.halted) {
+          return;
+        }
       }
       await runner.step(1, ...);        // the body starts here
     });
@@ -369,27 +379,48 @@ with `?? false` because a halt from step 0 happens before the flag is set.
 
 `onFunctionStart` reports the arguments as given, not the checked values.
 
-### Overridden arguments are checked after step 0
+### Overridden arguments
 
 A resume can replace a paused function's arguments: `agency resume --arg`
 through `restoreForResume`, and `restore(cp, { args })` through
 `applyRestoreSignal`. Both leave the values in `_pendingArgOverrides` on
-the execution context, keyed by module and scope name, and the matching
-function consumes them when it re-enters. That block sits just after step
-0, inside the body wrap. After writing each override into the parameter
-and its stack slot, it calls `__checkParams` with the names of the
-overridden `!` parameters.
+the execution context, keyed by module and scope name. When the function
+re-enters, `__takeArgOverrides` in `lib/runtime/argOverrides.ts` writes
+the overrides that name a parameter into the argument slots, clears the
+pending overrides, and returns the overridden names. This happens in the
+preamble, before step 0, for a reason: `runner.hook` can pause or trip a
+guard before it reads the counter, so a frame can be saved with its
+counter still at 0 and the argument it paused with in the slot. Writing
+the override first means step 0 checks the overridden value.
 
-The block is inside the `try` so the frame pop in the `finally` still
-runs when a check fails, and inside the body wrap so a failed check halts
-the runner the same way step 0 does. An override always targets the last
-frame on the stack, the function that paused, so no saved frame comes
-after it and a validator run here gets a fresh frame.
+When the resume's counter is past step 0, the hook is skipped and nothing
+has checked the override. The block just after step 0 covers that case:
+it runs `__checkParams` on the overridden `!` parameters when the
+function entered with overrides and step 0 did not run (`__entryChecked`
+stays false). It sits inside the `try` so the frame pop in the `finally`
+still runs when a check fails, and inside the body wrap so a failed
+check halts the runner the same way step 0 does. An override always
+targets the last frame on the stack, the function that paused, so no
+saved frame comes after it and a validator run here gets a fresh frame.
 
-The block is skipped when step 0 halted. The responders a compiled module
-exports, `respondToInterrupts` and its serve twin, take local overrides
-only; argument overrides reach a function through `agency resume` and
+Neither piece is emitted for a function that cannot use it: the take
+when the function has no parameters, the check when it has no `!`
+parameter. The responders a compiled module exports,
+`respondToInterrupts` and its serve twin, take local overrides only;
+argument overrides reach a function through `agency resume` and
 `restore`.
+
+### An edited checkpoint is not re-checked
+
+Before step 0 existed, every entry re-ran a `!` check on the argument as
+given, so a checkpoint whose argument slot had been edited by hand was
+checked again on resume. That re-run is what desynced the stack whenever
+the validator was an Agency function, so it only ever held for types
+checked by zod alone. Now a resume keeps the saved slot and skips step 0,
+so an edited slot reaches the body unchecked, like every other local in
+the frame. The guard for an edited checkpoint is its signature
+(`docs/dev/runtime/checkpoint-integrity.md`); the gap is recorded under
+B2 in `docs/dev/security/roadmap.md`.
 
 ### A validator that pauses
 
@@ -537,7 +568,8 @@ since `.meta()`'s semantics only matter at runtime.
 | `lib/backends/typescriptGenerator/tagArgToTs.ts`                                      | prints a tag argument as a TS source string                            |
 | `lib/backends/typescriptBuilder.ts`                                                    | emits `(Alias as any).__agency_descriptor = ...` and `!`-site validation calls |
 | `lib/runtime/validateChain.ts`                                                        | `__validateChain` / `__validateChainRecursive` / the predicate-contract check |
-| `lib/runtime/paramChecks.ts`                                                          | `__checkParams`: runs a function's `!` parameter checks from step 0 and from the override block, halts on the first miss, stores the checked values |
+| `lib/runtime/paramChecks.ts`                                                          | `__checkParams`: runs a function's `!` parameter checks from step 0 and from the override check after it, halts on the first miss, stores the checked values |
+| `lib/runtime/argOverrides.ts`                                                         | `__takeArgOverrides`: writes a resume's argument overrides into the frame before step 0 and returns the overridden names                             |
 | `lib/runtime/invalidArgument.ts`                                                      | `__invalidArgument`: rewords a failed `!` parameter so a model calling the function as a tool can correct it |
 | `stdlib/validation.agency`                                                            | the pre-baked validators and the annotated aliases (`Email`, `NumberInRange`, …) |
 

@@ -28,7 +28,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __takeArgOverrides,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -195,6 +195,11 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["prefix"] = prefix;
   __stack.args["messages"] = messages;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["prefix", "messages"]);
+  if (__overridden !== undefined) {
+    prefix = __stack.args["prefix"];
+    messages = __stack.args["messages"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -230,20 +235,6 @@ await callHook(__run, {
           }
         })
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = undefined;
-          if ("prefix" in __overrides) {
-            prefix = __overrides["prefix"];
-            __stack.args["prefix"] = prefix;
-          }
-          if ("messages" in __overrides) {
-            messages = __overrides["messages"];
-            __stack.args["messages"] = messages;
-          }
-        }
-      }
       await runner.step(1, __run, async (runner, __run) => {
 const __funcResult = await __call(__run, print, {
           type: "positional",

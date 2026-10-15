@@ -33,6 +33,7 @@ import {
   runtimeFailure,
   isFailure,
   stampFailureBoundary,
+  __takeArgOverrides,
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
@@ -129,7 +130,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "8557b148bee206e0e7cd51927b3dc43cf58cc57325f0306936a4924bddb1b972");
+__registerModuleFingerprint("index.agency", "38052a87b9ed5a532a01b9ffadd08e83b8175b2f374bdda8e2b7b017978dfbf9");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -190,6 +191,12 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
   __stack.args["url"] = url;
   __stack.args["maxChars"] = maxChars === __UNSET ? 2e4 : maxChars;
   __stack.args["timeout"] = timeout === __UNSET ? 15e3 : timeout;
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["url", "maxChars", "timeout"]);
+  if (__overridden !== void 0) {
+    url = __stack.args["url"];
+    maxChars = __stack.args["maxChars"];
+    timeout = __stack.args["timeout"];
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", stack: __run.stack, threads: __setupData.threads });
   let __resultCheckpointId = -1;
   try {
@@ -213,24 +220,6 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
           }
         });
       });
-      if (!runner.halted) {
-        if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
-          const __overrides = __ctx._pendingArgOverrides.values;
-          __ctx._pendingArgOverrides = void 0;
-          if ("url" in __overrides) {
-            url = __overrides["url"];
-            __stack.args["url"] = url;
-          }
-          if ("maxChars" in __overrides) {
-            maxChars = __overrides["maxChars"];
-            __stack.args["maxChars"] = maxChars;
-          }
-          if ("timeout" in __overrides) {
-            timeout = __overrides["timeout"];
-            __stack.args["timeout"] = timeout;
-          }
-        }
-      }
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
         runner2.halt(await __call(__run3, fetchPageImpl, {

@@ -2251,59 +2251,56 @@ export class TypeScriptBuilder {
 
   /**
    * The argument overrides a resume can carry (`agency resume --arg` or
-   * `restore(cp, { args })`): when the pending overrides name this frame,
-   * write each one into the parameter and its stack slot, then check the
-   * overridden `!` parameters. Emitted just after step 0, inside the body
-   * wrap: inside the `try` so the `finally` still pops the frame when a
-   * check fails, and inside the wrap so a failed check halts the same way
-   * step 0 does. Skipped when step 0 halted.
+   * `restore(cp, { args })`). `__takeArgOverrides` writes the ones that
+   * name this frame into the argument slots and returns their names, or
+   * `undefined` when none were pending. The parameter locals are then
+   * re-read from the slots, since `onFunctionStart` reports them. Emitted
+   * in the preamble, after the stores and before step 0, so a frame that
+   * paused at entry checks the overridden value in step 0. Empty when the
+   * function has no parameters.
    */
-  private argOverridesBlock(
-    functionName: string,
-    parameters: FunctionParameter[],
-    checkedNames: string[],
-  ): TsNode {
-    const overridden = (name: TsNode): TsNode => ts.binOp(name, "in", ts.id("__overrides"));
-    const writes = parameters.map((param) =>
-      ts.if(
-        overridden(ts.str(param.name)),
-        ts.statements([
-          ts.assign(ts.id(param.name), ts.index(ts.id("__overrides"), ts.str(param.name))),
-          ts.assign($(ts.stack("args")).index(ts.str(param.name)).done(), ts.id(param.name)),
-        ]),
-      ),
+  private takeArgOverrides(parameters: FunctionParameter[]): TsNode[] {
+    if (parameters.length === 0) return [];
+    const take = ts.call(ts.id("__takeArgOverrides"), [
+      ts.id("__ctx"),
+      ts.id("__stack"),
+      ts.arr(parameters.map((param) => ts.str(param.name))),
+    ]);
+    const reads = parameters.map((param) =>
+      ts.assign(ts.id(param.name), $(ts.stack("args")).index(ts.str(param.name)).done()),
     );
-    const checks: TsNode[] =
-      checkedNames.length === 0
-        ? []
-        : [
-            ts.constDecl(
-              "__overriddenChecks",
-              ts.methodCall(ts.arr(checkedNames.map((name) => ts.str(name))), "filter", [
-                ts.arrowFn([{ name: "name" }], overridden(ts.id("name"))),
-              ]),
-            ),
-            ...this.checkParamsCall(functionName, ts.id("__overriddenChecks")),
-          ];
-    const pending = ts.prop(ts.id("__ctx"), "_pendingArgOverrides");
-    const pendingField = (field: string): TsNode => ts.prop(pending, field, { optional: true });
-    const matches = ts.binOp(
-      ts.binOp(pendingField("moduleId"), "===", ts.stack("moduleId")),
+    return [
+      ts.constDecl("__overridden", take),
+      ts.if(ts.binOp(ts.id("__overridden"), "!==", ts.id("undefined")), ts.statements(reads)),
+    ];
+  }
+
+  /**
+   * The check of the overridden `!` parameters when step 0 did not run
+   * on this entry: a resume whose counter is past step 0 skips it, and
+   * the overrides were written after the frame was saved. Emitted just
+   * after step 0, inside the body wrap, so a failed check halts the same
+   * way step 0 does and the `finally` still pops the frame. Skipped when
+   * step 0 halted. Empty when the function has no `!` parameter.
+   */
+  private overriddenChecks(functionName: string, checkedNames: string[]): TsNode[] {
+    if (checkedNames.length === 0) return [];
+    const toCheck = ts.methodCall(ts.arr(checkedNames.map((name) => ts.str(name))), "filter", [
+      ts.arrowFn(
+        [{ name: "name" }],
+        ts.methodCall(ts.id("__overridden"), "includes", [ts.id("name")]),
+      ),
+    ]);
+    const condition = ts.binOp(
+      ts.binOp(
+        ts.not(ts.prop(ts.id("runner"), "halted")),
+        "&&",
+        ts.binOp(ts.id("__overridden"), "!==", ts.id("undefined")),
+      ),
       "&&",
-      ts.binOp(pendingField("scopeName"), "===", ts.stack("scopeName")),
+      ts.not(ts.id("__entryChecked")),
     );
-    return ts.if(
-      ts.not(ts.prop(ts.id("runner"), "halted")),
-      ts.if(
-        matches,
-        ts.statements([
-          ts.constDecl("__overrides", ts.prop(pending, "values")),
-          ts.assign(pending, ts.id("undefined")),
-          ...writes,
-          ...checks,
-        ]),
-      ),
-    );
+    return [ts.if(condition, ts.statements(this.checkParamsCall(functionName, toCheck)))];
   }
 
   /**
@@ -2384,6 +2381,7 @@ export class TypeScriptBuilder {
         param.validated && param.typeHint ? this.checkedParamStore(param) : this.paramStore(param),
       );
     }
+    setupStmts.push(...this.takeArgOverrides(parameters));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2403,6 +2401,11 @@ export class TypeScriptBuilder {
     const checkedNames = parameters
       .filter((param) => param.validated && param.typeHint)
       .map((param) => param.name);
+    // Set by step 0 once the checks passed, so the override check after it
+    // knows whether this entry ran step 0 or skipped it.
+    if (checkedNames.length > 0) {
+      setupStmts.push(ts.letDecl("__entryChecked", ts.bool(false)));
+    }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // Step 0 runs once and is skipped by a resume whose counter is past it.
@@ -2414,7 +2417,12 @@ export class TypeScriptBuilder {
       ts.runnerHookStep({
         id: 0,
         body: [
-          ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
+          ...(checkedNames.length === 0
+            ? []
+            : [
+                ...this.checkParamsCall(functionName, checkedNames),
+                ts.assign(ts.id("__entryChecked"), ts.bool(true)),
+              ]),
           this.tracking.init(!!opts.inDestructiveFunction),
           ts.callHook("onFunctionStart", {
             functionName: ts.str(functionName),
@@ -2447,7 +2455,7 @@ export class TypeScriptBuilder {
             threads: $(ts.id("__setupData")).prop("threads").done(),
             body: [
               ...onFunctionStartHook,
-              this.argOverridesBlock(functionName, parameters, checkedNames),
+              ...this.overriddenChecks(functionName, checkedNames),
               ...bodyCode,
             ],
           }),

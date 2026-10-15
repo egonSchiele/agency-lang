@@ -234,6 +234,7 @@ export { Schema, __validateType } from "./schema.js";
 export { __invalidArgument } from "./invalidArgument.js";
 export { __coarseTypeTest } from "./typeTest.js";
 export { __checkParams } from "./paramChecks.js";
+export { __takeArgOverrides } from "./argOverrides.js";
 export type { CheckOutcome, ParamCheck, ParamChecks } from "./paramChecks.js";
 export { __eq } from "./eq.js";
 export { __requireLength } from "./requireLength.js";

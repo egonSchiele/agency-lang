@@ -287,43 +287,51 @@ that also fires `onFunctionStart`. Shortened, the generated code for a
 function with one plain and one checked parameter is:
 
 ```ts
-__stack.args["label"] = label;          // a plain parameter: stored on every entry
-const __paramChecks = {
+const __schedule_paramChecks = {        // once per module, next to the function
   when: {
     typeText: "Stamp",
     validate: async (__run: __Run, value: unknown) =>
       __validateChainRecursive(__run, value, { kind: "ref", get: () => (Stamp as any).__agency_descriptor }),
   },
 };
-try {
-  await __withChildRun(..., async (__run) => {
-    await runner.hook(0, __run, async (__run) => {
-      __stack.args["when"] = when;      // a `!` parameter: stored with its check
-      await __checkParams(__run, runner, __stack, "schedule", __paramChecks, ["when"]);
-      if (runner.halted) {
-        return;
+async function __schedule_impl(__run: __Run, label: string, when: string) {
+  ...
+  __stack.args["label"] = label;        // a plain parameter: stored on every entry
+  if (!Object.hasOwn(__stack.args, "when")) {
+    __stack.args["when"] = when;        // a `!` parameter: stored on the first entry
+  }
+  ...
+  try {
+    await __withChildRun(..., async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+        await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, ["when"]);
+        if (runner.halted) {
+          return;
+        }
+        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        await callHook(__run, { name: "onFunctionStart", ... });
+      });
+      if (!runner.halted) {
+        // the argument overrides a resume carries, see below
       }
-      __self.__destructiveRan = __self.__destructiveRan ?? false;
-      await callHook(__run, { name: "onFunctionStart", ... });
+      await runner.step(1, ...);        // the body starts here
     });
-    if (!runner.halted) {
-      // the argument overrides a resume carries, see below
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+      }
+      return runner.haltResult;
     }
-    await runner.step(1, ...);          // the body starts here
-  });
-  if (runner.halted) {
-    if (isFailure(runner.haltResult)) {
-      stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
-    }
-    return runner.haltResult;
   }
 }
 ```
 
-`__paramChecks` has one entry per `!` parameter: the type text for the
+The checks table has one entry per `!` parameter: the type text for the
 failure message, and the validation `validateExpr` chose for the type
 (`__validateType` for a plain schema check, `__validateChainRecursive`
-when the type reaches a `@validate` tag). `__checkParams` in
+when the type reaches a `@validate` tag). It is declared once at module
+level; the schema or descriptor inside each `validate` is built when the
+check runs. `__checkParams` in
 `lib/runtime/paramChecks.ts` runs the named checks in order. It reads each
 argument from the frame, halts the runner with the `__invalidArgument`
 failure on the first miss, and stores the checked value back on each
@@ -341,12 +349,18 @@ would claim that callee's saved frame and the run would stop with
 Step 0 runs once and is skipped by any resume whose counter is past it,
 so a validator never runs twice for one call.
 
-The store of a `!` argument is inside step 0 with its check because a
-check can change the value: zod drops unknown keys, so
-`{ "type": "daily", "extra": 1 }` is stored as `{ "type": "daily" }`. A
-resume keeps the checked value the frame was saved with. A plain
-parameter is stored in the preamble on every entry. A default that names
-an earlier parameter reads the argument as given, before its check.
+Every argument is stored in the preamble, before any step, so a
+checkpoint taken at function entry (a pause requested while the function
+is being entered, or a guard trip at hook 0) holds a complete frame for
+the debugger, the logs viewer, and `restore(cp, { args })`. A plain
+parameter is stored on every entry. A `!` parameter is stored only when
+the frame has no slot for it yet, because a check can change the value:
+zod drops unknown keys, so `{ "type": "daily", "extra": 1 }` becomes
+`{ "type": "daily" }` in step 0. A fresh frame is empty, so the first
+entry stores the argument as given. A resume re-enters with the saved
+frame, whose slot holds the checked value, and the argument as given
+must not overwrite it. A default that names an earlier parameter reads
+the argument as given, before its check.
 
 The destructive flag is set after the checks. A `destructive def` commits
 its whole body at entry, but a refused argument never enters, so the

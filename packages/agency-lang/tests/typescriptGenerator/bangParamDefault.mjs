@@ -329,6 +329,17 @@ type Stamp = z.infer<typeof Stamp>;
   "schema": z.string(),
   "validators": [isStamp]
 };
+const __schedule_paramChecks = {
+  when: {
+    typeText: "Stamp",
+    validate: async (__run: __Run, value: unknown) => await __validateChainRecursive(__run, value, {
+      "kind": "ref",
+      "get": () => {
+        return (Stamp as any).__agency_descriptor;
+      }
+    })
+  }
+};
 async function __schedule_impl(__run: __Run, label: string, when: Stamp | typeof __UNSET = __UNSET) {
   const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
@@ -343,6 +354,9 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["label"] = label;
+  if (!Object.hasOwn(__stack.args, "when")) {
+    __stack.args["when"] = (when === __UNSET ? (`2026-10-16T09:00:00`) : (when));
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParamDefault.agency", scopeName: "schedule", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -358,17 +372,6 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
-  const __paramChecks = {
-    when: {
-      typeText: "Stamp",
-      validate: async (__run: __Run, value: unknown) => await __validateChainRecursive(__run, value, {
-        "kind": "ref",
-        "get": () => {
-          return (Stamp as any).__agency_descriptor;
-        }
-      })
-    }
-  };
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -376,8 +379,7 @@ let __resultCheckpointId = -1;
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
-__stack.args["when"] = (when === __UNSET ? (`2026-10-16T09:00:00`) : (when));
-await __checkParams(__run, runner, __stack, "schedule", __paramChecks, ["when"])
+await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, ["when"])
 if (runner.halted) {
           return;
         }
@@ -407,7 +409,7 @@ await callHook(__run, {
             __stack.args["when"] = when;
           }
           const __overriddenChecks = ["when"].filter((name) => name in __overrides);
-          await __checkParams(__run, runner, __stack, "schedule", __paramChecks, __overriddenChecks)
+          await __checkParams(__run, runner, __stack, "schedule", __schedule_paramChecks, __overriddenChecks)
           if (runner.halted) {
             return;
           }

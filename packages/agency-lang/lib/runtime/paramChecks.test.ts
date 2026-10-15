@@ -4,6 +4,7 @@ import { __checkParams } from "./paramChecks.js";
 import type { ParamChecks } from "./paramChecks.js";
 import { failure, isFailure, success } from "./result.js";
 import { __validateType } from "./schema.js";
+import { interrupt } from "./interrupts.js";
 import type { Run } from "./asyncContext.js";
 
 const run = {} as Run;
@@ -94,11 +95,13 @@ describe("__checkParams", () => {
   it("halts with a failure when a validator raised an interrupt", async () => {
     const runner = stubRunner();
     const frame = { args: { when: "09:00" } };
-    const interrupts = [{ message: "ok?", effect: "test::check" }];
+    const interrupts = [
+      interrupt({ effect: "test::check", message: "ok?", data: {}, origin: "t", runId: "r" }),
+    ];
     const checks: ParamChecks = {
       when: {
         typeText: "Stamp",
-        validate: () => interrupts as unknown as ReturnType<ParamChecks[string]["validate"]>,
+        validate: () => interrupts,
       },
     };
     await __checkParams(run, runner, frame, "schedule", checks, ["when"]);
@@ -107,6 +110,15 @@ describe("__checkParams", () => {
       'Argument "when" of schedule could not be checked: a validator for Stamp raised an interrupt',
     );
     expect(frame.args).toEqual({ when: "09:00" });
+  });
+
+  it("throws naming the parameter when the names list has no check", async () => {
+    const runner = stubRunner();
+    const frame = { args: { count: 3 } };
+    await expect(
+      __checkParams(run, runner, frame, "tally", { count: number }, ["count", "total"]),
+    ).rejects.toThrow('No check for parameter "total" of tally');
+    expect(runner.halts).toEqual([]);
   });
 
   it("words a @validate refusal as a refusal", async () => {

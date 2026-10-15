@@ -1,13 +1,18 @@
 import type { Run } from "./asyncContext.js";
+import type { Interrupt } from "./interrupts.js";
 import { __invalidArgument } from "./invalidArgument.js";
 import { failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue } from "./result.js";
+
+/** What a validation hands back: the checked value, a failure, or the
+ *  interrupts a `@validate` function raised. */
+export type CheckOutcome = ResultValue | Interrupt[];
 
 /** One `!` parameter's check: the type text for the failure message, and
  *  the validation the compiler chose for the type. */
 export type ParamCheck = {
   typeText: string;
-  validate: (run: Run, value: unknown) => Promise<ResultValue> | ResultValue;
+  validate: (run: Run, value: unknown) => Promise<CheckOutcome> | CheckOutcome;
 };
 
 /** The checks of one function, by parameter name. */
@@ -40,6 +45,11 @@ export async function __checkParams(
 ): Promise<void> {
   for (const name of names) {
     const check = checks[name];
+    if (check === undefined) {
+      throw new Error(
+        `No check for parameter "${name}" of ${functionName}: the names list and the checks table are both written by the compiler and must agree.`,
+      );
+    }
     const raw = frame.args[name];
     const outcome = await check.validate(run, raw);
     if (isSuccess(outcome)) {

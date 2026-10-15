@@ -176,6 +176,12 @@ async function __registerTopLevelCallbacks(__run) {
 }
 __registerCallbacksInit("bangParams.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
+const __process_paramChecks = {
+  data: {
+    typeText: "number",
+    validate: async (__run: __Run, value: unknown) => __validateType(value, z.number())
+  }
+};
 async function __process_impl(__run: __Run, data: number) {
   const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
@@ -189,6 +195,9 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
+  if (!Object.hasOwn(__stack.args, "data")) {
+    __stack.args["data"] = data;
+  }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParams.agency", scopeName: "process", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
@@ -204,12 +213,6 @@ let __functionCompleted = false;
 // no-op rather than failing.
 let __resultCheckpointId = -1;
 
-  const __paramChecks = {
-    data: {
-      typeText: "number",
-      validate: async (__run: __Run, value: unknown) => __validateType(value, z.number())
-    }
-  };
   try {
     await __withChildRun(__run, {
       ctx: __ctx,
@@ -217,8 +220,7 @@ let __resultCheckpointId = -1;
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
-__stack.args["data"] = data;
-await __checkParams(__run, runner, __stack, "process", __paramChecks, ["data"])
+await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["data"])
 if (runner.halted) {
           return;
         }
@@ -243,7 +245,7 @@ await callHook(__run, {
             __stack.args["data"] = data;
           }
           const __overriddenChecks = ["data"].filter((name) => name in __overrides);
-          await __checkParams(__run, runner, __stack, "process", __paramChecks, __overriddenChecks)
+          await __checkParams(__run, runner, __stack, "process", __process_paramChecks, __overriddenChecks)
           if (runner.halted) {
             return;
           }

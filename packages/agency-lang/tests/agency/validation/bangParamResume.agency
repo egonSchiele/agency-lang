@@ -143,6 +143,21 @@ node destructiveRefused() {
   return "no failure"
 }
 
+// A destructive def commits at entry, inside step 0. The flag has to
+// survive a pause and resume, since the resume skips step 0.
+destructive def wipeAfterAsk(amount: Count!): Result<string> {
+  ask("wipe")
+  return failure("wipe of ${amount} failed")
+}
+
+node destructiveResumed() {
+  const result = wipeAfterAsk(3)
+  if (isFailure(result)) {
+    return [result.destructiveRan, result.error]
+  }
+  return "no failure"
+}
+
 def askFirst(value: string): Result<string> {
   interrupt test::confirm("ok to validate?", { tag: "validator" })
   return success(value)

@@ -63,6 +63,14 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "destructiveResumed",
+      "description": "A destructive def that pauses and resumes still reports destructiveRan on its failure",
+      "input": "",
+      "expectedOutput": "[true,\"wipe of 3 failed\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
       "nodeName": "validatorRaises",
       "description": "A validator that raises an interrupt fails the call instead of running the body unchecked",
       "input": "",

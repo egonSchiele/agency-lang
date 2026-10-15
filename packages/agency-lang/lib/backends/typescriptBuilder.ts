@@ -2159,6 +2159,20 @@ export class TypeScriptBuilder {
    * For Result-returning functions: emit a pinned checkpoint at function entry
    * and a preamble that applies arg overrides on restore (for result.retry()).
    */
+  /** The preamble store of a `!` parameter: `paramStore`, skipped when the
+   *  frame already holds the slot. A fresh frame is empty, so the first
+   *  entry stores the argument as given and step 0 replaces it with the
+   *  checked value. A resume re-enters with the saved frame, and the saved
+   *  slot holds the checked value, which the argument as given must not
+   *  overwrite: a zod check drops unknown keys, so the two can differ. */
+  private checkedParamStore(param: FunctionParameter): TsNode {
+    const hasSlot = ts.methodCall(ts.id("Object"), "hasOwn", [
+      ts.stack("args"),
+      ts.str(param.name),
+    ]);
+    return ts.if(ts.not(hasSlot), ts.statements([this.paramStore(param)]));
+  }
+
   /** `__stack.args["name"] = name`, with the default applied when the
    *  argument was left unset. */
   private paramStore(param: FunctionParameter): TsNode {
@@ -2176,10 +2190,20 @@ export class TypeScriptBuilder {
     );
   }
 
-  /** The `__paramChecks` table: `{ name: { typeText, validate: (__run, value) => ... } }`
-   *  for each `!` parameter. `validate` wraps the expression `validateExpr`
-   *  emits for the parameter's type, so the schema fast path and the
-   *  `@validate` walk both go through the one runtime helper. */
+  /** A function's `!` parameter checks, emitted once at module level as
+   *  `const __name_paramChecks = { name: { typeText, validate: (__run, value) => ... } }`.
+   *  `validate` wraps the expression `validateExpr` emits for the
+   *  parameter's type, so the schema fast path and the `@validate` walk both
+   *  go through the one runtime helper. The schema or descriptor inside the
+   *  arrow is built when the check runs, as it was when the table sat inside
+   *  the function, so a type alias declared below the function still
+   *  resolves. Empty when the function has no `!` parameter. */
+  private paramChecksDecl(functionName: string, parameters: FunctionParameter[]): TsNode[] {
+    const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
+    if (checkedParams.length === 0) return [];
+    return [ts.constDecl(this.paramChecksName(functionName), this.paramChecksTable(checkedParams))];
+  }
+
   private paramChecksTable(checkedParams: FunctionParameter[]): TsNode {
     const entries: Record<string, TsNode> = {};
     for (const param of checkedParams) {
@@ -2198,7 +2222,12 @@ export class TypeScriptBuilder {
     return ts.obj(entries);
   }
 
-  /** `await __checkParams(__run, runner, __stack, "name", __paramChecks, names)`
+  /** The module-level name of a function's `!` parameter checks table. */
+  private paramChecksName(functionName: string): string {
+    return `__${functionName}_paramChecks`;
+  }
+
+  /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
    *  followed by the halted return. `names` is the literal list of `!`
    *  parameter names, or an expression that evaluates to a subset of it. */
   private checkParamsCall(functionName: string, names: string[] | TsNode): TsNode[] {
@@ -2209,7 +2238,7 @@ export class TypeScriptBuilder {
         ts.id("runner"),
         ts.id("__stack"),
         ts.str(functionName),
-        ts.id("__paramChecks"),
+        ts.id(this.paramChecksName(functionName)),
         namesNode,
       ]),
       ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
@@ -2345,17 +2374,15 @@ export class TypeScriptBuilder {
       ts.time("__funcStartTime"),
     ];
 
-    // A plain parameter is stored here, on every entry. A `!` parameter is
-    // stored inside step 0 with its check, so a resume that skips step 0
+    // Every parameter is stored here, before any step, so a checkpoint
+    // taken at function entry has a complete frame. A plain parameter is
+    // stored on every entry. A `!` parameter is stored on the first entry
+    // only: step 0 replaces the slot with the checked value, and a resume
     // keeps the checked value the frame was saved with.
-    const checkedParamStores: TsNode[] = [];
     for (const param of parameters) {
-      const store = this.paramStore(param);
-      if (param.validated && param.typeHint) {
-        checkedParamStores.push(store);
-      } else {
-        setupStmts.push(store);
-      }
+      setupStmts.push(
+        param.validated && param.typeHint ? this.checkedParamStore(param) : this.paramStore(param),
+      );
     }
 
     // Create runner for step execution. `threads` is read directly from
@@ -2370,25 +2397,23 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup());
 
-    // The `!` parameter checks, as a table `__checkParams` reads. See the
-    // "step 0" section of docs/dev/language/validation-annotations.md.
-    const checkedParams = parameters.filter((param) => param.validated && param.typeHint);
-    const checkedNames = checkedParams.map((param) => param.name);
-    if (checkedParams.length > 0) {
-      setupStmts.push(ts.constDecl("__paramChecks", this.paramChecksTable(checkedParams)));
-    }
+    // The names of the `!` parameters, checked from step 0 against the
+    // module-level table `paramChecksDecl` emits. See the "step 0" section
+    // of docs/dev/language/validation-annotations.md.
+    const checkedNames = parameters
+      .filter((param) => param.validated && param.typeHint)
+      .map((param) => param.name);
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // Step 0 runs once and is skipped by a resume whose counter is past it.
-    // It stores and checks the `!` parameters (a validator claims a frame,
-    // so it must not run again on a resume), sets the destructive flag
-    // after the checks so a refused argument leaves destructiveRan false,
-    // and fires onFunctionStart.
+    // It checks the `!` parameters (a validator claims a frame, so it must
+    // not run again on a resume), sets the destructive flag after the
+    // checks so a refused argument leaves destructiveRan false, and fires
+    // onFunctionStart.
     const onFunctionStartHook: TsNode[] = [
       ts.runnerHookStep({
         id: 0,
         body: [
-          ...checkedParamStores,
           ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
           this.tracking.init(!!opts.inDestructiveFunction),
           ts.callHook("onFunctionStart", {
@@ -2526,6 +2551,7 @@ export class TypeScriptBuilder {
     const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
     });
+    const paramChecks = this.paramChecksDecl(functionName, parameters);
 
     // Build AgencyFunction.create() params metadata
     // Include all params (including block-typed) so .partial() can bind them by name.
@@ -2584,7 +2610,7 @@ export class TypeScriptBuilder {
     // on AgencyFunction.create above still records the true visibility.
     const exportedConst = ts.export(constDecl);
 
-    return ts.statements([funcDecl, exportedConst]);
+    return ts.statements([...paramChecks, funcDecl, exportedConst]);
   }
 
   private processStatement(node: AgencyNode): TsNode {

@@ -35,6 +35,20 @@ export function roundInputPayload(round: Round, systemsExpanded: boolean): Paylo
   ]);
 }
 
+/** A message's content as the reader wrote it: the text of each text
+ *  part, with any other part (an image, say) shown as its fields. */
+function contentPayload(content: unknown): PayloadLine[] {
+  if (!Array.isArray(content)) {
+    return valuePayload(content);
+  }
+  return content.flatMap((part) => {
+    const text = typeof part === "string" ? part : partRecord(part).text;
+    return valuePayload(typeof text === "string" ? text : part);
+  });
+}
+function partRecord(part: unknown): Record<string, unknown> {
+  return part !== null && typeof part === "object" ? (part as Record<string, unknown>) : {};
+}
 function isSystem(message: WireMessage): boolean {
   return message.role === "system" || message.role === "developer";
 }
@@ -49,7 +63,7 @@ function messagePayload(message: WireMessage, systemsExpanded: boolean): Payload
         tone,
         text: `${name} · ${count} ${count === 1 ? "line" : "lines"} · s to ${systemsExpanded ? "hide" : "show"}`,
       },
-      ...(systemsExpanded ? valuePayload(message.content) : []),
+      ...(systemsExpanded ? contentPayload(message.content) : []),
     ];
   }
   return [
@@ -60,7 +74,7 @@ function messagePayload(message: WireMessage, systemsExpanded: boolean): Payload
         .filter(Boolean)
         .join(" · "),
     },
-    ...(message.content === null ? [] : valuePayload(message.content)),
+    ...(message.content === null ? [] : contentPayload(message.content)),
     ...(message.toolCalls ?? []).flatMap((call) => [
       {
         kind: "heading" as const,

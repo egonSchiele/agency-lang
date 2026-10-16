@@ -20,8 +20,18 @@ it("retains non-text content parts alongside the text in a multimodal message", 
     },
   ]);
   expect(text).toContain("Describe this picture");
+  expect(text).not.toContain("type: text");
   expect(text).toContain("image_url");
   expect(text).toContain("https://example.com/image.png");
+});
+it("shows a message sent as one text part as its text alone", () => {
+  const lines = input([
+    {
+      role: "user",
+      content: [{ type: "text", text: "summarize this article\nhttps://a.example" }],
+    },
+  ]).split("\n");
+  expect(lines).toEqual(["USER", "summarize this article", "https://a.example"]);
 });
 it("retains repeated input messages and their original order", () => {
   const text = input([

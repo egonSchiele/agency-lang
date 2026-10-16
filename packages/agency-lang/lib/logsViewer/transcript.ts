@@ -244,31 +244,36 @@ type BlockThread = { key: ThreadKey; label: string | undefined; depth: number };
  *  or before the first later block anywhere when its thread is unknown,
  *  so the transcript reads in time order. One after every block goes at
  *  the end. */
-type LooseBlock = {
-  at: number;
-  thread: BlockThread | undefined;
-  block: Extract<TranscriptBlock, { kind: "error" | "pause" }> extends infer Block
-    ? Block extends TranscriptBlock
-      ? Omit<Block, keyof BlockBase> & { id: string }
-      : never
-    : never;
-};
+type LooseBlockBody =
+  | { kind: "error"; id: string; error: TraceError }
+  | { kind: "pause"; id: string; pausedMs: number | undefined; resumed: boolean };
+type LooseBlock = { at: number; thread: BlockThread | undefined; block: LooseBlockBody };
 function withLooseBlocks(blocks: TranscriptBlock[], loose: LooseBlock[]): TranscriptBlock[] {
   const out = [...blocks];
   for (const { at, thread, block } of loose) {
-    const placed = {
+    const placed: TranscriptBlock = {
       ...block,
       roundId: undefined,
-      thread: thread?.key ?? { kind: "legacy" as const, id: "" },
+      thread: thread?.key ?? { kind: "legacy", id: "" },
       at,
       threadLabel: thread?.label,
       depth: thread?.depth ?? 0,
-    } as TranscriptBlock;
+    };
     const position = out.findIndex(
       (candidate) =>
         candidate.at > at &&
         (thread === undefined || threadKey(candidate.thread) === threadKey(thread.key)),
     );
+    // A block with no thread of its own joins the thread of the block it
+    // lands beside, so it opens no divider.
+    const neighbor = out[position === -1 ? out.length - 1 : position];
+    if (thread === undefined && neighbor !== undefined) {
+      Object.assign(placed, {
+        thread: neighbor.thread,
+        threadLabel: neighbor.threadLabel,
+        depth: neighbor.depth,
+      });
+    }
     out.splice(position === -1 ? out.length : position, 0, placed);
   }
   return out;

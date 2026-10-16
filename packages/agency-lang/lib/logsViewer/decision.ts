@@ -21,14 +21,22 @@ export function decisionSummary(decision: DecisionLog): string {
   return parts.join(" · ") || "no answer";
 }
 
+/** `decisionOf` checks a record's shape before it reaches here, but a log
+ *  can come from a later smoltalk with an answer type this code does not
+ *  know, so every read tolerates a missing field and an unknown type
+ *  prints as its name. The viewer degrades; it never throws on a log. */
 function answerSummary(answer: DecisionAnswer): string {
   switch (answer.type) {
-    case "choice":
-      return `${answer.choice} ${percent(answer.probabilities[answer.choice] ?? answer.confidence)}`;
+    case "choice": {
+      const probability = (answer.probabilities ?? {})[answer.choice] ?? answer.confidence ?? 0;
+      return `${answer.choice} ${percent(probability)}`;
+    }
     case "noul":
       return answer.noul >= 0.5 ? `yes ${percent(answer.noul)}` : `no ${percent(1 - answer.noul)}`;
     case "score":
-      return `score ${answer.score.toFixed(1)} ${percent(answer.confidence)}`;
+      return `score ${(answer.score ?? 0).toFixed(1)} ${percent(answer.confidence ?? 0)}`;
+    default:
+      return String((answer as { type?: unknown }).type ?? "answer");
   }
 }
 
@@ -48,8 +56,12 @@ export function decisionInputPayload(decision: DecisionLog): PayloadLine[] {
 }
 
 function choicesOf(question: DecisionQuestion): string {
-  if (question.type === "choice") return ` · ${Object.keys(question.criteria).join(", ")}`;
-  if (question.type === "score") return ` · ${question.criteria.length} levels`;
+  if (question.type === "choice") {
+    return ` · ${Object.keys(question.criteria ?? {}).join(", ")}`;
+  }
+  if (question.type === "score") {
+    return ` · ${(question.criteria ?? []).length} levels`;
+  }
   return "";
 }
 
@@ -75,8 +87,8 @@ function probabilityBars(answer: DecisionAnswer): string[] {
           ["yes", answer.noul],
           ["no", 1 - answer.noul],
         ]
-      : Object.entries(answer.probabilities).map(([key, value]) => [
-          answer.type === "score" ? (answer.legend[key] ?? key) : key,
+      : Object.entries(answer.probabilities ?? {}).map(([key, value]) => [
+          answer.type === "score" ? ((answer.legend ?? {})[key] ?? key) : key,
           value,
         ]);
   const width = Math.max(...probabilities.map(([label]) => label.length), 1);

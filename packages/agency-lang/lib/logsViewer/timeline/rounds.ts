@@ -157,7 +157,9 @@ function impliedThreadLabel(leafNode: TreeNode, index: TreeIndex): string | unde
   if (tool !== undefined) {
     const event = childEvent(tool, "toolCallStart") ?? childEvent(tool, "toolCall");
     const name = event?.data.toolName;
-    if (typeof name === "string" && name.length > 0) return name;
+    if (typeof name === "string" && name.length > 0) {
+      return name;
+    }
   }
   const node = nearestAncestor(leafNode, index, (node) => node.label === "nodeExecution");
   const nodeId = node === undefined ? undefined : childEvent(node, "enterNode")?.data.nodeId;

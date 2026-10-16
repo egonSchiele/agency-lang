@@ -23,6 +23,10 @@ export type OverviewCall = {
   at: number;
   /** The round's thread name; undefined for a failed request or an unnamed thread. */
   threadLabel: string | undefined;
+  /** The name the charts and legend show: the label, with `#2`, `#3`
+   *  added when another thread already took the same name, so two calls
+   *  of one sub-agent tool read as two threads. `unnamed` without a label. */
+  threadName: string;
 };
 
 export type OverviewData = {
@@ -53,8 +57,15 @@ export function overviewData(trace: TreeNode): OverviewData {
       roundOfTool[tool.id] = round.id;
     }
   }
-  const failures = errors.filter((error) => error.errorType === "llmError");
-  const attached = errors.filter((error) => error.errorType !== "llmError");
+  // A request that failed before the provider answered: an llmError inside
+  // an llmCall span. The memory manager logs llmErrors of its own for its
+  // extraction and compaction calls, which are not calls in the chart; those
+  // are marked on a call like any other error.
+  const isFailedRequest = (error: TraceError): boolean =>
+    error.errorType === "llmError" &&
+    nearestAncestor(error.node, index, (node) => node.label === "llmCall") !== undefined;
+  const failures = errors.filter(isFailedRequest);
+  const attached = errors.filter((error) => !isFailedRequest(error));
   const errorsByRound: Record<string, TraceError[]> = Object.create(null);
   for (const error of attached) {
     const owner = callFor(error, { rounds, roundOfTool, index });
@@ -62,6 +73,7 @@ export function overviewData(trace: TreeNode): OverviewData {
       (errorsByRound[owner.id] ??= []).push(error);
     }
   }
+  const nameOf = threadNamer(rounds);
   const calls: OverviewCall[] = [
     ...rounds.map((round) => ({
       id: round.id,
@@ -71,16 +83,21 @@ export function overviewData(trace: TreeNode): OverviewData {
       tools: toolsByRound[round.id],
       at: round.end,
       threadLabel: round.threadLabel,
+      threadName: nameOf(round),
     })),
-    ...failures.map((failure) => ({
-      id: stableLeafId(index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace, failure.node),
-      round: undefined,
-      failure,
-      errors: [failure],
-      tools: [],
-      at: failure.at,
-      threadLabel: undefined,
-    })),
+    ...failures.map((failure) => {
+      const parent = index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace;
+      return {
+        id: stableLeafId(parent, failure.node),
+        round: undefined,
+        failure,
+        errors: [failure],
+        tools: [],
+        at: failure.at,
+        threadLabel: undefined,
+        threadName: "unnamed",
+      };
+    }),
   ].sort((first, second) => first.at - second.at);
   return {
     models: models.filter((model, index) => models.indexOf(model) === index),
@@ -122,12 +139,27 @@ function callFor(
   );
 }
 
+/** One display name per thread, in order of first use. A second thread
+ *  with a name already taken gets `#2`, a third `#3`, so two threads that
+ *  one tool started (or two unnamed ones) are told apart. */
+function threadNamer(rounds: Round[]): (round: Round) => string {
+  const byThread: Record<string, string> = Object.create(null);
+  const taken: Record<string, number> = Object.create(null);
+  for (const round of [...rounds].sort((first, second) => first.end - second.end)) {
+    const key = `${round.thread.kind}:${round.thread.id}`;
+    if (byThread[key] !== undefined) {
+      continue;
+    }
+    const label = round.threadLabel ?? "unnamed";
+    taken[label] = (taken[label] ?? 0) + 1;
+    byThread[key] = taken[label] === 1 ? label : `${label} #${taken[label]}`;
+  }
+  return (round) => byThread[`${round.thread.kind}:${round.thread.id}`];
+}
+
 /** The distinct thread names across the calls, in order of first use, so
- *  every screen that colors by thread picks the same color for a name.
- *  Threads that share a name (every unnamed one, say) share a color. */
+ *  every screen that colors by thread picks the same color for a name. */
 export function threadNames(calls: OverviewCall[]): string[] {
-  const names = calls.flatMap((call) =>
-    call.round === undefined ? [] : [call.threadLabel ?? "unnamed"],
-  );
+  const names = calls.flatMap((call) => (call.round === undefined ? [] : [call.threadName]));
   return names.filter((name, index) => names.indexOf(name) === index);
 }

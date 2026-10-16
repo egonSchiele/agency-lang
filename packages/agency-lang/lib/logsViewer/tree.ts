@@ -120,7 +120,9 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // tree shape order-independent.
   for (const span of Object.values(spans)) {
     const desiredParentId = desiredParent[span.id];
-    if (!desiredParentId) continue;
+    if (!desiredParentId) {
+      continue;
+    }
     const trueParent = spans[desiredParentId];
     if (!trueParent) {
       span.parentMissing = true;

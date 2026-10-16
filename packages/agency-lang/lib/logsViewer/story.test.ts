@@ -199,6 +199,23 @@ describe("top-level thread rows", () => {
     const trace = buildForest([call("main", 200, "mainConversation")])[0];
     expect(outlineRows(trace, STORY).map((row) => row.kind)).toEqual(["user", "round"]);
   });
+
+  it("keeps several top-level calls on one thread flat, as a loop makes them", () => {
+    const onMain = (span: string, at: number) =>
+      event("promptCompletion", at, span, null, {
+        threadIdentity: "main",
+        threadLabel: "mainConversation",
+        messages: [{ role: "user", content: `step ${at}` }],
+        completion: { output: "ok" },
+      });
+    const trace = buildForest([onMain("A", 100), onMain("B", 200)])[0];
+    expect(outlineRows(trace, STORY).map((row) => row.kind)).toEqual([
+      "user",
+      "round",
+      "user",
+      "round",
+    ]);
+  });
 });
 
 describe("resumed runs", () => {
@@ -245,8 +262,16 @@ describe("resumed runs", () => {
   it("shows the pause under the interrupt, with how long it waited", () => {
     const rows = outlineRows(pausedAndResumed(), STORY);
     const pause = rows.find((row) => row.kind === "pause");
-    expect(pause).toMatchObject({ pausedMs: 14_197, resumed: true, depth: 3 });
+    expect(pause).toMatchObject({ pausedMs: 14_199, resumed: true, depth: 3 });
     expect(rows.indexOf(pause!)).toBe(rows.findIndex((row) => row.kind === "interrupt") + 1);
+  });
+
+  it("measures the pause to the person's answer, not to another run sharing the trace", () => {
+    const rows = outlineRows(
+      pausedAndResumed([event("agentStart", 5_000, "other", null, { entryNode: "watcher" })]),
+      STORY,
+    );
+    expect(rows.find((row) => row.kind === "pause")).toMatchObject({ pausedMs: 14_199 });
   });
 
   it("keeps the innermost tool as the owner when nested tools log the same interrupt", () => {

@@ -266,7 +266,7 @@ describe("roundResponsePayload with tool results", () => {
         leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
         leaf("interruptResolved", 1_150, { interruptId: "i", outcome: "passed" }),
       ]),
-    ).toContain("⚠ RESULT · waiting for a response");
+    ).toContain("⏸ RESULT · waiting for a response");
     expect(
       fixture([leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } })]),
     ).toContain("⋯ RESULT · completion not recorded");

@@ -362,7 +362,8 @@ const STATUS_TEXT: Record<RunStatus, { text: string; fg: string }> = {
 function header(data: OverviewData, following: boolean): Piece[] {
   const status = STATUS_TEXT[data.status];
   const count = data.errors.length;
-  const calls = data.calls.length;
+  const calls = data.rounds.length;
+  const failed = data.calls.length - calls;
   const plain = (text: string): Piece => ({ text, style: { fg: THEME.text, bold: true } });
   const separator = plain(" · ");
   const pieces: Piece[] = [
@@ -373,22 +374,35 @@ function header(data: OverviewData, following: boolean): Piece[] {
     plain(fmtDuration(data.elapsedMs, { minutes: true })),
     separator,
     plain(`${calls} LLM ${calls === 1 ? "call" : "calls"}`),
-    separator,
-    plain(fmtUsd(data.costUsd)),
   ];
+  if (failed > 0) {
+    pieces.push(separator, {
+      text: `${failed} failed ${failed === 1 ? "request" : "requests"}`,
+      style: { fg: THEME.kind.error, bold: true },
+    });
+  }
+  pieces.push(separator, plain(fmtUsd(data.costUsd)));
   if (count > 0) {
     pieces.push(separator, {
       text: `✖ ${count} ${count === 1 ? "error" : "errors"}`,
       style: { fg: THEME.kind.error, bold: true },
     });
   }
-  if (following) pieces.push(separator, plain("following"));
+  if (following) {
+    pieces.push(separator, plain("following"));
+  }
   return pieces;
 }
 function callTitle(call: OverviewCall | undefined): string {
-  if (call === undefined) return "LLM CALL";
-  if (call.round === undefined) return "FAILED REQUEST";
-  return `LLM CALL ${call.round.index + 1}${call.round.decision === undefined ? "" : ` · DECISION · ${decisionSummary(call.round.decision)}`}`;
+  if (call === undefined) {
+    return "LLM CALL";
+  }
+  if (call.round === undefined) {
+    return "FAILED REQUEST";
+  }
+  const decision = call.round.decision;
+  const suffix = decision === undefined ? "" : ` · DECISION · ${decisionSummary(decision)}`;
+  return `LLM CALL ${call.round.index + 1}${suffix}`;
 }
 function previewBody(
   call: OverviewCall,
@@ -439,7 +453,7 @@ function previewMetadata(call: OverviewCall): PayloadLine[] {
     round.model || "unknown model",
     `${time} · ${cost}`,
     ...tokens,
-    `thread ${round.threadLabel ?? "unnamed"}`,
+    `thread ${call.threadName}`,
   ].map((text) => ({ kind: "meta", text }));
 }
 

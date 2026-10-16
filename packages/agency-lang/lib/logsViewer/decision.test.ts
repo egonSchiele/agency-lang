@@ -60,6 +60,24 @@ describe("decisionSummary", () => {
   });
 });
 
+describe("a record from another version", () => {
+  it("prints an unknown answer type by name and tolerates missing fields", () => {
+    const odd = {
+      ...expression,
+      questions: { response: { type: "choice", instructions: "Which?" } },
+      answers: { response: { type: "ranking", order: ["a", "b"] } },
+    } as unknown as DecisionLog;
+    expect(decisionSummary(odd)).toBe("ranking");
+    expect(() => decisionInputPayload(odd)).not.toThrow();
+    expect(() => decisionOutputPayload(odd)).not.toThrow();
+    const bare = {
+      ...expression,
+      answers: { response: { type: "choice", choice: "curious" } },
+    } as unknown as DecisionLog;
+    expect(decisionSummary(bare)).toBe("curious 0%");
+  });
+});
+
 describe("decisionInputPayload", () => {
   it("shows the state, then each question with its type, choices and instructions", () => {
     const text = decisionInputPayload(expression).map((line) => ("text" in line ? line.text : ""));

@@ -2,7 +2,7 @@ import { contentText, type ToolCallRequest } from "../statelog/wireAccessors.js"
 import { fmtTokens } from "./format.js";
 import { payloadFor, valuePayload, type PayloadLine } from "./payload.js";
 import { fmtDuration } from "./spanText.js";
-import { toolErrorMessages, toolStatusText } from "./story.js";
+import { TOOL_STATUS_MARK, toolErrorMessages, toolStatusText } from "./story.js";
 import { decisionInputPayload, decisionOutputPayload } from "./decision.js";
 import type { TranscriptBlock } from "./transcript.js";
 
@@ -74,17 +74,11 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         {
           kind: "heading",
           tone: "interrupt",
-          text: `── ${block.label} at message ${block.firstChangedAt + 1} of ${block.messagesAfter} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
+          text: `── ${block.label} ${changedWhere(block)} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
         },
       ];
     case "tool": {
-      const symbol = {
-        completed: "→",
-        failed: "✖",
-        rejected: "✖",
-        awaitingApproval: "⚠",
-        unfinished: "⋯",
-      }[block.row.status];
+      const symbol = TOOL_STATUS_MARK[block.row.status];
       const duration =
         block.row.durationMs === undefined
           ? "duration not recorded"
@@ -112,6 +106,13 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
       ];
     }
   }
+}
+/** Where a rewrite starts. A thread that was only cut short has no first
+ *  changed message to point at, so it reads as cut after its last one. */
+function changedWhere(block: { firstChangedAt: number; messagesAfter: number }): string {
+  return block.firstChangedAt < block.messagesAfter
+    ? `from message ${block.firstChangedAt + 1}`
+    : `after message ${block.messagesAfter}`;
 }
 function requestLines(calls: ToolCallRequest[]): PayloadLine[] {
   return calls.flatMap((call) => [

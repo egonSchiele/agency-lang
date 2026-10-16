@@ -22,10 +22,10 @@ export function messagesOf(round: Round): WireMessage[] {
 }
 /** Messages compare as the text the model sees. A tool result saved as a
  *  value (an array of records, say) and the same result rebuilt as its
- *  JSON text are one message: smoltalk's `contentToString` on
- *  `BaseMessage` turns any non-string content into `JSON.stringify` of it
- *  before a provider sees it, and this restates that rule because the
- *  method is protected. Keep the two in step. */
+ *  JSON text are one message, because smoltalk turns any non-string
+ *  content into `JSON.stringify` of it before a provider sees it. smoltalk
+ *  PR #70 exports that rule as `contentToString`; `contentKey` restates it
+ *  until the pinned smoltalk carries the export, then should import it. */
 export function messageKey(message: WireMessage): string {
   return JSON.stringify([
     message.role,
@@ -36,7 +36,9 @@ export function messageKey(message: WireMessage): string {
   ]);
 }
 function contentKey(content: unknown): string | null {
-  if (content === null || content === undefined) return null;
+  if (content === null || content === undefined) {
+    return null;
+  }
   return typeof content === "string" ? content : JSON.stringify(content);
 }
 export function roundDeltas(rounds: Round[]): RoundDelta[] {

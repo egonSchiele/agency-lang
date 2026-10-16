@@ -151,6 +151,15 @@ export function toolErrorMessages(row: ToolStoryRow): string[] {
     .filter((node) => node.event?.data.type === "error")
     .map((node) => String(node.event!.data.message ?? "error"));
 }
+/** The one glyph per status every screen uses: ✖ for a tool that failed
+ *  or was rejected, ⏸ for one waiting on a person, → for a result. */
+export const TOOL_STATUS_MARK: Record<ToolStatus, string> = {
+  completed: "→",
+  failed: "✖",
+  rejected: "✖",
+  awaitingApproval: "⏸",
+  unfinished: "⋯",
+};
 export function toolStatusText(outcome: ToolOutcome): string {
   const label = TOOL_STATUS_TEXT[outcome.status];
   if (outcome.status === "failed" && outcome.work === "started") {
@@ -366,9 +375,11 @@ export function storyOutline(trace: TreeNode, options: AdminOptions): StoryRow[]
   const parents = storyParents(rows, lookups);
   function layOut(parentId: string | undefined, depth: number): StoryRow[] {
     const own = rows.filter((row) => parents[row.id] === parentId);
-    // Top-level rows read in time order, so a span whose parent is missing
-    // from the log (and so sits at the top) lands where it happened.
-    const ordered = parentId === undefined ? [...own].sort(byTime) : own;
+    // A span whose parent is missing from the log sits at the top level;
+    // when one does, the top level reads in time order so it lands where it
+    // happened. Otherwise rows keep log order, as they always have.
+    const ordered =
+      parentId === undefined && own.some((row) => row.orphan) ? [...own].sort(byTime) : own;
     return ordered.flatMap((row) => [
       ...userRows(row, depth, lookups),
       { ...row, depth },
@@ -382,7 +393,9 @@ function byTime(first: StoryRow, second: StoryRow): number {
   return rowTime(first) - rowTime(second);
 }
 function rowTime(row: StoryRow): number {
-  if (row.kind === "round") return row.round.start;
+  if (row.kind === "round") {
+    return row.round.start;
+  }
   const event = row.node.event;
   const at = event === undefined ? row.node.firstTs : Date.parse(event.data.timestamp);
   return at === undefined || !Number.isFinite(at) ? Number.POSITIVE_INFINITY : at;
@@ -412,13 +425,13 @@ function pauseRows(row: StoryRow, depth: number, lookups: Lookups): PauseStoryRo
 function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   const placed = walkWithDepth(trace);
   // An llmCall span inside a tool is a thread row, as before. A top-level
-  // one becomes a thread row only when it has a sibling llmCall to be told
-  // apart from: a conversation that runs beside the main one (an
+  // one becomes a thread row only when a sibling llmCall span runs on a
+  // different thread: a conversation that runs beside the main one (an
   // expression check, a watcher) then reads as its own thread, while a run
-  // with one conversation keeps its calls at the top.
+  // that calls llm() several times on one thread keeps its calls at the top.
   const candidates = placed.map((item) => {
     const context = { ...lookups, ...item };
-    return item.node.label === "llmCall" && isThreadRow(item.node, lookups.index)
+    return item.node.label === "llmCall" && isThreadRow(item.node, lookups)
       ? llmGroupRow(context)
       : rowFor(context);
   });
@@ -459,15 +472,19 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   }
   return candidates.filter((row) => !hidden.includes(row.id));
 }
-function isThreadRow(node: TreeNode, index: TreeIndex): boolean {
+function isThreadRow(node: TreeNode, lookups: Lookups): boolean {
+  const { index } = lookups;
   if (nearestAncestor(node, index, (ancestor) => ancestor.label === "toolExecution")) {
     return true;
   }
   const parent = index.byId[index.parentIds[node.id]];
-  const siblings = (parent?.children ?? []).filter(
-    (child) => child.nodeKind === "span" && child.label === "llmCall",
-  );
-  return siblings.length > 1;
+  const siblingIds = (parent?.children ?? [])
+    .filter((child) => child.nodeKind === "span" && child.label === "llmCall")
+    .map((child) => child.id);
+  const threads = Object.values(lookups.roundsByLeaf)
+    .filter((round) => siblingIds.includes(round.spanId))
+    .map((round) => `${round.thread.kind}:${round.thread.id}`);
+  return threads.some((thread) => thread !== threads[0]);
 }
 function storyParents(rows: StoryRow[], lookups: Lookups): Record<string, string | undefined> {
   const parents: Record<string, string | undefined> = Object.create(null);

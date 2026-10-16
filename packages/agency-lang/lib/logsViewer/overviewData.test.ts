@@ -190,10 +190,24 @@ describe("overview errors", () => {
     ]);
     expect(data.calls[1].id).toBe("leaf:L:error:0");
   });
+
+  it("keeps the memory manager's own request failures out of the chart columns", () => {
+    const root = trace([
+      span("llmCall", [leaf("promptCompletion", 1_000, { timeTaken: 100 })], { id: "L" }),
+      span(
+        "memoryCompaction",
+        [leaf("error", 2_000, { message: "503 overloaded", errorType: "llmError" })],
+        { id: "M" },
+      ),
+    ]);
+    const data = overviewData(root);
+    expect(data.calls.map((call) => call.round?.index)).toEqual([0]);
+    expect(data.calls[0].errors.map((error) => error.message)).toEqual(["503 overloaded"]);
+  });
 });
 
 describe("threadNames", () => {
-  it("lists distinct names in order of first use, with every unnamed thread as one entry", () => {
+  it("lists distinct names in order of first use, numbering a repeated name", () => {
     const root = trace([
       span(
         "llmCall",
@@ -208,6 +222,20 @@ describe("threadNames", () => {
         { id: "A2" },
       ),
     ]);
-    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed"]);
+    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed", "unnamed #2"]);
+  });
+
+  it("tells two threads one tool started apart", () => {
+    const sub = (id: string, at: number) =>
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", at, { toolName: "subagent", args: {} }),
+          span("llmCall", [leaf("promptCompletion", at + 10, { threadIdentity: id })], { id }),
+        ],
+        { id: `tool-${id}` },
+      );
+    const data = overviewData(trace([sub("x", 1_000), sub("y", 2_000)]));
+    expect(data.calls.map((call) => call.threadName)).toEqual(["subagent", "subagent #2"]);
   });
 });

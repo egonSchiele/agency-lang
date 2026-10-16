@@ -3,6 +3,7 @@ import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
 import { consumeRepresented, transcriptBlocks, transcriptText } from "./transcript.js";
+import { transcriptPayload } from "./transcriptPayload.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
 const user = { role: "user", content: "a module" };
@@ -471,9 +472,56 @@ describe("thread dividers", () => {
     ]);
   });
 
+  it("lets an error with no thread of its own join the thread it lands beside", () => {
+    const blocks = transcriptBlocks(
+      buildForest([
+        call("main", 100, "mainConversation"),
+        call("check", 200, "expressionCheck"),
+        event("error", 250, null, null, { message: "hook failed", errorType: "runtimeError" }),
+        call("main", 300, "mainConversation"),
+      ])[0],
+    );
+    expect(blocks.filter((block) => block.kind === "thread").map((block) => block.label)).toEqual([
+      "mainConversation",
+      "expressionCheck",
+      "mainConversation",
+    ]);
+    expect(blocks.find((block) => block.kind === "error")).toMatchObject({
+      threadLabel: "mainConversation",
+    });
+  });
+
   it("adds no divider to a transcript on one thread", () => {
     const blocks = transcriptBlocks(buildForest([call("main", 100, "mainConversation")])[0]);
     expect(blocks.some((block) => block.kind === "thread")).toBe(false);
+  });
+});
+
+describe("rewrite headings", () => {
+  const round = (at: number, messages: unknown[]) =>
+    event("promptCompletion", at, "L", null, {
+      threadIdentity: "main",
+      messages,
+      completion: { output: "ok" },
+    });
+  const heading = (blocks: ReturnType<typeof transcriptBlocks>) =>
+    transcriptPayload(
+      blocks.find((block) => block.kind === "rewrite")!,
+      false,
+    )[0];
+
+  it("says where the history changed", () => {
+    const blocks = transcriptBlocks(
+      buildForest([round(100, [system, user]), round(200, [system, { ...user, content: "b" }])])[0],
+    );
+    expect(heading(blocks)).toMatchObject({ text: expect.stringContaining("from message 2") });
+  });
+
+  it("says where a shortened history was cut", () => {
+    const blocks = transcriptBlocks(
+      buildForest([round(100, [system, user]), round(200, [system])])[0],
+    );
+    expect(heading(blocks)).toMatchObject({ text: expect.stringContaining("after message 1") });
   });
 });
 
@@ -519,7 +567,7 @@ describe("pause blocks", () => {
       "assistant",
     ]);
     const pause = blocks.find((block) => block.kind === "pause");
-    expect(pause).toMatchObject({ pausedMs: 7_000, resumed: true, at: 103 });
+    expect(pause).toMatchObject({ pausedMs: 7_001, resumed: true, at: 103 });
     expect(transcriptText(pause!)).toBe("paused, then resumed");
   });
 });

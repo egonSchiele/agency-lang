@@ -15,6 +15,7 @@ import {
 } from "../keymap.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
+import { TOOL_STATUS_MARK, type ToolStatus } from "../story.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
   threadKey,
@@ -402,12 +403,18 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
   );
   return [heading, ...body];
 }
+/** Only a problem gets a mark in the call list; a plain result does not. */
+function toolMark(status: ToolStatus): string {
+  return ["failed", "rejected", "awaitingApproval"].includes(status)
+    ? `${TOOL_STATUS_MARK[status]} `
+    : "";
+}
 function spineLabel(block: TranscriptBlock): string {
   switch (block.kind) {
     case "assistant":
       return `LLM call ${block.round.index + 1}`;
     case "tool":
-      return `  ${{ failed: "✖ ", rejected: "✖ ", awaitingApproval: "⚠ " }[block.row.status as string] ?? ""}${block.row.name}`;
+      return `  ${toolMark(block.row.status)}${block.row.name}`;
     case "error":
       return "✖ error";
     case "pause":

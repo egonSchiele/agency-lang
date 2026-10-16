@@ -97,13 +97,21 @@ export function runStatus(trace: TreeNode): RunStatus {
     return hasRunningWork(trace) ? "running" : "done";
   }
   const thisRun = events.slice(lastStart + 1);
-  const end = thisRun.find((event) => event.data.type === "agentEnd");
-  if (end !== undefined) {
-    const crashed =
-      !Object.hasOwn(end.data, "result") && thisRun.some((event) => event.data.type === "error");
-    return crashed ? "crashed" : "done";
+  const endAt = thisRun.findIndex((event) => event.data.type === "agentEnd");
+  if (endAt !== -1) {
+    return crashedBefore(thisRun.slice(0, endAt)) ? "crashed" : "done";
   }
   return awaitingResponse(events) ? "paused" : "running";
+}
+
+/** A crash is what the runtime logs when a run throws: an `error` with
+ *  `errorType: "runtimeError"` right before the footer. A tool that failed
+ *  and a structured reply the caller handled also log errors, and a node
+ *  that returns nothing has no `result` on its footer, so neither of those
+ *  can be the signal. */
+function crashedBefore(events: EventEnvelope[]): boolean {
+  const last = events.at(-1);
+  return last?.data.type === "error" && last.data.errorType === "runtimeError";
 }
 
 /** Whether some interrupt's latest resolution still waits on a person.
@@ -113,7 +121,9 @@ export function runStatus(trace: TreeNode): RunStatus {
 function awaitingResponse(events: EventEnvelope[]): boolean {
   const latest: Record<string, string> = Object.create(null);
   for (const event of events) {
-    if (event.data.type !== "interruptResolved") continue;
+    if (event.data.type !== "interruptResolved") {
+      continue;
+    }
     const id = typeof event.data.interruptId === "string" ? event.data.interruptId : "";
     latest[id] = String(event.data.outcome ?? "");
   }
@@ -137,6 +147,7 @@ export function runPauses(trace: TreeNode): RunPause[] {
     .filter((entry) => Number.isFinite(entry.at))
     .sort((first, second) => first.at - second.at);
   const starts = leaves.filter((entry) => entry.node.event!.data.type === "agentStart");
+  const answers = leaves.filter((entry) => entry.node.event!.data.resolvedBy === "user");
   return leaves
     .filter((entry) => {
       const data = entry.node.event!.data;
@@ -147,10 +158,17 @@ export function runPauses(trace: TreeNode): RunPause[] {
     })
     .map((entry) => {
       const id = entry.node.event!.data.interruptId;
+      // The wait ends when the person answers this interrupt. Several runs
+      // can share one trace (a harness naming it for a process tree), so
+      // another run's agentStart is only the fallback for a log that
+      // recorded no answer.
+      const answered = answers.find(
+        (answer) => answer.at > entry.at && answer.node.event!.data.interruptId === id,
+      );
       return {
         interruptId: typeof id === "string" ? id : undefined,
         pausedAt: entry.at,
-        resumedAt: starts.find((start) => start.at > entry.at)?.at,
+        resumedAt: answered?.at ?? starts.find((start) => start.at > entry.at)?.at,
         node: entry.node,
       };
     });

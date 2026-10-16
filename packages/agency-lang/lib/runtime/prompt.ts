@@ -25,16 +25,14 @@ import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
 import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
-import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindOf } from "./llmDispatch.js";
+import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
 import {
   emitPromptCompletion,
   emitPromptStart,
   redactMessagesForLog,
   redactPromptForLog,
-  withMessageLabels,
 } from "./promptEvents.js";
 import type { DecisionLog } from "../statelog/wireTypes.js";
-export { redactMessagesForLog, redactPromptForLog, withMessageLabels };
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
@@ -355,7 +353,7 @@ async function _runPrompt({
 
   // "completion" for a text model; "decision" for a decision model, whose
   // call is booked under its own kind. See decision/dispatch.ts.
-  const usageKind = usageKindOf(promptConfig);
+  const usageKind = usageKindFor(promptConfig);
   emitPromptStart({ run, messages, tools, responseFormat, clientConfig, callLabel, usageKind });
 
   let completion: PromptResult;

@@ -244,7 +244,8 @@ the chat thread and a decision model never sees a chat:
 
 The state is text only by construction (`messagesToState` reads the content
 getter, which joins text parts and drops attachments), so it needs no
-redaction of its own. The `decisionOf` and `usageKindOf` accessors in
+redaction of its own. The echoed `completion` on a decision call leaves out
+`rawData`, which would repeat the answers. The `decisionOf` and `usageKindOf` accessors in
 `lib/statelog/wireAccessors.ts` read the fields; both are absent on logs
 from before they were recorded.
 

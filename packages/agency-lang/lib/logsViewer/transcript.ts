@@ -239,6 +239,16 @@ function withErrorBlocks(
         candidate.at > error.at &&
         (thread === undefined || threadKey(candidate.thread) === threadKey(thread.key)),
     );
+    // An error with no thread of its own joins the thread of the block it
+    // lands beside, so it opens no divider.
+    const neighbor = out[position === -1 ? out.length - 1 : position];
+    if (thread === undefined && neighbor !== undefined) {
+      Object.assign(block, {
+        thread: neighbor.thread,
+        threadLabel: neighbor.threadLabel,
+        depth: neighbor.depth,
+      });
+    }
     out.splice(position === -1 ? out.length : position, 0, block);
   }
   return out;

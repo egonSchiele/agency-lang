@@ -471,6 +471,25 @@ describe("thread dividers", () => {
     ]);
   });
 
+  it("lets an error with no thread of its own join the thread it lands beside", () => {
+    const blocks = transcriptBlocks(
+      buildForest([
+        call("main", 100, "mainConversation"),
+        call("check", 200, "expressionCheck"),
+        event("error", 250, null, null, { message: "hook failed", errorType: "runtimeError" }),
+        call("main", 300, "mainConversation"),
+      ])[0],
+    );
+    expect(blocks.filter((block) => block.kind === "thread").map((block) => block.label)).toEqual([
+      "mainConversation",
+      "expressionCheck",
+      "mainConversation",
+    ]);
+    expect(blocks.find((block) => block.kind === "error")).toMatchObject({
+      threadLabel: "mainConversation",
+    });
+  });
+
   it("adds no divider to a transcript on one thread", () => {
     const blocks = transcriptBlocks(buildForest([call("main", 100, "mainConversation")])[0]);
     expect(blocks.some((block) => block.kind === "thread")).toBe(false);

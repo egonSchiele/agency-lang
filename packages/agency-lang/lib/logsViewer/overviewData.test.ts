@@ -207,7 +207,7 @@ describe("overview errors", () => {
 });
 
 describe("threadNames", () => {
-  it("lists distinct names in order of first use, with every unnamed thread as one entry", () => {
+  it("lists distinct names in order of first use, numbering a repeated name", () => {
     const root = trace([
       span(
         "llmCall",
@@ -222,6 +222,20 @@ describe("threadNames", () => {
         { id: "A2" },
       ),
     ]);
-    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed"]);
+    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed", "unnamed #2"]);
+  });
+
+  it("tells two threads one tool started apart", () => {
+    const sub = (id: string, at: number) =>
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", at, { toolName: "subagent", args: {} }),
+          span("llmCall", [leaf("promptCompletion", at + 10, { threadIdentity: id })], { id }),
+        ],
+        { id: `tool-${id}` },
+      );
+    const data = overviewData(trace([sub("x", 1_000), sub("y", 2_000)]));
+    expect(data.calls.map((call) => call.threadName)).toEqual(["subagent", "subagent #2"]);
   });
 });

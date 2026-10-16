@@ -363,13 +363,13 @@ export function storyOutline(trace: TreeNode, options: AdminOptions): StoryRow[]
 function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   const placed = walkWithDepth(trace);
   // An llmCall span inside a tool is a thread row, as before. A top-level
-  // one becomes a thread row only when it has a sibling llmCall to be told
-  // apart from: a conversation that runs beside the main one (an
+  // one becomes a thread row only when a sibling llmCall span runs on a
+  // different thread: a conversation that runs beside the main one (an
   // expression check, a watcher) then reads as its own thread, while a run
-  // with one conversation keeps its calls at the top.
+  // that calls llm() several times on one thread keeps its calls at the top.
   const candidates = placed.map((item) => {
     const context = { ...lookups, ...item };
-    return item.node.label === "llmCall" && isThreadRow(item.node, lookups.index)
+    return item.node.label === "llmCall" && isThreadRow(item.node, lookups)
       ? llmGroupRow(context)
       : rowFor(context);
   });
@@ -393,15 +393,19 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   }
   return candidates.filter((row) => !hidden.includes(row.id));
 }
-function isThreadRow(node: TreeNode, index: TreeIndex): boolean {
+function isThreadRow(node: TreeNode, lookups: Lookups): boolean {
+  const { index } = lookups;
   if (nearestAncestor(node, index, (ancestor) => ancestor.label === "toolExecution")) {
     return true;
   }
   const parent = index.byId[index.parentIds[node.id]];
-  const siblings = (parent?.children ?? []).filter(
-    (child) => child.nodeKind === "span" && child.label === "llmCall",
-  );
-  return siblings.length > 1;
+  const siblingIds = (parent?.children ?? [])
+    .filter((child) => child.nodeKind === "span" && child.label === "llmCall")
+    .map((child) => child.id);
+  const threads = Object.values(lookups.roundsByLeaf)
+    .filter((round) => siblingIds.includes(round.spanId))
+    .map((round) => `${round.thread.kind}:${round.thread.id}`);
+  return threads.some((thread) => thread !== threads[0]);
 }
 function storyParents(rows: StoryRow[], lookups: Lookups): Record<string, string | undefined> {
   const parents: Record<string, string | undefined> = Object.create(null);

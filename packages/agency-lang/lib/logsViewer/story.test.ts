@@ -199,4 +199,21 @@ describe("top-level thread rows", () => {
     const trace = buildForest([call("main", 200, "mainConversation")])[0];
     expect(outlineRows(trace, STORY).map((row) => row.kind)).toEqual(["user", "round"]);
   });
+
+  it("keeps several top-level calls on one thread flat, as a loop makes them", () => {
+    const onMain = (span: string, at: number) =>
+      event("promptCompletion", at, span, null, {
+        threadIdentity: "main",
+        threadLabel: "mainConversation",
+        messages: [{ role: "user", content: `step ${at}` }],
+        completion: { output: "ok" },
+      });
+    const trace = buildForest([onMain("A", 100), onMain("B", 200)])[0];
+    expect(outlineRows(trace, STORY).map((row) => row.kind)).toEqual([
+      "user",
+      "round",
+      "user",
+      "round",
+    ]);
+  });
 });

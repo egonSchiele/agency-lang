@@ -224,7 +224,7 @@ function tickColor(call: OverviewCall, selected: boolean, layout: ChartLayout): 
   if (call.round === undefined) {
     return THEME.kind.error;
   }
-  const thread = layout.threads.indexOf(call.threadLabel ?? "unnamed");
+  const thread = layout.threads.indexOf(call.threadName);
   if (layout.threads.length > 1 && thread !== -1) {
     return threadColor(thread);
   }

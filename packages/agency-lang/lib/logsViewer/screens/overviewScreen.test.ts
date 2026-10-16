@@ -32,8 +32,11 @@ function fixture(count = 3) {
     ]),
   ];
 }
+/** The fixture records no input, so these tests read the output pane. */
 function screen(count = 3) {
-  return new OverviewScreen(fixture(count), "T", () => 40000);
+  const view = new OverviewScreen(fixture(count), "T", () => 40000);
+  view.handleKey({ key: "tab" }, viewport);
+  return view;
 }
 function flat(element: Element): string[] {
   return element.type === "text"
@@ -167,6 +170,7 @@ it("shows tool requests and literal style tags in the preview", () => {
     ],
   };
   const view = new OverviewScreen(roots, "T", () => undefined);
+  view.handleKey({ key: "tab" }, viewport);
   expect(frame(view)).toContain("{bold}literal{/bold}");
   expect(frame(view)).toContain("TOOL CALL · read");
   expect(frame(view)).toContain("notes.md");
@@ -235,38 +239,42 @@ function inputScreen() {
   }
   return new OverviewScreen(roots, "T", () => undefined);
 }
-it("toggles to recorded input without changing graphs, selection or metrics", () => {
+it("opens on the recorded input and toggles to output without changing graphs, selection or metrics", () => {
   const view = inputScreen();
-  expect(frame(view)).toContain("[OUTPUT] INPUT");
-  const before = tickRows(view);
-  view.handleKey({ key: "tab" }, viewport);
   const text = frame(view);
-  expect(text).toContain("OUTPUT [INPUT]");
+  expect(text).toContain("[INPUT] OUTPUT");
   expect(text).toContain("USER");
   expect(text).toContain("input 1 line 1");
   expect(text).not.toContain("answer 1 line 1");
   expect(text).toContain("13,919");
+  expect(text).toContain("tab input/output");
+  const before = tickRows(view);
+  view.handleKey({ key: "tab" }, viewport);
+  const output = frame(view);
+  expect(output).toContain("INPUT [OUTPUT]");
+  expect(output).toContain("answer 1 line 1");
+  expect(output).not.toContain("input 1 line 1");
+  expect(output).toContain("13,919");
   expect(view.focusId()).toBe("round:L:0");
   expect(tickRows(view)).toEqual(before);
-  expect(text).toContain("tab input/output");
 });
 it("preserves separate input and output scroll positions", () => {
   const view = inputScreen();
-  view.handleKey({ key: "pagedown" }, viewport);
-  const output = frame(view);
-  view.handleKey({ key: "tab" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   const input = frame(view);
   expect(input).toContain("tool reply");
   expect(input).toContain("TOOL CALL · read · read-1");
   view.handleKey({ key: "tab" }, viewport);
-  expect(frame(view)).toBe(output);
+  view.handleKey({ key: "pagedown" }, viewport);
+  const output = frame(view);
+  expect(output).toContain("answer 1 line 30");
   view.handleKey({ key: "tab" }, viewport);
   expect(frame(view)).toBe(input);
+  view.handleKey({ key: "tab" }, viewport);
+  expect(frame(view)).toBe(output);
 });
 it("collapses the system prompt until s is pressed and retains expansion across toggles", () => {
   const view = inputScreen();
-  view.handleKey({ key: "tab" }, viewport);
   expect(frame(view)).toContain("System prompt · 2 lines · s to show");
   expect(frame(view)).not.toContain("system secret");
   view.handleKey({ key: "s" }, viewport);
@@ -280,20 +288,20 @@ it("collapses the system prompt until s is pressed and retains expansion across 
 });
 it("keeps input mode but resets both scroll positions and system expansion on another call", () => {
   const view = inputScreen();
+  view.handleKey({ key: "tab" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   view.handleKey({ key: "tab" }, viewport);
   view.handleKey({ key: "s" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   view.handleKey({ key: "right" }, viewport);
-  expect(frame(view)).toContain("OUTPUT [INPUT]");
+  expect(frame(view)).toContain("[INPUT] OUTPUT");
   expect(frame(view)).toContain("input 2 line 1");
   expect(frame(view)).not.toContain("system secret");
   view.handleKey({ key: "tab" }, viewport);
   expect(frame(view)).toContain("answer 2 line 1");
 });
 it("explains when an older log did not record the input", () => {
-  const view = screen();
-  view.handleKey({ key: "tab" }, viewport);
+  const view = new OverviewScreen(fixture(), "T", () => 40000);
   expect(frame(view)).toContain("Input messages were not recorded.");
 });
 
@@ -374,6 +382,7 @@ it("says how the run ended and counts its errors in the header, and marks failed
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
+  view.handleKey({ key: "tab" }, viewport);
   const text = frame(view);
   expect(text).toContain("✖ crashed");
   expect(text).toContain("✖ 2 errors");
@@ -469,13 +478,13 @@ it("previews a decision call as its state and questions, and its answers with ba
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
-  const output = frame(view);
-  expect(output).toContain("LLM CALL 1 · DECISION · curious 86%");
-  expect(output).toContain("ANSWER · response");
-  expect(output).toMatch(/curious █+░* 86%/);
-  view.handleKey({ key: "tab" }, viewport);
   const input = frame(view);
+  expect(input).toContain("LLM CALL 1 · DECISION · curious 86%");
   expect(input).toContain("STATE");
   expect(input).toContain("response · choice · idle, curious");
   expect(input).toContain("Which expression?");
+  view.handleKey({ key: "tab" }, viewport);
+  const output = frame(view);
+  expect(output).toContain("ANSWER · response");
+  expect(output).toMatch(/curious █+░* 86%/);
 });

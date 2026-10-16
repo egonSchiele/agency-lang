@@ -7,7 +7,12 @@ import {
 import { buildTreeIndex } from "./forest.js";
 import { fmtTokens, fmtUsd } from "./format.js";
 import { childEvent, fmtDuration } from "./spanText.js";
-import { decodeStructured, structuredLines, type StructuredLine } from "./structured.js";
+import {
+  decodeStructured,
+  structuredLines,
+  type FlatRole,
+  type StructuredLine,
+} from "./structured.js";
 import {
   ownedToolNodes,
   toolErrorMessages,
@@ -28,7 +33,11 @@ export type PayloadLine =
       tone: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome" | "accent";
     }
   | { kind: "meta"; text: string }
-  | { kind: "text"; text: string; indent: number; role: StructuredLine["role"] | "plain" | "error" }
+  | { kind: "text"; text: string; indent: number; role: FlatRole | "plain" | "error" }
+  /** A field with its value on the same line; the painter colors the key. */
+  | { kind: "pair"; key: string; text: string; indent: number }
+  /** A list of same-shaped objects; the painter draws rows when they fit. */
+  | { kind: "table"; columns: string[]; rows: string[][]; indent: number }
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
   | { kind: "blank" };
@@ -96,7 +105,7 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
     },
     {
       kind: "meta",
-      text: roundTokenSummary(row),
+      text: roundTokenLine(round),
     },
     { kind: "blank" },
     ...roundResponsePayload(round),
@@ -203,15 +212,19 @@ export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
       return [{ kind: "heading", text: "⋯ RESULT · completion not recorded", tone: "chrome" }];
   }
 }
-function roundTokenSummary(row: RoundStoryRow): string {
-  const event = row.node.event!;
+/** One line of token counts, the same on every screen: what the model
+ *  read, how much of that was cached (and written to the cache), and what
+ *  it wrote. Fresh input is the difference, so it is not printed. The
+ *  overview pane has room for exact counts; the others round. */
+export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): string {
+  const event = round.node.event!;
   if (!hasTokenUsage(event)) {
-    return "context ? · fresh ? · out ?";
+    return "input ? · output ?";
   }
-  const round = row.round;
+  const fmt = opts.exact ? (count: number) => count.toLocaleString("en-US") : fmtTokens;
   const written = tokensCacheWrite(event);
-  const writes = written > 0 ? `, ${fmtTokens(written)} write` : "";
-  return `context ${fmtTokens(round.contextTokens)} (${fmtTokens(round.cachedTokens)} cached${writes}) · fresh ${fmtTokens(round.freshTokens)} · out ${fmtTokens(round.outputTokens)}`;
+  const writes = written > 0 ? `, ${fmt(written)} write` : "";
+  return `input ${fmt(round.contextTokens)} (${fmt(round.cachedTokens)} cached${writes}) · output ${fmt(round.outputTokens)}`;
 }
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
@@ -296,13 +309,24 @@ function structuredPayload(lines: StructuredLine[]): PayloadLine[] {
   const output: PayloadLine[] = [];
   for (let position = 0; position < lines.length; position++) {
     const line = lines[position];
+    if (line.role === "pair") {
+      output.push(...pairPayload(line));
+      continue;
+    }
+    if (line.role === "table") {
+      output.push({ kind: "table", columns: line.columns, rows: line.rows, indent: line.indent });
+      continue;
+    }
     if (line.role !== "text") {
       output.push({ kind: "text", ...line });
       continue;
     }
     const block = [line.text];
-    while (lines[position + 1]?.role === "text" && lines[position + 1].indent === line.indent) {
-      block.push(lines[++position].text);
+    let next = lines[position + 1];
+    while (next?.role === "text" && next.indent === line.indent) {
+      block.push(next.text);
+      position += 1;
+      next = lines[position + 1];
     }
     const text = block.join("\n");
     const previous = lines[position - block.length];
@@ -321,4 +345,15 @@ function structuredPayload(lines: StructuredLine[]): PayloadLine[] {
     }
   }
   return output;
+}
+/** A one-line `code` field is still Agency source, highlighted like a
+ *  longer one. */
+function pairPayload(line: Extract<StructuredLine, { role: "pair" }>): PayloadLine[] {
+  if (line.key === "code") {
+    return [
+      { kind: "text", text: "code", indent: line.indent, role: "key" },
+      { kind: "code", text: line.text, language: "agency", indent: line.indent + 2 },
+    ];
+  }
+  return [{ kind: "pair", key: line.key, text: line.text, indent: line.indent }];
 }

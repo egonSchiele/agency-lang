@@ -18,7 +18,7 @@ import { storyOutline } from "../story.js";
 import { fmtUsd } from "../format.js";
 import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
 import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
-import { roundResponsePayload, type PayloadLine } from "../payload.js";
+import { roundResponsePayload, roundTokenLine, type PayloadLine } from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
 import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
@@ -46,7 +46,7 @@ export class OverviewScreen implements Screen {
   private selectedId: string | undefined;
   // Keep a tool selected when visiting overview without choosing another call.
   private returnFocusId: string | undefined;
-  private previewMode: PreviewMode = "output";
+  private previewMode: PreviewMode = "input";
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
   private get scrollTop(): number {
@@ -305,7 +305,7 @@ export class OverviewScreen implements Screen {
   private preview(width: number, height: number): Preview {
     const selected = this.selected();
     const heading = overviewSection(
-      `${callTitle(selected)} · ${this.previewMode === "output" ? "[OUTPUT] INPUT" : "OUTPUT [INPUT]"}`,
+      `${callTitle(selected)} · ${this.previewMode === "input" ? "[INPUT] OUTPUT" : "INPUT [OUTPUT]"}`,
       width,
     );
     if (
@@ -439,20 +439,17 @@ function previewMetadata(call: OverviewCall): PayloadLine[] {
   const event = round.node.event!;
   const time =
     typeof event.data.timeTaken === "number"
-      ? `${round.durationMs.toLocaleString("en-US")}ms`
+      ? fmtDuration(round.durationMs, { minutes: true })
       : "time not recorded";
   const cost =
     typeof event.data.cost?.totalCost === "number" ? fmtCost(round.costUsd) : "cost not recorded";
   const tokens = hasTokenUsage(event)
-    ? [
-        `context ${round.contextTokens.toLocaleString("en-US")} · cached ${round.cachedTokens.toLocaleString("en-US")}`,
-        `fresh ${round.freshTokens.toLocaleString("en-US")} · output ${round.outputTokens.toLocaleString("en-US")}`,
-      ]
-    : ["token usage not recorded"];
+    ? roundTokenLine(round, { exact: true })
+    : "token usage not recorded";
   return [
     round.model || "unknown model",
     `${time} · ${cost}`,
-    ...tokens,
+    tokens,
     `thread ${call.threadName}`,
   ].map((text) => ({ kind: "meta", text }));
 }

@@ -15,6 +15,7 @@ export const THEME = {
   text: "#cdd6f4",
   accent: "#cba6f7",
   cached: "#45475a",
+  key: "#89dceb",
   ok: "#94e2d5",
   warning: "#fab387",
   rule: "#313244",

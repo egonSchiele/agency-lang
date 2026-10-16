@@ -18,6 +18,12 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
       .split("\n")
       .flatMap((text) => wrapCodeLine(text, width - indent, indent));
   }
+  if (line.kind === "pair") {
+    return paintPair(line.key, line.text, line.indent, width);
+  }
+  if (line.kind === "table") {
+    return paintTable(line, width);
+  }
   let foreground: string = THEME.text;
   if (line.kind === "heading") {
     foreground = HEADING_COLORS[line.tone];
@@ -36,6 +42,54 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
         paint(" ".repeat(indent) + part, { fg: foreground, bold: line.kind === "heading" }),
       ),
     );
+}
+
+/** `key: value` with the key in its own color; a wrapped value continues
+ *  at the key's indent. */
+function paintPair(key: string, value: string, indent: number, width: number): Painted[] {
+  const inset = Math.min(indent, Math.max(0, width - 1));
+  const label = `${escapeControls(key)}:`;
+  const parts = wrapLine(`${label} ${escapeControls(value)}`, width - inset);
+  return parts.map((part, position) => {
+    const padding = " ".repeat(inset);
+    if (position === 0 && part.startsWith(label)) {
+      return joinPainted(
+        paint(padding + label, { fg: THEME.key }),
+        paint(part.slice(label.length), { fg: THEME.text }),
+      );
+    }
+    return paint(padding + part, { fg: THEME.text });
+  });
+}
+
+const TABLE_GAP = 2;
+
+/** Rows under a header when they fit the width; otherwise each row as an
+ *  index and its fields, the shape a mixed list gets. */
+function paintTable(line: Extract<PayloadLine, { kind: "table" }>, width: number): Painted[] {
+  const columns = line.columns.map(escapeControls);
+  const rows = line.rows.map((row) => row.map(escapeControls));
+  const widths = columns.map((column, index) =>
+    Math.max(column.length, ...rows.map((row) => row[index].length)),
+  );
+  const total =
+    line.indent + widths.reduce((sum, w) => sum + w, 0) + TABLE_GAP * (widths.length - 1);
+  if (total > width) {
+    return rows.flatMap((row, position) => [
+      paint(" ".repeat(line.indent) + `[${position}]`, { fg: THEME.text }),
+      ...row.flatMap((cell, index) => paintPair(columns[index], cell, line.indent + 2, width)),
+    ]);
+  }
+  const padded = (cells: string[]) =>
+    " ".repeat(line.indent) +
+    cells
+      .map((cell, index) => cell.padEnd(widths[index]))
+      .join(" ".repeat(TABLE_GAP))
+      .trimEnd();
+  return [
+    paint(padded(columns), { fg: THEME.key }),
+    ...rows.map((row) => paint(padded(row), { fg: THEME.text })),
+  ];
 }
 
 const HEADING_COLORS: Record<Extract<PayloadLine, { kind: "heading" }>["tone"], string> = {

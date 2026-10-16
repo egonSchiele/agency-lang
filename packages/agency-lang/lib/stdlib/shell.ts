@@ -273,7 +273,9 @@ async function approvedRoot(
 }
 
 /** The root of a probe. stat and exists raise no interrupt, so there is
- *  no approved spelling to hold fixed: the caller's spelling resolves. */
+ *  no approved spelling to hold fixed: the caller's spelling resolves.
+ *  The allow-list sees a plain join, not `resolvePath(probed, target)`,
+ *  because that refuses a symlink and a probe must report one as missing. */
 async function probeRoot(
   host: Host,
   rootDir: string,
@@ -281,7 +283,8 @@ async function probeRoot(
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
   const probed = await host.files.root(rootDir);
-  const walked = await host.files.resolvePath(probed, target);
+  const rootPath = await host.files.resolvePath(probed, ".");
+  const walked = path.join(rootPath, target);
   await assertContained(host, walked, allowedPaths ?? [], host.system.cwd());
   return probed;
 }

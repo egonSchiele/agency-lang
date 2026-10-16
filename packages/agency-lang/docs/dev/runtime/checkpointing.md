@@ -28,8 +28,15 @@ class Checkpoint {
   stepPath: string;
   label: string | null;     // a human-readable tag, used by pinned checkpoints
   pinned: boolean;          // pinned checkpoints survive rolling eviction and dedup
+  traceId?: string;         // the statelog trace the run was logging to
 }
 ```
+
+`traceId` lets `agency resume` log the resumed run into the paused run's
+trace, the way an interrupt response already does through `interrupt.runId`.
+It is the lowest-priority source of a trace id: a subprocess's inherited id, a
+supplied `traceId`, and `AGENCY_TRACE_ID` all come first (see
+`resolveInvocation` in `lib/runtime/invocationOptions.ts`).
 
 A checkpoint is a deep clone of the `StateStack` and `GlobalStore` at the moment it was created, so checkpoint data is always JSON-serializable.
 

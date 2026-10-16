@@ -99,6 +99,17 @@ function checkpointFrom(output: string): string {
   return match![1];
 }
 
+/** Every distinct trace id in a statelog file, in order of first appearance. */
+function traceIdsIn(file: string): string[] {
+  const seen: string[] = [];
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    const traceId = JSON.parse(line).trace_id as string;
+    if (!seen.includes(traceId)) seen.push(traceId);
+  }
+  return seen;
+}
+
 function removeTemp(dir: string): void {
   const root = realpathSync(process.cwd());
   const resolved = realpathSync(dir);
@@ -314,6 +325,38 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
       expect(match).not.toBeNull();
       expect(readdirSync(path.join(dir, "captures"))).toEqual([match![1]]);
       expect(path.basename(match![2].trim())).toBe(match![1]);
+    } finally {
+      removeTemp(dir);
+    }
+  }, 120_000);
+
+  it("logs the resumed run into the paused run's statelog trace", async () => {
+    const dir = mkdtempSync(path.join(process.cwd(), ".agency-resume-spawn-"));
+    try {
+      writeFileSync(path.join(dir, "agent.agency"), SOURCE);
+      writeFileSync(
+        path.join(dir, "agency.json"),
+        JSON.stringify({ observability: true, log: { logFile: "statelog.jsonl" } }),
+      );
+      const fresh = await invoke(dir, ["run", "agent.agency"]);
+      expect(fresh.code, fresh.stderr).toBe(0);
+      writeFileSync(path.join(dir, "checkpoint.json"), checkpointFrom(fresh.stdout));
+      const freshTraces = traceIdsIn(path.join(dir, "statelog.jsonl"));
+      expect(freshTraces).toHaveLength(1);
+
+      const resumed = await invoke(dir, ["resume", "checkpoint.json", "agent.agency"]);
+      expect(resumed.code, resumed.stderr).toBe(0);
+      expect(traceIdsIn(path.join(dir, "statelog.jsonl"))).toEqual(freshTraces);
+
+      // A harness that names the trace itself still wins.
+      const named = await invoke(dir, ["resume", "checkpoint.json", "agent.agency"], {
+        AGENCY_TRACE_ID: "harness-trace",
+      });
+      expect(named.code, named.stderr).toBe(0);
+      expect(traceIdsIn(path.join(dir, "statelog.jsonl"))).toEqual([
+        ...freshTraces,
+        "harness-trace",
+      ]);
     } finally {
       removeTemp(dir);
     }

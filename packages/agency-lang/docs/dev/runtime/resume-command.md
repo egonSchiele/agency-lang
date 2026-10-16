@@ -43,6 +43,15 @@ context. A new interrupt pauses the trace without a footer because the run has
 not finished. The result carries `usage` and `traceId`, the same two fields
 `runNode` puts on a fresh run's result.
 
+The resumed run logs into the paused run's statelog trace. The checkpoint
+carries the trace id it was taken under, and `resumeCliFromCheckpoint` uses it
+when nothing else names a trace: a subprocess's inherited id and
+`AGENCY_TRACE_ID` both come first, so a harness that gives a process tree one
+trace keeps it. With the span ids that `runPrompt` saves in its frame (see
+"Span ids across a resume" in `../hosting/statelog.md`), the resumed events
+then land in the spans the paused run opened, and a viewer reads the two
+invocations as one story.
+
 ## Integrity and code identity
 
 `runCliEntry` validates the checkpoint before checking its signature. A signed

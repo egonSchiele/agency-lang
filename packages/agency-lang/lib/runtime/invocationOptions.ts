@@ -47,6 +47,9 @@ export type InvocationRequest =
       inheritedRunId?: string;
       /** `AGENCY_TRACE_ID`, when a harness set it for the whole process tree. */
       environmentTraceId?: string;
+      /** The trace the paused run was logging to, from the checkpoint a CLI
+       *  resume starts from. Used only when nothing else names a trace. */
+      checkpointTraceId?: string;
     }
   | { kind: "resume"; options?: InvocationOptions; runId: string };
 
@@ -179,7 +182,9 @@ function selectLogConfig(log: AgencyConfig["log"] | undefined): PerInvocationLog
  * Run-id precedence for a fresh run: an inherited subprocess id wins (so child
  * events land in the parent's trace), then a supplied `traceId`, then the
  * environment's `AGENCY_TRACE_ID` (a harness giving a whole process tree —
- * root included — one trace id), then a fresh `nanoid()`. A resume always
+ * root included — one trace id), then the trace id saved in the checkpoint a
+ * CLI resume starts from (so the resumed run joins the paused run's trace,
+ * as an interrupt response does), then a fresh `nanoid()`. A resume always
  * keeps `interrupt.runId`; a supplied `traceId` — empty or not — is ignored.
  * A supplied empty trace id on a fresh run is a caller error and is rejected.
  */
@@ -196,6 +201,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
     request.inheritedRunId ??
     request.options?.traceId ??
     emptyToUndefined(request.environmentTraceId) ??
+    emptyToUndefined(request.checkpointTraceId) ??
     nanoid();
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");

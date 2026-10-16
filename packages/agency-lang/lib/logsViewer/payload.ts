@@ -10,6 +10,8 @@ import { childEvent, fmtDuration } from "./spanText.js";
 import { decodeStructured, structuredLines, type StructuredLine } from "./structured.js";
 import {
   ownedToolNodes,
+  toolErrorMessages,
+  toolResultText,
   toolStatusText,
   type StoryRow,
   type RoundStoryRow,
@@ -120,20 +122,63 @@ function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
   return lines;
 }
 
-export function roundResponsePayload(round: Round): PayloadLine[] {
+/** How much of a tool result the output preview shows. */
+export const RESULT_PREVIEW_CHARS = 600;
+
+/** The completion, then each requested tool call with its arguments and,
+ *  when `tools` holds the call's tool rows, what came back. Requests are
+ *  matched to tool rows by name, in order, so a tool called twice in one
+ *  round pairs first with first. */
+export function roundResponsePayload(round: Round, tools: ToolStoryRow[] = []): PayloadLine[] {
   const event = round.node.event!;
   const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
+  const unmatched = [...tools];
   return [
     ...valuePayload(completionOf(event) ?? ""),
-    ...calls.flatMap((call) => [
-      {
-        kind: "heading" as const,
-        text: `TOOL CALL · ${call.name ?? "tool"}`,
-        tone: "tool" as const,
-      },
-      ...valuePayload(call.arguments),
-    ]),
+    ...calls.flatMap((call) => {
+      const at = unmatched.findIndex((tool) => tool.name === call.name);
+      const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
+      return [
+        {
+          kind: "heading" as const,
+          text: `TOOL CALL · ${call.name ?? "tool"}`,
+          tone: "tool" as const,
+        },
+        ...valuePayload(call.arguments),
+        ...(tool === undefined ? [] : toolResultPayload(tool)),
+      ];
+    }),
   ];
+}
+
+/** What a requested tool gave back, by its recorded status. */
+export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
+  switch (tool.status) {
+    case "completed": {
+      const text = toolResultText(tool) ?? "";
+      const shown =
+        text.length > RESULT_PREVIEW_CHARS
+          ? `${text.slice(0, RESULT_PREVIEW_CHARS)}… (${text.length - RESULT_PREVIEW_CHARS} more characters)`
+          : text;
+      return [{ kind: "heading", text: "→ RESULT", tone: "tool" }, ...valuePayload(shown)];
+    }
+    case "failed":
+      return [
+        { kind: "heading", text: "✖ RESULT · tool failed", tone: "error" },
+        ...toolErrorMessages(tool).map((message) => ({
+          kind: "text" as const,
+          text: message,
+          indent: 0,
+          role: "error" as const,
+        })),
+      ];
+    case "rejected":
+      return [{ kind: "heading", text: "✖ RESULT · interrupt rejected", tone: "error" }];
+    case "awaitingApproval":
+      return [{ kind: "heading", text: "⚠ RESULT · waiting for a response", tone: "interrupt" }];
+    case "unfinished":
+      return [{ kind: "heading", text: "⋯ RESULT · completion not recorded", tone: "chrome" }];
+  }
 }
 function roundTokenSummary(row: RoundStoryRow): string {
   const event = row.node.event!;

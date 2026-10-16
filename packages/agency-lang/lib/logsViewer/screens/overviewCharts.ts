@@ -2,7 +2,7 @@ import { paint, segment, type Painted, type Piece } from "../../tui/paint.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
-import type { Round } from "../timeline/rounds.js";
+import type { OverviewCall } from "../overviewData.js";
 import { ceilingRow, columnWindow, EMPTY_CELL, stackedColumn } from "./charts.js";
 
 const AXIS_WIDTH = 10;
@@ -17,34 +17,42 @@ type ChartLayout = {
   height: number;
   columnWidth: number;
   selectedId: string | undefined;
+  /** Whether a ✖ row is drawn under each chart's call numbers. */
+  marks: boolean;
 };
 
 export function overviewCharts(
-  rounds: Round[],
+  calls: OverviewCall[],
   selectedId: string | undefined,
   width: number,
   height: number,
   ceiling: number | undefined,
 ): Painted[] {
   const available = Math.max(1, width - AXIS_WIDTH);
-  const minSlot = Math.max(MIN_SLOT, String(rounds.length).length + 1);
-  const room = overviewCallCapacity(rounds.length, width);
+  const minSlot = Math.max(MIN_SLOT, String(calls.length).length + 1);
+  const room = overviewCallCapacity(calls.length, width);
   const selectedAt = Math.max(
     0,
-    rounds.findIndex((round) => round.id === selectedId),
+    calls.findIndex((call) => call.id === selectedId),
   );
-  const window = columnWindow(rounds.length, room, selectedAt);
-  const shown = rounds.slice(window.from, window.to);
+  const window = columnWindow(calls.length, room, selectedAt);
+  const shown = calls.slice(window.from, window.to);
   const slot = Math.min(
     Math.max(MAX_SLOT, minSlot),
     Math.floor(available / Math.max(1, shown.length)),
   );
+  // The ✖ row only appears when something went wrong, so a clean run keeps
+  // its chart height.
+  const marks = calls.some((call) => call.errors.length > 0);
+  const chrome = CHROME_ROWS + (marks ? CHART_COUNT : 0);
   const layout = {
     width,
-    height: Math.max(0, Math.floor((height - CHROME_ROWS) / CHART_COUNT)),
+    height: Math.max(0, Math.floor((height - chrome) / CHART_COUNT)),
     columnWidth: Math.max(1, slot - 1),
     selectedId,
+    marks,
   };
+  const rounds = calls.flatMap((call) => (call.round === undefined ? [] : [call.round]));
   const maxContext = Math.max(
     1,
     ...rounds.map((round) => round.contextTokens + round.outputTokens),
@@ -63,7 +71,7 @@ export function overviewCharts(
       max: maxCost,
       label: fmtCost(maxCost),
       color: THEME.kind.interrupt,
-      values: shown.map((round) => round.costUsd),
+      values: shown.map((call) => call.round?.costUsd ?? 0),
     }),
     paint(""),
     ...metricChart(shown, layout, {
@@ -71,7 +79,7 @@ export function overviewCharts(
       max: maxTime,
       label: fmtDuration(maxTime),
       color: THEME.kind.user,
-      values: shown.map((round) => round.durationMs),
+      values: shown.map((call) => call.round?.durationMs ?? 0),
     }),
   ];
 }
@@ -90,13 +98,19 @@ export function overviewSection(title: string, width: number): Painted {
 }
 
 function contextChart(
-  rounds: Round[],
+  calls: OverviewCall[],
   layout: ChartLayout,
   max: number,
   ceiling: number | undefined,
 ): Painted[] {
-  const columns = rounds.map((round) =>
-    stackedColumn([round.cachedTokens, round.freshTokens, round.outputTokens], max, layout.height),
+  const columns = calls.map((call) =>
+    stackedColumn(
+      call.round === undefined
+        ? [0, 0, 0]
+        : [call.round.cachedTokens, call.round.freshTokens, call.round.outputTokens],
+      max,
+      layout.height,
+    ),
   );
   const ceilingAt = ceiling === undefined ? undefined : ceilingRow(ceiling, max, layout.height);
   const glyphs = ["░", "▒", "█"];
@@ -108,7 +122,7 @@ function contextChart(
     columns.forEach((cells, index) => {
       const band = cells[row];
       const glyph = band === EMPTY_CELL ? (row === ceilingAt ? "┄" : " ") : glyphs[band];
-      pieces.push(columnPiece(glyph, colors[band] ?? THEME.chrome, rounds[index], layout), {
+      pieces.push(columnPiece(glyph, colors[band] ?? THEME.chrome, calls[index], layout), {
         text: " ",
       });
     });
@@ -117,36 +131,37 @@ function contextChart(
   return [
     overviewSection("CONTEXT PER LLM CALL", layout.width),
     ...rows,
-    ticks(rounds, layout),
+    ...ticks(calls, layout),
     segment(
       [
         { text: "░ cached", style: { fg: THEME.cached } },
         { text: "  ▒ fresh", style: { fg: THEME.kind.user } },
         { text: "  █ output", style: { fg: THEME.kind.assistant } },
+        ...(layout.marks ? [{ text: "  ✖ failed", style: { fg: THEME.kind.error } }] : []),
       ],
       layout.width,
     ),
   ];
 }
 
-function metricChart(rounds: Round[], layout: ChartLayout, chart: Chart): Painted[] {
+function metricChart(calls: OverviewCall[], layout: ChartLayout, chart: Chart): Painted[] {
   const columns = chart.values.map((value) => verticalColumn(value, chart.max, layout.height));
   const rows = Array.from({ length: layout.height }, (_, row) => {
     const pieces: Piece[] = [axis(row === 0 ? chart.label : row === layout.height - 1 ? "0" : "")];
     columns.forEach((cells, index) =>
-      pieces.push(columnPiece(cells[row], chart.color, rounds[index], layout), { text: " " }),
+      pieces.push(columnPiece(cells[row], chart.color, calls[index], layout), { text: " " }),
     );
     return segment(pieces, layout.width);
   });
-  return [overviewSection(chart.title, layout.width), ...rows, ticks(rounds, layout)];
+  return [overviewSection(chart.title, layout.width), ...rows, ...ticks(calls, layout)];
 }
 
-function columnPiece(glyph: string, color: string, round: Round, layout: ChartLayout): Piece {
+function columnPiece(glyph: string, color: string, call: OverviewCall, layout: ChartLayout): Piece {
   return {
     text: glyph.repeat(layout.columnWidth),
     style: {
       fg: color,
-      ...(round.id === layout.selectedId ? { bg: THEME.cursorBg, bold: true } : {}),
+      ...(call.id === layout.selectedId ? { bg: THEME.cursorBg, bold: true } : {}),
     },
   };
 }
@@ -154,22 +169,35 @@ function axis(label: string): Piece {
   const fitted = label.length < AXIS_WIDTH ? label : `${label.slice(0, AXIS_WIDTH - 2)}…`;
   return { text: fitted.padStart(AXIS_WIDTH - 1) + " ", style: { fg: THEME.muted } };
 }
-function ticks(rounds: Round[], layout: ChartLayout): Painted {
-  const pieces: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
-  rounds.forEach((round) => {
-    const selected = round.id === layout.selectedId;
-    pieces.push(
+/** The call numbers, and when any call has a problem a second row with a
+ *  ✖ under each one that does. A separate row, so a two-digit number never
+ *  squeezes the mark out of a narrow column. A request that failed before
+ *  the provider answered has no number; its tick is the ✖ itself. */
+function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
+  const numbers: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
+  const marks: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
+  calls.forEach((call) => {
+    const selected = call.id === layout.selectedId;
+    const failed = call.round === undefined;
+    numbers.push(
       {
-        text: String(round.index + 1).padEnd(layout.columnWidth),
+        text: (failed ? "✖" : String(call.round!.index + 1)).padEnd(layout.columnWidth),
         style: {
-          fg: selected ? THEME.accent : THEME.muted,
+          fg: failed ? THEME.kind.error : selected ? THEME.accent : THEME.muted,
           ...(selected ? { bg: THEME.cursorBg, bold: true } : {}),
         },
       },
       { text: " " },
     );
+    marks.push(
+      {
+        text: (!failed && call.errors.length > 0 ? "✖" : "").padEnd(layout.columnWidth),
+        style: { fg: THEME.kind.error, ...(selected ? { bg: THEME.cursorBg } : {}) },
+      },
+      { text: " " },
+    );
   });
-  return segment(pieces, layout.width);
+  return [segment(numbers, layout.width), ...(layout.marks ? [segment(marks, layout.width)] : [])];
 }
 export function fmtCost(value: number): string {
   if (value === 0) return "$0";

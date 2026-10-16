@@ -407,7 +407,9 @@ function spineLabel(block: TranscriptBlock): string {
     case "assistant":
       return `LLM call ${block.round.index + 1}`;
     case "tool":
-      return `  ${block.row.name}`;
+      return `  ${{ failed: "✖ ", rejected: "✖ ", awaitingApproval: "⚠ " }[block.row.status as string] ?? ""}${block.row.name}`;
+    case "error":
+      return "✖ error";
     case "rewrite":
       return "⚠ rewrite";
     case "history":
@@ -424,6 +426,15 @@ function spineColor(block: TranscriptBlock): string {
   }
   if (role === "assistant") {
     return THEME.kind.assistant;
+  }
+  if (
+    role === "error" ||
+    (block.kind === "tool" && ["failed", "rejected"].includes(block.row.status))
+  ) {
+    return THEME.kind.error;
+  }
+  if (block.kind === "tool" && block.row.status === "awaitingApproval") {
+    return THEME.kind.interrupt;
   }
   return THEME.text;
 }

@@ -56,7 +56,7 @@ describe("overviewData", () => {
       event("promptStart", 200),
     ].join("\n");
     const roots = buildForest(parseStatelogJsonl(jsonl).events);
-    expect(overviewData(roots[0]).running).toBe(true);
+    expect(overviewData(roots[0]).status).toBe("running");
   });
 
   it("does not let another span's completion close a pending prompt", () => {
@@ -66,7 +66,7 @@ describe("overviewData", () => {
       event("promptCompletion", 100, { timeTaken: 100 }, "A"),
     ].join("\n");
     const roots = buildForest(parseStatelogJsonl(jsonl).events);
-    expect(overviewData(roots[0]).running).toBe(true);
+    expect(overviewData(roots[0]).status).toBe("running");
   });
 });
 
@@ -101,7 +101,7 @@ it.each(["runtimeError", "validationError", "limitExceeded", "structuredOutput",
         id: "tool",
       }),
     ]);
-    expect(overviewData(root).running).toBe(true);
+    expect(overviewData(root).status).toBe("running");
   },
 );
 it("ends a tool on a toolError", () => {
@@ -112,5 +112,82 @@ it("ends a tool on a toolError", () => {
       { id: "tool" },
     ),
   ]);
-  expect(overviewData(root).running).toBe(false);
+  expect(overviewData(root).status).toBe("done");
+});
+
+describe("overview errors", () => {
+  function run() {
+    const rounds = [
+      leaf("promptCompletion", 1_000, {
+        timeTaken: 100,
+        completion: { toolCalls: [{ name: "write", arguments: { path: "a" } }] },
+      }),
+      leaf("promptCompletion", 3_000, { timeTaken: 100, completion: { output: "done" } }),
+    ];
+    const tool = span(
+      "toolExecution",
+      [
+        leaf("toolCallStart", 1_100, { toolName: "write", args: { path: "a" } }),
+        leaf("error", 1_200, { message: "disk full", errorType: "toolError" }),
+      ],
+      { id: "t1" },
+    );
+    // The forest records a span's first timestamp; the fixture builder does not.
+    tool.firstTs = 1_100;
+    return trace([
+      leaf("agentStart", 0, { entryNode: "main" }),
+      span(
+        "llmCall",
+        [
+          ...rounds,
+          tool,
+          leaf("error", 3_500, { message: "hook failed", errorType: "runtimeError" }),
+        ],
+        { id: "L" },
+      ),
+      leaf("error", 4_000, { message: "hook failed", errorType: "runtimeError" }),
+      leaf("agentEnd", 4_100, {}),
+    ]);
+  }
+
+  it("marks a failed tool on the call that requested it and an error between calls on the last earlier call", () => {
+    const data = overviewData(run());
+    expect(data.status).toBe("crashed");
+    expect(data.errors.map((error) => [error.message, error.count])).toEqual([
+      ["disk full", 1],
+      ["hook failed", 2],
+    ]);
+    expect(data.calls.map((call) => call.errors.map((error) => error.message))).toEqual([
+      ["disk full"],
+      ["hook failed"],
+    ]);
+    expect(data.calls[0].tools.map((tool) => tool.name)).toEqual(["write"]);
+  });
+
+  it("marks an error with no earlier call on the first call", () => {
+    const root = trace([
+      leaf("error", 100, { message: "early" }),
+      span("llmCall", [leaf("promptCompletion", 1_000, { timeTaken: 100 })], { id: "L" }),
+    ]);
+    expect(overviewData(root).calls[0].errors.map((error) => error.message)).toEqual(["early"]);
+  });
+
+  it("gives a request that failed before the provider answered its own column", () => {
+    const root = trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 1_000, { timeTaken: 100 }),
+          leaf("error", 2_000, { message: "503 overloaded", errorType: "llmError" }),
+        ],
+        { id: "L" },
+      ),
+    ]);
+    const data = overviewData(root);
+    expect(data.calls.map((call) => [call.round?.index, call.failure?.message])).toEqual([
+      [0, undefined],
+      [undefined, "503 overloaded"],
+    ]);
+    expect(data.calls[1].id).toBe("leaf:L:error:0");
+  });
 });

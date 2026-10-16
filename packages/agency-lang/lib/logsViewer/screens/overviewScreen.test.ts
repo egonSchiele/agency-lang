@@ -338,3 +338,64 @@ it("uses the resized chart capacity even before the next render", () => {
   view.handleKey({ key: "f", ctrl: true }, size);
   expect(view.focusId()).toBe(`round:L:${expected}`);
 });
+
+it("says how the run ended and counts its errors in the header, and marks failed calls", () => {
+  const tool = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 2_100, { toolName: "write", args: { path: "a" } }),
+      leaf("error", 2_200, { message: "disk full", errorType: "toolError" }),
+    ],
+    { id: "t" },
+  );
+  tool.firstTs = 2_100;
+  const roots = [
+    trace([
+      leaf("agentStart", 0, { entryNode: "main" }),
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            model: '"m1"',
+            timeTaken: 100,
+            completion: { toolCalls: [{ name: "write", arguments: { path: "a" } }] },
+          }),
+          tool,
+          leaf("promptCompletion", 4_000, {
+            model: '"m1"',
+            timeTaken: 100,
+            completion: { output: "gave up" },
+          }),
+        ],
+        { id: "L" },
+      ),
+      leaf("error", 4_500, { message: "Resume desync", errorType: "runtimeError" }),
+      leaf("agentEnd", 4_600, {}),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  const text = frame(view);
+  expect(text).toContain("✖ crashed");
+  expect(text).toContain("✖ 2 errors");
+  expect(text).toContain("✖ failed");
+  expect(text).toContain("✖ RESULT · tool failed");
+  expect(text).toContain("disk full");
+  // The ✖ row sits under the call numbers, one mark per failed call.
+  const marks = flat(view.render(viewport))
+    .map((row) => row.split(" │ ")[0])
+    .filter((row) => /^\s+✖(\s+✖)*\s*$/.test(row));
+  expect(marks.length).toBeGreaterThan(0);
+});
+
+it("reads paused while an interrupt waits on a person", () => {
+  const roots = [
+    trace([
+      leaf("agentStart", 0, { entryNode: "main" }),
+      span("llmCall", [leaf("promptCompletion", 1_000, { timeTaken: 100 })], { id: "L" }),
+      leaf("interruptResolved", 1_500, { interruptId: "i", outcome: "passed" }),
+    ]),
+  ];
+  expect(frame(new OverviewScreen(roots, "T", () => undefined))).toContain(
+    "⏸ paused for a response",
+  );
+});

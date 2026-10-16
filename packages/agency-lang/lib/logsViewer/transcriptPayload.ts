@@ -2,7 +2,7 @@ import { contentText, type ToolCallRequest } from "../statelog/wireAccessors.js"
 import { fmtTokens } from "./format.js";
 import { payloadFor, valuePayload, type PayloadLine } from "./payload.js";
 import { fmtDuration } from "./spanText.js";
-import { toolStatusText } from "./story.js";
+import { toolErrorMessages, toolStatusText } from "./story.js";
 import type { TranscriptBlock } from "./transcript.js";
 
 export function transcriptPayload(block: TranscriptBlock, expanded: boolean): PayloadLine[] {
@@ -34,6 +34,19 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
       return [
         ...valuePayload(block.structured ?? block.text ?? ""),
         ...requestLines(block.message?.toolCalls ?? []),
+      ];
+    case "error":
+      return [
+        { kind: "heading", tone: "error", text: `✖ ERROR` },
+        { kind: "text", text: block.error.message, indent: 0, role: "error" },
+        ...(block.error.count > 1
+          ? [
+              {
+                kind: "meta" as const,
+                text: `logged ${block.error.count} times as it was rethrown`,
+              },
+            ]
+          : []),
       ];
     case "rewrite":
       return [
@@ -67,6 +80,13 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         },
         ...interrupts,
         { kind: "meta", text: toolStatusText(block.row) },
+        // The error is always in view; the arguments and output wait for Enter.
+        ...toolErrorMessages(block.row).map((message) => ({
+          kind: "text" as const,
+          text: message,
+          indent: 0,
+          role: "error" as const,
+        })),
         ...(expanded ? payloadFor(block.row, { raw: false }).slice(3) : []),
       ];
     }

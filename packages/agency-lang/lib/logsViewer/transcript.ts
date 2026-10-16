@@ -17,21 +17,27 @@ import {
 } from "./messageDelta.js";
 import { childEvent } from "./spanText.js";
 import {
-  ownedToolNodes,
+  storyChildren,
   storyOutline,
+  toolErrorMessages,
+  toolResultText,
   toolStatusText,
   type StoryRow,
   type ToolStoryRow,
   type Interrupt,
 } from "./story.js";
 import { decodeStructured } from "./structured.js";
+import { traceErrors, type TraceError } from "./problems.js";
 import { roundsOf, type Round, type ThreadKey } from "./timeline/rounds.js";
 import type { TreeNode } from "./types.js";
 
-type BlockBase = { id: string; roundId: string | undefined; thread: ThreadKey };
+/** `at` orders blocks by the time of the event each one comes from, so an
+ *  error block lands where the error happened and not at a round's end. */
+type BlockBase = { id: string; roundId: string | undefined; thread: ThreadKey; at: number };
 export type TranscriptBlock = BlockBase &
   (
     | { kind: "system"; text: string }
+    | { kind: "error"; error: TraceError }
     | { kind: "user"; text: string }
     | { kind: "history"; message: WireMessage; text: string }
     | {
@@ -68,13 +74,18 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
   const deltas = roundDeltas(rounds);
   const story = storyOutline(trace, { admin: false });
   const threads: Record<string, ThreadHistory> = Object.create(null);
+  // Errors inside a tool call show in that tool's block. The rest get a
+  // block of their own, placed by time on the thread they happened in.
+  const loose = traceErrors(trace, index)
+    .filter((error) => error.toolId === undefined)
+    .map((error) => ({ error, thread: errorThread(error.node, rounds, index) }));
   const compactions = walkNodes(trace)
     .filter((node) => node.event?.data.type === "memoryCompaction")
     .map((node) => ({
       at: Date.parse(node.event!.data.timestamp),
       thread: compactionThread(node, rounds, index),
     }));
-  return rounds.flatMap((round, position) => {
+  const roundBlocks = rounds.flatMap((round, position) => {
     const state = (threads[threadKey(round.thread)] ??= {
       pending: [],
       systems: [],
@@ -82,7 +93,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     });
     const delta = deltas[position];
     const blocks: TranscriptBlock[] = [];
-    const base = { roundId: round.id, thread: round.thread };
+    const base = { roundId: round.id, thread: round.thread, at: round.start };
     if (delta.rewrite) {
       state.pending = [];
       const compacted = compactions.some(
@@ -130,6 +141,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     const text = message === undefined ? undefined : contentText(message.content);
     blocks.push({
       ...base,
+      at: round.end,
       id: round.id,
       kind: "assistant",
       round,
@@ -137,7 +149,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
       structured: text === undefined ? undefined : decodeStructured(text),
       message,
     });
-    const tools = childrenOf(story, round.id).filter(
+    const tools = storyChildren(story, round.id).filter(
       (row): row is ToolStoryRow => row.kind === "tool",
     );
     const toolBlocks = tools.map((row) => toolBlock(round, row, story));
@@ -149,22 +161,53 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
+  return withErrorBlocks(roundBlocks, loose);
 }
-function childrenOf(story: StoryRow[], id: string): StoryRow[] {
-  const position = story.findIndex((row) => row.id === id);
-  if (position < 0) {
-    return [];
+/** Each loose error goes before the first later block on its thread, or
+ *  before the first later block anywhere when its thread is unknown, so
+ *  the transcript reads in time order. An error after every block goes
+ *  at the end. */
+function withErrorBlocks(
+  blocks: TranscriptBlock[],
+  loose: { error: TraceError; thread: ThreadKey | undefined }[],
+): TranscriptBlock[] {
+  const out = [...blocks];
+  for (const { error, thread } of loose) {
+    const block: TranscriptBlock = {
+      kind: "error",
+      id: `error:${error.id}`,
+      roundId: undefined,
+      thread: thread ?? { kind: "legacy", id: "" },
+      at: error.at,
+      error,
+    };
+    const position = out.findIndex(
+      (candidate) =>
+        candidate.at > error.at &&
+        (thread === undefined || threadKey(candidate.thread) === threadKey(thread)),
+    );
+    out.splice(position === -1 ? out.length : position, 0, block);
   }
-  const parent = story[position];
-  const next = story.slice(position + 1).findIndex((row) => row.depth <= parent.depth);
-  const end = next < 0 ? story.length : position + 1 + next;
-  return story.slice(position + 1, end).filter((row) => row.depth === parent.depth + 1);
+  return out;
+}
+/** The thread an error happened on: that of the rounds in its nearest
+ *  enclosing `llmCall` span, when they agree. */
+function errorThread(node: TreeNode, rounds: Round[], index: TreeIndex): ThreadKey | undefined {
+  for (const ancestor of ancestorsOf(node, index)) {
+    const enclosing = rounds.filter((round) => round.spanId === ancestor.id);
+    if (enclosing.length === 0) {
+      continue;
+    }
+    const first = enclosing[0].thread;
+    return enclosing.every((round) => threadKey(round.thread) === threadKey(first))
+      ? first
+      : undefined;
+  }
+  return undefined;
 }
 function toolBlock(round: Round, row: ToolStoryRow, story: StoryRow[]): TranscriptBlock {
-  const finished = childEvent(row.node, "toolCall");
-  const value = finished === undefined ? undefined : toolReplyContent(finished);
-  const output = finished === undefined ? undefined : contentText(value ?? finished.data.output);
-  const interrupts = childrenOf(story, row.id).flatMap((child) =>
+  const output = toolResultText(row);
+  const interrupts = storyChildren(story, row.id).flatMap((child) =>
     child.kind === "interrupt" ? [child.interrupt] : [],
   );
   return {
@@ -172,6 +215,7 @@ function toolBlock(round: Round, row: ToolStoryRow, story: StoryRow[]): Transcri
     id: row.id,
     roundId: round.id,
     thread: round.thread,
+    at: row.node.firstTs ?? round.end,
     row,
     interrupts,
     output,
@@ -274,9 +318,7 @@ export function transcriptText(block: TranscriptBlock): string {
       return [
         block.row.name,
         toolStatusText(block.row),
-        ...ownedToolNodes(block.row.node, buildTreeIndex(block.row.node))
-          .filter((node) => node.event?.data.type === "error")
-          .map((node) => String(node.event!.data.message ?? "error")),
+        ...toolErrorMessages(block.row),
         JSON.stringify(
           (childEvent(block.row.node, "toolCallStart") ?? childEvent(block.row.node, "toolCall"))
             ?.data.args,
@@ -294,6 +336,8 @@ export function transcriptText(block: TranscriptBlock): string {
       return [block.message.role, block.message.name, block.message.toolCallId, block.text]
         .filter(Boolean)
         .join("\n");
+    case "error":
+      return block.error.message;
     default:
       return block.text;
   }

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
 import { outlineRows, type StoryRow } from "./story.js";
 import { agentLoopTrace, event } from "./storyFixture.js";
-import { payloadFor, valuePayload } from "./payload.js";
+import { payloadFor, roundResponsePayload, RESULT_PREVIEW_CHARS, valuePayload } from "./payload.js";
+import { overviewData } from "./overviewData.js";
+import { leaf, span, trace } from "./timeline/fixture.js";
 const options = { raw: false };
 function roundRow(output: string): StoryRow {
   return outlineRows(
@@ -215,4 +217,66 @@ it.each([
   const trace = buildForest([event("toolCall", 1, "tool", null, { toolName: "read", output })])[0];
   const row = outlineRows(trace, { machinery: false, admin: false })[0];
   expect(payloadFor(row, options)).toContainEqual({ kind: "meta", text: expected });
+});
+
+describe("roundResponsePayload with tool results", () => {
+  function fixture(toolEvents: ReturnType<typeof leaf>[]) {
+    const root = trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 1_000, {
+            timeTaken: 100,
+            completion: { toolCalls: [{ name: "read", arguments: { path: "a" } }] },
+          }),
+          Object.assign(span("toolExecution", toolEvents, { id: "t" }), { firstTs: 1_100 }),
+        ],
+        { id: "L" },
+      ),
+    ]);
+    const data = overviewData(root);
+    return roundResponsePayload(data.rounds[0], data.calls[0].tools).map((line) =>
+      "text" in line ? line.text : line.kind,
+    );
+  }
+
+  it("shows a completed tool's output after its request", () => {
+    const lines = fixture([
+      leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
+      leaf("toolCall", 1_200, { toolName: "read", output: "file text" }),
+    ]);
+    expect(lines.slice(lines.indexOf("TOOL CALL · read"))).toEqual([
+      "TOOL CALL · read",
+      "path",
+      "a",
+      "→ RESULT",
+      "file text",
+    ]);
+  });
+
+  it("shows a failed tool's error, a waiting tool, and an unfinished tool", () => {
+    expect(
+      fixture([
+        leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
+        leaf("error", 1_200, { message: "no such file", errorType: "toolError" }),
+      ]),
+    ).toEqual(expect.arrayContaining(["✖ RESULT · tool failed", "no such file"]));
+    expect(
+      fixture([
+        leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
+        leaf("interruptResolved", 1_150, { interruptId: "i", outcome: "passed" }),
+      ]),
+    ).toContain("⚠ RESULT · waiting for a response");
+    expect(
+      fixture([leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } })]),
+    ).toContain("⋯ RESULT · completion not recorded");
+  });
+
+  it("shortens a long result to the preview limit", () => {
+    const lines = fixture([
+      leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
+      leaf("toolCall", 1_200, { toolName: "read", output: "x".repeat(RESULT_PREVIEW_CHARS + 50) }),
+    ]);
+    expect(lines.at(-1)).toMatch(/^x+… \(50 more characters\)$/);
+  });
 });

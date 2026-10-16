@@ -21,6 +21,8 @@ export type OverviewCall = {
   tools: ToolStoryRow[];
   /** Order key: the completion time, or the failure time. */
   at: number;
+  /** The round's thread name; undefined for a failed request or an unnamed thread. */
+  threadLabel: string | undefined;
 };
 
 export type OverviewData = {
@@ -68,6 +70,7 @@ export function overviewData(trace: TreeNode): OverviewData {
       errors: errorsByRound[round.id] ?? [],
       tools: toolsByRound[round.id],
       at: round.end,
+      threadLabel: round.threadLabel,
     })),
     ...failures.map((failure) => ({
       id: stableLeafId(index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace, failure.node),
@@ -76,6 +79,7 @@ export function overviewData(trace: TreeNode): OverviewData {
       errors: [failure],
       tools: [],
       at: failure.at,
+      threadLabel: undefined,
     })),
   ].sort((first, second) => first.at - second.at);
   return {
@@ -116,4 +120,14 @@ function callFor(
     earlier(rounds) ??
     rounds[0]
   );
+}
+
+/** The distinct thread names across the calls, in order of first use, so
+ *  every screen that colors by thread picks the same color for a name.
+ *  Threads that share a name (every unnamed one, say) share a color. */
+export function threadNames(calls: OverviewCall[]): string[] {
+  const names = calls.flatMap((call) =>
+    call.round === undefined ? [] : [call.threadLabel ?? "unnamed"],
+  );
+  return names.filter((name, index) => names.indexOf(name) === index);
 }

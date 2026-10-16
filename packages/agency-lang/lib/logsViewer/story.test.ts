@@ -167,3 +167,36 @@ describe("forest outline", () => {
     ).toHaveLength(4);
   });
 });
+
+describe("top-level thread rows", () => {
+  const call = (span: string, at: number, label: string) =>
+    event("promptCompletion", at, span, null, {
+      threadIdentity: span,
+      threadLabel: label,
+      messages: [{ role: "user", content: "hi" }],
+      completion: { output: "ok" },
+    });
+
+  it("gives each of two top-level llmCall spans a thread row with no owning tool", () => {
+    const trace = buildForest([
+      call("check", 100, "expressionCheck"),
+      call("main", 200, "mainConversation"),
+    ])[0];
+    const rows = outlineRows(trace, STORY);
+    expect(rows.map((row) => [row.kind, row.depth])).toEqual([
+      ["llmGroup", 0],
+      ["user", 1],
+      ["round", 1],
+      ["llmGroup", 0],
+      ["user", 1],
+      ["round", 1],
+    ]);
+    expect(rows[0]).toMatchObject({ label: "expressionCheck", toolName: undefined });
+    expect(rows[3]).toMatchObject({ label: "mainConversation" });
+  });
+
+  it("keeps a lone top-level llmCall span flat", () => {
+    const trace = buildForest([call("main", 200, "mainConversation")])[0];
+    expect(outlineRows(trace, STORY).map((row) => row.kind)).toEqual(["user", "round"]);
+  });
+});

@@ -431,3 +431,48 @@ describe("error blocks", () => {
     expect(transcriptText(tool!)).toContain("no such file");
   });
 });
+
+describe("thread dividers", () => {
+  const call = (span: string, at: number, label: string, parent: string | null = null) =>
+    event("promptCompletion", at, span, parent, {
+      threadIdentity: span,
+      threadLabel: label,
+      messages: [{ role: "user", content: `hi ${span}` }],
+      completion: { output: `ok ${span}` },
+    });
+
+  it("divides the transcript where the thread changes and indents by tool depth", () => {
+    const blocks = transcriptBlocks(
+      buildForest([
+        call("main", 100, "mainConversation"),
+        event("toolCallStart", 101, "tool", "main", { toolName: "subagent", args: {} }),
+        call("inner", 150, "subagent", "tool"),
+        event("toolCall", 160, "tool", "main", { toolName: "subagent", output: "done" }),
+        call("main", 300, "mainConversation"),
+      ])[0],
+    );
+    // The tool block sits with the call that requested it, before the
+    // sub-agent's thread it started; the main thread resumes after.
+    expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
+      "0 thread",
+      "0 user",
+      "0 assistant",
+      "0 tool",
+      "1 thread",
+      "1 user",
+      "1 assistant",
+      "0 thread",
+      "0 assistant",
+    ]);
+    expect(blocks.filter((block) => block.kind === "thread").map((block) => block.label)).toEqual([
+      "mainConversation",
+      "subagent",
+      "mainConversation",
+    ]);
+  });
+
+  it("adds no divider to a transcript on one thread", () => {
+    const blocks = transcriptBlocks(buildForest([call("main", 100, "mainConversation")])[0]);
+    expect(blocks.some((block) => block.kind === "thread")).toBe(false);
+  });
+});

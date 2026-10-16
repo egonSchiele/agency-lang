@@ -35,6 +35,8 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         ...valuePayload(block.structured ?? block.text ?? ""),
         ...requestLines(block.message?.toolCalls ?? []),
       ];
+    case "thread":
+      return [{ kind: "heading", tone: "accent", text: `══ THREAD · ${block.label} ══` }];
     case "error":
       return [
         { kind: "heading", tone: "error", text: `✖ ERROR` },

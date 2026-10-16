@@ -20,7 +20,12 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   }
   let foreground: string = THEME.text;
   if (line.kind === "heading") {
-    foreground = line.tone === "chrome" ? THEME.chrome : THEME.kind[line.tone];
+    foreground =
+      line.tone === "chrome"
+        ? THEME.chrome
+        : line.tone === "accent"
+          ? THEME.accent
+          : THEME.kind[line.tone];
   }
   if (line.kind === "meta") {
     foreground = THEME.muted;

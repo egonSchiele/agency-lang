@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { overviewData } from "./overviewData.js";
+import { overviewData, threadNames } from "./overviewData.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { buildForest } from "./tree.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
@@ -189,5 +189,25 @@ describe("overview errors", () => {
       [undefined, "503 overloaded"],
     ]);
     expect(data.calls[1].id).toBe("leaf:L:error:0");
+  });
+});
+
+describe("threadNames", () => {
+  it("lists distinct names in order of first use, with every unnamed thread as one entry", () => {
+    const root = trace([
+      span(
+        "llmCall",
+        [leaf("promptCompletion", 1_000, { threadIdentity: "a", threadLabel: "main" })],
+        { id: "A" },
+      ),
+      span("llmCall", [leaf("promptCompletion", 2_000, { threadIdentity: "b" })], { id: "B" }),
+      span("llmCall", [leaf("promptCompletion", 3_000, { threadIdentity: "c" })], { id: "C" }),
+      span(
+        "llmCall",
+        [leaf("promptCompletion", 4_000, { threadIdentity: "a", threadLabel: "main" })],
+        { id: "A2" },
+      ),
+    ]);
+    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed"]);
   });
 });

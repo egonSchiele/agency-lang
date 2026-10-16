@@ -523,3 +523,25 @@ it("reopens automatic folds when a retry starts in the same group, preserving ma
   screen.setData(buildForest(retrying));
   expect(text(screen)).toContain("▸ Thread · main");
 });
+
+it("shows two top-level threads as open thread rows", () => {
+  const call = (span: string, at: number, label: string) =>
+    event("promptCompletion", at, span, null, {
+      threadIdentity: span,
+      threadLabel: label,
+      messages: [{ role: "user", content: `hi ${span}` }],
+      completion: { output: `ok ${span}` },
+    });
+  const screen = new TraceScreen(
+    buildForest([call("check", 100, "expressionCheck"), call("main", 200, "mainConversation")]),
+    "T",
+    DEFAULT_THRESHOLDS,
+    { extractEnabled: false },
+  );
+  const shown = text(screen);
+  expect(shown).toContain("Thread · expressionCheck");
+  expect(shown).toContain("Thread · mainConversation");
+  expect(shown).not.toContain("▸ Thread");
+  expect(shown).toContain("LLM call  1");
+  expect(shown).toContain("LLM call  2");
+});

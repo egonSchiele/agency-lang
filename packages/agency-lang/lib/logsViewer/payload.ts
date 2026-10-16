@@ -25,7 +25,7 @@ export type PayloadLine =
   | {
       kind: "heading";
       text: string;
-      tone: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome";
+      tone: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome" | "accent";
     }
   | { kind: "meta"; text: string }
   | { kind: "text"; text: string; indent: number; role: StructuredLine["role"] | "plain" | "error" }
@@ -92,7 +92,10 @@ function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
   const latest = rounds.at(-1);
   const lines: PayloadLine[] = [
     { kind: "heading", text: `THREAD · ${row.label}`, tone: "assistant" },
-    { kind: "meta", text: `Tool: ${row.toolName}` },
+    {
+      kind: "meta",
+      text: row.toolName === undefined ? "Not started by a tool" : `Tool: ${row.toolName}`,
+    },
     { kind: "meta", text: `Thread: ${unique(threads)}` },
     { kind: "meta", text: `Model: ${unique(models)}` },
     {

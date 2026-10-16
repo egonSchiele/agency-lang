@@ -44,7 +44,8 @@ export type SubagentStoryRow = RowBase & { kind: "subagent"; label: string };
 export type LlmGroupStoryRow = RowBase & {
   kind: "llmGroup";
   label: string;
-  toolName: string;
+  /** The tool whose call started this thread; undefined for a top-level thread. */
+  toolName: string | undefined;
   rounds: Round[];
 };
 export type MachineryStoryRow = RowBase & { kind: "machinery"; text: string };
@@ -285,7 +286,7 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
     ...base(context),
     kind: "llmGroup",
     label: names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed",
-    toolName: (tool ? spanDetail(tool) : undefined) ?? "unknown tool",
+    toolName: tool ? spanDetail(tool) : undefined,
     rounds,
   };
 }
@@ -352,15 +353,16 @@ export function storyOutline(trace: TreeNode, options: AdminOptions): StoryRow[]
 }
 function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   const placed = walkWithDepth(trace);
+  // An llmCall span inside a tool is a thread row, as before. A top-level
+  // one becomes a thread row only when it has a sibling llmCall to be told
+  // apart from: a conversation that runs beside the main one (an
+  // expression check, a watcher) then reads as its own thread, while a run
+  // with one conversation keeps its calls at the top.
   const candidates = placed.map((item) => {
     const context = { ...lookups, ...item };
-    if (
-      item.node.label === "llmCall" &&
-      nearestAncestor(item.node, lookups.index, (node) => node.label === "toolExecution")
-    ) {
-      return llmGroupRow(context);
-    }
-    return rowFor(context);
+    return item.node.label === "llmCall" && isThreadRow(item.node, lookups.index)
+      ? llmGroupRow(context)
+      : rowFor(context);
   });
   // A story interrupt uses its first occurrence's stable ID and latest
   // evidence. Raw forest mode retains every occurrence separately.
@@ -381,6 +383,16 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
     hidden.push(...group.slice(1).map((row) => row.id));
   }
   return candidates.filter((row) => !hidden.includes(row.id));
+}
+function isThreadRow(node: TreeNode, index: TreeIndex): boolean {
+  if (nearestAncestor(node, index, (ancestor) => ancestor.label === "toolExecution")) {
+    return true;
+  }
+  const parent = index.byId[index.parentIds[node.id]];
+  const siblings = (parent?.children ?? []).filter(
+    (child) => child.nodeKind === "span" && child.label === "llmCall",
+  );
+  return siblings.length > 1;
 }
 function storyParents(rows: StoryRow[], lookups: Lookups): Record<string, string | undefined> {
   const parents: Record<string, string | undefined> = Object.create(null);

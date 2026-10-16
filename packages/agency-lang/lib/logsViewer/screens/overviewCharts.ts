@@ -1,8 +1,8 @@
 import { paint, segment, type Painted, type Piece } from "../../tui/paint.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { fmtDuration } from "../spanText.js";
-import { THEME } from "../theme.js";
-import type { OverviewCall } from "../overviewData.js";
+import { THEME, threadColor } from "../theme.js";
+import { threadNames, type OverviewCall } from "../overviewData.js";
 import { ceilingRow, columnWindow, EMPTY_CELL, stackedColumn } from "./charts.js";
 
 const AXIS_WIDTH = 10;
@@ -19,6 +19,8 @@ type ChartLayout = {
   selectedId: string | undefined;
   /** Whether a ✖ row is drawn under each chart's call numbers. */
   marks: boolean;
+  /** Thread names in color order; a call number takes its thread's color. */
+  threads: string[];
 };
 
 export function overviewCharts(
@@ -44,13 +46,16 @@ export function overviewCharts(
   // The ✖ row only appears when something went wrong, so a clean run keeps
   // its chart height.
   const marks = calls.some((call) => call.errors.length > 0);
-  const chrome = CHROME_ROWS + (marks ? CHART_COUNT : 0);
+  const threads = threadNames(calls);
+  // A threads legend only when there is more than one thread to tell apart.
+  const chrome = CHROME_ROWS + (marks ? CHART_COUNT : 0) + (threads.length > 1 ? 1 : 0);
   const layout = {
     width,
     height: Math.max(0, Math.floor((height - chrome) / CHART_COUNT)),
     columnWidth: Math.max(1, slot - 1),
     selectedId,
     marks,
+    threads,
   };
   const rounds = calls.flatMap((call) => (call.round === undefined ? [] : [call.round]));
   const maxContext = Math.max(
@@ -141,7 +146,21 @@ function contextChart(
       ],
       layout.width,
     ),
+    ...(layout.threads.length > 1 ? [threadsLegend(layout)] : []),
   ];
+}
+
+function threadsLegend(layout: ChartLayout): Painted {
+  return segment(
+    [
+      { text: "threads", style: { fg: THEME.muted } },
+      ...layout.threads.map((name, position) => ({
+        text: `  ■ ${name}`,
+        style: { fg: threadColor(position) },
+      })),
+    ],
+    layout.width,
+  );
 }
 
 function metricChart(calls: OverviewCall[], layout: ChartLayout, chart: Chart): Painted[] {
@@ -179,11 +198,19 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
   calls.forEach((call) => {
     const selected = call.id === layout.selectedId;
     const failed = call.round === undefined;
+    const thread = layout.threads.indexOf(call.threadLabel ?? "unnamed");
+    const byThread = layout.threads.length > 1 && thread !== -1;
     numbers.push(
       {
         text: (failed ? "✖" : String(call.round!.index + 1)).padEnd(layout.columnWidth),
         style: {
-          fg: failed ? THEME.kind.error : selected ? THEME.accent : THEME.muted,
+          fg: failed
+            ? THEME.kind.error
+            : byThread
+              ? threadColor(thread)
+              : selected
+                ? THEME.accent
+                : THEME.muted,
           ...(selected ? { bg: THEME.cursorBg, bold: true } : {}),
         },
       },

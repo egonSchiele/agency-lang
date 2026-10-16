@@ -208,7 +208,7 @@ resume, through `reopenSpan(type, slot)` on the client:
 | Site | Span | Where the id is saved |
 |---|---|---|
 | `runPrompt` (`lib/runtime/prompt.ts`) | `llmCall` | the runPrompt frame's locals, key `__span_llmCall` |
-| the tool loop in `runPrompt` | `toolExecution` | the same locals, key `__span_round.<round>.tool.<call>` |
+| the tool loop in `runPrompt` | `toolExecution` | the frame's `runnerState`, key `__span_round.<round>.tool.<call>`, dropped when the tool is done |
 
 A slot is a key under `__span_` in a record the checkpoint serializes (see
 `lib/statelog/spanSlot.ts`). The slot's lifetime is the id's lifetime: the
@@ -222,7 +222,14 @@ they differ. So a rewind (`rewindFrom`), which runs in a new trace, gets
 new spans without anything being cleared, and a `restore()` in the same
 trace continues the same spans. That second case is deliberate: the step
 log skips the completed `toolCallStart` step on replay, so keeping the id
-is what keeps the tool's start and end in one span. The saved id is also
+is what keeps the tool's start and end in one span. A retried tool then
+logs one `toolCallStart` and two `toolCall` events in that span; the eval
+extractor pairs by span and counts the tool complete, and the viewer's tool
+row reads the first `toolCall` it finds.
+
+The tool slot lives in the runPrompt frame's `runnerState`, beside
+`toolTimings`, and is forgotten once the tool is done (anything but a
+pause), so a long tool loop does not carry every old id in every checkpoint. The saved id is also
 checked for shape (twelve characters of the nanoid alphabet) before it goes
 into any event, because the checkpoint is the program and could have been
 edited.

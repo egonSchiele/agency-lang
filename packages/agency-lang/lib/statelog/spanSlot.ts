@@ -10,7 +10,9 @@
  *
  * The slot's lifetime is the id's lifetime. A frame local dies when its
  * frame is popped, which happens on completion and on a throw but not on a
- * pause, so no site writes a clear.
+ * pause. A site whose frame outlives the span by a long way (the tool loop,
+ * which can run hundreds of tools in one frame) calls `forgetSpan` once the
+ * span has closed for good, so checkpoints do not carry every old id.
  *
  * A saved id is reused only inside the trace that minted it. A rewind or a
  * CLI resume that starts a new trace gets fresh spans: the trace check
@@ -37,13 +39,24 @@ const SPAN_ID_SHAPE = /^[A-Za-z0-9_-]{12}$/;
  *  the id goes into every event's `span_id`. */
 export function savedSpanIdFor(slot: SpanSlot, traceId: string): string | undefined {
   const saved = slot.locals[slot.key];
-  if (typeof saved !== "object" || saved === null) return undefined;
+  if (typeof saved !== "object" || saved === null) {
+    return undefined;
+  }
   const { traceId: savedTrace, spanId } = saved as Partial<SavedSpan>;
-  if (savedTrace !== traceId) return undefined;
-  if (typeof spanId !== "string" || !SPAN_ID_SHAPE.test(spanId)) return undefined;
+  if (savedTrace !== traceId) {
+    return undefined;
+  }
+  if (typeof spanId !== "string" || !SPAN_ID_SHAPE.test(spanId)) {
+    return undefined;
+  }
   return spanId;
 }
 
 export function saveSpan(slot: SpanSlot, saved: SavedSpan): void {
   slot.locals[slot.key] = saved;
+}
+
+/** Drop a saved id once its span has closed for good. */
+export function forgetSpan(locals: Record<string, unknown>, name: string): void {
+  delete locals[spanSlot(locals, name).key];
 }

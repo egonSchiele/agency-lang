@@ -201,7 +201,7 @@ const results = {};
     rewound: rewound.data,
     newTrace: rewoundTraces.length === 1 && !firstTraces.includes(rewoundTraces[0]),
     reusedSpans: rewoundEvents.filter((e) => firstSpans.includes(e.span_id)).map(type),
-    rewoundProblems: spanProblems(rewoundEvents).filter((p) => !p.includes("toolCall")),
+    rewoundProblems: spanProblems(rewoundEvents),
   };
 }
 

@@ -1,0 +1,8 @@
+{
+  "finalData": "done",
+  "agentStarts": 2,
+  "firstInResumedSpan": "agentStart",
+  "restoredInResumedSpan": true,
+  "approvalInResumedSpan": true,
+  "spanlessEvents": []
+}

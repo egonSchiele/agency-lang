@@ -1,0 +1,12 @@
+// The model calls interruptTool, which raises an interrupt. The run pauses
+// and is resumed with respondToInterrupts. The resumed run must open its
+// agentRun span BEFORE it restores the checkpoint, so checkpointRestored and
+// the user's approval are logged inside that span. See test.js.
+def interruptTool(): string {
+  interrupt("approve")
+  return "tool result"
+}
+
+node main() {
+  return llm("call the tool", { tools: [interruptTool] })
+}

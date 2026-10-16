@@ -405,7 +405,7 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
 function spineLabel(block: TranscriptBlock): string {
   switch (block.kind) {
     case "assistant":
-      return `LLM call ${block.round.index + 1}`;
+      return `LLM call ${block.round.index + 1}${block.round.decision === undefined ? "" : " · decision"}`;
     case "tool":
       return `  ${{ failed: "✖ ", rejected: "✖ ", awaitingApproval: "⚠ " }[block.row.status as string] ?? ""}${block.row.name}`;
     case "error":

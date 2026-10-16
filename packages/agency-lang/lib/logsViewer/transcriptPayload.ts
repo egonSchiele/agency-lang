@@ -3,6 +3,7 @@ import { fmtTokens } from "./format.js";
 import { payloadFor, valuePayload, type PayloadLine } from "./payload.js";
 import { fmtDuration } from "./spanText.js";
 import { toolErrorMessages, toolStatusText } from "./story.js";
+import { decisionInputPayload, decisionOutputPayload } from "./decision.js";
 import type { TranscriptBlock } from "./transcript.js";
 
 export function transcriptPayload(block: TranscriptBlock, expanded: boolean): PayloadLine[] {
@@ -31,6 +32,13 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         ...requestLines(block.message.toolCalls ?? []),
       ];
     case "assistant":
+      if (block.round.decision !== undefined) {
+        return [
+          ...decisionInputPayload(block.round.decision),
+          { kind: "blank" },
+          ...decisionOutputPayload(block.round.decision),
+        ];
+      }
       return [
         ...valuePayload(block.structured ?? block.text ?? ""),
         ...requestLines(block.message?.toolCalls ?? []),

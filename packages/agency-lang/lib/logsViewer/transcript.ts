@@ -145,7 +145,11 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
       });
     }
     const offset = messagesOf(round).length - delta.added.length;
-    for (const [position, message] of delta.added.entries()) {
+    // A decision model never saw a chat: its block shows the state, the
+    // questions and the answers, so the new messages are not shown as a
+    // conversation that led up to a reply.
+    const added = round.decision === undefined ? delta.added : [];
+    for (const [position, message] of added.entries()) {
       const text = messageText(message);
       if (message.role === "system") {
         if (!state.systems.includes(text)) {

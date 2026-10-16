@@ -9,6 +9,7 @@ import {
 } from "./forest.js";
 import { roundDeltas, type RoundDelta } from "./messageDelta.js";
 import { runPauses, type RunPause } from "./problems.js";
+import { decisionSummary } from "./decision.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
 import { ADMIN_KINDS } from "./timeline/spans.js";
@@ -227,7 +228,10 @@ function roundRow(context: RowContext): StoryRow {
     kind: "round",
     id: round.id,
     round,
-    gist: completionOutcome(context.node.event!) ?? "",
+    gist:
+      round.decision === undefined
+        ? (completionOutcome(context.node.event!) ?? "")
+        : `decision · ${decisionSummary(round.decision)}`,
   };
 }
 function toolRow(context: RowContext): ToolStoryRow {

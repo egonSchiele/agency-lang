@@ -19,6 +19,7 @@ import { fmtUsd } from "../format.js";
 import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
 import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
 import { roundResponsePayload, type PayloadLine } from "../payload.js";
+import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
 import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
@@ -386,7 +387,8 @@ function header(data: OverviewData, following: boolean): Piece[] {
 }
 function callTitle(call: OverviewCall | undefined): string {
   if (call === undefined) return "LLM CALL";
-  return call.round === undefined ? "FAILED REQUEST" : `LLM CALL ${call.round.index + 1}`;
+  if (call.round === undefined) return "FAILED REQUEST";
+  return `LLM CALL ${call.round.index + 1}${call.round.decision === undefined ? "" : ` · DECISION · ${decisionSummary(call.round.decision)}`}`;
 }
 function previewBody(
   call: OverviewCall,
@@ -405,6 +407,11 @@ function previewBody(
             text: "input not recorded: the request failed before the provider answered",
           },
         ];
+  }
+  if (call.round.decision !== undefined) {
+    return mode === "output"
+      ? decisionOutputPayload(call.round.decision)
+      : decisionInputPayload(call.round.decision);
   }
   return mode === "output"
     ? roundResponsePayload(call.round, call.tools)

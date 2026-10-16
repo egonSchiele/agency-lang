@@ -3,6 +3,7 @@ import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
 import { consumeRepresented, transcriptBlocks, transcriptText } from "./transcript.js";
+import { transcriptPayload } from "./transcriptPayload.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
 const user = { role: "user", content: "a module" };
@@ -521,5 +522,47 @@ describe("pause blocks", () => {
     const pause = blocks.find((block) => block.kind === "pause");
     expect(pause).toMatchObject({ pausedMs: 7_000, resumed: true, at: 103 });
     expect(transcriptText(pause!)).toBe("paused, then resumed");
+  });
+});
+
+describe("decision calls", () => {
+  it("shows a decision call as one block with the questions and answers, not as a chat", () => {
+    const decision = {
+      state: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+      questions: {
+        response: {
+          type: "choice",
+          instructions: "Which expression?",
+          criteria: { idle: "i", curious: "c" },
+        },
+      },
+      answers: {
+        response: {
+          type: "choice",
+          choice: "curious",
+          confidence: 0.7,
+          probabilities: { curious: 0.86, idle: 0.14 },
+        },
+      },
+    };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "check",
+          usageKind: "decision",
+          messages: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+          completion: { output: JSON.stringify({ response: "curious" }) },
+          decision,
+        }),
+      ])[0],
+    );
+    expect(blocks.map((block) => block.kind)).toEqual(["assistant"]);
+    const lines = transcriptPayload(blocks[0], false).map((line) =>
+      "text" in line ? line.text : "",
+    );
+    expect(lines).toContain("QUESTIONS");
+    expect(lines).toContain("Which expression?");
+    expect(lines).toContain("ANSWER · response");
+    expect(lines).toContain("curious 86%");
   });
 });

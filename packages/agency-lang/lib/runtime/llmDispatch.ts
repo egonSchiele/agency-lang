@@ -2,6 +2,7 @@ import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { dispatchDecision, isDecisionCall, prepareDecision } from "./decision/dispatch.js";
 import type { DecisionPlan } from "./decision/questions.js";
+import type { DecisionLog } from "../statelog/wireTypes.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
 import type { ProviderUsageKind as UsageKind } from "./invocationUsage.js";
@@ -14,6 +15,19 @@ import type { RuntimeContext } from "./state/context.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
 import type { Run } from "./asyncContext.js";
+
+export type DispatchResult = {
+  completion: PromptResult;
+  toolCalls: ToolCallJSON[];
+  /** Present on a decision call: the request and reply as the log records them. */
+  decision?: DecisionLog;
+};
+
+/** Which usage kind a call books under: "decision" for a decision model,
+ *  "completion" for a text model. The one place that rule is spelled. */
+export function usageKindFor(promptConfig: PromptConfig): UsageKind {
+  return isDecisionCall(promptConfig) ? "decision" : "completion";
+}
 
 /** Dispatch the LLM request and extract `{completion, toolCalls}`,
  *  branching on the `stream` flag. Streaming uses `handleStreamingResponse`
@@ -37,13 +51,14 @@ export async function dispatchLLMRequest({
   /** Present when this is a decision call. `dispatchWithRetry` decides
    *  that once, before metering, and the plan is the only signal here. */
   decisionPlan?: DecisionPlan;
-}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+}): Promise<DispatchResult> {
   // A decision model (Jev, Laya) answers typed questions, not text. The
   // branch returns a completion shaped like a text model's, so everything
-  // after this point runs unchanged. There is nothing to stream.
+  // after this point runs unchanged. There is nothing to stream. What was
+  // sent and answered rides along for the log.
   if (decisionPlan !== undefined) {
-    const completion = await dispatchDecision(run, promptConfig, decisionPlan);
-    return { completion, toolCalls: [] };
+    const { completion, decision } = await dispatchDecision(run, promptConfig, decisionPlan);
+    return { completion, toolCalls: [], decision };
   }
   // The client is told which module is calling. See `PromptConfig.moduleId`.
   const withModule = { ...promptConfig, moduleId: run.callsite?.moduleId };
@@ -234,7 +249,7 @@ export async function dispatchWithRetry(args: {
   retryPolicy: RetryPolicy;
   parentSignal: AbortSignal | undefined;
   stateStack?: StateStack;
-}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[]; usageKind: UsageKind }> {
+}): Promise<DispatchResult & { usageKind: UsageKind }> {
   const { run, ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } = args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
@@ -265,10 +280,8 @@ export async function dispatchWithRetry(args: {
   // decision call's refusals (no schema, tools, no client support) happen
   // before any metered attempt, so a refused call is never counted as a
   // request that might have been paid for.
-  const decisionPlan = isDecisionCall(promptConfig)
-    ? prepareDecision(ctx, promptConfig)
-    : undefined;
-  const usageKind: UsageKind = decisionPlan === undefined ? "completion" : "decision";
+  const usageKind = usageKindFor(promptConfig);
+  const decisionPlan = usageKind === "decision" ? prepareDecision(ctx, promptConfig) : undefined;
   const result = await runWithRetry(
     (signal) =>
       meteredDispatch(ctx, targetStack, usageKind, () =>

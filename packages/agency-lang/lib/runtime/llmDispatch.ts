@@ -25,7 +25,7 @@ export type DispatchResult = {
 
 /** Which usage kind a call books under: "decision" for a decision model,
  *  "completion" for a text model. The one place that rule is spelled. */
-export function usageKindOf(promptConfig: PromptConfig): UsageKind {
+export function usageKindFor(promptConfig: PromptConfig): UsageKind {
   return isDecisionCall(promptConfig) ? "decision" : "completion";
 }
 
@@ -280,7 +280,7 @@ export async function dispatchWithRetry(args: {
   // decision call's refusals (no schema, tools, no client support) happen
   // before any metered attempt, so a refused call is never counted as a
   // request that might have been paid for.
-  const usageKind = usageKindOf(promptConfig);
+  const usageKind = usageKindFor(promptConfig);
   const decisionPlan = usageKind === "decision" ? prepareDecision(ctx, promptConfig) : undefined;
   const result = await runWithRetry(
     (signal) =>

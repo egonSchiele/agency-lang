@@ -303,8 +303,17 @@ it("does not turn image-only or object user messages into JSON text", () => {
 describe("usageKindOf / decisionOf", () => {
   const decision = {
     state: [{ role: "user", content: "Which department?" }],
-    questions: { answer: { type: "choice", choices: ["billing", "support"] } },
-    answers: { answer: { type: "choice", choice: "billing", confidence: 0.9 } },
+    questions: {
+      answer: { type: "choice", instructions: "Which?", criteria: { billing: "b", support: "s" } },
+    },
+    answers: {
+      answer: {
+        type: "choice",
+        choice: "billing",
+        confidence: 0.9,
+        probabilities: { billing: 0.9, support: 0.1 },
+      },
+    },
   };
 
   it("reads the usage kind off a prompt event", () => {
@@ -327,5 +336,17 @@ describe("usageKindOf / decisionOf", () => {
     expect(decisionOf(ev({ type: "promptCompletion" }))).toBeUndefined();
     expect(decisionOf(ev({ type: "promptCompletion", decision: "x" }))).toBeUndefined();
     expect(decisionOf(ev({ type: "promptCompletion", decision: { state: [] } }))).toBeUndefined();
+  });
+
+  it("drops a record whose answers or questions lack the fields a reader uses", () => {
+    const noProbabilities = {
+      ...decision,
+      answers: { answer: { type: "choice", choice: "billing", confidence: 0.9 } },
+    };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: noProbabilities }))).toBeUndefined();
+    const unknownType = { ...decision, answers: { answer: { type: "ranking", order: [] } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: unknownType }))).toBeUndefined();
+    const noInstructions = { ...decision, questions: { answer: { type: "choice", criteria: {} } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: noInstructions }))).toBeUndefined();
   });
 });

@@ -108,7 +108,13 @@ export function emitPromptCompletion({
     messages: withMessageLabels(messages),
     // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
     // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
-    completion: { ...completion, usage: projectedUsage },
+    // A decision call's rawData is its answers, which `decision` carries
+    // explicitly, so the echo leaves it out rather than logging them twice.
+    completion: {
+      ...completion,
+      usage: projectedUsage,
+      ...(decision === undefined ? {} : { rawData: undefined }),
+    },
     model: JSON.stringify(modelName),
     timeTaken,
     tools,

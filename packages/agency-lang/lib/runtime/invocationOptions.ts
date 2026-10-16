@@ -201,7 +201,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
     request.inheritedRunId ??
     request.options?.traceId ??
     emptyToUndefined(request.environmentTraceId) ??
-    emptyToUndefined(request.checkpointTraceId) ??
+    wellFormedTraceId(request.checkpointTraceId) ??
     nanoid();
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
@@ -223,6 +223,14 @@ function validateInvocationPolicy(policy: Policy | undefined): Policy | undefine
     throw new Error(`invalid invocation policy: ${valid.error}`);
   }
   return policy;
+}
+
+/** The checkpoint is the program, and this id becomes part of a trace
+ *  file name under `traceDir`. Only an id of the shape the runtime mints
+ *  (or a harness would set) is trusted; anything else gets a fresh id. */
+const TRACE_ID_SHAPE = /^[A-Za-z0-9_-]{1,64}$/;
+function wellFormedTraceId(value: string | undefined): string | undefined {
+  return value !== undefined && TRACE_ID_SHAPE.test(value) ? value : undefined;
 }
 
 function emptyToUndefined(value: string | undefined): string | undefined {

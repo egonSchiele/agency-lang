@@ -36,7 +36,10 @@ class Checkpoint {
 trace, the way an interrupt response already does through `interrupt.runId`.
 It is the lowest-priority source of a trace id: a subprocess's inherited id, a
 supplied `traceId`, and `AGENCY_TRACE_ID` all come first (see
-`resolveInvocation` in `lib/runtime/invocationOptions.ts`).
+`resolveInvocation` in `lib/runtime/invocationOptions.ts`), and only an id of
+the shape the runtime mints is trusted, since it names a trace file. A rewind
+(`rewindFrom`) deliberately ignores it: a rewind is a new execution in its own
+trace.
 
 A checkpoint is a deep clone of the `StateStack` and `GlobalStore` at the moment it was created, so checkpoint data is always JSON-serializable.
 

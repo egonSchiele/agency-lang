@@ -99,13 +99,21 @@ function checkpointFrom(output: string): string {
   return match![1];
 }
 
+type LoggedEvent = { trace_id: string; span_id: string | null; data: { type: string } };
+function eventsIn(file: string): LoggedEvent[] {
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as LoggedEvent);
+}
+
 /** Every distinct trace id in a statelog file, in order of first appearance. */
 function traceIdsIn(file: string): string[] {
   const seen: string[] = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    if (line.trim() === "") continue;
-    const traceId = JSON.parse(line).trace_id as string;
-    if (!seen.includes(traceId)) seen.push(traceId);
+  for (const event of eventsIn(file)) {
+    if (!seen.includes(event.trace_id)) {
+      seen.push(event.trace_id);
+    }
   }
   return seen;
 }
@@ -347,6 +355,23 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
       const resumed = await invoke(dir, ["resume", "checkpoint.json", "agent.agency"]);
       expect(resumed.code, resumed.stderr).toBe(0);
       expect(traceIdsIn(path.join(dir, "statelog.jsonl"))).toEqual(freshTraces);
+      // The restore is logged inside the resumed run's span.
+      const restored = eventsIn(path.join(dir, "statelog.jsonl")).filter(
+        (event) => event.data.type === "checkpointRestored",
+      );
+      expect(restored).toHaveLength(1);
+      expect(restored[0].span_id).toEqual(expect.any(String));
+
+      // A checkpoint file is not used up by a resume. Resuming it again
+      // joins the same trace: two attempts, one story.
+      const again = await invoke(dir, ["resume", "checkpoint.json", "agent.agency"]);
+      expect(again.code, again.stderr).toBe(0);
+      expect(traceIdsIn(path.join(dir, "statelog.jsonl"))).toEqual(freshTraces);
+      expect(
+        eventsIn(path.join(dir, "statelog.jsonl")).filter(
+          (event) => event.data.type === "agentStart",
+        ),
+      ).toHaveLength(3);
 
       // A harness that names the trace itself still wins.
       const named = await invoke(dir, ["resume", "checkpoint.json", "agent.agency"], {

@@ -52,6 +52,16 @@ trace keeps it. With the span ids that `runPrompt` saves in its frame (see
 then land in the spans the paused run opened, and a viewer reads the two
 invocations as one story.
 
+Two things follow from that. A checkpoint file is not used up by a resume, so
+resuming the same file twice (after a failure, say) puts both attempts into
+one trace, with the same span ids; the viewer shows them as one story, and in
+`traceDir` mode both append to one `.agencytrace` file. That is deliberate:
+the attempts are one piece of work on one checkpoint. And because the id
+becomes part of that file name, `resolveInvocation` trusts a checkpoint's
+trace id only when it has the shape the runtime mints (letters, digits, `_`
+and `-`, at most 64 characters); any other value gets a fresh id, so an
+edited checkpoint cannot steer the trace file outside `traceDir`.
+
 ## Integrity and code identity
 
 `runCliEntry` validates the checkpoint before checking its signature. A signed

@@ -10,6 +10,7 @@
 import * as smoltalk from "smoltalk";
 import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
 import type { DecideConfig, PromptConfig } from "../llmClient.js";
+import type { DecisionLog } from "../../statelog/wireTypes.js";
 import { answersToValue, messagesToState, planDecision, type DecisionPlan } from "./questions.js";
 import type { RuntimeContext } from "../state/context.js";
 import type { GraphState } from "../types.js";
@@ -113,11 +114,14 @@ function decisionRequestError(failed: { error: string; status?: number }): Error
   return Object.assign(err, { status: failed.status });
 }
 
+/** The completion, plus the request and reply as the log records them. */
+export type DecisionOutcome = { completion: PromptResult; decision: DecisionLog };
+
 export async function dispatchDecision(
   run: Run,
   config: PromptConfig,
   plan: DecisionPlan = prepareDecision(run.ctx, config),
-): Promise<PromptResult> {
+): Promise<DecisionOutcome> {
   const ctx = run.ctx as RuntimeContext<GraphState>;
   const decide = ctx.llmClient.decide;
   if (decide === undefined) {
@@ -162,7 +166,7 @@ export async function dispatchDecision(
     throw new Error(value.error);
   }
 
-  return smoltalk.promptResult({
+  const completion = smoltalk.promptResult({
     output: JSON.stringify({ response: value.value }),
     toolCalls: [],
     usage: result.value.usage,
@@ -171,4 +175,8 @@ export async function dispatchDecision(
     stopReason: "stop",
     rawData: result.value,
   });
+  return {
+    completion,
+    decision: { state, questions: plan.questions, answers: result.value.answers },
+  };
 }

@@ -4,6 +4,8 @@ import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
+import type { DecisionLog } from "./statelog/wireTypes.js";
+import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { sendStatelogPost } from "./statelogSender.js";
@@ -498,6 +500,7 @@ export class StatelogClient {
     hasResponseFormat,
     maxTokens,
     label,
+    usageKind,
   }: {
     model?: string;
     threadId?: string | null;
@@ -505,6 +508,8 @@ export class StatelogClient {
     toolCount: number;
     hasResponseFormat: boolean;
     maxTokens?: number | null;
+    /** "completion" for a text model, "decision" for a decision model. */
+    usageKind?: ProviderUsageKind;
     /** The `llm(label:)` debug tag for this call, or null when unlabeled.
      *  Observability only — never sent to the provider. Lets a log reader
      *  tell, say, a verifier's call from the main one. */
@@ -519,6 +524,7 @@ export class StatelogClient {
       hasResponseFormat,
       maxTokens: maxTokens ?? null,
       label: label ?? null,
+      usageKind: usageKind ?? null,
     });
   }
 
@@ -585,6 +591,8 @@ export class StatelogClient {
     threadId,
     threadIdentity,
     threadLabel,
+    usageKind,
+    decision,
   }: {
     messages: any[];
     completion: any;
@@ -610,6 +618,11 @@ export class StatelogClient {
     threadIdentity?: string | null;
     /** Optional user-facing label on that MessageThread. */
     threadLabel?: string | null;
+    /** "completion" for a text model, "decision" for a decision model. */
+    usageKind?: ProviderUsageKind;
+    /** What a decision model was sent and what it answered. Only on a
+     *  decision call. */
+    decision?: DecisionLog;
   }): Promise<void> {
     await this.post({
       type: "promptCompletion",
@@ -634,6 +647,8 @@ export class StatelogClient {
       threadId: threadId ?? null,
       threadIdentity: threadIdentity ?? null,
       threadLabel: threadLabel ?? null,
+      usageKind: usageKind ?? null,
+      ...(decision === undefined ? {} : { decision }),
     });
   }
 

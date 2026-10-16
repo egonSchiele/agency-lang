@@ -1,4 +1,4 @@
-import type { EventEnvelope } from "./wireTypes.js";
+import type { DecisionLog, EventEnvelope } from "./wireTypes.js";
 
 /** Thin accessor layer over the wire format. Every place that reads
  *  `ev.data.foo` directly is a leak of the wire format into consumer
@@ -47,6 +47,26 @@ export function threadIdentityOf(event: EventEnvelope): string | null {
 export function threadLabelOf(event: EventEnvelope): string | null {
   const label = event.data.threadLabel;
   return typeof label === "string" && label.length > 0 ? label : null;
+}
+
+/** The usage kind on a promptStart / promptCompletion: "completion" for a
+ *  text model, "decision" for a decision model. Null on logs from before
+ *  the field was recorded. */
+export function usageKindOf(ev: EventEnvelope): string | null {
+  const kind = ev.data.usageKind;
+  return typeof kind === "string" ? kind : null;
+}
+
+/** The decision a promptCompletion records, when its call went to a
+ *  decision model. Undefined on a text call and on older logs. */
+export function decisionOf(ev: EventEnvelope): DecisionLog | undefined {
+  const decision = ev.data.decision;
+  if (typeof decision !== "object" || decision === null) return undefined;
+  const { state, questions, answers } = decision as Partial<DecisionLog>;
+  if (state === undefined || typeof questions !== "object" || typeof answers !== "object") {
+    return undefined;
+  }
+  return { state, questions: questions ?? {}, answers: answers ?? {} };
 }
 
 /** Tool name on a toolCall / toolCallStart. */

@@ -6,6 +6,7 @@ import {
   completionOf,
   contextTokens,
   cost,
+  decisionOf,
   groupByType,
   modelOf,
   threadIdOf,
@@ -19,6 +20,7 @@ import {
   tokensCached,
   tokensCacheWrite,
   tokensOut,
+  usageKindOf,
   userMessageOf,
 } from "./wireAccessors.js";
 
@@ -296,4 +298,55 @@ it("does not turn image-only or object user messages into JSON text", () => {
       }),
     ),
   ).toBe("look here");
+});
+
+describe("usageKindOf / decisionOf", () => {
+  const decision = {
+    state: [{ role: "user", content: "Which department?" }],
+    questions: {
+      answer: { type: "choice", instructions: "Which?", criteria: { billing: "b", support: "s" } },
+    },
+    answers: {
+      answer: {
+        type: "choice",
+        choice: "billing",
+        confidence: 0.9,
+        probabilities: { billing: 0.9, support: 0.1 },
+      },
+    },
+  };
+
+  it("reads the usage kind off a prompt event", () => {
+    expect(usageKindOf(ev({ type: "promptStart", usageKind: "decision" }))).toBe("decision");
+    expect(usageKindOf(ev({ type: "promptCompletion", usageKind: "completion" }))).toBe(
+      "completion",
+    );
+  });
+
+  it("is null on a log from before the field was recorded", () => {
+    expect(usageKindOf(ev({ type: "promptStart" }))).toBeNull();
+    expect(usageKindOf(ev({ type: "promptStart", usageKind: null }))).toBeNull();
+  });
+
+  it("reads a recorded decision", () => {
+    expect(decisionOf(ev({ type: "promptCompletion", decision }))).toEqual(decision);
+  });
+
+  it("is undefined on a text call and on a half-formed record", () => {
+    expect(decisionOf(ev({ type: "promptCompletion" }))).toBeUndefined();
+    expect(decisionOf(ev({ type: "promptCompletion", decision: "x" }))).toBeUndefined();
+    expect(decisionOf(ev({ type: "promptCompletion", decision: { state: [] } }))).toBeUndefined();
+  });
+
+  it("drops a record whose answers or questions lack the fields a reader uses", () => {
+    const noProbabilities = {
+      ...decision,
+      answers: { answer: { type: "choice", choice: "billing", confidence: 0.9 } },
+    };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: noProbabilities }))).toBeUndefined();
+    const unknownType = { ...decision, answers: { answer: { type: "ranking", order: [] } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: unknownType }))).toBeUndefined();
+    const noInstructions = { ...decision, questions: { answer: { type: "choice", criteria: {} } } };
+    expect(decisionOf(ev({ type: "promptCompletion", decision: noInstructions }))).toBeUndefined();
+  });
 });

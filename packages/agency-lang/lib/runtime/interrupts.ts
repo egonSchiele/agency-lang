@@ -796,12 +796,16 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
+    // The span opens before the restore so that the restore's own events
+    // (checkpointRestored, the user's approval) land inside the run and not
+    // at the trace root. Restoring replaces the state stack and globals but
+    // never the span stack, so the span survives it.
+    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
+    execCtx.rootLog.agentStart({ entryNode: args.checkpoint.nodeId, args: {} });
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
-    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
-    execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
     outcome = { status: "returned", value };
   } catch (error) {
@@ -925,6 +929,10 @@ async function runResumeInvocation(
   let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
+    // Opened before the restore, so checkpointRestored and the user's
+    // approval sit inside this run's span (see resumeCliFromCheckpoint).
+    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
+    execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     await restoreForResume(execCtx, {
       checkpoint,
       policy: resolved.policy,
@@ -934,8 +942,6 @@ async function runResumeInvocation(
     });
     args.afterRestore?.(execCtx);
 
-    agentRunSpanId = execCtx.rootLogWithSpans.startSpan("agentRun");
-    execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await withExternalSignals(execCtx, signals, () =>
       runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
     );
@@ -946,6 +952,7 @@ async function runResumeInvocation(
     execCtx.rootLog.agentEnd({
       entryNode: checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
+      tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
     });
     outcome = { status: "threw", error };
   } finally {

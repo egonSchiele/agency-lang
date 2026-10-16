@@ -174,7 +174,7 @@ describe("dispatchDecision", () => {
   });
 
   it("returns a completion with the enveloped JSON value, the usage, the cost, and the raw answers", async () => {
-    const completion = await dispatchDecision(runWith(okDecide()), base({ model: "jev-1.13" }));
+    const { completion } = await dispatchDecision(runWith(okDecide()), base({ model: "jev-1.13" }));
     expect(JSON.parse(completion.output!)).toEqual({ response: "billing" });
     expect(completion.toolCalls).toEqual([]);
     expect(completion.usage).toEqual({ inputTokens: 40, outputTokens: 0 });
@@ -184,6 +184,31 @@ describe("dispatchDecision", () => {
     expect((completion.rawData as { answers: Record<string, unknown> }).answers.answer).toEqual(
       answer,
     );
+  });
+
+  it("returns what the model was sent and what it answered, for the log", async () => {
+    const { decision } = await dispatchDecision(runWith(okDecide()), base({ model: "jev-1.13" }));
+    expect(decision.state).toEqual([{ role: "user", content: "Which department?" }]);
+    expect(Object.keys(decision.questions)).toEqual(["answer"]);
+    expect(decision.questions.answer.type).toBe("choice");
+    expect(decision.answers).toEqual({ answer });
+  });
+
+  it("logs a state with text only: an image part never reaches the state or the log", async () => {
+    const { decision } = await dispatchDecision(
+      runWith(okDecide()),
+      base({
+        model: "jev-1.13",
+        messages: [
+          smoltalk.userMessage([
+            { type: "text", text: "Which department?" },
+            { type: "image", data: "data:image/png;base64,AAAA", mimeType: "image/png" } as any,
+          ]),
+        ],
+      }),
+    );
+    expect(JSON.stringify(decision.state)).not.toContain("base64");
+    expect(decision.state).toEqual([{ role: "user", content: "Which department?" }]);
   });
 
   it("throws before calling the client when there is no schema", async () => {
@@ -293,7 +318,7 @@ describe("dispatchDecision inside a block", () => {
       globals: {} as any,
       decisions: { collector, armKey: "arm" },
     };
-    const completion = await dispatchDecision(frame as any, base({ model: "jev-1.13" }));
+    const { completion } = await dispatchDecision(frame as any, base({ model: "jev-1.13" }));
     expect(decide).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
     expect(Object.keys(sent[0].questions)).toEqual(["c1_answer"]);

@@ -1,0 +1,44 @@
+{
+  "data": {
+    "dept": "billing",
+    "reply": "hello"
+  },
+  "startKinds": [
+    "decision",
+    "completion"
+  ],
+  "completionKinds": [
+    "decision",
+    "completion"
+  ],
+  "decision": {
+    "state": [
+      {
+        "role": "user",
+        "content": "Which department?"
+      }
+    ],
+    "questions": {
+      "answer": {
+        "type": "choice",
+        "instructions": "Which department?",
+        "criteria": {
+          "billing": "billing",
+          "support": "support"
+        }
+      }
+    },
+    "answers": {
+      "answer": {
+        "type": "choice",
+        "choice": "billing",
+        "confidence": 0.9,
+        "probabilities": {
+          "billing": 0.9,
+          "support": 0.1
+        }
+      }
+    }
+  },
+  "textHasDecision": false
+}

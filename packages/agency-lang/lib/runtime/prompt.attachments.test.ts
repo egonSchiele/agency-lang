@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
-import { promptText, redactMessagesForLog } from "./prompt.js";
+import { promptText } from "./prompt.js";
+import { redactMessagesForLog } from "./promptEvents.js";
 import { MessageThread } from "./state/messageThread.js";
 
 describe("promptText", () => {

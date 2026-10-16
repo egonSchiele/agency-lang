@@ -207,6 +207,42 @@ describe("extractEvalRecord", () => {
     });
   });
 
+  describe("fixture B2 — a tool that paused and resumed", () => {
+    // The resume is a second invocation with its own agentRun span. The
+    // tool's end event still carries the span id its start event used,
+    // so the tool is complete even though a whole run boundary sits
+    // between the two.
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("agentStart", { entryNode: "main" }, "span-run-1"),
+      ev(
+        "toolCallStart",
+        { threadId: "0", toolName: "slow_tool", args: {} },
+        "span-tool-X",
+        "span-llm",
+      ),
+      ev("interruptThrown", { interruptId: "i1" }, "span-tool-X", "span-llm"),
+      ev("agentStart", { entryNode: "main" }, "span-run-2"),
+      ev("checkpointRestored", { checkpointId: "cp1", restoreCount: 1 }, "span-run-2"),
+      ev(
+        "toolCall",
+        { threadId: "0", toolName: "slow_tool", args: {}, result: "ok" },
+        "span-tool-X",
+        "span-llm",
+      ),
+    ];
+    const rec = extractEvalRecord(events, "test:B2");
+
+    it("incomplete is empty", () => {
+      expect(rec.incomplete).toEqual([]);
+    });
+
+    it("metrics pair the start with the end", () => {
+      expect(rec.metrics.toolStarts).toBe(1);
+      expect(rec.metrics.toolEnds).toBe(1);
+    });
+  });
+
   describe("fixture C — nested: main thread calls a subagent that calls a tool", () => {
     resetClock();
     const events: EventEnvelope[] = [

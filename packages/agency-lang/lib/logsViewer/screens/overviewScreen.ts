@@ -21,7 +21,13 @@ import { overviewData, type OverviewCall, type OverviewData } from "../overviewD
 import { roundResponsePayload, roundTokenLine, type PayloadLine } from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
 import { roundDeltas, type RoundDelta } from "../messageDelta.js";
-import { hasSystemMessages, roundInputPayload, type InputPayload } from "../roundInputPayload.js";
+import {
+  hasHistory,
+  hasSystemMessages,
+  roundInputPayload,
+  type InputOptions,
+  type InputPayload,
+} from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
 import type { RunStatus } from "../problems.js";
@@ -51,6 +57,7 @@ export class OverviewScreen implements Screen {
   private previewMode: PreviewMode = "input";
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
+  private historyExpanded = false;
   /** The input preview opens on the call's new messages until scrolled. */
   private inputAtNew = true;
   private get scrollTop(): number {
@@ -152,6 +159,14 @@ export class OverviewScreen implements Screen {
         hint: "s system",
         when: () => this.previewMode === "input" && hasSystemMessages(this.selected()?.round),
         run: () => this.toggleSystems(),
+      },
+      {
+        keys: ["e"],
+        help: "show or hide the earlier messages of the input in full",
+        hint: "e earlier",
+        when: () =>
+          this.previewMode === "input" && hasHistory(this.selected()?.round, this.selectedDelta()),
+        run: () => this.toggleHistory(),
       },
       {
         keys: ["g", "Home"],
@@ -300,7 +315,17 @@ export class OverviewScreen implements Screen {
     this.scrollOffsets = { input: 0, output: 0 };
     this.inputAtNew = true;
     this.systemsExpanded = false;
+    this.historyExpanded = false;
     this.previewCache = undefined;
+  }
+  private selectedDelta(): RoundDelta | undefined {
+    const round = this.selected()?.round;
+    return round === undefined ? undefined : this.deltas[round.id];
+  }
+  private toggleHistory(): void {
+    this.historyExpanded = !this.historyExpanded;
+    this.inputAtNew = true;
+    if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
   private toggleSystems(): void {
     this.systemsExpanded = !this.systemsExpanded;
@@ -332,8 +357,12 @@ export class OverviewScreen implements Screen {
       };
     }
     if (selected !== undefined && this.previewCache!.bodies[this.previewMode] === undefined) {
-      const delta = selected.round === undefined ? undefined : this.deltas[selected.round.id];
-      const { lines, newAt } = previewBody(selected, this.previewMode, this.systemsExpanded, delta);
+      const { lines, newAt } = previewBody(
+        selected,
+        this.previewMode,
+        { systemsExpanded: this.systemsExpanded, historyExpanded: this.historyExpanded },
+        this.selectedDelta(),
+      );
       const history = paintPayload(lines.slice(0, newAt), width);
       this.previewCache!.bodies[this.previewMode] = [
         ...history,
@@ -429,7 +458,7 @@ function callTitle(call: OverviewCall | undefined): string {
 function previewBody(
   call: OverviewCall,
   mode: PreviewMode,
-  systemsExpanded: boolean,
+  options: InputOptions,
   delta: RoundDelta | undefined,
 ): InputPayload {
   if (call.round === undefined) {
@@ -457,7 +486,7 @@ function previewBody(
   if (mode === "output") {
     return { lines: roundResponsePayload(call.round, call.tools), newAt: 0 };
   }
-  return roundInputPayload(call.round, systemsExpanded, delta);
+  return roundInputPayload(call.round, options, delta);
 }
 function previewMetadata(call: OverviewCall): PayloadLine[] {
   if (call.round === undefined) {

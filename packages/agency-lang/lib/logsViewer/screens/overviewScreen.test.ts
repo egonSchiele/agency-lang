@@ -509,19 +509,28 @@ function growingInputScreen() {
   ];
   return new OverviewScreen(roots, "T", () => undefined);
 }
-it("opens a later call's input on its new messages, with the history faded above", () => {
+it("folds a later call's history to a stub, and e opens it faded above the new messages", () => {
   const view = growingInputScreen();
   view.handleKey({ key: "right" }, viewport);
   const text = frame(view);
-  expect(text).toContain("── 2 earlier messages above · NEW ──");
+  expect(text).toContain("first question line 1");
+  expect(text).toContain("… (+1 earlier message)");
+  expect(text).not.toContain("first question line 2");
   expect(text).toContain("second question");
-  expect(text).not.toContain("first question line 1");
   expect(text).toContain("13,920");
+  expect(text).toContain("e earlier");
+  view.handleKey({ key: "e" }, viewport);
+  const opened = frame(view);
+  expect(opened).toContain("── 2 earlier messages above · NEW ──");
+  expect(opened).toContain("second question");
+  expect(opened).not.toContain("first question line 1");
   view.handleKey({ key: "home", ctrl: true }, viewport);
   const top = frame(view);
   expect(top).toContain("first question line 1");
   expect(top).toContain("System prompt · 1 line · s to show");
+  view.handleKey({ key: "e" }, viewport);
+  expect(frame(view)).toContain("… (+1 earlier message)");
   view.handleKey({ key: "left" }, viewport);
   expect(frame(view)).toContain("first question line 1");
-  expect(frame(view)).not.toContain("earlier messages above");
+  expect(frame(view)).not.toContain("e earlier");
 });

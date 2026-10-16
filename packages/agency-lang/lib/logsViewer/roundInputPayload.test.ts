@@ -2,11 +2,11 @@ import { expect, it } from "vitest";
 import { leaf, trace } from "./timeline/fixture.js";
 import { roundsOf } from "./timeline/rounds.js";
 import { roundDeltas } from "./messageDelta.js";
-import { roundInputPayload } from "./roundInputPayload.js";
+import { hasHistory, roundInputPayload } from "./roundInputPayload.js";
 
 function input(messages: unknown[]) {
   const [round] = roundsOf(trace([leaf("promptCompletion", 100, { messages })]));
-  return roundInputPayload(round, false)
+  return roundInputPayload(round, { systemsExpanded: false, historyExpanded: false })
     .lines.flatMap((line) => ("text" in line ? [line.text] : []))
     .join("\n");
 }
@@ -46,6 +46,8 @@ it("distinguishes an empty recorded message list from missing input", () => {
   expect(input([])).toBe("No input messages.");
 });
 
+const expanded = { systemsExpanded: false, historyExpanded: true };
+const folded = { systemsExpanded: false, historyExpanded: false };
 function twoCalls(first: unknown[], second: unknown[]) {
   const rounds = roundsOf(
     trace([
@@ -65,7 +67,7 @@ it("fades the messages the previous call already had and marks where the new one
     { role: "assistant", content: "first answer" },
     { role: "user", content: "second question" },
   ]);
-  const { lines, newAt } = roundInputPayload(second, false, delta);
+  const { lines, newAt } = roundInputPayload(second, expanded, delta);
   expect(lines[newAt]).toEqual({
     kind: "heading",
     tone: "chrome",
@@ -89,14 +91,71 @@ it("names a rewrite on the divider and treats the first call as all new", () => 
       { role: "user", content: "a different question" },
     ],
   );
-  const { lines, newAt } = roundInputPayload(second, false, delta);
+  const { lines, newAt } = roundInputPayload(second, expanded, delta);
   expect("text" in lines[newAt] && lines[newAt].text).toBe(
     "── HISTORY CHANGED from message 2 · 1 earlier message above · NEW ──",
   );
   const [round] = roundsOf(
     trace([leaf("promptCompletion", 100, { messages: [{ role: "user", content: "hi" }] })]),
   );
-  const first = roundInputPayload(round, false, roundDeltas([round])[0]);
+  const first = roundInputPayload(round, expanded, roundDeltas([round])[0]);
   expect(first.newAt).toBe(0);
   expect(first.lines.some((line) => line.faded)).toBe(false);
+});
+it("folds the history to the last message's first line and a count of the rest", () => {
+  const history = [
+    { role: "system", content: "rules" },
+    { role: "user", content: "first question\nwith a second line" },
+  ];
+  const { second, delta } = twoCalls(history, [
+    ...history,
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "c1", function: { name: "read", arguments: "{}" } }],
+    },
+    { role: "user", content: "second question" },
+  ]);
+  const { lines, newAt } = roundInputPayload(second, folded, delta);
+  expect(newAt).toBe(0);
+  const texts = lines.map((line) => ("text" in line ? line.text : line.kind));
+  expect(texts.slice(0, 4)).toEqual(["USER", "first question", "… (+1 earlier message)", "blank"]);
+  expect(lines.slice(0, 3).every((line) => line.faded === true)).toBe(true);
+  expect(texts).toContain("TOOL CALL · read · c1");
+  expect(texts).toContain("second question");
+  expect(texts).not.toContain("with a second line");
+});
+it("writes plain dots when the stub is the only earlier message, and names a rewrite", () => {
+  const one = twoCalls(
+    [{ role: "user", content: "only" }],
+    [
+      { role: "user", content: "only" },
+      { role: "user", content: "more" },
+    ],
+  );
+  const texts = (lines: ReturnType<typeof roundInputPayload>["lines"]) =>
+    lines.map((line) => ("text" in line ? line.text : line.kind));
+  expect(texts(roundInputPayload(one.second, folded, one.delta).lines).slice(0, 3)).toEqual([
+    "USER",
+    "only",
+    "…",
+  ]);
+  const rewritten = twoCalls(
+    [
+      { role: "system", content: "rules" },
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+    ],
+    [
+      { role: "system", content: "rules" },
+      { role: "user", content: "changed" },
+    ],
+  );
+  const { lines } = roundInputPayload(rewritten.second, folded, rewritten.delta);
+  expect(texts(lines).slice(0, 2)).toEqual([
+    "System prompt · 1 line",
+    "… (history changed from message 2)",
+  ]);
+  expect(hasHistory(rewritten.second, rewritten.delta)).toBe(true);
+  expect(hasHistory(one.second, undefined)).toBe(false);
 });

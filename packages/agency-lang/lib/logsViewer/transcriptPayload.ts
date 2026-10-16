@@ -37,6 +37,17 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
       ];
     case "thread":
       return [{ kind: "heading", tone: "accent", text: `══ THREAD · ${block.label} ══` }];
+    case "pause":
+      return [
+        {
+          kind: "heading",
+          tone: "interrupt",
+          text:
+            block.pausedMs === undefined
+              ? "⏸ PAUSED · waiting for a response"
+              : `⏸ PAUSED ${fmtDuration(block.pausedMs, { minutes: true })} · ▶ RESUMED`,
+        },
+      ];
     case "error":
       return [
         { kind: "heading", tone: "error", text: `✖ ERROR` },
@@ -55,7 +66,7 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         {
           kind: "heading",
           tone: "interrupt",
-          text: `── ${block.label} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
+          text: `── ${block.label} ${changedWhere(block)} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
         },
       ];
     case "tool": {
@@ -87,6 +98,13 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
       ];
     }
   }
+}
+/** Where a rewrite starts. A thread that was only cut short has no first
+ *  changed message to point at, so it reads as cut after its last one. */
+function changedWhere(block: { firstChangedAt: number; messagesAfter: number }): string {
+  return block.firstChangedAt < block.messagesAfter
+    ? `from message ${block.firstChangedAt + 1}`
+    : `after message ${block.messagesAfter}`;
 }
 function requestLines(calls: ToolCallRequest[]): PayloadLine[] {
   return calls.flatMap((call) => [

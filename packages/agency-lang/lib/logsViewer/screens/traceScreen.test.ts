@@ -545,3 +545,39 @@ it("shows two top-level threads as open thread rows", () => {
   expect(shown).toContain("LLM call  1");
   expect(shown).toContain("LLM call  2");
 });
+
+it("shows who answered an interrupt, the pause under it, and a span with no parent in the log", () => {
+  const screen = new TraceScreen(
+    buildForest([
+      event("agentStart", 0, "run1", null, { entryNode: "main" }),
+      event("promptCompletion", 100, "L", "run1", {
+        completion: { toolCalls: [{ name: "deploy" }] },
+      }),
+      event("toolCallStart", 101, "tool", "L", { toolName: "deploy", args: { env: "prod" } }),
+      event("interruptResolved", 103, "tool", "L", {
+        interruptId: "i1",
+        outcome: "passed",
+        interrupt: { effect: "ops::deploy", message: "Deploy?" },
+      }),
+      event("agentStart", 14_300, "run2", null, { entryNode: "main" }),
+      event("interruptResolved", 14_302, "run2", null, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "user",
+      }),
+      event("toolCall", 14_400, "lost", "gone", {
+        toolName: "scheduleTask",
+        output: "ok",
+        timeTaken: 5,
+      }),
+    ]),
+    "T",
+    DEFAULT_THRESHOLDS,
+    { extractEnabled: false },
+  );
+  press(screen, "p");
+  const shown = text(screen);
+  expect(shown).toContain("ops::deploy approved by user");
+  expect(shown).toContain("── paused 14.2s · resumed ──");
+  expect(shown).toMatch(/scheduleTask\s+· parent span not in this log/);
+});

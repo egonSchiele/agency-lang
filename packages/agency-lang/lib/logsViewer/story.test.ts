@@ -217,3 +217,102 @@ describe("top-level thread rows", () => {
     ]);
   });
 });
+
+describe("resumed runs", () => {
+  // A tool pauses in run 1 (no handler decided, so the runtime logs
+  // `passed`), and run 2 logs the person's approval under its own span.
+  function pausedAndResumed(extra: ReturnType<typeof event>[] = []) {
+    return buildForest([
+      event("agentStart", 0, "run1", null, { entryNode: "main" }),
+      event("promptCompletion", 100, "L", "run1", {
+        completion: { toolCalls: [{ name: "deploy" }] },
+      }),
+      event("toolCallStart", 101, "tool", "L", { toolName: "deploy", args: { env: "prod" } }),
+      event("interruptThrown", 102, "tool", "L", { interruptId: "i1", interruptData: {} }),
+      event("interruptResolved", 103, "tool", "L", {
+        interruptId: "i1",
+        outcome: "passed",
+        resolvedBy: null,
+        interrupt: { effect: "ops::deploy", message: "Deploy?" },
+      }),
+      event("agentStart", 14_300, "run2", null, { entryNode: "main" }),
+      event("checkpointRestored", 14_301, "run2", null, { checkpointId: "cp" }),
+      event("interruptResolved", 14_302, "run2", null, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "user",
+      }),
+      event("toolCall", 14_400, "tool", "L", { toolName: "deploy", output: "ok", timeTaken: 10 }),
+      ...extra,
+    ])[0];
+  }
+
+  it("merges the approval from the next run into the interrupt it answers, under the tool", () => {
+    const rows = outlineRows(pausedAndResumed(), STORY);
+    const interrupts = rows.filter((row) => row.kind === "interrupt");
+    expect(interrupts).toHaveLength(1);
+    expect(interrupts[0]).toMatchObject({
+      depth: 2,
+      toolName: "deploy",
+      interrupt: { effect: "ops::deploy", outcome: "approved", resolvedBy: "user" },
+    });
+    expect(rows.find((row) => row.kind === "tool")).toMatchObject({ status: "completed" });
+  });
+
+  it("shows the pause under the interrupt, with how long it waited", () => {
+    const rows = outlineRows(pausedAndResumed(), STORY);
+    const pause = rows.find((row) => row.kind === "pause");
+    expect(pause).toMatchObject({ pausedMs: 14_199, resumed: true, depth: 3 });
+    expect(rows.indexOf(pause!)).toBe(rows.findIndex((row) => row.kind === "interrupt") + 1);
+  });
+
+  it("measures the pause to the person's answer, not to another run sharing the trace", () => {
+    const rows = outlineRows(
+      pausedAndResumed([event("agentStart", 5_000, "other", null, { entryNode: "watcher" })]),
+      STORY,
+    );
+    expect(rows.find((row) => row.kind === "pause")).toMatchObject({ pausedMs: 14_199 });
+  });
+
+  it("keeps the innermost tool as the owner when nested tools log the same interrupt", () => {
+    const trace = buildForest([
+      event("toolCallStart", 0, "outer", null, { toolName: "outer" }),
+      event("toolCallStart", 1, "inner", "outer", { toolName: "inner" }),
+      event("interruptThrown", 2, "inner", "outer", { interruptId: "i1" }),
+      event("interruptResolved", 3, "inner", "outer", {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+      }),
+      event("interruptResolved", 4, "outer", null, {
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+      }),
+    ])[0];
+    const interrupts = outlineRows(trace, STORY).filter((row) => row.kind === "interrupt");
+    expect(interrupts).toHaveLength(1);
+    expect(interrupts[0]).toMatchObject({
+      toolName: "inner",
+      interrupt: { resolvedBy: "handler" },
+    });
+  });
+
+  it("labels a span whose parent is missing and places it by time at the top", () => {
+    const trace = buildForest([
+      event("promptCompletion", 100, "L", null, { completion: { output: "first" } }),
+      event("toolCall", 300, "lost", "gone", {
+        toolName: "scheduleTask",
+        output: "ok",
+        timeTaken: 5,
+      }),
+      event("promptCompletion", 200, "L", null, { completion: { output: "second" } }),
+    ])[0];
+    const rows = outlineRows(trace, STORY);
+    expect(rows.map((row) => [row.kind, row.depth, row.orphan])).toEqual([
+      ["round", 0, false],
+      ["round", 0, false],
+      ["tool", 0, true],
+    ]);
+  });
+});

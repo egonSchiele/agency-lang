@@ -6,7 +6,7 @@ import {
 } from "../statelog/wireAccessors.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
-import { roundDeltas, messagesOf } from "./messageDelta.js";
+import { messageKey, messagesOf, roundDeltas } from "./messageDelta.js";
 
 const system = { role: "system", content: "write code" };
 const user = { role: "user", content: "a module" };
@@ -38,7 +38,7 @@ describe("message deltas", () => {
     ];
     expect(roundDeltas(rounds).every((delta) => delta.rewrite === undefined)).toBe(true);
   });
-  it("preserves all replacement messages and reports counts and context", () => {
+  it("reports a rewrite from the first changed message, with counts and context", () => {
     const summary = { role: "system", content: "summary" };
     expect(
       roundDeltas([
@@ -46,9 +46,47 @@ describe("message deltas", () => {
         round([system, summary], { contextTokens: 31000 }),
       ])[1],
     ).toMatchObject({
-      added: [system, summary],
-      rewrite: { messagesBefore: 2, messagesAfter: 2, tokensBefore: 184000, tokensAfter: 31000 },
+      added: [summary],
+      rewrite: {
+        messagesBefore: 2,
+        messagesAfter: 2,
+        tokensBefore: 184000,
+        tokensAfter: 31000,
+        firstChangedAt: 1,
+      },
     });
+  });
+
+  it("reports a shortened history as changed where the removed message was", () => {
+    const call = { id: "c1", name: "subagent", arguments: {} };
+    const asked = { role: "assistant", content: "", toolCalls: [call] };
+    const resumed = { role: "user", content: "[subagent finished. answer]" };
+    // A handoff drops its tool call from the assistant message that carried it.
+    expect(roundDeltas([round([user, asked]), round([user, resumed])])[1]).toMatchObject({
+      added: [resumed],
+      rewrite: { messagesBefore: 2, messagesAfter: 2, firstChangedAt: 1 },
+    });
+  });
+
+  it("treats a value and its JSON text as the same message, and two texts as different", () => {
+    const records = [{ city: "Oslo" }, { city: "Rome" }];
+    const asValue = { role: "tool", name: "cities", toolCallId: "c1", content: records };
+    const asText = {
+      role: "tool",
+      name: "cities",
+      toolCallId: "c1",
+      content: JSON.stringify(records),
+    };
+    expect(messageKey(asValue)).toBe(messageKey(asText));
+    expect(messageKey({ role: "user", content: "a" })).not.toBe(
+      messageKey({ role: "user", content: "b" }),
+    );
+    expect(roundDeltas([round([user, asValue]), round([user, asText, system])])[1]).toMatchObject({
+      added: [system],
+    });
+    expect(
+      roundDeltas([round([user, asValue]), round([user, asText, system])])[1].rewrite,
+    ).toBeUndefined();
   });
   it("compares full image contents and tool request identities, ignoring labels", () => {
     const image = { role: "user", content: [{ type: "image", url: "a" }] };

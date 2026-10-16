@@ -417,8 +417,10 @@ function spineLabel(block: TranscriptBlock): string {
       return `  ${toolMark(block.row.status)}${block.row.name}`;
     case "error":
       return "✖ error";
+    case "pause":
+      return block.resumed ? "⏸ paused · resumed" : "⏸ paused";
     case "rewrite":
-      return "⚠ rewrite";
+      return "⚠ changed";
     case "history":
       return block.message.role;
     default:
@@ -433,6 +435,12 @@ function spineColor(block: TranscriptBlock): string {
   }
   if (role === "assistant") {
     return THEME.kind.assistant;
+  }
+  if (role === "thread") {
+    return THEME.accent;
+  }
+  if (role === "pause") {
+    return THEME.kind.interrupt;
   }
   if (
     role === "error" ||

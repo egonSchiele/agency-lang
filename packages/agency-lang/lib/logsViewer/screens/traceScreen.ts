@@ -347,7 +347,7 @@ export class TraceScreen implements Screen {
     if (this.quick === "tools" && row.kind !== "tool") {
       return false;
     }
-    if (this.quick === "interrupts" && row.kind !== "interrupt") {
+    if (this.quick === "interrupts" && row.kind !== "interrupt" && row.kind !== "pause") {
       return false;
     }
     if (!this.filter) {
@@ -701,6 +701,12 @@ function durationOf(row: StoryRow): number | undefined {
   return undefined;
 }
 function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[] {
+  const pieces = rowBodyPieces(row, selected, collapsed);
+  return row.orphan
+    ? [...pieces, { text: " · parent span not in this log", style: { fg: THEME.muted } }]
+    : pieces;
+}
+function rowBodyPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[] {
   const prefix: Piece[] = [
     {
       text: `${selected ? "▶" : " "} ${" ".repeat(row.depth * LAYOUT.indent)}${collapsed ? "▸ " : ""}`,
@@ -732,8 +738,19 @@ function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[
         ...prefix,
         { text: `⚠ ${row.interrupt.effect} `, style: { fg: THEME.kind.interrupt } },
         {
-          text: row.interrupt.outcome,
+          text: `${row.interrupt.outcome}${row.interrupt.resolvedBy === undefined ? "" : ` by ${row.interrupt.resolvedBy}`}`,
           style: { fg: row.interrupt.outcome === "approved" ? THEME.ok : THEME.kind.error },
+        },
+      ];
+    case "pause":
+      return [
+        ...prefix,
+        {
+          text:
+            row.pausedMs === undefined
+              ? "── paused · waiting for a response ──"
+              : `── paused ${fmtDuration(row.pausedMs, { minutes: true })} · resumed ──`,
+          style: { fg: THEME.muted },
         },
       ];
     case "error":

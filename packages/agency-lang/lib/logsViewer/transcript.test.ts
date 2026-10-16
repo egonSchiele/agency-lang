@@ -3,6 +3,7 @@ import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
 import { consumeRepresented, transcriptBlocks, transcriptText } from "./transcript.js";
+import { transcriptPayload } from "./transcriptPayload.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
 const user = { role: "user", content: "a module" };
@@ -144,7 +145,7 @@ describe("transcript blocks", () => {
       );
       const blocks = transcriptBlocks(buildForest(events)[0]);
       expect(blocks.find((block) => block.kind === "rewrite")).toMatchObject({
-        label: compaction ? "CONTEXT COMPACTED" : "HISTORY REWRITTEN",
+        label: compaction ? "CONTEXT COMPACTED" : "HISTORY CHANGED",
         messagesBefore: 2,
         messagesAfter: 3,
         tokensBefore: 184000,
@@ -359,11 +360,11 @@ it.each([null, undefined])("suppresses the successful void reply once: %j", (val
 });
 
 it.each([
-  { compactionSpan: "A", data: { threadIdentity: "a" }, expected: "HISTORY REWRITTEN" },
-  { compactionSpan: "A", data: {}, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "A", data: { threadIdentity: "a" }, expected: "HISTORY CHANGED" },
+  { compactionSpan: "A", data: {}, expected: "HISTORY CHANGED" },
   { compactionSpan: "B", data: {}, expected: "CONTEXT COMPACTED" },
-  { compactionSpan: "B", data: { threadIdentity: "a" }, expected: "HISTORY REWRITTEN" },
-  { compactionSpan: "B", data: { threadId: "wrong" }, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "B", data: { threadIdentity: "a" }, expected: "HISTORY CHANGED" },
+  { compactionSpan: "B", data: { threadId: "wrong" }, expected: "HISTORY CHANGED" },
   { compactionSpan: "B", data: { threadId: "0" }, expected: "CONTEXT COMPACTED" },
 ])("attributes compaction to its own thread: %j", ({ compactionSpan, data, expected }) => {
   const trace = buildForest([
@@ -493,5 +494,80 @@ describe("thread dividers", () => {
   it("adds no divider to a transcript on one thread", () => {
     const blocks = transcriptBlocks(buildForest([call("main", 100, "mainConversation")])[0]);
     expect(blocks.some((block) => block.kind === "thread")).toBe(false);
+  });
+});
+
+describe("rewrite headings", () => {
+  const round = (at: number, messages: unknown[]) =>
+    event("promptCompletion", at, "L", null, {
+      threadIdentity: "main",
+      messages,
+      completion: { output: "ok" },
+    });
+  const heading = (blocks: ReturnType<typeof transcriptBlocks>) =>
+    transcriptPayload(
+      blocks.find((block) => block.kind === "rewrite")!,
+      false,
+    )[0];
+
+  it("says where the history changed", () => {
+    const blocks = transcriptBlocks(
+      buildForest([round(100, [system, user]), round(200, [system, { ...user, content: "b" }])])[0],
+    );
+    expect(heading(blocks)).toMatchObject({ text: expect.stringContaining("from message 2") });
+  });
+
+  it("says where a shortened history was cut", () => {
+    const blocks = transcriptBlocks(
+      buildForest([round(100, [system, user]), round(200, [system])])[0],
+    );
+    expect(heading(blocks)).toMatchObject({ text: expect.stringContaining("after message 1") });
+  });
+});
+
+describe("pause blocks", () => {
+  it("marks where the run paused and how long it waited", () => {
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("agentStart", 0, "run1", null, { entryNode: "main" }),
+        event("promptCompletion", 100, "L", "run1", {
+          threadIdentity: "main",
+          messages: [user],
+          completion: { toolCalls: [{ name: "deploy" }] },
+        }),
+        event("toolCallStart", 101, "tool", "L", { toolName: "deploy", args: {} }),
+        event("interruptResolved", 103, "tool", "L", { interruptId: "i1", outcome: "passed" }),
+        event("agentStart", 7_103, "run2", null, { entryNode: "main" }),
+        event("interruptResolved", 7_104, "run2", null, {
+          interruptId: "i1",
+          outcome: "approved",
+          resolvedBy: "user",
+        }),
+        event("toolCall", 7_200, "tool", "L", { toolName: "deploy", output: "ok" }),
+        event("promptCompletion", 7_300, "L", "run1", {
+          threadIdentity: "main",
+          messages: [
+            user,
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ id: "c", name: "deploy", arguments: {} }],
+            },
+          ],
+          completion: { output: "done" },
+        }),
+      ])[0],
+    );
+    expect(blocks.map((block) => block.kind)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "pause",
+      "history",
+      "assistant",
+    ]);
+    const pause = blocks.find((block) => block.kind === "pause");
+    expect(pause).toMatchObject({ pausedMs: 7_001, resumed: true, at: 103 });
+    expect(transcriptText(pause!)).toBe("paused, then resumed");
   });
 });

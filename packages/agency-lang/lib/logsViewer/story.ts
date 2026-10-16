@@ -8,6 +8,7 @@ import {
   type TreeIndex,
 } from "./forest.js";
 import { roundDeltas, type RoundDelta } from "./messageDelta.js";
+import { runPauses, type RunPause } from "./problems.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
 import { ADMIN_KINDS } from "./timeline/spans.js";
@@ -23,7 +24,14 @@ export type ToolEvidence = {
   errors: ToolFailure[];
   interrupts: ("approved" | "rejected" | "pending")[];
 };
-type RowBase = { id: string; depth: number; node: TreeNode };
+type RowBase = {
+  id: string;
+  depth: number;
+  node: TreeNode;
+  /** The row's span (or its event's span) names a parent this log never
+   *  recorded, so it sits at the top level. */
+  orphan: boolean;
+};
 export type RoundStoryRow = RowBase & { kind: "round"; round: Round; gist: string };
 export type UserStoryRow = RowBase & { kind: "user"; text: string };
 export type ToolStoryRow = RowBase & {
@@ -40,6 +48,13 @@ export type InterruptStoryRow = RowBase & {
   toolName: string | undefined;
 };
 export type ErrorStoryRow = RowBase & { kind: "error"; message: string };
+/** The run stopped under this interrupt and waited; `pausedMs` is undefined
+ *  while it still waits. */
+export type PauseStoryRow = RowBase & {
+  kind: "pause";
+  pausedMs: number | undefined;
+  resumed: boolean;
+};
 export type SubagentStoryRow = RowBase & { kind: "subagent"; label: string };
 export type LlmGroupStoryRow = RowBase & {
   kind: "llmGroup";
@@ -55,6 +70,7 @@ export type StoryRow =
   | ToolStoryRow
   | InterruptStoryRow
   | ErrorStoryRow
+  | PauseStoryRow
   | SubagentStoryRow
   | LlmGroupStoryRow
   | MachineryStoryRow;
@@ -67,8 +83,9 @@ type RowContext = {
   index: TreeIndex;
   roundsByLeaf: Record<string, Round>;
   deltasByRound: Record<string, RoundDelta>;
+  pausesByInterrupt: Record<string, RunPause>;
 };
-type Lookups = Pick<RowContext, "index" | "roundsByLeaf" | "deltasByRound">;
+type Lookups = Pick<RowContext, "index" | "roundsByLeaf" | "deltasByRound" | "pausesByInterrupt">;
 type RowMaker = (context: RowContext) => StoryRow;
 const STORY_EVENTS: Record<string, RowMaker> = {
   promptCompletion: roundRow,
@@ -206,6 +223,7 @@ function base(context: RowContext): RowBase {
     id: context.node.event ? stableLeafId(context.parent, context.node) : context.node.id,
     depth: context.depth,
     node: context.node,
+    orphan: (context.node.event ? context.parent : context.node).parentMissing === true,
   };
 }
 function roundRow(context: RowContext): StoryRow {
@@ -316,13 +334,19 @@ function lookupsFor(trace: TreeNode): Lookups {
   const rounds = roundsOf(trace, index);
   const roundsByLeaf: Record<string, Round> = Object.create(null);
   const deltasByRound: Record<string, RoundDelta> = Object.create(null);
+  const pausesByInterrupt: Record<string, RunPause> = Object.create(null);
   for (const round of rounds) {
     roundsByLeaf[round.node.id] = round;
   }
   for (const delta of roundDeltas(rounds)) {
     deltasByRound[delta.roundId] = delta;
   }
-  return { index, roundsByLeaf, deltasByRound };
+  for (const pause of runPauses(trace)) {
+    if (pause.interruptId !== undefined) {
+      pausesByInterrupt[pause.interruptId] = pause;
+    }
+  }
+  return { index, roundsByLeaf, deltasByRound, pausesByInterrupt };
 }
 export function forestOutline(trace: TreeNode, options: AdminOptions): StoryRow[] {
   const lookups = lookupsFor(trace);
@@ -350,15 +374,53 @@ export function storyOutline(trace: TreeNode, options: AdminOptions): StoryRow[]
   );
   const parents = storyParents(rows, lookups);
   function layOut(parentId: string | undefined, depth: number): StoryRow[] {
-    return rows
-      .filter((row) => parents[row.id] === parentId)
-      .flatMap((row) => [
-        ...userRows(row, depth, lookups),
-        { ...row, depth },
-        ...layOut(row.id, depth + 1),
-      ]);
+    const own = rows.filter((row) => parents[row.id] === parentId);
+    // A span whose parent is missing from the log sits at the top level;
+    // when one does, the top level reads in time order so it lands where it
+    // happened. Otherwise rows keep log order, as they always have.
+    const ordered =
+      parentId === undefined && own.some((row) => row.orphan) ? [...own].sort(byTime) : own;
+    return ordered.flatMap((row) => [
+      ...userRows(row, depth, lookups),
+      { ...row, depth },
+      ...pauseRows(row, depth + 1, lookups),
+      ...layOut(row.id, depth + 1),
+    ]);
   }
   return layOut(undefined, 0);
+}
+function byTime(first: StoryRow, second: StoryRow): number {
+  return rowTime(first) - rowTime(second);
+}
+function rowTime(row: StoryRow): number {
+  if (row.kind === "round") {
+    return row.round.start;
+  }
+  const event = row.node.event;
+  const at = event === undefined ? row.node.firstTs : Date.parse(event.data.timestamp);
+  return at === undefined || !Number.isFinite(at) ? Number.POSITIVE_INFINITY : at;
+}
+/** The pause the run took under this interrupt, when it went to a person. */
+function pauseRows(row: StoryRow, depth: number, lookups: Lookups): PauseStoryRow[] {
+  if (row.kind !== "interrupt") {
+    return [];
+  }
+  const id = row.node.event?.data.interruptId;
+  const pause = typeof id === "string" ? lookups.pausesByInterrupt[id] : undefined;
+  if (pause === undefined) {
+    return [];
+  }
+  return [
+    {
+      kind: "pause",
+      id: `${row.id}:pause`,
+      depth,
+      node: row.node,
+      orphan: false,
+      pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
+      resumed: pause.resumedAt !== undefined,
+    },
+  ];
 }
 function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   const placed = walkWithDepth(trace);
@@ -373,14 +435,23 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
       ? llmGroupRow(context)
       : rowFor(context);
   });
-  // A story interrupt uses its first occurrence's stable ID and latest
-  // evidence. Raw forest mode retains every occurrence separately.
-  const interrupts = candidates.filter((row) => row.kind === "interrupt");
-  const groups: Record<string, StoryRow[]> = Object.create(null);
+  // A story interrupt is one row: its first occurrence's place and stable
+  // ID, with the latest outcome. An interrupt with a recorded id merges
+  // across the whole trace, so the answer a person gave in a later run
+  // (logged under that run's own span) lands on the interrupt it answers.
+  // The first occurrence is the innermost tool's, because child spans walk
+  // before their parent's leaves, so a nested tool keeps ownership when
+  // the same id is logged at more than one level. Without a recorded id,
+  // only occurrences under one owner merge. Raw forest mode retains every
+  // occurrence separately.
+  const interrupts = candidates.filter((row): row is InterruptStoryRow => row.kind === "interrupt");
+  const groups: Record<string, InterruptStoryRow[]> = Object.create(null);
   for (const row of interrupts) {
-    const owner =
-      nearestAncestor(row.node, lookups.index, (node) => node.label === "toolExecution")?.id ??
-      lookups.index.parentIds[row.node.id];
+    const hasId = typeof row.node.event?.data.interruptId === "string";
+    const owner = hasId
+      ? null
+      : (nearestAncestor(row.node, lookups.index, (node) => node.label === "toolExecution")?.id ??
+        lookups.index.parentIds[row.node.id]);
     const key = JSON.stringify([owner, interruptKey(row.node)]);
     (groups[key] ??= []).push(row);
   }
@@ -388,7 +459,15 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
   for (const group of Object.values(groups)) {
     const first = group[0];
     const last = group.at(-1)!;
-    Object.assign(first, { ...last, id: first.id });
+    // The thrown event names no effect; a resolution does. Take each
+    // field from the first occurrence that recorded it.
+    const described = group.find((row) => row.interrupt.effect !== "interrupt") ?? first;
+    first.interrupt = {
+      effect: described.interrupt.effect,
+      message: group.find((row) => row.interrupt.message !== "")?.interrupt.message ?? "",
+      outcome: last.interrupt.outcome,
+      ...(last.interrupt.resolvedBy === undefined ? {} : { resolvedBy: last.interrupt.resolvedBy }),
+    };
     hidden.push(...group.slice(1).map((row) => row.id));
   }
   return candidates.filter((row) => !hidden.includes(row.id));
@@ -456,6 +535,7 @@ function userRows(row: StoryRow, depth: number, lookups: Lookups): UserStoryRow[
       id: `${row.id}:user`,
       depth,
       node: row.node,
+      orphan: row.orphan,
       text: users.map((message) => contentText(message.content)).join("\n"),
     },
   ];

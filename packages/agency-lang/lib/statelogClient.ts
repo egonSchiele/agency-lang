@@ -7,6 +7,7 @@ import { JSONEdge } from "./types.js";
 import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { sendStatelogPost } from "./statelogSender.js";
+import { savedSpanIdFor, saveSpan, spanSlot } from "./statelog/spanSlot.js";
 
 // Bump this when the wire format changes in a way the viewer needs
 // to notice. The viewer rejects files with a higher version.
@@ -295,10 +296,12 @@ export class StatelogClient {
     return fn([...parentStack]);
   }
 
-  startSpan(type: SpanType): string | undefined {
+  /** Open a span. Only `reopenSpan` passes an `id`; everyone else gets a
+   *  random one. */
+  startSpan(type: SpanType, options: { id?: string } = {}): string | undefined {
     if (!this.enabled) return undefined;
     const stack = this.currentStack();
-    const spanId = nanoid(12);
+    const spanId = options.id ?? nanoid(12);
     const parentSpanId = stack.length > 0 ? stack[stack.length - 1].spanId : null;
     stack.push({
       spanId,
@@ -306,6 +309,22 @@ export class StatelogClient {
       spanType: type,
       startTime: performance.now(),
     });
+    return spanId;
+  }
+
+  /** Open the span saved in the slot `name` of `locals`, or a new one
+   *  whose id is then saved there. For a span that can still be open when
+   *  a checkpoint is taken: the resumed run reopens it under the same id,
+   *  so its events join the paused run's instead of starting a span of
+   *  their own. Closing is the usual `endSpan`. See
+   *  lib/statelog/spanSlot.ts for what a slot is and how long an id lives. */
+  reopenSpan(type: SpanType, locals: Record<string, unknown>, name: string): string | undefined {
+    if (!this.enabled) {
+      return undefined;
+    }
+    const slot = spanSlot(locals, name);
+    const spanId = this.startSpan(type, { id: savedSpanIdFor(slot, this.traceId) })!;
+    saveSpan(slot, { traceId: this.traceId, spanId });
     return spanId;
   }
 
@@ -1672,7 +1691,7 @@ export function getStatelogClient(config: {
 }
 
 /**
- * The logging client without `startSpan` and `endSpan`. This is the type of
+ * The logging client without `startSpan`, `reopenSpan` and `endSpan`. This is the type of
  * `ctx.statelogClient` and `ctx.rootLog`.
  *
  * A span opened on the client itself goes on the root span stack, which
@@ -1680,4 +1699,4 @@ export function getStatelogClient(config: {
  * other's spans. A run's own logger, `run.log`, is bound to its branch's
  * span stack and keeps the span methods.
  */
-export type RootLog = Omit<StatelogClient, "startSpan" | "endSpan">;
+export type RootLog = Omit<StatelogClient, "startSpan" | "reopenSpan" | "endSpan">;

@@ -495,6 +495,68 @@ describe("StatelogClient", () => {
     });
   });
 
+  describe("reopenSpan", () => {
+    const key = "__span_llmCall";
+    const name = "llmCall";
+
+    it("opens a new span and saves its id in the slot", async () => {
+      const file = newLogFile("reopen-new");
+      const client = fileClient(file);
+      const locals: Record<string, unknown> = {};
+      const id = client.reopenSpan("llmCall", locals, name)!;
+      expect(id).toHaveLength(12);
+      expect(locals[key]).toEqual({ traceId: expect.any(String), spanId: id });
+      await client.debug("hi", {});
+      client.endSpan(id);
+      expect(readEvents(file)[0].span_id).toBe(id);
+    });
+
+    it("reuses a saved id from the same trace", async () => {
+      const file = newLogFile("reopen-reuse");
+      const client = fileClient(file);
+      const locals: Record<string, unknown> = {};
+      const first = client.reopenSpan("llmCall", locals, name)!;
+      client.endSpan(first);
+      // The same slot, as a resumed run would see it after a restore.
+      const second = client.reopenSpan("llmCall", locals, name)!;
+      expect(second).toBe(first);
+      await client.debug("hi", {});
+      client.endSpan(second);
+      expect(readEvents(file)[0].span_id).toBe(first);
+    });
+
+    it("replaces an id saved by another trace", () => {
+      const client = fileClient(newLogFile("reopen-other-trace"));
+      const locals: Record<string, unknown> = {
+        [key]: { traceId: "someone-else", spanId: "abcDEF123_-x" },
+      };
+      const id = client.reopenSpan("llmCall", locals, name)!;
+      expect(id).not.toBe("abcDEF123_-x");
+      expect(locals[key]).toEqual({ traceId: expect.any(String), spanId: id });
+      client.endSpan(id);
+    });
+
+    it("replaces a malformed id instead of logging under it", () => {
+      const client = fileClient(newLogFile("reopen-malformed"));
+      const first = client.reopenSpan("llmCall", {}, name)!;
+      client.endSpan(first);
+      const traceId = (client as any).traceId as string;
+      const locals: Record<string, unknown> = {
+        [key]: { traceId, spanId: "../../etc/passwd" },
+      };
+      const id = client.reopenSpan("llmCall", locals, name)!;
+      expect(id).toMatch(/^[A-Za-z0-9_-]{12}$/);
+      client.endSpan(id);
+    });
+
+    it("writes nothing when observability is off", () => {
+      const client = fileClient(newLogFile("reopen-disabled"), { observability: false });
+      const locals: Record<string, unknown> = {};
+      expect(client.reopenSpan("llmCall", locals, name)).toBeUndefined();
+      expect(locals).toEqual({});
+    });
+  });
+
   describe("branch span isolation", () => {
     it("snapshotStack copies the active stack and decouples it from later pushes", () => {
       const client = fileClient(newLogFile("snapshot"));

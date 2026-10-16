@@ -192,6 +192,64 @@ parent/child tree.
 > post a small marker event right after `startSpan` so the span materializes in
 > the tree.
 
+### Span ids across a resume
+
+Span ids are random and are not part of a checkpoint on their own. A resumed
+run builds a new execution context, so every span it reopens would get a new
+id, and a span whose events were all logged before the pause would never
+appear in the resumed run's log at all. The `toolCall` that ends a paused
+tool would then sit in a span with no `toolCallStart`, under an `llmCall`
+span missing from the log, and a viewer would show the resumed work as a
+second, separate call.
+
+Two sites can be open when a checkpoint is taken and reuse their id on
+resume, through `reopenSpan(type, slot)` on the client:
+
+| Site | Span | Where the id is saved |
+|---|---|---|
+| `runPrompt` (`lib/runtime/prompt.ts`) | `llmCall` | the runPrompt frame's locals, key `__span_llmCall` |
+| the tool loop in `runPrompt` | `toolExecution` | the frame's `runnerState`, key `__span_round.<round>.tool.<call>`, dropped when the tool is done |
+
+A slot is a key under `__span_` in a record the checkpoint serializes (see
+`lib/statelog/spanSlot.ts`). The slot's lifetime is the id's lifetime: the
+runPrompt frame is popped on completion and on a throw but not on a pause,
+so the id is kept across a pause and forgotten afterwards with no clearing
+code at either site, the same way `messagesJSON` and `toolTimings` are kept.
+
+A saved id is reused only inside the trace that minted it. The slot holds
+the trace id beside the span id, and `reopenSpan` opens a fresh span when
+they differ. So a rewind (`rewindFrom`), which runs in a new trace, gets
+new spans without anything being cleared, and a `restore()` in the same
+trace continues the same spans. That second case is deliberate: the step
+log skips the completed `toolCallStart` step on replay, so keeping the id
+is what keeps the tool's start and end in one span. A retried tool then
+logs one `toolCallStart` and two `toolCall` events in that span; the eval
+extractor pairs by span and counts the tool complete, and the viewer's tool
+row reads the first `toolCall` it finds.
+
+The tool slot lives in the runPrompt frame's `runnerState`, beside
+`toolTimings`, and is forgotten once the tool is done (anything but a
+pause), so a long tool loop does not carry every old id in every checkpoint. The saved id is also
+checked for shape (twelve characters of the nanoid alphabet) before it goes
+into any event, because the checkpoint is the program and could have been
+edited.
+
+`agentRun` and `nodeExecution` keep fresh ids. Each resume is its own
+invocation, and folding them into one span would make its duration cover
+the pause. The reopened `llmCall` events name the resumed run's fresh
+`nodeExecution` as their parent, and that span is in the log because the
+graph logs `enterNode` on every run, resumes included. A viewer keeps the
+parent it saw first for each span, so the resumed events land under the
+original call tree. Keep `enterNode` unconditional, or the parent goes
+missing.
+
+The remaining spans that can be open at a pause, `forkAll`/`race` and
+`subprocessRun`, still get fresh ids on resume.
+
+`tests/agency-js/span-ids-survive-resume` covers a pause inside a tool, in
+a handoff, twice in one loop, in a loop body, a same-trace `restore()`, and
+a rewind.
+
 ## Event catalog
 
 Run lifecycle: `runMetadata`, `agentStart`, `agentName`, `agentEnd`.

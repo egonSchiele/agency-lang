@@ -1,0 +1,71 @@
+// Spans whose ids survive a pause. Every node here pauses inside the
+// tool loop in some shape, and test.js checks that the resumed events
+// land in the spans the paused run opened. See lib/statelog/spanSlot.ts.
+import { bump, bumpCount, keep, keptCheckpoint } from "./counter.js"
+
+// Raises with no handler in scope, so the run pauses inside the tool.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+def quick(id: string): string {
+  return "quick ${id}"
+}
+
+// Takes a checkpoint inside the tool call and keeps it for the node body.
+def takeCheckpoint(id: string): string {
+  const cp = checkpoint()
+  return keep(getCheckpoint(cp))
+}
+
+// Hands a checkpoint taken inside a tool call back to the model, so the
+// test can rewind from it. A rewind is a new trace.
+def grabCheckpoint(id: string): any {
+  const cp = checkpoint()
+  return getCheckpoint(cp)
+}
+
+// The BMO shape: a handoff whose own tool pauses.
+handoff def subagent(question: string): string {
+  return llm("brief: ${question}", { tools: [pauseMe] })
+}
+
+node toolInterrupt() {
+  return llm("pause", { tools: [pauseMe] })
+}
+
+node handoffInterrupt() {
+  return llm("ask", { tools: [subagent] })
+}
+
+// The model pauses twice in one tool loop; the test resumes each in turn.
+node twoInterrupts() {
+  return llm("pause twice", { tools: [pauseMe] })
+}
+
+// One llm() call per iteration; the second pauses.
+node loopInterrupt() {
+  let out = ""
+  for (n in [1, 2, 3]) {
+    out = llm("step ${n}", { tools: [pauseMe, quick] })
+  }
+  return out
+}
+
+// Restores once to the checkpoint the tool took, so the tool loop replays
+// from inside that call, in the same trace. A restore() raised inside a
+// tool is reported to the model as a tool crash, which is why the node
+// body does it.
+node retry() {
+  const first = llm("checkpoint", { tools: [takeCheckpoint] })
+  if (bumpCount() == 0) {
+    bump()
+    restore(keptCheckpoint(), {})
+  }
+  return "retried after ${first}"
+}
+
+node forRewind() {
+  return llm("grab", { tools: [grabCheckpoint] })
+}

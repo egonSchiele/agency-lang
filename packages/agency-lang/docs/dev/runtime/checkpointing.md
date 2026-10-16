@@ -130,6 +130,13 @@ type RestoreOptions = {
 
 Something has to survive the rollback for a retry loop to terminate. That is why the loop counter usually lives outside the GlobalStore, either as a `static` value or in a plain JS module the program imports.
 
+Frame locals under the `__span_` prefix hold statelog span ids, so a resumed
+run can log its events in the spans the paused run opened. They are ordinary
+locals: serialized with the frame, covered by the integrity checksum, and
+rolled back with everything else. A restored id is reused only in the trace
+that minted it. See "Span ids across a resume" in
+[`../hosting/statelog.md`](../hosting/statelog.md).
+
 A checkpoint whose thread has since been repaired is stale. See "Reopen repair"
 in [`threads.md`](./threads.md). `restoreThreadForResume` (in
 `lib/runtime/threadRepair.ts`) throws rather than letting the old snapshot

@@ -1,0 +1,56 @@
+{
+  "toolInterrupt": {
+    "result": "done",
+    "resumes": 1,
+    "problems": [],
+    "agentStarts": 2,
+    "toolStarts": 1,
+    "toolEnds": 1,
+    "llmCallSpans": 1
+  },
+  "handoffInterrupt": {
+    "result": "done",
+    "resumes": 1,
+    "problems": [],
+    "agentStarts": 2,
+    "toolStarts": 2,
+    "toolEnds": 2,
+    "llmCallSpans": 2,
+    "pauseEndNestsUnderSubagent": true
+  },
+  "twoInterrupts": {
+    "result": "done",
+    "resumes": 2,
+    "problems": [],
+    "agentStarts": 3,
+    "toolStarts": 2,
+    "toolEnds": 2,
+    "llmCallSpans": 1
+  },
+  "loopInterrupt": {
+    "result": "done",
+    "resumes": 1,
+    "problems": [],
+    "agentStarts": 2,
+    "toolStarts": 3,
+    "toolEnds": 3,
+    "llmCallSpans": 3
+  },
+  "retry": {
+    "result": "retried after done",
+    "resumes": 0,
+    "restores": 1,
+    "problems": [],
+    "agentStarts": 1,
+    "toolStarts": 1,
+    "toolEnds": 2,
+    "llmCallSpans": 1
+  },
+  "forRewind": {
+    "first": "done",
+    "rewound": "done",
+    "newTrace": true,
+    "reusedSpans": [],
+    "rewoundProblems": []
+  }
+}

@@ -1,4 +1,5 @@
 import { requireCapabilities } from "../host/host.js";
+import { forgetSpan } from "../statelog/spanSlot.js";
 import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { createLogger, type Logger } from "../logger.js";
@@ -740,13 +741,6 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // the "one llmCall span == one llm() call" model the viewer renders.
   // Opened once below (outside `pr.step` so resume re-opens it on
   // re-entry) and closed once in `finally`.
-  let currentLlmSpanId: string | undefined;
-  const closeLlmSpan = () => {
-    if (currentLlmSpanId) {
-      run.log.endSpan(currentLlmSpanId);
-      currentLlmSpanId = undefined;
-    }
-  };
 
   // Tool calls: on resume, restore from frame; otherwise start at [] and
   // let the initialLlmCall step populate it.
@@ -759,10 +753,12 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
 
   let shouldPop = true;
   // Open the single llmCall span before the round-trip loop. Done here
-  // (not inside the idempotent `initialLlmCall` step) so a resumed run —
-  // which skips completed steps — still re-opens the span that the tool
-  // loop expects to be active.
-  currentLlmSpanId = run.log.startSpan("llmCall");
+  // (not inside the idempotent `initialLlmCall` step) so a resumed run,
+  // which skips completed steps, still opens the span the tool loop
+  // expects to be active. The id lives in this frame's locals, so a
+  // resume reopens the same span and its events join the paused run's;
+  // the frame pop on completion or throw is what forgets it.
+  const llmSpanId = run.log.reopenSpan("llmCall", self, "llmCall");
   // Guard-trip gate: settle every pending cost trip in an idempotent
   // step of its own, before/after the request steps. The gate loops
   // until the stack is clear (approving an inner guard can leave an
@@ -1548,7 +1544,10 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           });
           if (b.interrupts) return;
 
-          const toolSpanId = branchRun.log.startSpan("toolExecution");
+          // Saved in runnerState beside toolTimings, under this invocation's
+          // key, so a resumed invoke step logs its toolCall under the span
+          // that logged its toolCallStart. Forgotten once the tool is done.
+          const spanId = branchRun.log.reopenSpan("toolExecution", self.runnerState, invocationKey);
           let toolResult: any;
           let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
             "success";
@@ -1655,7 +1654,11 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
               });
             });
           } finally {
-            branchRun.log.endSpan(toolSpanId);
+            branchRun.log.endSpan(spanId);
+            // A pause keeps the id for the resume; anything else is final.
+            if (!b.interrupts) {
+              forgetSpan(self.runnerState, invocationKey);
+            }
           }
         };
 
@@ -1930,9 +1933,9 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   } finally {
     // Close any open llmCall span. This covers normal completion,
     // thrown errors, and early returns when tool calls interrupted
-    // (the resumed run opens a fresh llmCall span). The helper is a
-    // no-op if no span is currently open.
-    closeLlmSpan();
+    // (the resumed run reopens the same span from its saved id).
+    // endSpan is a no-op when no span is open.
+    run.log.endSpan(llmSpanId);
     if (shouldPop) stateStack.pop();
   }
 

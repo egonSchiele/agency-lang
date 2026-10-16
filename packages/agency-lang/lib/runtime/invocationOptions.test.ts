@@ -35,6 +35,30 @@ describe("resolveInvocation — run id policy", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("uses the checkpoint's trace id below the environment's, so a CLI resume joins the paused run's trace", () => {
+    expect(resolveInvocation({ kind: "fresh", checkpointTraceId: "paused-run" }).runId).toBe(
+      "paused-run",
+    );
+    expect(
+      resolveInvocation({
+        kind: "fresh",
+        environmentTraceId: "harness-run",
+        checkpointTraceId: "paused-run",
+      }).runId,
+    ).toBe("harness-run");
+    expect(
+      resolveInvocation({ kind: "fresh", checkpointTraceId: "" }).runId.length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("ignores a checkpoint trace id that could not have been minted, since it names a file", () => {
+    for (const bad of ["../../elsewhere", "a/b", "with space", "x".repeat(65)]) {
+      const resolved = resolveInvocation({ kind: "fresh", checkpointTraceId: bad });
+      expect(resolved.runId, bad).not.toBe(bad);
+      expect(resolved.runId, bad).toMatch(/^[A-Za-z0-9_-]+$/);
+    }
+  });
+
   it("generates a non-empty id when nothing is supplied", () => {
     const resolved = resolveInvocation({ kind: "fresh" });
     expect(resolved.runId.length).toBeGreaterThan(0);

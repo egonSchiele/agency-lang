@@ -43,6 +43,25 @@ context. A new interrupt pauses the trace without a footer because the run has
 not finished. The result carries `usage` and `traceId`, the same two fields
 `runNode` puts on a fresh run's result.
 
+The resumed run logs into the paused run's statelog trace. The checkpoint
+carries the trace id it was taken under, and `resumeCliFromCheckpoint` uses it
+when nothing else names a trace: a subprocess's inherited id and
+`AGENCY_TRACE_ID` both come first, so a harness that gives a process tree one
+trace keeps it. With the span ids that `runPrompt` saves in its frame (see
+"Span ids across a resume" in `../hosting/statelog.md`), the resumed events
+then land in the spans the paused run opened, and a viewer reads the two
+invocations as one story.
+
+Two things follow from that. A checkpoint file is not used up by a resume, so
+resuming the same file twice (after a failure, say) puts both attempts into
+one trace, with the same span ids; the viewer shows them as one story, and in
+`traceDir` mode both append to one `.agencytrace` file. That is deliberate:
+the attempts are one piece of work on one checkpoint. And because the id
+becomes part of that file name, `resolveInvocation` trusts a checkpoint's
+trace id only when it has the shape the runtime mints (letters, digits, `_`
+and `-`, at most 64 characters); any other value gets a fresh id, so an
+edited checkpoint cannot steer the trace file outside `traceDir`.
+
 ## Integrity and code identity
 
 `runCliEntry` validates the checkpoint before checking its signature. A signed

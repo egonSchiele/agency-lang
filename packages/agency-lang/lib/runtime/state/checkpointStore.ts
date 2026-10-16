@@ -43,6 +43,7 @@ export type CheckpointArgs = {
   pinned?: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
   usage?: unknown;
+  traceId?: string;
   signature?: string;
 };
 
@@ -58,6 +59,7 @@ export type CheckpointJSON = {
   pinned: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
   usage?: unknown;
+  traceId?: string;
   signature?: string;
 };
 
@@ -79,6 +81,10 @@ export class Checkpoint implements SourceLocation {
    *  keeps counting from there. `unknown` because a checkpoint comes back from
    *  the host; `InvocationUsageMeter.resumeFrom` recovers it. */
   public usage?: unknown;
+  /** The statelog trace the run was logging to when this checkpoint was
+   *  taken, so a resume from a file can log into the same trace. Absent on
+   *  checkpoints from before the field and on contexts with no run id. */
+  public traceId?: string;
   /** HMAC checksum embedded at creation when a signing key is configured.
    *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
   public signature?: string;
@@ -95,6 +101,7 @@ export class Checkpoint implements SourceLocation {
     this.pinned = args.pinned ?? false;
     this.moduleFingerprints = args.moduleFingerprints;
     this.usage = args.usage;
+    this.traceId = args.traceId;
     this.signature = args.signature;
   }
 
@@ -206,6 +213,9 @@ export class Checkpoint implements SourceLocation {
     if (this.usage !== undefined) {
       json.usage = this.usage;
     }
+    if (this.traceId !== undefined) {
+      json.traceId = this.traceId;
+    }
     if (this.signature !== undefined) {
       json.signature = this.signature;
     }
@@ -248,6 +258,7 @@ export class Checkpoint implements SourceLocation {
       globals: ctx.globals.toJSON(),
       nodeId,
       usage,
+      traceId: ctx.runId ?? undefined,
       ...opts,
     };
     if (Object.keys(moduleFingerprints).length > 0) {

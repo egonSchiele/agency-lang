@@ -116,6 +116,7 @@ describe("Checkpoint.fromJSON round trip", () => {
       stepPath: "0",
       label: null,
       pinned: false,
+      traceId: "trace-of-the-paused-run",
       globals: { store: {}, initializedModules: [] },
       stack: {
         mode: "serialize",
@@ -159,6 +160,7 @@ describe("Checkpoint.fromJSON round trip", () => {
     // Serialize the way an external store would, then revive.
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
     expect(revived).not.toBeNull();
+    expect(revived!.traceId).toBe("trace-of-the-paused-run");
 
     const stack = revived!.stack;
     expect(stack.localCost).toBe(2.25);

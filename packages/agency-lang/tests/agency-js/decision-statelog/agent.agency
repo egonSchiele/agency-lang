@@ -1,0 +1,10 @@
+// One decision call and one text call, so test.js can read what the
+// statelog records for each: the usage kind on both prompt events, and on
+// the decision call what the model was sent and what it answered.
+type Dept = "billing" | "support"
+
+node main() {
+  const dept: Dept = llm("Which department?", { model: "jev-1.13" })
+  const reply = llm("Say hello.")
+  return { dept: dept, reply: reply }
+}

@@ -288,6 +288,25 @@ Esc / timeout — deliberately not an error). Pairing is by span + order: the
 nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
 
+Both prompt events carry `usageKind`: `"completion"` for a text model and
+`"decision"` for a decision model such as Jev or Laya (the
+`ProviderUsageKind` names from `lib/runtime/invocationUsage.ts`). A
+`promptCompletion` from a decision model also carries `decision`, with what
+the model was actually sent and what it answered, because `messages` holds
+the chat thread and a decision model never sees a chat:
+
+- `state`: the thread as the model read it, role and text only;
+- `questions`: what the response type became, keyed by question name;
+- `answers`: the model's reply, with each answer's confidence and
+  probabilities, before it was turned back into the value.
+
+The state is text only by construction (`messagesToState` reads the content
+getter, which joins text parts and drops attachments), so it needs no
+redaction of its own. The echoed `completion` on a decision call leaves out
+`rawData`, which would repeat the answers. The `decisionOf` and `usageKindOf` accessors in
+`lib/statelog/wireAccessors.ts` read the fields; both are absent on logs
+from before they were recorded.
+
 A completion records three thread fields:
 
 - `threadId` is the local registry key, such as `"0"`. Fresh tool stores can

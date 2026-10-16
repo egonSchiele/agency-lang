@@ -1,7 +1,7 @@
 import { requireCapabilities } from "../host/host.js";
 import { forgetSpan } from "../statelog/spanSlot.js";
 import * as smoltalk from "smoltalk";
-import { PromptResult, ToolCallJSON, UserContentInput, redactAttachments } from "smoltalk";
+import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { createLogger, type Logger } from "../logger.js";
 import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
 import type { Run } from "./asyncContext.js";
@@ -26,7 +26,14 @@ import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
 import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
-import { armCallTimeout, dispatchWithRetry, runWithRetry } from "./llmDispatch.js";
+import { armCallTimeout, dispatchWithRetry, runWithRetry, usageKindFor } from "./llmDispatch.js";
+import {
+  emitPromptCompletion,
+  emitPromptStart,
+  redactMessagesForLog,
+  redactPromptForLog,
+} from "./promptEvents.js";
+import type { DecisionLog } from "../statelog/wireTypes.js";
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
@@ -95,7 +102,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
 import { buildReplyMessage, extractStructuredResponse, updateTokenStats } from "./utils.js";
 
-type Tool = {
+export type Tool = {
   name: string;
   description?: string;
   schema: any;
@@ -126,40 +133,6 @@ export function promptText(p: string | UserContentInput): string {
     .join(" ");
 }
 
-/** Deep copy of a thread's messages with attachment payloads (base64 / data
- *  URIs) redacted, for statelog. Uses `toJSON()` — the same plain shape
- *  `JSON.stringify` would emit — so wire consumers like
- *  `wireAccessors.userMessageOf` keep working. Redaction only shortens base64
- *  string values, so the result is still structurally `MessageJSON[]`. */
-export function redactMessagesForLog(messages: MessageThread): smoltalk.MessageJSON[] {
-  return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
-}
-
-/** A thread's redacted messages for statelog, each carrying its debug
- *  label (from `llm(label:)` / `userMessage(msg, label:)`) when it has
- *  one. Reads the labels off the SAME thread that produced the dump, so
- *  index `i` lines up: `redactMessagesForLog` maps `messages` in order,
- *  and smoltalk's `redactAttachments` is 1:1 over an array. That second
- *  half is someone else's implementation detail, so a test pins the
- *  pairing through the redaction path with a real attachment.
- *
- *  Unlabeled messages are emitted unchanged rather than with `label:
- *  null`, so logs for label-free programs stay byte-identical. */
-export function withMessageLabels(
-  messages: MessageThread,
-): (smoltalk.MessageJSON & { label?: string })[] {
-  return redactMessagesForLog(messages).map((m, i) => {
-    const label = messages.labelAt(i);
-    return label === null ? m : { ...m, label };
-  });
-}
-
-/** A prompt with attachment payloads redacted, preserving its string-or-array
- *  shape, for statelog / hook data. */
-export function redactPromptForLog(p: string | UserContentInput): string | UserContentInput {
-  return redactAttachments(p) as string | UserContentInput;
-}
-
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
 /** For prompt.test.ts. */
@@ -180,33 +153,6 @@ export const _internal = {
 /** The runtime's logger for a run: its level, writing to its host. */
 function ctxLogger(ctx: RuntimeContext<any>): Logger {
   return createLogger(ctx.logLevel, ctx.host.settings);
-}
-
-function emitPromptStart({
-  run,
-  messages,
-  tools,
-  responseFormat,
-  clientConfig,
-  callLabel,
-}: {
-  run: Run;
-  messages: MessageThread;
-  tools: Tool[];
-  responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolConfig>;
-  /** This call's `llm(label:)` debug tag, or null. Observability only. */
-  callLabel?: string | null;
-}): void {
-  run.log.promptStart({
-    model: JSON.stringify(clientConfig.model),
-    threadId: run.threads.activeId() ?? null,
-    messageCount: messages.getMessages().length,
-    toolCount: tools.length,
-    hasResponseFormat: responseFormat != null,
-    maxTokens: clientConfig.maxTokens ?? null,
-    label: callLabel ?? null,
-  });
 }
 
 /** A guard-trip cancellation of an in-flight request is RESUMABLE
@@ -406,22 +352,16 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  emitPromptStart({
-    run,
-    messages,
-    tools,
-    responseFormat,
-    clientConfig,
-    callLabel,
-  });
+  // "completion" for a text model; "decision" for a decision model, whose
+  // call is booked under its own kind. See decision/dispatch.ts.
+  const usageKind = usageKindFor(promptConfig);
+  emitPromptStart({ run, messages, tools, responseFormat, clientConfig, callLabel, usageKind });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
-  // "completion" for a text model; "decision" for a decision model, whose
-  // call is booked under its own kind. See decision/dispatch.ts.
-  let usageKind: ProviderUsageKind;
+  let decision: DecisionLog | undefined;
   try {
-    ({ completion, toolCalls, usageKind } = await dispatchWithRetry({
+    ({ completion, toolCalls, decision } = await dispatchWithRetry({
       run,
       ctx,
       promptConfig,
@@ -441,23 +381,18 @@ async function _runPrompt({
 
   const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
 
-  run.log.promptCompletion({
-    messages: withMessageLabels(messages),
-    // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
-    // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
-    completion: { ...completion, usage: projectedUsage },
-    model: JSON.stringify(modelName),
+  emitPromptCompletion({
+    run,
+    messages,
+    completion,
+    projectedUsage,
+    modelName,
     timeTaken: endTime - startTime,
     tools,
     responseFormat,
-    usage: projectedUsage,
-    cost: completion.cost,
-    // Statelog's field name; smoltalk's is `stopReason`.
-    finishReason: completion.stopReason ?? completion.rawStopReason,
     stream,
-    threadId: run.threads.activeId() ?? null,
-    threadIdentity: messages.id,
-    threadLabel: messages.label,
+    usageKind,
+    decision,
   });
 
   const reply = buildReplyMessage(completion, toolCalls, ctx.logLevel, ctx.host.settings);

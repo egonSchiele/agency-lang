@@ -60,7 +60,11 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
    assistant message is appended to the thread with the value as its
    content and the full answers as its `rawData`. Cost and tokens reach the
    branch totals under the `decision` kind. Statelog gets its usual
-   `promptCompletion` event.
+   `promptStart` and `promptCompletion` events, both with
+   `usageKind: "decision"`, and the completion carries a `decision` field
+   with the state, the questions, and the answers as sent and received
+   (see "Event catalog" in `../hosting/statelog.md`), since `messages`
+   shows a chat the model never saw.
 
 ## Which calls are decision calls
 

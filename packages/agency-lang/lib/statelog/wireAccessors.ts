@@ -1,4 +1,4 @@
-import type { EventEnvelope } from "./wireTypes.js";
+import type { DecisionLog, EventEnvelope } from "./wireTypes.js";
 
 /** Thin accessor layer over the wire format. Every place that reads
  *  `ev.data.foo` directly is a leak of the wire format into consumer
@@ -47,6 +47,76 @@ export function threadIdentityOf(event: EventEnvelope): string | null {
 export function threadLabelOf(event: EventEnvelope): string | null {
   const label = event.data.threadLabel;
   return typeof label === "string" && label.length > 0 ? label : null;
+}
+
+/** The usage kind on a promptStart / promptCompletion: "completion" for a
+ *  text model, "decision" for a decision model. Null on logs from before
+ *  the field was recorded. */
+export function usageKindOf(ev: EventEnvelope): string | null {
+  const kind = ev.data.usageKind;
+  return typeof kind === "string" ? kind : null;
+}
+
+/** The decision a promptCompletion records, when its call went to a
+ *  decision model. Undefined on a text call, on older logs, and on a
+ *  record whose parts do not have the shape a reader uses: a log can be
+ *  cut off mid-write or come from another version, and a viewer must
+ *  degrade, not throw. */
+export function decisionOf(ev: EventEnvelope): DecisionLog | undefined {
+  const decision = ev.data.decision;
+  if (!isRecord(decision)) {
+    return undefined;
+  }
+  const { state, questions, answers } = decision;
+  const stateOk = typeof state === "string" || isRecord(state) || Array.isArray(state);
+  if (!stateOk || !isRecord(questions) || !isRecord(answers)) {
+    return undefined;
+  }
+  if (!Object.values(questions).every(isQuestion) || !Object.values(answers).every(isAnswer)) {
+    return undefined;
+  }
+  return { state, questions, answers } as DecisionLog;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** A question names its type and carries instructions; a choice question
+ *  lists its options, a score question its levels. */
+function isQuestion(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.instructions !== "string") {
+    return false;
+  }
+  switch (value.type) {
+    case "choice":
+      return isRecord(value.criteria);
+    case "score":
+      return Array.isArray(value.criteria);
+    case "noul":
+      return true;
+    default:
+      return false;
+  }
+}
+
+/** An answer carries the fields of its type that a reader uses. */
+function isAnswer(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  switch (value.type) {
+    case "choice":
+      return typeof value.choice === "string" && isRecord(value.probabilities);
+    case "noul":
+      return typeof value.noul === "number";
+    case "score":
+      return (
+        typeof value.score === "number" && isRecord(value.probabilities) && isRecord(value.legend)
+      );
+    default:
+      return false;
+  }
 }
 
 /** Tool name on a toolCall / toolCallStart. */

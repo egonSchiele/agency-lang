@@ -471,3 +471,39 @@ it("toggles row numbers without changing focus, zoom, or drill state", () => {
   screen.handleKey({ key: "#" }, viewport);
   expect(frame(screen)).toBe(before);
 });
+
+describe("timeline marks", () => {
+  it("marks a span that logged an error with ✖ and a tool waiting on a person with ⏸", () => {
+    const failed = span(
+      "toolExecution",
+      [
+        leaf("toolCallStart", 1_000, { toolName: "write", args: { path: "a" } }),
+        leaf("error", 1_500, { message: "disk full", errorType: "toolError" }),
+      ],
+      { id: "failed" },
+    );
+    const waiting = span(
+      "toolExecution",
+      [
+        leaf("toolCallStart", 2_000, { toolName: "deploy", args: { env: "prod" } }),
+        leaf("interruptResolved", 2_100, { interruptId: "i", outcome: "passed" }),
+      ],
+      { id: "waiting" },
+    );
+    const view = new TimelineScreen(
+      [
+        trace([
+          span("llmCall", [leaf("promptCompletion", 500, { timeTaken: 100 }), failed, waiting], {
+            id: "L",
+          }),
+        ]),
+      ],
+      "T",
+      DEFAULT_THRESHOLDS,
+    );
+    const text = frame(view);
+    expect(text).toMatch(/✖ write/);
+    expect(text).toMatch(/⏸ deploy/);
+    expect(text).not.toMatch(/✖ Thread/);
+  });
+});

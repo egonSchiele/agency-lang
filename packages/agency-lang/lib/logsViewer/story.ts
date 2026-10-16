@@ -1,4 +1,4 @@
-import { contentText, toolNameOf } from "../statelog/wireAccessors.js";
+import { contentText, toolNameOf, toolReplyContent } from "../statelog/wireAccessors.js";
 import {
   ancestorsOf,
   buildTreeIndex,
@@ -107,6 +107,40 @@ const TOOL_STATUS_TEXT: Record<ToolStatus, string> = {
   rejected: "interrupt rejected; completion not recorded",
   awaitingApproval: "awaiting interrupt response",
   unfinished: "completion not recorded",
+};
+/** The rows laid out directly under `id` in an outline. */
+export function storyChildren(rows: StoryRow[], id: string): StoryRow[] {
+  const position = rows.findIndex((row) => row.id === id);
+  if (position < 0) {
+    return [];
+  }
+  const parent = rows[position];
+  const next = rows.slice(position + 1).findIndex((row) => row.depth <= parent.depth);
+  const end = next < 0 ? rows.length : position + 1 + next;
+  return rows.slice(position + 1, end).filter((row) => row.depth === parent.depth + 1);
+}
+/** What a completed tool returned, as text; undefined when it never completed. */
+export function toolResultText(row: ToolStoryRow): string | undefined {
+  const finished = childEvent(row.node, "toolCall");
+  if (finished === undefined) {
+    return undefined;
+  }
+  return contentText(toolReplyContent(finished) ?? finished.data.output);
+}
+/** The messages of the errors logged inside this tool and not inside a nested one. */
+export function toolErrorMessages(row: ToolStoryRow): string[] {
+  return ownedToolNodes(row.node, buildTreeIndex(row.node))
+    .filter((node) => node.event?.data.type === "error")
+    .map((node) => String(node.event!.data.message ?? "error"));
+}
+/** The one glyph per status every screen uses: ✖ for a tool that failed
+ *  or was rejected, ⏸ for one waiting on a person, → for a result. */
+export const TOOL_STATUS_MARK: Record<ToolStatus, string> = {
+  completed: "→",
+  failed: "✖",
+  rejected: "✖",
+  awaitingApproval: "⏸",
+  unfinished: "⋯",
 };
 export function toolStatusText(outcome: ToolOutcome): string {
   const label = TOOL_STATUS_TEXT[outcome.status];

@@ -27,6 +27,7 @@ import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { buildTreeIndex, type TreeIndex } from "../forest.js";
+import { storyOutline } from "../story.js";
 import {
   childEvent,
   durationColor,
@@ -60,6 +61,8 @@ type FlameRow = { row: TimelineRow; node: TreeNode; color: string | undefined };
 export class TimelineScreen implements Screen {
   readonly screenName = "timeline" as const;
   private rounds: Round[] = [];
+  /** Tool spans the story outline says are waiting for an interrupt response. */
+  private waitingToolIds: string[] = [];
   private pageRows = 1;
   private moves = {
     by: (delta: number): void => {
@@ -382,6 +385,9 @@ export class TimelineScreen implements Screen {
       this.drillPath.length > 0 ? index.byId[this.drillPath[this.drillPath.length - 1]] : trace;
     const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
     this.rounds = roundsOf(trace, index);
+    this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
+      row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
+    );
     const groups = groupSpans(spans, trace, index);
     const colorByKey = rankColors(groups);
     const keyBySpanId: Record<string, string> = Object.create(null);
@@ -563,7 +569,20 @@ export class TimelineScreen implements Screen {
         .filter((part) => part.length > 0)
         .join(" · ");
     }
-    return this.threadLabel(item.node) ?? new RowLabel(item.node).computeText();
+    return `${this.mark(item)}${this.threadLabel(item.node) ?? new RowLabel(item.node).computeText()}`;
+  }
+
+  /** ✖ for a span that logged an error itself, ⏸ for a tool waiting on a
+   *  person. The tool status comes from the story outline, so the timeline
+   *  and the trace never disagree about a tool. */
+  private mark(item: FlameRow): string {
+    if (item.row.kind !== "span") {
+      return "";
+    }
+    if (holdsError(item.node)) {
+      return "✖ ";
+    }
+    return this.waitingToolIds.includes(item.row.id) ? "⏸ " : "";
   }
 
   private threadLabel(node: TreeNode): string | undefined {
@@ -582,7 +601,7 @@ export class TimelineScreen implements Screen {
     window: Interval,
     widths: WidthSplit,
   ): Element {
-    const identity = isCursor ? THEME.text : (item.color ?? THEME.muted);
+    const identity = rowColor(item, isCursor);
     const content = joinPainted(
       ...(this.lineNumbers
         ? [lineNumber(this.rows.indexOf(item) + 1, lineNumberWidth(this.rows.length))]
@@ -707,4 +726,21 @@ function extentOf(row: TimelineRow): Interval {
 
 function isRunning(row: TimelineRow): boolean {
   return row.kind === "span" && row.span.running;
+}
+
+/** The cursor row reads in the text color, a span that logged an error in
+ *  red, anything else in its group's color. */
+function rowColor(item: FlameRow, isCursor: boolean): string {
+  if (isCursor) {
+    return THEME.text;
+  }
+  if (item.row.kind === "span" && holdsError(item.node)) {
+    return THEME.kind.error;
+  }
+  return item.color ?? THEME.muted;
+}
+
+/** Whether an error event was logged directly in this span. */
+function holdsError(node: TreeNode): boolean {
+  return childEvent(node, "error") !== undefined;
 }

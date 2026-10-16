@@ -15,6 +15,7 @@ import {
 } from "../keymap.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
+import { TOOL_STATUS_MARK, type ToolStatus } from "../story.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
   threadKey,
@@ -402,12 +403,20 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
   );
   return [heading, ...body];
 }
+/** Only a problem gets a mark in the call list; a plain result does not. */
+function toolMark(status: ToolStatus): string {
+  return ["failed", "rejected", "awaitingApproval"].includes(status)
+    ? `${TOOL_STATUS_MARK[status]} `
+    : "";
+}
 function spineLabel(block: TranscriptBlock): string {
   switch (block.kind) {
     case "assistant":
       return `LLM call ${block.round.index + 1}`;
     case "tool":
-      return `  ${block.row.name}`;
+      return `  ${toolMark(block.row.status)}${block.row.name}`;
+    case "error":
+      return "✖ error";
     case "rewrite":
       return "⚠ rewrite";
     case "history":
@@ -424,6 +433,15 @@ function spineColor(block: TranscriptBlock): string {
   }
   if (role === "assistant") {
     return THEME.kind.assistant;
+  }
+  if (
+    role === "error" ||
+    (block.kind === "tool" && ["failed", "rejected"].includes(block.row.status))
+  ) {
+    return THEME.kind.error;
+  }
+  if (block.kind === "tool" && block.row.status === "awaitingApproval") {
+    return THEME.kind.interrupt;
   }
   return THEME.text;
 }

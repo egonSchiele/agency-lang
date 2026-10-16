@@ -10,18 +10,19 @@ import {
   paintedLine,
   segment,
   type Painted,
+  type Piece,
 } from "../../tui/paint.js";
 import { hasTokenUsage } from "../../statelog/wireAccessors.js";
 import { findNode } from "../forest.js";
 import { storyOutline } from "../story.js";
 import { fmtUsd } from "../format.js";
 import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
-import { overviewData, type OverviewData } from "../overviewData.js";
+import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
 import { roundResponsePayload, type PayloadLine } from "../payload.js";
 import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
-import type { Round } from "../timeline/rounds.js";
+import type { RunStatus } from "../problems.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { keyFooter } from "./chrome.js";
@@ -59,7 +60,7 @@ export class OverviewScreen implements Screen {
   private previewLength = 0;
   private previewCache:
     | {
-        round: Round;
+        call: OverviewCall;
         width: number;
         metadata: Painted[];
         bodies: Partial<Record<PreviewMode, Painted[]>>;
@@ -142,7 +143,7 @@ export class OverviewScreen implements Screen {
         keys: ["s"],
         help: "show or hide system and developer prompts in the input",
         hint: "s system",
-        when: () => this.previewMode === "input" && hasSystemMessages(this.selected()),
+        when: () => this.previewMode === "input" && hasSystemMessages(this.selected()?.round),
         run: () => this.toggleSystems(),
       },
       {
@@ -154,7 +155,7 @@ export class OverviewScreen implements Screen {
       {
         keys: ["G", "End"],
         help: "select the last LLM call",
-        run: () => this.selectCall((this.data?.rounds.length ?? 1) - 1),
+        run: () => this.selectCall((this.data?.calls.length ?? 1) - 1),
       },
       {
         keys: ["Enter"],
@@ -170,7 +171,7 @@ export class OverviewScreen implements Screen {
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
     const widths = panelWidths(viewport.cols);
-    this.callPageSize = overviewCallCapacity(this.data?.rounds.length ?? 0, widths.left);
+    this.callPageSize = overviewCallCapacity(this.data?.calls.length ?? 0, widths.left);
     this.preview(widths.right, Math.max(0, viewport.rows - LAYOUT.outerRows));
     return runViewerKey(this.bindings(), formatKey(event));
   }
@@ -192,7 +193,7 @@ export class OverviewScreen implements Screen {
     const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
     const widths = panelWidths(viewport.cols);
     const left = overviewCharts(
-      data.rounds,
+      data.calls,
       this.selectedId,
       widths.left,
       bodyHeight,
@@ -214,11 +215,7 @@ export class OverviewScreen implements Screen {
     );
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
-      paintedLine(
-        segment(header(data, this.following), viewport.cols, {
-          style: { fg: THEME.text, bold: true },
-        }),
-      ),
+      paintedLine(segment(header(data, this.following), viewport.cols)),
       column({ height: bodyHeight, justifyContent: "flex-start" }, ...body),
       paintedLine(
         segment(this.message || this.scrollStatus(), viewport.cols, { style: { fg: THEME.muted } }),
@@ -234,8 +231,8 @@ export class OverviewScreen implements Screen {
     return this.returnFocusId ?? this.selectedId;
   }
   setFocus(id: string): void {
-    const rounds = this.data?.rounds ?? [];
-    const index = rounds.findIndex((round) => round.id === id || round.node.id === id);
+    const calls = this.data?.calls ?? [];
+    const index = calls.findIndex((call) => call.id === id || call.round?.node.id === id);
     if (index !== -1) {
       this.selectCall(index);
       return;
@@ -244,8 +241,8 @@ export class OverviewScreen implements Screen {
     if (trace === undefined) return;
     // A span id (a Thread group row) previews its first call but stays the focus.
     const ownerId = owningCall(trace, id);
-    const owner = rounds.findIndex((round) =>
-      ownerId === undefined ? round.spanId === id : round.id === ownerId,
+    const owner = calls.findIndex((call) =>
+      ownerId === undefined ? call.round?.spanId === id : call.id === ownerId,
     );
     if (owner !== -1) this.selectCall(owner);
     if (findNode([trace], id) !== undefined) this.returnFocusId = id;
@@ -272,19 +269,19 @@ export class OverviewScreen implements Screen {
     this.data = trace === undefined ? undefined : overviewData(trace);
     if (this.returnFocusId !== undefined && findNode(this.roots, this.returnFocusId) === undefined)
       this.returnFocusId = undefined;
-    if (!this.data?.rounds.some((round) => round.id === this.selectedId)) this.selectCall(0);
+    if (!this.data?.calls.some((call) => call.id === this.selectedId)) this.selectCall(0);
   }
-  private selected(): Round | undefined {
-    return this.data?.rounds.find((round) => round.id === this.selectedId);
+  private selected(): OverviewCall | undefined {
+    return this.data?.calls.find((call) => call.id === this.selectedId);
   }
   private moveCall(delta: number): void {
-    const index = this.data?.rounds.findIndex((round) => round.id === this.selectedId) ?? 0;
+    const index = this.data?.calls.findIndex((call) => call.id === this.selectedId) ?? 0;
     this.selectCall(index + delta);
   }
   private selectCall(index: number): void {
     this.returnFocusId = undefined;
-    const rounds = this.data?.rounds ?? [];
-    const next = rounds[Math.max(0, Math.min(rounds.length - 1, index))]?.id;
+    const calls = this.data?.calls ?? [];
+    const next = calls[Math.max(0, Math.min(calls.length - 1, index))]?.id;
     if (next !== this.selectedId) this.resetPreview();
     this.selectedId = next;
   }
@@ -307,26 +304,25 @@ export class OverviewScreen implements Screen {
   private preview(width: number, height: number): Preview {
     const selected = this.selected();
     const heading = overviewSection(
-      `${selected === undefined ? "LLM CALL" : `LLM CALL ${selected.index + 1}`} · ${this.previewMode === "output" ? "[OUTPUT] INPUT" : "OUTPUT [INPUT]"}`,
+      `${callTitle(selected)} · ${this.previewMode === "output" ? "[OUTPUT] INPUT" : "OUTPUT [INPUT]"}`,
       width,
     );
     if (
       selected !== undefined &&
-      (this.previewCache?.round !== selected || this.previewCache.width !== width)
+      (this.previewCache?.call !== selected || this.previewCache.width !== width)
     ) {
       this.previewCache = {
-        round: selected,
+        call: selected,
         width,
         metadata: paintPayload(previewMetadata(selected), width),
         bodies: {},
       };
     }
     if (selected !== undefined && this.previewCache!.bodies[this.previewMode] === undefined) {
-      const payload =
-        this.previewMode === "output"
-          ? roundResponsePayload(selected)
-          : roundInputPayload(selected, this.systemsExpanded);
-      this.previewCache!.bodies[this.previewMode] = paintPayload(payload, width);
+      this.previewCache!.bodies[this.previewMode] = paintPayload(
+        previewBody(selected, this.previewMode, this.systemsExpanded),
+        width,
+      );
     }
     const header =
       selected === undefined ? [heading] : [heading, ...this.previewCache!.metadata, paint("")];
@@ -353,19 +349,85 @@ function panelWidths(cols: number): { left: number; right: number } {
 function fit(content: Painted, width: number): Painted {
   return padPainted(clipPainted(content, width), width);
 }
-function header(data: OverviewData, following: boolean): string {
-  return [
-    data.models.join(", ") || "unknown model",
-    data.running ? "● running" : "done",
-    fmtDuration(data.elapsedMs, { minutes: true }),
-    `${data.rounds.length} LLM ${data.rounds.length === 1 ? "call" : "calls"}`,
-    fmtUsd(data.costUsd),
-    following ? "following" : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+const STATUS_TEXT: Record<RunStatus, { text: string; fg: string }> = {
+  done: { text: "done", fg: THEME.text },
+  crashed: { text: "✖ crashed", fg: THEME.kind.error },
+  paused: { text: "⏸ paused for a response", fg: THEME.kind.interrupt },
+  running: { text: "● running", fg: THEME.ok },
+};
+/** The header: model, how the run ended, elapsed time, call count, cost,
+ *  an error count in red, and the follow indicator. Pieces, so the status
+ *  and the count keep their own colors. */
+function header(data: OverviewData, following: boolean): Piece[] {
+  const status = STATUS_TEXT[data.status];
+  const count = data.errors.length;
+  const calls = data.rounds.length;
+  const failed = data.calls.length - calls;
+  const plain = (text: string): Piece => ({ text, style: { fg: THEME.text, bold: true } });
+  const separator = plain(" · ");
+  const pieces: Piece[] = [
+    plain(data.models.join(", ") || "unknown model"),
+    separator,
+    { text: status.text, style: { fg: status.fg, bold: true } },
+    separator,
+    plain(fmtDuration(data.elapsedMs, { minutes: true })),
+    separator,
+    plain(`${calls} LLM ${calls === 1 ? "call" : "calls"}`),
+  ];
+  if (failed > 0) {
+    pieces.push(separator, {
+      text: `${failed} failed ${failed === 1 ? "request" : "requests"}`,
+      style: { fg: THEME.kind.error, bold: true },
+    });
+  }
+  pieces.push(separator, plain(fmtUsd(data.costUsd)));
+  if (count > 0) {
+    pieces.push(separator, {
+      text: `✖ ${count} ${count === 1 ? "error" : "errors"}`,
+      style: { fg: THEME.kind.error, bold: true },
+    });
+  }
+  if (following) {
+    pieces.push(separator, plain("following"));
+  }
+  return pieces;
 }
-function previewMetadata(round: Round): PayloadLine[] {
+function callTitle(call: OverviewCall | undefined): string {
+  if (call === undefined) {
+    return "LLM CALL";
+  }
+  if (call.round === undefined) {
+    return "FAILED REQUEST";
+  }
+  return `LLM CALL ${call.round.index + 1}`;
+}
+function previewBody(
+  call: OverviewCall,
+  mode: PreviewMode,
+  systemsExpanded: boolean,
+): PayloadLine[] {
+  if (call.round === undefined) {
+    return mode === "output"
+      ? [
+          { kind: "heading", text: "✖ REQUEST FAILED", tone: "error" },
+          { kind: "text", text: call.failure!.message, indent: 0, role: "error" },
+        ]
+      : [
+          {
+            kind: "meta",
+            text: "input not recorded: the request failed before the provider answered",
+          },
+        ];
+  }
+  return mode === "output"
+    ? roundResponsePayload(call.round, call.tools)
+    : roundInputPayload(call.round, systemsExpanded);
+}
+function previewMetadata(call: OverviewCall): PayloadLine[] {
+  if (call.round === undefined) {
+    return [{ kind: "meta", text: `failed at ${new Date(call.at).toISOString()}` }];
+  }
+  const round = call.round;
   const event = round.node.event!;
   const time =
     typeof event.data.timeTaken === "number"

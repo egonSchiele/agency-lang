@@ -388,3 +388,46 @@ it.each([
     label: expected,
   });
 });
+
+describe("error blocks", () => {
+  function run() {
+    return buildForest([
+      event("promptCompletion", 100, "L", null, {
+        threadIdentity: "main",
+        messages: [user],
+        completion: { output: "same answer", toolCalls: [request] },
+      }),
+      event("toolCallStart", 101, "tool", "L", { toolName: "read", args: { path: "a" } }),
+      event("error", 102, "tool", "L", { message: "no such file", errorType: "toolError" }),
+      event("error", 150, "L", null, { message: "validator failed", errorType: "runtimeError" }),
+      event("error", 151, null, null, { message: "validator failed", errorType: "runtimeError" }),
+      event("promptCompletion", 200, "L", null, {
+        threadIdentity: "main",
+        messages: [user, assistant, { ...reply, content: "Error: no such file" }],
+        completion: { output: "done" },
+      }),
+    ])[0];
+  }
+
+  it("places an error outside a tool by time on its thread, folded with its rethrow", () => {
+    const blocks = transcriptBlocks(run());
+    // The failed tool's reply is not a represented result, so it stays as history.
+    expect(blocks.map((block) => block.kind)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "error",
+      "history",
+      "assistant",
+    ]);
+    const error = blocks.find((block) => block.kind === "error");
+    expect(error).toMatchObject({ error: { message: "validator failed", count: 2 }, at: 150 });
+    expect(transcriptText(error!)).toBe("validator failed");
+  });
+
+  it("keeps an error inside a tool on the tool block, with the tool marked failed", () => {
+    const tool = transcriptBlocks(run()).find((block) => block.kind === "tool");
+    expect(tool).toMatchObject({ row: { status: "failed" } });
+    expect(transcriptText(tool!)).toContain("no such file");
+  });
+});

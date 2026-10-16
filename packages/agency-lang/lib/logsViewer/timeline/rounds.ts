@@ -9,7 +9,8 @@ import {
   tokensCached,
   tokensOut,
 } from "../../statelog/wireAccessors.js";
-import { buildTreeIndex, walkNodes, type TreeIndex } from "../forest.js";
+import { buildTreeIndex, nearestAncestor, walkNodes, type TreeIndex } from "../forest.js";
+import { childEvent } from "../spanText.js";
 import type { TreeNode } from "../types.js";
 import { threadScopeOf, unambiguousThreadLabels, type ScopeLabelCache } from "./groups.js";
 
@@ -117,6 +118,7 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
   }
   const recordedLabel = threadLabelOf(event);
   const legacyLabel = unambiguousThreadLabels(scope, labelCache)[threadId];
+  const ownLabel = identity === null ? legacyLabel : (recordedLabel ?? undefined);
   const cachedTokens = tokensCached(event);
   const allInput = contextTokens(event);
   return {
@@ -124,7 +126,7 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     spanId: parent.id,
     ordinal,
     thread,
-    threadLabel: identity === null ? legacyLabel : (recordedLabel ?? undefined),
+    threadLabel: ownLabel ?? impliedThreadLabel(leafNode, index),
     model: modelOf(event),
     start: end - durationMs,
     end,
@@ -136,4 +138,24 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     costUsd: cost(event),
     node: leafNode,
   };
+}
+
+/** A thread with no label of its own is named after the tool that started
+ *  it, so a sub-agent's thread reads as the sub-agent. A top-level thread
+ *  has no starting tool and takes the node's name. (The call's own
+ *  `llm(label:)` tag is on `promptStart`, which the forest hides once the
+ *  call completes, so it cannot serve here.) Undefined when neither is
+ *  recorded; screens then print `unnamed`. */
+function impliedThreadLabel(leafNode: TreeNode, index: TreeIndex): string | undefined {
+  const tool = nearestAncestor(leafNode, index, (node) => node.label === "toolExecution");
+  if (tool !== undefined) {
+    const event = childEvent(tool, "toolCallStart") ?? childEvent(tool, "toolCall");
+    const name = event?.data.toolName;
+    if (typeof name === "string" && name.length > 0) {
+      return name;
+    }
+  }
+  const node = nearestAncestor(leafNode, index, (node) => node.label === "nodeExecution");
+  const nodeId = node === undefined ? undefined : childEvent(node, "enterNode")?.data.nodeId;
+  return typeof nodeId === "string" && nodeId.length > 0 ? nodeId : undefined;
 }

@@ -272,7 +272,9 @@ export class TraceScreen implements Screen {
       if (row.kind !== "llmGroup") {
         continue;
       }
-      const completed = completedGroup(row);
+      // A top-level thread is the conversation itself; folding it would
+      // hide the run. Only a thread a tool started folds when complete.
+      const completed = row.toolName !== undefined && completedGroup(row);
       if (!completed && this.defaultCollapsed.includes(row.id)) {
         this.defaultCollapsed = this.defaultCollapsed.filter((id) => id !== row.id);
         this.groupDefaultsApplied = this.groupDefaultsApplied.filter((id) => id !== row.id);

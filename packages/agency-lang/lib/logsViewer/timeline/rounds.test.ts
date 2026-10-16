@@ -149,3 +149,41 @@ describe("round ids", () => {
     expect(parseRoundId("round::0")).toBeUndefined();
   });
 });
+
+describe("thread names", () => {
+  const labeled = (at: number) =>
+    completion(at, { threadIdentity: "t1", threadLabel: "mainConversation" });
+  const unlabeled = (at: number) => completion(at, { threadIdentity: "t2" });
+
+  it("keeps a thread's own label", () => {
+    const root = trace([span("llmCall", [labeled(1000)], { id: "L" })]);
+    expect(roundsOf(root)[0].threadLabel).toBe("mainConversation");
+  });
+
+  it("names an unlabeled thread after the tool that started it", () => {
+    const root = trace([
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 100, { toolName: "schedulesAgent", args: {} }),
+          span("llmCall", [unlabeled(1000)], { id: "inner" }),
+        ],
+        { id: "tool" },
+      ),
+    ]);
+    expect(roundsOf(root)[0].threadLabel).toBe("schedulesAgent");
+  });
+
+  it("names an unlabeled top-level thread after the node, and leaves one with neither unnamed", () => {
+    const named = trace([
+      span(
+        "nodeExecution",
+        [leaf("enterNode", 0, { nodeId: "main" }), span("llmCall", [unlabeled(1000)], { id: "L" })],
+        { id: "node" },
+      ),
+    ]);
+    expect(roundsOf(named)[0].threadLabel).toBe("main");
+    const bare = trace([span("llmCall", [unlabeled(1000)], { id: "L" })]);
+    expect(roundsOf(bare)[0].threadLabel).toBeUndefined();
+  });
+});

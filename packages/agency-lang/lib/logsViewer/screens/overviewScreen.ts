@@ -445,7 +445,7 @@ function previewMetadata(call: OverviewCall): PayloadLine[] {
     round.model || "unknown model",
     `${time} · ${cost}`,
     ...tokens,
-    ...(round.threadLabel ? [`thread ${round.threadLabel}`] : []),
+    `thread ${call.threadName}`,
   ].map((text) => ({ kind: "meta", text }));
 }
 

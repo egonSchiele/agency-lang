@@ -33,10 +33,20 @@ import type { TreeNode } from "./types.js";
 
 /** `at` orders blocks by the time of the event each one comes from, so an
  *  error block lands where the error happened and not at a round's end. */
-type BlockBase = { id: string; roundId: string | undefined; thread: ThreadKey; at: number };
+type BlockBase = {
+  id: string;
+  roundId: string | undefined;
+  thread: ThreadKey;
+  at: number;
+  /** The thread's name, as `Round.threadLabel` gives it; undefined reads as `unnamed`. */
+  threadLabel: string | undefined;
+  /** How many tool calls deep the thread was started: the call list indents by it. */
+  depth: number;
+};
 export type TranscriptBlock = BlockBase &
   (
     | { kind: "system"; text: string }
+    | { kind: "thread"; label: string }
     | { kind: "error"; error: TraceError }
     | { kind: "user"; text: string }
     | { kind: "history"; message: WireMessage; text: string }
@@ -93,7 +103,13 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     });
     const delta = deltas[position];
     const blocks: TranscriptBlock[] = [];
-    const base = { roundId: round.id, thread: round.thread, at: round.start };
+    const base = {
+      roundId: round.id,
+      thread: round.thread,
+      at: round.start,
+      threadLabel: round.threadLabel,
+      depth: toolDepth(round.node, index),
+    };
     if (delta.rewrite) {
       state.pending = [];
       const compacted = compactions.some(
@@ -152,7 +168,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     const tools = storyChildren(story, round.id).filter(
       (row): row is ToolStoryRow => row.kind === "tool",
     );
-    const toolBlocks = tools.map((row) => toolBlock(round, row, story));
+    const toolBlocks = tools.map((row) => toolBlock(round, row, story, index));
     blocks.push(...toolBlocks);
     state.pending = [
       ...(message ? [message] : []),
@@ -161,15 +177,50 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
-  return withErrorBlocks(roundBlocks, loose);
+  return withThreadDividers(withErrorBlocks(roundBlocks, loose));
+}
+/** A `thread` block wherever the conversation moves to another thread, so
+ *  a sub-agent's calls no longer sit in one flat list with the main
+ *  conversation's. The divider takes the thread of the block it opens. */
+function withThreadDividers(blocks: TranscriptBlock[]): TranscriptBlock[] {
+  const keys = blocks.map((block) => threadKey(block.thread));
+  // One thread needs no dividers.
+  if (keys.every((key) => key === keys[0])) {
+    return blocks;
+  }
+  const out: TranscriptBlock[] = [];
+  let current: string | undefined;
+  for (const block of blocks) {
+    const key = threadKey(block.thread);
+    if (key !== current) {
+      current = key;
+      out.push({
+        kind: "thread",
+        id: `thread:${block.id}`,
+        roundId: undefined,
+        thread: block.thread,
+        at: block.at,
+        threadLabel: block.threadLabel,
+        depth: block.depth,
+        label: block.threadLabel ?? "unnamed",
+      });
+    }
+    out.push(block);
+  }
+  return out;
+}
+/** How many tool calls enclose a completion: the thread's nesting depth. */
+function toolDepth(node: TreeNode, index: TreeIndex): number {
+  return ancestorsOf(node, index).filter((ancestor) => ancestor.label === "toolExecution").length;
 }
 /** Each loose error goes before the first later block on its thread, or
  *  before the first later block anywhere when its thread is unknown, so
  *  the transcript reads in time order. An error after every block goes
  *  at the end. */
+type ErrorThread = { key: ThreadKey; label: string | undefined; depth: number };
 function withErrorBlocks(
   blocks: TranscriptBlock[],
-  loose: { error: TraceError; thread: ThreadKey | undefined }[],
+  loose: { error: TraceError; thread: ErrorThread | undefined }[],
 ): TranscriptBlock[] {
   const out = [...blocks];
   for (const { error, thread } of loose) {
@@ -177,35 +228,52 @@ function withErrorBlocks(
       kind: "error",
       id: `error:${error.id}`,
       roundId: undefined,
-      thread: thread ?? { kind: "legacy", id: "" },
+      thread: thread?.key ?? { kind: "legacy", id: "" },
       at: error.at,
+      threadLabel: thread?.label,
+      depth: thread?.depth ?? 0,
       error,
     };
     const position = out.findIndex(
       (candidate) =>
         candidate.at > error.at &&
-        (thread === undefined || threadKey(candidate.thread) === threadKey(thread)),
+        (thread === undefined || threadKey(candidate.thread) === threadKey(thread.key)),
     );
+    // An error with no thread of its own joins the thread of the block it
+    // lands beside, so it opens no divider.
+    const neighbor = out[position === -1 ? out.length - 1 : position];
+    if (thread === undefined && neighbor !== undefined) {
+      Object.assign(block, {
+        thread: neighbor.thread,
+        threadLabel: neighbor.threadLabel,
+        depth: neighbor.depth,
+      });
+    }
     out.splice(position === -1 ? out.length : position, 0, block);
   }
   return out;
 }
 /** The thread an error happened on: that of the rounds in its nearest
  *  enclosing `llmCall` span, when they agree. */
-function errorThread(node: TreeNode, rounds: Round[], index: TreeIndex): ThreadKey | undefined {
+function errorThread(node: TreeNode, rounds: Round[], index: TreeIndex): ErrorThread | undefined {
   for (const ancestor of ancestorsOf(node, index)) {
     const enclosing = rounds.filter((round) => round.spanId === ancestor.id);
     if (enclosing.length === 0) {
       continue;
     }
-    const first = enclosing[0].thread;
-    return enclosing.every((round) => threadKey(round.thread) === threadKey(first))
-      ? first
+    const first = enclosing[0];
+    return enclosing.every((round) => threadKey(round.thread) === threadKey(first.thread))
+      ? { key: first.thread, label: first.threadLabel, depth: toolDepth(first.node, index) }
       : undefined;
   }
   return undefined;
 }
-function toolBlock(round: Round, row: ToolStoryRow, story: StoryRow[]): TranscriptBlock {
+function toolBlock(
+  round: Round,
+  row: ToolStoryRow,
+  story: StoryRow[],
+  index: TreeIndex,
+): TranscriptBlock {
   const output = toolResultText(row);
   const interrupts = storyChildren(story, row.id).flatMap((child) =>
     child.kind === "interrupt" ? [child.interrupt] : [],
@@ -216,6 +284,8 @@ function toolBlock(round: Round, row: ToolStoryRow, story: StoryRow[]): Transcri
     roundId: round.id,
     thread: round.thread,
     at: row.node.firstTs ?? round.end,
+    threadLabel: round.threadLabel,
+    depth: toolDepth(round.node, index),
     row,
     interrupts,
     output,
@@ -338,6 +408,8 @@ export function transcriptText(block: TranscriptBlock): string {
         .join("\n");
     case "error":
       return block.error.message;
+    case "thread":
+      return `thread ${block.label}`;
     default:
       return block.text;
   }

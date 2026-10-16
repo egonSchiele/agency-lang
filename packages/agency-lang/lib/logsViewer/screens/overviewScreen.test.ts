@@ -399,3 +399,35 @@ it("reads paused while an interrupt waits on a person", () => {
     "⏸ paused for a response",
   );
 });
+
+it("colors call numbers by thread and lists the threads when there are several", () => {
+  const roots = [
+    trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 1_000, {
+            timeTaken: 10,
+            threadIdentity: "a",
+            threadLabel: "main",
+          }),
+        ],
+        { id: "A" },
+      ),
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            timeTaken: 10,
+            threadIdentity: "b",
+            threadLabel: "check",
+          }),
+        ],
+        { id: "B" },
+      ),
+    ]),
+  ];
+  const text = frame(new OverviewScreen(roots, "T", () => undefined));
+  expect(text).toContain("threads  ■ main  ■ check");
+  expect(text).toContain("thread main");
+});

@@ -20,7 +20,7 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   }
   let foreground: string = THEME.text;
   if (line.kind === "heading") {
-    foreground = line.tone === "chrome" ? THEME.chrome : THEME.kind[line.tone];
+    foreground = HEADING_COLORS[line.tone];
   }
   if (line.kind === "meta") {
     foreground = THEME.muted;
@@ -37,6 +37,12 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
       ),
     );
 }
+
+const HEADING_COLORS: Record<Extract<PayloadLine, { kind: "heading" }>["tone"], string> = {
+  ...THEME.kind,
+  chrome: THEME.chrome,
+  accent: THEME.accent,
+};
 
 function escapeControls(text: string): string {
   // eslint-disable-next-line no-control-regex

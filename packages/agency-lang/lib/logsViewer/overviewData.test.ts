@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { overviewData } from "./overviewData.js";
+import { overviewData, threadNames } from "./overviewData.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { buildForest } from "./tree.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
@@ -203,5 +203,39 @@ describe("overview errors", () => {
     const data = overviewData(root);
     expect(data.calls.map((call) => call.round?.index)).toEqual([0]);
     expect(data.calls[0].errors.map((error) => error.message)).toEqual(["503 overloaded"]);
+  });
+});
+
+describe("threadNames", () => {
+  it("lists distinct names in order of first use, numbering a repeated name", () => {
+    const root = trace([
+      span(
+        "llmCall",
+        [leaf("promptCompletion", 1_000, { threadIdentity: "a", threadLabel: "main" })],
+        { id: "A" },
+      ),
+      span("llmCall", [leaf("promptCompletion", 2_000, { threadIdentity: "b" })], { id: "B" }),
+      span("llmCall", [leaf("promptCompletion", 3_000, { threadIdentity: "c" })], { id: "C" }),
+      span(
+        "llmCall",
+        [leaf("promptCompletion", 4_000, { threadIdentity: "a", threadLabel: "main" })],
+        { id: "A2" },
+      ),
+    ]);
+    expect(threadNames(overviewData(root).calls)).toEqual(["main", "unnamed", "unnamed #2"]);
+  });
+
+  it("tells two threads one tool started apart", () => {
+    const sub = (id: string, at: number) =>
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", at, { toolName: "subagent", args: {} }),
+          span("llmCall", [leaf("promptCompletion", at + 10, { threadIdentity: id })], { id }),
+        ],
+        { id: `tool-${id}` },
+      );
+    const data = overviewData(trace([sub("x", 1_000), sub("y", 2_000)]));
+    expect(data.calls.map((call) => call.threadName)).toEqual(["subagent", "subagent #2"]);
   });
 });

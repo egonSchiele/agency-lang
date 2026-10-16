@@ -27,7 +27,7 @@ import {
   type Interrupt,
 } from "./story.js";
 import { decodeStructured } from "./structured.js";
-import { traceErrors, type TraceError } from "./problems.js";
+import { runPauses, traceErrors, type TraceError } from "./problems.js";
 import { roundsOf, type Round, type ThreadKey } from "./timeline/rounds.js";
 import type { TreeNode } from "./types.js";
 
@@ -48,6 +48,7 @@ export type TranscriptBlock = BlockBase &
     | { kind: "system"; text: string }
     | { kind: "thread"; label: string }
     | { kind: "error"; error: TraceError }
+    | { kind: "pause"; pausedMs: number | undefined; resumed: boolean }
     | { kind: "user"; text: string }
     | { kind: "history"; message: WireMessage; text: string }
     | {
@@ -64,7 +65,7 @@ export type TranscriptBlock = BlockBase &
         output: string | undefined;
         outputLines: number;
       }
-    | ({ kind: "rewrite"; label: "CONTEXT COMPACTED" | "HISTORY REWRITTEN" } & HistoryRewrite)
+    | ({ kind: "rewrite"; label: "CONTEXT COMPACTED" | "HISTORY CHANGED" } & HistoryRewrite)
   );
 type ThreadHistory = { pending: WireMessage[]; systems: string[]; previousEnd: number };
 export function threadKey(thread: ThreadKey): string {
@@ -86,9 +87,25 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
   const threads: Record<string, ThreadHistory> = Object.create(null);
   // Errors inside a tool call show in that tool's block. The rest get a
   // block of their own, placed by time on the thread they happened in.
-  const loose = traceErrors(trace, index)
-    .filter((error) => error.toolId === undefined)
-    .map((error) => ({ error, thread: errorThread(error.node, rounds, index) }));
+  const loose: LooseBlock[] = [
+    ...traceErrors(trace, index)
+      .filter((error) => error.toolId === undefined)
+      .map((error) => ({
+        at: error.at,
+        thread: blockThread(error.node, rounds, index),
+        block: { kind: "error" as const, id: `error:${error.id}`, error },
+      })),
+    ...runPauses(trace).map((pause) => ({
+      at: pause.pausedAt,
+      thread: blockThread(pause.node, rounds, index),
+      block: {
+        kind: "pause" as const,
+        id: `pause:${pause.node.id}`,
+        pausedMs: pause.resumedAt === undefined ? undefined : pause.resumedAt - pause.pausedAt,
+        resumed: pause.resumedAt !== undefined,
+      },
+    })),
+  ];
   const compactions = walkNodes(trace)
     .filter((node) => node.event?.data.type === "memoryCompaction")
     .map((node) => ({
@@ -123,7 +140,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
         ...base,
         id: `${round.id}:rewrite`,
         kind: "rewrite",
-        label: compacted ? "CONTEXT COMPACTED" : "HISTORY REWRITTEN",
+        label: compacted ? "CONTEXT COMPACTED" : "HISTORY CHANGED",
         ...delta.rewrite,
       });
     }
@@ -177,7 +194,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
-  return withThreadDividers(withErrorBlocks(roundBlocks, loose));
+  return withThreadDividers(withLooseBlocks(roundBlocks, loose));
 }
 /** A `thread` block wherever the conversation moves to another thread, so
  *  a sub-agent's calls no longer sit in one flat list with the main
@@ -217,35 +234,44 @@ function toolDepth(node: TreeNode, index: TreeIndex): number {
  *  before the first later block anywhere when its thread is unknown, so
  *  the transcript reads in time order. An error after every block goes
  *  at the end. */
-type ErrorThread = { key: ThreadKey; label: string | undefined; depth: number };
-function withErrorBlocks(
-  blocks: TranscriptBlock[],
-  loose: { error: TraceError; thread: ErrorThread | undefined }[],
-): TranscriptBlock[] {
+type BlockThread = { key: ThreadKey; label: string | undefined; depth: number };
+/** A block that comes from an event rather than a round: an error between
+ *  calls, or a pause. It goes before the first later block on its thread,
+ *  or before the first later block anywhere when its thread is unknown,
+ *  so the transcript reads in time order. One after every block goes at
+ *  the end. */
+type LooseBlock = {
+  at: number;
+  thread: BlockThread | undefined;
+  block: Extract<TranscriptBlock, { kind: "error" | "pause" }> extends infer Block
+    ? Block extends TranscriptBlock
+      ? Omit<Block, keyof BlockBase> & { id: string }
+      : never
+    : never;
+};
+function withLooseBlocks(blocks: TranscriptBlock[], loose: LooseBlock[]): TranscriptBlock[] {
   const out = [...blocks];
-  for (const { error, thread } of loose) {
-    const block: TranscriptBlock = {
-      kind: "error",
-      id: `error:${error.id}`,
+  for (const { at, thread, block } of loose) {
+    const placed = {
+      ...block,
       roundId: undefined,
-      thread: thread?.key ?? { kind: "legacy", id: "" },
-      at: error.at,
+      thread: thread?.key ?? { kind: "legacy" as const, id: "" },
+      at,
       threadLabel: thread?.label,
       depth: thread?.depth ?? 0,
-      error,
-    };
+    } as TranscriptBlock;
     const position = out.findIndex(
       (candidate) =>
-        candidate.at > error.at &&
+        candidate.at > at &&
         (thread === undefined || threadKey(candidate.thread) === threadKey(thread.key)),
     );
-    out.splice(position === -1 ? out.length : position, 0, block);
+    out.splice(position === -1 ? out.length : position, 0, placed);
   }
   return out;
 }
-/** The thread an error happened on: that of the rounds in its nearest
+/** The thread an event happened on: that of the rounds in its nearest
  *  enclosing `llmCall` span, when they agree. */
-function errorThread(node: TreeNode, rounds: Round[], index: TreeIndex): ErrorThread | undefined {
+function blockThread(node: TreeNode, rounds: Round[], index: TreeIndex): BlockThread | undefined {
   for (const ancestor of ancestorsOf(node, index)) {
     const enclosing = rounds.filter((round) => round.spanId === ancestor.id);
     if (enclosing.length === 0) {
@@ -398,6 +424,8 @@ export function transcriptText(block: TranscriptBlock): string {
         .join("\n");
     case "error":
       return block.error.message;
+    case "pause":
+      return block.resumed ? "paused, then resumed" : "paused, waiting for a response";
     case "thread":
       return `thread ${block.label}`;
     default:

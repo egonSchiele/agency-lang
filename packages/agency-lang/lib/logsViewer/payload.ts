@@ -42,6 +42,16 @@ const PAYLOADS: PayloadMakers = {
   tool: toolPayload,
   interrupt: interruptPayload,
   error: errorPayload,
+  pause: (row) => [
+    { kind: "heading", text: row.resumed ? "PAUSED, THEN RESUMED" : "PAUSED", tone: "interrupt" },
+    {
+      kind: "meta",
+      text:
+        row.pausedMs === undefined
+          ? "The run stopped here and is still waiting for a response."
+          : `The run stopped here for ${fmtDuration(row.pausedMs, { minutes: true })} and resumed when the response came.`,
+    },
+  ],
   llmGroup: llmGroupPayload,
   subagent: (row) => [
     { kind: "heading", text: `SUBAGENT · ${row.label}`, tone: "assistant" },
@@ -54,8 +64,18 @@ export function payloadFor(row: StoryRow, options: PayloadOptions): PayloadLine[
     return rawPayload(row);
   }
   const make = PAYLOADS[row.kind] as (row: StoryRow) => PayloadLine[];
-  return make(row);
+  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row)];
 }
+/** Why a span can name a parent the log never recorded. The viewer states
+ *  the fact and lists the causes; matching the span to a tool by name
+ *  would be wrong whenever a tool is called twice. */
+const ORPHAN_NOTE: PayloadLine[] = [
+  { kind: "heading", text: "parent span not in this log", tone: "chrome" },
+  {
+    kind: "meta",
+    text: "The log may have been written before span ids survived a resume, cut off mid-write, still being written, or this is a subprocess whose parent span is in another file.",
+  },
+];
 function rawPayload(row: StoryRow): PayloadLine[] {
   const events = row.node.event
     ? [row.node.event]

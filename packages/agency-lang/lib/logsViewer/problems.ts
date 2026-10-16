@@ -119,3 +119,39 @@ function awaitingResponse(events: EventEnvelope[]): boolean {
   }
   return Object.values(latest).some((outcome) => outcome === "propagated" || outcome === "passed");
 }
+
+/** One pause of the run: an interrupt went to a person, and the run
+ *  resumed when the next `agentStart` was logged, if it has yet. */
+export type RunPause = {
+  interruptId: string | undefined;
+  pausedAt: number;
+  resumedAt: number | undefined;
+  /** The `interruptResolved` event that paused the run. */
+  node: TreeNode;
+};
+
+export function runPauses(trace: TreeNode): RunPause[] {
+  const leaves = walkNodes(trace)
+    .filter((node) => node.event !== undefined)
+    .map((node) => ({ node, at: Date.parse(node.event!.data.timestamp) }))
+    .filter((entry) => Number.isFinite(entry.at))
+    .sort((first, second) => first.at - second.at);
+  const starts = leaves.filter((entry) => entry.node.event!.data.type === "agentStart");
+  return leaves
+    .filter((entry) => {
+      const data = entry.node.event!.data;
+      return (
+        data.type === "interruptResolved" &&
+        (data.outcome === "propagated" || data.outcome === "passed")
+      );
+    })
+    .map((entry) => {
+      const id = entry.node.event!.data.interruptId;
+      return {
+        interruptId: typeof id === "string" ? id : undefined,
+        pausedAt: entry.at,
+        resumedAt: starts.find((start) => start.at > entry.at)?.at,
+        node: entry.node,
+      };
+    });
+}

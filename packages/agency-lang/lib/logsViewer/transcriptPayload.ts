@@ -37,6 +37,17 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
       ];
     case "thread":
       return [{ kind: "heading", tone: "accent", text: `══ THREAD · ${block.label} ══` }];
+    case "pause":
+      return [
+        {
+          kind: "heading",
+          tone: "interrupt",
+          text:
+            block.pausedMs === undefined
+              ? "⏸ PAUSED · waiting for a response"
+              : `⏸ PAUSED ${fmtDuration(block.pausedMs, { minutes: true })} · ▶ RESUMED`,
+        },
+      ];
     case "error":
       return [
         { kind: "heading", tone: "error", text: `✖ ERROR` },
@@ -55,7 +66,7 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         {
           kind: "heading",
           tone: "interrupt",
-          text: `── ${block.label} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
+          text: `── ${block.label} at message ${block.firstChangedAt + 1} of ${block.messagesAfter} ── ${block.messagesBefore} messages → ${block.messagesAfter} · ${fmtTokens(block.tokensBefore)} → ${fmtTokens(block.tokensAfter)} tok ──`,
         },
       ];
     case "tool": {

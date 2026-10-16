@@ -29,4 +29,8 @@ export type TreeNode = {
   // The raw event for leaf nodes. Spans don't carry one (multiple
   // events share a span).
   event?: EventEnvelope;
+  // A span whose parent_span_id names a span this log never recorded.
+  // It sits at the trace root; the viewer says so rather than guessing
+  // where it belongs.
+  parentMissing?: boolean;
 };

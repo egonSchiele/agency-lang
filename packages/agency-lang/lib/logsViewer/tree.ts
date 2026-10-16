@@ -122,7 +122,11 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
     const desiredParentId = desiredParent[span.id];
     if (!desiredParentId) continue;
     const trueParent = spans[desiredParentId];
-    if (!trueParent || span.parentId === trueParent.id) continue;
+    if (!trueParent) {
+      span.parentMissing = true;
+      continue;
+    }
+    if (span.parentId === trueParent.id) continue;
     // Detach from current parent and re-attach to the true parent.
     const traceRoot = traces[span.traceId];
     traceRoot.children = traceRoot.children.filter((c) => c.id !== span.id);

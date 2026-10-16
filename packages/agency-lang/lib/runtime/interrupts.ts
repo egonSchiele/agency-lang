@@ -953,6 +953,7 @@ async function runResumeInvocation(
     execCtx.rootLog.agentEnd({
       entryNode: checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
+      tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
     });
     outcome = { status: "threw", error };
   } finally {

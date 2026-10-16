@@ -319,7 +319,9 @@ export class StatelogClient {
    *  their own. Closing is the usual `endSpan`. See
    *  lib/statelog/spanSlot.ts for what a slot is and how long an id lives. */
   reopenSpan(type: SpanType, locals: Record<string, unknown>, name: string): string | undefined {
-    if (!this.enabled) return undefined;
+    if (!this.enabled) {
+      return undefined;
+    }
     const slot = spanSlot(locals, name);
     const spanId = this.startSpan(type, { id: savedSpanIdFor(slot, this.traceId) })!;
     saveSpan(slot, { traceId: this.traceId, spanId });

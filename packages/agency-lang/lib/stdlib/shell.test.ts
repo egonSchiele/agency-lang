@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { __internal_exec, __internal_bash, _glob, _grep } from "./shell.js";
+import { __internal_exec, __internal_bash, _exists, _glob, _grep, _stat } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -234,6 +234,41 @@ describe("_glob and symlinks", () => {
     const linked = path.join(root, "linked");
     await expect(_glob(linked, ".", "*.md", 100)).rejects.toThrow(/symlink/);
     expect(await _glob(await _realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
+  });
+});
+
+describe("_exists and _stat report a symlink below the root as missing", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-probe-symlink-"));
+    fs.writeFileSync(path.join(root, "CLAUDE.md"), "rules");
+    fs.symlinkSync(path.join(root, "CLAUDE.md"), path.join(root, "AGENTS.md"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("returns false and missing for the link, and still sees the real file", async () => {
+    expect(await _exists(root, "AGENTS.md")).toBe(false);
+    expect((await _stat(root, "AGENTS.md")).type).toBe("missing");
+    expect(await _exists(root, "CLAUDE.md")).toBe(true);
+  });
+
+  it("still applies allowedPaths to a link", async () => {
+    const other = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-probe-other-"));
+    try {
+      await expect(_exists(root, "AGENTS.md", [other])).rejects.toThrow(
+        /not under any of the allowed paths/,
+      );
+    } finally {
+      await safeDeleteDirectory(other);
+    }
+  });
+
+  it("still refuses an upward escape", async () => {
+    await expect(_exists(root, "../x")).rejects.toThrow(/outside dir/);
   });
 });
 

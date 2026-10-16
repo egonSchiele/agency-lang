@@ -824,10 +824,12 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
 
   let shouldPop = true;
   // Open the single llmCall span before the round-trip loop. Done here
-  // (not inside the idempotent `initialLlmCall` step) so a resumed run —
-  // which skips completed steps — still re-opens the span that the tool
-  // loop expects to be active.
-  currentLlmSpanId = run.log.startSpan("llmCall");
+  // (not inside the idempotent `initialLlmCall` step) so a resumed run,
+  // which skips completed steps, still opens the span the tool loop
+  // expects to be active. The id lives in this frame's locals, so a
+  // resume reopens the same span and its events join the paused run's;
+  // the frame pop on completion or throw is what forgets it.
+  currentLlmSpanId = run.log.reopenSpan("llmCall", self, "llmCall");
   // Guard-trip gate: settle every pending cost trip in an idempotent
   // step of its own, before/after the request steps. The gate loops
   // until the stack is clear (approving an inner guard can leave an
@@ -1613,7 +1615,10 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           });
           if (b.interrupts) return;
 
-          const toolSpanId = branchRun.log.startSpan("toolExecution");
+          // Saved beside toolTimings on the runPrompt frame, under this
+          // invocation's key, so a resumed invoke step logs its toolCall
+          // under the span that logged its toolCallStart.
+          const toolSpanId = branchRun.log.reopenSpan("toolExecution", self, invocationKey);
           let toolResult: any;
           let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
             "success";
@@ -1995,8 +2000,8 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   } finally {
     // Close any open llmCall span. This covers normal completion,
     // thrown errors, and early returns when tool calls interrupted
-    // (the resumed run opens a fresh llmCall span). The helper is a
-    // no-op if no span is currently open.
+    // (the resumed run reopens the same span from its saved id). The
+    // helper is a no-op if no span is currently open.
     closeLlmSpan();
     if (shouldPop) stateStack.pop();
   }

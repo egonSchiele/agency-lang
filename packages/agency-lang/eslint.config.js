@@ -51,6 +51,7 @@ export const BROWSER_FILES = [
   "lib/typeChecker/diagnostics.ts",
   "lib/logger.ts",
   "lib/matchVal.ts",
+  "lib/statelog/spanSlot.ts",
   "lib/statelogClient.ts",
   "lib/statelogSender.ts",
   "lib/types/function.ts",

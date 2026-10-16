@@ -198,19 +198,11 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
   calls.forEach((call) => {
     const selected = call.id === layout.selectedId;
     const failed = call.round === undefined;
-    const thread = layout.threads.indexOf(call.threadLabel ?? "unnamed");
-    const byThread = layout.threads.length > 1 && thread !== -1;
     numbers.push(
       {
         text: (failed ? "✖" : String(call.round!.index + 1)).padEnd(layout.columnWidth),
         style: {
-          fg: failed
-            ? THEME.kind.error
-            : byThread
-              ? threadColor(thread)
-              : selected
-                ? THEME.accent
-                : THEME.muted,
+          fg: tickColor(call, selected, layout),
           ...(selected ? { bg: THEME.cursorBg, bold: true } : {}),
         },
       },
@@ -225,6 +217,18 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
     );
   });
   return [segment(numbers, layout.width), ...(layout.marks ? [segment(marks, layout.width)] : [])];
+}
+/** A failed request's tick is red. With several threads, a call's tick
+ *  takes its thread's color; otherwise the selected call's is the accent. */
+function tickColor(call: OverviewCall, selected: boolean, layout: ChartLayout): string {
+  if (call.round === undefined) {
+    return THEME.kind.error;
+  }
+  const thread = layout.threads.indexOf(call.threadLabel ?? "unnamed");
+  if (layout.threads.length > 1 && thread !== -1) {
+    return threadColor(thread);
+  }
+  return selected ? THEME.accent : THEME.muted;
 }
 export function fmtCost(value: number): string {
   if (value === 0) return "$0";

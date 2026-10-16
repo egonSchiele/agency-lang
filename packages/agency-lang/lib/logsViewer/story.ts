@@ -134,6 +134,15 @@ export function toolErrorMessages(row: ToolStoryRow): string[] {
     .filter((node) => node.event?.data.type === "error")
     .map((node) => String(node.event!.data.message ?? "error"));
 }
+/** The one glyph per status every screen uses: ✖ for a tool that failed
+ *  or was rejected, ⏸ for one waiting on a person, → for a result. */
+export const TOOL_STATUS_MARK: Record<ToolStatus, string> = {
+  completed: "→",
+  failed: "✖",
+  rejected: "✖",
+  awaitingApproval: "⏸",
+  unfinished: "⋯",
+};
 export function toolStatusText(outcome: ToolOutcome): string {
   const label = TOOL_STATUS_TEXT[outcome.status];
   if (outcome.status === "failed" && outcome.work === "started") {

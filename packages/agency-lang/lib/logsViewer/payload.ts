@@ -178,7 +178,7 @@ export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
     case "rejected":
       return [{ kind: "heading", text: "✖ RESULT · interrupt rejected", tone: "error" }];
     case "awaitingApproval":
-      return [{ kind: "heading", text: "⚠ RESULT · waiting for a response", tone: "interrupt" }];
+      return [{ kind: "heading", text: "⏸ RESULT · waiting for a response", tone: "interrupt" }];
     case "unfinished":
       return [{ kind: "heading", text: "⋯ RESULT · completion not recorded", tone: "chrome" }];
   }

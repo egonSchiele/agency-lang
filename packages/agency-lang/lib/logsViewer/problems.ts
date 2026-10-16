@@ -97,13 +97,21 @@ export function runStatus(trace: TreeNode): RunStatus {
     return hasRunningWork(trace) ? "running" : "done";
   }
   const thisRun = events.slice(lastStart + 1);
-  const end = thisRun.find((event) => event.data.type === "agentEnd");
-  if (end !== undefined) {
-    const crashed =
-      !Object.hasOwn(end.data, "result") && thisRun.some((event) => event.data.type === "error");
-    return crashed ? "crashed" : "done";
+  const endAt = thisRun.findIndex((event) => event.data.type === "agentEnd");
+  if (endAt !== -1) {
+    return crashedBefore(thisRun.slice(0, endAt)) ? "crashed" : "done";
   }
   return awaitingResponse(events) ? "paused" : "running";
+}
+
+/** A crash is what the runtime logs when a run throws: an `error` with
+ *  `errorType: "runtimeError"` right before the footer. A tool that failed
+ *  and a structured reply the caller handled also log errors, and a node
+ *  that returns nothing has no `result` on its footer, so neither of those
+ *  can be the signal. */
+function crashedBefore(events: EventEnvelope[]): boolean {
+  const last = events.at(-1);
+  return last?.data.type === "error" && last.data.errorType === "runtimeError";
 }
 
 /** Whether some interrupt's latest resolution still waits on a person.
@@ -113,7 +121,9 @@ export function runStatus(trace: TreeNode): RunStatus {
 function awaitingResponse(events: EventEnvelope[]): boolean {
   const latest: Record<string, string> = Object.create(null);
   for (const event of events) {
-    if (event.data.type !== "interruptResolved") continue;
+    if (event.data.type !== "interruptResolved") {
+      continue;
+    }
     const id = typeof event.data.interruptId === "string" ? event.data.interruptId : "";
     latest[id] = String(event.data.outcome ?? "");
   }

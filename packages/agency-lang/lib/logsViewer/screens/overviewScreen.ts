@@ -20,7 +20,8 @@ import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap
 import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
 import { roundResponsePayload, roundTokenLine, type PayloadLine } from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
-import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
+import { roundDeltas, type RoundDelta } from "../messageDelta.js";
+import { hasSystemMessages, roundInputPayload, type InputPayload } from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
 import type { RunStatus } from "../problems.js";
@@ -43,12 +44,15 @@ type Preview = { header: Painted[]; body: Painted[]; room: number };
 export class OverviewScreen implements Screen {
   readonly screenName = "overview" as const;
   private data: OverviewData | undefined;
+  private deltas: Record<string, RoundDelta> = Object.create(null);
   private selectedId: string | undefined;
   // Keep a tool selected when visiting overview without choosing another call.
   private returnFocusId: string | undefined;
   private previewMode: PreviewMode = "input";
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
+  /** The input preview opens on the call's new messages until scrolled. */
+  private inputAtNew = true;
   private get scrollTop(): number {
     return this.scrollOffsets[this.previewMode];
   }
@@ -65,6 +69,8 @@ export class OverviewScreen implements Screen {
         width: number;
         metadata: Painted[];
         bodies: Partial<Record<PreviewMode, Painted[]>>;
+        /** First painted line of the input's new messages. */
+        inputNewAt: number;
       }
     | undefined;
   private callPageSize = 1;
@@ -268,6 +274,10 @@ export class OverviewScreen implements Screen {
   private derive(): void {
     const trace = this.roots.find((root) => root.traceId === this.traceId) ?? this.roots[0];
     this.data = trace === undefined ? undefined : overviewData(trace);
+    this.deltas = Object.create(null);
+    for (const delta of roundDeltas(this.data?.rounds ?? [])) {
+      this.deltas[delta.roundId] = delta;
+    }
     if (this.returnFocusId !== undefined && findNode(this.roots, this.returnFocusId) === undefined)
       this.returnFocusId = undefined;
     if (!this.data?.calls.some((call) => call.id === this.selectedId)) this.selectCall(0);
@@ -288,12 +298,13 @@ export class OverviewScreen implements Screen {
   }
   private resetPreview(): void {
     this.scrollOffsets = { input: 0, output: 0 };
+    this.inputAtNew = true;
     this.systemsExpanded = false;
     this.previewCache = undefined;
   }
   private toggleSystems(): void {
     this.systemsExpanded = !this.systemsExpanded;
-    this.scrollOffsets.input = 0;
+    this.inputAtNew = true;
     if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
   private movePreview(delta: number): void {
@@ -317,13 +328,24 @@ export class OverviewScreen implements Screen {
         width,
         metadata: paintPayload(previewMetadata(selected), width),
         bodies: {},
+        inputNewAt: 0,
       };
     }
     if (selected !== undefined && this.previewCache!.bodies[this.previewMode] === undefined) {
-      this.previewCache!.bodies[this.previewMode] = paintPayload(
-        previewBody(selected, this.previewMode, this.systemsExpanded),
-        width,
-      );
+      const delta = selected.round === undefined ? undefined : this.deltas[selected.round.id];
+      const { lines, newAt } = previewBody(selected, this.previewMode, this.systemsExpanded, delta);
+      const history = paintPayload(lines.slice(0, newAt), width);
+      this.previewCache!.bodies[this.previewMode] = [
+        ...history,
+        ...paintPayload(lines.slice(newAt), width),
+      ];
+      if (this.previewMode === "input") {
+        this.previewCache!.inputNewAt = history.length;
+      }
+    }
+    if (selected !== undefined && this.previewMode === "input" && this.inputAtNew) {
+      this.scrollOffsets.input = this.previewCache!.inputNewAt;
+      this.inputAtNew = false;
     }
     const header =
       selected === undefined ? [heading] : [heading, ...this.previewCache!.metadata, paint("")];
@@ -408,28 +430,34 @@ function previewBody(
   call: OverviewCall,
   mode: PreviewMode,
   systemsExpanded: boolean,
-): PayloadLine[] {
+  delta: RoundDelta | undefined,
+): InputPayload {
   if (call.round === undefined) {
-    return mode === "output"
-      ? [
-          { kind: "heading", text: "✖ REQUEST FAILED", tone: "error" },
-          { kind: "text", text: call.failure!.message, indent: 0, role: "error" },
-        ]
-      : [
-          {
-            kind: "meta",
-            text: "input not recorded: the request failed before the provider answered",
-          },
-        ];
+    const lines: PayloadLine[] =
+      mode === "output"
+        ? [
+            { kind: "heading", text: "✖ REQUEST FAILED", tone: "error" },
+            { kind: "text", text: call.failure!.message, indent: 0, role: "error" },
+          ]
+        : [
+            {
+              kind: "meta",
+              text: "input not recorded: the request failed before the provider answered",
+            },
+          ];
+    return { lines, newAt: 0 };
   }
   if (call.round.decision !== undefined) {
-    return mode === "output"
-      ? decisionOutputPayload(call.round.decision)
-      : decisionInputPayload(call.round.decision);
+    const lines =
+      mode === "output"
+        ? decisionOutputPayload(call.round.decision)
+        : decisionInputPayload(call.round.decision);
+    return { lines, newAt: 0 };
   }
-  return mode === "output"
-    ? roundResponsePayload(call.round, call.tools)
-    : roundInputPayload(call.round, systemsExpanded);
+  if (mode === "output") {
+    return { lines: roundResponsePayload(call.round, call.tools), newAt: 0 };
+  }
+  return roundInputPayload(call.round, systemsExpanded, delta);
 }
 function previewMetadata(call: OverviewCall): PayloadLine[] {
   if (call.round === undefined) {

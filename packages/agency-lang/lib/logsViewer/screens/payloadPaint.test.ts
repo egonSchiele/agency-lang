@@ -98,3 +98,15 @@ it("falls back to indexed pairs when the table is too wide", () => {
     "    text: Write it up",
   ]);
 });
+
+it("paints a faded line in one muted color with the same text", () => {
+  const [bright] = paintPayload([{ kind: "pair", key: "id", text: "1", indent: 2 }], 40);
+  const [faded] = paintPayload(
+    [{ kind: "pair", key: "id", text: "1", indent: 2, faded: true }],
+    40,
+  );
+  expect(plainLines([faded])).toEqual(plainLines([bright]));
+  const spans = parseStyledText(faded);
+  expect(spans).toHaveLength(1);
+  expect(spans[0].fg).not.toBe(parseStyledText(bright)[0].fg);
+});

@@ -9,6 +9,16 @@ export function paintPayload(lines: PayloadLine[], width: number): Painted[] {
   return lines.flatMap((line) => paintPayloadLine(line, Math.max(1, width)));
 }
 function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
+  if (line.faded) {
+    return paintPayloadLine({ ...line, faded: false }, width).map((painted) =>
+      paint(
+        parseStyledText(painted)
+          .map((span) => span.text)
+          .join(""),
+        { fg: THEME.muted },
+      ),
+    );
+  }
   if (line.kind === "blank") {
     return [paint("")];
   }

@@ -4,6 +4,7 @@ import {
   normalizeMessage,
   type WireMessage,
 } from "../statelog/wireAccessors.js";
+import type { HistoryRewrite, RoundDelta } from "./messageDelta.js";
 import { valuePayload, type PayloadLine } from "./payload.js";
 import type { Round } from "./timeline/rounds.js";
 
@@ -22,17 +23,61 @@ export function hasSystemMessages(round: Round | undefined): boolean {
   );
 }
 
-/** Read the entire recorded input, including history and tool replies. */
-export function roundInputPayload(round: Round, systemsExpanded: boolean): PayloadLine[] {
+export type InputPayload = {
+  lines: PayloadLine[];
+  /** Where this call's new messages begin in `lines`: the divider, when
+   *  the call has history. The overview opens the preview there. */
+  newAt: number;
+};
+
+/** Read the entire recorded input, including history and tool replies.
+ *  With the call's delta, the messages the previous call on the thread
+ *  already had are faded and a divider marks where the new ones start. */
+export function roundInputPayload(
+  round: Round,
+  systemsExpanded: boolean,
+  delta?: RoundDelta,
+): InputPayload {
   const event = round.node.event!;
-  if (!Array.isArray(event.data.messages))
-    return [{ kind: "meta", text: "Input messages were not recorded." }];
+  if (!Array.isArray(event.data.messages)) {
+    return { lines: [{ kind: "meta", text: "Input messages were not recorded." }], newAt: 0 };
+  }
   const messages = messagesOf(event).map(normalizeMessage);
-  if (messages.length === 0) return [{ kind: "meta", text: "No input messages." }];
-  return messages.flatMap((message) => [
+  if (messages.length === 0) {
+    return { lines: [{ kind: "meta", text: "No input messages." }], newAt: 0 };
+  }
+  const newFrom = delta === undefined ? 0 : messages.length - delta.added.length;
+  const lines = (message: WireMessage): PayloadLine[] => [
     ...messagePayload(message, systemsExpanded),
-    { kind: "blank" as const },
-  ]);
+    { kind: "blank" },
+  ];
+  const history = messages
+    .slice(0, newFrom)
+    .flatMap(lines)
+    .map((line) => ({ ...line, faded: true }));
+  const fresh = messages.slice(newFrom).flatMap(lines);
+  if (newFrom === 0) {
+    return { lines: fresh, newAt: 0 };
+  }
+  return {
+    lines: [...history, divider(newFrom, fresh.length > 0, delta?.rewrite), ...fresh],
+    newAt: history.length,
+  };
+}
+
+function divider(
+  earlier: number,
+  anyNew: boolean,
+  rewrite: HistoryRewrite | undefined,
+): PayloadLine {
+  const parts = [
+    ...(rewrite === undefined
+      ? []
+      : [`HISTORY CHANGED from message ${rewrite.firstChangedAt + 1}`]),
+    `${earlier} earlier ${earlier === 1 ? "message" : "messages"} above`,
+    anyNew ? "NEW" : "NOTHING NEW",
+  ];
+  return { kind: "heading", tone: "chrome", text: `── ${parts.join(" · ")} ──` };
 }
 
 /** A message's content as the reader wrote it: the text of each text

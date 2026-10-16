@@ -1,12 +1,13 @@
 import { expect, it } from "vitest";
 import { leaf, trace } from "./timeline/fixture.js";
 import { roundsOf } from "./timeline/rounds.js";
+import { roundDeltas } from "./messageDelta.js";
 import { roundInputPayload } from "./roundInputPayload.js";
 
 function input(messages: unknown[]) {
   const [round] = roundsOf(trace([leaf("promptCompletion", 100, { messages })]));
   return roundInputPayload(round, false)
-    .flatMap((line) => ("text" in line ? [line.text] : []))
+    .lines.flatMap((line) => ("text" in line ? [line.text] : []))
     .join("\n");
 }
 it("retains non-text content parts alongside the text in a multimodal message", () => {
@@ -43,4 +44,59 @@ it("retains repeated input messages and their original order", () => {
 });
 it("distinguishes an empty recorded message list from missing input", () => {
   expect(input([])).toBe("No input messages.");
+});
+
+function twoCalls(first: unknown[], second: unknown[]) {
+  const rounds = roundsOf(
+    trace([
+      leaf("promptCompletion", 100, { messages: first }),
+      leaf("promptCompletion", 200, { messages: second }),
+    ]),
+  );
+  return { second: rounds[1], delta: roundDeltas(rounds)[1] };
+}
+it("fades the messages the previous call already had and marks where the new ones start", () => {
+  const history = [
+    { role: "system", content: "rules" },
+    { role: "user", content: "first question" },
+  ];
+  const { second, delta } = twoCalls(history, [
+    ...history,
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "second question" },
+  ]);
+  const { lines, newAt } = roundInputPayload(second, false, delta);
+  expect(lines[newAt]).toEqual({
+    kind: "heading",
+    tone: "chrome",
+    text: "── 2 earlier messages above · NEW ──",
+  });
+  expect(lines.slice(0, newAt).every((line) => line.faded === true)).toBe(true);
+  expect(lines.slice(newAt).some((line) => line.faded)).toBe(false);
+  const fresh = lines.slice(newAt).flatMap((line) => ("text" in line ? [line.text] : []));
+  expect(fresh).toContain("first answer");
+  expect(fresh).toContain("second question");
+  expect(fresh).not.toContain("first question");
+});
+it("names a rewrite on the divider and treats the first call as all new", () => {
+  const { second, delta } = twoCalls(
+    [
+      { role: "system", content: "rules" },
+      { role: "user", content: "first question" },
+    ],
+    [
+      { role: "system", content: "rules" },
+      { role: "user", content: "a different question" },
+    ],
+  );
+  const { lines, newAt } = roundInputPayload(second, false, delta);
+  expect("text" in lines[newAt] && lines[newAt].text).toBe(
+    "── HISTORY CHANGED from message 2 · 1 earlier message above · NEW ──",
+  );
+  const [round] = roundsOf(
+    trace([leaf("promptCompletion", 100, { messages: [{ role: "user", content: "hi" }] })]),
+  );
+  const first = roundInputPayload(round, false, roundDeltas([round])[0]);
+  expect(first.newAt).toBe(0);
+  expect(first.lines.some((line) => line.faded)).toBe(false);
 });

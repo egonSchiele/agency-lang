@@ -26,7 +26,8 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
-export type PayloadLine =
+/** `faded` marks a line that is history, painted in one muted color. */
+export type PayloadLine = (
   | {
       kind: "heading";
       text: string;
@@ -40,7 +41,8 @@ export type PayloadLine =
   | { kind: "table"; columns: string[]; rows: string[][]; indent: number }
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
-  | { kind: "blank" };
+  | { kind: "blank" }
+) & { faded?: boolean };
 export type PayloadOptions = { raw: boolean };
 type PayloadMakers = {
   [Kind in StoryRow["kind"]]: (row: Extract<StoryRow, { kind: Kind }>) => PayloadLine[];

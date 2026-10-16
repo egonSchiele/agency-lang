@@ -1,3 +1,21 @@
+## Oct 15 2026 — v0.31.0
+
+### Logs viewer
+
+- **Errors and run status on every screen.** The Overview now states whether a run finished, crashed, paused, or is still running. Same with the Transcript and Timeline screens.
+- **Threads on every screen.**
+- **Paused and resumed runs read as one story.** Earlier, we weren't saving span ids, so after resuming from an interrupt, we couldn't connect logs to earlier spans. Fixed now.
+- **Decision-model calls.** A call to a decision model such as Laya now shows the questions it was asked + the answers it chose, with their probabilities, instead of looking like a chat.
+
+### Runtime
+
+- `agency resume` logs into the paused run's trace instead of starting a new one. A checkpoint now records the trace id it was taken under.
+- The statelog records which calls went to a decision model, along with the questions sent and the answers given.
+
+### Dependencies
+
+- Upgrade smoltalk to 0.18.0.
+
 ## Oct 15 2026 — v0.30.0
 
 - When a tool call fails because argument validation failed, give a more descriptive message to the LLM. Right now, we just say something generic, like "expected object." With this change, we say exactly what the schema of the object is.
@@ -8,8 +26,8 @@
 ### Language
 
 #### Hosts and capabilities
-The biggest change in this release overall is the addition of the concept of hosts and capabilities. Instead of just compiling to Agency to JS to run on Node, it can now be compiled to run on different hosts. The first two hosts to start are Node.js and the browser. Each host is supposed to implement different capabilities, such as how that host reads and writes files, makes network calls, etc. This way, Agency code can run on different platforms that have different capabilities. For example, the browser isn't able to read and write files or touch the file system in any way.
 
+The biggest change in this release overall is the addition of the concept of hosts and capabilities. Instead of just compiling to Agency to JS to run on Node, it can now be compiled to run on different hosts. The first two hosts to start are Node.js and the browser. Each host is supposed to implement different capabilities, such as how that host reads and writes files, makes network calls, etc. This way, Agency code can run on different platforms that have different capabilities. For example, the browser isn't able to read and write files or touch the file system in any way.
 
 - **The `@capabilities` tag.** A function or node can say capabilities it needs in order to be able to do its work. For example, if you are writing a function that writes a file, you may want to specify the fileWrite capability. Supported capabilities are: `fileRead`, `fileWrite`, `network`, `subprocess`, `env`, `terminal`, and `llm`.
 

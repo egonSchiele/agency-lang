@@ -51,8 +51,15 @@ export function overviewData(trace: TreeNode): OverviewData {
       roundOfTool[tool.id] = round.id;
     }
   }
-  const failures = errors.filter((error) => error.errorType === "llmError");
-  const attached = errors.filter((error) => error.errorType !== "llmError");
+  // A request that failed before the provider answered: an llmError inside
+  // an llmCall span. The memory manager logs llmErrors of its own for its
+  // extraction and compaction calls, which are not calls in the chart; those
+  // are marked on a call like any other error.
+  const isFailedRequest = (error: TraceError): boolean =>
+    error.errorType === "llmError" &&
+    nearestAncestor(error.node, index, (node) => node.label === "llmCall") !== undefined;
+  const failures = errors.filter(isFailedRequest);
+  const attached = errors.filter((error) => !isFailedRequest(error));
   const errorsByRound: Record<string, TraceError[]> = Object.create(null);
   for (const error of attached) {
     const owner = callFor(error, { rounds, roundOfTool, index });
@@ -69,14 +76,17 @@ export function overviewData(trace: TreeNode): OverviewData {
       tools: toolsByRound[round.id],
       at: round.end,
     })),
-    ...failures.map((failure) => ({
-      id: stableLeafId(index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace, failure.node),
-      round: undefined,
-      failure,
-      errors: [failure],
-      tools: [],
-      at: failure.at,
-    })),
+    ...failures.map((failure) => {
+      const parent = index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace;
+      return {
+        id: stableLeafId(parent, failure.node),
+        round: undefined,
+        failure,
+        errors: [failure],
+        tools: [],
+        at: failure.at,
+      };
+    }),
   ].sort((first, second) => first.at - second.at);
   return {
     models: models.filter((model, index) => models.indexOf(model) === index),

@@ -183,7 +183,7 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
       {
         text: (failed ? "✖" : String(call.round!.index + 1)).padEnd(layout.columnWidth),
         style: {
-          fg: failed ? THEME.kind.error : selected ? THEME.accent : THEME.muted,
+          fg: tickColor(call, selected),
           ...(selected ? { bg: THEME.cursorBg, bold: true } : {}),
         },
       },
@@ -198,6 +198,13 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
     );
   });
   return [segment(numbers, layout.width), ...(layout.marks ? [segment(marks, layout.width)] : [])];
+}
+/** A failed request's tick is red; the selected call's is the accent. */
+function tickColor(call: OverviewCall, selected: boolean): string {
+  if (call.round === undefined) {
+    return THEME.kind.error;
+  }
+  return selected ? THEME.accent : THEME.muted;
 }
 export function fmtCost(value: number): string {
   if (value === 0) return "$0";

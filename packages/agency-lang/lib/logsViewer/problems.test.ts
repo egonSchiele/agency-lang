@@ -62,12 +62,36 @@ describe("runStatus", () => {
     expect(runStatus(trace([start(0), leaf("agentEnd", 50, {})]))).toBe("done");
   });
 
-  it("is crashed after an error and a footer with no result", () => {
+  it("is crashed after the runtime error that precedes a footer with no result", () => {
     expect(
       runStatus(
-        trace([start(0), leaf("error", 20, { message: "boom" }), leaf("agentEnd", 50, {})]),
+        trace([
+          start(0),
+          leaf("error", 20, { message: "boom", errorType: "runtimeError" }),
+          leaf("agentEnd", 50, {}),
+        ]),
       ),
     ).toBe("crashed");
+  });
+
+  it("is done when a tool failed, the model moved on, and the node returned nothing", () => {
+    expect(
+      runStatus(
+        trace([
+          start(0),
+          span(
+            "toolExecution",
+            [
+              leaf("toolCallStart", 10, { toolName: "write" }),
+              leaf("error", 20, { message: "disk full", errorType: "toolError" }),
+            ],
+            { id: "t" },
+          ),
+          leaf("promptCompletion", 30, { timeTaken: 5, completion: { output: "gave up" } }),
+          leaf("agentEnd", 50, {}),
+        ]),
+      ),
+    ).toBe("done");
   });
 
   it("is paused while an interrupt waits on a person, whether a handler sent it up or none decided", () => {

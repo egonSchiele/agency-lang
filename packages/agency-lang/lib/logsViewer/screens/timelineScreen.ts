@@ -576,8 +576,12 @@ export class TimelineScreen implements Screen {
    *  person. The tool status comes from the story outline, so the timeline
    *  and the trace never disagree about a tool. */
   private mark(item: FlameRow): string {
-    if (item.row.kind !== "span") return "";
-    if (holdsError(item.node)) return "✖ ";
+    if (item.row.kind !== "span") {
+      return "";
+    }
+    if (holdsError(item.node)) {
+      return "✖ ";
+    }
     return this.waitingToolIds.includes(item.row.id) ? "⏸ " : "";
   }
 
@@ -597,12 +601,7 @@ export class TimelineScreen implements Screen {
     window: Interval,
     widths: WidthSplit,
   ): Element {
-    const failed = item.row.kind === "span" && holdsError(item.node);
-    const identity = isCursor
-      ? THEME.text
-      : failed
-        ? THEME.kind.error
-        : (item.color ?? THEME.muted);
+    const identity = rowColor(item, isCursor);
     const content = joinPainted(
       ...(this.lineNumbers
         ? [lineNumber(this.rows.indexOf(item) + 1, lineNumberWidth(this.rows.length))]
@@ -727,6 +726,18 @@ function extentOf(row: TimelineRow): Interval {
 
 function isRunning(row: TimelineRow): boolean {
   return row.kind === "span" && row.span.running;
+}
+
+/** The cursor row reads in the text color, a span that logged an error in
+ *  red, anything else in its group's color. */
+function rowColor(item: FlameRow, isCursor: boolean): string {
+  if (isCursor) {
+    return THEME.text;
+  }
+  if (item.row.kind === "span" && holdsError(item.node)) {
+    return THEME.kind.error;
+  }
+  return item.color ?? THEME.muted;
 }
 
 /** Whether an error event was logged directly in this span. */

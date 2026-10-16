@@ -190,4 +190,18 @@ describe("overview errors", () => {
     ]);
     expect(data.calls[1].id).toBe("leaf:L:error:0");
   });
+
+  it("keeps the memory manager's own request failures out of the chart columns", () => {
+    const root = trace([
+      span("llmCall", [leaf("promptCompletion", 1_000, { timeTaken: 100 })], { id: "L" }),
+      span(
+        "memoryCompaction",
+        [leaf("error", 2_000, { message: "503 overloaded", errorType: "llmError" })],
+        { id: "M" },
+      ),
+    ]);
+    const data = overviewData(root);
+    expect(data.calls.map((call) => call.round?.index)).toEqual([0]);
+    expect(data.calls[0].errors.map((error) => error.message)).toEqual(["503 overloaded"]);
+  });
 });

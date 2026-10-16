@@ -264,6 +264,19 @@ Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
 
 Checkpoints: `checkpointCreated`, `checkpointRestored`.
 
+### A resumed run opens its span before it restores
+
+A resume (an interrupt response, `resumeFromCheckpoint`, or the `agency
+resume` command) runs in a fresh execution context. It opens its `agentRun`
+span and logs `agentStart` first, and only then restores the checkpoint. So
+`checkpointRestored` and the user's `interruptResolved` are the second and
+third events in that span, not span-less events at the trace root. Restoring
+replaces the state stack and globals but never the span stack, which is why
+the span can be opened first. `tests/agency-js/resume-events-in-span` pins
+this order. A rewind (`rewindFrom`) is the one restore path that opens no
+`agentRun` span at all: it is a replay in a fresh trace with no run
+lifecycle, so its `checkpointRestored` sits at the trace root.
+
 Fork/race: `forkStart`, `forkBranchEnd`, `forkEnd`.
 
 Threads: `threadCreated`, `threadResumed`, `threadRepaired`,

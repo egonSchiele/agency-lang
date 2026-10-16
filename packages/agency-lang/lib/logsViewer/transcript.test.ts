@@ -571,3 +571,45 @@ describe("pause blocks", () => {
     expect(transcriptText(pause!)).toBe("paused, then resumed");
   });
 });
+
+describe("decision calls", () => {
+  it("shows a decision call as one block with the questions and answers, not as a chat", () => {
+    const decision = {
+      state: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+      questions: {
+        response: {
+          type: "choice",
+          instructions: "Which expression?",
+          criteria: { idle: "i", curious: "c" },
+        },
+      },
+      answers: {
+        response: {
+          type: "choice",
+          choice: "curious",
+          confidence: 0.7,
+          probabilities: { curious: 0.86, idle: 0.14 },
+        },
+      },
+    };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "check",
+          usageKind: "decision",
+          messages: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+          completion: { output: JSON.stringify({ response: "curious" }) },
+          decision,
+        }),
+      ])[0],
+    );
+    expect(blocks.map((block) => block.kind)).toEqual(["assistant"]);
+    const lines = transcriptPayload(blocks[0], false).map((line) =>
+      "text" in line ? line.text : "",
+    );
+    expect(lines).toContain("QUESTIONS");
+    expect(lines).toContain("Which expression?");
+    expect(lines).toContain("ANSWER · response");
+    expect(lines).toContain("curious 86%");
+  });
+});

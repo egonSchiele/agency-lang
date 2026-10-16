@@ -316,3 +316,35 @@ describe("resumed runs", () => {
     ]);
   });
 });
+
+describe("decision calls", () => {
+  it("labels a decision call with its answer instead of a JSON reply", () => {
+    const trace = buildForest([
+      event("promptCompletion", 100, "L", null, {
+        usageKind: "decision",
+        messages: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+        completion: { output: JSON.stringify({ response: "curious" }) },
+        decision: {
+          state: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+          questions: {
+            response: {
+              type: "choice",
+              instructions: "Which expression?",
+              criteria: { idle: "i", curious: "c" },
+            },
+          },
+          answers: {
+            response: {
+              type: "choice",
+              choice: "curious",
+              confidence: 0.7,
+              probabilities: { curious: 0.86, idle: 0.14 },
+            },
+          },
+        },
+      }),
+    ])[0];
+    const round = outlineRows(trace, STORY).find((row) => row.kind === "round");
+    expect(round).toMatchObject({ gist: "decision · curious 86%" });
+  });
+});

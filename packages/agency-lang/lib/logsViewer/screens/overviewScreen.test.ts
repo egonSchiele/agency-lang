@@ -431,3 +431,51 @@ it("colors call numbers by thread and lists the threads when there are several",
   expect(text).toContain("threads  ■ main  ■ check");
   expect(text).toContain("thread main");
 });
+
+it("previews a decision call as its state and questions, and its answers with bars", () => {
+  const roots = [
+    trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 1_000, {
+            model: '"laya"',
+            timeTaken: 50,
+            usageKind: "decision",
+            messages: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+            completion: { output: JSON.stringify({ response: "curious" }) },
+            decision: {
+              state: [{ role: "user", content: "Are you able to set up a recurring job?" }],
+              questions: {
+                response: {
+                  type: "choice",
+                  instructions: "Which expression?",
+                  criteria: { idle: "i", curious: "c" },
+                },
+              },
+              answers: {
+                response: {
+                  type: "choice",
+                  choice: "curious",
+                  confidence: 0.7,
+                  probabilities: { curious: 0.86, idle: 0.14 },
+                },
+              },
+            },
+          }),
+        ],
+        { id: "L" },
+      ),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  const output = frame(view);
+  expect(output).toContain("LLM CALL 1 · DECISION · curious 86%");
+  expect(output).toContain("ANSWER · response");
+  expect(output).toMatch(/curious █+░* 86%/);
+  view.handleKey({ key: "tab" }, viewport);
+  const input = frame(view);
+  expect(input).toContain("STATE");
+  expect(input).toContain("response · choice · idle, curious");
+  expect(input).toContain("Which expression?");
+});

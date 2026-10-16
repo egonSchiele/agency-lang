@@ -28,6 +28,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { buildTreeIndex, type TreeIndex } from "../forest.js";
 import { storyOutline } from "../story.js";
+import { decisionSummary } from "../decision.js";
 import {
   childEvent,
   durationColor,
@@ -563,6 +564,7 @@ export class TimelineScreen implements Screen {
       const round = item.row.round;
       return [
         `LLM call ${round.index + 1}`,
+        ...(round.decision === undefined ? [] : [`decision · ${decisionSummary(round.decision)}`]),
         `${fmtTokens(round.contextTokens)} ctx`,
         fmtUsd(round.costUsd),
       ]

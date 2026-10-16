@@ -411,8 +411,10 @@ function toolMark(status: ToolStatus): string {
 }
 function spineLabel(block: TranscriptBlock): string {
   switch (block.kind) {
-    case "assistant":
-      return `LLM call ${block.round.index + 1}`;
+    case "assistant": {
+      const suffix = block.round.decision === undefined ? "" : " · decision";
+      return `LLM call ${block.round.index + 1}${suffix}`;
+    }
     case "tool":
       return `  ${toolMark(block.row.status)}${block.row.name}`;
     case "error":

@@ -2,6 +2,7 @@
 import {
   contextTokens,
   cost,
+  decisionOf,
   modelOf,
   threadIdOf,
   threadIdentityOf,
@@ -12,6 +13,7 @@ import {
 import { buildTreeIndex, nearestAncestor, walkNodes, type TreeIndex } from "../forest.js";
 import { childEvent } from "../spanText.js";
 import type { TreeNode } from "../types.js";
+import type { DecisionLog } from "../../statelog/wireTypes.js";
 import { threadScopeOf, unambiguousThreadLabels, type ScopeLabelCache } from "./groups.js";
 
 /** Recorded identity, or a conservative span-local key for older logs. */
@@ -38,6 +40,9 @@ export type Round = {
   outputTokens: number;
   contextTokens: number;
   costUsd: number;
+  /** What a decision model was sent and answered; undefined for a text call
+   *  and for logs from before the field was recorded. */
+  decision: DecisionLog | undefined;
   node: TreeNode;
 };
 
@@ -136,6 +141,7 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     outputTokens: tokensOut(event),
     contextTokens: allInput,
     costUsd: cost(event),
+    decision: decisionOf(event),
     node: leafNode,
   };
 }

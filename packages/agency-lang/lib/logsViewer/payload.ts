@@ -163,7 +163,24 @@ export const RESULT_PREVIEW_CHARS = 600;
  *  when `tools` holds the call's tool rows, what came back. Requests are
  *  matched to tool rows by name, in order, so a tool called twice in one
  *  round pairs first with first. */
-export function roundResponsePayload(round: Round, tools: ToolStoryRow[] = []): PayloadLine[] {
+export type ResultOptions = {
+  /** Print every result whole instead of its first RESULT_PREVIEW_CHARS. */
+  fullResults?: boolean;
+};
+
+/** Whether any completed tool's result is longer than the preview keeps. */
+export function hasCutResult(tools: ToolStoryRow[]): boolean {
+  return tools.some(
+    (tool) =>
+      tool.status === "completed" && (toolResultText(tool) ?? "").length > RESULT_PREVIEW_CHARS,
+  );
+}
+
+export function roundResponsePayload(
+  round: Round,
+  tools: ToolStoryRow[] = [],
+  options: ResultOptions = {},
+): PayloadLine[] {
   const event = round.node.event!;
   const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
   const unmatched = [...tools];
@@ -179,20 +196,20 @@ export function roundResponsePayload(round: Round, tools: ToolStoryRow[] = []): 
           tone: "tool" as const,
         },
         ...valuePayload(call.arguments),
-        ...(tool === undefined ? [] : toolResultPayload(tool)),
+        ...(tool === undefined ? [] : toolResultPayload(tool, options)),
       ];
     }),
   ];
 }
 
 /** What a requested tool gave back, by its recorded status. */
-export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
+export function toolResultPayload(tool: ToolStoryRow, options: ResultOptions = {}): PayloadLine[] {
   switch (tool.status) {
     case "completed": {
       const text = toolResultText(tool) ?? "";
       const shown =
-        text.length > RESULT_PREVIEW_CHARS
-          ? `${text.slice(0, RESULT_PREVIEW_CHARS)}… (${text.length - RESULT_PREVIEW_CHARS} more characters)`
+        text.length > RESULT_PREVIEW_CHARS && !options.fullResults
+          ? `${text.slice(0, RESULT_PREVIEW_CHARS)}… (${text.length - RESULT_PREVIEW_CHARS} more characters · x to show)`
           : text;
       return [{ kind: "heading", text: "→ RESULT", tone: "tool" }, ...valuePayload(shown)];
     }

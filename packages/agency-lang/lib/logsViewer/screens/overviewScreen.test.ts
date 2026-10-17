@@ -534,3 +534,47 @@ it("folds a later call's history to a stub, and e opens it faded above the new m
   expect(frame(view)).toContain("first question line 1");
   expect(frame(view)).not.toContain("e earlier");
 });
+
+it("cuts a long tool result with a hint, and x shows it whole", () => {
+  const long = Array.from({ length: 120 }, (_, n) => `line ${n + 1}`).join("\n");
+  const tool = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 2_100, { toolName: "read", args: { path: "a" } }),
+      leaf("toolCall", 2_200, { toolName: "read", output: long }),
+    ],
+    { id: "t" },
+  );
+  tool.firstTs = 2_100;
+  const roots = [
+    trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            model: '"m1"',
+            timeTaken: 100,
+            completion: { toolCalls: [{ name: "read", arguments: { path: "a" } }] },
+          }),
+          tool,
+        ],
+        { id: "L" },
+      ),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  view.handleKey({ key: "tab" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  const cut = frame(view);
+  expect(cut).toMatch(/more characters · x to show/);
+  expect(cut).toContain("x full results");
+  expect(cut).not.toContain("line 120");
+  view.handleKey({ key: "x" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  const full = frame(view);
+  expect(full).toContain("line 120");
+  expect(full).not.toContain("more characters");
+  view.handleKey({ key: "x" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  expect(frame(view)).toMatch(/more characters · x to show/);
+});

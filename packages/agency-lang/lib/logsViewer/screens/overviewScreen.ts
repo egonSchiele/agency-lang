@@ -18,7 +18,13 @@ import { storyOutline } from "../story.js";
 import { fmtUsd } from "../format.js";
 import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
 import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
-import { roundResponsePayload, roundTokenLine, type PayloadLine } from "../payload.js";
+import {
+  hasCutResult,
+  roundResponsePayload,
+  roundTokenLine,
+  type PayloadLine,
+  type ResultOptions,
+} from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
 import { roundDeltas, type RoundDelta } from "../messageDelta.js";
 import {
@@ -58,6 +64,7 @@ export class OverviewScreen implements Screen {
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
   private historyExpanded = false;
+  private fullResults = false;
   /** The input preview opens on the call's new messages until scrolled. */
   private inputAtNew = true;
   private get scrollTop(): number {
@@ -167,6 +174,13 @@ export class OverviewScreen implements Screen {
         when: () =>
           this.previewMode === "input" && hasHistory(this.selected()?.round, this.selectedDelta()),
         run: () => this.toggleHistory(),
+      },
+      {
+        keys: ["x"],
+        help: "show or cut long tool results in the output",
+        hint: "x full results",
+        when: () => this.previewMode === "output" && hasCutResult(this.selected()?.tools ?? []),
+        run: () => this.toggleResults(),
       },
       {
         keys: ["g", "Home"],
@@ -316,11 +330,17 @@ export class OverviewScreen implements Screen {
     this.inputAtNew = true;
     this.systemsExpanded = false;
     this.historyExpanded = false;
+    this.fullResults = false;
     this.previewCache = undefined;
   }
   private selectedDelta(): RoundDelta | undefined {
     const round = this.selected()?.round;
     return round === undefined ? undefined : this.deltas[round.id];
+  }
+  private toggleResults(): void {
+    this.fullResults = !this.fullResults;
+    this.scrollOffsets.output = 0;
+    if (this.previewCache !== undefined) this.previewCache.bodies.output = undefined;
   }
   private toggleHistory(): void {
     this.historyExpanded = !this.historyExpanded;
@@ -360,7 +380,11 @@ export class OverviewScreen implements Screen {
       const { lines, newAt } = previewBody(
         selected,
         this.previewMode,
-        { systemsExpanded: this.systemsExpanded, historyExpanded: this.historyExpanded },
+        {
+          systemsExpanded: this.systemsExpanded,
+          historyExpanded: this.historyExpanded,
+          fullResults: this.fullResults,
+        },
         this.selectedDelta(),
       );
       const history = paintPayload(lines.slice(0, newAt), width);
@@ -458,7 +482,7 @@ function callTitle(call: OverviewCall | undefined): string {
 function previewBody(
   call: OverviewCall,
   mode: PreviewMode,
-  options: InputOptions,
+  options: InputOptions & ResultOptions,
   delta: RoundDelta | undefined,
 ): InputPayload {
   if (call.round === undefined) {
@@ -484,7 +508,7 @@ function previewBody(
     return { lines, newAt: 0 };
   }
   if (mode === "output") {
-    return { lines: roundResponsePayload(call.round, call.tools), newAt: 0 };
+    return { lines: roundResponsePayload(call.round, call.tools, options), newAt: 0 };
   }
   return roundInputPayload(call.round, options, delta);
 }

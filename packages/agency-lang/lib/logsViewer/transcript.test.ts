@@ -47,6 +47,40 @@ describe("transcript blocks", () => {
       interrupts: [{ effect: "std::read", outcome: "approved" }],
     });
   });
+  it("does not repeat the caller's request when a sub-agent on the same thread runs between its calls", () => {
+    const ask = { id: "r", name: "researchAgent", arguments: {} };
+    const asked = { role: "assistant", content: "", toolCalls: [ask] };
+    const answer = { role: "tool", name: "researchAgent", tool_call_id: "r", content: "found it" };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "A", null, {
+          threadIdentity: "main",
+          messages: [user],
+          completion: { output: "", toolCalls: [ask] },
+        }),
+        event("toolCallStart", 101, "t", "A", { toolName: "researchAgent", args: {} }),
+        event("promptCompletion", 150, "B", "t", {
+          threadIdentity: "main",
+          messages: [user, asked, { role: "user", content: "research this" }],
+          completion: { output: "found it" },
+        }),
+        event("toolCall", 160, "t", "A", { toolName: "researchAgent", output: "found it" }),
+        event("promptCompletion", 300, "A", null, {
+          threadIdentity: "main",
+          messages: [user, asked, answer],
+          completion: { output: "done" },
+        }),
+      ])[0],
+    );
+    expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
+      "0 user",
+      "0 assistant",
+      "0 tool",
+      "1 user",
+      "1 assistant",
+      "0 assistant",
+    ]);
+  });
   it("consumes only one identical occurrence and retains refusals", () => {
     const blocks = transcriptBlocks(
       conversation([

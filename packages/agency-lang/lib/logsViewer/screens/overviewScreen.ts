@@ -23,11 +23,11 @@ import {
   roundResponsePayload,
   roundTokenLine,
   type PayloadLine,
-  type ResultOptions,
 } from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
 import { roundDeltas, type RoundDelta } from "../messageDelta.js";
 import {
+  hasCutToolResult,
   hasHistory,
   hasSystemMessages,
   roundInputPayload,
@@ -195,9 +195,12 @@ export class OverviewScreen implements Screen {
       },
       {
         keys: ["x"],
-        help: "show or cut long tool results in the output",
+        help: "show or cut long tool results",
         hint: "x full results",
-        when: () => this.previewMode === "output" && hasCutResult(this.selected()?.tools ?? []),
+        when: () =>
+          this.previewMode === "output"
+            ? hasCutResult(this.selected()?.tools ?? [])
+            : hasCutToolResult(this.selected()?.round),
         run: () => this.toggleResults(),
       },
       {
@@ -358,10 +361,12 @@ export class OverviewScreen implements Screen {
     const round = this.selected()?.round;
     return round === undefined ? undefined : this.deltas[round.id];
   }
+  /** `x` applies to both previews. The output restarts at its top; the
+   *  input keeps its scroll, like `s`, so the result opened is still in view. */
   private toggleResults(): void {
     this.fullResults = !this.fullResults;
     this.scrollOffsets.output = 0;
-    if (this.previewCache !== undefined) this.previewCache.bodies.output = undefined;
+    if (this.previewCache !== undefined) this.previewCache.bodies = {};
   }
   private toggleHistory(): void {
     this.historyExpanded = !this.historyExpanded;
@@ -528,7 +533,7 @@ function callTitle(call: OverviewCall | undefined): string {
 function previewBody(
   call: OverviewCall,
   mode: PreviewMode,
-  options: InputOptions & ResultOptions,
+  options: InputOptions,
   delta: RoundDelta | undefined,
 ): InputPayload {
   if (call.round === undefined) {

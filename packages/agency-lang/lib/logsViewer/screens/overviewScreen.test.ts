@@ -5,6 +5,7 @@ import { parseStyledText } from "../../tui/styleParser.js";
 import type { Element } from "../../tui/elements.js";
 import { leaf, span, trace } from "../timeline/fixture.js";
 import { agentLoopTrace } from "../storyFixture.js";
+import { THEME } from "../theme.js";
 import { OverviewScreen } from "./overviewScreen.js";
 
 const viewport = { rows: 30, cols: 130 };
@@ -46,6 +47,11 @@ function flat(element: Element): string[] {
           .join(""),
       ]
     : (element.children ?? []).flatMap(flat);
+}
+function styledRows(element: Element): ReturnType<typeof parseStyledText>[] {
+  return element.type === "text"
+    ? [parseStyledText(element.content ?? "")]
+    : (element.children ?? []).flatMap(styledRows);
 }
 function frame(view: OverviewScreen, size = viewport): string {
   return renderFrame(layout(view.render(size), size.cols, size.rows)).toPlainText();
@@ -607,10 +613,9 @@ function nestedTrace() {
     ]),
   ];
 }
-it("says which tool a call ran inside and which call it continues, and dots the nested calls", () => {
+it("says which tool a call ran inside and which call it continues, and brackets the nested calls", () => {
   const view = new OverviewScreen(nestedTrace(), "T", () => undefined);
   const first = frame(view);
-  expect(first).toContain("· inside a tool");
   expect(first).not.toContain("continues LLM call");
   expect(first).not.toContain("inside researchAgent");
   view.handleKey({ key: "right" }, viewport);
@@ -625,13 +630,25 @@ it("says which tool a call ran inside and which call it continues, and dots the 
   expect(last).toContain("LLM CALL 4");
   expect(last).toContain("continues LLM call 1");
   expect(last).not.toContain("inside researchAgent");
-  // The dots row sits under the numbers: nothing under 1 and 4, a dot under 2 and 3.
-  const dots = flat(view.render(viewport))
-    .map((row) => row.split(" │ ")[0])
-    .filter((row) => /^\s+·(\s+·)*\s*$/.test(row));
-  expect(dots.length).toBeGreaterThan(0);
-  const numbers = flat(view.render(viewport))
-    .map((row) => row.split(" │ ")[0])
-    .find((row) => /^\s+1\s+2\s+3\s+4\s*$/.test(row))!;
-  expect(dots[0].indexOf("·")).toBe(numbers.indexOf("2"));
+  // A bracket named after the tool spans columns 2 and 3 under the numbers,
+  // and those columns carry the group band while 1 and 4 do not.
+  const left = flat(view.render(viewport)).map((row) => row.split(" │ ")[0]);
+  const bracket = left.find((row) => /└.*┘/.test(row))!;
+  expect(bracket).toContain("└ rese… ┘");
+  const numbers = left.find((row) => /^\s+1\s+2\s+3\s+4\s*$/.test(row))!;
+  expect(bracket.indexOf("└")).toBe(numbers.indexOf("2"));
+  expect(bracket.indexOf("┘")).toBe(numbers.indexOf("3") + 3);
+  const numberSpans = styledRows(view.render(viewport)).find((spans) =>
+    /^\s+1\s+2\s+3\s+4\s*$/.test(
+      spans
+        .map((span) => span.text)
+        .join("")
+        .split(" │ ")[0],
+    ),
+  )!;
+  const spanFor = (digit: string) => numberSpans.find((span) => span.text.startsWith(digit))!;
+  expect(spanFor("2").bg).toBe(THEME.groupBg);
+  expect(spanFor("3").bg).toBe(THEME.groupBg);
+  expect(spanFor("1").bg).toBeUndefined();
+  expect(spanFor("4").bg).toBe(THEME.cursorBg);
 });

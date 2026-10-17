@@ -22,8 +22,9 @@ export type OverviewCall = {
   /** The tool call this request ran inside, with the index of the call
    *  that requested that tool when the log shows it; undefined at the top. */
   inside: { toolName: string; requestedBy: number | undefined } | undefined;
-  /** How many tool calls deep this request ran; 0 at the top. */
-  depth: number;
+  /** Every tool call this request ran inside, outermost first; empty at
+   *  the top. The charts bracket the calls that share one. */
+  enclosing: { id: string; toolName: string }[];
   /** The index of the previous call on the same thread, which this one
    *  continues with that call's reply and tool results added; undefined
    *  for the first call on a thread. */
@@ -96,6 +97,9 @@ export function overviewData(trace: TreeNode): OverviewData {
         (ancestor) => ancestor.label === "toolExecution",
       );
       const nearest = toolSpans[0];
+      const enclosing = toolSpans
+        .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
+        .reverse();
       const threadKey = JSON.stringify([round.thread.kind, round.thread.id]);
       const continues = lastOnThread[threadKey];
       lastOnThread[threadKey] = round.index;
@@ -106,7 +110,7 @@ export function overviewData(trace: TreeNode): OverviewData {
         errors: errorsByRound[round.id] ?? [],
         tools: toolsByRound[round.id],
         inside: nearest === undefined ? undefined : insideOf(nearest, toolRowByNode[nearest.id]),
-        depth: toolSpans.length,
+        enclosing,
         continues,
         at: round.end,
         threadLabel: round.threadLabel,
@@ -122,7 +126,7 @@ export function overviewData(trace: TreeNode): OverviewData {
         errors: [failure],
         tools: [],
         inside: undefined,
-        depth: 0,
+        enclosing: [],
         continues: undefined,
         at: failure.at,
         threadLabel: undefined,

@@ -566,15 +566,15 @@ it("cuts a long tool result with a hint, and x shows it whole", () => {
   view.handleKey({ key: "tab" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   const cut = frame(view);
-  expect(cut).toMatch(/more characters · x to show/);
+  expect(cut).toMatch(/… ~\d+ more tokens · x to show/);
   expect(cut).toContain("x full results");
   expect(cut).not.toContain("line 120");
   view.handleKey({ key: "x" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   const full = frame(view);
   expect(full).toContain("line 120");
-  expect(full).not.toContain("more characters");
+  expect(full).not.toContain("more tokens");
   view.handleKey({ key: "x" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
-  expect(frame(view)).toMatch(/more characters · x to show/);
+  expect(frame(view)).toMatch(/more tokens · x to show/);
 });

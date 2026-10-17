@@ -207,11 +207,16 @@ export function toolResultPayload(tool: ToolStoryRow, options: ResultOptions = {
   switch (tool.status) {
     case "completed": {
       const text = toolResultText(tool) ?? "";
-      const shown =
-        text.length > RESULT_PREVIEW_CHARS && !options.fullResults
-          ? `${text.slice(0, RESULT_PREVIEW_CHARS)}… (${text.length - RESULT_PREVIEW_CHARS} more characters · x to show)`
-          : text;
-      return [{ kind: "heading", text: "→ RESULT", tone: "tool" }, ...valuePayload(shown)];
+      const heading = { kind: "heading" as const, text: "→ RESULT", tone: "tool" as const };
+      if (text.length <= RESULT_PREVIEW_CHARS || options.fullResults) {
+        return [heading, ...valuePayload(text)];
+      }
+      const rest = Math.ceil((text.length - RESULT_PREVIEW_CHARS) / 4);
+      return [
+        heading,
+        ...valuePayload(text.slice(0, RESULT_PREVIEW_CHARS)),
+        { kind: "heading", text: `… ~${fmtTokens(rest)} more tokens · x to show`, tone: "accent" },
+      ];
     }
     case "failed":
       return [

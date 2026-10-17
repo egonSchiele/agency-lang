@@ -282,6 +282,7 @@ describe("roundResponsePayload with tool results", () => {
       leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
       leaf("toolCall", 1_200, { toolName: "read", output: "x".repeat(RESULT_PREVIEW_CHARS + 50) }),
     ]);
-    expect(lines.at(-1)).toMatch(/^x+… \(50 more characters · x to show\)$/);
+    expect(lines.at(-2)).toMatch(/^x+$/);
+    expect(lines.at(-1)).toBe("… ~13 more tokens · x to show");
   });
 });

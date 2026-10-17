@@ -238,8 +238,7 @@ export function toolResultPayload(tool: ToolStoryRow, options: ResultOptions = {
 }
 /** One line of token counts, the same on every screen: what the model
  *  read, how much of that was cached (and written to the cache), and what
- *  it wrote. Fresh input is the difference, so it is not printed. The
- *  overview pane has room for exact counts; the others round. */
+ *  it wrote. `exact` prints full numbers instead of rounded ones. */
 export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): string {
   const event = round.node.event!;
   if (!hasTokenUsage(event)) {

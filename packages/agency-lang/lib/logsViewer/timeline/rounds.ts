@@ -36,9 +36,7 @@ export type Round = {
   ordinal: number;
   thread: ThreadKey;
   threadLabel: string | undefined;
-  /** Ids of the tool calls this call ran inside, outermost first. Two
-   *  calls on one thread but different paths are different conversations:
-   *  a sub-agent that extends its caller's thread, and the caller after it. */
+  /** Ids of the tool calls this call ran inside, outermost first. */
   toolPath: string[];
   model: string;
   start: number;

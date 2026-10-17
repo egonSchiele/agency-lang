@@ -101,17 +101,7 @@ export function overviewData(trace: TreeNode): OverviewData {
   }
   const calls: OverviewCall[] = [
     ...rounds.map((round) => {
-      const toolSpans = ancestorsOf(round.node, index).filter(
-        (ancestor) => ancestor.label === "toolExecution",
-      );
-      const nearest = toolSpans[0];
-      const enclosing = toolSpans
-        .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
-        .reverse();
       const previous = roundById[previousOf[round.id] ?? ""];
-      // A sub-agent's first call diffs against its caller's last call, but
-      // "inside … (requested by …)" already says that; "continues" names
-      // only a call in the same conversation, at the same tool path.
       const continues =
         previous !== undefined && samePath(previous, round) ? previous.index : undefined;
       return {
@@ -120,8 +110,7 @@ export function overviewData(trace: TreeNode): OverviewData {
         failure: undefined,
         errors: errorsByRound[round.id] ?? [],
         tools: toolsByRound[round.id],
-        inside: nearest === undefined ? undefined : insideOf(nearest, toolRowByNode[nearest.id]),
-        enclosing,
+        ...placement(round.node, index, toolRowByNode),
         continues,
         at: round.end,
         threadLabel: round.threadLabel,
@@ -136,8 +125,7 @@ export function overviewData(trace: TreeNode): OverviewData {
         failure,
         errors: [failure],
         tools: [],
-        inside: undefined,
-        enclosing: [],
+        ...placement(failure.node, index, toolRowByNode),
         continues: undefined,
         at: failure.at,
         threadLabel: undefined,
@@ -190,6 +178,24 @@ function callFor(
  *  one tool started (or two unnamed ones) are told apart. */
 function samePath(first: Round, second: Round): boolean {
   return JSON.stringify(first.toolPath) === JSON.stringify(second.toolPath);
+}
+/** The tools a request (or a failed one) ran inside, from the
+ *  `toolExecution` spans above its node. */
+function placement(
+  node: TreeNode,
+  index: ReturnType<typeof buildTreeIndex>,
+  toolRowByNode: Record<string, { name: string; requestedBy: number }>,
+): Pick<OverviewCall, "inside" | "enclosing"> {
+  const toolSpans = ancestorsOf(node, index).filter(
+    (ancestor) => ancestor.label === "toolExecution",
+  );
+  const nearest = toolSpans[0];
+  return {
+    inside: nearest === undefined ? undefined : insideOf(nearest, toolRowByNode[nearest.id]),
+    enclosing: toolSpans
+      .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
+      .reverse(),
+  };
 }
 /** The tool a call ran inside: named by its story row when a call
  *  requested it, else by the span alone. */

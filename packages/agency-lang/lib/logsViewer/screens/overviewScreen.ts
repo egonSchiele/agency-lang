@@ -368,9 +368,9 @@ export class OverviewScreen implements Screen {
     this.inputAtNew = true;
     if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
+  /** The scroll stays put, so a prompt opened from the history is still in view. */
   private toggleSystems(): void {
     this.systemsExpanded = !this.systemsExpanded;
-    this.inputAtNew = true;
     if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
   /** Ctrl+F/B/D/U: whole or half pages of calls or of preview lines. */
@@ -395,8 +395,12 @@ export class OverviewScreen implements Screen {
   private movePreview(delta: number): void {
     this.scrollPreview(this.scrollTop + delta);
   }
+  /** In the input, the NEW divider may be the top row even when the new
+   *  messages beneath it do not fill the pane. */
   private scrollPreview(position: number): void {
-    this.scrollTop = Math.max(0, Math.min(position, this.previewLength - this.previewRoom));
+    const anchor = this.previewMode === "input" ? (this.previewCache?.inputNewAt ?? 0) : 0;
+    const last = Math.max(this.previewLength - this.previewRoom, anchor);
+    this.scrollTop = Math.max(0, Math.min(position, last));
   }
   private preview(width: number, height: number): Preview {
     const selected = this.selected();
@@ -572,7 +576,10 @@ function placeLine(call: OverviewCall): string[] {
 }
 function previewMetadata(call: OverviewCall): PayloadLine[] {
   if (call.round === undefined) {
-    return [{ kind: "meta", text: `failed at ${new Date(call.at).toISOString()}` }];
+    return [`failed at ${new Date(call.at).toISOString()}`, ...placeLine(call)].map((text) => ({
+      kind: "meta",
+      text,
+    }));
   }
   const round = call.round;
   const event = round.node.event!;

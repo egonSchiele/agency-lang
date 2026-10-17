@@ -536,12 +536,22 @@ it("folds a later call's history to a stub, and e opens it faded above the new m
   const opened = frame(view);
   expect(opened).toContain("── 2 earlier messages above · NEW ──");
   expect(opened).toContain("second question");
+  // The divider is the first row under the metrics even though the new
+  // messages are shorter than the pane: no history shows above it.
   expect(opened).not.toContain("first question line 1");
+  expect(opened).not.toContain("first question line 40");
   view.handleKey({ key: "home", ctrl: true }, viewport);
   const top = frame(view);
   expect(top).toContain("first question line 1");
   expect(top).toContain("SYSTEM");
   expect(top).toContain("rules");
+  // Opening the system prompt keeps the pane where it is instead of
+  // jumping back to the divider.
+  view.handleKey({ key: "s" }, viewport);
+  const expanded = frame(view);
+  expect(expanded).toContain("rules");
+  expect(expanded).toContain("s to hide");
+  expect(expanded).not.toContain("· NEW ──");
   view.handleKey({ key: "e" }, viewport);
   expect(frame(view)).toContain("… (+1 earlier message)");
   view.handleKey({ key: "left" }, viewport);
@@ -659,8 +669,63 @@ it("says which tool a call ran inside and which call it continues, and brackets 
     ),
   )!;
   const spanFor = (digit: string) => numberSpans.find((span) => span.text.startsWith(digit))!;
-  expect(spanFor("2").bg).toBe(THEME.groupBg);
-  expect(spanFor("3").bg).toBe(THEME.groupBg);
+  expect(spanFor("2").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("3").bg).toBe(THEME.groupBg[0]);
   expect(spanFor("1").bg).toBeUndefined();
   expect(spanFor("4").bg).toBe(THEME.cursorBg);
+});
+it("gives a tool nested inside a sub-agent its own bracket row and a deeper band shade", () => {
+  const call = (at: number, output: string, toolCalls: { name: string }[] = []) =>
+    leaf("promptCompletion", at, {
+      model: '"m1"',
+      timeTaken: 100,
+      threadIdentity: "T",
+      completion: { output, toolCalls: toolCalls.map((tool) => ({ ...tool, arguments: {} })) },
+    });
+  const innermost = span("toolExecution", [
+    leaf("toolCallStart", 2_100, { toolName: "fetchAgent", args: {} }),
+    span("llmCall", [call(2_500, "fetched")], { id: "C" }),
+  ]);
+  innermost.firstTs = 2_100;
+  const inner = span(
+    "llmCall",
+    [call(2_000, "fetching", [{ name: "fetchAgent" }]), innermost, call(3_000, "summary")],
+    { id: "B" },
+  );
+  const outer = span("toolExecution", [
+    leaf("toolCallStart", 1_100, { toolName: "researchAgent", args: {} }),
+    inner,
+  ]);
+  outer.firstTs = 1_100;
+  const roots = [
+    trace([
+      span("llmCall", [call(1_000, "", [{ name: "researchAgent" }]), outer, call(4_000, "done")], {
+        id: "A",
+      }),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  const left = flat(view.render(viewport)).map((row) => row.split(" │ ")[0]);
+  // Two bracket rows under each of the three charts; look at the first chart's.
+  const brackets = left.filter((row) => /└.*┘/.test(row));
+  expect(brackets).toHaveLength(6);
+  const numbers = left.find((row) => /^\s+1\s+2\s+3\s+4\s+5\s*$/.test(row))!;
+  // The outer bracket runs under calls 2 to 4, the inner one under call 3 alone.
+  expect(brackets[0].indexOf("└")).toBe(numbers.indexOf("2"));
+  expect(brackets[0].indexOf("┘")).toBe(numbers.indexOf("4") + 3);
+  expect(brackets[1].indexOf("└")).toBe(numbers.indexOf("3"));
+  expect(brackets[1].indexOf("┘")).toBe(numbers.indexOf("3") + 3);
+  const numberSpans = styledRows(view.render(viewport)).find((spans) =>
+    /^\s+1\s+2\s+3\s+4\s+5\s*$/.test(
+      spans
+        .map((span) => span.text)
+        .join("")
+        .split(" │ ")[0],
+    ),
+  )!;
+  const spanFor = (digit: string) => numberSpans.find((span) => span.text.startsWith(digit))!;
+  expect(spanFor("2").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("3").bg).toBe(THEME.groupBg[1]);
+  expect(spanFor("4").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("5").bg).toBeUndefined();
 });

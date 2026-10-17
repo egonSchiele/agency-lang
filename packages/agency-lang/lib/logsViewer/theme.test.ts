@@ -46,6 +46,8 @@ describe("the palette", () => {
       THEME.warning,
       THEME.rule,
       THEME.cursorBg,
+      THEME.key,
+      ...THEME.groupBg,
     ];
     for (const value of values) {
       expect(value).toMatch(/^#[0-9a-f]{6}$/);

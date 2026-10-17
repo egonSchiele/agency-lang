@@ -191,6 +191,35 @@ describe("overview errors", () => {
     expect(data.calls[1].id).toBe("leaf:L:error:0");
   });
 
+  it("places a failed request inside the tool it ran in, like a completed one", () => {
+    const inner = span(
+      "llmCall",
+      [leaf("error", 2_000, { message: "503 overloaded", errorType: "llmError" })],
+      { id: "B" },
+    );
+    const tool = span(
+      "toolExecution",
+      [leaf("toolCallStart", 1_100, { toolName: "researchAgent", args: {} }), inner],
+      { id: "t" },
+    );
+    const root = trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 1_000, {
+            timeTaken: 100,
+            completion: { output: "", toolCalls: [{ name: "researchAgent", arguments: {} }] },
+          }),
+          tool,
+        ],
+        { id: "A" },
+      ),
+    ]);
+    const failed = overviewData(root).calls.find((call) => call.failure !== undefined)!;
+    expect(failed.inside).toEqual({ toolName: "researchAgent", requestedBy: 0 });
+    expect(failed.enclosing.map((tool) => tool.toolName)).toEqual(["researchAgent"]);
+  });
+
   it("keeps the memory manager's own request failures out of the chart columns", () => {
     const root = trace([
       span("llmCall", [leaf("promptCompletion", 1_000, { timeTaken: 100 })], { id: "L" }),

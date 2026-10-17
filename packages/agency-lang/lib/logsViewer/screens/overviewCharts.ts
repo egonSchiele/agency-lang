@@ -201,16 +201,36 @@ function columnBackground(call: OverviewCall, layout: ChartLayout): { bg?: strin
   if (call.id === layout.selectedId) {
     return { bg: THEME.cursorBg };
   }
-  return call.enclosing.length > 0 ? { bg: THEME.groupBg } : {};
+  return call.enclosing.length > 0 ? { bg: groupShade(call.enclosing.length) } : {};
 }
-/** The space after a column: tinted when the next call sits in the same
- *  outermost tool, so the band runs unbroken across the group. */
+/** The band's shade at a depth of nesting: deeper is lighter, so a tool
+ *  run inside a sub-agent reads as a block within the sub-agent's block. */
+function groupShade(depth: number): string {
+  return THEME.groupBg[Math.min(depth, THEME.groupBg.length) - 1];
+}
+/** The space after a column: tinted when the next call sits inside the
+ *  same tools, so the band runs unbroken across the group, in the shade
+ *  of the deepest tool the two calls share. */
 function gapPiece(call: OverviewCall, next: OverviewCall | undefined): Piece {
-  const group = call.enclosing[0]?.id;
-  if (group !== undefined && next?.enclosing[0]?.id === group) {
-    return { text: " ", style: { bg: THEME.groupBg } };
+  const shared = sharedDepth(call, next);
+  if (shared === 0) {
+    return { text: " " };
   }
-  return { text: " " };
+  return { text: " ", style: { bg: groupShade(shared) } };
+}
+/** How many tools, from the outermost in, two neighbouring calls both ran inside. */
+function sharedDepth(call: OverviewCall, next: OverviewCall | undefined): number {
+  if (next === undefined) {
+    return 0;
+  }
+  let depth = 0;
+  while (
+    call.enclosing[depth] !== undefined &&
+    call.enclosing[depth].id === next.enclosing[depth]?.id
+  ) {
+    depth += 1;
+  }
+  return depth;
 }
 function axis(label: string): Piece {
   const fitted = label.length < AXIS_WIDTH ? label : `${label.slice(0, AXIS_WIDTH - 2)}…`;

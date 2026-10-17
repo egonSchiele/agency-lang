@@ -78,12 +78,7 @@ export function roundInputPayload(
     return { lines: fresh, newAt: 0 };
   }
   if (!historyExpanded) {
-    const [first, ...body] = messagePayload(messages[newFrom - 1], false);
-    // A folded prompt in the stub cannot be opened, so drop the key hint.
-    const heading =
-      first.kind === "heading"
-        ? { ...first, text: first.text.replace(/ · s to show$/, "") }
-        : first;
+    const [heading, ...body] = messagePayload(messages[newFrom - 1], false);
     const shown = [heading, ...firstBodyLine(body)];
     const lines = [...shown, dots(newFrom - 1, delta?.rewrite), { kind: "blank" as const }];
     return { lines: [...lines.map((line) => ({ ...line, faded: true })), ...fresh], newAt: 0 };
@@ -159,15 +154,17 @@ function isSystem(message: WireMessage): boolean {
 function messagePayload(message: WireMessage, systemsExpanded: boolean): PayloadLine[] {
   const tone = Object.hasOwn(ROLE_TONES, message.role) ? ROLE_TONES[message.role] : "chrome";
   if (isSystem(message)) {
-    const count = contentText(message.content).split("\n").length;
-    const name = message.role === "system" ? "System prompt" : "Developer prompt";
+    const lines = contentText(message.content).split("\n");
+    const heading = { kind: "heading" as const, tone, text: message.role.toUpperCase() };
+    if (systemsExpanded) {
+      return [heading, ...contentPayload(message.content), { kind: "meta", text: "s to hide" }];
+    }
+    const more = lines.length - 1;
+    const rest = `… (+${more} more ${more === 1 ? "line" : "lines"} · s to show)`;
     return [
-      {
-        kind: "heading",
-        tone,
-        text: `${name} · ${count} ${count === 1 ? "line" : "lines"} · s to ${systemsExpanded ? "hide" : "show"}`,
-      },
-      ...(systemsExpanded ? contentPayload(message.content) : []),
+      heading,
+      { kind: "text", text: lines[0], indent: 0, role: "plain" },
+      ...(more === 0 ? [] : [{ kind: "meta" as const, text: rest }]),
     ];
   }
   return [

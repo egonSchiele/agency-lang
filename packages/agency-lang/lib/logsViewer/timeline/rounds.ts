@@ -10,7 +10,13 @@ import {
   tokensCached,
   tokensOut,
 } from "../../statelog/wireAccessors.js";
-import { buildTreeIndex, nearestAncestor, walkNodes, type TreeIndex } from "../forest.js";
+import {
+  ancestorsOf,
+  buildTreeIndex,
+  nearestAncestor,
+  walkNodes,
+  type TreeIndex,
+} from "../forest.js";
 import { childEvent } from "../spanText.js";
 import type { TreeNode } from "../types.js";
 import type { DecisionLog } from "../../statelog/wireTypes.js";
@@ -30,6 +36,10 @@ export type Round = {
   ordinal: number;
   thread: ThreadKey;
   threadLabel: string | undefined;
+  /** Ids of the tool calls this call ran inside, outermost first. Two
+   *  calls on one thread but different paths are different conversations:
+   *  a sub-agent that extends its caller's thread, and the caller after it. */
+  toolPath: string[];
   model: string;
   start: number;
   end: number;
@@ -132,6 +142,10 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     ordinal,
     thread,
     threadLabel: ownLabel ?? impliedThreadLabel(leafNode, index),
+    toolPath: ancestorsOf(leafNode, index)
+      .filter((ancestor) => ancestor.label === "toolExecution")
+      .map((ancestor) => ancestor.id)
+      .reverse(),
     model: modelOf(event),
     start: end - durationMs,
     end,

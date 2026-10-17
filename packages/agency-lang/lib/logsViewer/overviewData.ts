@@ -1,4 +1,5 @@
 import { ancestorsOf, buildTreeIndex, nearestAncestor } from "./forest.js";
+import { roundDeltas } from "./messageDelta.js";
 import { runStatus, traceErrors, type RunStatus, type TraceError } from "./problems.js";
 import { stableLeafId, storyChildren, storyOutline, type ToolStoryRow } from "./story.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
@@ -25,9 +26,9 @@ export type OverviewCall = {
   /** Every tool call this request ran inside, outermost first; empty at
    *  the top. The charts bracket the calls that share one. */
   enclosing: { id: string; toolName: string }[];
-  /** The index of the previous call on the same thread, which this one
-   *  continues with that call's reply and tool results added; undefined
-   *  for the first call on a thread. */
+  /** The index of the call this one continues, with that call's reply and
+   *  tool results added: the previous call on the same thread inside the
+   *  same tools (see `roundDeltas`); undefined for the first on a thread. */
   continues: number | undefined;
   /** Order key: the completion time, or the failure time. */
   at: number;
@@ -90,7 +91,14 @@ export function overviewData(trace: TreeNode): OverviewData {
       toolRowByNode[tool.node.id] = { name: tool.name, requestedBy: round.index };
     }
   }
-  const lastOnThread: Record<string, number> = Object.create(null);
+  const indexOfRound: Record<string, number> = Object.create(null);
+  for (const round of rounds) {
+    indexOfRound[round.id] = round.index;
+  }
+  const previousOf: Record<string, string | undefined> = Object.create(null);
+  for (const delta of roundDeltas(rounds)) {
+    previousOf[delta.roundId] = delta.previousRoundId;
+  }
   const calls: OverviewCall[] = [
     ...rounds.map((round) => {
       const toolSpans = ancestorsOf(round.node, index).filter(
@@ -100,9 +108,8 @@ export function overviewData(trace: TreeNode): OverviewData {
       const enclosing = toolSpans
         .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
         .reverse();
-      const threadKey = JSON.stringify([round.thread.kind, round.thread.id]);
-      const continues = lastOnThread[threadKey];
-      lastOnThread[threadKey] = round.index;
+      const previous = previousOf[round.id];
+      const continues = previous === undefined ? undefined : indexOfRound[previous];
       return {
         id: round.id,
         round,

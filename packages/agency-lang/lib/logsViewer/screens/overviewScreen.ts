@@ -39,7 +39,7 @@ import { THEME } from "../theme.js";
 import type { RunStatus } from "../problems.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
-import { keyFooter } from "./chrome.js";
+import { keyFooter, paneHeader } from "./chrome.js";
 import {
   fmtCost,
   overviewCallCapacity,
@@ -51,6 +51,7 @@ import type { Screen } from "./screen.js";
 
 const LAYOUT = { leftShare: 0.45, dividerCells: 3, outerRows: 3 };
 type PreviewMode = "input" | "output";
+type Pane = "charts" | "preview";
 type Preview = { header: Painted[]; body: Painted[]; room: number };
 
 export class OverviewScreen implements Screen {
@@ -61,6 +62,8 @@ export class OverviewScreen implements Screen {
   // Keep a tool selected when visiting overview without choosing another call.
   private returnFocusId: string | undefined;
   private previewMode: PreviewMode = "input";
+  /** Which side the paging and end keys act on. */
+  private pane: Pane = "charts";
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
   private historyExpanded = false;
@@ -99,10 +102,25 @@ export class OverviewScreen implements Screen {
     return [
       {
         keys: ["Tab"],
-        help: "switch the preview between input and output",
-        hint: "tab input/output",
+        help: "focus the other pane: the charts or the preview",
+        hint: "tab pane",
         run: () => {
-          this.previewMode = this.previewMode === "output" ? "input" : "output";
+          this.pane = this.pane === "charts" ? "preview" : "charts";
+        },
+      },
+      {
+        keys: ["i"],
+        help: "preview the input of the selected call",
+        hint: "i/o input/output",
+        run: () => {
+          this.previewMode = "input";
+        },
+      },
+      {
+        keys: ["o"],
+        help: "preview the output of the selected call",
+        run: () => {
+          this.previewMode = "output";
         },
       },
       {
@@ -114,24 +132,24 @@ export class OverviewScreen implements Screen {
       { keys: ["Right", "l"], help: "select the next LLM call", run: () => this.moveCall(1) },
       {
         keys: ["Ctrl+F"],
-        help: "select the LLM call one chart page forward",
+        help: "a page forward in the focused pane: calls in the charts, lines in the preview",
         hint: "^f/^b page",
-        run: () => this.moveCall(this.callPageSize),
+        run: () => this.page(1),
       },
       {
         keys: ["Ctrl+B"],
-        help: "select the LLM call one chart page back",
-        run: () => this.moveCall(-this.callPageSize),
+        help: "a page back in the focused pane",
+        run: () => this.page(-1),
       },
       {
         keys: ["Ctrl+D"],
-        help: "select the LLM call half a chart page forward",
-        run: () => this.moveCall(Math.max(1, Math.floor(this.callPageSize / 2))),
+        help: "half a page forward in the focused pane",
+        run: () => this.page(0.5),
       },
       {
         keys: ["Ctrl+U"],
-        help: "select the LLM call half a chart page back",
-        run: () => this.moveCall(-Math.max(1, Math.floor(this.callPageSize / 2))),
+        help: "half a page back in the focused pane",
+        run: () => this.page(-0.5),
       },
       {
         keys: ["Up", "k"],
@@ -184,14 +202,14 @@ export class OverviewScreen implements Screen {
       },
       {
         keys: ["g", "Home"],
-        help: "select the first LLM call",
+        help: "the first LLM call, or the top of the preview when it is focused",
         hint: "g/G ends",
-        run: () => this.selectCall(0),
+        run: () => this.toEnd(-1),
       },
       {
         keys: ["G", "End"],
-        help: "select the last LLM call",
-        run: () => this.selectCall((this.data?.calls.length ?? 1) - 1),
+        help: "the last LLM call, or the end of the preview when it is focused",
+        run: () => this.toEnd(1),
       },
       {
         keys: ["Enter"],
@@ -228,13 +246,16 @@ export class OverviewScreen implements Screen {
       );
     const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
     const widths = panelWidths(viewport.cols);
-    const left = overviewCharts(
-      data.calls,
-      this.selectedId,
-      widths.left,
-      bodyHeight,
-      data.models.length === 1 ? this.contextWindowOf(data.models[0]) : undefined,
-    );
+    const left = [
+      paneHeader("CHARTS", this.pane === "charts", "", widths.left, "← → call"),
+      ...overviewCharts(
+        data.calls,
+        this.selectedId,
+        widths.left,
+        Math.max(0, bodyHeight - 1),
+        data.models.length === 1 ? this.contextWindowOf(data.models[0]) : undefined,
+      ),
+    ];
     const preview = this.preview(widths.right, bodyHeight);
     const right = [
       ...preview.header,
@@ -352,6 +373,25 @@ export class OverviewScreen implements Screen {
     this.inputAtNew = true;
     if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
+  /** Ctrl+F/B/D/U: whole or half pages of calls or of preview lines. */
+  private page(pages: number): void {
+    if (this.pane === "charts") {
+      const calls = Math.max(1, Math.floor(this.callPageSize * Math.abs(pages)));
+      this.moveCall(Math.sign(pages) * calls);
+      return;
+    }
+    this.movePreview(
+      Math.sign(pages) * Math.max(1, Math.floor(this.previewRoom * Math.abs(pages))),
+    );
+  }
+  /** g/G, Home/End: the first or last call, or the preview's top or end. */
+  private toEnd(direction: -1 | 1): void {
+    if (this.pane === "charts") {
+      this.selectCall(direction < 0 ? 0 : (this.data?.calls.length ?? 1) - 1);
+      return;
+    }
+    this.scrollPreview(direction < 0 ? 0 : this.previewLength);
+  }
   private movePreview(delta: number): void {
     this.scrollPreview(this.scrollTop + delta);
   }
@@ -360,8 +400,10 @@ export class OverviewScreen implements Screen {
   }
   private preview(width: number, height: number): Preview {
     const selected = this.selected();
-    const heading = overviewSection(
+    const heading = paneHeader(
       `${callTitle(selected)} · ${this.previewMode === "input" ? "[INPUT] OUTPUT" : "INPUT [OUTPUT]"}`,
+      this.pane === "preview",
+      "",
       width,
     );
     if (

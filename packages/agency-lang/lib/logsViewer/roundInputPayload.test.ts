@@ -152,8 +152,9 @@ it("writes plain dots when the stub is the only earlier message, and names a rew
     ],
   );
   const { lines } = roundInputPayload(rewritten.second, folded, rewritten.delta);
-  expect(texts(lines).slice(0, 2)).toEqual([
-    "System prompt · 1 line",
+  expect(texts(lines).slice(0, 3)).toEqual([
+    "SYSTEM",
+    "rules",
     "… (history changed from message 2)",
   ]);
   expect(hasHistory(rewritten.second, rewritten.delta)).toBe(true);

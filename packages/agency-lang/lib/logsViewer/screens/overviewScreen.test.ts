@@ -36,7 +36,7 @@ function fixture(count = 3) {
 /** The fixture records no input, so these tests read the output pane. */
 function screen(count = 3) {
   const view = new OverviewScreen(fixture(count), "T", () => 40000);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   return view;
 }
 function flat(element: Element): string[] {
@@ -52,6 +52,11 @@ function styledRows(element: Element): ReturnType<typeof parseStyledText>[] {
   return element.type === "text"
     ? [parseStyledText(element.content ?? "")]
     : (element.children ?? []).flatMap(styledRows);
+}
+/** Flip the preview between input and output, whichever it shows now. */
+function toggleMode(view: OverviewScreen): void {
+  const key = frame(view).includes("[INPUT] OUTPUT") ? "o" : "i";
+  view.handleKey({ key }, viewport);
 }
 function frame(view: OverviewScreen, size = viewport): string {
   return renderFrame(layout(view.render(size), size.cols, size.rows)).toPlainText();
@@ -176,7 +181,7 @@ it("shows tool requests and literal style tags in the preview", () => {
     ],
   };
   const view = new OverviewScreen(roots, "T", () => undefined);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   expect(frame(view)).toContain("{bold}literal{/bold}");
   expect(frame(view)).toContain("TOOL CALL · read");
   expect(frame(view)).toContain("notes.md");
@@ -253,9 +258,9 @@ it("opens on the recorded input and toggles to output without changing graphs, s
   expect(text).toContain("input 1 line 1");
   expect(text).not.toContain("answer 1 line 1");
   expect(text).toContain("13,919");
-  expect(text).toContain("tab input/output");
+  expect(text).toContain("i/o input/output");
   const before = tickRows(view);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   const output = frame(view);
   expect(output).toContain("INPUT [OUTPUT]");
   expect(output).toContain("answer 1 line 1");
@@ -270,40 +275,42 @@ it("preserves separate input and output scroll positions", () => {
   const input = frame(view);
   expect(input).toContain("tool reply");
   expect(input).toContain("TOOL CALL · read · read-1");
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   view.handleKey({ key: "pagedown" }, viewport);
   const output = frame(view);
   expect(output).toContain("answer 1 line 30");
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   expect(frame(view)).toBe(input);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   expect(frame(view)).toBe(output);
 });
 it("collapses the system prompt until s is pressed and retains expansion across toggles", () => {
   const view = inputScreen();
-  expect(frame(view)).toContain("System prompt · 2 lines · s to show");
-  expect(frame(view)).not.toContain("system secret");
+  expect(frame(view)).toContain("SYSTEM");
+  expect(frame(view)).toContain("system secret line 1");
+  expect(frame(view)).toContain("… (+1 more line · s to show)");
+  expect(frame(view)).not.toContain("system secret line 2");
   view.handleKey({ key: "s" }, viewport);
   expect(frame(view)).toContain("system secret line 1");
   expect(frame(view)).toContain("s to hide");
-  view.handleKey({ key: "tab" }, viewport);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
+  toggleMode(view);
   expect(frame(view)).toContain("system secret line 2");
   view.handleKey({ key: "s" }, viewport);
-  expect(frame(view)).not.toContain("system secret");
+  expect(frame(view)).not.toContain("system secret line 2");
 });
 it("keeps input mode but resets both scroll positions and system expansion on another call", () => {
   const view = inputScreen();
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   view.handleKey({ key: "end", ctrl: true }, viewport);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   view.handleKey({ key: "s" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   view.handleKey({ key: "right" }, viewport);
   expect(frame(view)).toContain("[INPUT] OUTPUT");
   expect(frame(view)).toContain("input 2 line 1");
-  expect(frame(view)).not.toContain("system secret");
-  view.handleKey({ key: "tab" }, viewport);
+  expect(frame(view)).not.toContain("system secret line 2");
+  toggleMode(view);
   expect(frame(view)).toContain("answer 2 line 1");
 });
 it("explains when an older log did not record the input", () => {
@@ -388,7 +395,7 @@ it("says how the run ended and counts its errors in the header, and marks failed
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   const text = frame(view);
   expect(text).toContain("✖ crashed");
   expect(text).toContain("✖ 2 errors");
@@ -489,7 +496,7 @@ it("previews a decision call as its state and questions, and its answers with ba
   expect(input).toContain("STATE");
   expect(input).toContain("response · choice · idle, curious");
   expect(input).toContain("Which expression?");
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   const output = frame(view);
   expect(output).toContain("ANSWER · response");
   expect(output).toMatch(/curious █+░* 86%/);
@@ -533,7 +540,8 @@ it("folds a later call's history to a stub, and e opens it faded above the new m
   view.handleKey({ key: "home", ctrl: true }, viewport);
   const top = frame(view);
   expect(top).toContain("first question line 1");
-  expect(top).toContain("System prompt · 1 line · s to show");
+  expect(top).toContain("SYSTEM");
+  expect(top).toContain("rules");
   view.handleKey({ key: "e" }, viewport);
   expect(frame(view)).toContain("… (+1 earlier message)");
   view.handleKey({ key: "left" }, viewport);
@@ -569,7 +577,7 @@ it("cuts a long tool result with a hint, and x shows it whole", () => {
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   const cut = frame(view);
   expect(cut).toMatch(/… ~\d+ more tokens · x to show/);
@@ -590,6 +598,9 @@ function nestedTrace() {
     leaf("promptCompletion", at, {
       model: '"m1"',
       timeTaken: 100,
+      // One recorded thread throughout: the sub-agent extends its caller's.
+      threadIdentity: "T",
+      threadLabel: "main",
       completion: { output, toolCalls: toolCalls.map((tool) => ({ ...tool, arguments: {} })) },
     });
   const inner = span(
@@ -628,6 +639,7 @@ it("says which tool a call ran inside and which call it continues, and brackets 
   view.handleKey({ key: "right" }, viewport);
   const last = frame(view);
   expect(last).toContain("LLM CALL 4");
+  // Call 4 is the caller again, so it continues call 1, not the sub-agent's call 3.
   expect(last).toContain("continues LLM call 1");
   expect(last).not.toContain("inside researchAgent");
   // A bracket named after the tool spans columns 2 and 3 under the numbers,

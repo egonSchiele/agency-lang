@@ -20,8 +20,9 @@ export const THEME = {
   warning: "#fab387",
   rule: "#313244",
   cursorBg: "#313244",
-  /** Behind the columns of calls that ran inside a tool. */
-  groupBg: "#24243a",
+  /** Behind the columns of calls that ran inside a tool: a dark blue, so
+   *  it reads as a different thing from the gray cursor, not a weaker one. */
+  groupBg: "#182030",
 } as const;
 
 const THREAD_COLORS = ["#89b4fa", "#a6e3a1", "#f9e2af", "#cba6f7", "#94e2d5", "#fab387"];

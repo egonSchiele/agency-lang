@@ -19,6 +19,8 @@ type ChartLayout = {
   selectedId: string | undefined;
   /** Whether a ✖ row is drawn under each chart's call numbers. */
   marks: boolean;
+  /** Whether a row of dots marks the calls that ran inside a tool. */
+  nesting: boolean;
   /** Thread names in color order; a call number takes its thread's color. */
   threads: string[];
 };
@@ -46,15 +48,21 @@ export function overviewCharts(
   // The ✖ row only appears when something went wrong, so a clean run keeps
   // its chart height.
   const marks = calls.some((call) => call.errors.length > 0);
+  const nesting = calls.some((call) => call.depth > 0);
   const threads = threadNames(calls);
   // A threads legend only when there is more than one thread to tell apart.
-  const chrome = CHROME_ROWS + (marks ? CHART_COUNT : 0) + (threads.length > 1 ? 1 : 0);
+  const chrome =
+    CHROME_ROWS +
+    (marks ? CHART_COUNT : 0) +
+    (nesting ? CHART_COUNT : 0) +
+    (threads.length > 1 ? 1 : 0);
   const layout = {
     width,
     height: Math.max(0, Math.floor((height - chrome) / CHART_COUNT)),
     columnWidth: Math.max(1, slot - 1),
     selectedId,
     marks,
+    nesting,
     threads,
   };
   const rounds = calls.flatMap((call) => (call.round === undefined ? [] : [call.round]));
@@ -143,6 +151,7 @@ function contextChart(
         { text: "  ▒ fresh", style: { fg: THEME.kind.user } },
         { text: "  █ output", style: { fg: THEME.kind.assistant } },
         ...(layout.marks ? [{ text: "  ✖ failed", style: { fg: THEME.kind.error } }] : []),
+        ...(layout.nesting ? [{ text: "  · inside a tool", style: { fg: THEME.muted } }] : []),
       ],
       layout.width,
     ),
@@ -195,6 +204,7 @@ function axis(label: string): Piece {
 function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
   const numbers: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
   const marks: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
+  const nesting: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
   calls.forEach((call) => {
     const selected = call.id === layout.selectedId;
     const failed = call.round === undefined;
@@ -215,8 +225,21 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
       },
       { text: " " },
     );
+    // One dot per tool call the request ran inside: `·` for a sub-agent's
+    // call, `··` for a call inside a tool that sub-agent used.
+    nesting.push(
+      {
+        text: "·".repeat(Math.min(call.depth, layout.columnWidth)).padEnd(layout.columnWidth),
+        style: { fg: THEME.muted, ...(selected ? { bg: THEME.cursorBg } : {}) },
+      },
+      { text: " " },
+    );
   });
-  return [segment(numbers, layout.width), ...(layout.marks ? [segment(marks, layout.width)] : [])];
+  return [
+    segment(numbers, layout.width),
+    ...(layout.marks ? [segment(marks, layout.width)] : []),
+    ...(layout.nesting ? [segment(nesting, layout.width)] : []),
+  ];
 }
 /** A failed request's tick is red. With several threads, a call's tick
  *  takes its thread's color; otherwise the selected call's is the accent. */

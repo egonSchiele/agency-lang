@@ -1,4 +1,4 @@
-import { buildTreeIndex, nearestAncestor } from "./forest.js";
+import { ancestorsOf, buildTreeIndex, nearestAncestor } from "./forest.js";
 import { runStatus, traceErrors, type RunStatus, type TraceError } from "./problems.js";
 import { stableLeafId, storyChildren, storyOutline, type ToolStoryRow } from "./story.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
@@ -19,6 +19,15 @@ export type OverviewCall = {
   errors: TraceError[];
   /** The tools this call requested, in story order. */
   tools: ToolStoryRow[];
+  /** The tool call this request ran inside, with the index of the call
+   *  that requested that tool when the log shows it; undefined at the top. */
+  inside: { toolName: string; requestedBy: number | undefined } | undefined;
+  /** How many tool calls deep this request ran; 0 at the top. */
+  depth: number;
+  /** The index of the previous call on the same thread, which this one
+   *  continues with that call's reply and tool results added; undefined
+   *  for the first call on a thread. */
+  continues: number | undefined;
   /** Order key: the completion time, or the failure time. */
   at: number;
   /** The round's thread name; undefined for a failed request or an unnamed thread. */
@@ -74,17 +83,36 @@ export function overviewData(trace: TreeNode): OverviewData {
     }
   }
   const nameOf = threadNamer(rounds);
+  const toolRowByNode: Record<string, { name: string; requestedBy: number }> = Object.create(null);
+  for (const round of rounds) {
+    for (const tool of toolsByRound[round.id]) {
+      toolRowByNode[tool.node.id] = { name: tool.name, requestedBy: round.index };
+    }
+  }
+  const lastOnThread: Record<string, number> = Object.create(null);
   const calls: OverviewCall[] = [
-    ...rounds.map((round) => ({
-      id: round.id,
-      round,
-      failure: undefined,
-      errors: errorsByRound[round.id] ?? [],
-      tools: toolsByRound[round.id],
-      at: round.end,
-      threadLabel: round.threadLabel,
-      threadName: nameOf(round),
-    })),
+    ...rounds.map((round) => {
+      const toolSpans = ancestorsOf(round.node, index).filter(
+        (ancestor) => ancestor.label === "toolExecution",
+      );
+      const nearest = toolSpans[0];
+      const threadKey = JSON.stringify([round.thread.kind, round.thread.id]);
+      const continues = lastOnThread[threadKey];
+      lastOnThread[threadKey] = round.index;
+      return {
+        id: round.id,
+        round,
+        failure: undefined,
+        errors: errorsByRound[round.id] ?? [],
+        tools: toolsByRound[round.id],
+        inside: nearest === undefined ? undefined : insideOf(nearest, toolRowByNode[nearest.id]),
+        depth: toolSpans.length,
+        continues,
+        at: round.end,
+        threadLabel: round.threadLabel,
+        threadName: nameOf(round),
+      };
+    }),
     ...failures.map((failure) => {
       const parent = index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace;
       return {
@@ -93,6 +121,9 @@ export function overviewData(trace: TreeNode): OverviewData {
         failure,
         errors: [failure],
         tools: [],
+        inside: undefined,
+        depth: 0,
+        continues: undefined,
         at: failure.at,
         threadLabel: undefined,
         threadName: "unnamed",
@@ -142,6 +173,17 @@ function callFor(
 /** One display name per thread, in order of first use. A second thread
  *  with a name already taken gets `#2`, a third `#3`, so two threads that
  *  one tool started (or two unnamed ones) are told apart. */
+/** The tool a call ran inside: named by its story row when a call
+ *  requested it, else by the span alone. */
+function insideOf(
+  span: TreeNode,
+  row: { name: string; requestedBy: number } | undefined,
+): OverviewCall["inside"] {
+  if (row === undefined) {
+    return { toolName: span.summary, requestedBy: undefined };
+  }
+  return { toolName: row.name, requestedBy: row.requestedBy };
+}
 function threadNamer(rounds: Round[]): (round: Round) => string {
   const byThread: Record<string, string> = Object.create(null);
   const taken: Record<string, number> = Object.create(null);

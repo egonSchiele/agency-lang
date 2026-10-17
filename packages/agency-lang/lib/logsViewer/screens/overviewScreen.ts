@@ -512,6 +512,22 @@ function previewBody(
   }
   return roundInputPayload(call.round, options, delta);
 }
+/** Where the call sits among the others: the call on its thread it
+ *  continues, and the tool it ran inside with the call that asked for it. */
+function placeLine(call: OverviewCall): string[] {
+  const parts: string[] = [];
+  if (call.continues !== undefined) {
+    parts.push(`continues LLM call ${call.continues + 1}`);
+  }
+  if (call.inside !== undefined) {
+    const asked =
+      call.inside.requestedBy === undefined
+        ? ""
+        : ` (requested by LLM call ${call.inside.requestedBy + 1})`;
+    parts.push(`inside ${call.inside.toolName}${asked}`);
+  }
+  return parts.length === 0 ? [] : [parts.join(" · ")];
+}
 function previewMetadata(call: OverviewCall): PayloadLine[] {
   if (call.round === undefined) {
     return [{ kind: "meta", text: `failed at ${new Date(call.at).toISOString()}` }];
@@ -532,6 +548,7 @@ function previewMetadata(call: OverviewCall): PayloadLine[] {
     `${time} · ${cost}`,
     tokens,
     `thread ${call.threadName}`,
+    ...placeLine(call),
   ].map((text) => ({ kind: "meta", text }));
 }
 

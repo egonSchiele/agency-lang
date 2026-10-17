@@ -578,3 +578,60 @@ it("cuts a long tool result with a hint, and x shows it whole", () => {
   view.handleKey({ key: "end", ctrl: true }, viewport);
   expect(frame(view)).toMatch(/more tokens · x to show/);
 });
+
+function nestedTrace() {
+  const call = (at: number, output: string, toolCalls: { name: string }[] = []) =>
+    leaf("promptCompletion", at, {
+      model: '"m1"',
+      timeTaken: 100,
+      completion: { output, toolCalls: toolCalls.map((tool) => ({ ...tool, arguments: {} })) },
+    });
+  const inner = span(
+    "llmCall",
+    [call(2_000, "fetching", [{ name: "fetch" }]), call(3_000, "summary")],
+    {
+      id: "B",
+    },
+  );
+  const tool = span(
+    "toolExecution",
+    [leaf("toolCallStart", 1_100, { toolName: "researchAgent", args: {} }), inner],
+    { id: "t" },
+  );
+  tool.firstTs = 1_100;
+  return [
+    trace([
+      span("llmCall", [call(1_000, "", [{ name: "researchAgent" }]), tool, call(4_000, "done")], {
+        id: "A",
+      }),
+    ]),
+  ];
+}
+it("says which tool a call ran inside and which call it continues, and dots the nested calls", () => {
+  const view = new OverviewScreen(nestedTrace(), "T", () => undefined);
+  const first = frame(view);
+  expect(first).toContain("· inside a tool");
+  expect(first).not.toContain("continues LLM call");
+  expect(first).not.toContain("inside researchAgent");
+  view.handleKey({ key: "right" }, viewport);
+  expect(frame(view)).toContain("inside researchAgent (requested by LLM call 1)");
+  expect(frame(view)).not.toContain("continues LLM call");
+  view.handleKey({ key: "right" }, viewport);
+  expect(frame(view)).toContain(
+    "continues LLM call 2 · inside researchAgent (requested by LLM call 1)",
+  );
+  view.handleKey({ key: "right" }, viewport);
+  const last = frame(view);
+  expect(last).toContain("LLM CALL 4");
+  expect(last).toContain("continues LLM call 1");
+  expect(last).not.toContain("inside researchAgent");
+  // The dots row sits under the numbers: nothing under 1 and 4, a dot under 2 and 3.
+  const dots = flat(view.render(viewport))
+    .map((row) => row.split(" │ ")[0])
+    .filter((row) => /^\s+·(\s+·)*\s*$/.test(row));
+  expect(dots.length).toBeGreaterThan(0);
+  const numbers = flat(view.render(viewport))
+    .map((row) => row.split(" │ ")[0])
+    .find((row) => /^\s+1\s+2\s+3\s+4\s*$/.test(row))!;
+  expect(dots[0].indexOf("·")).toBe(numbers.indexOf("2"));
+});

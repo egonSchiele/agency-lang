@@ -91,9 +91,9 @@ export function overviewData(trace: TreeNode): OverviewData {
       toolRowByNode[tool.node.id] = { name: tool.name, requestedBy: round.index };
     }
   }
-  const indexOfRound: Record<string, number> = Object.create(null);
+  const roundById: Record<string, Round> = Object.create(null);
   for (const round of rounds) {
-    indexOfRound[round.id] = round.index;
+    roundById[round.id] = round;
   }
   const previousOf: Record<string, string | undefined> = Object.create(null);
   for (const delta of roundDeltas(rounds)) {
@@ -108,8 +108,12 @@ export function overviewData(trace: TreeNode): OverviewData {
       const enclosing = toolSpans
         .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
         .reverse();
-      const previous = previousOf[round.id];
-      const continues = previous === undefined ? undefined : indexOfRound[previous];
+      const previous = roundById[previousOf[round.id] ?? ""];
+      // A sub-agent's first call diffs against its caller's last call, but
+      // "inside … (requested by …)" already says that; "continues" names
+      // only a call in the same conversation, at the same tool path.
+      const continues =
+        previous !== undefined && samePath(previous, round) ? previous.index : undefined;
       return {
         id: round.id,
         round,
@@ -184,6 +188,9 @@ function callFor(
 /** One display name per thread, in order of first use. A second thread
  *  with a name already taken gets `#2`, a third `#3`, so two threads that
  *  one tool started (or two unnamed ones) are told apart. */
+function samePath(first: Round, second: Round): boolean {
+  return JSON.stringify(first.toolPath) === JSON.stringify(second.toolPath);
+}
 /** The tool a call ran inside: named by its story row when a call
  *  requested it, else by the span alone. */
 function insideOf(

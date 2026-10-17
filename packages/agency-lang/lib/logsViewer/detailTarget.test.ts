@@ -63,5 +63,5 @@ it("resolves the second round again when an earlier prompt hides and leaf ids sh
           .join(""),
       )
       .join("\n"),
-  ).toContain("context 48 (31 cached) · fresh 17 · out 9");
+  ).toContain("input 48 (31 cached) · output 9");
 });

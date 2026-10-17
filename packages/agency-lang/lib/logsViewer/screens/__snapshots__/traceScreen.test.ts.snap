@@ -4,7 +4,7 @@ exports[`trace screen > renders the recorded trace at 100 columns 1`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden            │ DETAILS · Tab to focus
   user Write Agency modu…                         │ ASSISTANT · LLM call 10
   LLM call  1 tool: agen…    3.8s    14k  $0.0008 │ gpt-5-mini · 22.0s · $0.0034
-    agencyGuide handlers…     6ms                 │ context 20k (19k cached) · fresh 503 · out 1.4k
+    agencyGuide handlers…     6ms                 │ input 20k (19k cached) · output 1.4k
   LLM call  2 tool: agen…    2.8s    16k  $0.0011 │
     agencyGuide interrup…     1ms                 │ response
   LLM call  3 tool: agen…    5.5s    17k  $0.0011 │   code
@@ -47,41 +47,41 @@ exports[`trace screen > renders the recorded trace at 100 columns 2`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden            │ DETAILS · Tab to focus
  1   user Write Agency m…                         │  1 ASSISTANT · LLM call 10
  2   LLM call  1 tool: a…    3.8s    14k  $0.0008 │  2 gpt-5-mini · 22.0s · $0.0034
- 3     agencyGuide handl…     6ms                 │  3 context 20k (19k cached) · fresh 503 · out
- 5   LLM call  2 tool: a…    2.8s    16k  $0.0011 │  4 1.4k
- 6     agencyGuide inter…     1ms                 │  5
- 8   LLM call  3 tool: a…    5.5s    17k  $0.0011 │  6 response
- 9     agencyGuide built…     5ms                 │  7   code
-11   LLM call  4 tool: g…    4.7s    18k  $0.0015 │  8     def archiveNotes(count: number): Result<s
-12     ✖ grep interrupt         —                 │  9     tring> {
-13       ⚠ std::grep rej…                         │ 10       // Raise an interrupt with effect \`note
-14       ✖ interrupt rej…                         │ 11     s::archive\` and payload containing the co
-15   LLM call  5 tool: g…    4.1s    18k  $0.0009 │ 12     unt.
-16     ✖ grep notes::arc…       —                 │ 13       raise notes::archive("Archive \${count}
-17       ⚠ std::grep rej…                         │ 14     notes?", { count: count })
-18       ✖ interrupt rej…                         │ 15       return success("archived \${count}")
-19   LLM call  6 tool: g…    4.2s    18k  $0.0010 │ 16     }
-20     ✖ grep effect            —                 │ 17
-21       ⚠ std::grep rej…                         │ 18     /**
-22       ✖ interrupt rej…                         │ 19     For count == 11:
-23   LLM call  7 tool: g…    7.4s    18k  $0.0015 │ 20     - Both handlers run. The inner handler (c
-24     ✖ grep notes::           —                 │ 21     losest to the call) executes and approves
-25       ⚠ std::grep rej…                         │ 22      the notes::archive interrupt. The outer
-26       ✖ interrupt rej…                         │ 23     handler then executes and, because count
-27   LLM call  8 tool: a…    5.0s    18k  $0.0013 │ 24     > 10, rejects the notes::archive interrup
-28     agencyGuide effec…     6ms                 │ 25     t.
-30   LLM call  9 tool: t…   23.7s    19k  $0.0050 │ 26     - Because any handler rejecting causes th
-31     typecheck def arc…    95ms                 │ 27     e interrupt to be rejected even if an inn
-32 ▶ LLM call 10 {"respo…   22.0s    20k  $0.0034 │ 28     er handler approved it, archiveNotes ends
-                                                  │ 29      up failing, so runArchive returns "rejec
-                                                  │ 30     ted".
-                                                  │ 31     */
-                                                  │ 32     def runArchive(count: number): string {
-                                                  │ 33       handle {
-                                                  │ 34         // Inner handler: approves notes::arc
-                                                  │ 35     hive interrupts.
-                                                  │ 36         handle {
-                                                  │ 37           const res: Result<string> = archive
+ 3     agencyGuide handl…     6ms                 │  3 input 20k (19k cached) · output 1.4k
+ 5   LLM call  2 tool: a…    2.8s    16k  $0.0011 │  4
+ 6     agencyGuide inter…     1ms                 │  5 response
+ 8   LLM call  3 tool: a…    5.5s    17k  $0.0011 │  6   code
+ 9     agencyGuide built…     5ms                 │  7     def archiveNotes(count: number): Result<s
+11   LLM call  4 tool: g…    4.7s    18k  $0.0015 │  8     tring> {
+12     ✖ grep interrupt         —                 │  9       // Raise an interrupt with effect \`note
+13       ⚠ std::grep rej…                         │ 10     s::archive\` and payload containing the co
+14       ✖ interrupt rej…                         │ 11     unt.
+15   LLM call  5 tool: g…    4.1s    18k  $0.0009 │ 12       raise notes::archive("Archive \${count}
+16     ✖ grep notes::arc…       —                 │ 13     notes?", { count: count })
+17       ⚠ std::grep rej…                         │ 14       return success("archived \${count}")
+18       ✖ interrupt rej…                         │ 15     }
+19   LLM call  6 tool: g…    4.2s    18k  $0.0010 │ 16
+20     ✖ grep effect            —                 │ 17     /**
+21       ⚠ std::grep rej…                         │ 18     For count == 11:
+22       ✖ interrupt rej…                         │ 19     - Both handlers run. The inner handler (c
+23   LLM call  7 tool: g…    7.4s    18k  $0.0015 │ 20     losest to the call) executes and approves
+24     ✖ grep notes::           —                 │ 21      the notes::archive interrupt. The outer
+25       ⚠ std::grep rej…                         │ 22     handler then executes and, because count
+26       ✖ interrupt rej…                         │ 23     > 10, rejects the notes::archive interrup
+27   LLM call  8 tool: a…    5.0s    18k  $0.0013 │ 24     t.
+28     agencyGuide effec…     6ms                 │ 25     - Because any handler rejecting causes th
+30   LLM call  9 tool: t…   23.7s    19k  $0.0050 │ 26     e interrupt to be rejected even if an inn
+31     typecheck def arc…    95ms                 │ 27     er handler approved it, archiveNotes ends
+32 ▶ LLM call 10 {"respo…   22.0s    20k  $0.0034 │ 28      up failing, so runArchive returns "rejec
+                                                  │ 29     ted".
+                                                  │ 30     */
+                                                  │ 31     def runArchive(count: number): string {
+                                                  │ 32       handle {
+                                                  │ 33         // Inner handler: approves notes::arc
+                                                  │ 34     hive interrupts.
+                                                  │ 35         handle {
+                                                  │ 36           const res: Result<string> = archive
+                                                  │ 37     Notes(count)
 j k move   # numbers   space page   [] sibling   ⏎ fold   tab/←→ pane   r raw   m tree   p approvals
 a admin   d detail   / find   F filter                                                       [TRACE]"
 `;
@@ -90,7 +90,7 @@ exports[`trace screen > renders the recorded trace at 130 columns 1`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden                           │ DETAILS · Tab to focus
   user Write Agency module source for t…                         │ ASSISTANT · LLM call 10
   LLM call  1 tool: agencyGuide             3.8s    14k  $0.0008 │ gpt-5-mini · 22.0s · $0.0034
-    agencyGuide handlers.md                  6ms                 │ context 20k (19k cached) · fresh 503 · out 1.4k
+    agencyGuide handlers.md                  6ms                 │ input 20k (19k cached) · output 1.4k
   LLM call  2 tool: agencyGuide             2.8s    16k  $0.0011 │
     agencyGuide interrupts.md                1ms                 │ response
   LLM call  3 tool: agencyGuide             5.5s    17k  $0.0011 │   code
@@ -133,7 +133,7 @@ exports[`trace screen > renders the recorded trace at 130 columns 2`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden                           │ DETAILS · Tab to focus
  1   user Write Agency module source fo…                         │  1 ASSISTANT · LLM call 10
  2   LLM call  1 tool: agencyGuide          3.8s    14k  $0.0008 │  2 gpt-5-mini · 22.0s · $0.0034
- 3     agencyGuide handlers.md               6ms                 │  3 context 20k (19k cached) · fresh 503 · out 1.4k
+ 3     agencyGuide handlers.md               6ms                 │  3 input 20k (19k cached) · output 1.4k
  5   LLM call  2 tool: agencyGuide          2.8s    16k  $0.0011 │  4
  6     agencyGuide interrupts.md             1ms                 │  5 response
  8   LLM call  3 tool: agencyGuide          5.5s    17k  $0.0011 │  6   code
@@ -176,7 +176,7 @@ exports[`trace screen > renders the recorded trace at 200 columns 1`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden                                                              │ DETAILS · Tab to focus
   user Write Agency module source for this task. The deliverable is the mo…                         │ ASSISTANT · LLM call 10
   LLM call  1 tool: agencyGuide                                                3.8s    14k  $0.0008 │ gpt-5-mini · 22.0s · $0.0034
-    agencyGuide handlers.md                                                     6ms                 │ context 20k (19k cached) · fresh 503 · out 1.4k
+    agencyGuide handlers.md                                                     6ms                 │ input 20k (19k cached) · output 1.4k
   LLM call  2 tool: agencyGuide                                                2.8s    16k  $0.0011 │
     agencyGuide interrupts.md                                                   1ms                 │ response
   LLM call  3 tool: agencyGuide                                                5.5s    17k  $0.0011 │   code
@@ -219,7 +219,7 @@ exports[`trace screen > renders the recorded trace at 200 columns 2`] = `
 "▶ OUTLINE · ↑↓ scroll · all · 5 hidden                                                              │ DETAILS · Tab to focus
  1   user Write Agency module source for this task. The deliverable is the…                         │  1 ASSISTANT · LLM call 10
  2   LLM call  1 tool: agencyGuide                                             3.8s    14k  $0.0008 │  2 gpt-5-mini · 22.0s · $0.0034
- 3     agencyGuide handlers.md                                                  6ms                 │  3 context 20k (19k cached) · fresh 503 · out 1.4k
+ 3     agencyGuide handlers.md                                                  6ms                 │  3 input 20k (19k cached) · output 1.4k
  5   LLM call  2 tool: agencyGuide                                             2.8s    16k  $0.0011 │  4
  6     agencyGuide interrupts.md                                                1ms                 │  5 response
  8   LLM call  3 tool: agencyGuide                                             5.5s    17k  $0.0011 │  6   code

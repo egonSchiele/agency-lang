@@ -71,6 +71,12 @@ type ThreadHistory = { pending: WireMessage[]; systems: string[]; previousEnd: n
 export function threadKey(thread: ThreadKey): string {
   return JSON.stringify([thread.kind, thread.id]);
 }
+function copyHistory(from: ThreadHistory | undefined): ThreadHistory {
+  if (from === undefined) {
+    return { pending: [], systems: [], previousEnd: -Infinity };
+  }
+  return { pending: [...from.pending], systems: [...from.systems], previousEnd: from.previousEnd };
+}
 export function consumeRepresented(message: WireMessage, pending: WireMessage[]): boolean {
   const position = pending.findIndex((candidate) => messageKey(candidate) === messageKey(message));
   if (position < 0) {
@@ -84,7 +90,13 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
   const rounds = roundsOf(trace, index);
   const deltas = roundDeltas(rounds);
   const story = storyOutline(trace, { admin: false });
-  const threads: Record<string, ThreadHistory> = Object.create(null);
+  // What each conversation has already shown, keyed like `roundDeltas`
+  // keys its comparisons: by thread and tool path. A sub-agent on its
+  // caller's thread starts from the caller's state, and the caller picks
+  // its own state back up afterwards, so neither repeats the other's
+  // messages.
+  const conversations: Record<string, ThreadHistory> = Object.create(null);
+  const latestOnThread: Record<string, ThreadHistory> = Object.create(null);
   // Errors inside a tool call show in that tool's block. The rest get a
   // block of their own, placed by time on the thread they happened in.
   const loose: LooseBlock[] = [
@@ -113,11 +125,10 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
       thread: compactionThread(node, rounds, index),
     }));
   const roundBlocks = rounds.flatMap((round, position) => {
-    const state = (threads[threadKey(round.thread)] ??= {
-      pending: [],
-      systems: [],
-      previousEnd: -Infinity,
-    });
+    const thread = threadKey(round.thread);
+    const path = JSON.stringify([thread, round.toolPath]);
+    const state = (conversations[path] ??= copyHistory(latestOnThread[thread]));
+    latestOnThread[thread] = state;
     const delta = deltas[position];
     const blocks: TranscriptBlock[] = [];
     const base = {

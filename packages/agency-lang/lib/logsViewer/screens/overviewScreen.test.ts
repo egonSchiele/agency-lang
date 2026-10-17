@@ -5,6 +5,7 @@ import { parseStyledText } from "../../tui/styleParser.js";
 import type { Element } from "../../tui/elements.js";
 import { leaf, span, trace } from "../timeline/fixture.js";
 import { agentLoopTrace } from "../storyFixture.js";
+import { THEME } from "../theme.js";
 import { OverviewScreen } from "./overviewScreen.js";
 
 const viewport = { rows: 30, cols: 130 };
@@ -32,8 +33,11 @@ function fixture(count = 3) {
     ]),
   ];
 }
+/** The fixture records no input, so these tests read the output pane. */
 function screen(count = 3) {
-  return new OverviewScreen(fixture(count), "T", () => 40000);
+  const view = new OverviewScreen(fixture(count), "T", () => 40000);
+  toggleMode(view);
+  return view;
 }
 function flat(element: Element): string[] {
   return element.type === "text"
@@ -43,6 +47,16 @@ function flat(element: Element): string[] {
           .join(""),
       ]
     : (element.children ?? []).flatMap(flat);
+}
+function styledRows(element: Element): ReturnType<typeof parseStyledText>[] {
+  return element.type === "text"
+    ? [parseStyledText(element.content ?? "")]
+    : (element.children ?? []).flatMap(styledRows);
+}
+/** Flip the preview between input and output, whichever it shows now. */
+function toggleMode(view: OverviewScreen): void {
+  const key = frame(view).includes("[INPUT] OUTPUT") ? "o" : "i";
+  view.handleKey({ key }, viewport);
 }
 function frame(view: OverviewScreen, size = viewport): string {
   return renderFrame(layout(view.render(size), size.cols, size.rows)).toPlainText();
@@ -167,6 +181,7 @@ it("shows tool requests and literal style tags in the preview", () => {
     ],
   };
   const view = new OverviewScreen(roots, "T", () => undefined);
+  toggleMode(view);
   expect(frame(view)).toContain("{bold}literal{/bold}");
   expect(frame(view)).toContain("TOOL CALL · read");
   expect(frame(view)).toContain("notes.md");
@@ -235,65 +250,71 @@ function inputScreen() {
   }
   return new OverviewScreen(roots, "T", () => undefined);
 }
-it("toggles to recorded input without changing graphs, selection or metrics", () => {
+it("opens on the recorded input and toggles to output without changing graphs, selection or metrics", () => {
   const view = inputScreen();
-  expect(frame(view)).toContain("[OUTPUT] INPUT");
-  const before = tickRows(view);
-  view.handleKey({ key: "tab" }, viewport);
   const text = frame(view);
-  expect(text).toContain("OUTPUT [INPUT]");
+  expect(text).toContain("[INPUT] OUTPUT");
   expect(text).toContain("USER");
   expect(text).toContain("input 1 line 1");
   expect(text).not.toContain("answer 1 line 1");
   expect(text).toContain("13,919");
+  expect(text).toContain("i/o input/output");
+  const before = tickRows(view);
+  toggleMode(view);
+  const output = frame(view);
+  expect(output).toContain("INPUT [OUTPUT]");
+  expect(output).toContain("answer 1 line 1");
+  expect(output).not.toContain("input 1 line 1");
+  expect(output).toContain("13,919");
   expect(view.focusId()).toBe("round:L:0");
   expect(tickRows(view)).toEqual(before);
-  expect(text).toContain("tab input/output");
 });
 it("preserves separate input and output scroll positions", () => {
   const view = inputScreen();
-  view.handleKey({ key: "pagedown" }, viewport);
-  const output = frame(view);
-  view.handleKey({ key: "tab" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   const input = frame(view);
   expect(input).toContain("tool reply");
   expect(input).toContain("TOOL CALL · read · read-1");
-  view.handleKey({ key: "tab" }, viewport);
-  expect(frame(view)).toBe(output);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
+  view.handleKey({ key: "pagedown" }, viewport);
+  const output = frame(view);
+  expect(output).toContain("answer 1 line 30");
+  toggleMode(view);
   expect(frame(view)).toBe(input);
+  toggleMode(view);
+  expect(frame(view)).toBe(output);
 });
 it("collapses the system prompt until s is pressed and retains expansion across toggles", () => {
   const view = inputScreen();
-  view.handleKey({ key: "tab" }, viewport);
-  expect(frame(view)).toContain("System prompt · 2 lines · s to show");
-  expect(frame(view)).not.toContain("system secret");
+  expect(frame(view)).toContain("SYSTEM");
+  expect(frame(view)).toContain("system secret line 1");
+  expect(frame(view)).toContain("… (+1 more line · s to show)");
+  expect(frame(view)).not.toContain("system secret line 2");
   view.handleKey({ key: "s" }, viewport);
   expect(frame(view)).toContain("system secret line 1");
   expect(frame(view)).toContain("s to hide");
-  view.handleKey({ key: "tab" }, viewport);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
+  toggleMode(view);
   expect(frame(view)).toContain("system secret line 2");
   view.handleKey({ key: "s" }, viewport);
-  expect(frame(view)).not.toContain("system secret");
+  expect(frame(view)).not.toContain("system secret line 2");
 });
 it("keeps input mode but resets both scroll positions and system expansion on another call", () => {
   const view = inputScreen();
+  toggleMode(view);
   view.handleKey({ key: "end", ctrl: true }, viewport);
-  view.handleKey({ key: "tab" }, viewport);
+  toggleMode(view);
   view.handleKey({ key: "s" }, viewport);
   view.handleKey({ key: "end", ctrl: true }, viewport);
   view.handleKey({ key: "right" }, viewport);
-  expect(frame(view)).toContain("OUTPUT [INPUT]");
+  expect(frame(view)).toContain("[INPUT] OUTPUT");
   expect(frame(view)).toContain("input 2 line 1");
-  expect(frame(view)).not.toContain("system secret");
-  view.handleKey({ key: "tab" }, viewport);
+  expect(frame(view)).not.toContain("system secret line 2");
+  toggleMode(view);
   expect(frame(view)).toContain("answer 2 line 1");
 });
 it("explains when an older log did not record the input", () => {
-  const view = screen();
-  view.handleKey({ key: "tab" }, viewport);
+  const view = new OverviewScreen(fixture(), "T", () => 40000);
   expect(frame(view)).toContain("Input messages were not recorded.");
 });
 
@@ -374,6 +395,7 @@ it("says how the run ended and counts its errors in the header, and marks failed
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
+  toggleMode(view);
   const text = frame(view);
   expect(text).toContain("✖ crashed");
   expect(text).toContain("✖ 2 errors");
@@ -469,13 +491,241 @@ it("previews a decision call as its state and questions, and its answers with ba
     ]),
   ];
   const view = new OverviewScreen(roots, "T", () => undefined);
-  const output = frame(view);
-  expect(output).toContain("LLM CALL 1 · DECISION · curious 86%");
-  expect(output).toContain("ANSWER · response");
-  expect(output).toMatch(/curious █+░* 86%/);
-  view.handleKey({ key: "tab" }, viewport);
   const input = frame(view);
+  expect(input).toContain("LLM CALL 1 · DECISION · curious 86%");
   expect(input).toContain("STATE");
   expect(input).toContain("response · choice · idle, curious");
   expect(input).toContain("Which expression?");
+  toggleMode(view);
+  const output = frame(view);
+  expect(output).toContain("ANSWER · response");
+  expect(output).toMatch(/curious █+░* 86%/);
+});
+
+function growingInputScreen() {
+  const roots = fixture(2);
+  const history = [
+    { role: "system", content: "rules" },
+    {
+      role: "user",
+      content: Array.from({ length: 40 }, (_, line) => `first question line ${line + 1}`).join(
+        "\n",
+      ),
+    },
+  ];
+  const [first, second] = roots[0].children[0].children;
+  first.event!.data.messages = history;
+  second.event!.data.messages = [
+    ...history,
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "second question" },
+  ];
+  return new OverviewScreen(roots, "T", () => undefined);
+}
+it("folds a later call's history to a stub, and e opens it faded above the new messages", () => {
+  const view = growingInputScreen();
+  view.handleKey({ key: "right" }, viewport);
+  const text = frame(view);
+  expect(text).toContain("first question line 1");
+  expect(text).toContain("… (+1 earlier message)");
+  expect(text).not.toContain("first question line 2");
+  expect(text).toContain("second question");
+  expect(text).toContain("13,920");
+  expect(text).toContain("e earlier");
+  view.handleKey({ key: "e" }, viewport);
+  const opened = frame(view);
+  expect(opened).toContain("── 2 earlier messages above · NEW ──");
+  expect(opened).toContain("second question");
+  // The divider is the first row under the metrics even though the new
+  // messages are shorter than the pane: no history shows above it.
+  expect(opened).not.toContain("first question line 1");
+  expect(opened).not.toContain("first question line 40");
+  view.handleKey({ key: "home", ctrl: true }, viewport);
+  const top = frame(view);
+  expect(top).toContain("first question line 1");
+  expect(top).toContain("SYSTEM");
+  expect(top).toContain("rules");
+  // Opening the system prompt keeps the pane where it is instead of
+  // jumping back to the divider.
+  view.handleKey({ key: "s" }, viewport);
+  const expanded = frame(view);
+  expect(expanded).toContain("rules");
+  expect(expanded).toContain("s to hide");
+  expect(expanded).not.toContain("· NEW ──");
+  view.handleKey({ key: "e" }, viewport);
+  expect(frame(view)).toContain("… (+1 earlier message)");
+  view.handleKey({ key: "left" }, viewport);
+  expect(frame(view)).toContain("first question line 1");
+  expect(frame(view)).not.toContain("e earlier");
+});
+
+it("cuts a long tool result with a hint, and x shows it whole", () => {
+  const long = Array.from({ length: 120 }, (_, n) => `line ${n + 1}`).join("\n");
+  const tool = span(
+    "toolExecution",
+    [
+      leaf("toolCallStart", 2_100, { toolName: "read", args: { path: "a" } }),
+      leaf("toolCall", 2_200, { toolName: "read", output: long }),
+    ],
+    { id: "t" },
+  );
+  tool.firstTs = 2_100;
+  const roots = [
+    trace([
+      span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            model: '"m1"',
+            timeTaken: 100,
+            completion: { toolCalls: [{ name: "read", arguments: { path: "a" } }] },
+          }),
+          tool,
+        ],
+        { id: "L" },
+      ),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  toggleMode(view);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  const cut = frame(view);
+  expect(cut).toMatch(/… ~\d+ more tokens · x to show/);
+  expect(cut).toContain("x full results");
+  expect(cut).not.toContain("line 120");
+  view.handleKey({ key: "x" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  const full = frame(view);
+  expect(full).toContain("line 120");
+  expect(full).not.toContain("more tokens");
+  view.handleKey({ key: "x" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  expect(frame(view)).toMatch(/more tokens · x to show/);
+});
+
+function nestedTrace() {
+  const call = (at: number, output: string, toolCalls: { name: string }[] = []) =>
+    leaf("promptCompletion", at, {
+      model: '"m1"',
+      timeTaken: 100,
+      // One recorded thread throughout: the sub-agent extends its caller's.
+      threadIdentity: "T",
+      threadLabel: "main",
+      completion: { output, toolCalls: toolCalls.map((tool) => ({ ...tool, arguments: {} })) },
+    });
+  const inner = span(
+    "llmCall",
+    [call(2_000, "fetching", [{ name: "fetch" }]), call(3_000, "summary")],
+    {
+      id: "B",
+    },
+  );
+  const tool = span(
+    "toolExecution",
+    [leaf("toolCallStart", 1_100, { toolName: "researchAgent", args: {} }), inner],
+    { id: "t" },
+  );
+  tool.firstTs = 1_100;
+  return [
+    trace([
+      span("llmCall", [call(1_000, "", [{ name: "researchAgent" }]), tool, call(4_000, "done")], {
+        id: "A",
+      }),
+    ]),
+  ];
+}
+it("says which tool a call ran inside and which call it continues, and brackets the nested calls", () => {
+  const view = new OverviewScreen(nestedTrace(), "T", () => undefined);
+  const first = frame(view);
+  expect(first).not.toContain("continues LLM call");
+  expect(first).not.toContain("inside researchAgent");
+  view.handleKey({ key: "right" }, viewport);
+  expect(frame(view)).toContain("inside researchAgent (requested by LLM call 1)");
+  expect(frame(view)).not.toContain("continues LLM call");
+  view.handleKey({ key: "right" }, viewport);
+  expect(frame(view)).toContain(
+    "continues LLM call 2 · inside researchAgent (requested by LLM call 1)",
+  );
+  view.handleKey({ key: "right" }, viewport);
+  const last = frame(view);
+  expect(last).toContain("LLM CALL 4");
+  // Call 4 is the caller again, so it continues call 1, not the sub-agent's call 3.
+  expect(last).toContain("continues LLM call 1");
+  expect(last).not.toContain("inside researchAgent");
+  // A bracket named after the tool spans columns 2 and 3 under the numbers,
+  // and those columns carry the group band while 1 and 4 do not.
+  const left = flat(view.render(viewport)).map((row) => row.split(" │ ")[0]);
+  const bracket = left.find((row) => /└.*┘/.test(row))!;
+  expect(bracket).toContain("└ rese… ┘");
+  const numbers = left.find((row) => /^\s+1\s+2\s+3\s+4\s*$/.test(row))!;
+  expect(bracket.indexOf("└")).toBe(numbers.indexOf("2"));
+  expect(bracket.indexOf("┘")).toBe(numbers.indexOf("3") + 3);
+  const numberSpans = styledRows(view.render(viewport)).find((spans) =>
+    /^\s+1\s+2\s+3\s+4\s*$/.test(
+      spans
+        .map((span) => span.text)
+        .join("")
+        .split(" │ ")[0],
+    ),
+  )!;
+  const spanFor = (digit: string) => numberSpans.find((span) => span.text.startsWith(digit))!;
+  expect(spanFor("2").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("3").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("1").bg).toBeUndefined();
+  expect(spanFor("4").bg).toBe(THEME.cursorBg);
+});
+it("gives a tool nested inside a sub-agent its own bracket row and a deeper band shade", () => {
+  const call = (at: number, output: string, toolCalls: { name: string }[] = []) =>
+    leaf("promptCompletion", at, {
+      model: '"m1"',
+      timeTaken: 100,
+      threadIdentity: "T",
+      completion: { output, toolCalls: toolCalls.map((tool) => ({ ...tool, arguments: {} })) },
+    });
+  const innermost = span("toolExecution", [
+    leaf("toolCallStart", 2_100, { toolName: "fetchAgent", args: {} }),
+    span("llmCall", [call(2_500, "fetched")], { id: "C" }),
+  ]);
+  innermost.firstTs = 2_100;
+  const inner = span(
+    "llmCall",
+    [call(2_000, "fetching", [{ name: "fetchAgent" }]), innermost, call(3_000, "summary")],
+    { id: "B" },
+  );
+  const outer = span("toolExecution", [
+    leaf("toolCallStart", 1_100, { toolName: "researchAgent", args: {} }),
+    inner,
+  ]);
+  outer.firstTs = 1_100;
+  const roots = [
+    trace([
+      span("llmCall", [call(1_000, "", [{ name: "researchAgent" }]), outer, call(4_000, "done")], {
+        id: "A",
+      }),
+    ]),
+  ];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  const left = flat(view.render(viewport)).map((row) => row.split(" │ ")[0]);
+  // Two bracket rows under each of the three charts; look at the first chart's.
+  const brackets = left.filter((row) => /└.*┘/.test(row));
+  expect(brackets).toHaveLength(6);
+  const numbers = left.find((row) => /^\s+1\s+2\s+3\s+4\s+5\s*$/.test(row))!;
+  // The outer bracket runs under calls 2 to 4, the inner one under call 3 alone.
+  expect(brackets[0].indexOf("└")).toBe(numbers.indexOf("2"));
+  expect(brackets[0].indexOf("┘")).toBe(numbers.indexOf("4") + 3);
+  expect(brackets[1].indexOf("└")).toBe(numbers.indexOf("3"));
+  expect(brackets[1].indexOf("┘")).toBe(numbers.indexOf("3") + 3);
+  const numberSpans = styledRows(view.render(viewport)).find((spans) =>
+    /^\s+1\s+2\s+3\s+4\s+5\s*$/.test(
+      spans
+        .map((span) => span.text)
+        .join("")
+        .split(" │ ")[0],
+    ),
+  )!;
+  const spanFor = (digit: string) => numberSpans.find((span) => span.text.startsWith(digit))!;
+  expect(spanFor("2").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("3").bg).toBe(THEME.groupBg[1]);
+  expect(spanFor("4").bg).toBe(THEME.groupBg[0]);
+  expect(spanFor("5").bg).toBeUndefined();
 });

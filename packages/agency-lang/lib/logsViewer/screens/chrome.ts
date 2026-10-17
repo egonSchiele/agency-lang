@@ -1,6 +1,13 @@
 import { column } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
-import { clipText, paint, paintedLine, segment, type Piece } from "../../tui/paint.js";
+import {
+  clipText,
+  paint,
+  paintedLine,
+  segment,
+  type Painted,
+  type Piece,
+} from "../../tui/paint.js";
 import { THEME } from "../theme.js";
 import { bottomHints } from "../views/shared.js";
 import { SCREEN_ORDER, type ScreenName } from "./screen.js";
@@ -83,4 +90,20 @@ export function tooNarrow(cols: number): Element {
     { justifyContent: "flex-start" },
     ...messages.map((text) => paintedLine(paint(text))),
   );
+}
+
+/** The header of one pane of a two-pane screen: the active pane's in the
+ *  accent color on a contrasting background with its movement hint, the
+ *  other's muted with `Tab to focus`. */
+export function paneHeader(
+  label: string,
+  active: boolean,
+  status: string,
+  width: number,
+  moveHint = "↑↓ scroll",
+): Painted {
+  const heading = active ? `▶ ${label} · ${moveHint}` : `${label} · Tab to focus`;
+  return segment(`${heading}${status ? ` · ${status}` : ""}`, width, {
+    style: active ? { fg: THEME.accent, bg: THEME.rule, bold: true } : { fg: THEME.muted },
+  });
 }

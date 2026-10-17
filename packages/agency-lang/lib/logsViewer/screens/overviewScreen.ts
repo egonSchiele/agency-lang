@@ -18,15 +18,28 @@ import { storyOutline } from "../story.js";
 import { fmtUsd } from "../format.js";
 import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
 import { overviewData, type OverviewCall, type OverviewData } from "../overviewData.js";
-import { roundResponsePayload, type PayloadLine } from "../payload.js";
+import {
+  hasCutResult,
+  roundResponsePayload,
+  roundTokenLine,
+  type PayloadLine,
+  type ResultOptions,
+} from "../payload.js";
 import { decisionInputPayload, decisionOutputPayload, decisionSummary } from "../decision.js";
-import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
+import { roundDeltas, type RoundDelta } from "../messageDelta.js";
+import {
+  hasHistory,
+  hasSystemMessages,
+  roundInputPayload,
+  type InputOptions,
+  type InputPayload,
+} from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
 import type { RunStatus } from "../problems.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
-import { keyFooter } from "./chrome.js";
+import { keyFooter, paneHeader } from "./chrome.js";
 import {
   fmtCost,
   overviewCallCapacity,
@@ -38,17 +51,25 @@ import type { Screen } from "./screen.js";
 
 const LAYOUT = { leftShare: 0.45, dividerCells: 3, outerRows: 3 };
 type PreviewMode = "input" | "output";
+type Pane = "charts" | "preview";
 type Preview = { header: Painted[]; body: Painted[]; room: number };
 
 export class OverviewScreen implements Screen {
   readonly screenName = "overview" as const;
   private data: OverviewData | undefined;
+  private deltas: Record<string, RoundDelta> = Object.create(null);
   private selectedId: string | undefined;
   // Keep a tool selected when visiting overview without choosing another call.
   private returnFocusId: string | undefined;
-  private previewMode: PreviewMode = "output";
+  private previewMode: PreviewMode = "input";
+  /** Which side the paging and end keys act on. */
+  private pane: Pane = "charts";
   private scrollOffsets = { input: 0, output: 0 };
   private systemsExpanded = false;
+  private historyExpanded = false;
+  private fullResults = false;
+  /** The input preview opens on the call's new messages until scrolled. */
+  private inputAtNew = true;
   private get scrollTop(): number {
     return this.scrollOffsets[this.previewMode];
   }
@@ -65,6 +86,8 @@ export class OverviewScreen implements Screen {
         width: number;
         metadata: Painted[];
         bodies: Partial<Record<PreviewMode, Painted[]>>;
+        /** First painted line of the input's new messages. */
+        inputNewAt: number;
       }
     | undefined;
   private callPageSize = 1;
@@ -79,10 +102,25 @@ export class OverviewScreen implements Screen {
     return [
       {
         keys: ["Tab"],
-        help: "switch the preview between input and output",
-        hint: "tab input/output",
+        help: "focus the other pane: the charts or the preview",
+        hint: "tab pane",
         run: () => {
-          this.previewMode = this.previewMode === "output" ? "input" : "output";
+          this.pane = this.pane === "charts" ? "preview" : "charts";
+        },
+      },
+      {
+        keys: ["i"],
+        help: "preview the input of the selected call",
+        hint: "i/o input/output",
+        run: () => {
+          this.previewMode = "input";
+        },
+      },
+      {
+        keys: ["o"],
+        help: "preview the output of the selected call",
+        run: () => {
+          this.previewMode = "output";
         },
       },
       {
@@ -94,24 +132,24 @@ export class OverviewScreen implements Screen {
       { keys: ["Right", "l"], help: "select the next LLM call", run: () => this.moveCall(1) },
       {
         keys: ["Ctrl+F"],
-        help: "select the LLM call one chart page forward",
+        help: "a page forward in the focused pane: calls in the charts, lines in the preview",
         hint: "^f/^b page",
-        run: () => this.moveCall(this.callPageSize),
+        run: () => this.page(1),
       },
       {
         keys: ["Ctrl+B"],
-        help: "select the LLM call one chart page back",
-        run: () => this.moveCall(-this.callPageSize),
+        help: "a page back in the focused pane",
+        run: () => this.page(-1),
       },
       {
         keys: ["Ctrl+D"],
-        help: "select the LLM call half a chart page forward",
-        run: () => this.moveCall(Math.max(1, Math.floor(this.callPageSize / 2))),
+        help: "half a page forward in the focused pane",
+        run: () => this.page(0.5),
       },
       {
         keys: ["Ctrl+U"],
-        help: "select the LLM call half a chart page back",
-        run: () => this.moveCall(-Math.max(1, Math.floor(this.callPageSize / 2))),
+        help: "half a page back in the focused pane",
+        run: () => this.page(-0.5),
       },
       {
         keys: ["Up", "k"],
@@ -148,15 +186,30 @@ export class OverviewScreen implements Screen {
         run: () => this.toggleSystems(),
       },
       {
+        keys: ["e"],
+        help: "show or hide the earlier messages of the input in full",
+        hint: "e earlier",
+        when: () =>
+          this.previewMode === "input" && hasHistory(this.selected()?.round, this.selectedDelta()),
+        run: () => this.toggleHistory(),
+      },
+      {
+        keys: ["x"],
+        help: "show or cut long tool results in the output",
+        hint: "x full results",
+        when: () => this.previewMode === "output" && hasCutResult(this.selected()?.tools ?? []),
+        run: () => this.toggleResults(),
+      },
+      {
         keys: ["g", "Home"],
-        help: "select the first LLM call",
+        help: "the first LLM call, or the top of the preview when it is focused",
         hint: "g/G ends",
-        run: () => this.selectCall(0),
+        run: () => this.toEnd(-1),
       },
       {
         keys: ["G", "End"],
-        help: "select the last LLM call",
-        run: () => this.selectCall((this.data?.calls.length ?? 1) - 1),
+        help: "the last LLM call, or the end of the preview when it is focused",
+        run: () => this.toEnd(1),
       },
       {
         keys: ["Enter"],
@@ -193,13 +246,16 @@ export class OverviewScreen implements Screen {
       );
     const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
     const widths = panelWidths(viewport.cols);
-    const left = overviewCharts(
-      data.calls,
-      this.selectedId,
-      widths.left,
-      bodyHeight,
-      data.models.length === 1 ? this.contextWindowOf(data.models[0]) : undefined,
-    );
+    const left = [
+      paneHeader("CHARTS", this.pane === "charts", "", widths.left, "← → call"),
+      ...overviewCharts(
+        data.calls,
+        this.selectedId,
+        widths.left,
+        Math.max(0, bodyHeight - 1),
+        data.models.length === 1 ? this.contextWindowOf(data.models[0]) : undefined,
+      ),
+    ];
     const preview = this.preview(widths.right, bodyHeight);
     const right = [
       ...preview.header,
@@ -268,6 +324,10 @@ export class OverviewScreen implements Screen {
   private derive(): void {
     const trace = this.roots.find((root) => root.traceId === this.traceId) ?? this.roots[0];
     this.data = trace === undefined ? undefined : overviewData(trace);
+    this.deltas = Object.create(null);
+    for (const delta of roundDeltas(this.data?.rounds ?? [])) {
+      this.deltas[delta.roundId] = delta;
+    }
     if (this.returnFocusId !== undefined && findNode(this.roots, this.returnFocusId) === undefined)
       this.returnFocusId = undefined;
     if (!this.data?.calls.some((call) => call.id === this.selectedId)) this.selectCall(0);
@@ -288,24 +348,66 @@ export class OverviewScreen implements Screen {
   }
   private resetPreview(): void {
     this.scrollOffsets = { input: 0, output: 0 };
+    this.inputAtNew = true;
     this.systemsExpanded = false;
+    this.historyExpanded = false;
+    this.fullResults = false;
     this.previewCache = undefined;
   }
+  private selectedDelta(): RoundDelta | undefined {
+    const round = this.selected()?.round;
+    return round === undefined ? undefined : this.deltas[round.id];
+  }
+  private toggleResults(): void {
+    this.fullResults = !this.fullResults;
+    this.scrollOffsets.output = 0;
+    if (this.previewCache !== undefined) this.previewCache.bodies.output = undefined;
+  }
+  private toggleHistory(): void {
+    this.historyExpanded = !this.historyExpanded;
+    this.inputAtNew = true;
+    if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
+  }
+  /** The scroll stays put, so a prompt opened from the history is still in view. */
   private toggleSystems(): void {
     this.systemsExpanded = !this.systemsExpanded;
-    this.scrollOffsets.input = 0;
     if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
+  }
+  /** Ctrl+F/B/D/U: whole or half pages of calls or of preview lines. */
+  private page(pages: number): void {
+    if (this.pane === "charts") {
+      const calls = Math.max(1, Math.floor(this.callPageSize * Math.abs(pages)));
+      this.moveCall(Math.sign(pages) * calls);
+      return;
+    }
+    this.movePreview(
+      Math.sign(pages) * Math.max(1, Math.floor(this.previewRoom * Math.abs(pages))),
+    );
+  }
+  /** g/G, Home/End: the first or last call, or the preview's top or end. */
+  private toEnd(direction: -1 | 1): void {
+    if (this.pane === "charts") {
+      this.selectCall(direction < 0 ? 0 : (this.data?.calls.length ?? 1) - 1);
+      return;
+    }
+    this.scrollPreview(direction < 0 ? 0 : this.previewLength);
   }
   private movePreview(delta: number): void {
     this.scrollPreview(this.scrollTop + delta);
   }
+  /** In the input, the NEW divider may be the top row even when the new
+   *  messages beneath it do not fill the pane. */
   private scrollPreview(position: number): void {
-    this.scrollTop = Math.max(0, Math.min(position, this.previewLength - this.previewRoom));
+    const anchor = this.previewMode === "input" ? (this.previewCache?.inputNewAt ?? 0) : 0;
+    const last = Math.max(this.previewLength - this.previewRoom, anchor);
+    this.scrollTop = Math.max(0, Math.min(position, last));
   }
   private preview(width: number, height: number): Preview {
     const selected = this.selected();
-    const heading = overviewSection(
-      `${callTitle(selected)} · ${this.previewMode === "output" ? "[OUTPUT] INPUT" : "OUTPUT [INPUT]"}`,
+    const heading = paneHeader(
+      `${callTitle(selected)} · ${this.previewMode === "input" ? "[INPUT] OUTPUT" : "INPUT [OUTPUT]"}`,
+      this.pane === "preview",
+      "",
       width,
     );
     if (
@@ -317,13 +419,32 @@ export class OverviewScreen implements Screen {
         width,
         metadata: paintPayload(previewMetadata(selected), width),
         bodies: {},
+        inputNewAt: 0,
       };
     }
     if (selected !== undefined && this.previewCache!.bodies[this.previewMode] === undefined) {
-      this.previewCache!.bodies[this.previewMode] = paintPayload(
-        previewBody(selected, this.previewMode, this.systemsExpanded),
-        width,
+      const { lines, newAt } = previewBody(
+        selected,
+        this.previewMode,
+        {
+          systemsExpanded: this.systemsExpanded,
+          historyExpanded: this.historyExpanded,
+          fullResults: this.fullResults,
+        },
+        this.selectedDelta(),
       );
+      const history = paintPayload(lines.slice(0, newAt), width);
+      this.previewCache!.bodies[this.previewMode] = [
+        ...history,
+        ...paintPayload(lines.slice(newAt), width),
+      ];
+      if (this.previewMode === "input") {
+        this.previewCache!.inputNewAt = history.length;
+      }
+    }
+    if (selected !== undefined && this.previewMode === "input" && this.inputAtNew) {
+      this.scrollOffsets.input = this.previewCache!.inputNewAt;
+      this.inputAtNew = false;
     }
     const header =
       selected === undefined ? [heading] : [heading, ...this.previewCache!.metadata, paint("")];
@@ -407,53 +528,76 @@ function callTitle(call: OverviewCall | undefined): string {
 function previewBody(
   call: OverviewCall,
   mode: PreviewMode,
-  systemsExpanded: boolean,
-): PayloadLine[] {
+  options: InputOptions & ResultOptions,
+  delta: RoundDelta | undefined,
+): InputPayload {
   if (call.round === undefined) {
-    return mode === "output"
-      ? [
-          { kind: "heading", text: "✖ REQUEST FAILED", tone: "error" },
-          { kind: "text", text: call.failure!.message, indent: 0, role: "error" },
-        ]
-      : [
-          {
-            kind: "meta",
-            text: "input not recorded: the request failed before the provider answered",
-          },
-        ];
+    const lines: PayloadLine[] =
+      mode === "output"
+        ? [
+            { kind: "heading", text: "✖ REQUEST FAILED", tone: "error" },
+            { kind: "text", text: call.failure!.message, indent: 0, role: "error" },
+          ]
+        : [
+            {
+              kind: "meta",
+              text: "input not recorded: the request failed before the provider answered",
+            },
+          ];
+    return { lines, newAt: 0 };
   }
   if (call.round.decision !== undefined) {
-    return mode === "output"
-      ? decisionOutputPayload(call.round.decision)
-      : decisionInputPayload(call.round.decision);
+    const lines =
+      mode === "output"
+        ? decisionOutputPayload(call.round.decision)
+        : decisionInputPayload(call.round.decision);
+    return { lines, newAt: 0 };
   }
-  return mode === "output"
-    ? roundResponsePayload(call.round, call.tools)
-    : roundInputPayload(call.round, systemsExpanded);
+  if (mode === "output") {
+    return { lines: roundResponsePayload(call.round, call.tools, options), newAt: 0 };
+  }
+  return roundInputPayload(call.round, options, delta);
+}
+/** Where the call sits among the others: the call on its thread it
+ *  continues, and the tool it ran inside with the call that asked for it. */
+function placeLine(call: OverviewCall): string[] {
+  const parts: string[] = [];
+  if (call.continues !== undefined) {
+    parts.push(`continues LLM call ${call.continues + 1}`);
+  }
+  if (call.inside !== undefined) {
+    const asked =
+      call.inside.requestedBy === undefined
+        ? ""
+        : ` (requested by LLM call ${call.inside.requestedBy + 1})`;
+    parts.push(`inside ${call.inside.toolName}${asked}`);
+  }
+  return parts.length === 0 ? [] : [parts.join(" · ")];
 }
 function previewMetadata(call: OverviewCall): PayloadLine[] {
   if (call.round === undefined) {
-    return [{ kind: "meta", text: `failed at ${new Date(call.at).toISOString()}` }];
+    return [`failed at ${new Date(call.at).toISOString()}`, ...placeLine(call)].map((text) => ({
+      kind: "meta",
+      text,
+    }));
   }
   const round = call.round;
   const event = round.node.event!;
   const time =
     typeof event.data.timeTaken === "number"
-      ? `${round.durationMs.toLocaleString("en-US")}ms`
+      ? fmtDuration(round.durationMs, { minutes: true })
       : "time not recorded";
   const cost =
     typeof event.data.cost?.totalCost === "number" ? fmtCost(round.costUsd) : "cost not recorded";
   const tokens = hasTokenUsage(event)
-    ? [
-        `context ${round.contextTokens.toLocaleString("en-US")} · cached ${round.cachedTokens.toLocaleString("en-US")}`,
-        `fresh ${round.freshTokens.toLocaleString("en-US")} · output ${round.outputTokens.toLocaleString("en-US")}`,
-      ]
-    : ["token usage not recorded"];
+    ? roundTokenLine(round, { exact: true })
+    : "token usage not recorded";
   return [
     round.model || "unknown model",
     `${time} · ${cost}`,
-    ...tokens,
+    tokens,
     `thread ${call.threadName}`,
+    ...placeLine(call),
   ].map((text) => ({ kind: "meta", text }));
 }
 

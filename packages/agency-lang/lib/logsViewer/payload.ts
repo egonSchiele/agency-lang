@@ -7,7 +7,12 @@ import {
 import { buildTreeIndex } from "./forest.js";
 import { fmtTokens, fmtUsd } from "./format.js";
 import { childEvent, fmtDuration } from "./spanText.js";
-import { decodeStructured, structuredLines, type StructuredLine } from "./structured.js";
+import {
+  decodeStructured,
+  structuredLines,
+  type FlatRole,
+  type StructuredLine,
+} from "./structured.js";
 import {
   ownedToolNodes,
   toolErrorMessages,
@@ -21,17 +26,23 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
-export type PayloadLine =
+/** `faded` marks a line that is history, painted in one muted color. */
+export type PayloadLine = (
   | {
       kind: "heading";
       text: string;
       tone: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome" | "accent";
     }
   | { kind: "meta"; text: string }
-  | { kind: "text"; text: string; indent: number; role: StructuredLine["role"] | "plain" | "error" }
+  | { kind: "text"; text: string; indent: number; role: FlatRole | "plain" | "error" }
+  /** A field with its value on the same line; the painter colors the key. */
+  | { kind: "pair"; key: string; text: string; indent: number }
+  /** A list of same-shaped objects; the painter draws rows when they fit. */
+  | { kind: "table"; columns: string[]; rows: string[][]; indent: number }
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
-  | { kind: "blank" };
+  | { kind: "blank" }
+) & { faded?: boolean };
 export type PayloadOptions = { raw: boolean };
 type PayloadMakers = {
   [Kind in StoryRow["kind"]]: (row: Extract<StoryRow, { kind: Kind }>) => PayloadLine[];
@@ -96,7 +107,7 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
     },
     {
       kind: "meta",
-      text: roundTokenSummary(row),
+      text: roundTokenLine(round),
     },
     { kind: "blank" },
     ...roundResponsePayload(round),
@@ -152,7 +163,24 @@ export const RESULT_PREVIEW_CHARS = 600;
  *  when `tools` holds the call's tool rows, what came back. Requests are
  *  matched to tool rows by name, in order, so a tool called twice in one
  *  round pairs first with first. */
-export function roundResponsePayload(round: Round, tools: ToolStoryRow[] = []): PayloadLine[] {
+export type ResultOptions = {
+  /** Print every result whole instead of its first RESULT_PREVIEW_CHARS. */
+  fullResults?: boolean;
+};
+
+/** Whether any completed tool's result is longer than the preview keeps. */
+export function hasCutResult(tools: ToolStoryRow[]): boolean {
+  return tools.some(
+    (tool) =>
+      tool.status === "completed" && (toolResultText(tool) ?? "").length > RESULT_PREVIEW_CHARS,
+  );
+}
+
+export function roundResponsePayload(
+  round: Round,
+  tools: ToolStoryRow[] = [],
+  options: ResultOptions = {},
+): PayloadLine[] {
   const event = round.node.event!;
   const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
   const unmatched = [...tools];
@@ -168,22 +196,27 @@ export function roundResponsePayload(round: Round, tools: ToolStoryRow[] = []): 
           tone: "tool" as const,
         },
         ...valuePayload(call.arguments),
-        ...(tool === undefined ? [] : toolResultPayload(tool)),
+        ...(tool === undefined ? [] : toolResultPayload(tool, options)),
       ];
     }),
   ];
 }
 
 /** What a requested tool gave back, by its recorded status. */
-export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
+export function toolResultPayload(tool: ToolStoryRow, options: ResultOptions = {}): PayloadLine[] {
   switch (tool.status) {
     case "completed": {
       const text = toolResultText(tool) ?? "";
-      const shown =
-        text.length > RESULT_PREVIEW_CHARS
-          ? `${text.slice(0, RESULT_PREVIEW_CHARS)}… (${text.length - RESULT_PREVIEW_CHARS} more characters)`
-          : text;
-      return [{ kind: "heading", text: "→ RESULT", tone: "tool" }, ...valuePayload(shown)];
+      const heading = { kind: "heading" as const, text: "→ RESULT", tone: "tool" as const };
+      if (text.length <= RESULT_PREVIEW_CHARS || options.fullResults) {
+        return [heading, ...valuePayload(text)];
+      }
+      const rest = Math.ceil((text.length - RESULT_PREVIEW_CHARS) / 4);
+      return [
+        heading,
+        ...valuePayload(text.slice(0, RESULT_PREVIEW_CHARS)),
+        { kind: "heading", text: `… ~${fmtTokens(rest)} more tokens · x to show`, tone: "accent" },
+      ];
     }
     case "failed":
       return [
@@ -203,15 +236,18 @@ export function toolResultPayload(tool: ToolStoryRow): PayloadLine[] {
       return [{ kind: "heading", text: "⋯ RESULT · completion not recorded", tone: "chrome" }];
   }
 }
-function roundTokenSummary(row: RoundStoryRow): string {
-  const event = row.node.event!;
+/** One line of token counts, the same on every screen: what the model
+ *  read, how much of that was cached (and written to the cache), and what
+ *  it wrote. `exact` prints full numbers instead of rounded ones. */
+export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): string {
+  const event = round.node.event!;
   if (!hasTokenUsage(event)) {
-    return "context ? · fresh ? · out ?";
+    return "input ? · output ?";
   }
-  const round = row.round;
+  const fmt = opts.exact ? (count: number) => count.toLocaleString("en-US") : fmtTokens;
   const written = tokensCacheWrite(event);
-  const writes = written > 0 ? `, ${fmtTokens(written)} write` : "";
-  return `context ${fmtTokens(round.contextTokens)} (${fmtTokens(round.cachedTokens)} cached${writes}) · fresh ${fmtTokens(round.freshTokens)} · out ${fmtTokens(round.outputTokens)}`;
+  const writes = written > 0 ? `, ${fmt(written)} write` : "";
+  return `input ${fmt(round.contextTokens)} (${fmt(round.cachedTokens)} cached${writes}) · output ${fmt(round.outputTokens)}`;
 }
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
@@ -296,13 +332,24 @@ function structuredPayload(lines: StructuredLine[]): PayloadLine[] {
   const output: PayloadLine[] = [];
   for (let position = 0; position < lines.length; position++) {
     const line = lines[position];
+    if (line.role === "pair") {
+      output.push(...pairPayload(line));
+      continue;
+    }
+    if (line.role === "table") {
+      output.push({ kind: "table", columns: line.columns, rows: line.rows, indent: line.indent });
+      continue;
+    }
     if (line.role !== "text") {
       output.push({ kind: "text", ...line });
       continue;
     }
     const block = [line.text];
-    while (lines[position + 1]?.role === "text" && lines[position + 1].indent === line.indent) {
-      block.push(lines[++position].text);
+    let next = lines[position + 1];
+    while (next?.role === "text" && next.indent === line.indent) {
+      block.push(next.text);
+      position += 1;
+      next = lines[position + 1];
     }
     const text = block.join("\n");
     const previous = lines[position - block.length];
@@ -321,4 +368,15 @@ function structuredPayload(lines: StructuredLine[]): PayloadLine[] {
     }
   }
   return output;
+}
+/** A one-line `code` field is still Agency source, highlighted like a
+ *  longer one. */
+function pairPayload(line: Extract<StructuredLine, { role: "pair" }>): PayloadLine[] {
+  if (line.key === "code") {
+    return [
+      { kind: "text", text: "code", indent: line.indent, role: "key" },
+      { kind: "code", text: line.text, language: "agency", indent: line.indent + 2 },
+    ];
+  }
+  return [{ kind: "pair", key: line.key, text: line.text, indent: line.indent }];
 }

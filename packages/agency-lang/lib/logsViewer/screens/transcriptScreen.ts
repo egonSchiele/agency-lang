@@ -390,7 +390,7 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
   if (block.kind !== "assistant") {
     return body;
   }
-  const stats = `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} ctx · ${fmtUsd(block.round.costUsd)}`;
+  const stats = `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} in · ${fmtUsd(block.round.costUsd)}`;
   const heading = joinPainted(
     segment(
       `── ASSISTANT · LLM call ${block.round.index + 1} ──`,

@@ -565,7 +565,7 @@ export class TimelineScreen implements Screen {
       return [
         `LLM call ${round.index + 1}`,
         ...(round.decision === undefined ? [] : [`decision · ${decisionSummary(round.decision)}`]),
-        `${fmtTokens(round.contextTokens)} ctx`,
+        `${fmtTokens(round.contextTokens)} in`,
         fmtUsd(round.costUsd),
       ]
         .filter((part) => part.length > 0)

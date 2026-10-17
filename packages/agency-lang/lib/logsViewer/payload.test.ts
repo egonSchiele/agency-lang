@@ -108,8 +108,8 @@ describe("payloads", () => {
       .filter((line) => line.kind === "meta")
       .map((line) => line.text)
       .join(" ");
-    expect(text).toContain("context 18k (17k cached)");
-    expect(text).toContain("out 219");
+    expect(text).toContain("input 18k (17k cached)");
+    expect(text).toContain("output 219");
     expect(
       payloadFor(row, { raw: true }).some(
         (line) => line.kind === "json" && line.text.includes('"completion"'),
@@ -177,7 +177,10 @@ it("reports estimated result tokens and recorded error origin", () => {
 
 it("keeps ordinary prose as wrapping text with its structured indentation", () => {
   const sentence = "The capital of France is Paris. Let me know if you want more detail.";
-  expect(valuePayload({ answer: sentence })).toContainEqual({
+  expect(valuePayload({ answer: sentence })).toEqual([
+    { kind: "pair", key: "answer", text: sentence, indent: 0 },
+  ]);
+  expect(valuePayload({ answer: `${sentence}\nMore.` })).toContainEqual({
     kind: "text",
     text: sentence,
     indent: 2,
@@ -191,7 +194,7 @@ it("shows unknown usage and cache writes in round details", () => {
   row.node.event!.data.usage = undefined;
   expect(payloadFor(row, options)).toContainEqual({
     kind: "meta",
-    text: "context ? · fresh ? · out ?",
+    text: "input ? · output ?",
   });
   row.node.event!.data.usage = {
     inputTokens: 95,
@@ -235,9 +238,12 @@ describe("roundResponsePayload with tool results", () => {
       ),
     ]);
     const data = overviewData(root);
-    return roundResponsePayload(data.rounds[0], data.calls[0].tools).map((line) =>
-      "text" in line ? line.text : line.kind,
-    );
+    return roundResponsePayload(data.rounds[0], data.calls[0].tools).map((line) => {
+      if (line.kind === "pair") {
+        return `${line.key}: ${line.text}`;
+      }
+      return "text" in line ? line.text : line.kind;
+    });
   }
 
   it("shows a completed tool's output after its request", () => {
@@ -247,8 +253,7 @@ describe("roundResponsePayload with tool results", () => {
     ]);
     expect(lines.slice(lines.indexOf("TOOL CALL · read"))).toEqual([
       "TOOL CALL · read",
-      "path",
-      "a",
+      "path: a",
       "→ RESULT",
       "file text",
     ]);
@@ -277,6 +282,7 @@ describe("roundResponsePayload with tool results", () => {
       leaf("toolCallStart", 1_100, { toolName: "read", args: { path: "a" } }),
       leaf("toolCall", 1_200, { toolName: "read", output: "x".repeat(RESULT_PREVIEW_CHARS + 50) }),
     ]);
-    expect(lines.at(-1)).toMatch(/^x+… \(50 more characters\)$/);
+    expect(lines.at(-2)).toMatch(/^x+$/);
+    expect(lines.at(-1)).toBe("… ~13 more tokens · x to show");
   });
 });

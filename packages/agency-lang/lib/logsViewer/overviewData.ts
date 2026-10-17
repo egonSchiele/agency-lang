@@ -1,4 +1,5 @@
-import { buildTreeIndex, nearestAncestor } from "./forest.js";
+import { ancestorsOf, buildTreeIndex, nearestAncestor } from "./forest.js";
+import { roundDeltas } from "./messageDelta.js";
 import { runStatus, traceErrors, type RunStatus, type TraceError } from "./problems.js";
 import { stableLeafId, storyChildren, storyOutline, type ToolStoryRow } from "./story.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
@@ -19,6 +20,16 @@ export type OverviewCall = {
   errors: TraceError[];
   /** The tools this call requested, in story order. */
   tools: ToolStoryRow[];
+  /** The tool call this request ran inside, with the index of the call
+   *  that requested that tool when the log shows it; undefined at the top. */
+  inside: { toolName: string; requestedBy: number | undefined } | undefined;
+  /** Every tool call this request ran inside, outermost first; empty at
+   *  the top. The charts bracket the calls that share one. */
+  enclosing: { id: string; toolName: string }[];
+  /** The index of the call this one continues, with that call's reply and
+   *  tool results added: the previous call on the same thread inside the
+   *  same tools (see `roundDeltas`); undefined for the first on a thread. */
+  continues: number | undefined;
   /** Order key: the completion time, or the failure time. */
   at: number;
   /** The round's thread name; undefined for a failed request or an unnamed thread. */
@@ -74,17 +85,38 @@ export function overviewData(trace: TreeNode): OverviewData {
     }
   }
   const nameOf = threadNamer(rounds);
+  const toolRowByNode: Record<string, { name: string; requestedBy: number }> = Object.create(null);
+  for (const round of rounds) {
+    for (const tool of toolsByRound[round.id]) {
+      toolRowByNode[tool.node.id] = { name: tool.name, requestedBy: round.index };
+    }
+  }
+  const roundById: Record<string, Round> = Object.create(null);
+  for (const round of rounds) {
+    roundById[round.id] = round;
+  }
+  const previousOf: Record<string, string | undefined> = Object.create(null);
+  for (const delta of roundDeltas(rounds)) {
+    previousOf[delta.roundId] = delta.previousRoundId;
+  }
   const calls: OverviewCall[] = [
-    ...rounds.map((round) => ({
-      id: round.id,
-      round,
-      failure: undefined,
-      errors: errorsByRound[round.id] ?? [],
-      tools: toolsByRound[round.id],
-      at: round.end,
-      threadLabel: round.threadLabel,
-      threadName: nameOf(round),
-    })),
+    ...rounds.map((round) => {
+      const previous = roundById[previousOf[round.id] ?? ""];
+      const continues =
+        previous !== undefined && samePath(previous, round) ? previous.index : undefined;
+      return {
+        id: round.id,
+        round,
+        failure: undefined,
+        errors: errorsByRound[round.id] ?? [],
+        tools: toolsByRound[round.id],
+        ...placement(round.node, index, toolRowByNode),
+        continues,
+        at: round.end,
+        threadLabel: round.threadLabel,
+        threadName: nameOf(round),
+      };
+    }),
     ...failures.map((failure) => {
       const parent = index.byId[index.parentIds[failure.node.id] ?? ""] ?? trace;
       return {
@@ -93,6 +125,8 @@ export function overviewData(trace: TreeNode): OverviewData {
         failure,
         errors: [failure],
         tools: [],
+        ...placement(failure.node, index, toolRowByNode),
+        continues: undefined,
         at: failure.at,
         threadLabel: undefined,
         threadName: "unnamed",
@@ -142,6 +176,38 @@ function callFor(
 /** One display name per thread, in order of first use. A second thread
  *  with a name already taken gets `#2`, a third `#3`, so two threads that
  *  one tool started (or two unnamed ones) are told apart. */
+function samePath(first: Round, second: Round): boolean {
+  return JSON.stringify(first.toolPath) === JSON.stringify(second.toolPath);
+}
+/** The tools a request (or a failed one) ran inside, from the
+ *  `toolExecution` spans above its node. */
+function placement(
+  node: TreeNode,
+  index: ReturnType<typeof buildTreeIndex>,
+  toolRowByNode: Record<string, { name: string; requestedBy: number }>,
+): Pick<OverviewCall, "inside" | "enclosing"> {
+  const toolSpans = ancestorsOf(node, index).filter(
+    (ancestor) => ancestor.label === "toolExecution",
+  );
+  const nearest = toolSpans[0];
+  return {
+    inside: nearest === undefined ? undefined : insideOf(nearest, toolRowByNode[nearest.id]),
+    enclosing: toolSpans
+      .map((span) => ({ id: span.id, toolName: toolRowByNode[span.id]?.name ?? span.summary }))
+      .reverse(),
+  };
+}
+/** The tool a call ran inside: named by its story row when a call
+ *  requested it, else by the span alone. */
+function insideOf(
+  span: TreeNode,
+  row: { name: string; requestedBy: number } | undefined,
+): OverviewCall["inside"] {
+  if (row === undefined) {
+    return { toolName: span.summary, requestedBy: undefined };
+  }
+  return { toolName: row.name, requestedBy: row.requestedBy };
+}
 function threadNamer(rounds: Round[]): (round: Round) => string {
   const byThread: Record<string, string> = Object.create(null);
   const taken: Record<string, number> = Object.create(null);

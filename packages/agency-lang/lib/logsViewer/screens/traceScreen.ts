@@ -1,5 +1,5 @@
 import { column, row } from "../../tui/builders.js";
-import { twoLineKeyFooter } from "./chrome.js";
+import { paneHeader, twoLineKeyFooter } from "./chrome.js";
 import { normalizeMessage } from "../../statelog/wireAccessors.js";
 import { hasRunningWork } from "../timeline/spans.js";
 import type { Element } from "../../tui/elements.js";
@@ -771,13 +771,6 @@ function rowBodyPieces(row: StoryRow, selected: boolean, collapsed: boolean): Pi
     case "machinery":
       return [...prefix, { text: row.text, style: { fg: THEME.chrome } }];
   }
-}
-
-function paneHeader(label: string, active: boolean, status: string, width: number): Painted {
-  const heading = active ? `▶ ${label} · ↑↓ scroll` : `${label} · Tab to focus`;
-  return segment(`${heading}${status ? ` · ${status}` : ""}`, width, {
-    style: active ? { fg: THEME.accent, bg: THEME.rule, bold: true } : { fg: THEME.muted },
-  });
 }
 
 function completedGroup(row: Extract<StoryRow, { kind: "llmGroup" }>): boolean {

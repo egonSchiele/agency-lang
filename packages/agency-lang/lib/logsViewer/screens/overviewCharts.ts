@@ -19,6 +19,9 @@ type ChartLayout = {
   selectedId: string | undefined;
   /** Whether a ✖ row is drawn under each chart's call numbers. */
   marks: boolean;
+  /** Bracket rows under each chart's numbers: one per level of tool
+   *  nesting any call has, so a group's bracket never shifts as you scroll. */
+  nesting: number;
   /** Thread names in color order; a call number takes its thread's color. */
   threads: string[];
 };
@@ -46,15 +49,18 @@ export function overviewCharts(
   // The ✖ row only appears when something went wrong, so a clean run keeps
   // its chart height.
   const marks = calls.some((call) => call.errors.length > 0);
+  const nesting = Math.max(0, ...calls.map((call) => call.enclosing.length));
   const threads = threadNames(calls);
   // A threads legend only when there is more than one thread to tell apart.
-  const chrome = CHROME_ROWS + (marks ? CHART_COUNT : 0) + (threads.length > 1 ? 1 : 0);
+  const chrome =
+    CHROME_ROWS + (marks ? CHART_COUNT : 0) + nesting * CHART_COUNT + (threads.length > 1 ? 1 : 0);
   const layout = {
     width,
     height: Math.max(0, Math.floor((height - chrome) / CHART_COUNT)),
     columnWidth: Math.max(1, slot - 1),
     selectedId,
     marks,
+    nesting,
     threads,
   };
   const rounds = calls.flatMap((call) => (call.round === undefined ? [] : [call.round]));
@@ -127,9 +133,10 @@ function contextChart(
     columns.forEach((cells, index) => {
       const band = cells[row];
       const glyph = band === EMPTY_CELL ? (row === ceilingAt ? "┄" : " ") : glyphs[band];
-      pieces.push(columnPiece(glyph, colors[band] ?? THEME.chrome, calls[index], layout), {
-        text: " ",
-      });
+      pieces.push(
+        columnPiece(glyph, colors[band] ?? THEME.chrome, calls[index], layout),
+        gapPiece(calls[index], calls[index + 1]),
+      );
     });
     return segment(pieces, layout.width);
   });
@@ -168,7 +175,10 @@ function metricChart(calls: OverviewCall[], layout: ChartLayout, chart: Chart): 
   const rows = Array.from({ length: layout.height }, (_, row) => {
     const pieces: Piece[] = [axis(row === 0 ? chart.label : row === layout.height - 1 ? "0" : "")];
     columns.forEach((cells, index) =>
-      pieces.push(columnPiece(cells[row], chart.color, calls[index], layout), { text: " " }),
+      pieces.push(
+        columnPiece(cells[row], chart.color, calls[index], layout),
+        gapPiece(calls[index], calls[index + 1]),
+      ),
     );
     return segment(pieces, layout.width);
   });
@@ -180,9 +190,47 @@ function columnPiece(glyph: string, color: string, call: OverviewCall, layout: C
     text: glyph.repeat(layout.columnWidth),
     style: {
       fg: color,
-      ...(call.id === layout.selectedId ? { bg: THEME.cursorBg, bold: true } : {}),
+      ...(call.id === layout.selectedId ? { bold: true } : {}),
+      ...columnBackground(call, layout),
     },
   };
+}
+/** The selected column's highlight, else the band behind calls that ran
+ *  inside a tool, so a sub-agent's calls read as one block. */
+function columnBackground(call: OverviewCall, layout: ChartLayout): { bg?: string } {
+  if (call.id === layout.selectedId) {
+    return { bg: THEME.cursorBg };
+  }
+  return call.enclosing.length > 0 ? { bg: groupShade(call.enclosing.length) } : {};
+}
+/** The band's shade at a depth of nesting: deeper is lighter, so a tool
+ *  run inside a sub-agent reads as a block within the sub-agent's block. */
+function groupShade(depth: number): string {
+  return THEME.groupBg[Math.min(depth, THEME.groupBg.length) - 1];
+}
+/** The space after a column: tinted when the next call sits inside the
+ *  same tools, so the band runs unbroken across the group, in the shade
+ *  of the deepest tool the two calls share. */
+function gapPiece(call: OverviewCall, next: OverviewCall | undefined): Piece {
+  const shared = sharedDepth(call, next);
+  if (shared === 0) {
+    return { text: " " };
+  }
+  return { text: " ", style: { bg: groupShade(shared) } };
+}
+/** How many tools, from the outermost in, two neighbouring calls both ran inside. */
+function sharedDepth(call: OverviewCall, next: OverviewCall | undefined): number {
+  if (next === undefined) {
+    return 0;
+  }
+  let depth = 0;
+  while (
+    call.enclosing[depth] !== undefined &&
+    call.enclosing[depth].id === next.enclosing[depth]?.id
+  ) {
+    depth += 1;
+  }
+  return depth;
 }
 function axis(label: string): Piece {
   const fitted = label.length < AXIS_WIDTH ? label : `${label.slice(0, AXIS_WIDTH - 2)}…`;
@@ -195,7 +243,7 @@ function axis(label: string): Piece {
 function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
   const numbers: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
   const marks: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
-  calls.forEach((call) => {
+  calls.forEach((call, index) => {
     const selected = call.id === layout.selectedId;
     const failed = call.round === undefined;
     numbers.push(
@@ -203,20 +251,62 @@ function ticks(calls: OverviewCall[], layout: ChartLayout): Painted[] {
         text: (failed ? "✖" : String(call.round!.index + 1)).padEnd(layout.columnWidth),
         style: {
           fg: tickColor(call, selected, layout),
-          ...(selected ? { bg: THEME.cursorBg, bold: true } : {}),
+          ...(selected ? { bold: true } : {}),
+          ...columnBackground(call, layout),
         },
       },
-      { text: " " },
+      gapPiece(call, calls[index + 1]),
     );
     marks.push(
       {
         text: (!failed && call.errors.length > 0 ? "✖" : "").padEnd(layout.columnWidth),
-        style: { fg: THEME.kind.error, ...(selected ? { bg: THEME.cursorBg } : {}) },
+        style: { fg: THEME.kind.error, ...columnBackground(call, layout) },
       },
-      { text: " " },
+      gapPiece(call, calls[index + 1]),
     );
   });
-  return [segment(numbers, layout.width), ...(layout.marks ? [segment(marks, layout.width)] : [])];
+  return [
+    segment(numbers, layout.width),
+    ...(layout.marks ? [segment(marks, layout.width)] : []),
+    ...Array.from({ length: layout.nesting }, (_, level) => bracketRow(calls, level, layout)),
+  ];
+}
+/** One row of brackets, `└ researchAgent ┘`, under the runs of calls that
+ *  share the tool at this nesting level; a deeper level gets the next row. */
+function bracketRow(calls: OverviewCall[], level: number, layout: ChartLayout): Painted {
+  const pieces: Piece[] = [{ text: " ".repeat(AXIS_WIDTH) }];
+  let position = 0;
+  while (position < calls.length) {
+    const tool = calls[position].enclosing[level];
+    if (tool === undefined) {
+      pieces.push({ text: " ".repeat(layout.columnWidth + 1) });
+      position += 1;
+      continue;
+    }
+    let end = position + 1;
+    while (end < calls.length && calls[end].enclosing[level]?.id === tool.id) {
+      end += 1;
+    }
+    const span = (end - position) * (layout.columnWidth + 1) - 1;
+    pieces.push({ text: bracket(tool.toolName, span), style: { fg: THEME.muted } }, { text: " " });
+    position = end;
+  }
+  return segment(pieces, layout.width);
+}
+/** `└ name ┘` fitted to the width: the name is cut with `…` when the
+ *  bracket is narrow, and dropped when there is no room for a letter. */
+function bracket(name: string, width: number): string {
+  if (width < 2) {
+    return "─".repeat(width);
+  }
+  const inner = width - 2;
+  const room = inner - 2;
+  let label = "";
+  if (room >= 2) {
+    label = name.length <= room ? ` ${name} ` : ` ${name.slice(0, room - 1)}… `;
+  }
+  const left = Math.floor((inner - label.length) / 2);
+  return `└${"─".repeat(left)}${label}${"─".repeat(inner - left - label.length)}┘`;
 }
 /** A failed request's tick is red. With several threads, a call's tick
  *  takes its thread's color; otherwise the selected call's is the accent. */

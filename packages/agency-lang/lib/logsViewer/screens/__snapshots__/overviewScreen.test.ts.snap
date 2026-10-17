@@ -2,99 +2,99 @@
 
 exports[`renders the linked graphs and preview at 100 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
-CONTEXT PER LLM CALL ────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────
-      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                    │ m1
-                                            │ 100ms · $0.000012
-                                            │ context 13,919 · cached 13,824
-                                            │ fresh 95 · output 190
-          ░░░░ ░░░░ ░░░░                    │ thread unnamed
-        0 ░░░░ ░░░░ ░░░░                    │
-          1    2    3                       │ answer 1 line 1
-░ cached  ▒ fresh  █ output                 │ answer 1 line 2
-                                            │ answer 1 line 3
-COST PER LLM CALL ───────────────────────── │ answer 1 line 4
-$0.000037           ████                    │ answer 1 line 5
-                    ████                    │ answer 1 line 6
-               ████ ████                    │ answer 1 line 7
+▶ CHARTS · ← → call                         │ LLM CALL 1 · INPUT [OUTPUT] · Tab to focus
+CONTEXT PER LLM CALL ────────────────────── │ m1
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                    │ 100ms · $0.000012
+                                            │ input 13,919 (13,824 cached) · output 190
+                                            │ thread unnamed
+          ░░░░ ░░░░ ░░░░                    │
+        0 ░░░░ ░░░░ ░░░░                    │ answer 1 line 1
+          1    2    3                       │ answer 1 line 2
+░ cached  ▒ fresh  █ output                 │ answer 1 line 3
+                                            │ answer 1 line 4
+COST PER LLM CALL ───────────────────────── │ answer 1 line 5
+$0.000037           ████                    │ answer 1 line 6
+               ▃▃▃▃ ████                    │ answer 1 line 7
                ████ ████                    │ answer 1 line 8
-          ████ ████ ████                    │ answer 1 line 9
+          ▅▅▅▅ ████ ████                    │ answer 1 line 9
         0 ████ ████ ████                    │ answer 1 line 10
           1    2    3                       │ answer 1 line 11
                                             │ answer 1 line 12
 TIME PER LLM CALL ───────────────────────── │ answer 1 line 13
     300ms           ████                    │ answer 1 line 14
-                    ████                    │ answer 1 line 15
+               ▃▃▃▃ ████                    │ answer 1 line 15
                ████ ████                    │ answer 1 line 16
-               ████ ████                    │ answer 1 line 17
-          ████ ████ ████                    │ answer 1 line 18
-        0 ████ ████ ████                    │ answer 1 line 19
-          1    2    3                       │ answer 1 line 20
-preview 1–20/60
-tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                [OVERVIEW]"
+          ▅▅▅▅ ████ ████                    │ answer 1 line 17
+        0 ████ ████ ████                    │ answer 1 line 18
+          1    2    3                       │ answer 1 line 19
+                                            │ answer 1 line 20
+                                            │ answer 1 line 21
+preview 1–21/60
+tab pane   i/o input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open     [OVERVIEW]"
 `;
 
 exports[`renders the linked graphs and preview at 130 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
-CONTEXT PER LLM CALL ──────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────────────────────
-      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                  │ m1
-                                                          │ 100ms · $0.000012
-                                                          │ context 13,919 · cached 13,824
-                                                          │ fresh 95 · output 190
-          ░░░░ ░░░░ ░░░░                                  │ thread unnamed
-        0 ░░░░ ░░░░ ░░░░                                  │
-          1    2    3                                     │ answer 1 line 1
-░ cached  ▒ fresh  █ output                               │ answer 1 line 2
-                                                          │ answer 1 line 3
-COST PER LLM CALL ─────────────────────────────────────── │ answer 1 line 4
-$0.000037           ████                                  │ answer 1 line 5
-                    ████                                  │ answer 1 line 6
-               ████ ████                                  │ answer 1 line 7
+▶ CHARTS · ← → call                                       │ LLM CALL 1 · INPUT [OUTPUT] · Tab to focus
+CONTEXT PER LLM CALL ──────────────────────────────────── │ m1
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                  │ 100ms · $0.000012
+                                                          │ input 13,919 (13,824 cached) · output 190
+                                                          │ thread unnamed
+          ░░░░ ░░░░ ░░░░                                  │
+        0 ░░░░ ░░░░ ░░░░                                  │ answer 1 line 1
+          1    2    3                                     │ answer 1 line 2
+░ cached  ▒ fresh  █ output                               │ answer 1 line 3
+                                                          │ answer 1 line 4
+COST PER LLM CALL ─────────────────────────────────────── │ answer 1 line 5
+$0.000037           ████                                  │ answer 1 line 6
+               ▃▃▃▃ ████                                  │ answer 1 line 7
                ████ ████                                  │ answer 1 line 8
-          ████ ████ ████                                  │ answer 1 line 9
+          ▅▅▅▅ ████ ████                                  │ answer 1 line 9
         0 ████ ████ ████                                  │ answer 1 line 10
           1    2    3                                     │ answer 1 line 11
                                                           │ answer 1 line 12
 TIME PER LLM CALL ─────────────────────────────────────── │ answer 1 line 13
     300ms           ████                                  │ answer 1 line 14
-                    ████                                  │ answer 1 line 15
+               ▃▃▃▃ ████                                  │ answer 1 line 15
                ████ ████                                  │ answer 1 line 16
-               ████ ████                                  │ answer 1 line 17
-          ████ ████ ████                                  │ answer 1 line 18
-        0 ████ ████ ████                                  │ answer 1 line 19
-          1    2    3                                     │ answer 1 line 20
-preview 1–20/60
-tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                              [OVERVIEW]"
+          ▅▅▅▅ ████ ████                                  │ answer 1 line 17
+        0 ████ ████ ████                                  │ answer 1 line 18
+          1    2    3                                     │ answer 1 line 19
+                                                          │ answer 1 line 20
+                                                          │ answer 1 line 21
+preview 1–21/60
+tab pane   i/o input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                   [OVERVIEW]"
 `;
 
 exports[`renders the linked graphs and preview at 200 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
-CONTEXT PER LLM CALL ─────────────────────────────────────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ─────────────────────────────────────────────────────────────────────────────────
-      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                                                 │ m1
-                                                                                         │ 100ms · $0.000012
-                                                                                         │ context 13,919 · cached 13,824
-                                                                                         │ fresh 95 · output 190
-          ░░░░ ░░░░ ░░░░                                                                 │ thread unnamed
-        0 ░░░░ ░░░░ ░░░░                                                                 │
-          1    2    3                                                                    │ answer 1 line 1
-░ cached  ▒ fresh  █ output                                                              │ answer 1 line 2
-                                                                                         │ answer 1 line 3
-COST PER LLM CALL ────────────────────────────────────────────────────────────────────── │ answer 1 line 4
-$0.000037           ████                                                                 │ answer 1 line 5
-                    ████                                                                 │ answer 1 line 6
-               ████ ████                                                                 │ answer 1 line 7
+▶ CHARTS · ← → call                                                                      │ LLM CALL 1 · INPUT [OUTPUT] · Tab to focus
+CONTEXT PER LLM CALL ─────────────────────────────────────────────────────────────────── │ m1
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                                                 │ 100ms · $0.000012
+                                                                                         │ input 13,919 (13,824 cached) · output 190
+                                                                                         │ thread unnamed
+          ░░░░ ░░░░ ░░░░                                                                 │
+        0 ░░░░ ░░░░ ░░░░                                                                 │ answer 1 line 1
+          1    2    3                                                                    │ answer 1 line 2
+░ cached  ▒ fresh  █ output                                                              │ answer 1 line 3
+                                                                                         │ answer 1 line 4
+COST PER LLM CALL ────────────────────────────────────────────────────────────────────── │ answer 1 line 5
+$0.000037           ████                                                                 │ answer 1 line 6
+               ▃▃▃▃ ████                                                                 │ answer 1 line 7
                ████ ████                                                                 │ answer 1 line 8
-          ████ ████ ████                                                                 │ answer 1 line 9
+          ▅▅▅▅ ████ ████                                                                 │ answer 1 line 9
         0 ████ ████ ████                                                                 │ answer 1 line 10
           1    2    3                                                                    │ answer 1 line 11
                                                                                          │ answer 1 line 12
 TIME PER LLM CALL ────────────────────────────────────────────────────────────────────── │ answer 1 line 13
     300ms           ████                                                                 │ answer 1 line 14
-                    ████                                                                 │ answer 1 line 15
+               ▃▃▃▃ ████                                                                 │ answer 1 line 15
                ████ ████                                                                 │ answer 1 line 16
-               ████ ████                                                                 │ answer 1 line 17
-          ████ ████ ████                                                                 │ answer 1 line 18
-        0 ████ ████ ████                                                                 │ answer 1 line 19
-          1    2    3                                                                    │ answer 1 line 20
-preview 1–20/60
-tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                                                                                                    [OVERVIEW]"
+          ▅▅▅▅ ████ ████                                                                 │ answer 1 line 17
+        0 ████ ████ ████                                                                 │ answer 1 line 18
+          1    2    3                                                                    │ answer 1 line 19
+                                                                                         │ answer 1 line 20
+                                                                                         │ answer 1 line 21
+preview 1–21/60
+tab pane   i/o input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                                                                                         [OVERVIEW]"
 `;

@@ -5,7 +5,12 @@ import {
   type WireMessage,
 } from "../statelog/wireAccessors.js";
 import type { HistoryRewrite, RoundDelta } from "./messageDelta.js";
-import { valuePayload, type PayloadLine } from "./payload.js";
+import {
+  cutResultPayload,
+  RESULT_PREVIEW_CHARS,
+  valuePayload,
+  type PayloadLine,
+} from "./payload.js";
 import type { Round } from "./timeline/rounds.js";
 
 const ROLE_TONES: Record<string, Extract<PayloadLine, { kind: "heading" }>["tone"]> = {
@@ -34,7 +39,21 @@ export type InputOptions = {
   systemsExpanded: boolean;
   /** Show the whole history, faded, instead of the stub of its last message. */
   historyExpanded: boolean;
+  /** Print every tool result whole instead of its first RESULT_PREVIEW_CHARS. */
+  fullResults: boolean;
 };
+
+/** Whether any tool result among the call's messages is longer than the
+ *  preview keeps. */
+export function hasCutToolResult(round: Round | undefined): boolean {
+  return (
+    round !== undefined &&
+    messagesOf(round.node.event!).some((value) => {
+      const message = normalizeMessage(value);
+      return message.role === "tool" && resultText(message.content).length > RESULT_PREVIEW_CHARS;
+    })
+  );
+}
 
 /** Whether the call carries messages a previous call on its thread sent. */
 export function hasHistory(round: Round | undefined, delta: RoundDelta | undefined): boolean {
@@ -51,7 +70,7 @@ export function hasHistory(round: Round | undefined, delta: RoundDelta | undefin
  *  it shows, faded, with a divider where the new messages start. */
 export function roundInputPayload(
   round: Round,
-  { systemsExpanded, historyExpanded }: InputOptions,
+  options: InputOptions,
   delta?: RoundDelta,
 ): InputPayload {
   const event = round.node.event!;
@@ -64,7 +83,7 @@ export function roundInputPayload(
   }
   const newFrom = delta === undefined ? 0 : messages.length - delta.added.length;
   const lines = (message: WireMessage): PayloadLine[] => [
-    ...messagePayload(message, systemsExpanded),
+    ...messagePayload(message, options),
     { kind: "blank" },
   ];
   const history = messages
@@ -75,8 +94,9 @@ export function roundInputPayload(
   if (newFrom === 0) {
     return { lines: fresh, newAt: 0 };
   }
-  if (!historyExpanded) {
-    const [heading, ...body] = messagePayload(messages[newFrom - 1], false);
+  if (!options.historyExpanded) {
+    const stubOptions = { ...options, systemsExpanded: false, fullResults: false };
+    const [heading, ...body] = messagePayload(messages[newFrom - 1], stubOptions);
     const shown = [heading, ...firstBodyLine(body)];
     const lines = [...shown, dots(newFrom - 1, delta?.rewrite), { kind: "blank" as const }];
     return { lines: [...lines.map((line) => ({ ...line, faded: true })), ...fresh], newAt: 0 };
@@ -87,22 +107,25 @@ export function roundInputPayload(
   };
 }
 
-/** The first line of a message's body, as one plain line. */
+/** The first line of a message's body, kept to one painted row: a tool
+ *  result often starts with one very long line. */
 function firstBodyLine(lines: PayloadLine[]): PayloadLine[] {
   const first = lines.find((line) => line.kind !== "blank");
   if (first === undefined) {
     return [];
   }
-  if (first.kind === "table") {
-    return [{ kind: "text", text: first.columns.join("  "), indent: 0, role: "plain" }];
-  }
-  if (first.kind === "pair") {
-    return [{ kind: "text", text: `${first.key}: ${first.text}`, indent: 0, role: "plain" }];
-  }
   if (first.kind === "heading") {
     return [first];
   }
-  return [{ kind: "text", text: first.text.split("\n")[0], indent: 0, role: "plain" }];
+  let text: string;
+  if (first.kind === "table") {
+    text = first.columns.join("  ");
+  } else if (first.kind === "pair") {
+    text = `${first.key}: ${first.text}`;
+  } else {
+    text = first.text.split("\n")[0];
+  }
+  return [{ kind: "text", text, indent: 0, role: "plain", oneRow: true }];
 }
 
 function dots(moreEarlier: number, rewrite: HistoryRewrite | undefined): PayloadLine {
@@ -169,8 +192,35 @@ function isContentPart(part: unknown): boolean {
 function isSystem(message: WireMessage): boolean {
   return message.role === "system" || message.role === "developer";
 }
-function messagePayload(message: WireMessage, systemsExpanded: boolean): PayloadLine[] {
+/** A tool result as the text the model read, the length the cut measures. */
+function resultText(content: unknown): string {
+  return typeof content === "string" ? content : (JSON.stringify(content) ?? "");
+}
+/** A tool result message: `TOOL RESULT`, its tool and call ID, and the
+ *  result, cut like the output preview cuts it unless `fullResults`. */
+function toolResultMessagePayload(message: WireMessage, fullResults: boolean): PayloadLine[] {
+  const heading: PayloadLine = {
+    kind: "heading",
+    tone: "tool",
+    text: ["TOOL RESULT", message.name, message.toolCallId].filter(Boolean).join(" · "),
+  };
+  if (message.content === null) {
+    return [heading];
+  }
+  const text = resultText(message.content);
+  if (fullResults || text.length <= RESULT_PREVIEW_CHARS) {
+    return [heading, ...contentPayload(message.content)];
+  }
+  return [heading, ...cutResultPayload(text)];
+}
+function messagePayload(
+  message: WireMessage,
+  { systemsExpanded, fullResults }: InputOptions,
+): PayloadLine[] {
   const tone = Object.hasOwn(ROLE_TONES, message.role) ? ROLE_TONES[message.role] : "chrome";
+  if (message.role === "tool") {
+    return toolResultMessagePayload(message, fullResults);
+  }
   if (isSystem(message)) {
     const lines = contentText(message.content).split("\n");
     const heading = { kind: "heading" as const, tone, text: message.role.toUpperCase() };

@@ -44,14 +44,26 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   if (line.kind === "text" && line.role === "error") {
     foreground = THEME.kind.error;
   }
+  if (line.kind === "text" && line.role === "key") {
+    foreground = THEME.key;
+  }
   const indent = line.kind === "text" ? Math.min(line.indent, Math.max(0, width - 1)) : 0;
-  return escapeControls(line.text)
-    .split("\n")
-    .flatMap((text) =>
-      wrapLine(text, width - indent).map((part) =>
-        paint(" ".repeat(indent) + part, { fg: foreground, bold: line.kind === "heading" }),
-      ),
-    );
+  const text = escapeControls(line.text);
+  const rows = line.oneRow
+    ? [firstRow(text, width - indent)]
+    : text.split("\n").flatMap((part) => wrapLine(part, width - indent));
+  return rows.map((row) =>
+    paint(" ".repeat(indent) + row, { fg: foreground, bold: line.kind === "heading" }),
+  );
+}
+
+/** What fits on one row, ending in an ellipsis when the rest was cut. */
+function firstRow(text: string, width: number): string {
+  const [first] = text.split("\n");
+  if (wrapLine(first, width).length <= 1 && first === text) {
+    return first;
+  }
+  return wrapLine(first, Math.max(1, width - 1))[0] + "…";
 }
 
 /** `key: value` with the key in its own color; a wrapped value continues

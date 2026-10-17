@@ -729,3 +729,37 @@ it("gives a tool nested inside a sub-agent its own bracket row and a deeper band
   expect(spanFor("4").bg).toBe(THEME.groupBg[0]);
   expect(spanFor("5").bg).toBeUndefined();
 });
+
+it("cuts a long tool result in the input, x shows it whole, and the stub keeps one row of it", () => {
+  const roots = fixture(2);
+  const minified = "var a=1;".repeat(100);
+  const history = [
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "c1", function: { name: "read", arguments: "{}" } }],
+    },
+    { role: "tool", tool_call_id: "c1", name: "read", content: `${minified}\nresult line 2` },
+  ];
+  const [first, second] = roots[0].children[0].children;
+  first.event!.data.messages = history;
+  second.event!.data.messages = [...history, { role: "user", content: "next question" }];
+  const view = new OverviewScreen(roots, "T", () => undefined);
+  const cut = frame(view);
+  expect(cut).toContain("TOOL RESULT · read · c1");
+  expect(cut).toContain("x full results");
+  expect(cut).toMatch(/… ~\d+ more tokens · x to show/);
+  expect(cut).not.toContain("result line 2");
+  view.handleKey({ key: "x" }, viewport);
+  view.handleKey({ key: "end", ctrl: true }, viewport);
+  const full = frame(view);
+  expect(full).toContain("result line 2");
+  expect(full).not.toContain("more tokens");
+  view.handleKey({ key: "right" }, viewport);
+  const stub = frame(view);
+  const rows = stub.split("\n").filter((row) => row.includes("var a=1;"));
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toContain("…");
+  expect(stub).toContain("… (+1 earlier message)");
+  expect(stub).toContain("next question");
+});

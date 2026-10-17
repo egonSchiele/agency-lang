@@ -110,3 +110,35 @@ it("paints a faded line in one muted color with the same text", () => {
   expect(spans).toHaveLength(1);
   expect(spans[0].fg).not.toBe(parseStyledText(bright)[0].fg);
 });
+
+it("paints a key that heads a multi-line value in the key color", () => {
+  const [key, value] = paintPayload(
+    [
+      { kind: "text", text: "value", indent: 0, role: "key" },
+      { kind: "text", text: "# draft", indent: 2, role: "text" },
+    ],
+    40,
+  );
+  const [pair] = paintPayload([{ kind: "pair", key: "id", text: "1", indent: 0 }], 40);
+  expect(parseStyledText(key)[0].fg).toBe(parseStyledText(pair)[0].fg);
+  expect(parseStyledText(value)[0].fg).not.toBe(parseStyledText(key)[0].fg);
+});
+
+it("keeps a oneRow line to one painted row, ending in an ellipsis when cut", () => {
+  const minified = "abcdefghij".repeat(10);
+  const cut = paintPayload(
+    [{ kind: "text", text: minified, indent: 2, role: "plain", oneRow: true }],
+    20,
+  );
+  expect(plainLines(cut)).toEqual([`  ${minified.slice(0, 17)}…`]);
+  const twoLines = paintPayload(
+    [{ kind: "text", text: "first\nsecond", indent: 0, role: "plain", oneRow: true }],
+    20,
+  );
+  expect(plainLines(twoLines)).toEqual(["first…"]);
+  const whole = paintPayload(
+    [{ kind: "text", text: "fits", indent: 0, role: "plain", oneRow: true }],
+    20,
+  );
+  expect(plainLines(whole)).toEqual(["fits"]);
+});

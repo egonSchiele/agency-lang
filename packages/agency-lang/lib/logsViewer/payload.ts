@@ -26,7 +26,8 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
-/** `faded` marks a line that is history, painted in one muted color. */
+/** `faded` marks a line that is history, painted in one muted color.
+ *  `oneRow` keeps a line to a single painted row, cut with an ellipsis. */
 export type PayloadLine = (
   | {
       kind: "heading";
@@ -42,7 +43,7 @@ export type PayloadLine = (
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
   | { kind: "blank" }
-) & { faded?: boolean };
+) & { faded?: boolean; oneRow?: boolean };
 export type PayloadOptions = { raw: boolean };
 type PayloadMakers = {
   [Kind in StoryRow["kind"]]: (row: Extract<StoryRow, { kind: Kind }>) => PayloadLine[];
@@ -156,8 +157,17 @@ function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
   return lines;
 }
 
-/** How much of a tool result the output preview shows. */
+/** How much of a tool result the overview shows until `x` is pressed. */
 export const RESULT_PREVIEW_CHARS = 600;
+
+/** The first RESULT_PREVIEW_CHARS of a result and a line counting the rest. */
+export function cutResultPayload(text: string): PayloadLine[] {
+  const rest = Math.ceil((text.length - RESULT_PREVIEW_CHARS) / 4);
+  return [
+    ...valuePayload(text.slice(0, RESULT_PREVIEW_CHARS)),
+    { kind: "heading", text: `… ~${fmtTokens(rest)} more tokens · x to show`, tone: "accent" },
+  ];
+}
 
 /** The completion, then each requested tool call with its arguments and,
  *  when `tools` holds the call's tool rows, what came back. Requests are
@@ -211,12 +221,7 @@ export function toolResultPayload(tool: ToolStoryRow, options: ResultOptions = {
       if (text.length <= RESULT_PREVIEW_CHARS || options.fullResults) {
         return [heading, ...valuePayload(text)];
       }
-      const rest = Math.ceil((text.length - RESULT_PREVIEW_CHARS) / 4);
-      return [
-        heading,
-        ...valuePayload(text.slice(0, RESULT_PREVIEW_CHARS)),
-        { kind: "heading", text: `… ~${fmtTokens(rest)} more tokens · x to show`, tone: "accent" },
-      ];
+      return [heading, ...cutResultPayload(text)];
     }
     case "failed":
       return [

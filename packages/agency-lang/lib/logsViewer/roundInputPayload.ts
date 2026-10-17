@@ -78,10 +78,13 @@ export function roundInputPayload(
     return { lines: fresh, newAt: 0 };
   }
   if (!historyExpanded) {
-    const stub = messagePayload(messages[newFrom - 1], false);
+    const [first, ...body] = messagePayload(messages[newFrom - 1], false);
     // A folded prompt in the stub cannot be opened, so drop the key hint.
-    const heading = { ...stub[0], text: stub[0].text.replace(/ · s to show$/, "") };
-    const shown = [heading, ...firstBodyLine(stub.slice(1))];
+    const heading =
+      first.kind === "heading"
+        ? { ...first, text: first.text.replace(/ · s to show$/, "") }
+        : first;
+    const shown = [heading, ...firstBodyLine(body)];
     const lines = [...shown, dots(newFrom - 1, delta?.rewrite), { kind: "blank" as const }];
     return { lines: [...lines.map((line) => ({ ...line, faded: true })), ...fresh], newAt: 0 };
   }

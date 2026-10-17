@@ -127,6 +127,28 @@ If the server requires an API key or token, you can pass static headers:
 }
 ```
 
+### Web search with Parallel
+
+```json
+{
+  "mcpServers": {
+    "parallel": {
+      "type": "http",
+      "url": "https://search.parallel.ai/mcp",
+      "headers": {
+        "User-Agent": "agency-lang"
+      }
+    }
+  }
+}
+```
+
+Add this server to your existing `mcpServers` block in `agency.json`. [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) provides free web search and page fetching without an account or API key. Anonymous searches use Fast mode. The free service has rate limits.
+
+Follow the [quick start](#quick-start) with `mcp("parallel")` to load the tools. Keep the `registerTools()` call and pass the tools to `llm()`. For example, ask: "Find the latest Node.js release, fetch its release notes, and summarize the changes with source URLs."
+
+The tools appear as `parallel__web_search` and `parallel__web_fetch`. Use search to find relevant pages. Use fetch to read the URLs you choose from the results.
+
 ## Authentication (OAuth)
 
 Many MCP servers (like GitHub) require OAuth authentication. The `@agency-lang/mcp` package handles the full OAuth 2.1 flow — opening your browser, receiving the callback, and storing tokens for reuse.

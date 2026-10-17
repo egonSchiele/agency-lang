@@ -45,12 +45,10 @@ export function hasHistory(round: Round | undefined, delta: RoundDelta | undefin
   );
 }
 
-/** Read the recorded input. With the call's delta, the messages the
- *  previous call on the thread already had are history: by default only
- *  the last of them appears, faded, as its heading and first line with a
- *  dots line counting the rest, so the reader keeps the thread without
- *  the bulk; expanded, the whole history is faded with a divider marking
- *  where the new messages start. */
+/** The recorded input. With the call's delta, the messages the previous
+ *  call already had are history: folded, only the last of them shows, as
+ *  its heading and first line plus a count of the rest; expanded, all of
+ *  it shows, faded, with a divider where the new messages start. */
 export function roundInputPayload(
   round: Round,
   { systemsExpanded, historyExpanded }: InputOptions,
@@ -108,15 +106,17 @@ function firstBodyLine(lines: PayloadLine[]): PayloadLine[] {
 }
 
 function dots(moreEarlier: number, rewrite: HistoryRewrite | undefined): PayloadLine {
-  const notes = [
-    ...(rewrite === undefined
-      ? []
-      : [`history changed from message ${rewrite.firstChangedAt + 1}`]),
-    ...(moreEarlier === 0
-      ? []
-      : [`+${moreEarlier} earlier ${moreEarlier === 1 ? "message" : "messages"}`]),
-  ];
-  return { kind: "meta", text: notes.length === 0 ? "…" : `… (${notes.join(", ")})` };
+  const notes: string[] = [];
+  if (rewrite !== undefined) {
+    notes.push(`history changed from message ${rewrite.firstChangedAt + 1}`);
+  }
+  if (moreEarlier > 0) {
+    notes.push(`+${moreEarlier} earlier ${plural(moreEarlier, "message")}`);
+  }
+  if (notes.length === 0) {
+    return { kind: "meta", text: "…" };
+  }
+  return { kind: "meta", text: `… (${notes.join(", ")})` };
 }
 
 function divider(
@@ -124,29 +124,47 @@ function divider(
   anyNew: boolean,
   rewrite: HistoryRewrite | undefined,
 ): PayloadLine {
-  const parts = [
-    ...(rewrite === undefined
-      ? []
-      : [`HISTORY CHANGED from message ${rewrite.firstChangedAt + 1}`]),
-    `${earlier} earlier ${earlier === 1 ? "message" : "messages"} above`,
-    anyNew ? "NEW" : "NOTHING NEW",
-  ];
+  const parts: string[] = [];
+  if (rewrite !== undefined) {
+    parts.push(`HISTORY CHANGED from message ${rewrite.firstChangedAt + 1}`);
+  }
+  parts.push(`${earlier} earlier ${plural(earlier, "message")} above`);
+  parts.push(anyNew ? "NEW" : "NOTHING NEW");
   return { kind: "heading", tone: "chrome", text: `── ${parts.join(" · ")} ──` };
 }
 
-/** A message's content as the reader wrote it: the text of each text
- *  part, with any other part (an image, say) shown as its fields. */
+function plural(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
+}
+
+/** A message's content as the reader wrote it. Content sent as parts
+ *  (`[{ type: "text", text }, { type: "image_url", … }]`) shows each text
+ *  part as its text and any other part as its fields. A list that is not
+ *  made of parts, such as a tool result of records, keeps every field. */
 function contentPayload(content: unknown): PayloadLine[] {
-  if (!Array.isArray(content)) {
+  if (!Array.isArray(content) || !content.every(isContentPart)) {
     return valuePayload(content);
   }
   return content.flatMap((part) => {
-    const text = typeof part === "string" ? part : partRecord(part).text;
-    return valuePayload(typeof text === "string" ? text : part);
+    if (typeof part === "string") {
+      return valuePayload(part);
+    }
+    const record = part as Record<string, unknown>;
+    return valuePayload(
+      record.type === "text" && typeof record.text === "string" ? record.text : part,
+    );
   });
 }
-function partRecord(part: unknown): Record<string, unknown> {
-  return part !== null && typeof part === "object" ? (part as Record<string, unknown>) : {};
+/** A string, or an object with a `type` field, the shape of a content part. */
+function isContentPart(part: unknown): boolean {
+  if (typeof part === "string") {
+    return true;
+  }
+  return (
+    part !== null &&
+    typeof part === "object" &&
+    typeof (part as { type?: unknown }).type === "string"
+  );
 }
 function isSystem(message: WireMessage): boolean {
   return message.role === "system" || message.role === "developer";
@@ -160,12 +178,14 @@ function messagePayload(message: WireMessage, systemsExpanded: boolean): Payload
       return [heading, ...contentPayload(message.content), { kind: "meta", text: "s to hide" }];
     }
     const more = lines.length - 1;
-    const rest = `… (+${more} more ${more === 1 ? "line" : "lines"} · s to show)`;
-    return [
+    const shown: PayloadLine[] = [
       heading,
       { kind: "text", text: lines[0], indent: 0, role: "plain" },
-      ...(more === 0 ? [] : [{ kind: "meta" as const, text: rest }]),
     ];
+    if (more > 0) {
+      shown.push({ kind: "meta", text: `… (+${more} more ${plural(more, "line")} · s to show)` });
+    }
+    return shown;
   }
   return [
     {

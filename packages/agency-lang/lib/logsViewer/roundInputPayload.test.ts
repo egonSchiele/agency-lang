@@ -160,3 +160,31 @@ it("writes plain dots when the stub is the only earlier message, and names a rew
   expect(hasHistory(rewritten.second, rewritten.delta)).toBe(true);
   expect(hasHistory(one.second, undefined)).toBe(false);
 });
+it("keeps every field of a tool result that is a list of records", () => {
+  const [round] = roundsOf(
+    trace([
+      leaf("promptCompletion", 100, {
+        messages: [
+          {
+            role: "tool",
+            tool_call_id: "todos",
+            name: "listTodos",
+            content: [
+              { id: 1, text: "Gather facts", status: "completed" },
+              { id: 2, text: "Write it up", status: "pending" },
+            ],
+          },
+        ],
+      }),
+    ]),
+  );
+  const { lines } = roundInputPayload(round, { systemsExpanded: false, historyExpanded: false });
+  expect(lines[1]).toMatchObject({
+    kind: "table",
+    columns: ["id", "text", "status"],
+    rows: [
+      ["1", "Gather facts", "completed"],
+      ["2", "Write it up", "pending"],
+    ],
+  });
+});

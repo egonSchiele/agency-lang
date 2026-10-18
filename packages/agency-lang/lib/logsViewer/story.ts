@@ -357,34 +357,45 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
   const rounds = Object.values(context.roundsByLeaf).filter(
     (round) => round.spanId === context.node.id,
   );
-  const names = rounds
-    .map((round) => round.threadLabel)
-    .filter((name): name is string => Boolean(name));
-  const label =
-    names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed";
-  const toolName = tool ? spanDetail(tool) : undefined;
-  const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
   return {
     ...base(context),
     kind: "llmGroup",
-    title:
-      tool !== undefined && continuesCaller(tool, rounds, context)
-        ? `${toolName ?? "tool"} · ${count}`
-        : `Thread · ${label}`,
-    label,
-    toolName,
+    title: llmGroupTitle(context.node, Object.values(context.roundsByLeaf), context.index),
+    label: threadLabelOf(rounds),
+    toolName: tool ? spanDetail(tool) : undefined,
     rounds,
   };
 }
-/** Whether every call of a group inside `tool` runs on the thread of the
- *  LLM call that requested the tool: a sub-agent extending its caller's
- *  conversation rather than starting one of its own. */
-function continuesCaller(tool: TreeNode, rounds: Round[], context: RowContext): boolean {
-  const caller = nearestAncestor(tool, context.index, (node) => node.label === "llmCall");
+/** The name every screen gives an `llmCall` span: `Thread · <label>`, or
+ *  `<tool> · N LLM calls` when the span sits in a tool and all its calls
+ *  run on the thread of the call that requested the tool, a sub-agent
+ *  extending its caller's conversation rather than starting one of its own. */
+export function llmGroupTitle(node: TreeNode, allRounds: Round[], index: TreeIndex): string {
+  const rounds = allRounds.filter((round) => round.spanId === node.id);
+  const tool = nearestAncestor(node, index, (ancestor) => ancestor.label === "toolExecution");
+  if (tool !== undefined && continuesCaller(tool, rounds, allRounds, index)) {
+    const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
+    return `${spanDetail(tool) ?? "tool"} · ${count}`;
+  }
+  return `Thread · ${threadLabelOf(rounds)}`;
+}
+function threadLabelOf(rounds: Round[]): string {
+  const names = rounds
+    .map((round) => round.threadLabel)
+    .filter((name): name is string => Boolean(name));
+  return names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed";
+}
+function continuesCaller(
+  tool: TreeNode,
+  rounds: Round[],
+  allRounds: Round[],
+  index: TreeIndex,
+): boolean {
+  const caller = nearestAncestor(tool, index, (node) => node.label === "llmCall");
   if (caller === undefined || rounds.length === 0) {
     return false;
   }
-  return Object.values(context.roundsByLeaf).some(
+  return allRounds.some(
     (round) =>
       round.spanId === caller.id &&
       rounds.every(

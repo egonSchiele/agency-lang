@@ -90,7 +90,7 @@ At boot, multiple traces with no requested focus open the picker over the most r
 
 Timeline uses `[` and `]` to select the previous or next sibling in its displayed row hierarchy. It skips descendants, stops at parent boundaries, and does not wrap. This works in drilled and zoomed views without changing the time window. Panning uses `{` and `}` while zoomed.
 
-Timeline labels enclosing `llmCall` spans `Thread · <name>` in bold accent text, matching Trace. Names come from the span's recorded calls, with `unnamed` when unavailable; breadcrumbs and the selection footer use the same label. Individual requests retain their `LLM call N` labels, and tool rows retain their argument summaries.
+Timeline labels enclosing `llmCall` spans in bold accent text with `llmGroupTitle` from `story.ts`, the same rule as Trace: `Thread · <name>`, or `<tool> · N LLM calls` for a sub-agent's span on its caller's thread. Names come from the span's recorded calls, with `unnamed` when unavailable; breadcrumbs and the selection footer use the same label. Individual requests retain their `LLM call N` labels, and tool rows retain their argument summaries.
 
 Tool ownership uses the recorded `toolCallStart` timestamp when available, falling back to the span's extent start for older logs. A duration-derived extent can begin slightly before the requesting completion, so it does not override a recorded tool start.
 

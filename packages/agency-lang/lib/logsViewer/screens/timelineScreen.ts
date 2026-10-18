@@ -27,7 +27,7 @@ import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { buildTreeIndex, type TreeIndex } from "../forest.js";
-import { storyOutline } from "../story.js";
+import { llmGroupTitle, storyOutline } from "../story.js";
 import { decisionSummary } from "../decision.js";
 import {
   childEvent,
@@ -588,13 +588,8 @@ export class TimelineScreen implements Screen {
   }
 
   private threadLabel(node: TreeNode): string | undefined {
-    if (node.label !== "llmCall") return undefined;
-    const names = this.rounds
-      .filter((round) => round.spanId === node.id)
-      .map((round) => round.threadLabel)
-      .filter((name): name is string => Boolean(name));
-    const name = names.filter((name, index) => names.indexOf(name) === index).join(", ");
-    return `Thread · ${name || "unnamed"}`;
+    if (node.label !== "llmCall" || this.index === undefined) return undefined;
+    return llmGroupTitle(node, this.rounds, this.index);
   }
 
   private renderRow(

@@ -96,6 +96,30 @@ describe("TimelineScreen", () => {
     expect(frame(view)).toContain("» Thread · codingAgent");
   });
 
+  it("names a sub-agent's span by its tool when it runs on the caller's thread", () => {
+    const call = (at: number) =>
+      leaf("promptCompletion", at, {
+        model: '"m1"',
+        threadIdentity: "T",
+        threadLabel: "main",
+        timeTaken: 500,
+        completion: { output: "ok" },
+      });
+    const inner = span("llmCall", [call(3_000), call(4_000)], { id: "inner" });
+    const tool = span(
+      "toolExecution",
+      [leaf("toolCallStart", 1_500, { toolName: "researchAgent", args: {} }), inner],
+      { id: "research" },
+    );
+    const outer = span("llmCall", [call(1_000), tool, call(5_000)], { id: "outer" });
+    const view = new TimelineScreen([trace([outer])], "T", DEFAULT_THRESHOLDS);
+    const text = frame(view);
+    expect(text).toContain("Thread · main");
+    expect(text).toContain("researchAgent · 2 LLM calls");
+    // The outer span's row and the selection footer; the inner span is no second thread.
+    expect(text.split("\n").filter((row) => row.includes("Thread · main"))).toHaveLength(2);
+  });
+
   it("uses unnamed for threads without recorded names and preserves individual call labels", () => {
     const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
     expect(frame(view)).toContain("Thread · unnamed");

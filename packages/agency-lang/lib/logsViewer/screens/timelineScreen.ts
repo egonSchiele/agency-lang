@@ -71,13 +71,20 @@ type ItemRow = {
   node: TreeNode;
   color: string;
 };
-/** The row above a turn's spans: its title in the gutter and its own axis
- *  in the bar column, since every turn is drawn to its own working time. */
+/** The row above a turn's spans: the message that began it, across the
+ *  whole width, with its cost and call count at the right. */
 type TurnRow = { kind: "turn"; id: string; depth: number; turn: number };
+/** The line under a turn's row carrying that turn's own axis, since every
+ *  turn is drawn to its own working time. The cursor skips it. */
+type AxisRow = { kind: "axis"; id: string; depth: number; turn: number };
 /** The dim line after a turn saying how long the run then waited. The
  *  cursor skips it. */
 type WaitRow = { kind: "wait"; id: string; depth: number; turn: number };
-type FlameRow = ItemRow | TurnRow | WaitRow;
+type FlameRow = ItemRow | TurnRow | AxisRow | WaitRow;
+/** Rows that are read, never selected. */
+function isReadOnly(row: FlameRow): boolean {
+  return row.kind === "axis" || row.kind === "wait";
+}
 
 export class TimelineScreen implements Screen {
   readonly screenName = "timeline" as const;
@@ -141,15 +148,25 @@ export class TimelineScreen implements Screen {
     this.derive();
   }
 
-  /** The nearest row at or past `position` the cursor may rest on: a wait
-   *  line is read, not selected. */
+  /** Several turns: each carries its own axis line, so the screen draws
+   *  none at the top. */
+  private stacked(): boolean {
+    return this.turns.length > 1;
+  }
+  private chromeRows(): number {
+    return this.stacked() ? CHROME_ROWS - 1 : CHROME_ROWS;
+  }
+
+  /** The nearest row at or past `position` the cursor may rest on: an
+   *  axis or wait line is read, not selected. */
   private selectable(position: number, direction: 1 | -1): number {
     const last = Math.max(0, this.rows.length - 1);
     let at = Math.max(0, Math.min(last, position));
-    while (this.rows[at]?.kind === "wait" && at + direction >= 0 && at + direction <= last) {
+    const skipping = (): boolean => this.rows[at] !== undefined && isReadOnly(this.rows[at]);
+    while (skipping() && at + direction >= 0 && at + direction <= last) {
       at += direction;
     }
-    if (this.rows[at]?.kind === "wait") {
+    if (skipping()) {
       at -= direction;
     }
     return Math.max(0, Math.min(last, at));
@@ -244,7 +261,7 @@ export class TimelineScreen implements Screen {
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
-    this.pageRows = Math.max(1, viewport.rows - CHROME_ROWS);
+    this.pageRows = Math.max(1, viewport.rows - this.chromeRows());
     return runViewerKey(this.bindings(), formatKey(ev));
   }
 
@@ -262,7 +279,7 @@ export class TimelineScreen implements Screen {
     ) {
       const row = this.rows[position];
       if (row.depth < selected.depth) return;
-      if (row.depth === selected.depth && row.kind !== "wait") {
+      if (row.depth === selected.depth && !isReadOnly(row)) {
         this.cursor = position;
         return;
       }
@@ -289,7 +306,7 @@ export class TimelineScreen implements Screen {
     const numberWidth = this.lineNumbers ? lineNumberWidth(this.rows.length) : 0;
     const widths = splitWidth("timeline", viewport.cols - numberWidth);
     const window = this.window();
-    const bodyRows = Math.max(1, viewport.rows - CHROME_ROWS);
+    const bodyRows = Math.max(1, viewport.rows - this.chromeRows());
     if (this.cursor < this.scrollTop) {
       this.scrollTop = this.cursor;
     }
@@ -306,21 +323,23 @@ export class TimelineScreen implements Screen {
     return column(
       { justifyContent: "flex-start" },
       paintedLine(paint(this.headerText(window), { fg: THEME.text })),
-      paintedLine(
-        joinPainted(
-          paint(
-            new AxisHeader(widths.gutter + numberWidth).computeText(
-              window,
-              this.viewStart(),
-              widths.bar,
+      ...(this.stacked()
+        ? []
+        : [
+            paintedLine(
+              joinPainted(
+                paint(
+                  new AxisHeader(widths.gutter + numberWidth).computeText(
+                    window,
+                    this.viewStart(),
+                    widths.bar,
+                  ),
+                  { fg: THEME.chrome },
+                ),
+                totalSelfLabel(widths.stats),
+              ),
             ),
-            { fg: THEME.chrome },
-          ),
-          // Names the two numbers in the right-hand column: how long a row
-          // ran, and how much of that was outside every span beneath it.
-          segment("total/self", widths.stats, { align: "right", style: { fg: THEME.chrome } }),
-        ),
-      ),
+          ]),
       body,
       paintedLine(paint(new SelectionFooter().computeText(this.footerText()), { fg: THEME.text })),
       keyFooter(hintsFrom(this.bindings()), viewport.cols, "TIMELINE", sharedHints),
@@ -481,6 +500,7 @@ export class TimelineScreen implements Screen {
       }
       if (turn !== undefined) {
         this.allRows.push({ kind: "turn", id: `turn:${turn.index}`, depth: 0, turn: turn.index });
+        this.allRows.push({ kind: "axis", id: `axis:${turn.index}`, depth: 1, turn: turn.index });
       }
       this.allRows.push(...items);
       if (turn !== undefined && turnTimes(turn).waitingMs > 0) {
@@ -822,6 +842,9 @@ export class TimelineScreen implements Screen {
     if (item.kind === "wait") {
       return waitText(this.turns[item.turn], item.turn === this.turns.length - 1);
     }
+    if (item.kind === "axis") {
+      return "";
+    }
     if (item.row.kind === "round") {
       const round = item.row.round;
       return [
@@ -880,7 +903,15 @@ export class TimelineScreen implements Screen {
 
   /** A turn's row: its title, then its own axis where its bars will be
    *  measured, then its working time; a wait row is one dim line. */
-  private turnParts(item: TurnRow | WaitRow, isCursor: boolean, widths: WidthSplit): Painted[] {
+  /** A turn's row is its title across the gutter and bar columns with its
+   *  cost and call count at the right; its axis line is blank in the
+   *  gutter, the axis in the bar column, `total/self` at the right; a wait
+   *  row is one dim line. */
+  private turnParts(
+    item: TurnRow | AxisRow | WaitRow,
+    isCursor: boolean,
+    widths: WidthSplit,
+  ): Painted[] {
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
     const turn = this.turns[item.turn];
     if (item.kind === "wait") {
@@ -889,15 +920,27 @@ export class TimelineScreen implements Screen {
         segment(text, widths.gutter + widths.bar + widths.stats, { style: { fg: THEME.muted } }),
       ];
     }
+    if (item.kind === "axis") {
+      const window = this.windowFor(item.turn);
+      return [
+        segment("", widths.gutter),
+        paint(new AxisHeader(0).computeText(window, window.start, widths.bar), {
+          fg: THEME.chrome,
+        }),
+        totalSelfLabel(widths.stats),
+      ];
+    }
     const fold = this.isFolded(item) ? "▸ " : "";
-    const window = this.windowFor(item.turn);
-    const axis = new AxisHeader(0).computeText(window, window.start, widths.bar);
+    // The title takes the whole row; the stats sit at its far right, in
+    // their own width, since the stats column is too narrow for them.
+    const stats = turnStats(turn);
+    const total = widths.gutter + widths.bar + widths.stats;
+    const statsWidth = Math.min(total, stats.length + 2);
     return [
-      segment(`${marker}${fold}${this.rowText(item)}`, widths.gutter, {
+      segment(`${marker}${fold}${this.rowText(item)}`, total - statsWidth, {
         style: { fg: isCursor ? THEME.text : THEME.accent, bold: true },
       }),
-      paint(axis, { fg: THEME.chrome }),
-      segment(turnStats(turn), widths.stats, { align: "right", style: { fg: THEME.muted } }),
+      segment(stats, statsWidth, { align: "right", style: { fg: THEME.muted } }),
     ];
   }
 
@@ -1009,10 +1052,17 @@ function turnTitle(turn: Turn): string {
   const text = turn.userText?.split("\n")[0].trim();
   return text ? `turn ${turn.index + 1} · ${text}` : `turn ${turn.index + 1}`;
 }
-/** `2m25s · $0.154`: a turn's working time and what its calls cost. */
+/** `$0.154 · 10 LLM calls`: what a turn's calls cost and how many there
+ *  were. Its working time is the end of the axis line beneath. */
 function turnStats(turn: Turn): string {
   const cost = fmtUsd(turn.rounds.reduce((sum, round) => sum + round.costUsd, 0));
-  return [fmtOffset(turnTimes(turn).workingMs), cost].filter(Boolean).join(" · ");
+  const calls = `${turn.rounds.length} LLM ${turn.rounds.length === 1 ? "call" : "calls"}`;
+  return [cost, calls].filter(Boolean).join(" · ");
+}
+/** Names the two numbers in the right-hand column: how long a row ran,
+ *  and how much of that was outside every span beneath it. */
+function totalSelfLabel(width: number): Painted {
+  return segment("total/self", width, { align: "right", style: { fg: THEME.chrome } });
 }
 function waitText(turn: Turn, last: boolean): string {
   const waited = fmtOffset(turnTimes(turn).waitingMs);

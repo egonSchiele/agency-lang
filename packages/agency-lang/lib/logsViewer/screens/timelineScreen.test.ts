@@ -151,11 +151,17 @@ describe("TimelineScreen", () => {
     expect(text).toContain("read · a");
     expect(text.indexOf("read · a")).toBeGreaterThan(text.indexOf("turn 2 ·"));
     // Each turn's row carries its own axis, ending at that turn's working time.
-    const axes = text
-      .split("\n")
-      .filter((row) => row.startsWith("▶ turn") || row.startsWith("  turn"));
-    expect(axes[0]).toMatch(/0ms\s+3\.0s\s+6\.0s\s+6\.0s · \$0\.010/);
-    expect(axes[1]).toMatch(/0ms\s+4\.5s\s+9\.0s\s+9\.0s · \$0\.010/);
+    // A turn's row is its title with cost and calls; the line beneath is its
+    // own axis, ending at that turn's working time, labeled total/self.
+    const lines = text.split("\n");
+    const under = (title: string) => lines[lines.findIndex((row) => row.includes(title)) + 1];
+    expect(lines.find((row) => row.includes("turn 1 · first question"))).toMatch(
+      /\$0\.010 · 1 LLM call/,
+    );
+    expect(under("turn 1 · first question")).toMatch(/0ms\s+3\.0s\s+6\.0s\s+total\/self/);
+    expect(under("turn 2 · second question")).toMatch(/0ms\s+4\.5s\s+9\.0s\s+total\/self/);
+    // No axis at the top: the header is followed by turn 1 directly.
+    expect(lines[1]).toContain("turn 1 · first question");
     expect(frame(view)).toMatch(
       /turn 1 · first question {2}· {2}start \+0ms {2}· {2}1 LLM call, ran 6\.0s, then waited 9m54s/,
     );
@@ -202,7 +208,8 @@ describe("TimelineScreen", () => {
     const zoomed = frame(view);
     expect(zoomed).toContain("(zoom ");
     // Turn 1's axis is untouched by a zoom in turn 2.
-    expect(zoomed.split("\n").find((row) => row.includes("turn 1 ·"))).toMatch(
+    const rows = zoomed.split("\n");
+    expect(rows[rows.findIndex((row) => row.includes("turn 1 ·")) + 1]).toMatch(
       /0ms\s+3\.0s\s+6\.0s/,
     );
     view.setFocus("L1");

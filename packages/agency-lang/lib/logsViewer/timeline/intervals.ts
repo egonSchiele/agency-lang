@@ -29,20 +29,38 @@ export function subtract(base: Interval, pieces: Interval[]): Interval[] {
  *  busyness, never overlap count. A zero-width window degenerates to 1ms
  *  so the math stays finite (the drill-into-a-0ms-span case). */
 export function coverage(intervals: Interval[], window: Interval, cells: number): number[] {
+  return cellFills(intervals, window, cells).map((fill) => fill.fraction);
+}
+
+/** How much of a cell is occupied and where: `mid` is the midpoint of the
+ *  occupied part as a fraction of the cell, 0.5 when nothing is, so a bar
+ *  can draw a span that starts late in a cell on that cell's right side. */
+export type CellFill = { fraction: number; mid: number };
+
+export function cellFills(intervals: Interval[], window: Interval, cells: number): CellFill[] {
   const windowMs = Math.max(window.end - window.start, 1);
   const cellMs = windowMs / cells;
-  const covered = new Array(cells).fill(0);
+  const covered = new Array<number>(cells).fill(0);
+  const from = new Array<number>(cells).fill(Infinity);
+  const to = new Array<number>(cells).fill(-Infinity);
   for (const iv of intervals) {
     if (iv.end < window.start || iv.start > window.end) continue;
     const first = Math.max(0, Math.floor((iv.start - window.start) / cellMs));
     const last = Math.min(cells - 1, Math.floor((iv.end - window.start) / cellMs));
     for (let i = first; i <= last; i++) {
       const cellStart = window.start + i * cellMs;
-      const overlap = Math.min(iv.end, cellStart + cellMs) - Math.max(iv.start, cellStart);
-      covered[i] += Math.max(overlap, 0);
+      const start = Math.max(iv.start, cellStart);
+      const end = Math.min(iv.end, cellStart + cellMs);
+      if (end < start) continue;
+      covered[i] += end - start;
+      from[i] = Math.min(from[i], (start - cellStart) / cellMs);
+      to[i] = Math.max(to[i], (end - cellStart) / cellMs);
     }
   }
-  return covered.map((ms) => Math.min(ms / cellMs, 1));
+  return covered.map((ms, i) => ({
+    fraction: Math.min(ms / cellMs, 1),
+    mid: from[i] <= to[i] ? (from[i] + to[i]) / 2 : 0.5,
+  }));
 }
 
 export function totalMs(intervals: Interval[]): number {

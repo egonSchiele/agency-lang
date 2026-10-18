@@ -63,3 +63,54 @@ export function benchForest(): TreeNode[] {
   const jsonl = fs.readFileSync(path.join(dir, "fixtures", "bench.jsonl"), "utf8");
   return buildForest(parseStatelogJsonl(jsonl).events);
 }
+
+const first = [{ role: "user", content: "first question" }];
+const second = [
+  ...first,
+  { role: "assistant", content: "ok" },
+  { role: "user", content: "second question\nwith a second line" },
+];
+function sessionCall(at: number, messages: unknown[]) {
+  return leaf("promptCompletion", at, {
+    timeTaken: 4_000,
+    threadIdentity: "T",
+    threadLabel: "main",
+    model: '"m1"',
+    cost: { totalCost: 0.01 },
+    messages,
+    completion: { output: "ok" },
+  });
+}
+/** Two turns: a question, a 9m54s wait, a second question, then the run
+ *  sat for 4m51s before it ended. */
+export function sessionTrace() {
+  return trace([
+    span(
+      "agentRun",
+      [
+        leaf("agentStart", 0),
+        span("llmCall", [sessionCall(5_000, first)], { id: "L1" }),
+        leaf("threadEndHooksEnd", 6_000),
+        leaf("threadResumed", 600_000),
+        span(
+          "llmCall",
+          [
+            sessionCall(605_000, second),
+            span(
+              "toolExecution",
+              [
+                leaf("toolCallStart", 606_000, { toolName: "read", args: { path: "a" } }),
+                leaf("toolCall", 608_000, { toolName: "read" }),
+              ],
+              { id: "tool2" },
+            ),
+          ],
+          { id: "L2" },
+        ),
+        leaf("threadEndHooksEnd", 609_000),
+        leaf("exitNode", 900_000),
+      ],
+      { id: "run" },
+    ),
+  ]);
+}

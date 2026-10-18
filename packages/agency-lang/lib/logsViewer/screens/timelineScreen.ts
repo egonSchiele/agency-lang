@@ -19,6 +19,8 @@ const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
 const PAN_STEP = 0.25;
 const CHROME_ROWS = 4;
+/** Right-hand column of the turns list: `2m25s · $0.021 · 10 LLM calls`. */
+const TURN_STATS_WIDTH = 30;
 const LAYOUT = { indentCells: 2, maxIndentLevels: 10, cursorMarker: "▶ ", noMarker: "  " };
 // Timeline rows share a time axis and can be drilled into nested calls.
 import { column } from "../../tui/builders.js";
@@ -41,7 +43,9 @@ import {
 import type { ViewerThresholds } from "../thresholds.js";
 import { spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
-import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
+import { ADMIN_KINDS, spanExtent, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
+import { traceTurns, turnTimes, type Turn } from "../timeline/turns.js";
+import { roundDeltas } from "../messageDelta.js";
 import {
   AxisHeader,
   BarComponent,
@@ -61,15 +65,27 @@ export class TimelineScreen implements Screen {
   /** Tool spans the story outline says are waiting for an interrupt response. */
   private waitingToolIds: string[] = [];
   private pageRows = 1;
+  /** The session's turns, one per message the person sent; a trace with
+   *  one turn shows it directly. */
+  private turns: Turn[] = [];
+  /** The turn shown, when the trace has several; undefined lists them. */
+  private turn: number | undefined;
+  private turnCursor = 0;
   private moves = {
     by: (delta: number): void => {
+      if (this.atTurnsList()) {
+        this.turnCursor = Math.max(0, Math.min(this.turns.length - 1, this.turnCursor + delta));
+        return;
+      }
       this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
     },
     toTop: (): void => {
       this.cursor = 0;
+      this.turnCursor = 0;
     },
     toBottom: (): void => {
       this.cursor = Math.max(0, this.rows.length - 1);
+      this.turnCursor = Math.max(0, this.turns.length - 1);
     },
     page: (): number => this.pageRows,
     halfPage: (): number => Math.max(1, Math.floor(this.pageRows / 2)),
@@ -109,9 +125,28 @@ export class TimelineScreen implements Screen {
       this.drillPath = [opts.drillTo];
     }
     this.derive();
+    if (opts.drillTo !== undefined) {
+      this.showTurnOf(opts.drillTo);
+    }
+  }
+
+  /** Several turns, none opened: the list of them is on screen. */
+  private atTurnsList(): boolean {
+    return this.turns.length > 1 && this.turn === undefined;
   }
 
   private bindings(): ViewerBinding[] {
+    if (this.atTurnsList()) {
+      return [
+        ...cursorBindings<ViewAction>(this.moves),
+        {
+          keys: ["Enter", "Right", "l"],
+          help: "open the selected turn: its calls and tools on their own axis",
+          hint: "⏎ open turn",
+          run: () => this.openTurn(this.turnCursor),
+        },
+      ];
+    }
     const zoomed = (): boolean => this.zoom !== undefined;
     return [
       ...cursorBindings<ViewAction>(this.moves),
@@ -148,9 +183,9 @@ export class TimelineScreen implements Screen {
       },
       {
         keys: ["Left", "h"],
-        help: "drill out",
+        help: "drill out; from a turn, back to the list of turns",
         hint: "← out",
-        when: () => this.drillPath.length > 0,
+        when: () => this.drillPath.length > 0 || this.turn !== undefined,
         run: () => this.drillOut(),
       },
       {
@@ -242,6 +277,9 @@ export class TimelineScreen implements Screen {
     return { kind: "promptLine", label: "Search: ", onResult: (text) => this.applySearch(text) };
   }
   render(viewport: Viewport, sharedHints = ""): Element {
+    if (this.atTurnsList()) {
+      return this.renderTurnsList(viewport, sharedHints);
+    }
     const numberWidth = this.lineNumbers ? lineNumberWidth(this.rows.length) : 0;
     const widths = splitWidth("timeline", viewport.cols - numberWidth);
     const window = this.window();
@@ -280,6 +318,75 @@ export class TimelineScreen implements Screen {
     );
   }
 
+  /** One line per turn, the message that started it and its work as
+   *  numbers, with the wait for the person's next message between turns:
+   *  the time a session spends waiting is said here, not drawn as a gap
+   *  that squeezes every bar. */
+  private renderTurnsList(viewport: Viewport, sharedHints: string): Element {
+    const elapsed = this.turns.length === 0 ? 0 : this.turns.at(-1)!.end - this.turns[0].start;
+    const working = this.turns.reduce((sum, turn) => sum + turnTimes(turn).workingMs, 0);
+    const header = `Elapsed ${fmtOffset(elapsed)} · ${fmtOffset(working)} working · ${fmtOffset(elapsed - working)} waiting for the user`;
+    const lines: { turn: number | undefined; text: Painted }[] = [];
+    for (const turn of this.turns) {
+      const selected = turn.index === this.turnCursor;
+      const calls = `${turn.rounds.length} LLM ${turn.rounds.length === 1 ? "call" : "calls"}`;
+      const cost = fmtUsd(turn.rounds.reduce((sum, round) => sum + round.costUsd, 0));
+      const stats = [fmtOffset(turnTimes(turn).workingMs), cost, calls].filter(Boolean).join(" · ");
+      lines.push({
+        turn: turn.index,
+        text: joinPainted(
+          segment(`${selected ? "▶ " : "  "}${turnTitle(turn)}`, viewport.cols - TURN_STATS_WIDTH, {
+            style: { fg: selected ? THEME.text : THEME.accent, bold: true },
+          }),
+          segment(stats, TURN_STATS_WIDTH, { align: "right", style: { fg: THEME.muted } }),
+        ),
+      });
+      const { waitingMs } = turnTimes(turn);
+      if (waitingMs > 0) {
+        const last = turn.index === this.turns.length - 1;
+        const note = last
+          ? `⏸ waited ${fmtOffset(waitingMs)}, then the run ended`
+          : `⏸ waited ${fmtOffset(waitingMs)} for the user`;
+        lines.push({
+          turn: undefined,
+          text: segment(`    ${note}`, viewport.cols, { style: { fg: THEME.muted } }),
+        });
+      }
+    }
+    const cursorIdx = Math.max(
+      0,
+      lines.findIndex((line) => line.turn === this.turnCursor),
+    );
+    const bodyRows = Math.max(1, viewport.rows - CHROME_ROWS);
+    if (cursorIdx < this.scrollTop) {
+      this.scrollTop = cursorIdx;
+    }
+    if (cursorIdx >= this.scrollTop + bodyRows) {
+      this.scrollTop = cursorIdx - bodyRows + 1;
+    }
+    const { element: body } = scrollList({
+      items: lines,
+      cursorIdx,
+      scrollTop: this.scrollTop,
+      viewportRows: bodyRows,
+      renderItem: (line, isCursor) =>
+        paintedLine(line.text, { bg: isCursor ? THEME.cursorBg : undefined }),
+    });
+    const selected = this.turns[this.turnCursor];
+    const footer =
+      selected === undefined
+        ? this.message
+        : `${turnTitle(selected)}  ·  start +${fmtOffset(selected.start - this.turns[0].start)}  ${this.message}`;
+    return column(
+      { justifyContent: "flex-start" },
+      paintedLine(paint(header, { fg: THEME.text })),
+      paintedLine(paint("", { fg: THEME.chrome })),
+      body,
+      paintedLine(paint(new SelectionFooter().computeText(footer.trimEnd()), { fg: THEME.text })),
+      keyFooter(hintsFrom(this.bindings()), viewport.cols, "TIMELINE", sharedHints),
+    );
+  }
+
   setData(roots: TreeNode[]): void {
     this.roots = roots;
     this.derive();
@@ -290,6 +397,7 @@ export class TimelineScreen implements Screen {
   }
 
   setFocus(id: string): void {
+    this.showTurnOf(id);
     const target = this.drawnIdFor(id) ?? this.afterLeavingDrill(id);
     if (target !== undefined) {
       this.reveal(target);
@@ -298,6 +406,8 @@ export class TimelineScreen implements Screen {
 
   setTrace(traceId: string): void {
     this.traceId = traceId;
+    this.turn = undefined;
+    this.turnCursor = 0;
     this.folded = [];
     this.defaultFolded = [];
     this.foldDefaultsApplied = [];
@@ -317,7 +427,7 @@ export class TimelineScreen implements Screen {
       this.query = undefined;
       return true;
     }
-    if (this.drillPath.length > 0) {
+    if (this.drillPath.length > 0 || this.turn !== undefined) {
       this.drillOut();
       return true;
     }
@@ -399,14 +509,29 @@ export class TimelineScreen implements Screen {
     this.drillPath = this.drillPath.filter((id) => index.byId[id] !== undefined);
     const rootNode =
       this.drillPath.length > 0 ? index.byId[this.drillPath[this.drillPath.length - 1]] : trace;
-    const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
     this.rounds = roundsOf(trace, index);
+    this.turns = traceTurns(trace, this.rounds, roundDeltas(this.rounds));
+    if (this.turn !== undefined && this.turn >= this.turns.length) {
+      this.turn = undefined;
+    }
+    if (this.atTurnsList()) {
+      this.allRows = [];
+      this.rows = [];
+      this.turnCursor = Math.max(0, Math.min(this.turns.length - 1, this.turnCursor));
+      return;
+    }
+    const window = this.turnWindow();
+    const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [], window });
+    const rounds =
+      window === undefined
+        ? this.rounds
+        : this.rounds.filter((round) => round.start >= window.start && round.start < window.end);
     this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
     this.allRows = timelineRows(
       spans,
-      this.rounds,
+      rounds,
       rootNode.nodeKind === "trace" ? rootNode.id : undefined,
     ).map((row) => ({
       row,
@@ -563,6 +688,12 @@ export class TimelineScreen implements Screen {
 
   private drillOut(): void {
     if (this.drillPath.length === 0) {
+      if (this.turn !== undefined) {
+        this.turnCursor = this.turn;
+        this.turn = undefined;
+        this.zoom = undefined;
+        this.derive();
+      }
       return;
     }
     this.drillPath = this.drillPath.slice(0, -1);
@@ -572,7 +703,51 @@ export class TimelineScreen implements Screen {
     this.derive();
   }
 
+  /** The opened turn's working time, which every bar is cut to; the whole
+   *  trace when there is one turn or none is opened. */
+  private turnWindow(): Interval | undefined {
+    const turn = this.turn === undefined ? undefined : this.turns[this.turn];
+    if (turn === undefined) {
+      return undefined;
+    }
+    return { start: turn.start, end: Math.max(turn.workEnd, turn.start + 1) };
+  }
+  /** The turn a row's time falls in. */
+  private turnOf(id: string): number | undefined {
+    const node = this.index?.byId[parseRoundId(id)?.spanId ?? id];
+    const round = this.rounds.find((candidate) => candidate.id === id);
+    const at = round?.start ?? (node === undefined ? undefined : spanExtent(node)?.start);
+    if (at === undefined) {
+      return undefined;
+    }
+    const found = this.turns.findIndex((turn) => at >= turn.start && at < turn.end);
+    return found === -1 ? undefined : found;
+  }
+  /** Open the turn holding `id` when the trace has several and that turn
+   *  is not the one on screen. */
+  private showTurnOf(id: string): void {
+    const want = this.turnOf(id);
+    if (this.turns.length > 1 && want !== undefined && want !== this.turn) {
+      this.openTurn(want, { keepDrill: true });
+    }
+  }
+  private openTurn(index: number, opts: { keepDrill?: boolean } = {}): void {
+    this.turn = index;
+    this.turnCursor = index;
+    if (!opts.keepDrill) {
+      this.drillPath = [];
+    }
+    this.zoom = undefined;
+    this.cursor = 0;
+    this.scrollTop = 0;
+    this.derive();
+  }
+
   private viewExtent(): Interval {
+    const window = this.drillPath.length === 0 ? this.turnWindow() : undefined;
+    if (window !== undefined) {
+      return window;
+    }
     if (this.rows.length === 0) {
       return { start: 0, end: 1 };
     }
@@ -657,10 +832,14 @@ export class TimelineScreen implements Screen {
 
   private headerText(window: Interval): string {
     const full = this.viewExtent();
-    const crumbs = this.drillPath
-      .map((id) => this.index?.byId[id])
-      .filter((node): node is TreeNode => node !== undefined)
-      .map((node) => this.threadLabel(node) ?? spanDisplayName(node));
+    const turn = this.turn === undefined ? undefined : this.turns[this.turn];
+    const crumbs = [
+      ...(turn === undefined ? [] : [turnTitle(turn)]),
+      ...this.drillPath
+        .map((id) => this.index?.byId[id])
+        .filter((node): node is TreeNode => node !== undefined)
+        .map((node) => this.threadLabel(node) ?? spanDisplayName(node)),
+    ];
     return new TimelineHeader().computeText({
       crumbs,
       totalMs: full.end - full.start,
@@ -843,6 +1022,12 @@ function spanColor(node: TreeNode): string {
     return THEME.accent;
   }
   return ADMIN_KINDS.includes(node.label) ? THEME.chrome : THEME.muted;
+}
+
+/** `turn 2 · do the same analysis for modem.ai`, the message on one line. */
+function turnTitle(turn: Turn): string {
+  const text = turn.userText?.split("\n")[0].trim();
+  return text ? `turn ${turn.index + 1} · ${text}` : `turn ${turn.index + 1}`;
 }
 
 function extentOf(row: TimelineRow): Interval {

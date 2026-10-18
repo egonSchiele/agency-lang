@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { Element } from "../../tui/elements.js";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { THEME } from "../theme.js";
-import { benchForest, leaf, span, trace } from "../timeline/fixture.js";
+import { benchForest, leaf, sessionTrace, span, trace } from "../timeline/fixture.js";
 import { TimelineScreen } from "../screens/timelineScreen.js";
 import type { TreeNode } from "../types.js";
 
@@ -134,6 +134,43 @@ describe("TimelineScreen", () => {
     expect(part("bash · pip install")).toMatchObject({ fg: THEME.kind.tool });
     expect(part("codeAgent ·")).toMatchObject({ fg: THEME.kind.tool });
     expect(part("Thread · codingAgent")).toMatchObject({ fg: THEME.accent });
+  });
+
+  it("lists the turns of a session with the message, the work and the wait, and opens one on its own axis", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    const list = frame(view);
+    expect(list).toContain("Elapsed 15m00s · 15.0s working · 14m45s waiting for the user");
+    expect(list).toContain("▶ turn 1 · first question");
+    expect(list).toContain("⏸ waited 9m54s for the user");
+    expect(list).toContain("turn 2 · second question");
+    expect(list).not.toContain("with a second line");
+    expect(list).toContain("⏸ waited 4m51s, then the run ended");
+    expect(list).toMatch(/9\.0s · \$0\.010 · 1 LLM call/);
+    expect(list).not.toContain("LLM call 1");
+    view.handleKey({ key: "down" }, viewport);
+    view.handleKey({ key: "enter" }, viewport);
+    const opened = frame(view);
+    expect(opened).toContain("Elapsed 9.0s  » turn 2 · second question");
+    expect(opened).toContain("LLM call 2");
+    expect(opened).toContain("read · ");
+    expect(opened).not.toContain("LLM call 1");
+    expect(opened).not.toContain("waited");
+    view.handleKey({ key: "left" }, viewport);
+    expect(frame(view)).toContain("▶ turn 2 · second question");
+  });
+
+  it("a focus from another screen opens the turn that holds it", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    view.setFocus("tool2");
+    expect(view.focusId()).toBe("tool2");
+    expect(frame(view)).toContain("» turn 2");
+    view.setFocus("L1");
+    expect(view.focusId()).toBe("L1");
+    expect(frame(view)).toContain("» turn 1");
+    const drilled = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS, {
+      drillTo: "L2",
+    });
+    expect(frame(drilled)).toContain("» turn 2 · second question » Thread · main");
   });
 
   it("uses unnamed for threads without recorded names and preserves individual call labels", () => {

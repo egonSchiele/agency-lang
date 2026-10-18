@@ -394,9 +394,11 @@ export class TraceScreen implements Screen {
     const next = Math.max(0, Math.min(position + delta, this.visible.length - 1));
     this.select(this.visible[next]?.id ?? "");
   }
+  /** A row with nothing under it, such as an LLM call that requested no
+   *  tool, has nothing to fold and keeps its look. */
   private toggleCollapsed(): void {
     const row = this.selected();
-    if (!row) {
+    if (!row || !this.hasChildren(row)) {
       return;
     }
     const collapsed = this.isCollapsed(row);
@@ -405,6 +407,10 @@ export class TraceScreen implements Screen {
       this.collapsed.push(row.id);
     }
     this.filterRows();
+  }
+  private hasChildren(row: StoryRow): boolean {
+    const next = this.allRows[this.allRows.indexOf(row) + 1];
+    return next !== undefined && next.depth > row.depth;
   }
   private isCollapsed(row: StoryRow): boolean {
     return (

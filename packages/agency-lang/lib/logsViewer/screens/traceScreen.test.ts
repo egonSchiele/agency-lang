@@ -473,6 +473,19 @@ function threadEvents(running = false) {
   ];
 }
 
+it("Enter on a row with nothing under it changes nothing", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 1000, "L", null, { completion: { output: "no tools" } }),
+    ]),
+  );
+  const before = text(screen);
+  expect(before).toContain("▶ LLM call  1");
+  press(screen, "enter");
+  expect(text(screen)).toBe(before);
+  expect(text(screen)).not.toContain("▸");
+});
+
 it("starts completed thread groups folded, while expansion survives follow and machinery", () => {
   const roots = buildForest(threadEvents());
   const screen = make(roots);

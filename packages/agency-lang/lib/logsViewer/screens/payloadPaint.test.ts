@@ -111,6 +111,33 @@ it("paints a faded line in one muted color with the same text", () => {
   expect(spans[0].fg).not.toBe(parseStyledText(bright)[0].fg);
 });
 
+it("paints a charts line as the three overview charts, each with four rows of bars", () => {
+  const round = (index: number) =>
+    ({
+      index,
+      contextTokens: 1000 * (index + 1),
+      outputTokens: 10,
+      costUsd: 0.01,
+      durationMs: 100,
+    }) as never;
+  const call = (index: number) => ({
+    id: `r${index}`,
+    round: round(index),
+    failure: undefined,
+    errors: [],
+    tools: [],
+    inside: undefined,
+    enclosing: [],
+    continues: undefined,
+    at: index,
+    threadLabel: "main",
+    threadName: "main",
+  });
+  const lines = plainLines(paintPayload([{ kind: "charts", calls: [call(0), call(1)] }], 60));
+  expect(lines.filter((line) => line.includes("PER LLM CALL"))).toHaveLength(3);
+  expect(lines.some((line) => /\s1\s+2\s*$/.test(line))).toBe(true);
+});
+
 it("paints a key that heads a multi-line value in the key color", () => {
   const [key, value] = paintPayload(
     [

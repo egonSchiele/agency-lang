@@ -5,6 +5,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { paintedLine, segment, type Painted } from "../../tui/paint.js";
 import { parseStyledText } from "../../tui/styleParser.js";
 import { resolveDetailRow } from "../detailTarget.js";
+import { findNode } from "../forest.js";
 import {
   cursorBindings,
   helpFrom,
@@ -25,6 +26,8 @@ type PayloadCache = { width: number; raw: boolean; lines: Painted[] };
 export class DetailScreen implements View {
   readonly viewName = "detail" as const;
   private row: StoryRow | undefined;
+  /** The trace the row belongs to, for payloads that chart its calls. */
+  private trace: TreeNode | undefined;
   private raw = false;
   private scroll = 0;
   private pageRows = 1;
@@ -114,6 +117,11 @@ export class DetailScreen implements View {
   }
   setData(roots: TreeNode[]): void {
     this.row = resolveDetailRow(roots, this.rowId);
+    const node = this.row?.node;
+    this.trace =
+      node === undefined
+        ? undefined
+        : roots.find((root) => findNode([root], node.id) !== undefined);
     this.cache = undefined;
   }
   helpLines(): string[] {
@@ -131,7 +139,7 @@ export class DetailScreen implements View {
       this.cache = {
         width,
         raw: this.raw,
-        lines: paintPayload(payloadFor(this.row, { raw: this.raw }), width),
+        lines: paintPayload(payloadFor(this.row, { raw: this.raw, trace: this.trace }), width),
       };
     }
     return this.cache.lines;

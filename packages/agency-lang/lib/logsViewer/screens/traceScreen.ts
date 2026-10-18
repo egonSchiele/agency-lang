@@ -549,7 +549,7 @@ export class TraceScreen implements Screen {
     }
     const key = JSON.stringify([this.cursorId, this.raw, width, this.lineNumbers]);
     if (this.cache?.key !== key) {
-      const payload = payloadFor(selected, { raw: this.raw });
+      const payload = payloadFor(selected, { raw: this.raw, trace: this.trace() });
       const render = (contentWidth: number) => [{ lines: paintPayload(payload, contentWidth) }];
       const blocks = this.lineNumbers ? numberedBlocks(width, render) : render(width);
       this.cache = { key, lines: blocks[0].lines };
@@ -764,10 +764,7 @@ function rowBodyPieces(row: StoryRow, selected: boolean, collapsed: boolean): Pi
     case "subagent":
       return [...prefix, { text: `subagent ${row.label}`, style: { fg: THEME.kind.assistant } }];
     case "llmGroup":
-      return [
-        ...prefix,
-        { text: `Thread · ${row.label}`, style: { fg: THEME.accent, bold: true } },
-      ];
+      return [...prefix, { text: row.title, style: { fg: THEME.accent, bold: true } }];
     case "machinery":
       return [...prefix, { text: row.text, style: { fg: THEME.chrome } }];
   }

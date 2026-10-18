@@ -65,7 +65,11 @@ export type PauseStoryRow = RowBase & {
   resumed: boolean;
 };
 export type SubagentStoryRow = RowBase & { kind: "subagent"; label: string };
+/** `title` is the row's name: `Thread · <label>` for a conversation of
+ *  its own, or `<tool> · N LLM calls` for a sub-agent's loop that runs on
+ *  its caller's thread, so one thread is never named twice. */
 export type LlmGroupStoryRow = RowBase & {
+  title: string;
   kind: "llmGroup";
   label: string;
   /** The tool whose call started this thread; undefined for a top-level thread. */
@@ -356,13 +360,37 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
   const names = rounds
     .map((round) => round.threadLabel)
     .filter((name): name is string => Boolean(name));
+  const label =
+    names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed";
+  const toolName = tool ? spanDetail(tool) : undefined;
+  const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
   return {
     ...base(context),
     kind: "llmGroup",
-    label: names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed",
-    toolName: tool ? spanDetail(tool) : undefined,
+    title:
+      tool !== undefined && continuesCaller(tool, rounds, context)
+        ? `${toolName ?? "tool"} · ${count}`
+        : `Thread · ${label}`,
+    label,
+    toolName,
     rounds,
   };
+}
+/** Whether every call of a group inside `tool` runs on the thread of the
+ *  LLM call that requested the tool: a sub-agent extending its caller's
+ *  conversation rather than starting one of its own. */
+function continuesCaller(tool: TreeNode, rounds: Round[], context: RowContext): boolean {
+  const caller = nearestAncestor(tool, context.index, (node) => node.label === "llmCall");
+  if (caller === undefined || rounds.length === 0) {
+    return false;
+  }
+  return Object.values(context.roundsByLeaf).some(
+    (round) =>
+      round.spanId === caller.id &&
+      rounds.every(
+        (own) => own.thread.kind === round.thread.kind && own.thread.id === round.thread.id,
+      ),
+  );
 }
 function machineryRow(context: RowContext): MachineryStoryRow {
   return {

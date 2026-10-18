@@ -24,6 +24,10 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
+import { walkNodes } from "./forest.js";
+import { overviewData, type OverviewCall } from "./overviewData.js";
+import { spanExtent } from "./timeline/spans.js";
+import type { TreeNode } from "./types.js";
 /** `faded` marks a line that is history, painted in one muted color.
  *  `oneRow` keeps a line to a single painted row, cut with an ellipsis. */
 export type PayloadLine = (
@@ -40,11 +44,21 @@ export type PayloadLine = (
   | { kind: "table"; columns: string[]; rows: string[][]; indent: number }
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
+  /** The overview's three charts over these calls, painted by `overviewCharts`. */
+  | { kind: "charts"; calls: OverviewCall[] }
   | { kind: "blank" }
 ) & { faded?: boolean; oneRow?: boolean };
-export type PayloadOptions = { raw: boolean };
+export type PayloadOptions = {
+  raw: boolean;
+  /** The trace the row belongs to. A group row charts its calls with it
+   *  and shows its summary alone without it. */
+  trace?: TreeNode;
+};
 type PayloadMakers = {
-  [Kind in StoryRow["kind"]]: (row: Extract<StoryRow, { kind: Kind }>) => PayloadLine[];
+  [Kind in StoryRow["kind"]]: (
+    row: Extract<StoryRow, { kind: Kind }>,
+    options: PayloadOptions,
+  ) => PayloadLine[];
 };
 const PAYLOADS: PayloadMakers = {
   round: roundPayload,
@@ -73,8 +87,8 @@ export function payloadFor(row: StoryRow, options: PayloadOptions): PayloadLine[
   if (options.raw) {
     return rawPayload(row);
   }
-  const make = PAYLOADS[row.kind] as (row: StoryRow) => PayloadLine[];
-  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row)];
+  const make = PAYLOADS[row.kind] as (row: StoryRow, options: PayloadOptions) => PayloadLine[];
+  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row, options)];
 }
 /** Why a span can name a parent the log never recorded. The viewer states
  *  the fact and lists the causes; matching the span to a tool by name
@@ -113,46 +127,52 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
   ];
 }
 
-function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
+/** A group of LLM calls: the row's title, one line of count and models,
+ *  one of wall time against model time and cost, an error count when there
+ *  is one, then the overview's charts over just these calls. The rows
+ *  beneath show each call, so no call is repeated here. */
+function llmGroupPayload(row: LlmGroupStoryRow, options: PayloadOptions): PayloadLine[] {
   const rounds = row.rounds;
   const models = rounds.map((round) => round.model).filter(Boolean);
-  const threads = rounds.map((round) => round.threadLabel).filter(Boolean);
-  const unique = (values: (string | undefined)[]): string =>
-    values.filter((value, index) => values.indexOf(value) === index).join(", ") || "not recorded";
-  const latest = rounds.at(-1);
+  const unique = models.filter((value, index) => models.indexOf(value) === index);
+  const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
+  const llmMs = rounds.reduce((sum, round) => sum + round.durationMs, 0);
+  const cost = fmtUsd(rounds.reduce((sum, round) => sum + round.costUsd, 0)) || "$0";
+  const extent = spanExtent(row.node);
+  const wall =
+    extent === undefined
+      ? "wall time not recorded"
+      : `ran ${fmtDuration(extent.end - extent.start, { minutes: true })}`;
   const lines: PayloadLine[] = [
-    { kind: "heading", text: `THREAD · ${row.label}`, tone: "assistant" },
-    {
-      kind: "meta",
-      text: row.toolName === undefined ? "Not started by a tool" : `Tool: ${row.toolName}`,
-    },
-    { kind: "meta", text: `Thread: ${unique(threads)}` },
-    { kind: "meta", text: `Model: ${unique(models)}` },
-    {
-      kind: "meta",
-      text: `${rounds.length} completed LLM ${rounds.length === 1 ? "call" : "calls"}`,
-    },
-    {
-      kind: "meta",
-      text: `LLM time: ${fmtDuration(rounds.reduce((sum, round) => sum + round.durationMs, 0))} · Cost: ${fmtUsd(rounds.reduce((sum, round) => sum + round.costUsd, 0)) || "$0"}`,
-    },
-    {
-      kind: "meta",
-      text: "Metrics cover these calls; nested tools are excluded. Press r for raw events.",
-    },
+    { kind: "heading", text: row.title, tone: "assistant" },
+    { kind: "meta", text: `${count} · ${unique.join(", ") || "model not recorded"}` },
+    { kind: "meta", text: `${wall} · LLM time ${fmtDuration(llmMs, { minutes: true })} · ${cost}` },
   ];
-  if (latest) {
-    lines.push(
-      { kind: "blank" },
-      {
-        kind: "heading",
-        text: `Latest response · LLM call ${latest.index + 1}`,
-        tone: "assistant",
-      },
-      ...roundResponsePayload(latest, [], TRACE_DETAIL),
-    );
+  const errors = walkNodes(row.node).filter((node) => node.event?.data.type === "error").length;
+  if (errors > 0) {
+    lines.push({
+      kind: "text",
+      text: `✖ ${errors} ${errors === 1 ? "error" : "errors"}`,
+      indent: 0,
+      role: "error",
+    });
+  }
+  if (options.trace !== undefined) {
+    const calls = groupCalls(row, options.trace);
+    if (calls.length > 0) {
+      lines.push({ kind: "blank" }, { kind: "charts", calls });
+    }
   }
   return lines;
+}
+
+/** The overview's columns for the group's calls. The tools every call
+ *  shares are dropped from `enclosing`, so the charts bracket only the
+ *  nesting inside the group and not the tool the whole group ran in. */
+function groupCalls(row: LlmGroupStoryRow, trace: TreeNode): OverviewCall[] {
+  const calls = overviewData(trace).calls.filter((call) => call.round?.spanId === row.node.id);
+  const shared = Math.min(...calls.map((call) => call.enclosing.length));
+  return calls.map((call) => ({ ...call, enclosing: call.enclosing.slice(shared) }));
 }
 
 /** How much of a tool result the overview shows until `x` is pressed. */

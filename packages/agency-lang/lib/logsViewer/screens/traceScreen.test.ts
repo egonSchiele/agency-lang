@@ -87,8 +87,8 @@ describe("trace screen", () => {
     press(screen, "enter");
     expect(screen.focusId()).toBe("calls");
     expect(text(screen)).toContain("Thread · main");
-    expect(text(screen)).toContain("Thread: main");
-    expect(text(screen)).toContain("research result");
+    expect(text(screen)).toContain("1 LLM call · test-model");
+    expect(text(screen)).toContain("CONTEXT PER LLM CALL");
     expect(text(screen)).not.toContain("subagent main");
     press(screen, "r");
     expect(text(screen)).toContain('"promptCompletion"');

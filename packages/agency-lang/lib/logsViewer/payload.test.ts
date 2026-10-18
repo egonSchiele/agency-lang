@@ -58,15 +58,12 @@ describe("payloads", () => {
     const text = payloadFor(row, options)
       .map((line) => ("text" in line ? line.text : ""))
       .join("\n");
-    expect(text).toContain("THREAD · main");
-    expect(text).toContain("Tool: researchAgent");
-    expect(text).toContain("Thread: main");
-    expect(text).toContain("Model: test-model");
-    expect(text).toContain("2 completed LLM calls");
-    expect(text).toContain("LLM time: 3.0s");
-    expect(text).toContain("Cost: $0.300");
-    expect(text).toContain("Latest response");
-    expect(text).toContain("latest answer");
+    expect(text).toContain("Thread · main");
+    expect(text).toContain("2 LLM calls · test-model");
+    expect(text).toContain("ran 4.0s · LLM time 3.0s · $0.300");
+    expect(text).not.toContain("researchAgent");
+    expect(text).not.toContain("Latest response");
+    expect(text).not.toContain("latest answer");
     expect(text).not.toContain("earlier answer");
     expect(text).not.toContain("nested review");
     expect(text).not.toContain("long repeated history");
@@ -257,6 +254,46 @@ it("shows a tool row as the call with its arguments, then the result, with no se
     "→ RESULT · ~1 tokens",
     "text",
   ]);
+});
+
+it("names a sub-agent's group by its tool when it runs on the caller's thread, and charts its calls", () => {
+  const call = (span: string, parent: string | null, at: number, identity: string) =>
+    event("promptCompletion", at, span, parent, {
+      threadIdentity: identity,
+      threadLabel: "main",
+      model: "m1",
+      timeTaken: 100,
+      cost: { totalCost: 0.1 },
+      usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 10 },
+      completion: { output: "ok" },
+    });
+  const trace = buildForest([
+    call("outer", null, 1_000, "T"),
+    event("toolCallStart", 1_100, "research", "outer", { toolName: "researchAgent" }),
+    call("inner", "research", 2_000, "T"),
+    call("inner", "research", 3_000, "T"),
+    event("toolCallStart", 3_100, "review", "outer", { toolName: "reviewAgent" }),
+    call("own", "review", 4_000, "R"),
+  ])[0];
+  const groups = outlineRows(trace, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "llmGroup",
+  );
+  expect(groups.map((row) => (row.kind === "llmGroup" ? row.title : ""))).toEqual([
+    "researchAgent · 2 LLM calls",
+    "Thread · main",
+  ]);
+  const detail = payloadFor(groups[0], { raw: false, trace });
+  expect(detail[0]).toEqual({
+    kind: "heading",
+    text: "researchAgent · 2 LLM calls",
+    tone: "assistant",
+  });
+  const charts = detail.find((line) => line.kind === "charts");
+  expect(charts?.kind === "charts" && charts.calls.map((c) => c.round?.index)).toEqual([1, 2]);
+  expect(charts?.kind === "charts" && charts.calls.every((c) => c.enclosing.length === 0)).toBe(
+    true,
+  );
+  expect(payloadFor(groups[0], { raw: false }).some((line) => line.kind === "charts")).toBe(false);
 });
 
 it("restores arguments the model sent as null that the runtime dropped, and says why", () => {

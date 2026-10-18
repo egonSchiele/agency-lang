@@ -4,11 +4,19 @@ import { parseStyledText } from "../../tui/styleParser.js";
 import type { PayloadLine } from "../payload.js";
 import { THEME } from "../theme.js";
 import { wrapLine } from "../wrapLine.js";
+import { overviewCharts, overviewChartsHeight } from "./overviewCharts.js";
+
+/** Bars per chart when a payload charts a group's calls. */
+const CHART_BAR_ROWS = 4;
 
 export function paintPayload(lines: PayloadLine[], width: number): Painted[] {
   return lines.flatMap((line) => paintPayloadLine(line, Math.max(1, width)));
 }
 function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
+  if (line.kind === "charts") {
+    const height = overviewChartsHeight(line.calls, CHART_BAR_ROWS);
+    return overviewCharts(line.calls, undefined, width, height, undefined);
+  }
   if (line.faded) {
     return paintPayloadLine({ ...line, faded: false }, width).map((painted) =>
       paint(

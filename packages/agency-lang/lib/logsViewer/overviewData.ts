@@ -56,7 +56,7 @@ export function overviewData(trace: TreeNode): OverviewData {
   const index = buildTreeIndex(trace);
   const rounds = roundsOf(trace, index);
   const models = rounds.map((round) => round.model).filter((model) => model !== "");
-  const times = traceTimes(trace, rounds);
+  const times = traceTimes(trace);
   const errors = traceErrors(trace, index);
   const story = storyOutline(trace, { admin: false });
   const toolsByRound: Record<string, ToolStoryRow[]> = Object.create(null);

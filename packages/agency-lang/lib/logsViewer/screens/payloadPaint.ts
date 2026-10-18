@@ -2,9 +2,10 @@ import { syntaxHighlight } from "../../stdlib/syntax.js";
 import { joinPainted, paint, paintAnsi, type Painted } from "../../tui/paint.js";
 import { parseStyledText } from "../../tui/styleParser.js";
 import type { PayloadLine } from "../payload.js";
+import type { OverviewCall } from "../overviewData.js";
 import { THEME } from "../theme.js";
 import { wrapLine } from "../wrapLine.js";
-import { overviewCharts, overviewChartsHeight } from "./overviewCharts.js";
+import { overviewCallCapacity, overviewCharts, overviewChartsHeight } from "./overviewCharts.js";
 
 /** Bars per chart when a payload charts a group's calls. */
 const CHART_BAR_ROWS = 4;
@@ -14,8 +15,7 @@ export function paintPayload(lines: PayloadLine[], width: number): Painted[] {
 }
 function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   if (line.kind === "charts") {
-    const height = overviewChartsHeight(line.calls, CHART_BAR_ROWS);
-    return overviewCharts(line.calls, undefined, width, height, undefined);
+    return paintCharts(line.calls, width);
   }
   if (line.faded) {
     return paintPayloadLine({ ...line, faded: false }, width).map((painted) =>
@@ -63,6 +63,21 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   return rows.map((row) =>
     paint(" ".repeat(indent) + row, { fg: foreground, bold: line.kind === "heading" }),
   );
+}
+
+/** The three charts over the calls, as many times over as it takes for
+ *  every call to be drawn: a payload scrolls down, not across, so a group
+ *  with more calls than fit in one width gets a further set of charts for
+ *  each page of them, all on the same scales. */
+function paintCharts(calls: OverviewCall[], width: number): Painted[] {
+  const height = overviewChartsHeight(calls, CHART_BAR_ROWS);
+  const room = overviewCallCapacity(calls, width);
+  const pages: Painted[][] = [];
+  for (let from = 0; from < calls.length; from += room) {
+    const page = { from, to: Math.min(calls.length, from + room) };
+    pages.push(overviewCharts(calls, undefined, width, height, undefined, page));
+  }
+  return pages.flatMap((page, position) => (position === 0 ? page : [paint(""), ...page]));
 }
 
 /** What fits on one row, ending in an ellipsis when the rest was cut. */

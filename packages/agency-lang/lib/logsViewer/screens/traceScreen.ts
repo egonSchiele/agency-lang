@@ -1,7 +1,5 @@
 import { column, row } from "../../tui/builders.js";
 import { paneHeader, twoLineKeyFooter } from "./chrome.js";
-import { normalizeMessage } from "../../statelog/wireAccessors.js";
-import { hasRunningWork } from "../timeline/spans.js";
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
@@ -25,7 +23,7 @@ import {
 } from "../keymap.js";
 import { payloadFor } from "../payload.js";
 import { fmtDuration } from "../spanText.js";
-import { outlineRows, type StoryRow } from "../story.js";
+import { outlineRows, threadComplete, type StoryRow } from "../story.js";
 import { THEME, costTone, durationTone, hotMark, toneStyle } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { parseRoundId } from "../timeline/rounds.js";
@@ -274,7 +272,7 @@ export class TraceScreen implements Screen {
       }
       // A top-level thread is the conversation itself; folding it would
       // hide the run. Only a thread a tool started folds when complete.
-      const completed = row.toolName !== undefined && completedGroup(row);
+      const completed = row.toolName !== undefined && threadComplete(row.node);
       if (!completed && this.defaultCollapsed.includes(row.id)) {
         this.defaultCollapsed = this.defaultCollapsed.filter((id) => id !== row.id);
         this.groupDefaultsApplied = this.groupDefaultsApplied.filter((id) => id !== row.id);
@@ -774,25 +772,4 @@ function rowBodyPieces(row: StoryRow, selected: boolean, collapsed: boolean): Pi
     case "machinery":
       return [...prefix, { text: row.text, style: { fg: THEME.chrome } }];
   }
-}
-
-function completedGroup(row: Extract<StoryRow, { kind: "llmGroup" }>): boolean {
-  if (hasRunningWork(row.node)) {
-    return false;
-  }
-  const last = row.node.children
-    .flatMap((node) => (node.event ? [node.event] : []))
-    .filter((event) =>
-      ["promptStart", "promptCompletion", "promptCancelled"].includes(event.data.type),
-    )
-    .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
-    .at(-1);
-  if (last?.data.type === "promptCancelled") {
-    return true;
-  }
-  if (last?.data.type !== "promptCompletion") {
-    return false;
-  }
-  const calls = normalizeMessage({ role: "assistant", ...last.data.completion }).toolCalls ?? [];
-  return calls.length === 0;
 }

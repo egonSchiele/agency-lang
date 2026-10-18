@@ -38,7 +38,7 @@ function summarize(root: TreeNode, annotation: string | undefined): TraceSummary
   return {
     traceId: root.traceId,
     startedAt: root.firstTs,
-    durationMs: root.duration === undefined ? undefined : traceTimes(root, rounds).workingMs,
+    durationMs: root.duration === undefined ? undefined : traceTimes(root).workingMs,
     rounds: rounds.length,
     tokens: root.tokens ?? 0,
     costUsd: root.cost ?? 0,

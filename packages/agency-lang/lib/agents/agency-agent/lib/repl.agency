@@ -6,6 +6,7 @@
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
 import { expandSlash } from "std::skills"
+import { turnStart } from "std::statelog"
 import { getCost, getModelCosts } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
 import {
@@ -349,6 +350,9 @@ export def buildStatus(): { left: string; right: string; context: string } {
 }
 
 export def runSeedTurn(target: string, msg: string) {
+  // The REPL logs a turn for each line it reads; a seeded prompt comes from
+  // the command line, so it is logged here.
+  turnStart(msg)
   renderUserLine(msg)
   const response = try runTurn(target, msg)
   renderAgentResponse(response)

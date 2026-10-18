@@ -444,3 +444,64 @@ describe("roundResponsePayload with tool results", () => {
     expect(lines.at(-1)).toBe("… ~13 more tokens · x to show");
   });
 });
+
+it("a group charts the request that failed in it, and counts the same errors the charts mark", () => {
+  const call = (span: string, parent: string | null, at: number, identity: string) =>
+    event("promptCompletion", at, span, parent, {
+      threadIdentity: identity,
+      threadLabel: "main",
+      model: "m1",
+      timeTaken: 100,
+      cost: { totalCost: 0.1 },
+      completion: { output: "ok" },
+    });
+  const trace = buildForest([
+    call("outer", null, 1_000, "T"),
+    event("toolCallStart", 1_100, "research", "outer", { toolName: "researchAgent" }),
+    call("inner", "research", 2_000, "T"),
+    event("error", 2_500, "inner", "research", { errorType: "llmError", message: "overloaded" }),
+    event("toolCallStart", 2_600, "deeper", "inner", { toolName: "reviewAgent" }),
+    call("nested", "deeper", 3_000, "R"),
+    event("error", 3_100, "nested", "deeper", { errorType: "llmError", message: "nested" }),
+  ])[0];
+  const groups = outlineRows(trace, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "llmGroup",
+  );
+  const detail = payloadFor(groups[0], { raw: false, trace });
+  // One error of its own; the nested thread's error belongs to the nested group.
+  expect(detail.some((line) => line.kind === "text" && line.text === "✖ 1 error")).toBe(true);
+  const charts = detail.find((line) => line.kind === "charts");
+  expect(
+    charts?.kind === "charts" &&
+      charts.calls.map((c) => (c.round === undefined ? "✖" : c.round.index + 1)),
+  ).toEqual([2, "✖"]);
+});
+
+it("shows arguments recorded as anything but an object as recorded", () => {
+  const tool = span(
+    "toolExecution",
+    [leaf("toolCallStart", 2_100, { toolName: "echo", args: "raw text" })],
+    { id: "t1" },
+  );
+  tool.firstTs = 2_100;
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: { toolCalls: [{ name: "echo", arguments: { text: null } }] },
+        }),
+        tool,
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const row = outlineRows(root, { machinery: false, admin: false }).find(
+    (candidate) => candidate.kind === "tool",
+  )!;
+  const texts = payloadFor(row, options).map((line) => ("text" in line ? line.text : line.kind));
+  expect(texts).toContain("raw text");
+  expect(texts.some((text) => text.startsWith("0:"))).toBe(false);
+});

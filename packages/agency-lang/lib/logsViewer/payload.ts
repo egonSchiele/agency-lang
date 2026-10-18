@@ -24,7 +24,7 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
-import { walkNodes } from "./forest.js";
+import { buildTreeIndex, nearestAncestor, walkNodes } from "./forest.js";
 import { overviewData, type OverviewCall } from "./overviewData.js";
 import { spanExtent } from "./timeline/spans.js";
 import type { TreeNode } from "./types.js";
@@ -130,7 +130,9 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
 /** A group of LLM calls: the row's title, one line of count and models,
  *  one of wall time against model time and cost, an error count when there
  *  is one, then the overview's charts over just these calls. The rows
- *  beneath show each call, so no call is repeated here. */
+ *  beneath show each call, so no call is repeated here. The error count
+ *  and the charts cover the same errors: those logged in this span and
+ *  not inside a nested thread, which has its own group row. */
 function llmGroupPayload(row: LlmGroupStoryRow, options: PayloadOptions): PayloadLine[] {
   const rounds = row.rounds;
   const models = rounds.map((round) => round.model).filter(Boolean);
@@ -148,7 +150,7 @@ function llmGroupPayload(row: LlmGroupStoryRow, options: PayloadOptions): Payloa
     { kind: "meta", text: `${count} · ${unique.join(", ") || "model not recorded"}` },
     { kind: "meta", text: `${wall} · LLM time ${fmtDuration(llmMs, { minutes: true })} · ${cost}` },
   ];
-  const errors = walkNodes(row.node).filter((node) => node.event?.data.type === "error").length;
+  const errors = ownErrorCount(row.node);
   if (errors > 0) {
     lines.push({
       kind: "text",
@@ -166,11 +168,30 @@ function llmGroupPayload(row: LlmGroupStoryRow, options: PayloadOptions): Payloa
   return lines;
 }
 
-/** The overview's columns for the group's calls. The tools every call
- *  shares are dropped from `enclosing`, so the charts bracket only the
- *  nesting inside the group and not the tool the whole group ran in. */
+/** Errors logged under the span whose nearest `llmCall` ancestor is the
+ *  span itself: a nested thread's errors belong to its own group. */
+function ownErrorCount(group: TreeNode): number {
+  const index = buildTreeIndex(group);
+  return walkNodes(group).filter(
+    (node) =>
+      node.event?.data.type === "error" &&
+      nearestAncestor(node, index, (ancestor) => ancestor.label === "llmCall") === group,
+  ).length;
+}
+
+/** The overview's columns for the group's calls: its completed calls, and
+ *  the requests that failed inside the span before the provider answered.
+ *  The tools every call shares are dropped from `enclosing`, so the charts
+ *  bracket only the nesting inside the group and not the tool the whole
+ *  group ran in. */
 function groupCalls(row: LlmGroupStoryRow, trace: TreeNode): OverviewCall[] {
-  const calls = overviewData(trace).calls.filter((call) => call.round?.spanId === row.node.id);
+  const index = buildTreeIndex(trace);
+  const inGroup = (call: OverviewCall): boolean =>
+    call.round !== undefined
+      ? call.round.spanId === row.node.id
+      : nearestAncestor(call.failure!.node, index, (node) => node.label === "llmCall")?.id ===
+        row.node.id;
+  const calls = overviewData(trace).calls.filter(inGroup);
   const shared = Math.min(...calls.map((call) => call.enclosing.length));
   return calls.map((call) => ({ ...call, enclosing: call.enclosing.slice(shared) }));
 }
@@ -330,9 +351,10 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
   }
   return output;
 }
-/** The recorded arguments with the dropped ones restored as `name: null`. */
+/** The recorded arguments with the dropped ones restored as `name: null`.
+ *  Arguments recorded as anything but an object are shown as recorded. */
 function argumentsWithDropped(args: unknown, dropped: string[]): unknown {
-  if (dropped.length === 0) {
+  if (dropped.length === 0 || args === null || typeof args !== "object" || Array.isArray(args)) {
     return args;
   }
   const restored: Record<string, unknown> = { ...(args as Record<string, unknown>) };

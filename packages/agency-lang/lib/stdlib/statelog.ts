@@ -1,4 +1,4 @@
-import { currentRunOrNone } from "../runtime/asyncContext.js";
+import { currentRunOrNone, type Run } from "../runtime/asyncContext.js";
 import { StatelogParser } from "../eval/statelogParser.js";
 import type { EvalRecord, EvalValue } from "../eval/types.js";
 import type { StatelogClient } from "../statelogClient.js";
@@ -65,6 +65,22 @@ export async function _evalValue(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;
   await prepared.client.evalValueRecorded(prepared.payload);
+}
+
+/** The REPLs log a turn for every line a person submits, except a slash
+ *  command, which is an instruction to the program and not a message. */
+export async function logReplTurn(run: Run, line: string): Promise<void> {
+  if (line.trimStart().startsWith("/")) {
+    return;
+  }
+  await run.log.turnStart({ message: line });
+}
+
+/** Logs `turnStart`; a no-op outside an Agency frame, like the eval events. */
+export async function _turnStart(message: string): Promise<void> {
+  const frame = currentRunOrNone();
+  if (!frame) return;
+  await frame.log.turnStart({ message: String(message) });
 }
 
 export async function _evalOutput(value: unknown): Promise<void> {

@@ -6,6 +6,7 @@ import {
   _evalOutputs,
   _finalEvalOutput,
   _setAgentName,
+  _turnStart,
 } from "agency-lang/stdlib-lib/statelog.js"
 
 /** @module
@@ -94,6 +95,24 @@ export def setAgentName(name: string) {
   @param name - The agent name, e.g. "gcode-v2".
   """
   _setAgentName(name)
+}
+
+/**
+ * Records a `turnStart` event. The logs viewer splits a session into turns
+ * at these events: each turn runs from its message to the next, and the
+ * time after a turn's last event is shown as waiting for the person. The
+ * `repl` functions in `std::ui` and `std::ui/cli` log one for every line
+ * a person submits that is not a slash command, so a program that takes
+ * its messages another way (a seeded first prompt, a chat server) calls
+ * this itself.
+ */
+export def turnStart(message: string) {
+  """
+  Mark the start of a turn: a message a person sent this program. The logs viewer draws each turn on its own axis and reports the time between turns as waiting for the person.
+
+  @param message - The message the person sent.
+  """
+  _turnStart(message)
 }
 
 export def evalValue(value: any) {

@@ -216,6 +216,10 @@ describe("TimelineScreen", () => {
     expect(rows[rows.findIndex((row) => row.includes("turn 1 ·")) + 1]).toMatch(
       /0ms\s+3\.0s\s+6\.0s/,
     );
+    // Turn 2's axis reads in offsets from the turn's start, as the header does.
+    const turnTwoAxis = rows[rows.findIndex((row) => row.includes("turn 2 ·")) + 1].trim();
+    expect(turnTwoAxis.startsWith("4.5s")).toBe(true);
+    expect(turnTwoAxis).toContain("9.0s");
     view.setFocus("L1");
     expect(view.focusId()).toBe("L1");
     expect(frame(view)).not.toContain("(zoom ");
@@ -627,6 +631,10 @@ it.each(["trace-T", "missing"])("retains its drill and cursor for unresolvable f
   expect(view.focusId()).toBe("bash1");
   expect(frame(view)).toContain("» codeAgent");
   expect(frame(view)).not.toContain("agentRun");
+  // The rows behind the drawn ones were rolled back too, so Enter still
+  // finds the selected row among them.
+  view.handleKey({ key: "enter" }, viewport);
+  expect(frame(view)).toContain("» codeAgent");
 });
 it("leaves its drill to reveal a focus drawn outside it", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS, { drillTo: "llm1" });
@@ -685,5 +693,117 @@ describe("timeline marks", () => {
     expect(text).toMatch(/✖ write/);
     expect(text).toMatch(/⏸ deploy/);
     expect(text).not.toMatch(/✖ Thread/);
+  });
+});
+
+describe("turns across follow updates and searches", () => {
+  it("a search never leaves the cursor on a wait row", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    const action = view.handleKey({ key: "/" }, viewport);
+    if (action.kind === "promptLine") action.onResult("waited");
+    expect(view.focusId()).toBe("turn:0");
+    expect(frame(view)).toContain('no matches for "waited"');
+  });
+
+  it("a follow update keeps the cursor in the turn it was in", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    for (let step = 0; step < 4; step += 1) {
+      view.handleKey({ key: "down" }, viewport);
+    }
+    expect(view.focusId()).toBe("turn:1");
+    view.setData([sessionTrace()]);
+    expect(view.focusId()).toBe("turn:1");
+    // The node span is drawn in both turns; the cursor stays on turn 2's copy.
+    view.handleKey({ key: "down" }, viewport);
+    expect(view.focusId()).toBe("node");
+    view.setData([sessionTrace()]);
+    expect(view.focusId()).toBe("node");
+    const lines = frame(view).split("\n");
+    const marker = lines.findIndex((line) => line.includes("▶ "));
+    expect(marker).toBeGreaterThan(lines.findIndex((line) => line.includes("turn 2 ·")));
+  });
+
+  it("numbers rows at the width of every row, so a fold does not widen the gutter", () => {
+    const calls = (from: number) =>
+      Array.from({ length: 60 }, (_, position) =>
+        leaf("promptCompletion", from + position * 1_000, {
+          timeTaken: 500,
+          completion: { output: "ok" },
+        }),
+      );
+    const root = trace([
+      span("llmCall", calls(1_000), { id: "A" }),
+      span("llmCall", calls(100_000), { id: "B" }),
+    ]);
+    const view = new TimelineScreen([root], root.traceId, DEFAULT_THRESHOLDS);
+    const vp = { rows: 12, cols: 100 };
+    view.handleKey({ key: "#" }, vp);
+    view.handleKey({ key: "enter" }, vp); // fold A: 62 of 122 rows stay visible
+    const recorder = new FrameRecorder();
+    recorder.write(render(layout(view.render(vp), vp.cols, vp.rows)));
+    const lines = recorder.lastText().split("\n");
+    expect(lines[1].trimEnd().endsWith("total/self")).toBe(true);
+    expect(lines.every((line) => line.length <= vp.cols)).toBe(true);
+    expect(lines[2]).toMatch(/^\s*1 /);
+  });
+
+  it("does not fold a sub-agent that is still in its tool loop", () => {
+    const loop = (finished: boolean) => {
+      const inner = span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            threadId: "5",
+            timeTaken: 1_000,
+            completion: { toolCalls: [{ name: "bash", arguments: { command: "ls" } }] },
+          }),
+          span(
+            "toolExecution",
+            [
+              leaf("toolCallStart", 2_100, { toolName: "bash", args: { command: "ls" } }),
+              leaf("toolCall", 2_500, { toolName: "bash" }),
+            ],
+            { id: "bash1" },
+          ),
+          ...(finished
+            ? [
+                leaf("promptCompletion", 3_000, {
+                  threadId: "5",
+                  timeTaken: 400,
+                  completion: { output: "done" },
+                }),
+              ]
+            : []),
+        ],
+        { id: "llm1" },
+      );
+      const agent = span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 500, { toolName: "codeAgent", args: { userMsg: "list" } }),
+          inner,
+          ...(finished ? [leaf("toolCall", 3_100, { toolName: "codeAgent" })] : []),
+        ],
+        { id: "agent1" },
+      );
+      return [trace([leaf("threadCreated", 0, { threadId: "5", label: "codingAgent" }), agent])];
+    };
+    const view = new TimelineScreen(loop(false), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).toContain("bash · ls");
+    expect(frame(view)).not.toContain("▸ Thread");
+    view.setData(loop(true));
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · ls");
+  });
+
+  it("a follow update never folds the group the cursor is inside", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1");
+    const roots = fixtureForest();
+    const index = buildTreeIndex(roots[0]);
+    index.byId.llm1.children.push(leaf("promptCompletion", 70_000, { timeTaken: 100 }));
+    view.setData(roots);
+    expect(view.focusId()).toBe("bash1");
+    expect(frame(view)).toContain("bash · pip install");
   });
 });

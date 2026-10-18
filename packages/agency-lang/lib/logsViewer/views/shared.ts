@@ -49,15 +49,17 @@ export function splitWidth(view: "timeline" | "occurrences", cols: number): Widt
 }
 
 /** Solid cells for a set of intervals, all block elements of one height
- *  so a bar reads as one shape: █ for a cell the intervals fill (over
- *  90%), ▐ for one they occupy mostly on its right (a span starting partway
- *  through), ▌ for one they occupy mostly on its left (a span ending
- *  partway through, or a short call), · for none. The shades ░▒▓ were
- *  tried first and sit at other heights than █ in most fonts. Floor
- *  override: any interval inside the window paints at least one ▌ (losing
- *  a 60ms call on a 20-minute axis is worse than overstating it). A running
- *  bar extends to the window end and is capped with ⋯ so it cannot read as
- *  finished. */
+ *  so a bar reads as one shape: █ for a cell the intervals cover by more
+ *  than three quarters, ▐ for one they cover mostly on its right (a span
+ *  starting partway through), ▌ for one they cover mostly on its left (a
+ *  span ending partway through, or a short call), · for none. The half
+ *  glyph covers half a cell and the full one all of it, so three quarters
+ *  is where each is equally wrong. The shades ░▒▓ sit at other heights
+ *  than █ in most fonts. Floor: an interval inside the window too short
+ *  for any cell still paints one half glyph, on the side of its cell it
+ *  falls in, since losing a 60ms call on a 20-minute axis is worse than
+ *  overstating it. A running bar extends to the window end and is capped
+ *  with ⋯ so it cannot read as finished. */
 export class BarComponent {
   constructor(
     private readonly intervals: Interval[],
@@ -73,15 +75,18 @@ export class BarComponent {
       }
     }
     const glyphs = cellFills(draw, window, cells).map(glyphFor);
+    const windowMs = Math.max(window.end - window.start, 1);
+    const cellMs = windowMs / Math.max(cells, 1);
     for (const iv of draw) {
       if (iv.end < window.start || iv.start > window.end) continue;
-      const windowMs = Math.max(window.end - window.start, 1);
       const at = Math.min(
         cells - 1,
         Math.max(0, Math.floor(((iv.start - window.start) / windowMs) * cells)),
       );
       if (glyphs[at] === "·") {
-        glyphs[at] = "▌";
+        const cellStart = window.start + at * cellMs;
+        const mid = Math.min(1, Math.max(0, ((iv.start + iv.end) / 2 - cellStart) / cellMs));
+        glyphs[at] = halfGlyph(mid);
       }
     }
     if (this.opts.running && cells > 0) {
@@ -93,8 +98,12 @@ export class BarComponent {
 
 function glyphFor(fill: CellFill): string {
   if (fill.fraction <= 0) return "·";
-  if (fill.fraction > 0.9) return "█";
-  return fill.mid > 0.5 ? "▐" : "▌";
+  if (fill.fraction > 0.75) return "█";
+  return halfGlyph(fill.mid);
+}
+/** The half of its cell an interval sits in, by where its middle falls. */
+function halfGlyph(mid: number): string {
+  return mid > 0.5 ? "▐" : "▌";
 }
 
 /** Tick labels over the bar area: left / mid / right offsets from the

@@ -19,6 +19,9 @@ describe("BarComponent", () => {
       new BarComponent([{ start, end }], {}).computeCells(window, 4);
     expect(new BarComponent([], {}).computeCells(window, 4)).toBe("····");
     expect(bar(0, 24)[0]).toBe("█"); // 0.96 of the cell
+    expect(bar(0, 19)[0]).toBe("█"); // 0.76: more than three quarters reads full
+    expect(bar(0, 18)[0]).toBe("▌"); // 0.72: still the half it mostly occupies
+    expect(bar(3, 22)[0]).toBe("█"); // 0.76, centred: not a half glyph
     expect(bar(0, 6)[0]).toBe("▌"); // ends early: the left side
     expect(bar(19, 25)[0]).toBe("▐"); // starts late: the right side
     // A span across cells: a start edge, full cells, an end edge.
@@ -29,6 +32,16 @@ describe("BarComponent", () => {
     const bigWindow = { start: 0, end: MIN20 };
     const cells = new BarComponent([{ start: 5_000, end: 5_060 }], {}).computeCells(bigWindow, 60);
     expect(cells).toContain("▌");
+  });
+
+  it("the floor glyph sits on the side of its cell the short call falls in", () => {
+    const bigWindow = { start: 0, end: MIN20 };
+    // Cells are 20s wide; a call at 19s is at the right end of the first cell.
+    const cells = new BarComponent([{ start: 19_000, end: 19_060 }], {}).computeCells(
+      bigWindow,
+      60,
+    );
+    expect(cells.split("").filter((c) => c !== "·")).toEqual(["▐"]);
   });
 
   it("a zero-width span inside a wide window renders exactly one ▌", () => {

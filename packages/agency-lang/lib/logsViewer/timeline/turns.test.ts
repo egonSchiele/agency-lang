@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { roundDeltas } from "../messageDelta.js";
 import { leaf, sessionTrace, span, trace } from "./fixture.js";
 import { roundsOf } from "./rounds.js";
 import { timelineSpans } from "./spans.js";
-import { traceTimes, traceTurns, turnTimes } from "./turns.js";
+import { emptyTally, tallyEvent, tallyTimes, traceTimes, traceTurns, turnTimes } from "./turns.js";
 
 describe("traceTurns", () => {
-  it("splits a session at every threadResumed, naming each turn by the message that began it", () => {
+  it("splits a session at every turnStart, naming each turn by the message it carried", () => {
     const root = sessionTrace();
     const rounds = roundsOf(root);
-    const turns = traceTurns(root, rounds, roundDeltas(rounds));
+    const turns = traceTurns(root, rounds);
     expect(turns.map((turn) => [turn.start, turn.workEnd, turn.end])).toEqual([
       [0, 6_000, 600_000],
       [600_000, 609_000, 900_000],
@@ -25,7 +24,7 @@ describe("traceTurns", () => {
 
   it("splits the run's wall time into working and waiting", () => {
     const root = sessionTrace();
-    expect(traceTimes(root, roundsOf(root))).toEqual({
+    expect(traceTimes(root)).toEqual({
       elapsedMs: 900_000,
       workingMs: 15_000,
       waitingMs: 885_000,
@@ -41,7 +40,74 @@ describe("traceTurns", () => {
       ),
     ]);
     const rounds = roundsOf(root);
-    expect(traceTurns(root, rounds, roundDeltas(rounds))).toHaveLength(1);
+    expect(traceTurns(root, rounds)).toHaveLength(1);
+  });
+
+  it("does not split at a threadResumed, which a re-entered session thread logs with no person involved", () => {
+    const call = (at: number) =>
+      leaf("promptCompletion", at, { timeTaken: 1_000, completion: { output: "ok" } });
+    const root = trace([
+      span("llmCall", [call(5_000)], { id: "L1" }),
+      leaf("threadResumed", 10_000),
+      span("llmCall", [call(15_000)], { id: "L2" }),
+    ]);
+    expect(traceTurns(root, roundsOf(root))).toHaveLength(1);
+    expect(traceTimes(root).waitingMs).toBe(0);
+  });
+});
+
+describe("tallyEvent", () => {
+  const feed = (events: [string, number][]) => {
+    const tally = emptyTally();
+    for (const [type, at] of events) {
+      tallyEvent(tally, type, at, type === "turnStart" ? "hi" : undefined);
+    }
+    return tally;
+  };
+
+  it("folds startup before the first message into that message's turn", () => {
+    const tally = feed([
+      ["agentStart", 0],
+      ["enterNode", 100],
+      ["turnStart", 5_000],
+      ["promptCompletion", 6_000],
+      ["turnStart", 20_000],
+      ["promptCompletion", 21_000],
+      ["agentEnd", 60_000],
+    ]);
+    expect(tally.turns.map((turn) => [turn.start, turn.workEnd, turn.calls])).toEqual([
+      [5_000, 6_000, 1],
+      [20_000, 21_000, 1],
+    ]);
+    // Elapsed from the first event; the startup and the quiet end are waits.
+    expect(tallyTimes(tally, { start: 0, end: 60_000 })).toEqual({
+      elapsedMs: 60_000,
+      workingMs: 2_000,
+      waitingMs: 58_000,
+    });
+  });
+
+  it("keeps work done before the first message as a turn of its own", () => {
+    const tally = feed([
+      ["agentStart", 0],
+      ["promptCompletion", 1_000],
+      ["turnStart", 5_000],
+      ["promptCompletion", 6_000],
+    ]);
+    expect(tally.turns.map((turn) => [turn.start, turn.workEnd, turn.fromMessage])).toEqual([
+      [0, 1_000, false],
+      [5_000, 6_000, true],
+    ]);
+  });
+
+  it("a run with one turn or none works to its end", () => {
+    const one = feed([
+      ["turnStart", 0],
+      ["promptCompletion", 1_000],
+      ["agentEnd", 9_000],
+    ]);
+    expect(tallyTimes(one, { start: 0, end: 9_000 }).workingMs).toBe(9_000);
+    expect(tallyTimes(emptyTally(), { start: 0, end: 9_000 }).workingMs).toBe(9_000);
   });
 });
 

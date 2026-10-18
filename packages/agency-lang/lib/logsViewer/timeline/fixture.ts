@@ -82,7 +82,8 @@ function sessionCall(at: number, messages: unknown[]) {
   });
 }
 /** Two turns: a question, a 9m54s wait, a second question, then the run
- *  sat for 4m51s before it ended. */
+ *  sat for 4m51s before it ended. Each message is a `turnStart`, as the
+ *  REPL logs them. */
 export function sessionTrace() {
   return trace([
     span(
@@ -93,9 +94,10 @@ export function sessionTrace() {
           "nodeExecution",
           [
             leaf("enterNode", 500, { nodeId: "main" }),
+            leaf("turnStart", 0, { message: "first question" }),
             span("llmCall", [sessionCall(5_000, first)], { id: "L1" }),
             leaf("threadEndHooksEnd", 6_000),
-            leaf("threadResumed", 600_000),
+            leaf("turnStart", 600_000, { message: "second question\nwith a second line" }),
             span(
               "llmCall",
               [

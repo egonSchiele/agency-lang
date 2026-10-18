@@ -1026,6 +1026,16 @@ export class StatelogClient {
     });
   }
 
+  /** A person sent the program a message: the REPL logs one per submitted
+   *  line, and `std::statelog`'s `turnStart` lets other code log one. The
+   *  logs viewer splits a session into turns at these. */
+  async turnStart({ message }: { message: string }): Promise<void> {
+    await this.post({
+      type: "turnStart",
+      message,
+    });
+  }
+
   async evalOutputRecorded({
     value,
     threadId,

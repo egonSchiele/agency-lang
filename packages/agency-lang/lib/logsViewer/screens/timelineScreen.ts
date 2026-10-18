@@ -32,7 +32,7 @@ import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { buildTreeIndex, nearestAncestor, type TreeIndex } from "../forest.js";
-import { llmGroupTitle, storyOutline } from "../story.js";
+import { llmGroupTitle, storyOutline, threadComplete } from "../story.js";
 import { decisionSummary } from "../decision.js";
 import {
   childEvent,
@@ -47,8 +47,7 @@ import type { ViewerThresholds } from "../thresholds.js";
 import { spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
-import { traceTurns, turnTimes, type Turn } from "../timeline/turns.js";
-import { roundDeltas } from "../messageDelta.js";
+import { traceTimes, traceTurns, turnTimes, type Turn } from "../timeline/turns.js";
 import {
   AxisHeader,
   BarComponent,
@@ -97,6 +96,8 @@ export class TimelineScreen implements Screen {
   /** The session's turns, one per message the person sent. With several,
    *  each is drawn under its own row and axis, one after another. */
   private turns: Turn[] = [];
+  /** The run's wall time split into work and waits for the person. */
+  private times = { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
   /** The turn the zoom belongs to; a zoom never reaches another turn. */
   private zoomTurn = 0;
   private moves = {
@@ -305,7 +306,7 @@ export class TimelineScreen implements Screen {
     return { kind: "promptLine", label: "Search: ", onResult: (text) => this.applySearch(text) };
   }
   render(viewport: Viewport, sharedHints = ""): Element {
-    const numberWidth = this.lineNumbers ? lineNumberWidth(this.rows.length) : 0;
+    const numberWidth = this.lineNumbers ? lineNumberWidth(this.allRows.length) : 0;
     const widths = splitWidth("timeline", viewport.cols - numberWidth);
     const window = this.window();
     const bodyRows = Math.max(1, viewport.rows - this.chromeRows());
@@ -421,12 +422,14 @@ export class TimelineScreen implements Screen {
     const drillPath = this.drillPath;
     const cursor = this.cursor;
     const rows = this.rows;
+    const allRows = this.allRows;
     this.drillPath = [];
     this.derive();
     const target = this.drawnIdFor(id);
     if (target === undefined) {
       this.drillPath = drillPath;
       this.rows = rows;
+      this.allRows = allRows;
       this.cursor = cursor;
     }
     return target;
@@ -460,6 +463,14 @@ export class TimelineScreen implements Screen {
       return;
     }
     const selected = this.selected();
+    // What the cursor was on, as turn-qualified keys: the row, then the
+    // rows above it. A span that runs across turns is drawn once per turn,
+    // and the cursor stays in the copy it was in.
+    const position = selected === undefined ? -1 : this.allRows.indexOf(selected);
+    const previousKeys =
+      position < 0
+        ? []
+        : [selected!, ...this.ancestorRows(position)].map((row) => this.rowKey(row));
     const previousAncestors =
       selected?.kind !== "item" || this.index === undefined
         ? []
@@ -472,7 +483,8 @@ export class TimelineScreen implements Screen {
     const rootNode =
       this.drillPath.length > 0 ? index.byId[this.drillPath[this.drillPath.length - 1]] : trace;
     this.rounds = roundsOf(trace, index);
-    this.turns = traceTurns(trace, this.rounds, roundDeltas(this.rounds));
+    this.turns = traceTurns(trace, this.rounds);
+    this.times = traceTimes(trace);
     this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
@@ -483,10 +495,7 @@ export class TimelineScreen implements Screen {
     for (const turn of stacked ? this.turns : [undefined]) {
       const window = turn === undefined ? undefined : this.turnWindow(turn.index);
       const spans = timelineSpans(rootNode, { hideKinds, window });
-      const rounds =
-        window === undefined
-          ? this.rounds
-          : this.rounds.filter((round) => round.start >= window.start && round.start < window.end);
+      const rounds = turn === undefined ? this.rounds : turn.rounds;
       const items: ItemRow[] = timelineRows(spans, rounds, traceId).map((row) => ({
         kind: "item",
         id: row.id,
@@ -512,38 +521,72 @@ export class TimelineScreen implements Screen {
         this.allRows.push({ kind: "wait", id: `wait:${turn.index}`, depth: 0, turn: turn.index });
       }
     }
-    this.applyFoldDefaults(index);
+    this.applyFoldDefaults(index, previousKeys);
     this.rows = this.visibleRows();
-    const target = focusCandidates.map((id) => this.drawnIdFor(id)).find((id) => id !== undefined);
-    this.cursor = this.selectable(target === undefined ? 0 : this.nearestVisible(target), 1);
+    this.cursor = this.selectable(
+      this.restoredPosition(previousKeys, focusCandidates, selected?.turn),
+      1,
+    );
   }
 
-  /** A completed `llmCall` span inside a tool folds the first time it is
-   *  seen, as a sub-agent's group does on the trace; a top-level thread
-   *  never folds by itself. A fold reopens when its span runs again. */
-  private applyFoldDefaults(index: TreeIndex): void {
-    this.defaultFolded = this.defaultFolded.filter((key) => {
+  /** Where the cursor lands after the rows are rebuilt: the row it was on
+   *  by turn-qualified key, else the nearest row above it by key, else
+   *  the same span or round by id in the same turn, else its first copy. */
+  private restoredPosition(keys: string[], ids: string[], turn: number | undefined): number {
+    for (const key of keys) {
+      const at = this.allRows.findIndex((row) => this.rowKey(row) === key);
+      if (at !== -1) {
+        return this.visiblePosition(at);
+      }
+    }
+    for (const id of ids) {
+      const drawn = this.drawnIdFor(id);
+      if (drawn === undefined) {
+        continue;
+      }
+      const sameTurn = this.allRows.findIndex((row) => row.id === drawn && row.turn === turn);
+      const at = sameTurn !== -1 ? sameTurn : this.allRows.findIndex((row) => row.id === drawn);
+      if (at !== -1) {
+        return this.visiblePosition(at);
+      }
+    }
+    return 0;
+  }
+
+  /** A completed thread inside a tool folds the first time it is seen, as
+   *  a sub-agent's group does on the trace; a top-level thread never folds
+   *  by itself, and a thread still in its tool loop is not complete. The
+   *  rows the cursor is on or inside (`keep`) stay open, and count as
+   *  handled so a later update does not fold them. A fold reopens when its
+   *  thread runs again. */
+  private applyFoldDefaults(index: TreeIndex, keep: string[]): void {
+    const reopened = this.defaultFolded.filter((key) => {
       const item = this.allRows.find((candidate) => this.rowKey(candidate) === key);
-      return item?.kind !== "item" || !isRunning(item.row);
+      return item?.kind === "item" && !threadComplete(item.node);
     });
+    this.defaultFolded = this.defaultFolded.filter((key) => !reopened.includes(key));
+    this.foldDefaultsApplied = this.foldDefaultsApplied.filter((key) => !reopened.includes(key));
     for (const [position, item] of this.allRows.entries()) {
       if (item.kind !== "item") {
         continue;
       }
+      const key = this.rowKey(item);
       const insideTool =
         nearestAncestor(item.node, index, (node) => node.label === "toolExecution") !== undefined;
       if (
         item.row.kind !== "span" ||
         item.node.label !== "llmCall" ||
         !insideTool ||
-        isRunning(item.row) ||
+        !threadComplete(item.node) ||
         !this.hasChildRows(position) ||
-        this.foldDefaultsApplied.includes(this.rowKey(item))
+        this.foldDefaultsApplied.includes(key)
       ) {
         continue;
       }
-      this.defaultFolded.push(this.rowKey(item));
-      this.foldDefaultsApplied.push(this.rowKey(item));
+      this.foldDefaultsApplied.push(key);
+      if (!keep.includes(key)) {
+        this.defaultFolded.push(key);
+      }
     }
   }
   private hasChildRows(position: number): boolean {
@@ -606,21 +649,16 @@ export class TimelineScreen implements Screen {
     }
     this.open(this.ancestorRows(position));
     this.rows = this.visibleRows();
-    this.cursor = this.rows.indexOf(this.allRows[position]);
+    this.cursor = this.selectable(this.rows.indexOf(this.allRows[position]), 1);
   }
-  /** The visible position of `id`, or of the folded span that hides it. */
-  private nearestVisible(id: string): number {
-    const direct = this.rows.findIndex((item) => item.id === id);
+  /** The visible position of the row at `position` in `allRows`, or of
+   *  the folded row that hides it. */
+  private visiblePosition(position: number): number {
+    const direct = this.rows.indexOf(this.allRows[position]);
     if (direct !== -1) {
       return direct;
     }
-    const position = this.allRows.findIndex((item) => item.id === id);
-    if (position === -1) {
-      return 0;
-    }
-    const holder = this.ancestorRows(position).find((item) =>
-      this.rows.some((shown) => shown === item),
-    );
+    const holder = this.ancestorRows(position).find((item) => this.rows.includes(item));
     return Math.max(0, holder === undefined ? 0 : this.rows.indexOf(holder));
   }
   /** Enter: fold or unfold a span with rows under it. A round opens in the
@@ -800,13 +838,11 @@ export class TimelineScreen implements Screen {
       .map((id) => this.index?.byId[id])
       .filter((node): node is TreeNode => node !== undefined)
       .map((node) => this.threadLabel(node) ?? spanDisplayName(node));
-    const stacked = this.turns.length > 1;
-    const elapsed = stacked ? this.turns.at(-1)!.end - this.turns[0].start : full.end - full.start;
-    const working = this.turns.reduce((sum, turn) => sum + turnTimes(turn).workingMs, 0);
+    const stacked = this.stacked();
     return new TimelineHeader().computeText({
       crumbs,
-      totalMs: elapsed,
-      waitingMs: stacked ? elapsed - working : undefined,
+      totalMs: stacked ? this.times.elapsedMs : full.end - full.start,
+      waitingMs: stacked ? this.times.waitingMs : undefined,
       zoom: this.zoom !== undefined && this.zoomTurn === this.cursorTurn() ? window : undefined,
       viewStart: full.start,
       adminShown: !this.hideAdmin,
@@ -840,14 +876,12 @@ export class TimelineScreen implements Screen {
     return this.message ? `${base}  ${this.message}` : base;
   }
 
+  /** What a search matches. A row the cursor cannot rest on has none. */
   private rowText(item: FlameRow): string {
     if (item.kind === "turn") {
       return turnTitle(this.turns[item.turn]);
     }
-    if (item.kind === "wait") {
-      return waitText(this.turns[item.turn], item.turn === this.turns.length - 1);
-    }
-    if (item.kind === "axis" || item.kind === "gap") {
+    if (item.kind !== "item") {
       return "";
     }
     if (item.row.kind === "round") {
@@ -878,8 +912,8 @@ export class TimelineScreen implements Screen {
   }
 
   private threadLabel(node: TreeNode): string | undefined {
-    if (node.label !== "llmCall" || this.index === undefined) return undefined;
-    return llmGroupTitle(node, this.rounds, this.index);
+    if (node.label !== "llmCall") return undefined;
+    return llmGroupTitle(node, this.rounds);
   }
 
   private renderRow(item: FlameRow, isCursor: boolean, widths: WidthSplit): Element {
@@ -901,13 +935,11 @@ export class TimelineScreen implements Screen {
         widths.gutter +
         widths.bar +
         widths.stats +
-        (this.lineNumbers ? lineNumberWidth(this.rows.length) : 0),
+        (this.lineNumbers ? lineNumberWidth(this.allRows.length) : 0),
       bg: isCursor ? THEME.cursorBg : undefined,
     });
   }
 
-  /** A turn's row: its title, then its own axis where its bars will be
-   *  measured, then its working time; a wait row is one dim line. */
   /** A turn's row is its title across the gutter and bar columns with its
    *  cost and call count at the right; its axis line is blank in the
    *  gutter, the axis in the bar column, `total/self` at the right; a wait
@@ -923,16 +955,19 @@ export class TimelineScreen implements Screen {
       return [segment("", widths.gutter + widths.bar + widths.stats)];
     }
     if (item.kind === "wait") {
-      const text = `${LAYOUT.noMarker}${" ".repeat(LAYOUT.indentCells)}${this.rowText(item)}`;
+      const wait = waitText(turn, item.turn === this.turns.length - 1);
+      const text = `${LAYOUT.noMarker}${" ".repeat(LAYOUT.indentCells)}${wait}`;
       return [
         segment(text, widths.gutter + widths.bar + widths.stats, { style: { fg: THEME.muted } }),
       ];
     }
     if (item.kind === "axis") {
+      // Ticks are offsets from the turn's start, as the header and footer
+      // print them, so a zoomed axis reads 4.5s–9.0s and not 0–4.5s.
       const window = this.windowFor(item.turn);
       return [
         segment("", widths.gutter),
-        paint(new AxisHeader(0).computeText(window, window.start, widths.bar), {
+        paint(new AxisHeader(0).computeText(window, turn.start, widths.bar), {
           fg: THEME.chrome,
         }),
         totalSelfLabel(widths.stats),

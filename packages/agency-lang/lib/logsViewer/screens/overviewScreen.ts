@@ -228,7 +228,7 @@ export class OverviewScreen implements Screen {
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
     const widths = panelWidths(viewport.cols);
-    this.callPageSize = overviewCallCapacity(this.data?.calls.length ?? 0, widths.left);
+    this.callPageSize = overviewCallCapacity(this.data?.calls ?? [], widths.left);
     this.preview(widths.right, Math.max(0, viewport.rows - LAYOUT.outerRows));
     return runViewerKey(this.bindings(), formatKey(event));
   }

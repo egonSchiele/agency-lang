@@ -17,7 +17,7 @@ import { runPauses, type RunPause } from "./problems.js";
 import { decisionSummary } from "./decision.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
-import { ADMIN_KINDS } from "./timeline/spans.js";
+import { ADMIN_KINDS, hasRunningWork } from "./timeline/spans.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 
 export type Interrupt = { effect: string; message: string; outcome: string; resolvedBy?: string };
@@ -95,8 +95,13 @@ type RowContext = {
   roundsByLeaf: Record<string, Round>;
   deltasByRound: Record<string, RoundDelta>;
   pausesByInterrupt: Record<string, RunPause>;
+  /** The round that requested each tool span, by the span's node id. */
+  requestedByTool: Record<string, Round>;
 };
-type Lookups = Pick<RowContext, "index" | "roundsByLeaf" | "deltasByRound" | "pausesByInterrupt">;
+type Lookups = Pick<
+  RowContext,
+  "index" | "roundsByLeaf" | "deltasByRound" | "pausesByInterrupt" | "requestedByTool"
+>;
 type RowMaker = (context: RowContext) => StoryRow;
 const STORY_EVENTS: Record<string, RowMaker> = {
   promptCompletion: roundRow,
@@ -274,8 +279,7 @@ function toolRow(context: RowContext): ToolStoryRow {
  *  compare its arguments with the LLM call's. Requests pair with tool
  *  rows by name, in order, as they do on the overview. */
 function droppedNullArgs(context: RowContext, event: EventEnvelope): string[] {
-  const rounds = Object.values(context.roundsByLeaf).sort((a, b) => a.end - b.end);
-  const round = requestedBy(context.node, rounds, context.index);
+  const round = context.requestedByTool[context.node.id];
   if (round === undefined) {
     return [];
   }
@@ -283,10 +287,9 @@ function droppedNullArgs(context: RowContext, event: EventEnvelope): string[] {
   const siblings = context.parent.children.filter((node) => {
     const started = childEvent(node, "toolCallStart") ?? childEvent(node, "toolCall");
     return (
-      node.label === "toolExecution" &&
       started !== undefined &&
       toolNameOf(started) === name &&
-      requestedBy(node, rounds, context.index) === round
+      context.requestedByTool[node.id] === round
     );
   });
   const calls =
@@ -358,7 +361,7 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
   return {
     ...base(context),
     kind: "llmGroup",
-    title: llmGroupTitle(context.node, rounds, context.index),
+    title: llmGroupTitle(context.node, rounds),
     label: threadLabelOf(rounds),
     toolName: tool ? spanDetail(tool) : undefined,
     rounds,
@@ -368,7 +371,7 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
  *  calls`. A sub-agent that runs on its caller's thread is named by that
  *  thread too; naming it by its tool instead was tried and read as a
  *  different kind of row. */
-export function llmGroupTitle(node: TreeNode, allRounds: Round[], index: TreeIndex): string {
+export function llmGroupTitle(node: TreeNode, allRounds: Round[]): string {
   const rounds = allRounds.filter((round) => round.spanId === node.id);
   const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
   return `Thread · ${threadLabelOf(rounds)} · ${count}`;
@@ -378,6 +381,31 @@ function threadLabelOf(rounds: Round[]): string {
     .map((round) => round.threadLabel)
     .filter((name): name is string => Boolean(name));
   return names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed";
+}
+/** Whether an `llmCall` span's thread is done: nothing under it still
+ *  runs, and its last call was cancelled or answered without asking for a
+ *  tool. A span whose last call requested tools is still in its tool loop,
+ *  even between the tools' end and the next call. The trace and the
+ *  timeline fold a completed sub-agent on first sight by this rule. */
+export function threadComplete(node: TreeNode): boolean {
+  if (hasRunningWork(node)) {
+    return false;
+  }
+  const last = node.children
+    .flatMap((child) => (child.event ? [child.event] : []))
+    .filter((event) =>
+      ["promptStart", "promptCompletion", "promptCancelled"].includes(event.data.type),
+    )
+    .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
+    .at(-1);
+  if (last?.data.type === "promptCancelled") {
+    return true;
+  }
+  if (last?.data.type !== "promptCompletion") {
+    return false;
+  }
+  const calls = normalizeMessage({ role: "assistant", ...last.data.completion }).toolCalls ?? [];
+  return calls.length === 0;
 }
 function machineryRow(context: RowContext): MachineryStoryRow {
   return {
@@ -408,7 +436,18 @@ function lookupsFor(trace: TreeNode): Lookups {
       pausesByInterrupt[pause.interruptId] = pause;
     }
   }
-  return { index, roundsByLeaf, deltasByRound, pausesByInterrupt };
+  const byEnd = [...rounds].sort((first, second) => first.end - second.end);
+  const requestedByTool: Record<string, Round> = Object.create(null);
+  for (const node of walkNodes(trace)) {
+    if (node.label !== "toolExecution") {
+      continue;
+    }
+    const round = requestedBy(node, byEnd, index);
+    if (round !== undefined) {
+      requestedByTool[node.id] = round;
+    }
+  }
+  return { index, roundsByLeaf, deltasByRound, pausesByInterrupt, requestedByTool };
 }
 export function forestOutline(trace: TreeNode, options: AdminOptions): StoryRow[] {
   const lookups = lookupsFor(trace);
@@ -550,9 +589,6 @@ function isThreadRow(node: TreeNode, lookups: Lookups): boolean {
 }
 function storyParents(rows: StoryRow[], lookups: Lookups): Record<string, string | undefined> {
   const parents: Record<string, string | undefined> = Object.create(null);
-  const rounds = Object.values(lookups.roundsByLeaf).sort(
-    (first, second) => first.end - second.end,
-  );
   for (const row of rows) {
     const ancestors = ancestorsOf(row.node, lookups.index);
     const ancestor = ancestors.find((node) =>
@@ -560,7 +596,7 @@ function storyParents(rows: StoryRow[], lookups: Lookups): Record<string, string
     );
     parents[row.id] = rows.find((candidate) => candidate.node === ancestor)?.id;
     if (row.kind === "tool") {
-      parents[row.id] = requestedBy(row.node, rounds, lookups.index)?.id ?? parents[row.id];
+      parents[row.id] = lookups.requestedByTool[row.node.id]?.id ?? parents[row.id];
     }
     if (row.kind === "machinery") {
       const tool = nearestAncestor(

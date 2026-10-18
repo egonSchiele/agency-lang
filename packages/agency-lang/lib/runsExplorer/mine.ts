@@ -7,6 +7,7 @@
 // log with keystrokes. Bytes carry across chunks (a UTF-8 character
 // split at a chunk boundary must survive), and every failure becomes a
 // typed warning — a torn line keeps the metrics accumulated before it.
+import { emptyTally, tallyEvent, type TurnTally } from "../logsViewer/timeline/turns.js";
 import * as fs from "fs";
 
 import { stripQuotes } from "../logsViewer/spanText.js";
@@ -21,6 +22,9 @@ export type TraceTotals = {
   models: string[];
   firstTsMs: number | null;
   lastTsMs: number | null;
+  /** The trace's turns, so the explorer's duration is working time: a
+   *  session that sat between two messages did not take that long. */
+  turns: TurnTally;
   agentName?: string;
   eventCount: number;
 };
@@ -148,6 +152,7 @@ function accumulate(traces: Record<string, TraceTotals>, parsed: unknown): void 
     models: [],
     firstTsMs: null,
     lastTsMs: null,
+    turns: emptyTally(),
     eventCount: 0,
   };
   traces[traceId] = totals;
@@ -157,6 +162,7 @@ function accumulate(traces: Record<string, TraceTotals>, parsed: unknown): void 
   if (Number.isFinite(tsMs)) {
     totals.firstTsMs = totals.firstTsMs === null ? tsMs : Math.min(totals.firstTsMs, tsMs);
     totals.lastTsMs = totals.lastTsMs === null ? tsMs : Math.max(totals.lastTsMs, tsMs);
+    tallyEvent(totals.turns, String(payload.type), tsMs, payload.message);
   }
 
   if (payload.type === "agentName" && typeof payload.name === "string") {

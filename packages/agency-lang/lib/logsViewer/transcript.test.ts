@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
-import { consumeRepresented, transcriptBlocks, transcriptText } from "./transcript.js";
+import { represents, transcriptBlocks, transcriptText } from "./transcript.js";
 import { transcriptPayload } from "./transcriptPayload.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
@@ -92,42 +92,52 @@ describe("transcript blocks", () => {
       expect.stringContaining("same answer"),
       "Call rejected",
     ]);
-    const pending: WireMessage[] = [{ role: "assistant", content: "same" }];
-    expect(consumeRepresented(pending[0], pending)).toBe(true);
-    expect(consumeRepresented({ role: "assistant", content: "same" }, pending)).toBe(false);
+  });
+  it("represents a message by its key, a handoff's kept text, or a reply's call id", () => {
+    const shown: WireMessage = { role: "assistant", content: "same", toolCalls: [request] };
+    expect(represents(shown, { ...shown })).toBe(true);
+    // A handoff leaves the completion's text in the history with the call
+    // that dispatched it removed; a different text is another message.
+    expect(represents(shown, { role: "assistant", content: "same" })).toBe(true);
+    expect(represents(shown, { role: "assistant", content: "other" })).toBe(false);
+    expect(represents({ role: "assistant", content: "same" }, shown)).toBe(false);
+    const reply: WireMessage = { role: "tool", toolCallId: "call", content: "result" };
+    expect(represents(reply, { ...reply, content: "result [attachment: image]" })).toBe(true);
+    expect(represents(reply, { ...reply, toolCallId: "other" })).toBe(false);
+    expect(represents({ role: "tool", content: "x" }, { role: "tool", content: "x" })).toBe(true);
   });
   it.each([
     "result [attachment: image]",
     "res\n\n[tool result truncated: showing 3 of 6 chars]",
     { errors: [], warnings: [] },
     42,
-  ])("retains a reply that differs from a recorded result: %j", (output) => {
-    expect(
-      transcriptBlocks(conversation([], output)).filter((block) => block.kind === "history"),
-    ).toHaveLength(1);
+  ])("lays a reply that differs from the recorded result beside the tool block: %j", (output) => {
+    const blocks = transcriptBlocks(conversation([], output));
+    expect(blocks.filter((block) => block.kind === "history")).toHaveLength(0);
+    expect(blocks.find((block) => block.kind === "tool")).toMatchObject({ modelSaw: "result" });
   });
-  it("accepts one successful Result wrapper and conservatively retains nested wrappers", () => {
+  it("notes what the model read only when it differs from the recorded result", () => {
+    const plain = transcriptBlocks(
+      conversation([], { __type: "resultType", success: true, value: "result" }),
+    );
+    expect(plain.filter((block) => block.kind === "history")).toHaveLength(0);
+    expect(plain.find((block) => block.kind === "tool")).toMatchObject({ modelSaw: undefined });
+    const nested = transcriptBlocks(
+      conversation([], {
+        __type: "resultType",
+        success: true,
+        value: { __type: "resultType", success: true, value: "result" },
+      }),
+    );
+    expect(nested.filter((block) => block.kind === "history")).toHaveLength(0);
+    expect(nested.find((block) => block.kind === "tool")).toMatchObject({ modelSaw: "result" });
+  });
+  it("pairs identical repeated requests with the tools by position, as the trace does", () => {
     expect(
-      transcriptBlocks(
-        conversation([], { __type: "resultType", success: true, value: "result" }),
-      ).filter((block) => block.kind === "history"),
+      transcriptBlocks(conversation([], "result", [request, { ...request, id: "other" }])).filter(
+        (block) => block.kind === "history",
+      ),
     ).toHaveLength(0);
-    expect(
-      transcriptBlocks(
-        conversation([], {
-          __type: "resultType",
-          success: true,
-          value: { __type: "resultType", success: true, value: "result" },
-        }),
-      ).filter((block) => block.kind === "history"),
-    ).toHaveLength(1);
-  });
-  it("does not assign identical repeated requests to one result", () => {
-    expect(
-      transcriptBlocks(conversation([], "result", [request, { ...request, id: "other" }]))
-        .filter((block) => block.kind === "history")
-        .map((block) => block.text),
-    ).toContain("result");
   });
   it("retains seeded messages and identical text on independent recorded threads", () => {
     const trace = buildForest([
@@ -189,9 +199,8 @@ describe("transcript blocks", () => {
         "write code",
         "summary of earlier work",
       ]);
-      expect(blocks.filter((block) => block.kind === "history").map((block) => block.text)).toEqual(
-        ["same"],
-      );
+      // The messages compaction kept were shown already and are not repeated.
+      expect(blocks.filter((block) => block.kind === "history")).toEqual([]);
     },
   );
   it("gives distinct stable system IDs per thread and full input position", () => {
@@ -337,6 +346,9 @@ function toolConversation(options: {
   ])[0];
 }
 
+// A tool with no recorded call id pairs with the request of its name at its
+// position in the round, whatever the recorded arguments: the runtime fills
+// in defaults and drops nulls, so the arguments seldom match exactly.
 it.each([
   { requested: { path: "a", limit: null }, recorded: { path: "a" } },
   { requested: { limit: 1, path: "a" }, recorded: { path: "a", limit: 1 } },
@@ -344,20 +356,13 @@ it.each([
     requested: { options: { limit: 1, path: "a" } },
     recorded: { options: { path: "a", limit: 1 } },
   },
-])("pairs normalized arguments without repeating the tool reply: %j", (options) => {
-  expect(
-    transcriptBlocks(toolConversation(options)).filter((block) => block.kind === "history"),
-  ).toHaveLength(0);
-});
-
-it.each([
   { requested: { path: "a" }, recorded: { path: "a", required: null } },
   { requested: { path: "a", required: null }, recorded: { path: "a", required: "value" } },
   { requested: { options: { limit: null } }, recorded: { options: {} } },
-])("retains replies with different required or nested arguments: %j", (options) => {
+])("pairs a reply by position without repeating it, for arguments %j", (options) => {
   expect(
     transcriptBlocks(toolConversation(options)).filter((block) => block.kind === "history"),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
 });
 
 it("uses the recorded call ID to distinguish identical requests", () => {
@@ -446,15 +451,17 @@ describe("error blocks", () => {
 
   it("places an error outside a tool by time on its thread, folded with its rethrow", () => {
     const blocks = transcriptBlocks(run());
-    // The failed tool's reply is not a represented result, so it stays as history.
+    // The failed tool's reply is laid beside its block, not shown again.
     expect(blocks.map((block) => block.kind)).toEqual([
       "user",
       "assistant",
       "tool",
       "error",
-      "history",
       "assistant",
     ]);
+    expect(blocks.find((block) => block.kind === "tool")).toMatchObject({
+      modelSaw: "Error: no such file",
+    });
     const error = blocks.find((block) => block.kind === "error");
     expect(error).toMatchObject({ error: { message: "validator failed", count: 2 }, at: 150 });
     expect(transcriptText(error!)).toBe("validator failed");
@@ -645,5 +652,219 @@ describe("decision calls", () => {
     expect(lines).toContain("Which expression?");
     expect(lines).toContain("ANSWER · response");
     expect(lines).toContain("curious 86%");
+  });
+});
+
+describe("a handoff on the caller's thread", () => {
+  /** The caller dispatches `researchAgent`, whose calls land on the same
+   *  thread; on return its system prompt is stripped and a hand-back user
+   *  message is pushed. */
+  function handoff() {
+    const ask = { id: "r", name: "researchAgent", arguments: { userMsg: "look it up" } };
+    const kept = { role: "assistant", content: "I will dispatch a researcher." };
+    const research = { role: "system", content: "You are a research analyst." };
+    const prompt = { role: "user", content: "look it up" };
+    const search = { id: "s", name: "search", arguments: { query: "q" } };
+    const searched = { role: "assistant", content: "", toolCalls: [search] };
+    const found = { role: "tool", name: "search", tool_call_id: "s", content: "hits" };
+    const back = { role: "user", content: "[researchAgent finished. found it]\nContinue." };
+    return buildForest([
+      event("promptCompletion", 100, "A", null, {
+        threadIdentity: "main",
+        threadLabel: "main",
+        messages: [user],
+        completion: { output: "I will dispatch a researcher.", toolCalls: [ask] },
+      }),
+      event("toolCallStart", 101, "t", "A", { toolName: "researchAgent", args: ask.arguments }),
+      event("promptCompletion", 150, "B", "t", {
+        threadIdentity: "main",
+        threadLabel: "main",
+        messages: [user, kept, research, prompt],
+        completion: { output: "", toolCalls: [search] },
+      }),
+      event("toolCallStart", 151, "s1", "B", { toolName: "search", args: { query: "q" } }),
+      event("toolCall", 152, "s1", "B", { toolName: "search", output: "hits" }),
+      event("promptCompletion", 200, "B", "t", {
+        threadIdentity: "main",
+        threadLabel: "main",
+        messages: [user, kept, research, prompt, searched, found],
+        completion: { output: "found it" },
+      }),
+      event("toolCall", 210, "t", "A", { toolName: "researchAgent", output: "found it" }),
+      event("promptCompletion", 300, "A", null, {
+        threadIdentity: "main",
+        threadLabel: "main",
+        messages: [
+          user,
+          kept,
+          prompt,
+          searched,
+          found,
+          { role: "assistant", content: "found it" },
+          back,
+        ],
+        completion: { output: "done" },
+      }),
+    ])[0];
+  }
+  it("shows the sub-agent's work once, names its prompt, and marks the hand-back", () => {
+    const blocks = transcriptBlocks(handoff());
+    expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
+      "0 user",
+      "0 assistant",
+      "0 tool",
+      "1 system",
+      "1 user",
+      "1 assistant",
+      "1 tool",
+      "1 assistant",
+      "0 handback",
+      "0 assistant",
+    ]);
+    expect(blocks[0]).toMatchObject({ promptTo: undefined });
+    expect(blocks[4]).toMatchObject({ promptTo: "researchAgent", text: "look it up" });
+    expect(blocks[8]).toMatchObject({ tool: "researchAgent" });
+    expect(blocks.find((block) => block.kind === "rewrite")).toBeUndefined();
+  });
+});
+
+describe("tools without recorded call ids", () => {
+  it("pairs each reply with the same-named tool at its position in the round", () => {
+    const first = { id: "a", name: "search", arguments: { query: "one" } };
+    const second = { id: "b", name: "search", arguments: { query: "two" } };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [user],
+          completion: { output: "", toolCalls: [first, second] },
+        }),
+        // The runtime filled in a default the model never sent.
+        event("toolCallStart", 101, "t1", "L", {
+          toolName: "search",
+          args: { query: "one", count: 8 },
+        }),
+        event("toolCall", 102, "t1", "L", { toolName: "search", output: "hits one" }),
+        event("toolCallStart", 103, "t2", "L", {
+          toolName: "search",
+          args: { query: "two", count: 8 },
+        }),
+        event("toolCall", 104, "t2", "L", { toolName: "search", output: "hits two" }),
+        event("promptCompletion", 200, "L", null, {
+          threadIdentity: "main",
+          messages: [
+            user,
+            { role: "assistant", content: "", toolCalls: [first, second] },
+            { role: "tool", name: "search", tool_call_id: "a", content: "hits one" },
+            { role: "tool", name: "search", tool_call_id: "b", content: "hits two" },
+          ],
+          completion: { output: "done" },
+        }),
+      ])[0],
+    );
+    expect(blocks.map((block) => block.kind)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "tool",
+      "assistant",
+    ]);
+  });
+});
+
+describe("turns", () => {
+  function session() {
+    const call = (span: string, at: number, messages: unknown[], output: string) =>
+      event("promptCompletion", at, span, null, {
+        threadIdentity: "main",
+        threadLabel: "main",
+        timeTaken: 1_000,
+        messages,
+        completion: { output },
+        cost: { totalCost: 0.01 },
+      });
+    const first = { role: "user", content: "first question" };
+    const second = { role: "user", content: "second question" };
+    return buildForest([
+      event("turnStart", 0, null, null, { message: "first question" }),
+      call("L1", 5_000, [first], "one"),
+      event("turnStart", 600_000, null, null, { message: "second question" }),
+      call("L2", 605_000, [first, { role: "assistant", content: "one" }, second], "two"),
+      event("promptCompletion", 606_000, "T", null, {
+        threadIdentity: "title",
+        threadLabel: "sessionTitle",
+        timeTaken: 500,
+        messages: [{ role: "user", content: "Write a title for this conversation" }],
+        completion: { output: "Two questions" },
+      }),
+    ])[0];
+  }
+  it("opens each of the person's messages with a turn block carrying the wait before it", () => {
+    const blocks = transcriptBlocks(session());
+    expect(blocks.map((block) => block.kind)).toEqual([
+      "thread",
+      "turn",
+      "user",
+      "assistant",
+      "turn",
+      "user",
+      "assistant",
+      "thread",
+      "user",
+      "assistant",
+    ]);
+    expect(blocks[1]).toMatchObject({ waitedMs: undefined, turn: { index: 0 } });
+    expect(blocks[4]).toMatchObject({ waitedMs: 595_000, turn: { index: 1 } });
+    // The person's messages are the turn starts; the helper's prompt is not.
+    expect(blocks[2]).toMatchObject({ promptTo: undefined });
+    expect(blocks[8]).toMatchObject({ promptTo: "sessionTitle" });
+    expect(
+      transcriptPayload(blocks[4], false).map((line) => ("text" in line ? line.text : "")),
+    ).toEqual([
+      "⏸ waited 9m55s for the user",
+      "══ TURN 2 · second question ══",
+      "ran 6.0s · 2 LLM calls · $0.010",
+    ]);
+  });
+  it("adds no turn blocks to a trace with one turn", () => {
+    const one = buildForest([
+      event("promptCompletion", 100, "L", null, { messages: [user], completion: { output: "x" } }),
+    ])[0];
+    expect(transcriptBlocks(one).some((block) => block.kind === "turn")).toBe(false);
+  });
+});
+
+it("counts the LLM calls a thread divider opens", () => {
+  const blocks = transcriptBlocks(
+    buildForest([
+      event("promptCompletion", 100, "L", null, {
+        threadIdentity: "a",
+        threadLabel: "main",
+        messages: [user],
+        completion: { output: "1" },
+      }),
+      event("promptCompletion", 200, "L", null, {
+        threadIdentity: "a",
+        threadLabel: "main",
+        messages: [user, { role: "assistant", content: "1" }],
+        completion: { output: "2" },
+      }),
+      event("promptCompletion", 300, "R", null, {
+        threadIdentity: "b",
+        threadLabel: "review",
+        messages: [user],
+        completion: { output: "ok" },
+      }),
+    ])[0],
+  );
+  const dividers = blocks.filter((block) => block.kind === "thread");
+  expect(
+    dividers.map((block) => (block.kind === "thread" ? [block.label, block.calls] : [])),
+  ).toEqual([
+    ["main", 2],
+    ["review", 1],
+  ]);
+  expect(transcriptPayload(dividers[0], false)[0]).toMatchObject({
+    text: "══ THREAD · main · 2 LLM calls ══",
   });
 });

@@ -79,6 +79,11 @@ describe("transcript screen", () => {
     const screen = make(buildForest(loopEvents()));
     screen.setFocus("guide");
     expect(text(screen)).toMatch(/→ agencyGuide\(handlers.md\)\s+1 lines\s+6ms/);
+    // An approved interrupt is hidden until p, as on the trace; a plain
+    // success has no status line.
+    expect(text(screen)).not.toContain("⚠ std::read  approved");
+    expect(text(screen)).not.toMatch(/\n\s*completed\n/);
+    press(screen, "p");
     expect(text(screen)).toContain("⚠ std::read  approved");
     screen.setFocus("grep");
     expect(text(screen)).toContain("interrupt rejected; completion not recorded");
@@ -170,7 +175,7 @@ it("pages inside a long block by display lines and keeps j/k on blocks", () => {
   const screen = make(
     buildForest([event("promptCompletion", 100, "L", null, { completion: { output: answer } })]),
   );
-  const small = { cols: 100, rows: 12 };
+  const small = { cols: 100, rows: 13 };
   expect(text(screen, small.cols, small.rows)).toContain("line 0");
   screen.handleKey({ key: "d", ctrl: true }, small);
   expect(text(screen, small.cols, small.rows)).toContain("line 4");
@@ -207,7 +212,7 @@ it("follow replaces pending approval with completion and preserves tool focus", 
   );
   screen.setData(buildForest(events));
   expect(screen.focusId()).toBe("tool");
-  expect(text(screen)).toContain("completed");
+  expect(text(screen)).toContain("→ read(");
   expect(text(screen)).not.toContain("pending");
   screen.setData(buildForest(events.slice(0, 1)));
   expect(screen.focusId()).toBe("round:L:0");
@@ -362,4 +367,110 @@ it("searches payload text rather than the numbered gutter", () => {
   screen.handleKey({ key: "#" }, viewport);
   screen.applySearch("42");
   expect(text(screen, 100, 12)).toContain("target 42");
+});
+
+describe("the call list and header", () => {
+  it("heads the screen with the elapsed time and the cursor's place", () => {
+    const screen = make(systems());
+    expect(text(screen).split("\n")[0]).toMatch(/^Elapsed 100ms · block 1 of \d+/);
+    press(screen, "j");
+    expect(text(screen).split("\n")[0]).toContain("block 2 of");
+  });
+
+  it("indents a sub-agent's rows under the tool that started it and marks what Enter opens", () => {
+    const ask = { id: "r", name: "researchAgent", arguments: {} };
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "A", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: { output: "", toolCalls: [ask] },
+        }),
+        event("toolCallStart", 101, "t", "A", { toolName: "researchAgent", args: {} }),
+        event("promptCompletion", 150, "B", "t", {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            { role: "system", content: "You research." },
+            { role: "user", content: "research this" },
+          ],
+          completion: { output: "found" },
+        }),
+        event("toolCall", 160, "t", "A", { toolName: "researchAgent", output: "found" }),
+        event("promptCompletion", 300, "A", null, {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            { role: "user", content: "[researchAgent finished. found]\nContinue." },
+          ],
+          completion: { output: "done" },
+        }),
+      ]),
+    );
+    const lines = text(screen).split("\n");
+    const spine = lines.map((line) => line.split("│")[0].trimEnd());
+    // The fold marker keeps one column; the indent follows it.
+    expect(spine).toContain("▶   user");
+    expect(spine).toContain("    LLM call 1");
+    expect(spine).toContain("  ▸   researchAgent");
+    expect(spine).toContain("  ▸     system");
+    expect(spine).toContain("        prompt");
+    expect(spine).toContain("        LLM call 2");
+    expect(spine).toContain("    ↩ researchAgent");
+    const body = text(screen);
+    expect(body).toContain("── PROMPT · researchAgent ──");
+    expect(body).toContain("── HAND-BACK · researchAgent ──");
+    screen.setFocus("t");
+    press(screen, "enter");
+    expect(
+      text(screen)
+        .split("\n")
+        .map((line) => line.split("│")[0].trimEnd()),
+    ).toContain("▶ ▾   researchAgent");
+  });
+
+  it("cuts a long argument on the call and shows what the model read on the tool", () => {
+    const long = "x".repeat(200);
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [{ id: "c", name: "read", arguments: { path: long } }],
+          },
+        }),
+        event("toolCallStart", 101, "tool", "L", { toolName: "read", args: { path: long } }),
+        event("toolCall", 102, "tool", "L", { toolName: "read", output: "a".repeat(10) }),
+        event("promptCompletion", 200, "L", null, {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ id: "c", name: "read", arguments: { path: long } }],
+            },
+            {
+              role: "tool",
+              name: "read",
+              tool_call_id: "c",
+              content: "aaa [tool result truncated]",
+            },
+          ],
+          completion: { output: "done" },
+        }),
+      ]),
+    );
+    const before = text(screen, 300, 40);
+    expect(before).toContain(`path: ${"x".repeat(120)}…`);
+    expect(before).not.toContain("→ WHAT THE MODEL READ");
+    screen.setFocus("tool");
+    press(screen, "enter");
+    const after = text(screen, 300, 40);
+    expect(after).toContain(`path: ${"x".repeat(200)}`);
+    expect(after).toContain("→ WHAT THE MODEL READ");
+    expect(after).toContain("aaa [tool result truncated]");
+  });
 });

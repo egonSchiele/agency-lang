@@ -23,15 +23,21 @@ import {
   transcriptText,
   type TranscriptBlock,
 } from "../transcript.js";
-import { transcriptPayload } from "../transcriptPayload.js";
+import { transcriptPayload, type TranscriptPayloadOptions } from "../transcriptPayload.js";
+import { traceTimes } from "../timeline/turns.js";
+import { fmtOffset } from "../views/shared.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
 import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
 import { keyFooter } from "./chrome.js";
 import type { Screen } from "./screen.js";
-const LAYOUT = { spineWidth: 28, dividerWidth: 2, fixedRows: 1, gap: 1, half: 2 };
+/** `indent` is per level of tool depth: a sub-agent's rows sit two cells
+ *  further in than the tool rows of the call that started it. */
+const LAYOUT = { spineWidth: 28, dividerWidth: 2, fixedRows: 2, gap: 1, half: 2, indent: 4 };
 type BlockLines = { id: string; start: number; lines: Painted[] };
+/** Blocks Enter opens: the ones that hold something back until asked. */
+const EXPANDABLE = ["system", "tool"];
 
 export class TranscriptScreen implements Screen {
   readonly screenName = "transcript" as const;
@@ -49,6 +55,12 @@ export class TranscriptScreen implements Screen {
   private painted: BlockLines[] = [];
   private needsReveal = true;
   private revealMatch = false;
+  private showApprovals = false;
+  /** The run's wall time split into work and waits for the person. */
+  private times = { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
+  /** Painted blocks by id, expansion, approvals and width; cleared when
+   *  the blocks are rebuilt. */
+  private paintCache: Record<string, Painted[]> = Object.create(null);
   constructor(
     private roots: TreeNode[],
     private traceId: string,
@@ -94,6 +106,14 @@ export class TranscriptScreen implements Screen {
         help: "reveal or hide this thread's system prompt",
         hint: "s system",
         run: () => this.toggleSystem(),
+      },
+      {
+        keys: ["p"],
+        help: "show or hide approved interrupts",
+        hint: "p approvals",
+        run: () => {
+          this.showApprovals = !this.showApprovals;
+        },
       },
       {
         keys: ["/"],
@@ -149,6 +169,8 @@ export class TranscriptScreen implements Screen {
     const old = this.selected();
     const trace = this.trace();
     this.blocks = trace ? transcriptBlocks(trace) : [];
+    this.times = trace ? traceTimes(trace) : { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
+    this.paintCache = Object.create(null);
     this.expanded = this.expanded.filter((id) => this.blocks.some((block) => block.id === id));
     if (!this.blocks.some((block) => block.id === this.cursor)) {
       this.cursor =
@@ -298,7 +320,7 @@ export class TranscriptScreen implements Screen {
     const renderBlocks = (width: number): BlockLines[] => {
       let start = 0;
       return this.blocks.map((block) => {
-        const lines = paintBlock(block, this.expanded.includes(block.id), width);
+        const lines = this.paintBlockCached(block, width);
         const placed = {
           id: block.id,
           start,
@@ -331,18 +353,49 @@ export class TranscriptScreen implements Screen {
     }
     this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, total - 1)));
   }
+  /** `▸` or `▾` on a block Enter opens or closes; the same width of
+   *  nothing on the rest, so labels line up. */
+  private spineMarker(block: TranscriptBlock): string {
+    if (!EXPANDABLE.includes(block.kind)) {
+      return "  ";
+    }
+    return this.expanded.includes(block.id) ? "▾ " : "▸ ";
+  }
+  private paintBlockCached(block: TranscriptBlock, width: number): Painted[] {
+    const expanded = this.expanded.includes(block.id);
+    const key = `${block.id}|${expanded}|${this.showApprovals}|${width}`;
+    return (this.paintCache[key] ??= paintBlock(block, expanded, width, {
+      showApprovals: this.showApprovals,
+    }));
+  }
+  /** `Elapsed 26m37s · 7m25s working · 19m12s waiting for the user · block 12 of 87`;
+   *  the split appears only when the trace has turns to split by. */
+  private headerText(position: number): string {
+    const split =
+      this.times.waitingMs > 0
+        ? ` · ${fmtOffset(this.times.workingMs)} working · ${fmtOffset(this.times.waitingMs)} waiting for the user`
+        : "";
+    const where =
+      this.blocks.length === 0 ? "" : ` · block ${position + 1} of ${this.blocks.length}`;
+    return `Elapsed ${fmtOffset(this.times.elapsedMs)}${split}${where}`;
+  }
   render(viewport: Viewport, sharedHints = ""): Element {
     this.prepare(viewport);
     const position = this.blocks.findIndex((block) => block.id === this.cursor);
     const spineTop = Math.max(0, position - this.page + 1);
     const spine = this.blocks.slice(spineTop, spineTop + this.page).map((block) =>
       paintedLine(
-        segment(`${block.id === this.cursor ? "▶" : " "} ${spineLabel(block)}`, LAYOUT.spineWidth, {
-          style: {
-            fg: spineColor(block),
-            ...(block.id === this.cursor ? { bg: THEME.cursorBg } : {}),
+        segment(
+          `${block.id === this.cursor ? "▶" : " "} ${this.spineMarker(block)}${spineLabel(block)}`,
+          LAYOUT.spineWidth,
+          {
+            style: {
+              fg: spineColor(block),
+              ...(block.kind === "thread" || block.kind === "turn" ? { bold: true } : {}),
+              ...(block.id === this.cursor ? { bg: THEME.cursorBg } : {}),
+            },
           },
-        }),
+        ),
       ),
     );
     const lines = this.painted
@@ -356,6 +409,7 @@ export class TranscriptScreen implements Screen {
       .join(" · ");
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
+      paintedLine(segment(this.headerText(position), viewport.cols, { style: { fg: THEME.text } })),
       ...(status
         ? [paintedLine(segment(status, viewport.cols, { style: { fg: THEME.muted } }))]
         : []),
@@ -385,8 +439,13 @@ export class TranscriptScreen implements Screen {
     );
   }
 }
-function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): Painted[] {
-  const body = paintPayload(transcriptPayload(block, expanded), width);
+function paintBlock(
+  block: TranscriptBlock,
+  expanded: boolean,
+  width: number,
+  options: TranscriptPayloadOptions,
+): Painted[] {
+  const body = paintPayload(transcriptPayload(block, expanded, options), width);
   if (block.kind !== "assistant") {
     return body;
   }
@@ -409,31 +468,48 @@ function toolMark(status: ToolStatus): string {
     ? `${TOOL_STATUS_MARK[status]} `
     : "";
 }
+/** The call list's row for a block, indented by how many tool calls deep
+ *  its thread runs, so a sub-agent's calls sit under the tool that
+ *  started them. */
 function spineLabel(block: TranscriptBlock): string {
+  const indent = " ".repeat(block.depth * LAYOUT.indent);
   switch (block.kind) {
     case "assistant": {
       const suffix = block.round.decision === undefined ? "" : " · decision";
-      return `LLM call ${block.round.index + 1}${suffix}`;
+      return `${indent}LLM call ${block.round.index + 1}${suffix}`;
     }
     case "tool":
-      return `  ${toolMark(block.row.status)}${block.row.name}`;
+      return `${indent}  ${toolMark(block.row.status)}${block.row.name}`;
+    case "thread":
+      return `${indent}Thread · ${block.label}`;
+    case "turn": {
+      const title = block.turn.userText?.split("\n")[0].trim();
+      return `turn ${block.turn.index + 1}${title ? ` · ${title}` : ""}`;
+    }
+    case "user":
+      return `${indent}${block.promptTo === undefined ? "user" : "prompt"}`;
+    case "handback":
+      return `${indent}↩ ${block.tool}`;
     case "error":
-      return "✖ error";
+      return `${indent}✖ error`;
     case "pause":
-      return block.resumed ? "⏸ paused · resumed" : "⏸ paused";
+      return `${indent}${block.resumed ? "⏸ paused · resumed" : "⏸ paused"}`;
     case "rewrite":
-      return "⚠ changed";
+      return `${indent}⚠ changed`;
     case "history":
-      return block.message.role;
+      return `${indent}history · ${block.message.role}`;
     default:
-      return block.kind;
+      return `${indent}${block.kind}`;
   }
 }
 
 function spineColor(block: TranscriptBlock): string {
   const role = block.kind === "history" ? block.message.role : block.kind;
-  if (role === "user") {
+  if (role === "user" || role === "turn") {
     return THEME.kind.user;
+  }
+  if (block.kind === "handback") {
+    return THEME.kind.tool;
   }
   if (role === "assistant") {
     return THEME.kind.assistant;

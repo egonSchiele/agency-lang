@@ -259,7 +259,7 @@ export function roundResponsePayload(
 
 /** The arguments with every value longer than `cap` characters cut to
  *  that many and an ellipsis, measured as the text the viewer would print. */
-function cutArguments(args: unknown, cap: number): unknown {
+export function cutArguments(args: unknown, cap: number): unknown {
   const shorten = (value: unknown): unknown => {
     const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
     return text.length <= cap ? value : `${text.slice(0, cap)}…`;

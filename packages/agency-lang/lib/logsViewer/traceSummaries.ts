@@ -3,11 +3,13 @@
 import { userMessageOf } from "../statelog/wireAccessors.js";
 import { walkNodes } from "./forest.js";
 import { roundsOf } from "./timeline/rounds.js";
+import { traceTimes } from "./timeline/turns.js";
 import type { TreeNode } from "./types.js";
 
 export type TraceSummary = {
   traceId: string;
   startedAt: number | undefined;
+  /** Working time: the waits for the person between turns are left out. */
   durationMs: number | undefined;
   rounds: number;
   tokens: number;
@@ -36,7 +38,7 @@ function summarize(root: TreeNode, annotation: string | undefined): TraceSummary
   return {
     traceId: root.traceId,
     startedAt: root.firstTs,
-    durationMs: root.duration,
+    durationMs: root.duration === undefined ? undefined : traceTimes(root, rounds).workingMs,
     rounds: rounds.length,
     tokens: root.tokens ?? 0,
     costUsd: root.cost ?? 0,

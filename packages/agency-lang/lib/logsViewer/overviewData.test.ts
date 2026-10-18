@@ -46,7 +46,8 @@ describe("overviewData", () => {
 
   it("uses trace-root rounds for elapsed time", () => {
     const data = overviewData(trace([leaf("promptCompletion", 1_000, { timeTaken: 100 })]));
-    expect(data.elapsedMs).toBe(100);
+    expect(data.workingMs).toBe(100);
+    expect(data.waitingMs).toBe(0);
   });
 
   it("reports a pending root prompt after an earlier completed prompt", () => {

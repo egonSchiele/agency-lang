@@ -3,7 +3,7 @@ import { roundDeltas } from "../messageDelta.js";
 import { leaf, sessionTrace, span, trace } from "./fixture.js";
 import { roundsOf } from "./rounds.js";
 import { timelineSpans } from "./spans.js";
-import { traceTurns, turnTimes } from "./turns.js";
+import { traceTimes, traceTurns, turnTimes } from "./turns.js";
 
 describe("traceTurns", () => {
   it("splits a session at every threadResumed, naming each turn by the message that began it", () => {
@@ -21,6 +21,15 @@ describe("traceTurns", () => {
     expect(turns.map((turn) => turn.rounds.map((round) => round.index))).toEqual([[0], [1]]);
     expect(turnTimes(turns[0])).toEqual({ workingMs: 6_000, waitingMs: 594_000 });
     expect(turnTimes(turns[1])).toEqual({ workingMs: 9_000, waitingMs: 291_000 });
+  });
+
+  it("splits the run's wall time into working and waiting", () => {
+    const root = sessionTrace();
+    expect(traceTimes(root, roundsOf(root))).toEqual({
+      elapsedMs: 900_000,
+      workingMs: 15_000,
+      waitingMs: 885_000,
+    });
   });
 
   it("is one turn for a trace that never resumed", () => {

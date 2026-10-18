@@ -286,13 +286,8 @@ it("cuts long arguments on the LLM call row and keeps them whole on the overview
   const cut = detail.find((line) => line.kind === "pair" && line.key === "userMsg")!;
   expect(cut).toMatchObject({ text: `${"x".repeat(ARGUMENT_PREVIEW_CHARS)}…` });
   expect(detail).toContainEqual({ kind: "pair", key: "agencyTopic", text: "false", indent: 0 });
-  expect(detail).toContainEqual({
-    kind: "meta",
-    text: "… arguments cut · the tool's row has them whole",
-  });
   const whole = roundResponsePayload(round);
   expect(whole).toContainEqual({ kind: "pair", key: "userMsg", text: long, indent: 0 });
-  expect(whole.some((line) => line.kind === "meta")).toBe(false);
 });
 
 describe("roundResponsePayload with tool results", () => {

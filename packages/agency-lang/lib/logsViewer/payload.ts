@@ -204,15 +204,11 @@ export function roundResponsePayload(
     const at = unmatched.findIndex((tool) => tool.name === call.name);
     const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
     lines.push({ kind: "heading", text: `TOOL CALL · ${call.name ?? "tool"}`, tone: "tool" });
-    if (options.argumentChars === undefined) {
-      lines.push(...valuePayload(call.arguments));
-    } else {
-      const shortened = cutArguments(call.arguments, options.argumentChars);
-      lines.push(...valuePayload(shortened.value));
-      if (shortened.cut) {
-        lines.push({ kind: "meta", text: "… arguments cut · the tool's row has them whole" });
-      }
-    }
+    const args =
+      options.argumentChars === undefined
+        ? call.arguments
+        : cutArguments(call.arguments, options.argumentChars);
+    lines.push(...valuePayload(args));
     if (tool !== undefined) {
       lines.push(...toolResultPayload(tool, options));
     }
@@ -222,21 +218,15 @@ export function roundResponsePayload(
 
 /** The arguments with every value longer than `cap` characters cut to
  *  that many and an ellipsis, measured as the text the viewer would print. */
-function cutArguments(args: unknown, cap: number): { value: unknown; cut: boolean } {
-  let cut = false;
+function cutArguments(args: unknown, cap: number): unknown {
   const shorten = (value: unknown): unknown => {
     const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
-    if (text.length <= cap) {
-      return value;
-    }
-    cut = true;
-    return `${text.slice(0, cap)}…`;
+    return text.length <= cap ? value : `${text.slice(0, cap)}…`;
   };
   if (args !== null && typeof args === "object" && !Array.isArray(args)) {
-    const entries = Object.entries(args).map(([key, item]) => [key, shorten(item)]);
-    return { value: Object.fromEntries(entries), cut };
+    return Object.fromEntries(Object.entries(args).map(([key, item]) => [key, shorten(item)]));
   }
-  return { value: shorten(args), cut };
+  return shorten(args);
 }
 
 /** What a requested tool gave back, by its recorded status. */

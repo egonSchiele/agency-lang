@@ -136,41 +136,73 @@ describe("TimelineScreen", () => {
     expect(part("Thread · codingAgent")).toMatchObject({ fg: THEME.accent });
   });
 
-  it("lists the turns of a session with the message, the work and the wait, and opens one on its own axis", () => {
+  it("stacks a session's turns, each under its own row and axis, with the wait between them", () => {
     const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
-    const list = frame(view);
-    expect(list).toContain("Elapsed 15m00s · 15.0s working · 14m45s waiting for the user");
-    expect(list).toContain("▶ turn 1 · first question");
-    expect(list).toContain("⏸ waited 9m54s for the user");
-    expect(list).toContain("turn 2 · second question");
-    expect(list).not.toContain("with a second line");
-    expect(list).toContain("⏸ waited 4m51s, then the run ended");
-    expect(list).toMatch(/9\.0s · \$0\.010 · 1 LLM call/);
-    expect(list).not.toContain("LLM call 1");
-    view.handleKey({ key: "down" }, viewport);
+    const text = frame(view);
+    expect(text).toContain("Elapsed 15m00s · 15.0s working · 14m45s waiting for the user");
+    expect(text).toContain("▶ turn 1 · first question");
+    expect(text).toContain("⏸ waited 9m54s for the user");
+    expect(text).toContain("turn 2 · second question");
+    expect(text).not.toContain("with a second line");
+    expect(text).toContain("⏸ waited 4m51s, then the run ended");
+    // One call per span draws no call row of its own; the tool shows under turn 2 only.
+    expect(text).toContain("read · a");
+    expect(text.indexOf("read · a")).toBeGreaterThan(text.indexOf("turn 2 ·"));
+    // Each turn's row carries its own axis, ending at that turn's working time.
+    const axes = text
+      .split("\n")
+      .filter((row) => row.startsWith("▶ turn") || row.startsWith("  turn"));
+    expect(axes[0]).toMatch(/0ms\s+3\.0s\s+6\.0s\s+6\.0s · \$0\.010/);
+    expect(axes[1]).toMatch(/0ms\s+4\.5s\s+9\.0s\s+9\.0s · \$0\.010/);
+    expect(frame(view)).toMatch(
+      /turn 1 · first question {2}· {2}start \+0ms {2}· {2}1 LLM call, ran 6\.0s, then waited 9m54s/,
+    );
+    // The cursor walks down turn 1's rows, past the wait line, into turn 2.
+    const seen: string[] = [];
+    for (let step = 0; step < 7; step += 1) {
+      view.handleKey({ key: "down" }, viewport);
+      seen.push(view.focusId() ?? "");
+    }
+    expect(seen).toEqual(["run", "L1", "turn:1", "run", "L2", "round:L2:0", "tool2"]);
+    for (let step = 0; step < 4; step += 1) {
+      view.handleKey({ key: "up" }, viewport);
+    }
+    expect(view.focusId()).toBe("turn:1");
+    // Enter folds a turn.
     view.handleKey({ key: "enter" }, viewport);
-    const opened = frame(view);
-    expect(opened).toContain("Elapsed 9.0s  » turn 2 · second question");
-    expect(opened).toContain("LLM call 2");
-    expect(opened).toContain("read · ");
-    expect(opened).not.toContain("LLM call 1");
-    expect(opened).not.toContain("waited");
-    view.handleKey({ key: "left" }, viewport);
-    expect(frame(view)).toContain("▶ turn 2 · second question");
+    expect(frame(view)).toContain("▸ turn 2 · second question");
+    expect(frame(view)).not.toContain("read · a");
+    expect(frame(view)).toContain("⏸ waited 4m51s, then the run ended");
+    // The run's span is drawn in both turns; folding it in one leaves the other open.
+    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "down" }, viewport);
+    expect(view.focusId()).toBe("run");
+    view.handleKey({ key: "enter" }, viewport);
+    const rows = frame(view).split("\n");
+    expect(rows.filter((row) => row.includes("▸ agentRun"))).toHaveLength(1);
+    expect(rows.filter((row) => row.includes("Thread · main"))).toHaveLength(1);
   });
 
-  it("a focus from another screen opens the turn that holds it", () => {
+  it("zoom and focus stay within the turn they belong to", () => {
     const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
     view.setFocus("tool2");
     expect(view.focusId()).toBe("tool2");
-    expect(frame(view)).toContain("» turn 2");
+    view.handleKey({ key: "+" }, viewport);
+    const zoomed = frame(view);
+    expect(zoomed).toContain("(zoom ");
+    // Turn 1's axis is untouched by a zoom in turn 2.
+    expect(zoomed.split("\n").find((row) => row.includes("turn 1 ·"))).toMatch(
+      /0ms\s+3\.0s\s+6\.0s/,
+    );
     view.setFocus("L1");
     expect(view.focusId()).toBe("L1");
-    expect(frame(view)).toContain("» turn 1");
+    expect(frame(view)).not.toContain("(zoom ");
     const drilled = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS, {
       drillTo: "L2",
     });
-    expect(frame(drilled)).toContain("» turn 2 · second question » Thread · main");
+    expect(frame(drilled)).toContain("» Thread · main");
+    expect(frame(drilled)).toContain("turn 2 · second question");
+    expect(frame(drilled)).not.toContain("turn 1 ·");
   });
 
   it("uses unnamed for threads without recorded names and preserves individual call labels", () => {

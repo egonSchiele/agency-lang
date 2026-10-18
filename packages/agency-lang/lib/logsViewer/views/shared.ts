@@ -121,6 +121,9 @@ export class TimelineHeader {
     viewStart: number;
     adminShown: boolean;
     following?: boolean;
+    /** Time the run spent waiting for the person; the header then splits
+     *  the elapsed time into working and waiting. */
+    waitingMs?: number;
   }): string {
     const crumbs = args.crumbs.length > 0 ? `  » ${args.crumbs.join(" » ")}` : "";
     const admin =
@@ -129,7 +132,11 @@ export class TimelineHeader {
       args.zoom !== undefined
         ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
         : "";
-    return `Elapsed ${fmtOffset(args.totalMs)}${crumbs}${admin}${zoom}`;
+    const split =
+      args.waitingMs === undefined
+        ? ""
+        : ` · ${fmtOffset(args.totalMs - args.waitingMs)} working · ${fmtOffset(args.waitingMs)} waiting for the user`;
+    return `Elapsed ${fmtOffset(args.totalMs)}${split}${crumbs}${admin}${zoom}`;
   }
 }
 

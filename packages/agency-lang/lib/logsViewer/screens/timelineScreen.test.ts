@@ -97,7 +97,7 @@ describe("TimelineScreen", () => {
     expect(frame(view)).toContain("» Thread · codingAgent");
   });
 
-  it("names a sub-agent's span by its tool when it runs on the caller's thread", () => {
+  it("names every thread span by its thread and call count, nested ones too", () => {
     const call = (at: number) =>
       leaf("promptCompletion", at, {
         model: '"m1"',
@@ -115,10 +115,12 @@ describe("TimelineScreen", () => {
     const outer = span("llmCall", [call(1_000), tool, call(5_000)], { id: "outer" });
     const view = new TimelineScreen([trace([outer])], "T", DEFAULT_THRESHOLDS);
     const text = frame(view);
-    expect(text).toContain("Thread · main");
-    expect(text).toContain("researchAgent · 2 LLM calls");
-    // The outer span's row and the selection footer; the inner span is no second thread.
-    expect(text.split("\n").filter((row) => row.includes("Thread · main"))).toHaveLength(2);
+    // The outer span and the sub-agent's span inside it, both two calls on "main".
+    const rows = text
+      .split("\n")
+      .filter((row) => row.includes("Thread · main · 2 LLM calls") && !row.startsWith("Thread"));
+    expect(rows).toHaveLength(2);
+    expect(rows[1].indexOf("Thread")).toBeGreaterThan(rows[0].indexOf("Thread"));
   });
 
   it("colors rows by kind as the trace does, not by how much time a name took", () => {

@@ -256,7 +256,7 @@ it("shows a tool row as the call with its arguments, then the result, with no se
   ]);
 });
 
-it("names a sub-agent's group by its tool when it runs on the caller's thread, and charts its calls", () => {
+it("names every group by its thread and call count, and charts a sub-agent's calls", () => {
   const call = (span: string, parent: string | null, at: number, identity: string) =>
     event("promptCompletion", at, span, parent, {
       threadIdentity: identity,
@@ -279,13 +279,13 @@ it("names a sub-agent's group by its tool when it runs on the caller's thread, a
     (row) => row.kind === "llmGroup",
   );
   expect(groups.map((row) => (row.kind === "llmGroup" ? row.title : ""))).toEqual([
-    "researchAgent · 2 LLM calls",
-    "Thread · main",
+    "Thread · main · 2 LLM calls",
+    "Thread · main · 1 LLM call",
   ]);
   const detail = payloadFor(groups[0], { raw: false, trace });
   expect(detail[0]).toEqual({
     kind: "heading",
-    text: "researchAgent · 2 LLM calls",
+    text: "Thread · main · 2 LLM calls",
     tone: "assistant",
   });
   const charts = detail.find((line) => line.kind === "charts");

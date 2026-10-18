@@ -65,9 +65,7 @@ export type PauseStoryRow = RowBase & {
   resumed: boolean;
 };
 export type SubagentStoryRow = RowBase & { kind: "subagent"; label: string };
-/** `title` is the row's name: `Thread · <label>` for a conversation of
- *  its own, or `<tool> · N LLM calls` for a sub-agent's loop that runs on
- *  its caller's thread, so one thread is never named twice. */
+/** `title` is the row's name on every screen: `Thread · <label> · N LLM calls`. */
 export type LlmGroupStoryRow = RowBase & {
   title: string;
   kind: "llmGroup";
@@ -360,48 +358,26 @@ function llmGroupRow(context: RowContext): LlmGroupStoryRow {
   return {
     ...base(context),
     kind: "llmGroup",
-    title: llmGroupTitle(context.node, Object.values(context.roundsByLeaf), context.index),
+    title: llmGroupTitle(context.node, rounds, context.index),
     label: threadLabelOf(rounds),
     toolName: tool ? spanDetail(tool) : undefined,
     rounds,
   };
 }
-/** The name every screen gives an `llmCall` span: `Thread · <label>`, or
- *  `<tool> · N LLM calls` when the span sits in a tool and all its calls
- *  run on the thread of the call that requested the tool, a sub-agent
- *  extending its caller's conversation rather than starting one of its own. */
+/** The name every screen gives an `llmCall` span: `Thread · main · 13 LLM
+ *  calls`. A sub-agent that runs on its caller's thread is named by that
+ *  thread too; naming it by its tool instead was tried and read as a
+ *  different kind of row. */
 export function llmGroupTitle(node: TreeNode, allRounds: Round[], index: TreeIndex): string {
   const rounds = allRounds.filter((round) => round.spanId === node.id);
-  const tool = nearestAncestor(node, index, (ancestor) => ancestor.label === "toolExecution");
-  if (tool !== undefined && continuesCaller(tool, rounds, allRounds, index)) {
-    const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
-    return `${spanDetail(tool) ?? "tool"} · ${count}`;
-  }
-  return `Thread · ${threadLabelOf(rounds)}`;
+  const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
+  return `Thread · ${threadLabelOf(rounds)} · ${count}`;
 }
 function threadLabelOf(rounds: Round[]): string {
   const names = rounds
     .map((round) => round.threadLabel)
     .filter((name): name is string => Boolean(name));
   return names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed";
-}
-function continuesCaller(
-  tool: TreeNode,
-  rounds: Round[],
-  allRounds: Round[],
-  index: TreeIndex,
-): boolean {
-  const caller = nearestAncestor(tool, index, (node) => node.label === "llmCall");
-  if (caller === undefined || rounds.length === 0) {
-    return false;
-  }
-  return allRounds.some(
-    (round) =>
-      round.spanId === caller.id &&
-      rounds.every(
-        (own) => own.thread.kind === round.thread.kind && own.thread.id === round.thread.id,
-      ),
-  );
 }
 function machineryRow(context: RowContext): MachineryStoryRow {
   return {

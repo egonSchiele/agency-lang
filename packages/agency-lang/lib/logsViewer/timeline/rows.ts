@@ -16,14 +16,8 @@ type Placed = { start: number; tieBreak: number; rows: TimelineRow[] };
 
 type RoundsBySpan = Record<string, Round[]>;
 
-const MIN_ROUNDS_FOR_ROWS = 2;
 const ROUND_BEFORE_SPAN = 0;
 const SPAN_AFTER_ROUND = 1;
-
-/** With one round, its bar would repeat the span's own bar. */
-export function drawsRoundRows(rounds: Round[]): boolean {
-  return rounds.length >= MIN_ROUNDS_FOR_ROWS;
-}
 
 export function timelineRows(
   spans: TimelineSpan[],
@@ -118,13 +112,11 @@ function requestingRound(block: SpanBlock, rounds: Round[]): Round | undefined {
 
 function placeBlock(block: SpanBlock, depth: number, roundsBySpan: RoundsBySpan): Placed {
   const { span } = block;
+  // Every call gets a row, a lone one too: its bar repeats the span's,
+  // but the row is what opens the call in the trace.
   const own = roundsBySpan[span.id] ?? [];
-  const hasRequestedTools = block.children.some(
-    (child) => requestingRound(child, own) !== undefined,
-  );
-  const drawn = drawsRoundRows(own) || hasRequestedTools ? own : [];
   const spanRow: SpanRow = { kind: "span", id: span.id, depth, span };
-  const below = rowsFor(block.children, drawn, depth + 1, roundsBySpan);
+  const below = rowsFor(block.children, own, depth + 1, roundsBySpan);
   return { start: span.extent.start, tieBreak: SPAN_AFTER_ROUND, rows: [spanRow, ...below] };
 }
 

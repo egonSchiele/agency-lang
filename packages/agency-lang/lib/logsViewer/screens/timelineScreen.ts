@@ -637,7 +637,7 @@ export class TimelineScreen implements Screen {
     const isCurrentRoot = this.drillPath[this.drillPath.length - 1] === sel.row.id;
     const hasChildren =
       sel.node.children.some((child) => child.nodeKind === "span") ||
-      this.rounds.filter((round) => round.spanId === sel.row.id).length > 1;
+      this.rounds.some((round) => round.spanId === sel.row.id);
     if (!isCurrentRoot && hasChildren) {
       this.drillPath = [...this.drillPath, sel.row.id];
       this.zoom = undefined;

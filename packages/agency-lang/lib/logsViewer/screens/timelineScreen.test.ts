@@ -159,11 +159,20 @@ describe("TimelineScreen", () => {
     );
     // The cursor walks down turn 1's rows, past the wait line, into turn 2.
     const seen: string[] = [];
-    for (let step = 0; step < 7; step += 1) {
+    for (let step = 0; step < 8; step += 1) {
       view.handleKey({ key: "down" }, viewport);
       seen.push(view.focusId() ?? "");
     }
-    expect(seen).toEqual(["node", "L1", "turn:1", "node", "L2", "round:L2:0", "tool2"]);
+    expect(seen).toEqual([
+      "node",
+      "L1",
+      "round:L1:0",
+      "turn:1",
+      "node",
+      "L2",
+      "round:L2:0",
+      "tool2",
+    ]);
     for (let step = 0; step < 4; step += 1) {
       view.handleKey({ key: "up" }, viewport);
     }
@@ -570,11 +579,16 @@ it("drilling a multi-round call draws each round once", () => {
   expect(frame(view).match(/LLM call 1/g)).toHaveLength(1);
   expect(frame(view).match(/LLM call 2/g)).toHaveLength(1);
 });
-it("drilling a single-round call keeps the duplicate round bar suppressed", () => {
+it("a thread with one call draws the call's row, and Enter on it opens the call in the trace", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-  view.setFocus("llm1");
-  view.handleKey({ key: "right" }, viewport);
-  expect(frame(view)).not.toContain("LLM call 1");
+  view.setFocus("round:llm1:0");
+  expect(view.focusId()).toBe("round:llm1:0");
+  expect(frame(view)).toContain("LLM call 1");
+  expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
+    kind: "openScreen",
+    screen: "trace",
+    focusId: "round:llm1:0",
+  });
 });
 it("drilling never imports unrelated rounds from the trace root", () => {
   const roots = loopForest();

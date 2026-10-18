@@ -68,12 +68,14 @@ export async function _evalValue(value: unknown): Promise<void> {
 }
 
 /** The REPLs log a turn for every line a person submits, except a slash
- *  command, which is an instruction to the program and not a message. */
+ *  command, which is an instruction to the program and not a message. A
+ *  test's stub client may have no `turnStart`, as `ThreadStore` allows for
+ *  its thread events. */
 export async function logReplTurn(run: Run, line: string): Promise<void> {
   if (line.trimStart().startsWith("/")) {
     return;
   }
-  await run.log.turnStart({ message: line });
+  await run.log.turnStart?.({ message: line });
 }
 
 /** Logs `turnStart`; a no-op outside an Agency frame, like the eval events. */

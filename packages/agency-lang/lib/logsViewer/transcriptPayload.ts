@@ -7,6 +7,7 @@ import {
   valuePayload,
   type PayloadLine,
 } from "./payload.js";
+import { systemPromptPayload } from "./roundInputPayload.js";
 import { fmtDuration, truncate } from "./spanText.js";
 import { TOOL_STATUS_MARK, toolErrorMessages, toolStatusText } from "./story.js";
 import { decisionInputPayload, decisionOutputPayload } from "./decision.js";
@@ -30,14 +31,7 @@ export function transcriptPayload(
 ): PayloadLine[] {
   switch (block.kind) {
     case "system":
-      return [
-        {
-          kind: "heading",
-          text: `system prompt · ${block.text.split("\n").length} lines · s to ${expanded ? "hide" : "show"}`,
-          tone: "chrome",
-        },
-        ...(expanded ? valuePayload(block.text) : []),
-      ];
+      return systemPromptPayload("system", block.text, expanded);
     case "user":
       return [
         {

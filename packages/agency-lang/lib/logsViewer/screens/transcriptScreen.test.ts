@@ -23,14 +23,14 @@ function systems(rounds = 2) {
     event("promptCompletion", 100, "L", null, {
       threadIdentity: "parent",
       messages: [
-        { role: "system", content: "parent-only prompt" },
-        { role: "system", content: "second parent prompt" },
+        { role: "system", content: "parent-only prompt\nparent second line" },
+        { role: "system", content: "second parent prompt\nsecond parent line" },
       ],
       completion: { output: "parent answer" },
     }),
     event("promptCompletion", 200, "child", null, {
       threadIdentity: "child",
-      messages: [{ role: "system", content: "child-only prompt" }],
+      messages: [{ role: "system", content: "child-only prompt\nchild second line" }],
       completion: { output: "child answer" },
     }),
     ...(rounds > 2
@@ -38,8 +38,8 @@ function systems(rounds = 2) {
           event("promptCompletion", 300, "L", null, {
             threadIdentity: "parent",
             messages: [
-              { role: "system", content: "parent-only prompt" },
-              { role: "system", content: "second parent prompt" },
+              { role: "system", content: "parent-only prompt\nparent second line" },
+              { role: "system", content: "second parent prompt\nsecond parent line" },
             ],
             completion: { output: "later" },
           }),
@@ -50,24 +50,29 @@ function systems(rounds = 2) {
 describe("transcript screen", () => {
   it("starts collapsed and reveals a system prompt on s", () => {
     const screen = make(systems());
-    expect(text(screen)).not.toContain("parent-only prompt");
-    press(screen, "s");
+    // The first line is a signpost, as on the overview; the rest waits for s.
+    expect(text(screen)).toContain("SYSTEM");
     expect(text(screen)).toContain("parent-only prompt");
-    expect(text(screen)).not.toContain("second parent prompt");
+    expect(text(screen)).toContain("… (+1 more line · s to show)");
+    expect(text(screen)).not.toContain("parent second line");
+    press(screen, "s");
+    expect(text(screen)).toContain("parent second line");
+    expect(text(screen)).toContain("s to hide");
+    expect(text(screen)).not.toContain("child second line");
   });
   it("expands systems independently by thread and preserves them through follow", () => {
     const screen = make(systems());
     screen.setFocus("round:child:0");
     press(screen, "s");
-    expect(text(screen)).toContain("child-only prompt");
-    expect(text(screen)).not.toContain("parent-only prompt");
+    expect(text(screen)).toContain("child second line");
+    expect(text(screen)).not.toContain("parent second line");
     screen.setData(systems(3));
-    expect(text(screen)).toContain("child-only prompt");
+    expect(text(screen)).toContain("child second line");
     press(screen, "s");
-    expect(text(screen)).not.toContain("child-only prompt");
+    expect(text(screen)).not.toContain("child second line");
     screen.setFocus("round:L:0");
     press(screen, "s");
-    expect(text(screen)).toContain("second parent prompt");
+    expect(text(screen)).toContain("second parent line");
   });
   it("decodes the final answer as Agency source", () => {
     const screen = make();

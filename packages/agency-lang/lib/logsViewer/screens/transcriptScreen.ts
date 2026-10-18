@@ -503,6 +503,8 @@ function spineLabel(block: TranscriptBlock): string {
   }
 }
 
+/** The trace's colors by kind, so a tool reads as a tool on every screen
+ *  and a system prompt sits back in chrome. */
 function spineColor(block: TranscriptBlock): string {
   const role = block.kind === "history" ? block.message.role : block.kind;
   if (role === "user" || role === "turn") {
@@ -529,5 +531,8 @@ function spineColor(block: TranscriptBlock): string {
   if (block.kind === "tool" && block.row.status === "awaitingApproval") {
     return THEME.kind.interrupt;
   }
-  return THEME.text;
+  if (block.kind === "tool") {
+    return THEME.kind.tool;
+  }
+  return block.kind === "system" ? THEME.chrome : THEME.text;
 }

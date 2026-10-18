@@ -259,6 +259,59 @@ it("shows a tool row as the call with its arguments, then the result, with no se
   ]);
 });
 
+it("restores arguments the model sent as null that the runtime dropped, and says why", () => {
+  const toolSpan = (id: string, at: number, args: Record<string, unknown>) => {
+    const node = span(
+      "toolExecution",
+      [leaf("toolCallStart", at, { toolName: "researchAgent", args })],
+      { id },
+    );
+    node.firstTs = at;
+    return node;
+  };
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: {
+            toolCalls: [
+              {
+                name: "researchAgent",
+                arguments: { agencyTopic: false, maxSeconds: null, userMsg: "first" },
+              },
+              { name: "researchAgent", arguments: { agencyTopic: true, userMsg: "second" } },
+            ],
+          },
+        }),
+        toolSpan("t1", 2_100, { agencyTopic: false, userMsg: "first" }),
+        toolSpan("t2", 2_200, { agencyTopic: true, userMsg: "second" }),
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const tools = outlineRows(root, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "tool",
+  );
+  const texts = (row: StoryRow) =>
+    payloadFor(row, options).map((line) =>
+      line.kind === "pair" ? `${line.key}: ${line.text}` : "text" in line ? line.text : line.kind,
+    );
+  expect(texts(tools[0])).toEqual([
+    "TOOL CALL · researchAgent",
+    "completion not recorded",
+    "duration not recorded",
+    "agencyTopic: false",
+    "userMsg: first",
+    "maxSeconds: null",
+    "Null arguments in tool calls are dropped, defaults apply",
+  ]);
+  expect(texts(tools[1])).not.toContain("Null arguments in tool calls are dropped, defaults apply");
+  expect(texts(tools[1])).not.toContain("maxSeconds: null");
+});
+
 it("cuts long arguments on the LLM call row and keeps them whole on the overview", () => {
   const long = "x".repeat(ARGUMENT_PREVIEW_CHARS + 50);
   const root = trace([

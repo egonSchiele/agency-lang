@@ -272,7 +272,9 @@ export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): st
   return `input ${fmt(round.contextTokens)} (${fmt(round.cachedTokens)} cached${writes}) · output ${fmt(round.outputTokens)}`;
 }
 /** A tool's row, in the shape the overview gives a requested tool: the
- *  call with its arguments, then `→ RESULT` with the whole output. */
+ *  call with its arguments, then `→ RESULT` with the whole output. The
+ *  arguments include any the model sent as null and the runtime dropped,
+ *  with a line saying so, so the row agrees with the LLM call's. */
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
   const finished = childEvent(row.node, "toolCall");
@@ -283,14 +285,19 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
       kind: "meta",
       text: row.durationMs === undefined ? "duration not recorded" : fmtDuration(row.durationMs),
     },
-    ...valuePayload((started ?? finished)?.data.args),
+    ...valuePayload(argumentsWithDropped((started ?? finished)?.data.args, row.droppedNulls)),
+  ];
+  if (row.droppedNulls.length > 0) {
+    output.push({ kind: "meta", text: "Null arguments in tool calls are dropped, defaults apply" });
+  }
+  output.push(
     ...toolErrorMessages(row).map((message) => ({
       kind: "text" as const,
       text: message,
       indent: 0,
       role: "error" as const,
     })),
-  ];
+  );
   if (finished !== undefined) {
     output.push(
       {
@@ -302,6 +309,17 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
     );
   }
   return output;
+}
+/** The recorded arguments with the dropped ones restored as `name: null`. */
+function argumentsWithDropped(args: unknown, dropped: string[]): unknown {
+  if (dropped.length === 0) {
+    return args;
+  }
+  const restored: Record<string, unknown> = { ...(args as Record<string, unknown>) };
+  for (const name of dropped) {
+    restored[name] = null;
+  }
+  return restored;
 }
 function resultTokenEstimate(output: unknown): number {
   const result = output as { __type?: string; success?: boolean; value?: unknown } | null;

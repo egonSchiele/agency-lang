@@ -1,4 +1,9 @@
-import { contentText, toolNameOf, toolReplyContent } from "../statelog/wireAccessors.js";
+import {
+  contentText,
+  normalizeMessage,
+  toolNameOf,
+  toolReplyContent,
+} from "../statelog/wireAccessors.js";
 import {
   ancestorsOf,
   buildTreeIndex,
@@ -13,7 +18,7 @@ import { decisionSummary } from "./decision.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
 import { ADMIN_KINDS } from "./timeline/spans.js";
-import type { TreeNode } from "./types.js";
+import type { EventEnvelope, TreeNode } from "./types.js";
 
 export type Interrupt = { effect: string; message: string; outcome: string; resolvedBy?: string };
 export type ToolStatus = "completed" | "failed" | "rejected" | "awaitingApproval" | "unfinished";
@@ -42,6 +47,9 @@ export type ToolStoryRow = RowBase & {
   durationMs: number | undefined;
   status: ToolStatus;
   work: ToolWork;
+  /** Arguments the model sent as null that the runtime dropped before the
+   *  call, so the parameter's default applied. */
+  droppedNulls: string[];
 };
 export type InterruptStoryRow = RowBase & {
   kind: "interrupt";
@@ -255,7 +263,42 @@ function toolRow(context: RowContext): ToolStoryRow {
     argSummary: toolArgSummary(event.data.args),
     durationMs: typeof finished?.data.timeTaken === "number" ? finished.data.timeTaken : undefined,
     ...classifyTool(toolEvidence(context.node, context.index)),
+    droppedNulls: droppedNullArgs(context, event),
   };
+}
+/** The names the request set to null that the recorded arguments lack.
+ *  The runtime drops a null for a parameter with a default so the default
+ *  applies, and the tool row says so instead of leaving the reader to
+ *  compare its arguments with the LLM call's. Requests pair with tool
+ *  rows by name, in order, as they do on the overview. */
+function droppedNullArgs(context: RowContext, event: EventEnvelope): string[] {
+  const rounds = Object.values(context.roundsByLeaf).sort((a, b) => a.end - b.end);
+  const round = requestedBy(context.node, rounds, context.index);
+  if (round === undefined) {
+    return [];
+  }
+  const name = toolNameOf(event);
+  const siblings = context.parent.children.filter((node) => {
+    const started = childEvent(node, "toolCallStart") ?? childEvent(node, "toolCall");
+    return (
+      node.label === "toolExecution" &&
+      started !== undefined &&
+      toolNameOf(started) === name &&
+      requestedBy(node, rounds, context.index) === round
+    );
+  });
+  const calls =
+    normalizeMessage({ role: "assistant", ...round.node.event!.data.completion }).toolCalls ?? [];
+  const request = calls.filter((call) => call.name === name)[siblings.indexOf(context.node)];
+  if (!isRecord(request?.arguments)) {
+    return [];
+  }
+  const sent = request.arguments;
+  const recorded = isRecord(event.data.args) ? event.data.args : {};
+  return Object.keys(sent).filter((key) => sent[key] === null && !Object.hasOwn(recorded, key));
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function interruptRow(context: RowContext): InterruptStoryRow {
   const data = context.node.event!.data;

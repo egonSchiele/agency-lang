@@ -163,7 +163,7 @@ describe("TimelineScreen", () => {
       view.handleKey({ key: "down" }, viewport);
       seen.push(view.focusId() ?? "");
     }
-    expect(seen).toEqual(["run", "L1", "turn:1", "run", "L2", "round:L2:0", "tool2"]);
+    expect(seen).toEqual(["node", "L1", "turn:1", "node", "L2", "round:L2:0", "tool2"]);
     for (let step = 0; step < 4; step += 1) {
       view.handleKey({ key: "up" }, viewport);
     }
@@ -173,13 +173,13 @@ describe("TimelineScreen", () => {
     expect(frame(view)).toContain("▸ turn 2 · second question");
     expect(frame(view)).not.toContain("read · a");
     expect(frame(view)).toContain("⏸ waited 4m51s, then the run ended");
-    // The run's span is drawn in both turns; folding it in one leaves the other open.
+    // The node's span is drawn in both turns; folding it in one leaves the other open.
     view.handleKey({ key: "enter" }, viewport);
     view.handleKey({ key: "down" }, viewport);
-    expect(view.focusId()).toBe("run");
+    expect(view.focusId()).toBe("node");
     view.handleKey({ key: "enter" }, viewport);
     const rows = frame(view).split("\n");
-    expect(rows.filter((row) => row.includes("▸ agentRun"))).toHaveLength(1);
+    expect(rows.filter((row) => row.includes("▸ "))).toHaveLength(1);
     expect(rows.filter((row) => row.includes("Thread · main"))).toHaveLength(1);
   });
 
@@ -223,12 +223,20 @@ describe("TimelineScreen", () => {
 
   it("drill re-roots on the selected span with breadcrumbs; ← climbs out", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "down" }, viewport); // → codeAgent row
+    // The first row is codeAgent: agentRun above it is hidden.
     view.handleKey({ key: "right" }, viewport); // drill in
     const drilled = frame(view);
     expect(drilled).toContain("» codeAgent");
-    expect(drilled).not.toContain("agentRun");
     view.handleKey({ key: "left" }, viewport);
+    expect(frame(view)).toContain("codeAgent · do the task");
+    expect(frame(view)).not.toContain("» ");
+  });
+
+  it("hides the agentRun span until a shows it", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).not.toContain("agentRun");
+    expect(frame(view)).toContain("total/self");
+    view.handleKey({ key: "a" }, viewport);
     expect(frame(view)).toContain("agentRun");
   });
 
@@ -595,9 +603,10 @@ it.each(["trace-T", "missing"])("retains its drill and cursor for unresolvable f
 });
 it("leaves its drill to reveal a focus drawn outside it", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS, { drillTo: "llm1" });
-  view.setFocus("root1");
-  expect(view.focusId()).toBe("root1");
-  expect(frame(view)).toContain("agentRun");
+  view.setFocus("agent1");
+  expect(view.focusId()).toBe("agent1");
+  expect(frame(view)).toContain("codeAgent · do the task");
+  expect(frame(view)).not.toContain("» ");
 });
 
 it("toggles row numbers without changing focus, zoom, or drill state", () => {

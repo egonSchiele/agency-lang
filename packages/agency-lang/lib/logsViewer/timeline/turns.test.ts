@@ -42,12 +42,13 @@ describe("timelineSpans with a window", () => {
       hideKinds: [],
       window: { start: 600_000, end: 609_000 },
     });
-    expect(spans.map((span) => span.id)).toEqual(["run", "L2", "tool2"]);
+    expect(spans.map((span) => span.id)).toEqual(["run", "node", "L2", "tool2"]);
     expect(spans[0].extent).toEqual({ start: 600_000, end: 609_000 });
-    // The run's self time inside the turn: the window minus the call under
+    expect(spans[0].selfMs).toBe(0);
+    // The node's self time inside the turn: the window minus the call under
     // it, which runs from 1s before its completion to its tool's end.
-    expect(spans[1].extent).toEqual({ start: 601_000, end: 608_000 });
-    expect(spans[0].selfMs).toBe(1_000 + 1_000);
-    expect(spans[2].extent).toEqual({ start: 606_000, end: 608_000 });
+    expect(spans[2].extent).toEqual({ start: 601_000, end: 608_000 });
+    expect(spans[1].selfMs).toBe(1_000 + 1_000);
+    expect(spans[3].extent).toEqual({ start: 606_000, end: 608_000 });
   });
 });

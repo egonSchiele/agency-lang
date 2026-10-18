@@ -89,25 +89,32 @@ export function sessionTrace() {
       "agentRun",
       [
         leaf("agentStart", 0),
-        span("llmCall", [sessionCall(5_000, first)], { id: "L1" }),
-        leaf("threadEndHooksEnd", 6_000),
-        leaf("threadResumed", 600_000),
         span(
-          "llmCall",
+          "nodeExecution",
           [
-            sessionCall(605_000, second),
+            leaf("enterNode", 500, { nodeId: "main" }),
+            span("llmCall", [sessionCall(5_000, first)], { id: "L1" }),
+            leaf("threadEndHooksEnd", 6_000),
+            leaf("threadResumed", 600_000),
             span(
-              "toolExecution",
+              "llmCall",
               [
-                leaf("toolCallStart", 606_000, { toolName: "read", args: { path: "a" } }),
-                leaf("toolCall", 608_000, { toolName: "read" }),
+                sessionCall(605_000, second),
+                span(
+                  "toolExecution",
+                  [
+                    leaf("toolCallStart", 606_000, { toolName: "read", args: { path: "a" } }),
+                    leaf("toolCall", 608_000, { toolName: "read" }),
+                  ],
+                  { id: "tool2" },
+                ),
               ],
-              { id: "tool2" },
+              { id: "L2" },
             ),
+            leaf("threadEndHooksEnd", 609_000),
           ],
-          { id: "L2" },
+          { id: "node" },
         ),
-        leaf("threadEndHooksEnd", 609_000),
         leaf("exitNode", 900_000),
       ],
       { id: "run" },

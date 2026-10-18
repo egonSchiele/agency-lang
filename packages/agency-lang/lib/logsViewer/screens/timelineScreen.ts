@@ -19,6 +19,11 @@ const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
 const PAN_STEP = 0.25;
 const CHROME_ROWS = 4;
+/** Hidden until `a`: the admin spans, and the `agentRun` span, whose own
+ *  time is startup and shutdown and whose name and totals the node row
+ *  and the overview header already carry; as a row it only indented
+ *  everything beneath it. */
+const HIDDEN_KINDS = [...ADMIN_KINDS, "agentRun"];
 const LAYOUT = { indentCells: 2, maxIndentLevels: 10, cursorMarker: "▶ ", noMarker: "  " };
 // Timeline rows share a time axis and can be drilled into nested calls.
 import { column } from "../../tui/builders.js";
@@ -302,15 +307,18 @@ export class TimelineScreen implements Screen {
       { justifyContent: "flex-start" },
       paintedLine(paint(this.headerText(window), { fg: THEME.text })),
       paintedLine(
-        paint(
-          new AxisHeader(widths.gutter + numberWidth).computeText(
-            window,
-            this.viewStart(),
-            widths.bar,
+        joinPainted(
+          paint(
+            new AxisHeader(widths.gutter + numberWidth).computeText(
+              window,
+              this.viewStart(),
+              widths.bar,
+            ),
+            { fg: THEME.chrome },
           ),
-          {
-            fg: THEME.chrome,
-          },
+          // Names the two numbers in the right-hand column: how long a row
+          // ran, and how much of that was outside every span beneath it.
+          segment("total/self", widths.stats, { align: "right", style: { fg: THEME.chrome } }),
         ),
       ),
       body,
@@ -448,7 +456,7 @@ export class TimelineScreen implements Screen {
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
     const stacked = this.turns.length > 1;
-    const hideKinds = this.hideAdmin ? ADMIN_KINDS : [];
+    const hideKinds = this.hideAdmin ? HIDDEN_KINDS : [];
     const traceId = rootNode.nodeKind === "trace" ? rootNode.id : undefined;
     this.allRows = [];
     for (const turn of stacked ? this.turns : [undefined]) {

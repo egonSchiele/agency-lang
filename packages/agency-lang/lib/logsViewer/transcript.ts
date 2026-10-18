@@ -62,6 +62,9 @@ export type TranscriptBlock = BlockBase &
         text: string | undefined;
         structured: unknown | undefined;
         message: WireMessage | undefined;
+        /** Requests no tool block stands for, such as a tool the runtime
+         *  never ran; the block shows these itself. */
+        unpaired: ToolCallRequest[];
       }
     | {
         kind: "tool";
@@ -341,21 +344,26 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     }
     const message = completionMessageOf(round.node.event!);
     const text = message === undefined ? undefined : contentText(message.content);
-    blocks.push({
-      ...base,
-      at: round.end,
-      id: round.id,
-      kind: "assistant",
-      round,
-      text,
-      structured: text === undefined ? undefined : decodeStructured(text),
-      message,
-    });
     const tools = storyChildren(story, round.id).filter(
       (row): row is ToolStoryRow => row.kind === "tool",
     );
     const toolBlocks = tools.map((row) => toolBlock(round, row, story, index));
-    blocks.push(...toolBlocks);
+    const requests = message?.toolCalls ?? [];
+    const paired = toolBlocks.map((block) => requestFor(block.row, tools, requests));
+    blocks.push(
+      {
+        ...base,
+        at: round.end,
+        id: round.id,
+        kind: "assistant",
+        round,
+        text,
+        structured: text === undefined ? undefined : decodeStructured(text),
+        message,
+        unpaired: requests.filter((request) => !paired.includes(request)),
+      },
+      ...toolBlocks,
+    );
     // What this round added to the thread's shown history: its input's
     // new messages, its completion, and its tools' replies.
     state.shown.push(
@@ -363,7 +371,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
         (_, position) => matched[position] === undefined && round.decision === undefined,
       ),
       ...(message ? [message] : []),
-      ...representedTools(toolBlocks, message?.toolCalls ?? [], state.toolsByCallId),
+      ...representedTools(toolBlocks, requests, state.toolsByCallId),
     );
     state.lastRound = round;
     state.lastAtPath[JSON.stringify(round.toolPath)] = round;

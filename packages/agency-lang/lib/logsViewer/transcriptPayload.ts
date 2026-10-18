@@ -8,16 +8,15 @@ import {
   type PayloadLine,
 } from "./payload.js";
 import { systemPromptPayload } from "./roundInputPayload.js";
-import { fmtDuration, truncate } from "./spanText.js";
+import { childEvent, fmtDuration, truncate } from "./spanText.js";
 import { TOOL_STATUS_MARK, toolErrorMessages, toolStatusText } from "./story.js";
 import { decisionInputPayload, decisionOutputPayload } from "./decision.js";
 import { turnTimes } from "./timeline/turns.js";
 import type { TranscriptBlock } from "./transcript.js";
 import { fmtOffset } from "./views/shared.js";
 
-/** How much of a tool's first argument its heading shows; Enter has the
- *  arguments whole. */
-const HEADING_ARG_CHARS = 80;
+/** The names a reply's `→ 4 tool calls` line lists before it is cut. */
+const REQUEST_NAMES_CHARS = 60;
 
 export type TranscriptPayloadOptions = {
   /** Show interrupts that were approved; hidden by default, as on the trace. */
@@ -36,14 +35,14 @@ export function transcriptPayload(
       return [
         {
           kind: "heading",
-          text: block.promptTo === undefined ? "── USER ──" : `── PROMPT · ${block.promptTo} ──`,
+          text: block.promptTo === undefined ? "USER" : `PROMPT · ${block.promptTo}`,
           tone: "user",
         },
         ...valuePayload(block.text),
       ];
     case "handback":
       return [
-        { kind: "heading", text: `── HAND-BACK · ${block.tool} ──`, tone: "tool" },
+        { kind: "heading", text: `HAND-BACK · ${block.tool}`, tone: "tool" },
         ...valuePayload(block.text),
       ];
     case "turn":
@@ -67,7 +66,7 @@ export function transcriptPayload(
       ];
     case "error":
       return [
-        { kind: "heading", tone: "error", text: `✖ ERROR` },
+        { kind: "heading", tone: "error", text: "✖ ERROR" },
         { kind: "text", text: block.error.message, indent: 0, role: "error" },
         ...(block.error.count > 1
           ? [
@@ -101,18 +100,46 @@ export function transcriptPayload(
         ...requestLines(block.message.toolCalls ?? []),
       ];
     case "assistant":
-      if (block.round.decision !== undefined) {
-        return [
-          ...decisionInputPayload(block.round.decision),
-          { kind: "blank" },
-          ...decisionOutputPayload(block.round.decision),
-        ];
-      }
-      return [
-        ...valuePayload(block.structured ?? block.text ?? ""),
-        ...requestLines(block.message?.toolCalls ?? []),
-      ];
+      return assistantPayload(block);
   }
+}
+/** The reply's text, then one line naming the tools it asked for, since
+ *  each has its own block next. A request no block stands for is shown
+ *  here whole. */
+function assistantPayload(block: Extract<TranscriptBlock, { kind: "assistant" }>): PayloadLine[] {
+  const decision = block.round.decision === undefined ? "" : " · decision";
+  const heading: PayloadLine = {
+    kind: "heading",
+    tone: "assistant",
+    text: `ASSISTANT · LLM call ${block.round.index + 1}${decision}`,
+  };
+  if (block.round.decision !== undefined) {
+    return [
+      heading,
+      ...decisionInputPayload(block.round.decision),
+      { kind: "blank" },
+      ...decisionOutputPayload(block.round.decision),
+    ];
+  }
+  const requests = block.message?.toolCalls ?? [];
+  const text = block.structured ?? block.text ?? "";
+  const names = truncate(
+    requests.map((call) => call.name ?? "tool").join(", "),
+    REQUEST_NAMES_CHARS,
+  );
+  return [
+    heading,
+    ...(text === "" && requests.length > 0 ? [] : valuePayload(text)),
+    ...(requests.length === 0
+      ? []
+      : [
+          {
+            kind: "meta" as const,
+            text: `→ ${requests.length} tool ${requests.length === 1 ? "call" : "calls"} · ${names}`,
+          },
+        ]),
+    ...requestLines(block.unpaired),
+  ];
 }
 /** `⏸ waited 9m54s for the user` when a wait preceded the turn, then the
  *  turn's title and one line of its work. */
@@ -138,19 +165,19 @@ function turnPayload(block: Extract<TranscriptBlock, { kind: "turn" }>): Payload
     },
   ];
 }
-/** A tool's heading, its interrupts, its status when it did not complete,
- *  its errors, and on Enter the arguments and result in the trace's tool-row
- *  shape, then what the model read when that differs. */
+/** `TOOL CALL · name`, the arguments cut as on the trace's call row, the
+ *  tool's interrupts, its status when it did not complete, its errors, and
+ *  on Enter the arguments and result whole in the trace's tool-row shape,
+ *  then what the model read when that differs. */
 function toolPayload(
   block: Extract<TranscriptBlock, { kind: "tool" }>,
   expanded: boolean,
   options: TranscriptPayloadOptions,
 ): PayloadLine[] {
-  const symbol = TOOL_STATUS_MARK[block.row.status];
-  const duration =
-    block.row.durationMs === undefined
-      ? "duration not recorded"
-      : fmtDuration(block.row.durationMs);
+  const failed = ["failed", "rejected"].includes(block.row.status);
+  const mark = failed ? `${TOOL_STATUS_MARK[block.row.status]} ` : "";
+  const started =
+    childEvent(block.row.node, "toolCallStart") ?? childEvent(block.row.node, "toolCall");
   // An approved interrupt is the ordinary case and stays out of the way
   // until `p`, as on the trace; a rejection or a pending one always shows.
   const interrupts: PayloadLine[] = block.interrupts
@@ -166,9 +193,10 @@ function toolPayload(
   return [
     {
       kind: "heading",
-      tone: ["failed", "rejected"].includes(block.row.status) ? "error" : "tool",
-      text: `${symbol} ${block.row.name}(${truncate(block.row.argSummary.replace(/\s+/g, " "), HEADING_ARG_CHARS)})   ${block.outputLines} lines   ${duration}`,
+      tone: failed ? "error" : "tool",
+      text: `${mark}TOOL CALL · ${block.row.name}`,
     },
+    ...(expanded ? [] : valuePayload(cutArguments(started?.data.args, ARGUMENT_PREVIEW_CHARS))),
     ...interrupts,
     // A plain success says nothing more; any other status is stated.
     ...(block.row.status === "completed"

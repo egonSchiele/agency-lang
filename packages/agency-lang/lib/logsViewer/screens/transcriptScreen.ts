@@ -3,7 +3,7 @@ import type { Element } from "../../tui/elements.js";
 import { parseStyledText } from "../../tui/styleParser.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
-import { joinPainted, paint, paintedLine, segment, type Painted } from "../../tui/paint.js";
+import { paint, paintedLine, segment, type Painted } from "../../tui/paint.js";
 import { ancestorsOf, buildTreeIndex, walkNodes } from "../forest.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import {
@@ -29,15 +29,28 @@ import { fmtOffset } from "../views/shared.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
+import { boxInnerWidth, boxLines, SIDES_MIN_WIDTH } from "./blockBox.js";
 import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
 import { keyFooter } from "./chrome.js";
 import type { Screen } from "./screen.js";
 /** `indent` is per level of tool depth: a sub-agent's rows sit two cells
  *  further in than the tool rows of the call that started it. */
-const LAYOUT = { spineWidth: 28, dividerWidth: 2, fixedRows: 2, gap: 1, half: 2, indent: 4 };
+const LAYOUT = {
+  spineWidth: 28,
+  dividerWidth: 2,
+  fixedRows: 2,
+  gap: 1,
+  half: 2,
+  indent: 4,
+  /** A nested box is indented no further than leaves it this wide. */
+  minBoxWidth: 24,
+};
 type BlockLines = { id: string; start: number; lines: Painted[] };
 /** Blocks Enter opens: the ones that hold something back until asked. */
 const EXPANDABLE = ["system", "tool"];
+/** Blocks drawn as a box. A turn or thread divider, a pause and a rewrite
+ *  are rules across the pane, not messages. */
+const BOXED = ["system", "user", "handback", "assistant", "tool", "history", "error"];
 
 export class TranscriptScreen implements Screen {
   readonly screenName = "transcript" as const;
@@ -239,17 +252,24 @@ export class TranscriptScreen implements Screen {
       this.blocks[Math.max(0, Math.min(this.blocks.length - 1, position + delta))]?.id ?? "",
     );
   }
+  /** Scroll by lines and move the cursor to the block at the top of the
+   *  pane. A page that cannot scroll, at the end or when everything fits,
+   *  leaves the cursor where it is. */
   private pageBy(delta: number): void {
     const total = this.painted.flatMap((block) => block.lines).length;
-    this.scrollTop = Math.max(
+    const scrollTop = Math.max(
       0,
       Math.min(this.scrollTop + delta, Math.max(this.scrollTop, total - this.page)),
     );
+    this.needsReveal = false;
+    if (scrollTop === this.scrollTop) {
+      return;
+    }
+    this.scrollTop = scrollTop;
     const atTop = this.painted.filter((block) => block.start <= this.scrollTop).at(-1);
     if (atTop) {
       this.cursor = atTop.id;
     }
-    this.needsReveal = false;
   }
   private toggle(id: string): void {
     this.needsReveal = true;
@@ -336,7 +356,7 @@ export class TranscriptScreen implements Screen {
     const total = this.painted.reduce((sum, block) => sum + block.lines.length, 0);
     if (this.needsReveal) {
       const focused = this.painted.find((block) => block.id === this.cursor);
-      this.scrollTop = focused?.start ?? 0;
+      this.keepVisible(focused);
       if (this.revealMatch && focused) {
         const line = focused.lines.findIndex((line) =>
           parseStyledText(line)
@@ -353,6 +373,22 @@ export class TranscriptScreen implements Screen {
     }
     this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, total - 1)));
   }
+  /** Scroll only as far as it takes to bring the block into the pane, so
+   *  the active box stays where the eye left it: up to its top when it is
+   *  above, down to its bottom when it is below, and to its top when it is
+   *  taller than the pane. */
+  private keepVisible(focused: BlockLines | undefined): void {
+    if (focused === undefined) {
+      this.scrollTop = 0;
+      return;
+    }
+    const end = focused.start + focused.lines.length - LAYOUT.gap;
+    if (focused.start < this.scrollTop || end - focused.start > this.page) {
+      this.scrollTop = focused.start;
+    } else if (end > this.scrollTop + this.page) {
+      this.scrollTop = end - this.page;
+    }
+  }
   /** `▸` or `▾` on a block Enter opens or closes; the same width of
    *  nothing on the rest, so labels line up. */
   private spineMarker(block: TranscriptBlock): string {
@@ -363,8 +399,9 @@ export class TranscriptScreen implements Screen {
   }
   private paintBlockCached(block: TranscriptBlock, width: number): Painted[] {
     const expanded = this.expanded.includes(block.id);
-    const key = `${block.id}|${expanded}|${this.showApprovals}|${width}`;
-    return (this.paintCache[key] ??= paintBlock(block, expanded, width, {
+    const active = block.id === this.cursor;
+    const key = `${block.id}|${expanded}|${this.showApprovals}|${width}|${active}`;
+    return (this.paintCache[key] ??= paintBlock(block, expanded, width, active, {
       showApprovals: this.showApprovals,
     }));
   }
@@ -439,28 +476,43 @@ export class TranscriptScreen implements Screen {
     );
   }
 }
+/** A message block as a box titled by its payload's first heading, with
+ *  its stats on the title rule; a divider block as its lines across the
+ *  pane. The box is indented by tool depth, as the call list is. */
 function paintBlock(
   block: TranscriptBlock,
   expanded: boolean,
   width: number,
+  active: boolean,
   options: TranscriptPayloadOptions,
 ): Painted[] {
-  const body = paintPayload(transcriptPayload(block, expanded, options), width);
-  if (block.kind !== "assistant") {
-    return body;
+  const payload = transcriptPayload(block, expanded, options);
+  const [first, ...rest] = payload;
+  if (!BOXED.includes(block.kind) || first?.kind !== "heading") {
+    return paintPayload(payload, width);
   }
-  const stats = `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} in · ${fmtUsd(block.round.costUsd)}`;
-  const heading = joinPainted(
-    segment(
-      `── ASSISTANT · LLM call ${block.round.index + 1} ──`,
-      Math.max(0, width - stats.length),
-      {
-        style: { fg: THEME.kind.assistant, bold: true },
-      },
-    ),
-    segment(stats, Math.min(width, stats.length), { align: "right", style: { fg: THEME.muted } }),
-  );
-  return [heading, ...body];
+  const spec = {
+    title: first.text,
+    stats: blockStats(block),
+    color: spineColor(block),
+    indent: Math.min(block.depth * LAYOUT.indent, Math.max(0, width - LAYOUT.minBoxWidth)),
+    active,
+    sides: width >= SIDES_MIN_WIDTH,
+  };
+  return boxLines(paintPayload(rest, boxInnerWidth(width, spec)), width, spec);
+}
+/** What the title rule says on the right: an LLM call's time, context
+ *  and cost; a tool's result size and time. */
+function blockStats(block: TranscriptBlock): string {
+  if (block.kind === "assistant") {
+    return `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} in · ${fmtUsd(block.round.costUsd)}`;
+  }
+  if (block.kind === "tool") {
+    const duration =
+      block.row.durationMs === undefined ? "no duration" : fmtDuration(block.row.durationMs);
+    return `${block.outputLines} ${block.outputLines === 1 ? "line" : "lines"} · ${duration}`;
+  }
+  return "";
 }
 /** Only a problem gets a mark in the call list; a plain result does not. */
 function toolMark(status: ToolStatus): string {

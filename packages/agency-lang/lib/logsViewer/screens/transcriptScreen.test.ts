@@ -83,7 +83,10 @@ describe("transcript screen", () => {
   it("shows tool size, time, interrupts and recorded status", () => {
     const screen = make(buildForest(loopEvents()));
     screen.setFocus("guide");
-    expect(text(screen)).toMatch(/→ agencyGuide\(handlers.md\)\s+1 lines\s+6ms/);
+    // The title rule names the tool and carries its size and time; the
+    // arguments sit in the box, cut as on the trace's call row.
+    expect(text(screen)).toMatch(/TOOL CALL · agencyGuide .*1 line · 6ms/);
+    expect(text(screen)).toContain("filename: handlers.md");
     // An approved interrupt is hidden until p, as on the trace; a plain
     // success has no status line.
     expect(text(screen)).not.toContain("⚠ std::read  approved");
@@ -217,7 +220,7 @@ it("follow replaces pending approval with completion and preserves tool focus", 
   );
   screen.setData(buildForest(events));
   expect(screen.focusId()).toBe("tool");
-  expect(text(screen)).toContain("→ read(");
+  expect(text(screen)).toContain("TOOL CALL · read");
   expect(text(screen)).not.toContain("pending");
   screen.setData(buildForest(events.slice(0, 1)));
   expect(screen.focusId()).toBe("round:L:0");
@@ -231,7 +234,7 @@ it("scrolls to a search match deep inside an expanded result", () => {
   ).join("\n");
   const screen = make(buildForest(events));
   screen.applySearch("needle inside result");
-  expect(text(screen)).toContain("│ needle inside result");
+  expect(text(screen)).toContain("needle inside result");
   expect(screen.focusId()).toBe("guide");
 });
 
@@ -253,7 +256,7 @@ it("keeps a searched tool visible when collapsing its long result", () => {
   screen.applySearch("needle inside result");
   text(screen);
   press(screen, "enter");
-  expect(text(screen)).toContain("→ agencyGuide(handlers.md)");
+  expect(text(screen)).toContain("TOOL CALL · agencyGuide");
   expect(screen.focusId()).toBe("guide");
 });
 
@@ -266,7 +269,7 @@ it("finds and copies an owned final tool error without a later prompt snapshot",
   const screen = make(roots);
   screen.applySearch("disk quota exceeded");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│ disk quota exceeded");
+  expect(text(screen)).toContain("disk quota exceeded");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("disk quota exceeded"),
@@ -312,7 +315,7 @@ it("reveals an interrupt message found inside a collapsed tool", () => {
   );
   screen.applySearch("Approve replacing the archived notes?");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│ Approve replacing the archived notes?");
+  expect(text(screen)).toContain("Approve replacing the archived notes?");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("Approve replacing the archived notes?"),
@@ -423,8 +426,8 @@ describe("the call list and header", () => {
     expect(spine).toContain("        LLM call 2");
     expect(spine).toContain("    ↩ researchAgent");
     const body = text(screen);
-    expect(body).toContain("── PROMPT · researchAgent ──");
-    expect(body).toContain("── HAND-BACK · researchAgent ──");
+    expect(body).toContain("─ PROMPT · researchAgent ─");
+    expect(body).toContain("─ HAND-BACK · researchAgent ─");
     screen.setFocus("t");
     press(screen, "enter");
     expect(
@@ -434,6 +437,41 @@ describe("the call list and header", () => {
     ).toContain("▶ ▾   researchAgent");
   });
 
+  it("names a reply's tool calls on one line and shows a request no tool ran whole", () => {
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [
+              { id: "c1", name: "grep", arguments: { pattern: "a" } },
+              { id: "c2", name: "imaginary", arguments: { what: "never ran" } },
+            ],
+          },
+        }),
+        event("toolCallStart", 101, "g", "L", { toolName: "grep", toolCallId: "c1", args: {} }),
+        event("toolCall", 102, "g", "L", { toolName: "grep", toolCallId: "c1", output: "x" }),
+      ]),
+    );
+    const body = text(screen);
+    expect(body).toContain("→ 2 tool calls · grep, imaginary");
+    expect(body).not.toContain("TOOL CALL · grep · c1");
+    expect(body).toContain("TOOL CALL · imaginary · c2");
+    expect(body).toContain("what: never ran");
+  });
+  it("keeps the active box where it is until it would leave the pane", () => {
+    const screen = make(buildForest(loopEvents()));
+    expect(text(screen).split("\n")[1]).toContain("┏━ USER");
+    press(screen, "j");
+    press(screen, "j");
+    // Moving down within the pane does not scroll: the first box is still
+    // at the top, and the heavy rule marks the active one further down.
+    const moved = text(screen).split("\n");
+    expect(moved[1]).toContain("┌─ USER");
+    expect(moved.findIndex((line) => line.includes("┏━"))).toBeGreaterThan(1);
+  });
   it("cuts a long argument on the call and shows what the model read on the tool", () => {
     const long = "x".repeat(200);
     const screen = make(

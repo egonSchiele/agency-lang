@@ -2,7 +2,7 @@
 // the bar itself, the axis, the header line, the selection footer, and the
 // width budget.
 import { fmtDuration } from "../spanText.js";
-import { coverage, type Interval } from "../timeline/intervals.js";
+import { cellFills, type CellFill, type Interval } from "../timeline/intervals.js";
 import { clipText } from "../../tui/paint.js";
 
 /** Width budget. The bar-cell count is an input to `coverage`, so these
@@ -48,12 +48,18 @@ export function splitWidth(view: "timeline" | "occurrences", cols: number): Widt
   return { gutter, bar, stats };
 }
 
-/** Shaded cells for a set of intervals. The glyph is the fraction of the
- *  cell's time slice the intervals occupy — busyness, never overlap count:
- *  · none, ░ ≤25%, ▒ ≤50%, ▓ ≤90%, █ above. Floor override: any interval
- *  inside the window paints at least one ░ (losing a 60ms call on a
- *  20-minute axis is worse than overstating it). A running bar extends to
- *  the window end and is capped with ⋯ so it cannot read as finished. */
+/** Solid cells for a set of intervals, all block elements of one height
+ *  so a bar reads as one shape: █ for a cell the intervals cover by more
+ *  than three quarters, ▐ for one they cover mostly on its right (a span
+ *  starting partway through), ▌ for one they cover mostly on its left (a
+ *  span ending partway through, or a short call), · for none. The half
+ *  glyph covers half a cell and the full one all of it, so three quarters
+ *  is where each is equally wrong. The shades ░▒▓ sit at other heights
+ *  than █ in most fonts. Floor: an interval inside the window too short
+ *  for any cell still paints one half glyph, on the side of its cell it
+ *  falls in, since losing a 60ms call on a 20-minute axis is worse than
+ *  overstating it. A running bar extends to the window end and is capped
+ *  with ⋯ so it cannot read as finished. */
 export class BarComponent {
   constructor(
     private readonly intervals: Interval[],
@@ -68,17 +74,19 @@ export class BarComponent {
         draw.push({ start: lastEnd, end: window.end });
       }
     }
-    const fractions = coverage(draw, window, cells);
-    const glyphs = fractions.map(glyphFor);
+    const glyphs = cellFills(draw, window, cells).map(glyphFor);
+    const windowMs = Math.max(window.end - window.start, 1);
+    const cellMs = windowMs / Math.max(cells, 1);
     for (const iv of draw) {
       if (iv.end < window.start || iv.start > window.end) continue;
-      const windowMs = Math.max(window.end - window.start, 1);
       const at = Math.min(
         cells - 1,
         Math.max(0, Math.floor(((iv.start - window.start) / windowMs) * cells)),
       );
       if (glyphs[at] === "·") {
-        glyphs[at] = "░";
+        const cellStart = window.start + at * cellMs;
+        const mid = Math.min(1, Math.max(0, ((iv.start + iv.end) / 2 - cellStart) / cellMs));
+        glyphs[at] = halfGlyph(mid);
       }
     }
     if (this.opts.running && cells > 0) {
@@ -88,12 +96,14 @@ export class BarComponent {
   }
 }
 
-function glyphFor(fraction: number): string {
-  if (fraction <= 0) return "·";
-  if (fraction <= 0.25) return "░";
-  if (fraction <= 0.5) return "▒";
-  if (fraction <= 0.9) return "▓";
-  return "█";
+function glyphFor(fill: CellFill): string {
+  if (fill.fraction <= 0) return "·";
+  if (fill.fraction > 0.75) return "█";
+  return halfGlyph(fill.mid);
+}
+/** The half of its cell an interval sits in, by where its middle falls. */
+function halfGlyph(mid: number): string {
+  return mid > 0.5 ? "▐" : "▌";
 }
 
 /** Tick labels over the bar area: left / mid / right offsets from the
@@ -120,6 +130,9 @@ export class TimelineHeader {
     viewStart: number;
     adminShown: boolean;
     following?: boolean;
+    /** Time the run spent waiting for the person; the header then splits
+     *  the elapsed time into working and waiting. */
+    waitingMs?: number;
   }): string {
     const crumbs = args.crumbs.length > 0 ? `  » ${args.crumbs.join(" » ")}` : "";
     const admin =
@@ -128,7 +141,11 @@ export class TimelineHeader {
       args.zoom !== undefined
         ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
         : "";
-    return `Elapsed ${fmtOffset(args.totalMs)}${crumbs}${admin}${zoom}`;
+    const split =
+      args.waitingMs === undefined
+        ? ""
+        : ` · ${fmtOffset(args.totalMs - args.waitingMs)} working · ${fmtOffset(args.waitingMs)} waiting for the user`;
+    return `Elapsed ${fmtOffset(args.totalMs)}${split}${crumbs}${admin}${zoom}`;
   }
 }
 

@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import { parseStyledText } from "../../tui/styleParser.js";
 import { visibleWidth } from "../../tui/paint.js";
 import { paintPayload } from "./payloadPaint.js";
+import { overviewData } from "../overviewData.js";
+import { leaf, span, trace } from "../timeline/fixture.js";
 it("wraps text and JSON, wraps code and preserves literal controls and braces", () => {
   const lines = paintPayload(
     [
@@ -111,6 +113,33 @@ it("paints a faded line in one muted color with the same text", () => {
   expect(spans[0].fg).not.toBe(parseStyledText(bright)[0].fg);
 });
 
+it("paints a charts line as the three overview charts, each with four rows of bars", () => {
+  const round = (index: number) =>
+    ({
+      index,
+      contextTokens: 1000 * (index + 1),
+      outputTokens: 10,
+      costUsd: 0.01,
+      durationMs: 100,
+    }) as never;
+  const call = (index: number) => ({
+    id: `r${index}`,
+    round: round(index),
+    failure: undefined,
+    errors: [],
+    tools: [],
+    inside: undefined,
+    enclosing: [],
+    continues: undefined,
+    at: index,
+    threadLabel: "main",
+    threadName: "main",
+  });
+  const lines = plainLines(paintPayload([{ kind: "charts", calls: [call(0), call(1)] }], 60));
+  expect(lines.filter((line) => line.includes("PER LLM CALL"))).toHaveLength(3);
+  expect(lines.some((line) => /\s1\s+2\s*$/.test(line))).toBe(true);
+});
+
 it("paints a key that heads a multi-line value in the key color", () => {
   const [key, value] = paintPayload(
     [
@@ -141,4 +170,38 @@ it("keeps a oneRow line to one painted row, ending in an ellipsis when cut", () 
     20,
   );
   expect(plainLines(whole)).toEqual(["fits"]);
+});
+
+function callsTrace(count: number) {
+  return trace([
+    span(
+      "llmCall",
+      Array.from({ length: count }, (_, position) =>
+        leaf("promptCompletion", 1_000 + position * 1_000, {
+          timeTaken: 100,
+          usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 10 },
+          completion: { output: "ok" },
+        }),
+      ),
+      { id: "L" },
+    ),
+  ]);
+}
+
+it("sizes chart columns by the widest call number drawn, not by how many calls there are", () => {
+  const calls = overviewData(callsTrace(109)).calls.slice(100);
+  const text = plainLines(paintPayload([{ kind: "charts", calls }], 40)).join("\n");
+  for (let number = 101; number <= 109; number += 1) {
+    expect(text).toContain(String(number));
+  }
+});
+
+it("draws a further set of charts for every page of calls that does not fit the width", () => {
+  const calls = overviewData(callsTrace(40)).calls;
+  const lines = plainLines(paintPayload([{ kind: "charts", calls }], 60));
+  const text = lines.join("\n");
+  expect(lines.filter((line) => line.startsWith("CONTEXT PER LLM CALL"))).toHaveLength(3);
+  for (const number of ["1", "17", "33", "40"]) {
+    expect(text).toMatch(new RegExp(`(^|\\s)${number}(\\s|$)`, "m"));
+  }
 });

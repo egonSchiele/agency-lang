@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { Element } from "../../tui/elements.js";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { THEME } from "../theme.js";
-import { benchForest, leaf, span, trace } from "../timeline/fixture.js";
+import { benchForest, leaf, sessionTrace, span, trace } from "../timeline/fixture.js";
 import { TimelineScreen } from "../screens/timelineScreen.js";
 import type { TreeNode } from "../types.js";
 
@@ -75,6 +75,7 @@ function fixtureForest(): TreeNode[] {
 describe("TimelineScreen", () => {
   it("labels thread groups by name and keeps tool argument summaries", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
     const text = frame(view);
     expect(text).toContain("Thread · codingAgent");
     expect(text).toContain("bash · pip install matplotlib");
@@ -92,8 +93,142 @@ describe("TimelineScreen", () => {
       part.text.includes("Thread · codingAgent"),
     );
     expect(label).toMatchObject({ fg: THEME.accent, bold: true });
-    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "right" }, viewport);
     expect(frame(view)).toContain("» Thread · codingAgent");
+  });
+
+  it("names every thread span by its thread and call count, nested ones too", () => {
+    const call = (at: number) =>
+      leaf("promptCompletion", at, {
+        model: '"m1"',
+        threadIdentity: "T",
+        threadLabel: "main",
+        timeTaken: 500,
+        completion: { output: "ok" },
+      });
+    const inner = span("llmCall", [call(3_000), call(4_000)], { id: "inner" });
+    const tool = span(
+      "toolExecution",
+      [leaf("toolCallStart", 1_500, { toolName: "researchAgent", args: {} }), inner],
+      { id: "research" },
+    );
+    const outer = span("llmCall", [call(1_000), tool, call(5_000)], { id: "outer" });
+    const view = new TimelineScreen([trace([outer])], "T", DEFAULT_THRESHOLDS);
+    const text = frame(view);
+    // The outer span and the sub-agent's span inside it, both two calls on "main".
+    const rows = text
+      .split("\n")
+      .filter((row) => row.includes("Thread · main · 2 LLM calls") && !row.startsWith("Thread"));
+    expect(rows).toHaveLength(2);
+    expect(rows[1].indexOf("Thread")).toBeGreaterThan(rows[0].indexOf("Thread"));
+  });
+
+  it("colors rows by kind as the trace does, not by how much time a name took", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
+    view.setFocus("llm1"); // the cursor row paints in the text color
+    const styled = (element: Element): ReturnType<typeof parseStyledText> =>
+      element.type === "text"
+        ? parseStyledText(element.content ?? "")
+        : (element.children ?? []).flatMap(styled);
+    const parts = styled(view.render(viewport));
+    const part = (text: string) => parts.find((candidate) => candidate.text.includes(text));
+    expect(part("bash · pip install")).toMatchObject({ fg: THEME.kind.tool });
+    expect(part("codeAgent ·")).toMatchObject({ fg: THEME.kind.tool });
+    expect(part("Thread · codingAgent")).toMatchObject({ fg: THEME.accent });
+  });
+
+  it("stacks a session's turns, each under its own row and axis, with the wait between them", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    const text = frame(view);
+    expect(text).toContain("Elapsed 15m00s · 15.0s working · 14m45s waiting for the user");
+    expect(text).toContain("▶ turn 1 · first question");
+    expect(text).toContain("⏸ waited 9m54s for the user");
+    expect(text).toContain("turn 2 · second question");
+    expect(text).not.toContain("with a second line");
+    expect(text).toContain("⏸ waited 4m51s, then the run ended");
+    // One call per span draws no call row of its own; the tool shows under turn 2 only.
+    expect(text).toContain("read · a");
+    expect(text.indexOf("read · a")).toBeGreaterThan(text.indexOf("turn 2 ·"));
+    // Each turn's row carries its own axis, ending at that turn's working time.
+    // A turn's row is its title with cost and calls; the line beneath is its
+    // own axis, ending at that turn's working time, labeled total/self.
+    const lines = text.split("\n");
+    const under = (title: string) => lines[lines.findIndex((row) => row.includes(title)) + 1];
+    expect(lines.find((row) => row.includes("turn 1 · first question"))).toMatch(
+      /\$0\.010 · 1 LLM call/,
+    );
+    expect(under("turn 1 · first question")).toMatch(/0ms\s+3\.0s\s+6\.0s\s+total\/self/);
+    expect(under("turn 2 · second question")).toMatch(/0ms\s+4\.5s\s+9\.0s\s+total\/self/);
+    // No axis at the top: the header is followed by turn 1 directly, and a
+    // blank line sets every later turn apart.
+    expect(lines[1]).toContain("turn 1 · first question");
+    const second = lines.findIndex((row) => row.includes("turn 2 · second question"));
+    expect(lines[second - 1].trim()).toBe("");
+    expect(lines[second - 2]).toContain("waited 9m54s");
+    expect(frame(view)).toMatch(
+      /turn 1 · first question {2}· {2}start \+0ms {2}· {2}1 LLM call, ran 6\.0s, then waited 9m54s/,
+    );
+    // The cursor walks down turn 1's rows, past the wait line, into turn 2.
+    const seen: string[] = [];
+    for (let step = 0; step < 8; step += 1) {
+      view.handleKey({ key: "down" }, viewport);
+      seen.push(view.focusId() ?? "");
+    }
+    expect(seen).toEqual([
+      "node",
+      "L1",
+      "round:L1:0",
+      "turn:1",
+      "node",
+      "L2",
+      "round:L2:0",
+      "tool2",
+    ]);
+    for (let step = 0; step < 4; step += 1) {
+      view.handleKey({ key: "up" }, viewport);
+    }
+    expect(view.focusId()).toBe("turn:1");
+    // Enter folds a turn.
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).toContain("▸ turn 2 · second question");
+    expect(frame(view)).not.toContain("read · a");
+    expect(frame(view)).toContain("⏸ waited 4m51s, then the run ended");
+    // The node's span is drawn in both turns; folding it in one leaves the other open.
+    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "down" }, viewport);
+    expect(view.focusId()).toBe("node");
+    view.handleKey({ key: "enter" }, viewport);
+    const rows = frame(view).split("\n");
+    expect(rows.filter((row) => row.includes("▸ "))).toHaveLength(1);
+    expect(rows.filter((row) => row.includes("Thread · main"))).toHaveLength(1);
+  });
+
+  it("zoom and focus stay within the turn they belong to", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    view.setFocus("tool2");
+    expect(view.focusId()).toBe("tool2");
+    view.handleKey({ key: "+" }, viewport);
+    const zoomed = frame(view);
+    expect(zoomed).toContain("(zoom ");
+    // Turn 1's axis is untouched by a zoom in turn 2.
+    const rows = zoomed.split("\n");
+    expect(rows[rows.findIndex((row) => row.includes("turn 1 ·")) + 1]).toMatch(
+      /0ms\s+3\.0s\s+6\.0s/,
+    );
+    // Turn 2's axis reads in offsets from the turn's start, as the header does.
+    const turnTwoAxis = rows[rows.findIndex((row) => row.includes("turn 2 ·")) + 1].trim();
+    expect(turnTwoAxis.startsWith("4.5s")).toBe(true);
+    expect(turnTwoAxis).toContain("9.0s");
+    view.setFocus("L1");
+    expect(view.focusId()).toBe("L1");
+    expect(frame(view)).not.toContain("(zoom ");
+    const drilled = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS, {
+      drillTo: "L2",
+    });
+    expect(frame(drilled)).toContain("» Thread · main");
+    expect(frame(drilled)).toContain("turn 2 · second question");
+    expect(frame(drilled)).not.toContain("turn 1 ·");
   });
 
   it("uses unnamed for threads without recorded names and preserves individual call labels", () => {
@@ -114,20 +249,62 @@ describe("TimelineScreen", () => {
 
   it("drill re-roots on the selected span with breadcrumbs; ← climbs out", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "down" }, viewport); // → codeAgent row
-    view.handleKey({ key: "enter" }, viewport); // drill in
+    // The first row is codeAgent: agentRun above it is hidden.
+    view.handleKey({ key: "right" }, viewport); // drill in
     const drilled = frame(view);
     expect(drilled).toContain("» codeAgent");
-    expect(drilled).not.toContain("agentRun");
     view.handleKey({ key: "left" }, viewport);
+    expect(frame(view)).toContain("codeAgent · do the task");
+    expect(frame(view)).not.toContain("» ");
+  });
+
+  it("hides the agentRun span until a shows it", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).not.toContain("agentRun");
+    expect(frame(view)).toContain("total/self");
+    view.handleKey({ key: "a" }, viewport);
     expect(frame(view)).toContain("agentRun");
   });
 
   it("Enter on a leaf opens the detail screen for that span", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "G" }, viewport); // last row = bash (leaf)
+    view.setFocus("bash1");
     const action = view.handleKey({ key: "enter" }, viewport);
     expect(action).toEqual({ kind: "openDetail", rowId: "bash1" });
+  });
+
+  it("starts a completed sub-agent group folded; Enter opens and closes it in place", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · pip install");
+    view.handleKey({ key: "G" }, viewport); // last visible row = the folded group
+    expect(view.cursorSpanId()).toBe("llm1");
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).not.toContain("▸ Thread");
+    expect(frame(view)).toContain("bash · pip install");
+    expect(view.cursorSpanId()).toBe("llm1");
+    expect(frame(view)).not.toContain("» "); // no drill happened
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · pip install");
+    // A top-level thread never folds by itself.
+    expect(frame(new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS))).toContain(
+      "LLM call 3",
+    );
+  });
+
+  it("search and focus open the fold that hides their row", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    const action = view.handleKey({ key: "/" }, viewport);
+    if (action.kind === "promptLine") action.onResult("pip install");
+    expect(view.cursorSpanId()).toBe("bash1");
+    expect(frame(view)).toContain("bash · pip install");
+    const other = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    other.setFocus("bash1");
+    expect(other.cursorSpanId()).toBe("bash1");
+    // A follow update keeps a group the reader opened open.
+    other.setData(fixtureForest());
+    expect(frame(other)).toContain("bash · pip install");
   });
 
   it("zoom halves the window around the cursor span; 0 resets; pan clamps", () => {
@@ -149,6 +326,7 @@ describe("TimelineScreen", () => {
 
   it("total/self appears only when they differ", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
     const text = frame(view);
     expect(text).toMatch(/1m0[12]s\/\d+m?\d*/); // wrapping span shows total/self
     expect(text).toMatch(/ 4\.0s(?!\/)/); // leaf bash shows plain total
@@ -364,7 +542,7 @@ describe("timeline screen rows and focus", () => {
     expect(frame(view)).not.toContain("{ } pan");
     view.handleKey({ key: "+" }, viewport);
     expect(frame(view)).toContain("{ } pan");
-    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "right" }, viewport);
     view.applySearch("round");
     expect(view.escape()).toBe(true);
     expect(view.escape()).toBe(true);
@@ -414,21 +592,26 @@ it("help derives a table with no duplicate key ownership", () => {
 
 it("drilling a multi-round call draws each round once", () => {
   const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
-  view.handleKey({ key: "enter" }, viewport);
+  view.handleKey({ key: "right" }, viewport);
   expect(frame(view).match(/LLM call 1/g)).toHaveLength(1);
   expect(frame(view).match(/LLM call 2/g)).toHaveLength(1);
 });
-it("drilling a single-round call keeps the duplicate round bar suppressed", () => {
+it("a thread with one call draws the call's row, and Enter on it opens the call in the trace", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-  view.setFocus("llm1");
-  view.handleKey({ key: "enter" }, viewport);
-  expect(frame(view)).not.toContain("LLM call 1");
+  view.setFocus("round:llm1:0");
+  expect(view.focusId()).toBe("round:llm1:0");
+  expect(frame(view)).toContain("LLM call 1");
+  expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
+    kind: "openScreen",
+    screen: "trace",
+    focusId: "round:llm1:0",
+  });
 });
 it("drilling never imports unrelated rounds from the trace root", () => {
   const roots = loopForest();
   roots[0].children.push(leaf("promptCompletion", 4000, { timeTaken: 100 }));
   const view = new TimelineScreen(roots, "T", DEFAULT_THRESHOLDS);
-  view.handleKey({ key: "enter" }, viewport);
+  view.handleKey({ key: "right" }, viewport);
   expect(frame(view)).not.toContain("LLM call 4");
 });
 it("falls back to a surviving parent when follow removes the selected child", () => {
@@ -448,12 +631,17 @@ it.each(["trace-T", "missing"])("retains its drill and cursor for unresolvable f
   expect(view.focusId()).toBe("bash1");
   expect(frame(view)).toContain("» codeAgent");
   expect(frame(view)).not.toContain("agentRun");
+  // The rows behind the drawn ones were rolled back too, so Enter still
+  // finds the selected row among them.
+  view.handleKey({ key: "enter" }, viewport);
+  expect(frame(view)).toContain("» codeAgent");
 });
 it("leaves its drill to reveal a focus drawn outside it", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS, { drillTo: "llm1" });
-  view.setFocus("root1");
-  expect(view.focusId()).toBe("root1");
-  expect(frame(view)).toContain("agentRun");
+  view.setFocus("agent1");
+  expect(view.focusId()).toBe("agent1");
+  expect(frame(view)).toContain("codeAgent · do the task");
+  expect(frame(view)).not.toContain("» ");
 });
 
 it("toggles row numbers without changing focus, zoom, or drill state", () => {
@@ -505,5 +693,117 @@ describe("timeline marks", () => {
     expect(text).toMatch(/✖ write/);
     expect(text).toMatch(/⏸ deploy/);
     expect(text).not.toMatch(/✖ Thread/);
+  });
+});
+
+describe("turns across follow updates and searches", () => {
+  it("a search never leaves the cursor on a wait row", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    const action = view.handleKey({ key: "/" }, viewport);
+    if (action.kind === "promptLine") action.onResult("waited");
+    expect(view.focusId()).toBe("turn:0");
+    expect(frame(view)).toContain('no matches for "waited"');
+  });
+
+  it("a follow update keeps the cursor in the turn it was in", () => {
+    const view = new TimelineScreen([sessionTrace()], "T", DEFAULT_THRESHOLDS);
+    for (let step = 0; step < 4; step += 1) {
+      view.handleKey({ key: "down" }, viewport);
+    }
+    expect(view.focusId()).toBe("turn:1");
+    view.setData([sessionTrace()]);
+    expect(view.focusId()).toBe("turn:1");
+    // The node span is drawn in both turns; the cursor stays on turn 2's copy.
+    view.handleKey({ key: "down" }, viewport);
+    expect(view.focusId()).toBe("node");
+    view.setData([sessionTrace()]);
+    expect(view.focusId()).toBe("node");
+    const lines = frame(view).split("\n");
+    const marker = lines.findIndex((line) => line.includes("▶ "));
+    expect(marker).toBeGreaterThan(lines.findIndex((line) => line.includes("turn 2 ·")));
+  });
+
+  it("numbers rows at the width of every row, so a fold does not widen the gutter", () => {
+    const calls = (from: number) =>
+      Array.from({ length: 60 }, (_, position) =>
+        leaf("promptCompletion", from + position * 1_000, {
+          timeTaken: 500,
+          completion: { output: "ok" },
+        }),
+      );
+    const root = trace([
+      span("llmCall", calls(1_000), { id: "A" }),
+      span("llmCall", calls(100_000), { id: "B" }),
+    ]);
+    const view = new TimelineScreen([root], root.traceId, DEFAULT_THRESHOLDS);
+    const vp = { rows: 12, cols: 100 };
+    view.handleKey({ key: "#" }, vp);
+    view.handleKey({ key: "enter" }, vp); // fold A: 62 of 122 rows stay visible
+    const recorder = new FrameRecorder();
+    recorder.write(render(layout(view.render(vp), vp.cols, vp.rows)));
+    const lines = recorder.lastText().split("\n");
+    expect(lines[1].trimEnd().endsWith("total/self")).toBe(true);
+    expect(lines.every((line) => line.length <= vp.cols)).toBe(true);
+    expect(lines[2]).toMatch(/^\s*1 /);
+  });
+
+  it("does not fold a sub-agent that is still in its tool loop", () => {
+    const loop = (finished: boolean) => {
+      const inner = span(
+        "llmCall",
+        [
+          leaf("promptCompletion", 2_000, {
+            threadId: "5",
+            timeTaken: 1_000,
+            completion: { toolCalls: [{ name: "bash", arguments: { command: "ls" } }] },
+          }),
+          span(
+            "toolExecution",
+            [
+              leaf("toolCallStart", 2_100, { toolName: "bash", args: { command: "ls" } }),
+              leaf("toolCall", 2_500, { toolName: "bash" }),
+            ],
+            { id: "bash1" },
+          ),
+          ...(finished
+            ? [
+                leaf("promptCompletion", 3_000, {
+                  threadId: "5",
+                  timeTaken: 400,
+                  completion: { output: "done" },
+                }),
+              ]
+            : []),
+        ],
+        { id: "llm1" },
+      );
+      const agent = span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 500, { toolName: "codeAgent", args: { userMsg: "list" } }),
+          inner,
+          ...(finished ? [leaf("toolCall", 3_100, { toolName: "codeAgent" })] : []),
+        ],
+        { id: "agent1" },
+      );
+      return [trace([leaf("threadCreated", 0, { threadId: "5", label: "codingAgent" }), agent])];
+    };
+    const view = new TimelineScreen(loop(false), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).toContain("bash · ls");
+    expect(frame(view)).not.toContain("▸ Thread");
+    view.setData(loop(true));
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · ls");
+  });
+
+  it("a follow update never folds the group the cursor is inside", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1");
+    const roots = fixtureForest();
+    const index = buildTreeIndex(roots[0]);
+    index.byId.llm1.children.push(leaf("promptCompletion", 70_000, { timeTaken: 100 }));
+    view.setData(roots);
+    expect(view.focusId()).toBe("bash1");
+    expect(frame(view)).toContain("bash · pip install");
   });
 });

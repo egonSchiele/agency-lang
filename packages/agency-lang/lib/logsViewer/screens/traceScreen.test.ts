@@ -36,7 +36,7 @@ describe("trace screen", () => {
     press(screen, "p");
     press(screen, "j");
     press(screen, "j");
-    expect(text(screen)).toContain("TOOL · agencyGuide");
+    expect(text(screen)).toContain("TOOL CALL · agencyGuide");
     press(screen, "j");
     expect(screen.focusId()).toBe("guide");
     expect(press(screen, "d")).toEqual({
@@ -87,8 +87,8 @@ describe("trace screen", () => {
     press(screen, "enter");
     expect(screen.focusId()).toBe("calls");
     expect(text(screen)).toContain("Thread · main");
-    expect(text(screen)).toContain("Thread: main");
-    expect(text(screen)).toContain("research result");
+    expect(text(screen)).toContain("1 LLM call · test-model");
+    expect(text(screen)).toContain("CONTEXT PER LLM CALL");
     expect(text(screen)).not.toContain("subagent main");
     press(screen, "r");
     expect(text(screen)).toContain('"promptCompletion"');
@@ -269,7 +269,7 @@ it("reveals an explicitly requested shared focus through an active filter", () =
   screen.applySearch("Search?");
   screen.setFocus("guide");
   expect(screen.focusId()).toBe("guide");
-  expect(text(screen)).toContain("TOOL · agencyGuide");
+  expect(text(screen)).toContain("TOOL CALL · agencyGuide");
 });
 
 it("previous match from a nonmatching ancestor selects the last match", () => {
@@ -472,6 +472,19 @@ function threadEvents(running = false) {
         ]),
   ];
 }
+
+it("Enter on a row with nothing under it changes nothing", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 1000, "L", null, { completion: { output: "no tools" } }),
+    ]),
+  );
+  const before = text(screen);
+  expect(before).toContain("▶ LLM call  1");
+  press(screen, "enter");
+  expect(text(screen)).toBe(before);
+  expect(text(screen)).not.toContain("▸");
+});
 
 it("starts completed thread groups folded, while expansion survives follow and machinery", () => {
   const roots = buildForest(threadEvents());

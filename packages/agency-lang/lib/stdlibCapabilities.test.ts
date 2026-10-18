@@ -169,6 +169,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "setAgentName",
     "evalValue",
     "evalOutput",
+    "turnStart",
     "evalRecord",
     "evalValues",
     "evalOutputs",

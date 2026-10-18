@@ -3,6 +3,7 @@
 // a run directory comes in as the snapshot `readRunDirectory` produced,
 // a raw statelog as the miner's scan result, and every aggregate is
 // recomputed from the per-test rows so no two paths can disagree.
+import { tallyTimes } from "../logsViewer/timeline/turns.js";
 import * as path from "path";
 
 import type { Annotation, Score } from "@/runDirectory/annotations.js";
@@ -299,11 +300,12 @@ function deriveRunStatus(tests: TestRow[]): RunRow["status"] {
   return "failed";
 }
 
+/** Working time: the waits between a session's turns are left out. */
 function traceWallMs(totals: TraceTotals): number | null {
   if (totals.firstTsMs === null || totals.lastTsMs === null) {
     return null;
   }
-  return totals.lastTsMs - totals.firstTsMs;
+  return tallyTimes(totals.turns, { start: totals.firstTsMs, end: totals.lastTsMs }).workingMs;
 }
 
 function lastPathSegment(value: string): string {

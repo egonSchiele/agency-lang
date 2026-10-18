@@ -19,6 +19,13 @@ describe("barText", () => {
 });
 
 describe("stackedColumn", () => {
+  it("rounds the stack, not each band: two small bands earn one row between them", () => {
+    // Call 15 of a long-context trace: 11.5k fresh and 12.4k output against a
+    // 116k scale on four rows. Separately both round to nothing.
+    const cells = stackedColumn([0, 11_464, 12_436], 116_220, 4);
+    expect(cells).toEqual([-1, -1, -1, 2]);
+  });
+
   it("stacks bands from the bottom in the order given", () => {
     expect(stackedColumn([50, 30, 20], 100, 10)).toEqual([2, 2, 1, 1, 1, 0, 0, 0, 0, 0]);
   });

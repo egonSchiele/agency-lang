@@ -19,6 +19,8 @@ import {
   _evalRecord,
   _finalEvalOutput,
   _setAgentName,
+  _turnStart,
+  logReplTurn,
 } from "./statelog.js";
 
 let ts = 0;
@@ -62,13 +64,15 @@ function spyClient(ctx: RuntimeContext<any>) {
   const evalValueRecorded = vi.fn(async () => undefined);
   const evalOutputRecorded = vi.fn(async () => undefined);
   const agentName = vi.fn(async () => undefined);
+  const turnStart = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
     evalValueRecorded,
     evalOutputRecorded,
     agentName,
+    turnStart,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName };
+  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart };
 }
 
 async function withFrame(
@@ -120,6 +124,28 @@ describe("std::statelog eval annotations", () => {
 
     expect(spies.agentName).toHaveBeenCalledOnce();
     expect(spies.agentName).toHaveBeenCalledWith({ name: "gcode-v2" });
+  });
+
+  it("turnStart posts the person's message as a turnStart event", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      await _turnStart("do the same for modem.ai");
+    });
+
+    expect(spies.turnStart).toHaveBeenCalledWith({ message: "do the same for modem.ai" });
+    await expect(_turnStart("outside a frame")).resolves.toBeUndefined();
+  });
+
+  it("a REPL logs a turn for a message and not for a slash command", async () => {
+    const turnStart = vi.fn(async () => {});
+    const run = { log: { turnStart } } as unknown as Parameters<typeof logReplTurn>[0];
+    await logReplTurn(run, "  /cost");
+    expect(turnStart).not.toHaveBeenCalled();
+    await logReplTurn(run, "what does /cost show?");
+    expect(turnStart).toHaveBeenCalledWith({ message: "what does /cost show?" });
   });
 
   it("setAgentName outside an Agency frame is a no-op", async () => {

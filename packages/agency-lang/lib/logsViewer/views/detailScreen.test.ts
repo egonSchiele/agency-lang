@@ -32,7 +32,7 @@ describe("DetailScreen", () => {
   });
   it("shows raw JSON, copies the whole page and returns on left", () => {
     const screen = new DetailScreen(roots, "guide", DEFAULT_THRESHOLDS);
-    expect(plain(screen)).toContain("TOOL · agencyGuide");
+    expect(plain(screen)).toContain("TOOL CALL · agencyGuide");
     screen.handleKey({ key: "r" }, viewport);
     expect(plain(screen)).toContain('"toolCallStart"');
     const action = screen.handleKey({ key: "y" }, viewport);

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
 import { outlineRows, type StoryRow } from "./story.js";
 import { agentLoopTrace, event } from "./storyFixture.js";
-import { payloadFor, roundResponsePayload, RESULT_PREVIEW_CHARS, valuePayload } from "./payload.js";
+import {
+  ARGUMENT_PREVIEW_CHARS,
+  payloadFor,
+  roundResponsePayload,
+  RESULT_PREVIEW_CHARS,
+  valuePayload,
+} from "./payload.js";
+import { roundsOf } from "./timeline/rounds.js";
 import { overviewData } from "./overviewData.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
 const options = { raw: false };
@@ -51,15 +58,12 @@ describe("payloads", () => {
     const text = payloadFor(row, options)
       .map((line) => ("text" in line ? line.text : ""))
       .join("\n");
-    expect(text).toContain("THREAD · main");
-    expect(text).toContain("Tool: researchAgent");
-    expect(text).toContain("Thread: main");
-    expect(text).toContain("Model: test-model");
-    expect(text).toContain("2 completed LLM calls");
-    expect(text).toContain("LLM time: 3.0s");
-    expect(text).toContain("Cost: $0.300");
-    expect(text).toContain("Latest response");
-    expect(text).toContain("latest answer");
+    expect(text).toContain("Thread · main");
+    expect(text).toContain("2 LLM calls · test-model");
+    expect(text).toContain("ran 4.0s · LLM time 3.0s · $0.300");
+    expect(text).not.toContain("researchAgent");
+    expect(text).not.toContain("Latest response");
+    expect(text).not.toContain("latest answer");
     expect(text).not.toContain("earlier answer");
     expect(text).not.toContain("nested review");
     expect(text).not.toContain("long repeated history");
@@ -165,7 +169,7 @@ it("reports estimated result tokens and recorded error origin", () => {
       rows.find((row) => row.kind === "tool")!,
       options,
     ),
-  ).toContainEqual({ kind: "meta", text: "result: ~4 tokens" });
+  ).toContainEqual({ kind: "heading", text: "→ RESULT · ~4 tokens", tone: "tool" });
   const error = payloadFor(
     rows.find((row) => row.kind === "error")!,
     options,
@@ -212,14 +216,168 @@ it("shows unknown usage and cache writes in round details", () => {
 });
 
 it.each([
-  ["", "result: ~0 tokens"],
-  ["12345", "result: ~2 tokens"],
-  [{ __type: "resultType", success: true, value: "a".repeat(8000) }, "result: ~2.0k tokens"],
-  [{ answer: "done" }, "result: ~5 tokens"],
+  ["", "→ RESULT · ~0 tokens"],
+  ["12345", "→ RESULT · ~2 tokens"],
+  [{ __type: "resultType", success: true, value: "a".repeat(8000) }, "→ RESULT · ~2.0k tokens"],
+  [{ answer: "done" }, "→ RESULT · ~5 tokens"],
 ])("estimates tool output tokens from text or compact JSON: %j", (output, expected) => {
   const trace = buildForest([event("toolCall", 1, "tool", null, { toolName: "read", output })])[0];
   const row = outlineRows(trace, { machinery: false, admin: false })[0];
-  expect(payloadFor(row, options)).toContainEqual({ kind: "meta", text: expected });
+  expect(payloadFor(row, options)).toContainEqual({
+    kind: "heading",
+    text: expected,
+    tone: "tool",
+  });
+});
+
+it("shows a tool row as the call with its arguments, then the result, with no section labels", () => {
+  const trace = buildForest([
+    event("toolCallStart", 0, "tool", null, { toolName: "read", args: { path: "a.md" } }),
+    event("toolCall", 1, "tool", null, {
+      toolName: "read",
+      args: { path: "a.md" },
+      output: "text",
+    }),
+  ])[0];
+  const row = outlineRows(trace, { machinery: false, admin: false })[0];
+  const texts = payloadFor(row, options).map((line) => {
+    if (line.kind === "pair") {
+      return `${line.key}: ${line.text}`;
+    }
+    return "text" in line ? line.text : line.kind;
+  });
+  expect(texts).toEqual([
+    "TOOL CALL · read",
+    "completed",
+    "duration not recorded",
+    "path: a.md",
+    "→ RESULT · ~1 tokens",
+    "text",
+  ]);
+});
+
+it("names every group by its thread and call count, and charts a sub-agent's calls", () => {
+  const call = (span: string, parent: string | null, at: number, identity: string) =>
+    event("promptCompletion", at, span, parent, {
+      threadIdentity: identity,
+      threadLabel: "main",
+      model: "m1",
+      timeTaken: 100,
+      cost: { totalCost: 0.1 },
+      usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 10 },
+      completion: { output: "ok" },
+    });
+  const trace = buildForest([
+    call("outer", null, 1_000, "T"),
+    event("toolCallStart", 1_100, "research", "outer", { toolName: "researchAgent" }),
+    call("inner", "research", 2_000, "T"),
+    call("inner", "research", 3_000, "T"),
+    event("toolCallStart", 3_100, "review", "outer", { toolName: "reviewAgent" }),
+    call("own", "review", 4_000, "R"),
+  ])[0];
+  const groups = outlineRows(trace, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "llmGroup",
+  );
+  expect(groups.map((row) => (row.kind === "llmGroup" ? row.title : ""))).toEqual([
+    "Thread · main · 2 LLM calls",
+    "Thread · main · 1 LLM call",
+  ]);
+  const detail = payloadFor(groups[0], { raw: false, trace });
+  expect(detail[0]).toEqual({
+    kind: "heading",
+    text: "Thread · main · 2 LLM calls",
+    tone: "assistant",
+  });
+  const charts = detail.find((line) => line.kind === "charts");
+  expect(charts?.kind === "charts" && charts.calls.map((c) => c.round?.index)).toEqual([1, 2]);
+  expect(charts?.kind === "charts" && charts.calls.every((c) => c.enclosing.length === 0)).toBe(
+    true,
+  );
+  expect(payloadFor(groups[0], { raw: false }).some((line) => line.kind === "charts")).toBe(false);
+});
+
+it("restores arguments the model sent as null that the runtime dropped, and says why", () => {
+  const toolSpan = (id: string, at: number, args: Record<string, unknown>) => {
+    const node = span(
+      "toolExecution",
+      [leaf("toolCallStart", at, { toolName: "researchAgent", args })],
+      { id },
+    );
+    node.firstTs = at;
+    return node;
+  };
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: {
+            toolCalls: [
+              {
+                name: "researchAgent",
+                arguments: { agencyTopic: false, maxSeconds: null, userMsg: "first" },
+              },
+              { name: "researchAgent", arguments: { agencyTopic: true, userMsg: "second" } },
+            ],
+          },
+        }),
+        toolSpan("t1", 2_100, { agencyTopic: false, userMsg: "first" }),
+        toolSpan("t2", 2_200, { agencyTopic: true, userMsg: "second" }),
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const tools = outlineRows(root, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "tool",
+  );
+  const texts = (row: StoryRow) =>
+    payloadFor(row, options).map((line) =>
+      line.kind === "pair" ? `${line.key}: ${line.text}` : "text" in line ? line.text : line.kind,
+    );
+  expect(texts(tools[0])).toEqual([
+    "TOOL CALL · researchAgent",
+    "completion not recorded",
+    "duration not recorded",
+    "agencyTopic: false",
+    "userMsg: first",
+    "maxSeconds: null",
+    "Null arguments in tool calls are dropped, defaults apply",
+  ]);
+  expect(texts(tools[1])).not.toContain("Null arguments in tool calls are dropped, defaults apply");
+  expect(texts(tools[1])).not.toContain("maxSeconds: null");
+});
+
+it("cuts long arguments on the LLM call row and keeps them whole on the overview", () => {
+  const long = "x".repeat(ARGUMENT_PREVIEW_CHARS + 50);
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: {
+            toolCalls: [
+              { name: "researchAgent", arguments: { agencyTopic: false, userMsg: long } },
+            ],
+          },
+        }),
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const round = roundsOf(root)[0];
+  const row = outlineRows(root, { machinery: false, admin: false }).find(
+    (candidate) => candidate.kind === "round",
+  )!;
+  const detail = payloadFor(row, options);
+  const cut = detail.find((line) => line.kind === "pair" && line.key === "userMsg")!;
+  expect(cut).toMatchObject({ text: `${"x".repeat(ARGUMENT_PREVIEW_CHARS)}…` });
+  expect(detail).toContainEqual({ kind: "pair", key: "agencyTopic", text: "false", indent: 0 });
+  const whole = roundResponsePayload(round);
+  expect(whole).toContainEqual({ kind: "pair", key: "userMsg", text: long, indent: 0 });
 });
 
 describe("roundResponsePayload with tool results", () => {
@@ -285,4 +443,65 @@ describe("roundResponsePayload with tool results", () => {
     expect(lines.at(-2)).toMatch(/^x+$/);
     expect(lines.at(-1)).toBe("… ~13 more tokens · x to show");
   });
+});
+
+it("a group charts the request that failed in it, and counts the same errors the charts mark", () => {
+  const call = (span: string, parent: string | null, at: number, identity: string) =>
+    event("promptCompletion", at, span, parent, {
+      threadIdentity: identity,
+      threadLabel: "main",
+      model: "m1",
+      timeTaken: 100,
+      cost: { totalCost: 0.1 },
+      completion: { output: "ok" },
+    });
+  const trace = buildForest([
+    call("outer", null, 1_000, "T"),
+    event("toolCallStart", 1_100, "research", "outer", { toolName: "researchAgent" }),
+    call("inner", "research", 2_000, "T"),
+    event("error", 2_500, "inner", "research", { errorType: "llmError", message: "overloaded" }),
+    event("toolCallStart", 2_600, "deeper", "inner", { toolName: "reviewAgent" }),
+    call("nested", "deeper", 3_000, "R"),
+    event("error", 3_100, "nested", "deeper", { errorType: "llmError", message: "nested" }),
+  ])[0];
+  const groups = outlineRows(trace, { machinery: false, admin: false }).filter(
+    (row) => row.kind === "llmGroup",
+  );
+  const detail = payloadFor(groups[0], { raw: false, trace });
+  // One error of its own; the nested thread's error belongs to the nested group.
+  expect(detail.some((line) => line.kind === "text" && line.text === "✖ 1 error")).toBe(true);
+  const charts = detail.find((line) => line.kind === "charts");
+  expect(
+    charts?.kind === "charts" &&
+      charts.calls.map((c) => (c.round === undefined ? "✖" : c.round.index + 1)),
+  ).toEqual([2, "✖"]);
+});
+
+it("shows arguments recorded as anything but an object as recorded", () => {
+  const tool = span(
+    "toolExecution",
+    [leaf("toolCallStart", 2_100, { toolName: "echo", args: "raw text" })],
+    { id: "t1" },
+  );
+  tool.firstTs = 2_100;
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: { toolCalls: [{ name: "echo", arguments: { text: null } }] },
+        }),
+        tool,
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const row = outlineRows(root, { machinery: false, admin: false }).find(
+    (candidate) => candidate.kind === "tool",
+  )!;
+  const texts = payloadFor(row, options).map((line) => ("text" in line ? line.text : line.kind));
+  expect(texts).toContain("raw text");
+  expect(texts.some((text) => text.startsWith("0:"))).toBe(false);
 });

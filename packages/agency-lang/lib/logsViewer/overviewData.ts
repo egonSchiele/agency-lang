@@ -3,7 +3,7 @@ import { roundDeltas } from "./messageDelta.js";
 import { runStatus, traceErrors, type RunStatus, type TraceError } from "./problems.js";
 import { stableLeafId, storyChildren, storyOutline, type ToolStoryRow } from "./story.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
-import { spanExtent } from "./timeline/spans.js";
+import { traceTimes } from "./timeline/turns.js";
 import type { TreeNode } from "./types.js";
 
 /** One column of the overview charts: a completed call, or a request that
@@ -43,7 +43,9 @@ export type OverviewCall = {
 export type OverviewData = {
   models: string[];
   status: RunStatus;
-  elapsedMs: number;
+  /** The turns' working time; the waits for the person are `waitingMs`. */
+  workingMs: number;
+  waitingMs: number;
   costUsd: number;
   rounds: Round[];
   calls: OverviewCall[];
@@ -54,7 +56,7 @@ export function overviewData(trace: TreeNode): OverviewData {
   const index = buildTreeIndex(trace);
   const rounds = roundsOf(trace, index);
   const models = rounds.map((round) => round.model).filter((model) => model !== "");
-  const extent = spanExtent(trace);
+  const times = traceTimes(trace);
   const errors = traceErrors(trace, index);
   const story = storyOutline(trace, { admin: false });
   const toolsByRound: Record<string, ToolStoryRow[]> = Object.create(null);
@@ -136,7 +138,8 @@ export function overviewData(trace: TreeNode): OverviewData {
   return {
     models: models.filter((model, index) => models.indexOf(model) === index),
     status: runStatus(trace),
-    elapsedMs: extent === undefined ? 0 : extent.end - extent.start,
+    workingMs: times.workingMs,
+    waitingMs: times.waitingMs,
     costUsd: rounds.reduce((total, round) => total + round.costUsd, 0),
     rounds,
     calls,

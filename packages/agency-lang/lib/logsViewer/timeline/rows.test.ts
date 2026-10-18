@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { leaf, span, trace } from "./fixture.js";
 import { roundsOf } from "./rounds.js";
-import { drawsRoundRows, rowIdFor, timelineRows } from "./rows.js";
+import { rowIdFor, timelineRows } from "./rows.js";
 import { timelineSpans } from "./spans.js";
 
 function completion(at: number) {
@@ -48,12 +48,9 @@ describe("timelineRows", () => {
     ]);
   });
 
-  it("draws no round row for a call with one round", () => {
-    const { rows, rounds } = describeRows(
-      trace([span("llmCall", [completion(1000)], { id: "L" })]),
-    );
-    expect(rows.map((row) => row.id)).toEqual(["L"]);
-    expect(drawsRoundRows(rounds)).toBe(false);
+  it("draws a round row even for a call with one round, so the call can be opened", () => {
+    const { rows } = describeRows(trace([span("llmCall", [completion(1000)], { id: "L" })]));
+    expect(rows.map((row) => row.id)).toEqual(["L", "round:L:0"]);
   });
 
   it("keeps a tool's own subtree together", () => {
@@ -74,6 +71,7 @@ describe("timelineRows", () => {
       "1:round:L:0",
       "2:agent",
       "3:S",
+      "4:round:S:0",
       "1:round:L:1",
     ]);
   });
@@ -150,11 +148,11 @@ describe("timelineRows", () => {
 });
 
 describe("rowIdFor", () => {
-  it("lands a lone round on its span", () => {
+  it("lands a lone round on its own row", () => {
     const { rows, rounds } = describeRows(
       trace([span("llmCall", [completion(1000)], { id: "L" })]),
     );
-    expect(rowIdFor("round:L:0", rows, rounds)).toBe("L");
+    expect(rowIdFor("round:L:0", rows, rounds)).toBe("round:L:0");
   });
   it("draws a round that is not inside any span at the top level", () => {
     const root = trace([completion(1000), completion(2000), tool("grep", 1100, 1500)]);

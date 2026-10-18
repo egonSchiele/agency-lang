@@ -3,7 +3,13 @@ import { fmtTokens, fmtUsd } from "../format.js";
 import { fmtDuration } from "../spanText.js";
 import { THEME, threadColor } from "../theme.js";
 import { threadNames, type OverviewCall } from "../overviewData.js";
-import { ceilingRow, columnWindow, EMPTY_CELL, stackedColumn } from "./charts.js";
+import {
+  ceilingRow,
+  columnWindow,
+  EMPTY_CELL,
+  stackedColumn,
+  type ColumnWindow,
+} from "./charts.js";
 
 const AXIS_WIDTH = 10;
 const MIN_SLOT = 3;
@@ -26,37 +32,35 @@ type ChartLayout = {
   threads: string[];
 };
 
+/** `page` draws those calls instead of the window around the selected
+ *  one; the scales still cover every call, so pages of one group agree. */
 export function overviewCharts(
   calls: OverviewCall[],
   selectedId: string | undefined,
   width: number,
   height: number,
   ceiling: number | undefined,
+  page?: ColumnWindow,
 ): Painted[] {
   const available = Math.max(1, width - AXIS_WIDTH);
-  const minSlot = Math.max(MIN_SLOT, String(calls.length).length + 1);
-  const room = overviewCallCapacity(calls.length, width);
+  const minSlot = Math.max(MIN_SLOT, widestNumber(calls) + 1);
+  const room = overviewCallCapacity(calls, width);
   const selectedAt = Math.max(
     0,
     calls.findIndex((call) => call.id === selectedId),
   );
-  const window = columnWindow(calls.length, room, selectedAt);
+  const window = page ?? columnWindow(calls.length, room, selectedAt);
   const shown = calls.slice(window.from, window.to);
   const slot = Math.min(
     Math.max(MAX_SLOT, minSlot),
     Math.floor(available / Math.max(1, shown.length)),
   );
-  // The ✖ row only appears when something went wrong, so a clean run keeps
-  // its chart height.
-  const marks = calls.some((call) => call.errors.length > 0);
-  const nesting = Math.max(0, ...calls.map((call) => call.enclosing.length));
+  const marks = hasMarks(calls);
+  const nesting = nestingOf(calls);
   const threads = threadNames(calls);
-  // A threads legend only when there is more than one thread to tell apart.
-  const chrome =
-    CHROME_ROWS + (marks ? CHART_COUNT : 0) + nesting * CHART_COUNT + (threads.length > 1 ? 1 : 0);
   const layout = {
     width,
-    height: Math.max(0, Math.floor((height - chrome) / CHART_COUNT)),
+    height: Math.max(0, Math.floor((height - chromeRows(calls)) / CHART_COUNT)),
     columnWidth: Math.max(1, slot - 1),
     selectedId,
     marks,
@@ -95,11 +99,40 @@ export function overviewCharts(
   ];
 }
 
+/** The ✖ row only appears when something went wrong, so a clean run keeps
+ *  its chart height. */
+function hasMarks(calls: OverviewCall[]): boolean {
+  return calls.some((call) => call.errors.length > 0);
+}
+function nestingOf(calls: OverviewCall[]): number {
+  return Math.max(0, ...calls.map((call) => call.enclosing.length));
+}
+/** Rows the three charts spend on headings, axes, call numbers, ✖ marks,
+ *  brackets and the threads legend (drawn only with more than one thread). */
+function chromeRows(calls: OverviewCall[]): number {
+  const legend = threadNames(calls).length > 1 ? 1 : 0;
+  return (
+    CHROME_ROWS + (hasMarks(calls) ? CHART_COUNT : 0) + nestingOf(calls) * CHART_COUNT + legend
+  );
+}
+/** The height that gives each of the three charts `barRows` rows of bars. */
+export function overviewChartsHeight(calls: OverviewCall[], barRows: number): number {
+  return chromeRows(calls) + CHART_COUNT * barRows;
+}
+
 /** Number of calls that fit across any of the three overview charts. */
-export function overviewCallCapacity(count: number, width: number): number {
+export function overviewCallCapacity(calls: OverviewCall[], width: number): number {
   const available = Math.max(1, width - AXIS_WIDTH);
-  const minSlot = Math.max(MIN_SLOT, String(count).length + 1);
+  const minSlot = Math.max(MIN_SLOT, widestNumber(calls) + 1);
   return Math.max(1, Math.floor(available / minSlot));
+}
+/** Digits in the widest call number drawn. A group's calls keep their
+ *  numbers from the whole trace, so calls 101 to 109 need three cells. */
+function widestNumber(calls: OverviewCall[]): number {
+  return Math.max(
+    1,
+    ...calls.map((call) => (call.round === undefined ? 1 : String(call.round.index + 1).length)),
+  );
 }
 
 export function overviewSection(title: string, width: number): Painted {

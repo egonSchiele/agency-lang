@@ -117,6 +117,9 @@ function firstBodyLine(lines: PayloadLine[]): PayloadLine[] {
   if (first.kind === "heading") {
     return [first];
   }
+  if (first.kind === "charts") {
+    return [];
+  }
   let text: string;
   if (first.kind === "table") {
     text = first.columns.join("  ");

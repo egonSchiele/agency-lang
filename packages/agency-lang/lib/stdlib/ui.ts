@@ -14,6 +14,7 @@ import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 import { currentRunOrNone, currentRun, type Run } from "../runtime/asyncContext.js";
+import { logReplTurn } from "./statelog.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
@@ -467,6 +468,7 @@ export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubm
   setTimeout(() => {
     void (async () => {
       try {
+        await logReplTurn(run, submitted);
         const reply = await callBridgeFn<unknown>(run, onSubmit, submitted);
         if (reply === false) {
           // Signal exit via the bridge instead of mutating

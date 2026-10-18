@@ -1,5 +1,5 @@
 import { paint, paintedLine, segment, joinPainted, type Painted } from "../../tui/paint.js";
-import { THEME, durationTone, toneStyle, hotMark, threadColor } from "../theme.js";
+import { THEME, durationTone, toneStyle, hotMark } from "../theme.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { roundsOf, parseRoundId, type Round } from "../timeline/rounds.js";
 import { timelineRows, rowIdFor, type TimelineRow } from "../timeline/rows.js";
@@ -19,6 +19,11 @@ const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
 const PAN_STEP = 0.25;
 const CHROME_ROWS = 4;
+/** Hidden until `a`: the admin spans, and the `agentRun` span, whose own
+ *  time is startup and shutdown and whose name and totals the node row
+ *  and the overview header already carry; as a row it only indented
+ *  everything beneath it. */
+const HIDDEN_KINDS = [...ADMIN_KINDS, "agentRun"];
 const LAYOUT = { indentCells: 2, maxIndentLevels: 10, cursorMarker: "▶ ", noMarker: "  " };
 // Timeline rows share a time axis and can be drilled into nested calls.
 import { column } from "../../tui/builders.js";
@@ -26,8 +31,8 @@ import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
-import { buildTreeIndex, type TreeIndex } from "../forest.js";
-import { storyOutline } from "../story.js";
+import { buildTreeIndex, nearestAncestor, type TreeIndex } from "../forest.js";
+import { llmGroupTitle, storyOutline, threadComplete } from "../story.js";
 import { decisionSummary } from "../decision.js";
 import {
   childEvent,
@@ -39,9 +44,10 @@ import {
   truncate,
 } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { groupSpans, spanDisplayName } from "../timeline/groups.js";
+import { spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
+import { traceTimes, traceTurns, turnTimes, type Turn } from "../timeline/turns.js";
 import {
   AxisHeader,
   BarComponent,
@@ -53,11 +59,33 @@ import {
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 
-export const GROUP_PALETTE = Array.from({ length: 8 }, (_unused, position) =>
-  threadColor(position),
-);
-
-type FlameRow = { row: TimelineRow; node: TreeNode; color: string | undefined };
+/** A span or call of one turn; `depth` is indented one level under the
+ *  turn's own row when the trace has several turns. */
+type ItemRow = {
+  kind: "item";
+  id: string;
+  depth: number;
+  turn: number;
+  row: TimelineRow;
+  node: TreeNode;
+  color: string;
+};
+/** The row above a turn's spans: the message that began it, across the
+ *  whole width, with its cost and call count at the right. */
+type TurnRow = { kind: "turn"; id: string; depth: number; turn: number };
+/** The line under a turn's row carrying that turn's own axis, since every
+ *  turn is drawn to its own working time. The cursor skips it. */
+type AxisRow = { kind: "axis"; id: string; depth: number; turn: number };
+/** The dim line after a turn saying how long the run then waited. The
+ *  cursor skips it. */
+type WaitRow = { kind: "wait"; id: string; depth: number; turn: number };
+/** An empty line before every turn but the first, so turns read apart. */
+type GapRow = { kind: "gap"; id: string; depth: number; turn: number };
+type FlameRow = ItemRow | TurnRow | AxisRow | WaitRow | GapRow;
+/** Rows that are read, never selected. */
+function isReadOnly(row: FlameRow): boolean {
+  return row.kind === "axis" || row.kind === "wait" || row.kind === "gap";
+}
 
 export class TimelineScreen implements Screen {
   readonly screenName = "timeline" as const;
@@ -65,15 +93,22 @@ export class TimelineScreen implements Screen {
   /** Tool spans the story outline says are waiting for an interrupt response. */
   private waitingToolIds: string[] = [];
   private pageRows = 1;
+  /** The session's turns, one per message the person sent. With several,
+   *  each is drawn under its own row and axis, one after another. */
+  private turns: Turn[] = [];
+  /** The run's wall time split into work and waits for the person. */
+  private times = { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
+  /** The turn the zoom belongs to; a zoom never reaches another turn. */
+  private zoomTurn = 0;
   private moves = {
     by: (delta: number): void => {
-      this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
+      this.cursor = this.selectable(this.cursor + delta, delta < 0 ? -1 : 1);
     },
     toTop: (): void => {
-      this.cursor = 0;
+      this.cursor = this.selectable(0, 1);
     },
     toBottom: (): void => {
-      this.cursor = Math.max(0, this.rows.length - 1);
+      this.cursor = this.selectable(this.rows.length - 1, -1);
     },
     page: (): number => this.pageRows,
     halfPage: (): number => Math.max(1, Math.floor(this.pageRows / 2)),
@@ -90,7 +125,18 @@ export class TimelineScreen implements Screen {
   private following = false;
   private lineNumbers = false;
   private index: TreeIndex | undefined;
+  /** Every row of the drill view, folded ones included. */
+  private allRows: FlameRow[] = [];
+  /** The rows drawn: `allRows` without what sits under a folded span. */
   private rows: FlameRow[] = [];
+  /** Spans the reader folded, by `rowKey`: a span that runs across turns
+   *  is drawn once per turn, and each copy folds on its own. */
+  private folded: string[] = [];
+  /** Completed sub-agent groups folded on first sight, as on the trace. */
+  private defaultFolded: string[] = [];
+  /** Groups whose default has been applied once, so a group the reader
+   *  opened stays open across follow updates. */
+  private foldDefaultsApplied: string[] = [];
 
   constructor(
     roots: TreeNode[],
@@ -105,8 +151,32 @@ export class TimelineScreen implements Screen {
     this.derive();
   }
 
+  /** Several turns: each carries its own axis line, so the screen draws
+   *  none at the top. */
+  private stacked(): boolean {
+    return this.turns.length > 1;
+  }
+  private chromeRows(): number {
+    return this.stacked() ? CHROME_ROWS - 1 : CHROME_ROWS;
+  }
+
+  /** The nearest row at or past `position` the cursor may rest on: an
+   *  axis or wait line is read, not selected. */
+  private selectable(position: number, direction: 1 | -1): number {
+    const last = Math.max(0, this.rows.length - 1);
+    let at = Math.max(0, Math.min(last, position));
+    const skipping = (): boolean => this.rows[at] !== undefined && isReadOnly(this.rows[at]);
+    while (skipping() && at + direction >= 0 && at + direction <= last) {
+      at += direction;
+    }
+    if (skipping()) {
+      at -= direction;
+    }
+    return Math.max(0, Math.min(last, at));
+  }
+
   private bindings(): ViewerBinding[] {
-    const zoomed = (): boolean => this.zoom !== undefined;
+    const zoomed = (): boolean => this.zoom !== undefined && this.zoomTurn === this.cursorTurn();
     return [
       ...cursorBindings<ViewAction>(this.moves),
       {
@@ -129,9 +199,15 @@ export class TimelineScreen implements Screen {
         },
       },
       {
-        keys: ["Enter", "Right", "l"],
-        help: "drill into the selected call; on an LLM call, open it in the trace",
-        hint: "⏎ drill",
+        keys: ["Enter"],
+        help: "fold or unfold the selected span; on an LLM call, open it in the trace",
+        hint: "⏎ fold",
+        run: () => this.toggleFoldOrOpen(),
+      },
+      {
+        keys: ["Right", "l"],
+        help: "drill into the selected span; on an LLM call, open it in the trace",
+        hint: "→ drill",
         run: () => this.drillOrOpen(),
       },
       {
@@ -188,7 +264,7 @@ export class TimelineScreen implements Screen {
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
-    this.pageRows = Math.max(1, viewport.rows - CHROME_ROWS);
+    this.pageRows = Math.max(1, viewport.rows - this.chromeRows());
     return runViewerKey(this.bindings(), formatKey(ev));
   }
 
@@ -204,9 +280,9 @@ export class TimelineScreen implements Screen {
       position >= 0 && position < this.rows.length;
       position += direction
     ) {
-      const { row } = this.rows[position];
-      if (row.depth < selected.row.depth) return;
-      if (row.depth === selected.row.depth) {
+      const row = this.rows[position];
+      if (row.depth < selected.depth) return;
+      if (row.depth === selected.depth && !isReadOnly(row)) {
         this.cursor = position;
         return;
       }
@@ -215,9 +291,9 @@ export class TimelineScreen implements Screen {
 
   private openDetail(): ViewAction {
     const selected = this.selected();
-    return selected === undefined
+    return selected?.kind !== "item"
       ? { kind: "none" }
-      : { kind: "openDetail", rowId: selected.row.id };
+      : { kind: "openDetail", rowId: selected.id };
   }
   private resetZoom(): void {
     this.zoom = undefined;
@@ -230,10 +306,10 @@ export class TimelineScreen implements Screen {
     return { kind: "promptLine", label: "Search: ", onResult: (text) => this.applySearch(text) };
   }
   render(viewport: Viewport, sharedHints = ""): Element {
-    const numberWidth = this.lineNumbers ? lineNumberWidth(this.rows.length) : 0;
+    const numberWidth = this.lineNumbers ? lineNumberWidth(this.allRows.length) : 0;
     const widths = splitWidth("timeline", viewport.cols - numberWidth);
     const window = this.window();
-    const bodyRows = Math.max(1, viewport.rows - CHROME_ROWS);
+    const bodyRows = Math.max(1, viewport.rows - this.chromeRows());
     if (this.cursor < this.scrollTop) {
       this.scrollTop = this.cursor;
     }
@@ -245,23 +321,28 @@ export class TimelineScreen implements Screen {
       cursorIdx: this.cursor,
       scrollTop: this.scrollTop,
       viewportRows: bodyRows,
-      renderItem: (item, isCursor) => this.renderRow(item, isCursor, window, widths),
+      renderItem: (item, isCursor) => this.renderRow(item, isCursor, widths),
     });
     return column(
       { justifyContent: "flex-start" },
       paintedLine(paint(this.headerText(window), { fg: THEME.text })),
-      paintedLine(
-        paint(
-          new AxisHeader(widths.gutter + numberWidth).computeText(
-            window,
-            this.viewStart(),
-            widths.bar,
-          ),
-          {
-            fg: THEME.chrome,
-          },
-        ),
-      ),
+      ...(this.stacked()
+        ? []
+        : [
+            paintedLine(
+              joinPainted(
+                paint(
+                  new AxisHeader(widths.gutter + numberWidth).computeText(
+                    window,
+                    this.viewStart(),
+                    widths.bar,
+                  ),
+                  { fg: THEME.chrome },
+                ),
+                totalSelfLabel(widths.stats),
+              ),
+            ),
+          ]),
       body,
       paintedLine(paint(new SelectionFooter().computeText(this.footerText()), { fg: THEME.text })),
       keyFooter(hintsFrom(this.bindings()), viewport.cols, "TIMELINE", sharedHints),
@@ -274,19 +355,21 @@ export class TimelineScreen implements Screen {
   }
 
   focusId(): string | undefined {
-    return this.selected()?.row.id;
+    return this.selected()?.id;
   }
 
   setFocus(id: string): void {
     const target = this.drawnIdFor(id) ?? this.afterLeavingDrill(id);
-    const position = this.rows.findIndex((item) => item.row.id === target);
-    if (position !== -1) {
-      this.cursor = position;
+    if (target !== undefined) {
+      this.reveal(target);
     }
   }
 
   setTrace(traceId: string): void {
     this.traceId = traceId;
+    this.folded = [];
+    this.defaultFolded = [];
+    this.foldDefaultsApplied = [];
     this.drillPath = [];
     this.zoom = undefined;
     this.cursor = 0;
@@ -311,9 +394,12 @@ export class TimelineScreen implements Screen {
   }
 
   /** The row `id` lands on in the current view: itself, a lone round's
-   *  span, or the nearest ancestor that is drawn. */
+   *  span, or the nearest ancestor that is drawn. A row under a folded
+   *  span counts as drawn; `reveal` opens the way to it. */
   private drawnIdFor(id: string): string | undefined {
-    const timelineRowsNow = this.rows.map((item) => item.row);
+    const timelineRowsNow = this.allRows.flatMap((item) =>
+      item.kind === "item" ? [item.row] : [],
+    );
     const direct = rowIdFor(id, timelineRowsNow, this.rounds);
     if (direct !== undefined) {
       return direct;
@@ -336,12 +422,14 @@ export class TimelineScreen implements Screen {
     const drillPath = this.drillPath;
     const cursor = this.cursor;
     const rows = this.rows;
+    const allRows = this.allRows;
     this.drillPath = [];
     this.derive();
     const target = this.drawnIdFor(id);
     if (target === undefined) {
       this.drillPath = drillPath;
       this.rows = rows;
+      this.allRows = allRows;
       this.cursor = cursor;
     }
     return target;
@@ -357,10 +445,12 @@ export class TimelineScreen implements Screen {
 
   /** Test probes — reading, never mutating. */
   rowSpans(): TimelineSpan[] {
-    return this.rows.flatMap((item) => (item.row.kind === "span" ? [item.row.span] : []));
+    return this.rows.flatMap((item) =>
+      item.kind === "item" && item.row.kind === "span" ? [item.row.span] : [],
+    );
   }
   cursorSpanId(): string | undefined {
-    return this.selected()?.row.id;
+    return this.selected()?.id;
   }
   currentWindow(): Interval {
     return this.window();
@@ -373,42 +463,226 @@ export class TimelineScreen implements Screen {
       return;
     }
     const selected = this.selected();
+    // What the cursor was on, as turn-qualified keys: the row, then the
+    // rows above it. A span that runs across turns is drawn once per turn,
+    // and the cursor stays in the copy it was in.
+    const position = selected === undefined ? -1 : this.allRows.indexOf(selected);
+    const previousKeys =
+      position < 0
+        ? []
+        : [selected!, ...this.ancestorRows(position)].map((row) => this.rowKey(row));
     const previousAncestors =
-      selected === undefined || this.index === undefined
+      selected?.kind !== "item" || this.index === undefined
         ? []
         : ancestorsOf(selected.node, this.index);
     const focusCandidates =
-      selected === undefined ? [] : [selected.row.id, ...previousAncestors.map((node) => node.id)];
+      selected === undefined ? [] : [selected.id, ...previousAncestors.map((node) => node.id)];
     const index = buildTreeIndex(trace);
     this.index = index;
     this.drillPath = this.drillPath.filter((id) => index.byId[id] !== undefined);
     const rootNode =
       this.drillPath.length > 0 ? index.byId[this.drillPath[this.drillPath.length - 1]] : trace;
-    const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
     this.rounds = roundsOf(trace, index);
+    this.turns = traceTurns(trace, this.rounds);
+    this.times = traceTimes(trace);
     this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
-    const groups = groupSpans(spans, trace, index);
-    const colorByKey = rankColors(groups);
-    const keyBySpanId: Record<string, string> = Object.create(null);
-    for (const group of groups) {
-      for (const id of group.spanIds) {
-        keyBySpanId[id] = group.key;
+    const stacked = this.turns.length > 1;
+    const hideKinds = this.hideAdmin ? HIDDEN_KINDS : [];
+    const traceId = rootNode.nodeKind === "trace" ? rootNode.id : undefined;
+    this.allRows = [];
+    for (const turn of stacked ? this.turns : [undefined]) {
+      const window = turn === undefined ? undefined : this.turnWindow(turn.index);
+      const spans = timelineSpans(rootNode, { hideKinds, window });
+      const rounds = turn === undefined ? this.rounds : turn.rounds;
+      const items: ItemRow[] = timelineRows(spans, rounds, traceId).map((row) => ({
+        kind: "item",
+        id: row.id,
+        depth: row.depth + (stacked ? 1 : 0),
+        turn: turn?.index ?? 0,
+        row,
+        node: row.kind === "round" ? row.round.node : index.byId[row.id],
+        color: row.kind === "round" ? THEME.kind.assistant : spanColor(index.byId[row.id]),
+      }));
+      if (turn !== undefined && items.length === 0) {
+        // A drilled span that did no work in this turn.
+        continue;
+      }
+      if (turn !== undefined && turn.index > 0) {
+        this.allRows.push({ kind: "gap", id: `gap:${turn.index}`, depth: 0, turn: turn.index });
+      }
+      if (turn !== undefined) {
+        this.allRows.push({ kind: "turn", id: `turn:${turn.index}`, depth: 0, turn: turn.index });
+        this.allRows.push({ kind: "axis", id: `axis:${turn.index}`, depth: 1, turn: turn.index });
+      }
+      this.allRows.push(...items);
+      if (turn !== undefined && turnTimes(turn).waitingMs > 0) {
+        this.allRows.push({ kind: "wait", id: `wait:${turn.index}`, depth: 0, turn: turn.index });
       }
     }
-    this.rows = timelineRows(
-      spans,
-      this.rounds,
-      rootNode.nodeKind === "trace" ? rootNode.id : undefined,
-    ).map((row) => ({
-      row,
-      node: row.kind === "round" ? row.round.node : index.byId[row.id],
-      color: row.kind === "round" ? THEME.kind.assistant : colorByKey[keyBySpanId[row.id] ?? ""],
-    }));
-    const target = focusCandidates.map((id) => this.drawnIdFor(id)).find((id) => id !== undefined);
-    const restored = this.rows.findIndex((item) => item.row.id === target);
-    this.cursor = restored !== -1 ? restored : 0;
+    this.applyFoldDefaults(index, previousKeys);
+    this.rows = this.visibleRows();
+    this.cursor = this.selectable(
+      this.restoredPosition(previousKeys, focusCandidates, selected?.turn),
+      1,
+    );
+  }
+
+  /** Where the cursor lands after the rows are rebuilt: the row it was on
+   *  by turn-qualified key, else the nearest row above it by key, else
+   *  the same span or round by id in the same turn, else its first copy. */
+  private restoredPosition(keys: string[], ids: string[], turn: number | undefined): number {
+    for (const key of keys) {
+      const at = this.allRows.findIndex((row) => this.rowKey(row) === key);
+      if (at !== -1) {
+        return this.visiblePosition(at);
+      }
+    }
+    for (const id of ids) {
+      const drawn = this.drawnIdFor(id);
+      if (drawn === undefined) {
+        continue;
+      }
+      const sameTurn = this.allRows.findIndex((row) => row.id === drawn && row.turn === turn);
+      const at = sameTurn !== -1 ? sameTurn : this.allRows.findIndex((row) => row.id === drawn);
+      if (at !== -1) {
+        return this.visiblePosition(at);
+      }
+    }
+    return 0;
+  }
+
+  /** A completed thread inside a tool folds the first time it is seen, as
+   *  a sub-agent's group does on the trace; a top-level thread never folds
+   *  by itself, and a thread still in its tool loop is not complete. The
+   *  rows the cursor is on or inside (`keep`) stay open, and count as
+   *  handled so a later update does not fold them. A fold reopens when its
+   *  thread runs again. */
+  private applyFoldDefaults(index: TreeIndex, keep: string[]): void {
+    const reopened = this.defaultFolded.filter((key) => {
+      const item = this.allRows.find((candidate) => this.rowKey(candidate) === key);
+      return item?.kind === "item" && !threadComplete(item.node);
+    });
+    this.defaultFolded = this.defaultFolded.filter((key) => !reopened.includes(key));
+    this.foldDefaultsApplied = this.foldDefaultsApplied.filter((key) => !reopened.includes(key));
+    for (const [position, item] of this.allRows.entries()) {
+      if (item.kind !== "item") {
+        continue;
+      }
+      const key = this.rowKey(item);
+      const insideTool =
+        nearestAncestor(item.node, index, (node) => node.label === "toolExecution") !== undefined;
+      if (
+        item.row.kind !== "span" ||
+        item.node.label !== "llmCall" ||
+        !insideTool ||
+        !threadComplete(item.node) ||
+        !this.hasChildRows(position) ||
+        this.foldDefaultsApplied.includes(key)
+      ) {
+        continue;
+      }
+      this.foldDefaultsApplied.push(key);
+      if (!keep.includes(key)) {
+        this.defaultFolded.push(key);
+      }
+    }
+  }
+  private hasChildRows(position: number): boolean {
+    const next = this.allRows[position + 1];
+    return next !== undefined && next.depth > this.allRows[position].depth;
+  }
+  private rowKey(item: FlameRow): string {
+    return `${item.turn}:${item.id}`;
+  }
+  private isFolded(item: FlameRow): boolean {
+    const key = this.rowKey(item);
+    return this.folded.includes(key) || this.defaultFolded.includes(key);
+  }
+  /** `allRows` without the rows under a folded span: once a folded row is
+   *  met, everything deeper than it is skipped until a row at its depth
+   *  or above. */
+  private visibleRows(): FlameRow[] {
+    const shown: FlameRow[] = [];
+    let hiddenBelow: number | undefined;
+    for (const item of this.allRows) {
+      if (hiddenBelow !== undefined && item.depth > hiddenBelow) {
+        continue;
+      }
+      hiddenBelow = this.isFolded(item) ? item.depth : undefined;
+      shown.push(item);
+    }
+    return shown;
+  }
+  /** The rows above `position` in `allRows` that contain it: the nearest
+   *  shallower row, then the nearest shallower than that, and so on. */
+  private ancestorRows(position: number): FlameRow[] {
+    const ancestors: FlameRow[] = [];
+    let depth = this.allRows[position].depth;
+    for (let at = position - 1; at >= 0; at -= 1) {
+      if (this.allRows[at].depth < depth) {
+        ancestors.push(this.allRows[at]);
+        depth = this.allRows[at].depth;
+      }
+    }
+    return ancestors;
+  }
+  private open(items: FlameRow[]): void {
+    const keys = items.map((item) => this.rowKey(item));
+    this.folded = this.folded.filter((key) => !keys.includes(key));
+    this.defaultFolded = this.defaultFolded.filter((key) => !keys.includes(key));
+    for (const key of keys) {
+      if (!this.foldDefaultsApplied.includes(key)) {
+        this.foldDefaultsApplied.push(key);
+      }
+    }
+  }
+  /** Open every fold above the row and put the cursor on it. An id drawn
+   *  in several turns reveals its first copy. */
+  private reveal(id: string): void {
+    this.revealAt(this.allRows.findIndex((item) => item.id === id));
+  }
+  private revealAt(position: number): void {
+    if (position < 0 || position >= this.allRows.length) {
+      return;
+    }
+    this.open(this.ancestorRows(position));
+    this.rows = this.visibleRows();
+    this.cursor = this.selectable(this.rows.indexOf(this.allRows[position]), 1);
+  }
+  /** The visible position of the row at `position` in `allRows`, or of
+   *  the folded row that hides it. */
+  private visiblePosition(position: number): number {
+    const direct = this.rows.indexOf(this.allRows[position]);
+    if (direct !== -1) {
+      return direct;
+    }
+    const holder = this.ancestorRows(position).find((item) => this.rows.includes(item));
+    return Math.max(0, holder === undefined ? 0 : this.rows.indexOf(holder));
+  }
+  /** Enter: fold or unfold a span with rows under it. A round opens in the
+   *  trace and a span with nothing under it opens its detail, as Right does. */
+  private toggleFoldOrOpen(): ViewAction {
+    const sel = this.selected();
+    if (sel === undefined) {
+      return { kind: "none" };
+    }
+    const position = this.allRows.indexOf(sel);
+    if (sel.kind === "wait") {
+      return { kind: "none" };
+    }
+    if ((sel.kind === "item" && sel.row.kind === "round") || !this.hasChildRows(position)) {
+      return this.drillOrOpen();
+    }
+    if (this.isFolded(sel)) {
+      this.open([sel]);
+    } else {
+      this.folded.push(this.rowKey(sel));
+    }
+    this.rows = this.visibleRows();
+    this.cursor = this.rows.indexOf(sel);
+    return { kind: "none" };
   }
 
   private selected(): FlameRow | undefined {
@@ -417,7 +691,7 @@ export class TimelineScreen implements Screen {
 
   private drillOrOpen(): ViewAction {
     const sel = this.selected();
-    if (sel === undefined) {
+    if (sel?.kind !== "item") {
       return { kind: "none" };
     }
     if (sel.row.kind === "round") {
@@ -426,7 +700,7 @@ export class TimelineScreen implements Screen {
     const isCurrentRoot = this.drillPath[this.drillPath.length - 1] === sel.row.id;
     const hasChildren =
       sel.node.children.some((child) => child.nodeKind === "span") ||
-      this.rounds.filter((round) => round.spanId === sel.row.id).length > 1;
+      this.rounds.some((round) => round.spanId === sel.row.id);
     if (!isCurrentRoot && hasChildren) {
       this.drillPath = [...this.drillPath, sel.row.id];
       this.zoom = undefined;
@@ -449,13 +723,38 @@ export class TimelineScreen implements Screen {
     this.derive();
   }
 
+  /** A turn's working time, which its bars are cut to; undefined when the
+   *  trace is one turn and the rows' own extent is the axis. */
+  private turnWindow(turn: number): Interval | undefined {
+    const found = this.turns.length > 1 ? this.turns[turn] : undefined;
+    if (found === undefined) {
+      return undefined;
+    }
+    return { start: found.start, end: Math.max(found.workEnd, found.start + 1) };
+  }
+  private cursorTurn(): number {
+    return this.selected()?.turn ?? 0;
+  }
+  /** The axis a row is drawn on: its turn's zoom, else its turn's window,
+   *  else the whole view. */
+  private windowFor(turn: number): Interval {
+    if (this.zoom !== undefined && this.zoomTurn === turn) {
+      return this.zoom;
+    }
+    return this.turnWindow(turn) ?? this.rowsExtent();
+  }
+
   private viewExtent(): Interval {
-    if (this.rows.length === 0) {
+    return this.turnWindow(this.cursorTurn()) ?? this.rowsExtent();
+  }
+  private rowsExtent(): Interval {
+    const items = this.rows.flatMap((item) => (item.kind === "item" ? [item] : []));
+    if (items.length === 0) {
       return { start: 0, end: 1 };
     }
     return {
-      start: Math.min(...this.rows.map((item) => extentOf(item.row).start)),
-      end: Math.max(...this.rows.map((item) => extentOf(item.row).end)),
+      start: Math.min(...items.map((item) => extentOf(item.row).start)),
+      end: Math.max(...items.map((item) => extentOf(item.row).end)),
     };
   }
 
@@ -464,7 +763,7 @@ export class TimelineScreen implements Screen {
   }
 
   private window(): Interval {
-    return this.zoom ?? this.viewExtent();
+    return this.windowFor(this.cursorTurn());
   }
 
   private zoomBy(factor: number): void {
@@ -472,7 +771,7 @@ export class TimelineScreen implements Screen {
     const full = this.viewExtent();
     const sel = this.selected();
     const center =
-      sel !== undefined
+      sel?.kind === "item"
         ? (extentOf(sel.row).start + extentOf(sel.row).end) / 2
         : (current.start + current.end) / 2;
     const newSpan = Math.min(
@@ -491,10 +790,11 @@ export class TimelineScreen implements Screen {
     }
     const clamped = { start: Math.max(start, full.start), end: Math.min(end, full.end) };
     this.zoom = clamped.start === full.start && clamped.end === full.end ? undefined : clamped;
+    this.zoomTurn = this.cursorTurn();
   }
 
   private pan(fraction: number): void {
-    if (this.zoom === undefined) {
+    if (this.zoom === undefined || this.zoomTurn !== this.cursorTurn()) {
       return;
     }
     const full = this.viewExtent();
@@ -515,15 +815,17 @@ export class TimelineScreen implements Screen {
     }
   }
 
+  /** Searches every row, folded or not, and opens the way to a match. */
   private jumpMatch(direction: 1 | -1, includeCurrent = false): boolean {
-    if (this.query === undefined || this.rows.length === 0) {
+    if (this.query === undefined || this.allRows.length === 0) {
       return false;
     }
-    const count = this.rows.length;
+    const count = this.allRows.length;
+    const from = Math.max(0, this.allRows.indexOf(this.selected()!));
     for (let step = includeCurrent ? 0 : 1; step <= count; step++) {
-      const at = (this.cursor + direction * step + count * (step + 1)) % count;
-      if (this.rowText(this.rows[at]).toLowerCase().includes(this.query)) {
-        this.cursor = at;
+      const at = (from + direction * step + count * (step + 1)) % count;
+      if (this.rowText(this.allRows[at]).toLowerCase().includes(this.query)) {
+        this.revealAt(at);
         return true;
       }
     }
@@ -536,10 +838,12 @@ export class TimelineScreen implements Screen {
       .map((id) => this.index?.byId[id])
       .filter((node): node is TreeNode => node !== undefined)
       .map((node) => this.threadLabel(node) ?? spanDisplayName(node));
+    const stacked = this.stacked();
     return new TimelineHeader().computeText({
       crumbs,
-      totalMs: full.end - full.start,
-      zoom: this.zoom !== undefined ? window : undefined,
+      totalMs: stacked ? this.times.elapsedMs : full.end - full.start,
+      waitingMs: stacked ? this.times.waitingMs : undefined,
+      zoom: this.zoom !== undefined && this.zoomTurn === this.cursorTurn() ? window : undefined,
       viewStart: full.start,
       adminShown: !this.hideAdmin,
       following: this.following,
@@ -551,15 +855,35 @@ export class TimelineScreen implements Screen {
     if (sel === undefined) {
       return this.message;
     }
-    const label =
-      (sel.row.kind === "span" ? this.threadLabel(sel.node) : undefined) ?? sel.node.summary;
-    const base =
-      `${label}  ·  start +${fmtOffset(extentOf(sel.row).start - this.viewStart())}` +
-      `  self ${fmtDuration(sel.row.kind === "span" ? sel.row.span.selfMs : sel.row.round.durationMs, { minutes: true })}`;
+    let base: string;
+    if (sel.kind === "item") {
+      const label =
+        (sel.row.kind === "span" ? this.threadLabel(sel.node) : undefined) ?? sel.node.summary;
+      const self = sel.row.kind === "span" ? sel.row.span.selfMs : sel.row.round.durationMs;
+      base =
+        `${label}  ·  start +${fmtOffset(extentOf(sel.row).start - this.viewStart())}` +
+        `  self ${fmtDuration(self, { minutes: true })}`;
+    } else {
+      const turn = this.turns[sel.turn];
+      const { workingMs, waitingMs } = turnTimes(turn);
+      const then =
+        sel.turn === this.turns.length - 1
+          ? `then the run ended ${fmtOffset(waitingMs)} later`
+          : `then waited ${fmtOffset(waitingMs)} for the user`;
+      const calls = `${turn.rounds.length} LLM ${turn.rounds.length === 1 ? "call" : "calls"}`;
+      base = `${turnTitle(turn)}  ·  start +${fmtOffset(turn.start - this.turns[0].start)}  ·  ${calls}, ran ${fmtOffset(workingMs)}, ${then}`;
+    }
     return this.message ? `${base}  ${this.message}` : base;
   }
 
+  /** What a search matches. A row the cursor cannot rest on has none. */
   private rowText(item: FlameRow): string {
+    if (item.kind === "turn") {
+      return turnTitle(this.turns[item.turn]);
+    }
+    if (item.kind !== "item") {
+      return "";
+    }
     if (item.row.kind === "round") {
       const round = item.row.round;
       return [
@@ -577,74 +901,116 @@ export class TimelineScreen implements Screen {
   /** ✖ for a span that logged an error itself, ⏸ for a tool waiting on a
    *  person. The tool status comes from the story outline, so the timeline
    *  and the trace never disagree about a tool. */
-  private mark(item: FlameRow): string {
+  private mark(item: ItemRow): string {
     if (item.row.kind !== "span") {
       return "";
     }
     if (holdsError(item.node)) {
       return "✖ ";
     }
-    return this.waitingToolIds.includes(item.row.id) ? "⏸ " : "";
+    return this.waitingToolIds.includes(item.id) ? "⏸ " : "";
   }
 
   private threadLabel(node: TreeNode): string | undefined {
     if (node.label !== "llmCall") return undefined;
-    const names = this.rounds
-      .filter((round) => round.spanId === node.id)
-      .map((round) => round.threadLabel)
-      .filter((name): name is string => Boolean(name));
-    const name = names.filter((name, index) => names.indexOf(name) === index).join(", ");
-    return `Thread · ${name || "unnamed"}`;
+    return llmGroupTitle(node, this.rounds);
   }
 
-  private renderRow(
-    item: FlameRow,
-    isCursor: boolean,
-    window: Interval,
-    widths: WidthSplit,
-  ): Element {
+  private renderRow(item: FlameRow, isCursor: boolean, widths: WidthSplit): Element {
     const identity = rowColor(item, isCursor);
-    const content = joinPainted(
-      ...(this.lineNumbers
-        ? [lineNumber(this.rows.indexOf(item) + 1, lineNumberWidth(this.rows.length))]
-        : []),
-      this.labelPart(item, isCursor, widths.gutter, identity),
-      this.barPart(item, window, widths.bar, identity),
-      this.statsPart(item, widths.stats),
-    );
+    const numbers = this.lineNumbers
+      ? [lineNumber(this.allRows.indexOf(item) + 1, lineNumberWidth(this.allRows.length))]
+      : [];
+    const content =
+      item.kind === "item"
+        ? joinPainted(
+            ...numbers,
+            this.labelPart(item, isCursor, widths.gutter, identity),
+            this.barPart(item, this.windowFor(item.turn), widths.bar, identity),
+            this.statsPart(item, widths.stats),
+          )
+        : joinPainted(...numbers, ...this.turnParts(item, isCursor, widths));
     return paintedLine(content, {
       width:
         widths.gutter +
         widths.bar +
         widths.stats +
-        (this.lineNumbers ? lineNumberWidth(this.rows.length) : 0),
+        (this.lineNumbers ? lineNumberWidth(this.allRows.length) : 0),
       bg: isCursor ? THEME.cursorBg : undefined,
     });
   }
 
-  private labelPart(item: FlameRow, isCursor: boolean, width: number, fg: string): Painted {
-    const levels = Math.min(item.row.depth, LAYOUT.maxIndentLevels);
+  /** A turn's row is its title across the gutter and bar columns with its
+   *  cost and call count at the right; its axis line is blank in the
+   *  gutter, the axis in the bar column, `total/self` at the right; a wait
+   *  row is one dim line. */
+  private turnParts(
+    item: TurnRow | AxisRow | WaitRow | GapRow,
+    isCursor: boolean,
+    widths: WidthSplit,
+  ): Painted[] {
+    const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
+    const turn = this.turns[item.turn];
+    if (item.kind === "gap") {
+      return [segment("", widths.gutter + widths.bar + widths.stats)];
+    }
+    if (item.kind === "wait") {
+      const wait = waitText(turn, item.turn === this.turns.length - 1);
+      const text = `${LAYOUT.noMarker}${" ".repeat(LAYOUT.indentCells)}${wait}`;
+      return [
+        segment(text, widths.gutter + widths.bar + widths.stats, { style: { fg: THEME.muted } }),
+      ];
+    }
+    if (item.kind === "axis") {
+      // Ticks are offsets from the turn's start, as the header and footer
+      // print them, so a zoomed axis reads 4.5s–9.0s and not 0–4.5s.
+      const window = this.windowFor(item.turn);
+      return [
+        segment("", widths.gutter),
+        paint(new AxisHeader(0).computeText(window, turn.start, widths.bar), {
+          fg: THEME.chrome,
+        }),
+        totalSelfLabel(widths.stats),
+      ];
+    }
+    const fold = this.isFolded(item) ? "▸ " : "";
+    // The title takes the whole row; the stats sit at its far right, in
+    // their own width, since the stats column is too narrow for them.
+    const stats = turnStats(turn);
+    const total = widths.gutter + widths.bar + widths.stats;
+    const statsWidth = Math.min(total, stats.length + 2);
+    return [
+      segment(`${marker}${fold}${this.rowText(item)}`, total - statsWidth, {
+        style: { fg: isCursor ? THEME.text : THEME.accent, bold: true },
+      }),
+      segment(stats, statsWidth, { align: "right", style: { fg: THEME.muted } }),
+    ];
+  }
+
+  private labelPart(item: ItemRow, isCursor: boolean, width: number, fg: string): Painted {
+    const levels = Math.min(item.depth, LAYOUT.maxIndentLevels);
     const indent = " ".repeat(levels * LAYOUT.indentCells);
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
     const isThread = item.row.kind === "span" && item.node.label === "llmCall";
-    return segment(`${marker}${indent}${this.rowText(item)}`, width, {
+    const fold = this.isFolded(item) ? "▸ " : "";
+    return segment(`${marker}${indent}${fold}${this.rowText(item)}`, width, {
       style: isThread ? { fg: THEME.accent, bold: true } : { fg },
     });
   }
 
-  private barPart(item: FlameRow, window: Interval, width: number, fg: string): Painted {
+  private barPart(item: ItemRow, window: Interval, width: number, fg: string): Painted {
     const bar = new BarComponent([extentOf(item.row)], { running: isRunning(item.row) });
     return paint(bar.computeCells(window, width), { fg });
   }
 
-  private statsPart(item: FlameRow, width: number): Painted {
+  private statsPart(item: ItemRow, width: number): Painted {
     const extent = extentOf(item.row);
     const tone = durationTone(extent.end - extent.start, this.thresholds);
     const text = `${this.statsText(item)}${hotMark(tone)}`;
     return segment(text, width, { align: "right", style: toneStyle(tone) });
   }
 
-  private statsText(item: FlameRow): string {
+  private statsText(item: ItemRow): string {
     if (item.row.kind === "round") {
       return fmtDuration(item.row.round.durationMs, { minutes: true });
     }
@@ -711,15 +1077,39 @@ export class DurationCell {
   }
 }
 
-export function rankColors(
-  groups: { key: string; totalSelfMs: number }[],
-): Record<string, string | undefined> {
-  const ranked = [...groups].sort((first, second) => second.totalSelfMs - first.totalSelfMs);
-  const colors: Record<string, string | undefined> = Object.create(null);
-  ranked.forEach((group, position) => {
-    colors[group.key] = GROUP_PALETTE[position] ?? THEME.muted;
-  });
-  return colors;
+/** The trace's colors by kind, so a tool reads as a tool on every screen:
+ *  the tool color, the accent an `llmCall` span's label already has, chrome
+ *  for an admin span, and muted for the rest (the run, a subprocess). */
+function spanColor(node: TreeNode): string {
+  if (node.label === "toolExecution") {
+    return THEME.kind.tool;
+  }
+  if (node.label === "llmCall") {
+    return THEME.accent;
+  }
+  return ADMIN_KINDS.includes(node.label) ? THEME.chrome : THEME.muted;
+}
+
+/** `turn 2 · do the same analysis for modem.ai`, the message on one line. */
+function turnTitle(turn: Turn): string {
+  const text = turn.userText?.split("\n")[0].trim();
+  return text ? `turn ${turn.index + 1} · ${text}` : `turn ${turn.index + 1}`;
+}
+/** `$0.154 · 10 LLM calls`: what a turn's calls cost and how many there
+ *  were. Its working time is the end of the axis line beneath. */
+function turnStats(turn: Turn): string {
+  const cost = fmtUsd(turn.rounds.reduce((sum, round) => sum + round.costUsd, 0));
+  const calls = `${turn.rounds.length} LLM ${turn.rounds.length === 1 ? "call" : "calls"}`;
+  return [cost, calls].filter(Boolean).join(" · ");
+}
+/** Names the two numbers in the right-hand column: how long a row ran,
+ *  and how much of that was outside every span beneath it. */
+function totalSelfLabel(width: number): Painted {
+  return segment("total/self", width, { align: "right", style: { fg: THEME.chrome } });
+}
+function waitText(turn: Turn, last: boolean): string {
+  const waited = fmtOffset(turnTimes(turn).waitingMs);
+  return last ? `⏸ waited ${waited}, then the run ended` : `⏸ waited ${waited} for the user`;
 }
 
 function extentOf(row: TimelineRow): Interval {
@@ -731,15 +1121,18 @@ function isRunning(row: TimelineRow): boolean {
 }
 
 /** The cursor row reads in the text color, a span that logged an error in
- *  red, anything else in its group's color. */
+ *  red, anything else in its kind's color. */
 function rowColor(item: FlameRow, isCursor: boolean): string {
   if (isCursor) {
     return THEME.text;
   }
+  if (item.kind !== "item") {
+    return item.kind === "turn" ? THEME.accent : THEME.muted;
+  }
   if (item.row.kind === "span" && holdsError(item.node)) {
     return THEME.kind.error;
   }
-  return item.color ?? THEME.muted;
+  return item.color;
 }
 
 /** Whether an error event was logged directly in this span. */

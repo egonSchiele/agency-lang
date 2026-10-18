@@ -361,6 +361,14 @@ Threads: `threadCreated`, `threadResumed`, `threadRepaired`,
 `threadRepaired` fires when a reopened thread was structurally invalid and
 `repairAbandonedTurn` synthesized the missing tool results.
 
+Turns: `turnStart` (`message`): a person sent the program a message. The
+`repl` functions log one per submitted line that is not a slash command, and
+`turnStart` in `std::statelog` logs one from anywhere else. The logs viewer
+splits a session into turns at these and reports the time between a turn's
+last event and the next `turnStart` as waiting for the person; a
+`threadResumed` is not a turn, since the runtime logs it whenever a named
+session thread is re-entered, with no person involved.
+
 Subprocess: `subprocessStarted`, `subprocessEnd`.
 
 Salvage: `abortSalvage` — records how a `saveDraft` partial is handled as an

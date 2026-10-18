@@ -4,7 +4,6 @@ import {
   hasTokenUsage,
   tokensCacheWrite,
 } from "../statelog/wireAccessors.js";
-import { buildTreeIndex } from "./forest.js";
 import { fmtTokens, fmtUsd } from "./format.js";
 import { childEvent, fmtDuration } from "./spanText.js";
 import {
@@ -14,7 +13,6 @@ import {
   type StructuredLine,
 } from "./structured.js";
 import {
-  ownedToolNodes,
   toolErrorMessages,
   toolResultText,
   toolStatusText,
@@ -26,6 +24,10 @@ import {
   type LlmGroupStoryRow,
 } from "./story.js";
 import type { Round } from "./timeline/rounds.js";
+import { buildTreeIndex, nearestAncestor, walkNodes } from "./forest.js";
+import { overviewData, type OverviewCall } from "./overviewData.js";
+import { spanExtent } from "./timeline/spans.js";
+import type { TreeNode } from "./types.js";
 /** `faded` marks a line that is history, painted in one muted color.
  *  `oneRow` keeps a line to a single painted row, cut with an ellipsis. */
 export type PayloadLine = (
@@ -42,11 +44,21 @@ export type PayloadLine = (
   | { kind: "table"; columns: string[]; rows: string[][]; indent: number }
   | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
+  /** The overview's three charts over these calls, painted by `overviewCharts`. */
+  | { kind: "charts"; calls: OverviewCall[] }
   | { kind: "blank" }
 ) & { faded?: boolean; oneRow?: boolean };
-export type PayloadOptions = { raw: boolean };
+export type PayloadOptions = {
+  raw: boolean;
+  /** The trace the row belongs to. A group row charts its calls with it
+   *  and shows its summary alone without it. */
+  trace?: TreeNode;
+};
 type PayloadMakers = {
-  [Kind in StoryRow["kind"]]: (row: Extract<StoryRow, { kind: Kind }>) => PayloadLine[];
+  [Kind in StoryRow["kind"]]: (
+    row: Extract<StoryRow, { kind: Kind }>,
+    options: PayloadOptions,
+  ) => PayloadLine[];
 };
 const PAYLOADS: PayloadMakers = {
   round: roundPayload,
@@ -75,8 +87,8 @@ export function payloadFor(row: StoryRow, options: PayloadOptions): PayloadLine[
   if (options.raw) {
     return rawPayload(row);
   }
-  const make = PAYLOADS[row.kind] as (row: StoryRow) => PayloadLine[];
-  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row)];
+  const make = PAYLOADS[row.kind] as (row: StoryRow, options: PayloadOptions) => PayloadLine[];
+  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row, options)];
 }
 /** Why a span can name a parent the log never recorded. The viewer states
  *  the fact and lists the causes; matching the span to a tool by name
@@ -111,50 +123,77 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
       text: roundTokenLine(round),
     },
     { kind: "blank" },
-    ...roundResponsePayload(round),
+    ...roundResponsePayload(round, [], TRACE_DETAIL),
   ];
 }
 
-function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
+/** A group of LLM calls: the row's title, one line of count and models,
+ *  one of wall time against model time and cost, an error count when there
+ *  is one, then the overview's charts over just these calls. The rows
+ *  beneath show each call, so no call is repeated here. The error count
+ *  and the charts cover the same errors: those logged in this span and
+ *  not inside a nested thread, which has its own group row. */
+function llmGroupPayload(row: LlmGroupStoryRow, options: PayloadOptions): PayloadLine[] {
   const rounds = row.rounds;
   const models = rounds.map((round) => round.model).filter(Boolean);
-  const threads = rounds.map((round) => round.threadLabel).filter(Boolean);
-  const unique = (values: (string | undefined)[]): string =>
-    values.filter((value, index) => values.indexOf(value) === index).join(", ") || "not recorded";
-  const latest = rounds.at(-1);
+  const unique = models.filter((value, index) => models.indexOf(value) === index);
+  const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
+  const llmMs = rounds.reduce((sum, round) => sum + round.durationMs, 0);
+  const cost = fmtUsd(rounds.reduce((sum, round) => sum + round.costUsd, 0)) || "$0";
+  const extent = spanExtent(row.node);
+  const wall =
+    extent === undefined
+      ? "wall time not recorded"
+      : `ran ${fmtDuration(extent.end - extent.start, { minutes: true })}`;
   const lines: PayloadLine[] = [
-    { kind: "heading", text: `THREAD · ${row.label}`, tone: "assistant" },
-    {
-      kind: "meta",
-      text: row.toolName === undefined ? "Not started by a tool" : `Tool: ${row.toolName}`,
-    },
-    { kind: "meta", text: `Thread: ${unique(threads)}` },
-    { kind: "meta", text: `Model: ${unique(models)}` },
-    {
-      kind: "meta",
-      text: `${rounds.length} completed LLM ${rounds.length === 1 ? "call" : "calls"}`,
-    },
-    {
-      kind: "meta",
-      text: `LLM time: ${fmtDuration(rounds.reduce((sum, round) => sum + round.durationMs, 0))} · Cost: ${fmtUsd(rounds.reduce((sum, round) => sum + round.costUsd, 0)) || "$0"}`,
-    },
-    {
-      kind: "meta",
-      text: "Metrics cover these calls; nested tools are excluded. Press r for raw events.",
-    },
+    { kind: "heading", text: row.title, tone: "assistant" },
+    { kind: "meta", text: `${count} · ${unique.join(", ") || "model not recorded"}` },
+    { kind: "meta", text: `${wall} · LLM time ${fmtDuration(llmMs, { minutes: true })} · ${cost}` },
   ];
-  if (latest) {
-    lines.push(
-      { kind: "blank" },
-      {
-        kind: "heading",
-        text: `Latest response · LLM call ${latest.index + 1}`,
-        tone: "assistant",
-      },
-      ...roundResponsePayload(latest),
-    );
+  const errors = ownErrorCount(row.node);
+  if (errors > 0) {
+    lines.push({
+      kind: "text",
+      text: `✖ ${errors} ${errors === 1 ? "error" : "errors"}`,
+      indent: 0,
+      role: "error",
+    });
+  }
+  if (options.trace !== undefined) {
+    const calls = groupCalls(row, options.trace);
+    if (calls.length > 0) {
+      lines.push({ kind: "blank" }, { kind: "charts", calls });
+    }
   }
   return lines;
+}
+
+/** Errors logged under the span whose nearest `llmCall` ancestor is the
+ *  span itself: a nested thread's errors belong to its own group. */
+function ownErrorCount(group: TreeNode): number {
+  const index = buildTreeIndex(group);
+  return walkNodes(group).filter(
+    (node) =>
+      node.event?.data.type === "error" &&
+      nearestAncestor(node, index, (ancestor) => ancestor.label === "llmCall") === group,
+  ).length;
+}
+
+/** The overview's columns for the group's calls: its completed calls, and
+ *  the requests that failed inside the span before the provider answered.
+ *  The tools every call shares are dropped from `enclosing`, so the charts
+ *  bracket only the nesting inside the group and not the tool the whole
+ *  group ran in. */
+function groupCalls(row: LlmGroupStoryRow, trace: TreeNode): OverviewCall[] {
+  const index = buildTreeIndex(trace);
+  const inGroup = (call: OverviewCall): boolean =>
+    call.round !== undefined
+      ? call.round.spanId === row.node.id
+      : nearestAncestor(call.failure!.node, index, (node) => node.label === "llmCall")?.id ===
+        row.node.id;
+  const calls = overviewData(trace).calls.filter(inGroup);
+  const shared = Math.min(...calls.map((call) => call.enclosing.length));
+  return calls.map((call) => ({ ...call, enclosing: call.enclosing.slice(shared) }));
 }
 
 /** How much of a tool result the overview shows until `x` is pressed. */
@@ -176,7 +215,14 @@ export function cutResultPayload(text: string): PayloadLine[] {
 export type ResultOptions = {
   /** Print every result whole instead of its first RESULT_PREVIEW_CHARS. */
   fullResults?: boolean;
+  /** Cut each argument longer than this many characters. */
+  argumentChars?: number;
 };
+
+/** How much of each argument an LLM call's row shows. The call row says
+ *  which tools were requested; the tool's own row has the arguments whole. */
+export const ARGUMENT_PREVIEW_CHARS = 120;
+const TRACE_DETAIL: ResultOptions = { argumentChars: ARGUMENT_PREVIEW_CHARS };
 
 /** Whether any completed tool's result is longer than the preview keeps. */
 export function hasCutResult(tools: ToolStoryRow[]): boolean {
@@ -194,22 +240,34 @@ export function roundResponsePayload(
   const event = round.node.event!;
   const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
   const unmatched = [...tools];
-  return [
-    ...valuePayload(completionOf(event) ?? ""),
-    ...calls.flatMap((call) => {
-      const at = unmatched.findIndex((tool) => tool.name === call.name);
-      const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
-      return [
-        {
-          kind: "heading" as const,
-          text: `TOOL CALL · ${call.name ?? "tool"}`,
-          tone: "tool" as const,
-        },
-        ...valuePayload(call.arguments),
-        ...(tool === undefined ? [] : toolResultPayload(tool, options)),
-      ];
-    }),
-  ];
+  const lines = valuePayload(completionOf(event) ?? "");
+  for (const call of calls) {
+    const at = unmatched.findIndex((tool) => tool.name === call.name);
+    const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
+    lines.push({ kind: "heading", text: `TOOL CALL · ${call.name ?? "tool"}`, tone: "tool" });
+    const args =
+      options.argumentChars === undefined
+        ? call.arguments
+        : cutArguments(call.arguments, options.argumentChars);
+    lines.push(...valuePayload(args));
+    if (tool !== undefined) {
+      lines.push(...toolResultPayload(tool, options));
+    }
+  }
+  return lines;
+}
+
+/** The arguments with every value longer than `cap` characters cut to
+ *  that many and an ellipsis, measured as the text the viewer would print. */
+function cutArguments(args: unknown, cap: number): unknown {
+  const shorten = (value: unknown): unknown => {
+    const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
+    return text.length <= cap ? value : `${text.slice(0, cap)}…`;
+  };
+  if (args !== null && typeof args === "object" && !Array.isArray(args)) {
+    return Object.fromEntries(Object.entries(args).map(([key, item]) => [key, shorten(item)]));
+  }
+  return shorten(args);
 }
 
 /** What a requested tool gave back, by its recorded status. */
@@ -254,38 +312,56 @@ export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): st
   const writes = written > 0 ? `, ${fmt(written)} write` : "";
   return `input ${fmt(round.contextTokens)} (${fmt(round.cachedTokens)} cached${writes}) · output ${fmt(round.outputTokens)}`;
 }
+/** A tool's row, in the shape the overview gives a requested tool: the
+ *  call with its arguments, then `→ RESULT` with the whole output. The
+ *  arguments include any the model sent as null and the runtime dropped,
+ *  with a line saying so, so the row agrees with the LLM call's. */
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
   const finished = childEvent(row.node, "toolCall");
-  const owned = ownedToolNodes(row.node, buildTreeIndex(row.node));
-  const errors = owned.filter((node) => node.event?.data.type === "error");
   const output: PayloadLine[] = [
-    { kind: "heading", text: `TOOL · ${row.name}`, tone: "tool" },
+    { kind: "heading", text: `TOOL CALL · ${row.name}`, tone: "tool" },
     { kind: "meta", text: toolStatusText(row) },
     {
       kind: "meta",
       text: row.durationMs === undefined ? "duration not recorded" : fmtDuration(row.durationMs),
     },
-    { kind: "heading", text: "Arguments", tone: "chrome" },
-    ...valuePayload((started ?? finished)?.data.args),
-    ...errors.map((node) => ({
+    ...valuePayload(argumentsWithDropped((started ?? finished)?.data.args, row.droppedNulls)),
+  ];
+  if (row.droppedNulls.length > 0) {
+    output.push({ kind: "meta", text: "Null arguments in tool calls are dropped, defaults apply" });
+  }
+  output.push(
+    ...toolErrorMessages(row).map((message) => ({
       kind: "text" as const,
-      text: String(node.event!.data.message ?? "error"),
+      text: message,
       indent: 0,
       role: "error" as const,
     })),
-  ];
+  );
   if (finished !== undefined) {
     output.push(
-      { kind: "heading", text: "Output", tone: "chrome" },
       {
-        kind: "meta",
-        text: `result: ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+        kind: "heading",
+        text: `→ RESULT · ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+        tone: "tool",
       },
       ...valuePayload(finished.data.output),
     );
   }
   return output;
+}
+/** The recorded arguments with the dropped ones restored as `name: null`.
+ *  Arguments recorded as anything but an object are shown as recorded. */
+function argumentsWithDropped(args: unknown, dropped: string[]): unknown {
+  if (dropped.length === 0 || args === null || typeof args !== "object" || Array.isArray(args)) {
+    return args;
+  }
+  const restored: Record<string, unknown> = { ...(args as Record<string, unknown>) };
+  for (const name of dropped) {
+    restored[name] = null;
+  }
+  return restored;
 }
 function resultTokenEstimate(output: unknown): number {
   const result = output as { __type?: string; success?: boolean; value?: unknown } | null;

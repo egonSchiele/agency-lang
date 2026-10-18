@@ -4,6 +4,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createStatelogScan, runScanToEnd, STATELOG_SCAN_CHUNK_BYTES } from "./mine.js";
+import { buildTraceRows } from "./rows.js";
 import {
   envelope,
   promptCompletion,
@@ -43,6 +44,25 @@ describe("createStatelogScan", () => {
     expect(trace.agentName).toBe("final");
     expect(trace.firstTsMs).toBe(FIXTURE_EPOCH_MS + 1_000);
     expect(trace.lastTsMs).toBe(FIXTURE_EPOCH_MS + 5_000);
+  });
+
+  it("tallies the turns, so a session's row reports working time and not the waits", () => {
+    // One event per second: the messages at 2s and 4s, each answered a
+    // second later, then the run ends at 6s. Elapsed 5s; working 2s.
+    const file = writeStatelog(path.join(tmpDir, "session.jsonl"), [
+      envelope("t1", { type: "agentStart" }),
+      envelope("t1", { type: "turnStart", message: "first" }),
+      promptCompletion("t1", "sonnet", 1.0),
+      envelope("t1", { type: "turnStart", message: "second" }),
+      promptCompletion("t1", "sonnet", 1.0),
+      envelope("t1", { type: "agentEnd" }),
+    ]);
+    const result = runScanToEnd(createStatelogScan(file));
+    if (result.kind !== "ok") {
+      throw new Error("expected ok");
+    }
+    expect(result.traces["t1"].turns.turns).toHaveLength(2);
+    expect(buildTraceRows(file, result)[0].wallMs).toBe(2_000);
   });
 
   it("a torn final line preserves the metrics before it and adds a warning", () => {

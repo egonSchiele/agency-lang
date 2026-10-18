@@ -73,7 +73,7 @@ describe("coverage", () => {
     expect(coverage([{ start: 200, end: 300 }], { start: 0, end: 100 }, 4)).toEqual([0, 0, 0, 0]);
   });
 
-  it("a zero-width window stays finite (visibility of tiny spans is the ░ floor's job)", () => {
+  it("a zero-width window stays finite (visibility of tiny spans is the bar floor's job)", () => {
     const out = coverage([{ start: 5, end: 5 }], { start: 5, end: 5 }, 4);
     expect(out.every(Number.isFinite)).toBe(true);
   });

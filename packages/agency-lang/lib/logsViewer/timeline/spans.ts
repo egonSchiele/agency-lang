@@ -33,43 +33,60 @@ const ENDS_BY_START: Record<string, string[]> = {
   subprocessStarted: ["subprocessEnd"],
 };
 
-export function timelineSpans(root: TreeNode, opts: { hideKinds: string[] }): TimelineSpan[] {
+export type SpanOptions = {
+  hideKinds: string[];
+  /** Keep only the spans that overlap this window, cut to it, with self
+   *  time counted inside it: one turn of a session. */
+  window?: Interval;
+};
+
+export function timelineSpans(root: TreeNode, opts: SpanOptions): TimelineSpan[] {
   const out: TimelineSpan[] = [];
   if (root.nodeKind === "span") {
-    pushSpan(root, 0, opts.hideKinds, out);
+    pushSpan(root, 0, opts, out);
   } else {
-    collect(root, 0, opts.hideKinds, out);
+    collect(root, 0, opts, out);
   }
   return out;
 }
 
-function pushSpan(node: TreeNode, depth: number, hideKinds: string[], out: TimelineSpan[]): void {
-  const made = makeSpan(node, depth);
+function pushSpan(node: TreeNode, depth: number, opts: SpanOptions, out: TimelineSpan[]): void {
+  const made = makeSpan(node, depth, opts.window);
+  if (made === undefined && opts.window !== undefined && spanExtent(node) !== undefined) {
+    // Outside the window, and so is everything under it.
+    return;
+  }
   if (made !== undefined) {
     out.push(made);
   }
   // A timestamp-less span is dropped; its children surface at ITS depth so
   // no phantom indentation level appears under a row that is not there.
   const childDepth = made !== undefined ? depth + 1 : depth;
-  collect(node, childDepth, hideKinds, out);
+  collect(node, childDepth, opts, out);
 }
 
-function collect(node: TreeNode, depth: number, hideKinds: string[], out: TimelineSpan[]): void {
+function collect(node: TreeNode, depth: number, opts: SpanOptions, out: TimelineSpan[]): void {
   for (const child of node.children) {
     if (child.nodeKind !== "span") continue;
-    if (hideKinds.includes(child.label)) {
+    if (opts.hideKinds.includes(child.label)) {
       // Hidden rows disappear; their subtree keeps ITS depth relative to
       // the surviving ancestor, and self-time is untouched (an admin
       // span's envelope sits inside its parent's either way).
-      collect(child, depth, hideKinds, out);
+      collect(child, depth, opts, out);
     } else {
-      pushSpan(child, depth, hideKinds, out);
+      pushSpan(child, depth, opts, out);
     }
   }
 }
 
-function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
-  const extent = spanExtent(node);
+function makeSpan(
+  node: TreeNode,
+  depth: number,
+  window: Interval | undefined,
+): TimelineSpan | undefined {
+  const whole = spanExtent(node);
+  if (whole === undefined) return undefined;
+  const extent = window === undefined ? whole : clip(whole, window);
   if (extent === undefined) return undefined;
   const childExtents = node.children
     .filter((c) => c.nodeKind === "span")
@@ -86,6 +103,13 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
     selfIntervals,
     selfMs: totalMs(selfIntervals),
   };
+}
+
+/** The part of `extent` inside `window`, or undefined when none is. */
+function clip(extent: Interval, window: Interval): Interval | undefined {
+  const start = Math.max(extent.start, window.start);
+  const end = Math.min(extent.end, window.end);
+  return end < start ? undefined : { start, end };
 }
 
 function toolStartedAt(node: TreeNode): number | undefined {

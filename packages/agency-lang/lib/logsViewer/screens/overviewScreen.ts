@@ -228,7 +228,7 @@ export class OverviewScreen implements Screen {
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
     const widths = panelWidths(viewport.cols);
-    this.callPageSize = overviewCallCapacity(this.data?.calls.length ?? 0, widths.left);
+    this.callPageSize = overviewCallCapacity(this.data?.calls ?? [], widths.left);
     this.preview(widths.right, Math.max(0, viewport.rows - LAYOUT.outerRows));
     return runViewerKey(this.bindings(), formatKey(event));
   }
@@ -482,9 +482,10 @@ const STATUS_TEXT: Record<RunStatus, { text: string; fg: string }> = {
   paused: { text: "⏸ paused for a response", fg: THEME.kind.interrupt },
   running: { text: "● running", fg: THEME.ok },
 };
-/** The header: model, how the run ended, elapsed time, call count, cost,
- *  an error count in red, and the follow indicator. Pieces, so the status
- *  and the count keep their own colors. */
+/** The header: model, how the run ended, working time (with the time
+ *  spent waiting for the person beside it, dim, when there was any), call
+ *  count, cost, an error count in red, and the follow indicator. Pieces,
+ *  so the status and the count keep their own colors. */
 function header(data: OverviewData, following: boolean): Piece[] {
   const status = STATUS_TEXT[data.status];
   const count = data.errors.length;
@@ -497,10 +498,15 @@ function header(data: OverviewData, following: boolean): Piece[] {
     separator,
     { text: status.text, style: { fg: status.fg, bold: true } },
     separator,
-    plain(fmtDuration(data.elapsedMs, { minutes: true })),
-    separator,
-    plain(`${calls} LLM ${calls === 1 ? "call" : "calls"}`),
+    plain(fmtDuration(data.workingMs, { minutes: true })),
   ];
+  if (data.waitingMs > 0) {
+    pieces.push({
+      text: ` (waited ${fmtDuration(data.waitingMs, { minutes: true })} for the user)`,
+      style: { fg: THEME.muted },
+    });
+  }
+  pieces.push(separator, plain(`${calls} LLM ${calls === 1 ? "call" : "calls"}`));
   if (failed > 0) {
     pieces.push(separator, {
       text: `${failed} failed ${failed === 1 ? "request" : "requests"}`,

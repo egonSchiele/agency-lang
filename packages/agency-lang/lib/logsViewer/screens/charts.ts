@@ -4,6 +4,24 @@ const EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"];
 const FULL_CELL = "█";
 const SLIVER = "▏";
 
+/** Rows per band: each band's whole rows first, then the rows the total
+ *  still earns go to the bands with the largest fractions left over. */
+function shareRows(values: number[], max: number, height: number): number[] {
+  const exact = values.map((value) => (Math.max(0, value) / max) * height);
+  const rows = exact.map(Math.floor);
+  const total = exact.reduce((sum, value) => sum + value, 0);
+  let spare = Math.round(total) - rows.reduce((sum, value) => sum + value, 0);
+  const byRemainder = exact
+    .map((value, band) => ({ band, remainder: value - rows[band] }))
+    .sort((first, second) => second.remainder - first.remainder);
+  for (const { band } of byRemainder) {
+    if (spare <= 0) break;
+    rows[band] += 1;
+    spare -= 1;
+  }
+  return rows;
+}
+
 /** A cell of a stacked column that no band fills. */
 export const EMPTY_CELL = -1;
 
@@ -21,12 +39,15 @@ export function barText(fraction: number, width: number): string {
   return `${FULL_CELL.repeat(fullCells)}${tail}`.padEnd(width).slice(0, width);
 }
 
-/** Top row first. Bands stack from the bottom in the order given. */
+/** Top row first. Bands stack from the bottom in the order given. The
+ *  column gets the rows its total earns, handed to the bands by largest
+ *  remainder, so two bands each worth 0.4 of a row still make one row
+ *  between them instead of rounding away separately. */
 export function stackedColumn(values: number[], max: number, height: number): number[] {
   if (max <= 0 || height <= 0) {
     return emptyCells(Math.max(0, height));
   }
-  const bandHeights = values.map((value) => Math.round((value / max) * height));
+  const bandHeights = shareRows(values, max, height);
   const stacked = bandHeights.flatMap((rows, band) => Array.from({ length: rows }, () => band));
   const bottomUp = stacked.length > 0 ? stacked.slice(0, height) : sliverFor(values);
   return [...emptyCells(height - bottomUp.length), ...[...bottomUp].reverse()];

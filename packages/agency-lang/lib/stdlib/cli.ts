@@ -4,6 +4,7 @@ import process from "process";
 import { wholePath, stat, readText, writeText, mkdir } from "../host/node/nodeFiles.js";
 import { __call } from "../runtime/call.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
@@ -1493,6 +1494,7 @@ export async function _runLineRepl(
       });
 
       try {
+        await logReplTurn(run, line);
         reply = await callBridgeFn(run, onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();

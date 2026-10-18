@@ -160,8 +160,12 @@ describe("TimelineScreen", () => {
     );
     expect(under("turn 1 · first question")).toMatch(/0ms\s+3\.0s\s+6\.0s\s+total\/self/);
     expect(under("turn 2 · second question")).toMatch(/0ms\s+4\.5s\s+9\.0s\s+total\/self/);
-    // No axis at the top: the header is followed by turn 1 directly.
+    // No axis at the top: the header is followed by turn 1 directly, and a
+    // blank line sets every later turn apart.
     expect(lines[1]).toContain("turn 1 · first question");
+    const second = lines.findIndex((row) => row.includes("turn 2 · second question"));
+    expect(lines[second - 1].trim()).toBe("");
+    expect(lines[second - 2]).toContain("waited 9m54s");
     expect(frame(view)).toMatch(
       /turn 1 · first question {2}· {2}start \+0ms {2}· {2}1 LLM call, ran 6\.0s, then waited 9m54s/,
     );

@@ -80,10 +80,12 @@ type AxisRow = { kind: "axis"; id: string; depth: number; turn: number };
 /** The dim line after a turn saying how long the run then waited. The
  *  cursor skips it. */
 type WaitRow = { kind: "wait"; id: string; depth: number; turn: number };
-type FlameRow = ItemRow | TurnRow | AxisRow | WaitRow;
+/** An empty line before every turn but the first, so turns read apart. */
+type GapRow = { kind: "gap"; id: string; depth: number; turn: number };
+type FlameRow = ItemRow | TurnRow | AxisRow | WaitRow | GapRow;
 /** Rows that are read, never selected. */
 function isReadOnly(row: FlameRow): boolean {
-  return row.kind === "axis" || row.kind === "wait";
+  return row.kind === "axis" || row.kind === "wait" || row.kind === "gap";
 }
 
 export class TimelineScreen implements Screen {
@@ -498,6 +500,9 @@ export class TimelineScreen implements Screen {
         // A drilled span that did no work in this turn.
         continue;
       }
+      if (turn !== undefined && turn.index > 0) {
+        this.allRows.push({ kind: "gap", id: `gap:${turn.index}`, depth: 0, turn: turn.index });
+      }
       if (turn !== undefined) {
         this.allRows.push({ kind: "turn", id: `turn:${turn.index}`, depth: 0, turn: turn.index });
         this.allRows.push({ kind: "axis", id: `axis:${turn.index}`, depth: 1, turn: turn.index });
@@ -842,7 +847,7 @@ export class TimelineScreen implements Screen {
     if (item.kind === "wait") {
       return waitText(this.turns[item.turn], item.turn === this.turns.length - 1);
     }
-    if (item.kind === "axis") {
+    if (item.kind === "axis" || item.kind === "gap") {
       return "";
     }
     if (item.row.kind === "round") {
@@ -908,12 +913,15 @@ export class TimelineScreen implements Screen {
    *  gutter, the axis in the bar column, `total/self` at the right; a wait
    *  row is one dim line. */
   private turnParts(
-    item: TurnRow | AxisRow | WaitRow,
+    item: TurnRow | AxisRow | WaitRow | GapRow,
     isCursor: boolean,
     widths: WidthSplit,
   ): Painted[] {
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
     const turn = this.turns[item.turn];
+    if (item.kind === "gap") {
+      return [segment("", widths.gutter + widths.bar + widths.stats)];
+    }
     if (item.kind === "wait") {
       const text = `${LAYOUT.noMarker}${" ".repeat(LAYOUT.indentCells)}${this.rowText(item)}`;
       return [

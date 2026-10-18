@@ -1,5 +1,5 @@
 import { paint, paintedLine, segment, joinPainted, type Painted } from "../../tui/paint.js";
-import { THEME, durationTone, toneStyle, hotMark, threadColor } from "../theme.js";
+import { THEME, durationTone, toneStyle, hotMark } from "../theme.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { roundsOf, parseRoundId, type Round } from "../timeline/rounds.js";
 import { timelineRows, rowIdFor, type TimelineRow } from "../timeline/rows.js";
@@ -39,7 +39,7 @@ import {
   truncate,
 } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { groupSpans, spanDisplayName } from "../timeline/groups.js";
+import { spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import {
@@ -53,11 +53,7 @@ import {
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 
-export const GROUP_PALETTE = Array.from({ length: 8 }, (_unused, position) =>
-  threadColor(position),
-);
-
-type FlameRow = { row: TimelineRow; node: TreeNode; color: string | undefined };
+type FlameRow = { row: TimelineRow; node: TreeNode; color: string };
 
 export class TimelineScreen implements Screen {
   readonly screenName = "timeline" as const;
@@ -389,14 +385,6 @@ export class TimelineScreen implements Screen {
     this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
-    const groups = groupSpans(spans, trace, index);
-    const colorByKey = rankColors(groups);
-    const keyBySpanId: Record<string, string> = Object.create(null);
-    for (const group of groups) {
-      for (const id of group.spanIds) {
-        keyBySpanId[id] = group.key;
-      }
-    }
     this.rows = timelineRows(
       spans,
       this.rounds,
@@ -404,7 +392,7 @@ export class TimelineScreen implements Screen {
     ).map((row) => ({
       row,
       node: row.kind === "round" ? row.round.node : index.byId[row.id],
-      color: row.kind === "round" ? THEME.kind.assistant : colorByKey[keyBySpanId[row.id] ?? ""],
+      color: row.kind === "round" ? THEME.kind.assistant : spanColor(index.byId[row.id]),
     }));
     const target = focusCandidates.map((id) => this.drawnIdFor(id)).find((id) => id !== undefined);
     const restored = this.rows.findIndex((item) => item.row.id === target);
@@ -706,15 +694,17 @@ export class DurationCell {
   }
 }
 
-export function rankColors(
-  groups: { key: string; totalSelfMs: number }[],
-): Record<string, string | undefined> {
-  const ranked = [...groups].sort((first, second) => second.totalSelfMs - first.totalSelfMs);
-  const colors: Record<string, string | undefined> = Object.create(null);
-  ranked.forEach((group, position) => {
-    colors[group.key] = GROUP_PALETTE[position] ?? THEME.muted;
-  });
-  return colors;
+/** The trace's colors by kind, so a tool reads as a tool on every screen:
+ *  the tool color, the accent an `llmCall` span's label already has, chrome
+ *  for an admin span, and muted for the rest (the run, a subprocess). */
+function spanColor(node: TreeNode): string {
+  if (node.label === "toolExecution") {
+    return THEME.kind.tool;
+  }
+  if (node.label === "llmCall") {
+    return THEME.accent;
+  }
+  return ADMIN_KINDS.includes(node.label) ? THEME.chrome : THEME.muted;
 }
 
 function extentOf(row: TimelineRow): Interval {
@@ -726,7 +716,7 @@ function isRunning(row: TimelineRow): boolean {
 }
 
 /** The cursor row reads in the text color, a span that logged an error in
- *  red, anything else in its group's color. */
+ *  red, anything else in its kind's color. */
 function rowColor(item: FlameRow, isCursor: boolean): string {
   if (isCursor) {
     return THEME.text;
@@ -734,7 +724,7 @@ function rowColor(item: FlameRow, isCursor: boolean): string {
   if (item.row.kind === "span" && holdsError(item.node)) {
     return THEME.kind.error;
   }
-  return item.color ?? THEME.muted;
+  return item.color;
 }
 
 /** Whether an error event was logged directly in this span. */

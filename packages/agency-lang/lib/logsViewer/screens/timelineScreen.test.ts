@@ -120,6 +120,19 @@ describe("TimelineScreen", () => {
     expect(text.split("\n").filter((row) => row.includes("Thread · main"))).toHaveLength(2);
   });
 
+  it("colors rows by kind as the trace does, not by how much time a name took", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    const styled = (element: Element): ReturnType<typeof parseStyledText> =>
+      element.type === "text"
+        ? parseStyledText(element.content ?? "")
+        : (element.children ?? []).flatMap(styled);
+    const parts = styled(view.render(viewport));
+    const part = (text: string) => parts.find((candidate) => candidate.text.includes(text));
+    expect(part("bash · pip install")).toMatchObject({ fg: THEME.kind.tool });
+    expect(part("codeAgent ·")).toMatchObject({ fg: THEME.kind.tool });
+    expect(part("Thread · codingAgent")).toMatchObject({ fg: THEME.accent });
+  });
+
   it("uses unnamed for threads without recorded names and preserves individual call labels", () => {
     const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
     expect(frame(view)).toContain("Thread · unnamed");

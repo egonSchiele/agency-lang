@@ -12,7 +12,7 @@ exports[`renders a timeline golden at 100 columns 1`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search   [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   … [TIMELINE]"
 `;
 
 exports[`renders a timeline golden at 100 columns 2`] = `
@@ -27,7 +27,7 @@ exports[`renders a timeline golden at 100 columns 2`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search   [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   … [TIMELINE]"
 `;
 
 exports[`renders a timeline golden at 130 columns 1`] = `
@@ -42,7 +42,7 @@ exports[`renders a timeline golden at 130 columns 1`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search                                 [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   / search                        [TIMELINE]"
 `;
 
 exports[`renders a timeline golden at 130 columns 2`] = `
@@ -57,7 +57,7 @@ exports[`renders a timeline golden at 130 columns 2`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search                                 [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   / search                        [TIMELINE]"
 `;
 
 exports[`renders a timeline golden at 200 columns 1`] = `
@@ -72,7 +72,7 @@ exports[`renders a timeline golden at 200 columns 1`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search                                                                                                       [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   / search                                                                                              [TIMELINE]"
 `;
 
 exports[`renders a timeline golden at 200 columns 2`] = `
@@ -87,5 +87,5 @@ exports[`renders a timeline golden at 200 columns 2`] = `
 
 
 Thread · unnamed  ·  start +0ms  self 1.7s
-j k move   [ ] sibling   # numbers   ⏎ drill   d detail   +/- zoom   a admin   / search                                                                                                       [TIMELINE]"
+j k move   [ ] sibling   # numbers   ⏎ fold   → drill   d detail   +/- zoom   a admin   / search                                                                                              [TIMELINE]"
 `;

@@ -75,6 +75,7 @@ function fixtureForest(): TreeNode[] {
 describe("TimelineScreen", () => {
   it("labels thread groups by name and keeps tool argument summaries", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
     const text = frame(view);
     expect(text).toContain("Thread · codingAgent");
     expect(text).toContain("bash · pip install matplotlib");
@@ -92,7 +93,7 @@ describe("TimelineScreen", () => {
       part.text.includes("Thread · codingAgent"),
     );
     expect(label).toMatchObject({ fg: THEME.accent, bold: true });
-    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "right" }, viewport);
     expect(frame(view)).toContain("» Thread · codingAgent");
   });
 
@@ -122,6 +123,8 @@ describe("TimelineScreen", () => {
 
   it("colors rows by kind as the trace does, not by how much time a name took", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
+    view.setFocus("llm1"); // the cursor row paints in the text color
     const styled = (element: Element): ReturnType<typeof parseStyledText> =>
       element.type === "text"
         ? parseStyledText(element.content ?? "")
@@ -152,7 +155,7 @@ describe("TimelineScreen", () => {
   it("drill re-roots on the selected span with breadcrumbs; ← climbs out", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
     view.handleKey({ key: "down" }, viewport); // → codeAgent row
-    view.handleKey({ key: "enter" }, viewport); // drill in
+    view.handleKey({ key: "right" }, viewport); // drill in
     const drilled = frame(view);
     expect(drilled).toContain("» codeAgent");
     expect(drilled).not.toContain("agentRun");
@@ -162,9 +165,43 @@ describe("TimelineScreen", () => {
 
   it("Enter on a leaf opens the detail screen for that span", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
-    view.handleKey({ key: "G" }, viewport); // last row = bash (leaf)
+    view.setFocus("bash1");
     const action = view.handleKey({ key: "enter" }, viewport);
     expect(action).toEqual({ kind: "openDetail", rowId: "bash1" });
+  });
+
+  it("starts a completed sub-agent group folded; Enter opens and closes it in place", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · pip install");
+    view.handleKey({ key: "G" }, viewport); // last visible row = the folded group
+    expect(view.cursorSpanId()).toBe("llm1");
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).not.toContain("▸ Thread");
+    expect(frame(view)).toContain("bash · pip install");
+    expect(view.cursorSpanId()).toBe("llm1");
+    expect(frame(view)).not.toContain("» "); // no drill happened
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).toContain("▸ Thread · codingAgent");
+    expect(frame(view)).not.toContain("bash · pip install");
+    // A top-level thread never folds by itself.
+    expect(frame(new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS))).toContain(
+      "LLM call 3",
+    );
+  });
+
+  it("search and focus open the fold that hides their row", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    const action = view.handleKey({ key: "/" }, viewport);
+    if (action.kind === "promptLine") action.onResult("pip install");
+    expect(view.cursorSpanId()).toBe("bash1");
+    expect(frame(view)).toContain("bash · pip install");
+    const other = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    other.setFocus("bash1");
+    expect(other.cursorSpanId()).toBe("bash1");
+    // A follow update keeps a group the reader opened open.
+    other.setData(fixtureForest());
+    expect(frame(other)).toContain("bash · pip install");
   });
 
   it("zoom halves the window around the cursor span; 0 resets; pan clamps", () => {
@@ -186,6 +223,7 @@ describe("TimelineScreen", () => {
 
   it("total/self appears only when they differ", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("bash1"); // open the folded group so every row shows
     const text = frame(view);
     expect(text).toMatch(/1m0[12]s\/\d+m?\d*/); // wrapping span shows total/self
     expect(text).toMatch(/ 4\.0s(?!\/)/); // leaf bash shows plain total
@@ -401,7 +439,7 @@ describe("timeline screen rows and focus", () => {
     expect(frame(view)).not.toContain("{ } pan");
     view.handleKey({ key: "+" }, viewport);
     expect(frame(view)).toContain("{ } pan");
-    view.handleKey({ key: "enter" }, viewport);
+    view.handleKey({ key: "right" }, viewport);
     view.applySearch("round");
     expect(view.escape()).toBe(true);
     expect(view.escape()).toBe(true);
@@ -451,21 +489,21 @@ it("help derives a table with no duplicate key ownership", () => {
 
 it("drilling a multi-round call draws each round once", () => {
   const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
-  view.handleKey({ key: "enter" }, viewport);
+  view.handleKey({ key: "right" }, viewport);
   expect(frame(view).match(/LLM call 1/g)).toHaveLength(1);
   expect(frame(view).match(/LLM call 2/g)).toHaveLength(1);
 });
 it("drilling a single-round call keeps the duplicate round bar suppressed", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
   view.setFocus("llm1");
-  view.handleKey({ key: "enter" }, viewport);
+  view.handleKey({ key: "right" }, viewport);
   expect(frame(view)).not.toContain("LLM call 1");
 });
 it("drilling never imports unrelated rounds from the trace root", () => {
   const roots = loopForest();
   roots[0].children.push(leaf("promptCompletion", 4000, { timeTaken: 100 }));
   const view = new TimelineScreen(roots, "T", DEFAULT_THRESHOLDS);
-  view.handleKey({ key: "enter" }, viewport);
+  view.handleKey({ key: "right" }, viewport);
   expect(frame(view)).not.toContain("LLM call 4");
 });
 it("falls back to a surviving parent when follow removes the selected child", () => {

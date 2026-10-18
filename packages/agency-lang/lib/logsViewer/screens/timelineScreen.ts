@@ -26,7 +26,7 @@ import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
-import { buildTreeIndex, type TreeIndex } from "../forest.js";
+import { buildTreeIndex, nearestAncestor, type TreeIndex } from "../forest.js";
 import { llmGroupTitle, storyOutline } from "../story.js";
 import { decisionSummary } from "../decision.js";
 import {
@@ -86,7 +86,17 @@ export class TimelineScreen implements Screen {
   private following = false;
   private lineNumbers = false;
   private index: TreeIndex | undefined;
+  /** Every row of the drill view, folded ones included. */
+  private allRows: FlameRow[] = [];
+  /** The rows drawn: `allRows` without what sits under a folded span. */
   private rows: FlameRow[] = [];
+  /** Spans the reader folded. */
+  private folded: string[] = [];
+  /** Completed sub-agent groups folded on first sight, as on the trace. */
+  private defaultFolded: string[] = [];
+  /** Groups whose default has been applied once, so a group the reader
+   *  opened stays open across follow updates. */
+  private foldDefaultsApplied: string[] = [];
 
   constructor(
     roots: TreeNode[],
@@ -125,9 +135,15 @@ export class TimelineScreen implements Screen {
         },
       },
       {
-        keys: ["Enter", "Right", "l"],
-        help: "drill into the selected call; on an LLM call, open it in the trace",
-        hint: "⏎ drill",
+        keys: ["Enter"],
+        help: "fold or unfold the selected span; on an LLM call, open it in the trace",
+        hint: "⏎ fold",
+        run: () => this.toggleFoldOrOpen(),
+      },
+      {
+        keys: ["Right", "l"],
+        help: "drill into the selected span; on an LLM call, open it in the trace",
+        hint: "→ drill",
         run: () => this.drillOrOpen(),
       },
       {
@@ -275,14 +291,16 @@ export class TimelineScreen implements Screen {
 
   setFocus(id: string): void {
     const target = this.drawnIdFor(id) ?? this.afterLeavingDrill(id);
-    const position = this.rows.findIndex((item) => item.row.id === target);
-    if (position !== -1) {
-      this.cursor = position;
+    if (target !== undefined) {
+      this.reveal(target);
     }
   }
 
   setTrace(traceId: string): void {
     this.traceId = traceId;
+    this.folded = [];
+    this.defaultFolded = [];
+    this.foldDefaultsApplied = [];
     this.drillPath = [];
     this.zoom = undefined;
     this.cursor = 0;
@@ -307,9 +325,10 @@ export class TimelineScreen implements Screen {
   }
 
   /** The row `id` lands on in the current view: itself, a lone round's
-   *  span, or the nearest ancestor that is drawn. */
+   *  span, or the nearest ancestor that is drawn. A row under a folded
+   *  span counts as drawn; `reveal` opens the way to it. */
   private drawnIdFor(id: string): string | undefined {
-    const timelineRowsNow = this.rows.map((item) => item.row);
+    const timelineRowsNow = this.allRows.map((item) => item.row);
     const direct = rowIdFor(id, timelineRowsNow, this.rounds);
     if (direct !== undefined) {
       return direct;
@@ -385,7 +404,7 @@ export class TimelineScreen implements Screen {
     this.waitingToolIds = storyOutline(trace, { admin: false }).flatMap((row) =>
       row.kind === "tool" && row.status === "awaitingApproval" ? [row.id] : [],
     );
-    this.rows = timelineRows(
+    this.allRows = timelineRows(
       spans,
       this.rounds,
       rootNode.nodeKind === "trace" ? rootNode.id : undefined,
@@ -394,9 +413,125 @@ export class TimelineScreen implements Screen {
       node: row.kind === "round" ? row.round.node : index.byId[row.id],
       color: row.kind === "round" ? THEME.kind.assistant : spanColor(index.byId[row.id]),
     }));
+    this.applyFoldDefaults(index);
+    this.rows = this.visibleRows();
     const target = focusCandidates.map((id) => this.drawnIdFor(id)).find((id) => id !== undefined);
-    const restored = this.rows.findIndex((item) => item.row.id === target);
-    this.cursor = restored !== -1 ? restored : 0;
+    this.cursor = target === undefined ? 0 : this.nearestVisible(target);
+  }
+
+  /** A completed `llmCall` span inside a tool folds the first time it is
+   *  seen, as a sub-agent's group does on the trace; a top-level thread
+   *  never folds by itself. A fold reopens when its span runs again. */
+  private applyFoldDefaults(index: TreeIndex): void {
+    this.defaultFolded = this.defaultFolded.filter((id) => {
+      const item = this.allRows.find((candidate) => candidate.row.id === id);
+      return item === undefined || !isRunning(item.row);
+    });
+    for (const [position, item] of this.allRows.entries()) {
+      const insideTool =
+        nearestAncestor(item.node, index, (node) => node.label === "toolExecution") !== undefined;
+      if (
+        item.row.kind !== "span" ||
+        item.node.label !== "llmCall" ||
+        !insideTool ||
+        isRunning(item.row) ||
+        !this.hasChildRows(position) ||
+        this.foldDefaultsApplied.includes(item.row.id)
+      ) {
+        continue;
+      }
+      this.defaultFolded.push(item.row.id);
+      this.foldDefaultsApplied.push(item.row.id);
+    }
+  }
+  private hasChildRows(position: number): boolean {
+    const next = this.allRows[position + 1];
+    return next !== undefined && next.row.depth > this.allRows[position].row.depth;
+  }
+  private isFolded(id: string): boolean {
+    return this.folded.includes(id) || this.defaultFolded.includes(id);
+  }
+  /** `allRows` without the rows under a folded span: once a folded row is
+   *  met, everything deeper than it is skipped until a row at its depth
+   *  or above. */
+  private visibleRows(): FlameRow[] {
+    const shown: FlameRow[] = [];
+    let hiddenBelow: number | undefined;
+    for (const item of this.allRows) {
+      if (hiddenBelow !== undefined && item.row.depth > hiddenBelow) {
+        continue;
+      }
+      hiddenBelow = this.isFolded(item.row.id) ? item.row.depth : undefined;
+      shown.push(item);
+    }
+    return shown;
+  }
+  /** The rows above `position` in `allRows` that contain it: the nearest
+   *  shallower row, then the nearest shallower than that, and so on. */
+  private ancestorRows(position: number): FlameRow[] {
+    const ancestors: FlameRow[] = [];
+    let depth = this.allRows[position].row.depth;
+    for (let at = position - 1; at >= 0; at -= 1) {
+      if (this.allRows[at].row.depth < depth) {
+        ancestors.push(this.allRows[at]);
+        depth = this.allRows[at].row.depth;
+      }
+    }
+    return ancestors;
+  }
+  private open(ids: string[]): void {
+    this.folded = this.folded.filter((id) => !ids.includes(id));
+    this.defaultFolded = this.defaultFolded.filter((id) => !ids.includes(id));
+    for (const id of ids) {
+      if (!this.foldDefaultsApplied.includes(id)) {
+        this.foldDefaultsApplied.push(id);
+      }
+    }
+  }
+  /** Open every fold above the row and put the cursor on it. */
+  private reveal(id: string): void {
+    const position = this.allRows.findIndex((item) => item.row.id === id);
+    if (position === -1) {
+      return;
+    }
+    this.open(this.ancestorRows(position).map((item) => item.row.id));
+    this.rows = this.visibleRows();
+    this.cursor = this.rows.findIndex((item) => item.row.id === id);
+  }
+  /** The visible position of `id`, or of the folded span that hides it. */
+  private nearestVisible(id: string): number {
+    const direct = this.rows.findIndex((item) => item.row.id === id);
+    if (direct !== -1) {
+      return direct;
+    }
+    const position = this.allRows.findIndex((item) => item.row.id === id);
+    if (position === -1) {
+      return 0;
+    }
+    const holder = this.ancestorRows(position).find((item) =>
+      this.rows.some((shown) => shown === item),
+    );
+    return Math.max(0, holder === undefined ? 0 : this.rows.indexOf(holder));
+  }
+  /** Enter: fold or unfold a span with rows under it. A round opens in the
+   *  trace and a span with nothing under it opens its detail, as Right does. */
+  private toggleFoldOrOpen(): ViewAction {
+    const sel = this.selected();
+    if (sel === undefined) {
+      return { kind: "none" };
+    }
+    const position = this.allRows.indexOf(sel);
+    if (sel.row.kind === "round" || !this.hasChildRows(position)) {
+      return this.drillOrOpen();
+    }
+    if (this.isFolded(sel.row.id)) {
+      this.open([sel.row.id]);
+    } else {
+      this.folded.push(sel.row.id);
+    }
+    this.rows = this.visibleRows();
+    this.cursor = this.rows.indexOf(sel);
+    return { kind: "none" };
   }
 
   private selected(): FlameRow | undefined {
@@ -503,15 +638,17 @@ export class TimelineScreen implements Screen {
     }
   }
 
+  /** Searches every row, folded or not, and opens the way to a match. */
   private jumpMatch(direction: 1 | -1, includeCurrent = false): boolean {
-    if (this.query === undefined || this.rows.length === 0) {
+    if (this.query === undefined || this.allRows.length === 0) {
       return false;
     }
-    const count = this.rows.length;
+    const count = this.allRows.length;
+    const from = Math.max(0, this.allRows.indexOf(this.selected()!));
     for (let step = includeCurrent ? 0 : 1; step <= count; step++) {
-      const at = (this.cursor + direction * step + count * (step + 1)) % count;
-      if (this.rowText(this.rows[at]).toLowerCase().includes(this.query)) {
-        this.cursor = at;
+      const at = (from + direction * step + count * (step + 1)) % count;
+      if (this.rowText(this.allRows[at]).toLowerCase().includes(this.query)) {
+        this.reveal(this.allRows[at].row.id);
         return true;
       }
     }
@@ -589,7 +726,7 @@ export class TimelineScreen implements Screen {
     const identity = rowColor(item, isCursor);
     const content = joinPainted(
       ...(this.lineNumbers
-        ? [lineNumber(this.rows.indexOf(item) + 1, lineNumberWidth(this.rows.length))]
+        ? [lineNumber(this.allRows.indexOf(item) + 1, lineNumberWidth(this.allRows.length))]
         : []),
       this.labelPart(item, isCursor, widths.gutter, identity),
       this.barPart(item, window, widths.bar, identity),
@@ -610,7 +747,8 @@ export class TimelineScreen implements Screen {
     const indent = " ".repeat(levels * LAYOUT.indentCells);
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
     const isThread = item.row.kind === "span" && item.node.label === "llmCall";
-    return segment(`${marker}${indent}${this.rowText(item)}`, width, {
+    const fold = this.isFolded(item.row.id) ? "▸ " : "";
+    return segment(`${marker}${indent}${fold}${this.rowText(item)}`, width, {
       style: isThread ? { fg: THEME.accent, bold: true } : { fg },
     });
   }

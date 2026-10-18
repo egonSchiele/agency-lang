@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
 import { outlineRows, type StoryRow } from "./story.js";
 import { agentLoopTrace, event } from "./storyFixture.js";
-import { payloadFor, roundResponsePayload, RESULT_PREVIEW_CHARS, valuePayload } from "./payload.js";
+import {
+  ARGUMENT_PREVIEW_CHARS,
+  payloadFor,
+  roundResponsePayload,
+  RESULT_PREVIEW_CHARS,
+  valuePayload,
+} from "./payload.js";
+import { roundsOf } from "./timeline/rounds.js";
 import { overviewData } from "./overviewData.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
 const options = { raw: false };
@@ -165,7 +172,7 @@ it("reports estimated result tokens and recorded error origin", () => {
       rows.find((row) => row.kind === "tool")!,
       options,
     ),
-  ).toContainEqual({ kind: "meta", text: "result: ~4 tokens" });
+  ).toContainEqual({ kind: "heading", text: "→ RESULT · ~4 tokens", tone: "tool" });
   const error = payloadFor(
     rows.find((row) => row.kind === "error")!,
     options,
@@ -212,14 +219,80 @@ it("shows unknown usage and cache writes in round details", () => {
 });
 
 it.each([
-  ["", "result: ~0 tokens"],
-  ["12345", "result: ~2 tokens"],
-  [{ __type: "resultType", success: true, value: "a".repeat(8000) }, "result: ~2.0k tokens"],
-  [{ answer: "done" }, "result: ~5 tokens"],
+  ["", "→ RESULT · ~0 tokens"],
+  ["12345", "→ RESULT · ~2 tokens"],
+  [{ __type: "resultType", success: true, value: "a".repeat(8000) }, "→ RESULT · ~2.0k tokens"],
+  [{ answer: "done" }, "→ RESULT · ~5 tokens"],
 ])("estimates tool output tokens from text or compact JSON: %j", (output, expected) => {
   const trace = buildForest([event("toolCall", 1, "tool", null, { toolName: "read", output })])[0];
   const row = outlineRows(trace, { machinery: false, admin: false })[0];
-  expect(payloadFor(row, options)).toContainEqual({ kind: "meta", text: expected });
+  expect(payloadFor(row, options)).toContainEqual({
+    kind: "heading",
+    text: expected,
+    tone: "tool",
+  });
+});
+
+it("shows a tool row as the call with its arguments, then the result, with no section labels", () => {
+  const trace = buildForest([
+    event("toolCallStart", 0, "tool", null, { toolName: "read", args: { path: "a.md" } }),
+    event("toolCall", 1, "tool", null, {
+      toolName: "read",
+      args: { path: "a.md" },
+      output: "text",
+    }),
+  ])[0];
+  const row = outlineRows(trace, { machinery: false, admin: false })[0];
+  const texts = payloadFor(row, options).map((line) => {
+    if (line.kind === "pair") {
+      return `${line.key}: ${line.text}`;
+    }
+    return "text" in line ? line.text : line.kind;
+  });
+  expect(texts).toEqual([
+    "TOOL CALL · read",
+    "completed",
+    "duration not recorded",
+    "path: a.md",
+    "→ RESULT · ~1 tokens",
+    "text",
+  ]);
+});
+
+it("cuts long arguments on the LLM call row and keeps them whole on the overview", () => {
+  const long = "x".repeat(ARGUMENT_PREVIEW_CHARS + 50);
+  const root = trace([
+    span(
+      "llmCall",
+      [
+        leaf("promptCompletion", 2_000, {
+          model: '"m1"',
+          timeTaken: 100,
+          completion: {
+            toolCalls: [
+              { name: "researchAgent", arguments: { agencyTopic: false, userMsg: long } },
+            ],
+          },
+        }),
+      ],
+      { id: "L" },
+    ),
+  ]);
+  const round = roundsOf(root)[0];
+  const row = outlineRows(root, { machinery: false, admin: false }).find(
+    (candidate) => candidate.kind === "round",
+  )!;
+  const detail = payloadFor(row, options);
+  const cut = detail.find((line) => line.kind === "pair" && line.key === "userMsg")!;
+  expect(cut).toMatchObject({ text: `${"x".repeat(ARGUMENT_PREVIEW_CHARS)}…` });
+  expect(detail).toContainEqual({ kind: "pair", key: "agencyTopic", text: "false", indent: 0 });
+  expect(detail).toContainEqual({
+    kind: "meta",
+    text: "… arguments cut · the tool's row has them whole",
+  });
+  const whole = roundResponsePayload(round);
+  expect(whole).toContainEqual({ kind: "pair", key: "userMsg", text: long, indent: 0 });
+  expect(whole.some((line) => line.kind === "meta")).toBe(false);
 });
 
 describe("roundResponsePayload with tool results", () => {

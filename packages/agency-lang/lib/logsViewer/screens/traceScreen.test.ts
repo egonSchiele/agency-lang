@@ -36,7 +36,7 @@ describe("trace screen", () => {
     press(screen, "p");
     press(screen, "j");
     press(screen, "j");
-    expect(text(screen)).toContain("TOOL · agencyGuide");
+    expect(text(screen)).toContain("TOOL CALL · agencyGuide");
     press(screen, "j");
     expect(screen.focusId()).toBe("guide");
     expect(press(screen, "d")).toEqual({
@@ -269,7 +269,7 @@ it("reveals an explicitly requested shared focus through an active filter", () =
   screen.applySearch("Search?");
   screen.setFocus("guide");
   expect(screen.focusId()).toBe("guide");
-  expect(text(screen)).toContain("TOOL · agencyGuide");
+  expect(text(screen)).toContain("TOOL CALL · agencyGuide");
 });
 
 it("previous match from a nonmatching ancestor selects the last match", () => {

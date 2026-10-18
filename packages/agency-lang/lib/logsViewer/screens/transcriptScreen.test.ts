@@ -86,7 +86,7 @@ describe("transcript screen", () => {
   it("searches collapsed payloads, expands matches, and copies full text", () => {
     const screen = make(buildForest(loopEvents()));
     screen.applySearch("handlers.md");
-    expect(text(screen)).toContain("Arguments");
+    expect(text(screen)).toContain("filename: handlers.md");
     expect(press(screen, "y")).toMatchObject({
       kind: "copy",
       text: expect.stringContaining('"filename":"handlers.md"'),

@@ -4,7 +4,6 @@ import {
   hasTokenUsage,
   tokensCacheWrite,
 } from "../statelog/wireAccessors.js";
-import { buildTreeIndex } from "./forest.js";
 import { fmtTokens, fmtUsd } from "./format.js";
 import { childEvent, fmtDuration } from "./spanText.js";
 import {
@@ -14,7 +13,6 @@ import {
   type StructuredLine,
 } from "./structured.js";
 import {
-  ownedToolNodes,
   toolErrorMessages,
   toolResultText,
   toolStatusText,
@@ -111,7 +109,7 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
       text: roundTokenLine(round),
     },
     { kind: "blank" },
-    ...roundResponsePayload(round),
+    ...roundResponsePayload(round, [], TRACE_DETAIL),
   ];
 }
 
@@ -151,7 +149,7 @@ function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
         text: `Latest response · LLM call ${latest.index + 1}`,
         tone: "assistant",
       },
-      ...roundResponsePayload(latest),
+      ...roundResponsePayload(latest, [], TRACE_DETAIL),
     );
   }
   return lines;
@@ -176,7 +174,14 @@ export function cutResultPayload(text: string): PayloadLine[] {
 export type ResultOptions = {
   /** Print every result whole instead of its first RESULT_PREVIEW_CHARS. */
   fullResults?: boolean;
+  /** Cut each argument longer than this many characters. */
+  argumentChars?: number;
 };
+
+/** How much of each argument an LLM call's row shows. The call row says
+ *  which tools were requested; the tool's own row has the arguments whole. */
+export const ARGUMENT_PREVIEW_CHARS = 120;
+const TRACE_DETAIL: ResultOptions = { argumentChars: ARGUMENT_PREVIEW_CHARS };
 
 /** Whether any completed tool's result is longer than the preview keeps. */
 export function hasCutResult(tools: ToolStoryRow[]): boolean {
@@ -194,22 +199,44 @@ export function roundResponsePayload(
   const event = round.node.event!;
   const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
   const unmatched = [...tools];
-  return [
-    ...valuePayload(completionOf(event) ?? ""),
-    ...calls.flatMap((call) => {
-      const at = unmatched.findIndex((tool) => tool.name === call.name);
-      const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
-      return [
-        {
-          kind: "heading" as const,
-          text: `TOOL CALL · ${call.name ?? "tool"}`,
-          tone: "tool" as const,
-        },
-        ...valuePayload(call.arguments),
-        ...(tool === undefined ? [] : toolResultPayload(tool, options)),
-      ];
-    }),
-  ];
+  const lines = valuePayload(completionOf(event) ?? "");
+  for (const call of calls) {
+    const at = unmatched.findIndex((tool) => tool.name === call.name);
+    const tool = at === -1 ? undefined : unmatched.splice(at, 1)[0];
+    lines.push({ kind: "heading", text: `TOOL CALL · ${call.name ?? "tool"}`, tone: "tool" });
+    if (options.argumentChars === undefined) {
+      lines.push(...valuePayload(call.arguments));
+    } else {
+      const shortened = cutArguments(call.arguments, options.argumentChars);
+      lines.push(...valuePayload(shortened.value));
+      if (shortened.cut) {
+        lines.push({ kind: "meta", text: "… arguments cut · the tool's row has them whole" });
+      }
+    }
+    if (tool !== undefined) {
+      lines.push(...toolResultPayload(tool, options));
+    }
+  }
+  return lines;
+}
+
+/** The arguments with every value longer than `cap` characters cut to
+ *  that many and an ellipsis, measured as the text the viewer would print. */
+function cutArguments(args: unknown, cap: number): { value: unknown; cut: boolean } {
+  let cut = false;
+  const shorten = (value: unknown): unknown => {
+    const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
+    if (text.length <= cap) {
+      return value;
+    }
+    cut = true;
+    return `${text.slice(0, cap)}…`;
+  };
+  if (args !== null && typeof args === "object" && !Array.isArray(args)) {
+    const entries = Object.entries(args).map(([key, item]) => [key, shorten(item)]);
+    return { value: Object.fromEntries(entries), cut };
+  }
+  return { value: shorten(args), cut };
 }
 
 /** What a requested tool gave back, by its recorded status. */
@@ -254,33 +281,32 @@ export function roundTokenLine(round: Round, opts: { exact?: boolean } = {}): st
   const writes = written > 0 ? `, ${fmt(written)} write` : "";
   return `input ${fmt(round.contextTokens)} (${fmt(round.cachedTokens)} cached${writes}) · output ${fmt(round.outputTokens)}`;
 }
+/** A tool's row, in the shape the overview gives a requested tool: the
+ *  call with its arguments, then `→ RESULT` with the whole output. */
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
   const finished = childEvent(row.node, "toolCall");
-  const owned = ownedToolNodes(row.node, buildTreeIndex(row.node));
-  const errors = owned.filter((node) => node.event?.data.type === "error");
   const output: PayloadLine[] = [
-    { kind: "heading", text: `TOOL · ${row.name}`, tone: "tool" },
+    { kind: "heading", text: `TOOL CALL · ${row.name}`, tone: "tool" },
     { kind: "meta", text: toolStatusText(row) },
     {
       kind: "meta",
       text: row.durationMs === undefined ? "duration not recorded" : fmtDuration(row.durationMs),
     },
-    { kind: "heading", text: "Arguments", tone: "chrome" },
     ...valuePayload((started ?? finished)?.data.args),
-    ...errors.map((node) => ({
+    ...toolErrorMessages(row).map((message) => ({
       kind: "text" as const,
-      text: String(node.event!.data.message ?? "error"),
+      text: message,
       indent: 0,
       role: "error" as const,
     })),
   ];
   if (finished !== undefined) {
     output.push(
-      { kind: "heading", text: "Output", tone: "chrome" },
       {
-        kind: "meta",
-        text: `result: ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+        kind: "heading",
+        text: `→ RESULT · ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+        tone: "tool",
       },
       ...valuePayload(finished.data.output),
     );

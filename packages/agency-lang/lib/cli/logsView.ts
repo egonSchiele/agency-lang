@@ -14,6 +14,12 @@ import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { matchTrace, readTraces, tracesFromText, type Trace } from "@/runDirectory/traces.js";
+import { commentsPathFor } from "@/runDirectory/commentsPath.js";
+import {
+  humanAuthorAtTerminal,
+  openCommentsStore,
+  type CommentsStore,
+} from "@/runDirectory/commentsStore.js";
 import { csvRowsFromRuns, exportCsv } from "@/runsExplorer/csv.js";
 import { loadAllRuns } from "@/runsExplorer/loader.js";
 import { runExplorer } from "@/runsExplorer/run.js";
@@ -183,6 +189,7 @@ type ViewerSource = (
       /** Set when the file is a run directory's statelog: one summary line
        *  of annotations per trace id, shown on the trace rows. */
       traceAnnotations?: Record<string, string>;
+      comments?: CommentsStore;
     }
 ) & { thresholds?: Partial<ViewerThresholds>; focusTraceId?: string };
 
@@ -282,6 +289,7 @@ function viewerOptions(
     traceAnnotations: source.traceAnnotations,
     thresholds: source.thresholds,
     focusTraceId: source.focusTraceId,
+    comments: source.comments,
     contextWindowOf,
   };
 }
@@ -391,6 +399,10 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     initialFollow: cliOpts.follow ?? false,
     thresholds: cliOpts.config?.viewer,
     focusTraceId,
+    comments: openCommentsStore(
+      commentsPathFor({ kind: "file", path: file }),
+      humanAuthorAtTerminal(),
+    ),
   });
 }
 
@@ -448,5 +460,6 @@ async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<voi
     traceAnnotations: annotationSummaries(snapshot),
     thresholds: cliOpts.config?.viewer,
     focusTraceId,
+    comments: openCommentsStore(commentsPathFor({ kind: "runDir", dir }), humanAuthorAtTerminal()),
   });
 }

@@ -13,6 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer, viewerShellBindings } from "./run.js";
+import { foldComments, type Comment } from "../runDirectory/comments.js";
+import type { CommentsStore } from "../runDirectory/commentsStore.js";
 
 // `A` copies through the clipboard the shell detects; swap in a fake that
 // records what was written, as copyTrace.test.ts does.
@@ -594,5 +596,124 @@ describe("the address key", () => {
       const shared = shellKeys.filter((key) => screenKeys.includes(key));
       expect(shared, name).toEqual([]);
     }
+  });
+});
+
+/** An in-memory store: the viewer never learns where comments live. */
+function fakeStore(rows: Comment[] = []): CommentsStore & { rows: Comment[]; changed: boolean } {
+  const store = {
+    rows,
+    changed: false,
+    path: "fake",
+    read: () => {
+      store.changed = false;
+      return foldComments(store.rows);
+    },
+    add: (draft: Omit<Comment, "v" | "id" | "created" | "author">) => {
+      const row: Comment = {
+        v: 1,
+        id: `c${store.rows.length + 1}`,
+        created: "2026-10-19T14:30:02.000Z",
+        author: { kind: "human", id: "adit" },
+        ...draft,
+      };
+      store.rows.push(row);
+      return row;
+    },
+    changedSince: () => store.changed,
+  };
+  return store;
+}
+function agentNote(id: string, text: string, replyTo?: string): Comment {
+  return {
+    v: 1,
+    id,
+    traceId: "abc",
+    rowId: "round:s2:0",
+    anchor: {},
+    author: { kind: "agent", id: "claude" },
+    text,
+    created: "2026-10-19T14:31:00.000Z",
+    replyTo,
+  };
+}
+async function driveWithStore(
+  store: CommentsStore,
+  keys: (string | { key: string })[],
+  lines: string[] = [],
+  jsonl = sample,
+): Promise<FrameRecorder> {
+  const out = new FrameRecorder();
+  const input = new ScriptedInput([...keys, "q"]);
+  lines.forEach((line) => input.feedLine(line));
+  await runViewer({
+    jsonl,
+    input,
+    output: out,
+    viewport: { rows: 24, cols: 130 },
+    comments: store,
+  });
+  return out;
+}
+
+describe("comments in the viewer", () => {
+  it("c saves a comment on the focused row and the next frame marks it and shows the text", async () => {
+    const store = fakeStore();
+    const out = await driveWithStore(store, ["2", "c"], ["why does it do this?"]);
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]).toMatchObject({ traceId: "abc", rowId: "round:s2:0" });
+    expect(store.rows[0].anchor.at).toBe("2026-05-16T00:00:01.000Z");
+    expect(out.lastText()).toContain("✎");
+    expect(out.lastText()).toContain("why does it do this?");
+    expect(out.lastText()).toContain("COMMENTS · 1");
+  });
+
+  it("c on the detail overlay comments on the row it shows", async () => {
+    const store = fakeStore();
+    const out = await driveWithStore(store, ["2", "d", "c"], ["from detail"]);
+    expect(store.rows.map((row) => row.rowId)).toEqual(["round:s2:0"]);
+    expect(out.lastText()).toContain("from detail");
+  });
+
+  it("an empty line saves nothing", async () => {
+    const store = fakeStore();
+    await driveWithStore(store, ["2", "c"], ["   "]);
+    expect(store.rows).toEqual([]);
+  });
+
+  it("without a store, c says comments are unavailable", async () => {
+    const out = await drive(["2", "c"]);
+    expect(out.lastText()).toContain("comments unavailable");
+  });
+
+  it("C shows and hides the agent's own notes; a reply to a person always shows", async () => {
+    const store = fakeStore([agentNote("n1", "an aside")]);
+    const hidden = await driveWithStore(store, ["2"]);
+    expect(hidden.lastText()).not.toContain("an aside");
+    expect(hidden.lastText()).not.toContain("⚑");
+    const shown = await driveWithStore(store, ["2", "C"]);
+    expect(shown.lastText()).toContain("an aside");
+    expect(shown.lastText()).toContain("⚑");
+
+    const asked = fakeStore();
+    asked.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "why?" });
+    asked.rows.push(agentNote("n2", "because it retries", asked.rows[0].id));
+    const reply = await driveWithStore(asked, ["2"]);
+    expect(reply.lastText()).toContain("because it retries");
+  });
+
+  it("the trace picker counts a trace's comments", async () => {
+    const store = fakeStore();
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
+    store.add({ traceId: "abc", rowId: "s1", anchor: {}, text: "two" });
+    const out = await driveWithStore(store, [], [], twoTraceSample);
+    expect(out.lastText()).toContain("2 comments");
+  });
+
+  it("the timeline marks a commented row too", async () => {
+    const store = fakeStore();
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
+    const out = await driveWithStore(store, ["4"]);
+    expect(out.lastText()).toContain("✎");
   });
 });

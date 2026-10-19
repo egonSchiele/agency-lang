@@ -15,6 +15,7 @@ import {
 import { fmtDuration } from "../spanText.js";
 import { THEME, costTone, durationTone, toneStyle, hotMark } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
+import { commentCount, type RowMarks } from "../marks.js";
 import { traceSummaries, type TraceSummary } from "../traceSummaries.js";
 import {
   traceTexts,
@@ -45,6 +46,7 @@ export type TracePickerOptions = {
 };
 type ShownTraces = { summaries: TraceSummary[]; hits: TraceHit[]; searching: boolean };
 export class TracePicker implements View {
+  private marks: RowMarks = {};
   readonly viewName = "tracePicker" as const;
   private summaries: TraceSummary[] = [];
   private texts: TraceText[] = [];
@@ -145,6 +147,20 @@ export class TracePicker implements View {
     this.texts = traceTexts(roots);
     this.keepCursorVisible();
   }
+  setMarks(marks: RowMarks): void {
+    this.marks = marks;
+  }
+  /** The muted line under a trace: its annotations, then its comment count
+   *  from the marks the viewer holds, so a loose file gets one too and it
+   *  is current after every `c`. */
+  private traceNote(summary: TraceSummary): string | undefined {
+    const count = commentCount(this.marks, summary.traceId);
+    const parts = [
+      ...(summary.annotation === undefined ? [] : [summary.annotation]),
+      ...(count === 0 ? [] : [`${count} ${count === 1 ? "comment" : "comments"}`]),
+    ];
+    return parts.length === 0 ? undefined : parts.join(" · ");
+  }
   setFollowIndicator(on: boolean): void {
     this.following = on;
   }
@@ -207,11 +223,10 @@ export class TracePicker implements View {
         cursorLine = body.length;
       }
       body.push(tableRows[position + 1]);
-      if (summary.annotation !== undefined) {
+      const note = this.traceNote(summary);
+      if (note !== undefined) {
         body.push(
-          paintedLine(
-            segment(`   ${summary.annotation}`, viewport.cols, { style: { fg: THEME.muted } }),
-          ),
+          paintedLine(segment(`   ${note}`, viewport.cols, { style: { fg: THEME.muted } })),
         );
       }
     });

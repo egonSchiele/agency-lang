@@ -1,6 +1,6 @@
 import { parseStyledText } from "../tui/styleParser.js";
 import { it, expect } from "vitest";
-import { resolveDetailRow } from "./detailTarget.js";
+import { findRow, resolveDetailRow } from "./detailTarget.js";
 import { DetailScreen } from "./views/detailScreen.js";
 import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { buildForest } from "./tree.js";
@@ -64,4 +64,11 @@ it("resolves the second round again when an earlier prompt hides and leaf ids sh
       )
       .join("\n"),
   ).toContain("input 48 (31 cached) · output 9");
+});
+
+it("findRow resolves a row in one trace, admin rows included, and nothing for an unknown id", () => {
+  const [trace] = loopForest(true);
+  expect(findRow(trace, "round:L:1")?.kind).toBe("round");
+  expect(findRow(trace, "L")?.node.id).toBe("L");
+  expect(findRow(trace, "nope")).toBeUndefined();
 });

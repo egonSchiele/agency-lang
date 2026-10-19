@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 
 import {
   foldComments,
@@ -25,6 +26,11 @@ export type CommentsStore = {
    *  re-reading, since the follow tick fires every 250ms. */
   changedSince(): boolean;
 };
+
+/** Who is at the terminal, for a store the CLI opens for a person. */
+export function humanAuthorAtTerminal(): CommentAuthor {
+  return { kind: "human", id: os.userInfo().username };
+}
 
 export function openCommentsStore(
   commentsPath: string,

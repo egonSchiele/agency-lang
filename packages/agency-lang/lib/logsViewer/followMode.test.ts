@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer } from "./run.js";
+import { commentsPathFor } from "../runDirectory/commentsPath.js";
+import { openCommentsStore } from "../runDirectory/commentsStore.js";
 
 function envelope(
   spanId: string,
@@ -262,5 +264,47 @@ describe("follow mode with a trace asked for by id", () => {
     await done;
     expect(out.lastText()).toContain("second");
     expect(out.lastText()).toContain("trace 2/2");
+  });
+});
+
+describe("follow mode and comments", () => {
+  let dir: string;
+  let file: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "follow-comments-"));
+    file = path.join(dir, "run.jsonl");
+    fs.writeFileSync(file, bootLine + toolLines("s2", "firstTool", 1_000));
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a comment added from another terminal appears on the next tick, with no log growth", async () => {
+    const sidecar = commentsPathFor({ kind: "file", path: file });
+    const viewerStore = openCommentsStore(sidecar, { kind: "human", id: "adit" });
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = runViewer({
+      jsonl: fs.readFileSync(file, "utf8"),
+      followPath: file,
+      followIntervalMs: 20,
+      initialFollow: true,
+      comments: viewerStore,
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 100 },
+    });
+    input.feedKey({ key: "2" });
+    await until(() => out.frames.length > 0 && out.lastText().includes("[2 trace]"));
+    expect(out.lastText()).not.toContain("✎");
+
+    const otherTerminal = openCommentsStore(sidecar, { kind: "agent", id: "claude" });
+    otherTerminal.add({ traceId: "abc", rowId: "s2", anchor: {}, text: "noted" });
+    const person = openCommentsStore(sidecar, { kind: "human", id: "adit" });
+    person.add({ traceId: "abc", rowId: "s2", anchor: {}, text: "seen" });
+    await until(() => out.lastText().includes("✎"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("✎");
   });
 });

@@ -18,6 +18,17 @@ export function commentsPathFor(source: CommentsSource): string {
   return `${source.path}.comments.jsonl`;
 }
 
+/** The source for a statelog path the viewer was handed: a run directory's
+ *  `statelog.jsonl` keeps comments in the directory; any other file gets a
+ *  sidecar. */
+export function commentsSourceForStatelog(statelogPath: string): CommentsSource {
+  const dir = path.dirname(statelogPath);
+  if (runDirPaths(dir).statelog === statelogPath) {
+    return { kind: "runDir", dir };
+  }
+  return { kind: "file", path: statelogPath };
+}
+
 /** The lock a write to this comments file takes: a run directory's own `.lock`,
  *  or `<sidecar>.lock` for a loose file, so no `.lock` is left in whatever
  *  folder holds the statelog. */

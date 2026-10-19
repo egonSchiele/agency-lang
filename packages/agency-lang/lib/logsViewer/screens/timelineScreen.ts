@@ -14,6 +14,7 @@ import {
 import type { Screen } from "./screen.js";
 import { keyFooter } from "./chrome.js";
 import { lineNumber, lineNumberWidth } from "./lineNumbers.js";
+import { markGlyphs, marksForRow, type RowMarks } from "../marks.js";
 import type { WidthSplit } from "../views/shared.js";
 const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
@@ -124,6 +125,7 @@ export class TimelineScreen implements Screen {
   private message = "";
   private following = false;
   private lineNumbers = false;
+  private marks: RowMarks = {};
   private index: TreeIndex | undefined;
   /** Every row of the drill view, folded ones included. */
   private allRows: FlameRow[] = [];
@@ -352,6 +354,10 @@ export class TimelineScreen implements Screen {
   setData(roots: TreeNode[]): void {
     this.roots = roots;
     this.derive();
+  }
+
+  setMarks(marks: RowMarks): void {
+    this.marks = marks;
   }
 
   focusId(): string | undefined {
@@ -993,7 +999,9 @@ export class TimelineScreen implements Screen {
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
     const isThread = item.row.kind === "span" && item.node.label === "llmCall";
     const fold = this.isFolded(item) ? "▸ " : "";
-    return segment(`${marker}${indent}${fold}${this.rowText(item)}`, width, {
+    const glyphs = markGlyphs(marksForRow(this.marks, this.traceId, item.row.id));
+    const mark = glyphs.length === 0 ? "" : `${glyphs} `;
+    return segment(`${marker}${indent}${fold}${mark}${this.rowText(item)}`, width, {
       style: isThread ? { fg: THEME.accent, bold: true } : { fg },
     });
   }

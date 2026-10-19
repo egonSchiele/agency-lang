@@ -15,6 +15,8 @@
 import * as fs from "fs";
 
 import { runViewer } from "../logsViewer/run.js";
+import { commentsPathFor, commentsSourceForStatelog } from "../runDirectory/commentsPath.js";
+import { humanAuthorAtTerminal, openCommentsStore } from "../runDirectory/commentsStore.js";
 import type { ViewerThresholds } from "../logsViewer/thresholds.js";
 import { Screen } from "../tui/screen.js";
 import type { InputSource, KeyEvent } from "../tui/input/types.js";
@@ -267,6 +269,10 @@ class ExplorerShell {
         // A run directory's statelog holds every test's trace; land on this one.
         focusTraceId: traceId,
         thresholds: this.options.thresholds,
+        comments: openCommentsStore(
+          commentsPathFor(commentsSourceForStatelog(statelogPath)),
+          humanAuthorAtTerminal(),
+        ),
       });
       if (resolution === "quit") {
         return true;

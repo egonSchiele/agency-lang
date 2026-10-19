@@ -21,6 +21,7 @@ import {
   get,
   list,
   navigate,
+  pick,
   show,
   type CommandDeps,
   type CommandResult,
@@ -33,7 +34,8 @@ export type SessionCommand =
   | { name: "show" }
   | { name: "comments"; all: boolean }
   | { name: "comment add"; text: string; replyTo?: string }
-  | { name: "navigate" };
+  | { name: "navigate" }
+  | { name: "pick" };
 
 export type SessionCliOptions = TargetArgs & { json: boolean; author?: string };
 
@@ -98,5 +100,7 @@ async function run(
       return commentAdd(target, command.text, { replyTo: command.replyTo }, deps.commandDeps);
     case "navigate":
       return navigate(target, deps.commandDeps);
+    case "pick":
+      return pick(target, deps.commandDeps);
   }
 }

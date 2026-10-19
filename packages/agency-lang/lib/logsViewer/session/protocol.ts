@@ -1,7 +1,8 @@
 // The wire between `agency logs session …` and a running viewer: one
 // newline-delimited JSON request per connection, one reply, close. Three
-// requests. There is no request that writes a comment: the CLI writes
-// through its own store, under its own author, and then sends `reload`.
+// requests, and a fourth that opens the trace list. There is no request that
+// writes a comment: the CLI writes through its own store, under its own
+// author, and then sends `reload`.
 import { z } from "zod";
 
 import type { Focus } from "./port.js";
@@ -12,6 +13,7 @@ export const SessionRequestSchema = z.discriminatedUnion("op", [
     .object({ op: z.literal("navigate"), traceId: z.string().min(1), rowId: z.string().optional() })
     .strict(),
   z.object({ op: z.literal("reload") }).strict(),
+  z.object({ op: z.literal("pick") }).strict(),
 ]);
 export type SessionRequest = z.infer<typeof SessionRequestSchema>;
 

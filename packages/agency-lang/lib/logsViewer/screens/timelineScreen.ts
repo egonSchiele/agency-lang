@@ -364,6 +364,13 @@ export class TimelineScreen implements Screen {
     return this.selected()?.id;
   }
 
+  /** A turn header, an axis, a wait, or a gap is drawn but is no row of the
+   *  trace: nothing can be said about it, so it has no row id. */
+  selectedRowId(): string | undefined {
+    const selected = this.selected();
+    return selected?.kind === "item" ? selected.row.id : undefined;
+  }
+
   setFocus(id: string): void {
     const target = this.drawnIdFor(id) ?? this.afterLeavingDrill(id);
     if (target !== undefined) {

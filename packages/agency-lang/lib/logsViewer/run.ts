@@ -36,6 +36,7 @@ import { OccurrencesView } from "./views/occurrencesView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
+import { matchTraceId } from "../runDirectory/traces.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -225,11 +226,7 @@ async function runSession(
   const notify = (message: string): void => host.target().notify(message);
 
   let followOn = false;
-  // A line prompt owns the bottom row while it is open; a redraw asked for
-  // meanwhile (a follow poll, a comments refresh, a session request) would
-  // paint over what the person is typing, so it is deferred to the close.
-  let promptOpen = false;
-  let dirtyBehindPrompt = false;
+  const prompt = makePromptGate(() => render());
   const innerViewport = (): Viewport => ({
     cols: viewport.cols,
     rows: Math.max(1, viewport.rows - 1 - (parseErrors.length > 0 ? 1 : 0)),
@@ -281,14 +278,7 @@ async function runSession(
             watcher,
             onNewText,
           },
-    prompt: {
-      open: () => {
-        promptOpen = true;
-      },
-      close: () => {
-        promptOpen = false;
-      },
-    },
+    prompt,
   });
   const shellBindings = (controls?: ShellControls): ShellBinding[] =>
     viewerShellBindings(host, () => roots, toggleFollow, openPicker, controls, commentsSource);
@@ -299,11 +289,9 @@ async function runSession(
     () => host.closeHelp(),
   );
   const render = (): void => {
-    if (promptOpen) {
-      dirtyBehindPrompt = true;
+    if (prompt.defer()) {
       return;
     }
-    dirtyBehindPrompt = false;
     if (tooNarrowNow) {
       screen.render(tooNarrow(viewport.cols));
       return;
@@ -333,13 +321,13 @@ async function runSession(
     host.setFollowIndicator(true);
     watcher.start(onNewText, commentsSource.refreshIfChanged);
   }
-  commentsSource.refresh();
-  render();
   let session: SessionServer | undefined;
   try {
+    commentsSource.refresh();
+    render();
     session = await startSessionIfAsked(
       opts,
-      sessionPortFor(host, () => roots, commentsSource, notify, render),
+      sessionPortFor(host, () => roots, commentsSource, notify, render, openPicker),
     );
     return await runKeyLoop({
       screen,
@@ -387,6 +375,7 @@ function sessionPortFor(
   comments: CommentsSource,
   notify: (message: string) => void,
   render: () => void,
+  openPicker: () => void,
 ): SessionPort {
   return {
     focus: () => sessionFocus(host),
@@ -396,6 +385,10 @@ function sessionPortFor(
       return result;
     },
     reloadComments: comments.refresh,
+    pick: () => {
+      openPicker();
+      render();
+    },
     notify: (message) => {
       notify(message);
       render();
@@ -445,20 +438,57 @@ function navigateTo(
   if (rowId !== undefined && findRow(trace, rowId) === undefined) {
     return "no such row";
   }
+  // Every refusal comes before the host changes: a refused navigate must
+  // leave the person's trace, overlays, and screen as they were.
+  const traceScreen = host.screen("trace");
+  if (
+    rowId !== undefined &&
+    traceScreen instanceof TraceScreen &&
+    !traceScreen.shows(rowId, trace)
+  ) {
+    return "row hidden by filter";
+  }
   if (traceId !== host.currentTraceId()) {
     host.selectTrace(traceId);
   }
   host.closeHelp();
-  if (rowId === undefined) {
-    host.switchTo("trace");
-    return "ok";
-  }
-  const traceScreen = host.screen("trace");
-  if (traceScreen instanceof TraceScreen && !traceScreen.shows(rowId)) {
-    return "row hidden by filter";
-  }
   host.switchTo("trace", rowId);
   return "ok";
+}
+
+/**
+ * A line prompt owns the bottom row while it is open; a redraw asked for
+ * meanwhile (a follow poll, a comments refresh, a session request) would
+ * paint over what the person is typing. `defer` says whether a render must
+ * wait, and remembers that one was wanted; `close` draws it.
+ */
+function makePromptGate(render: () => void): {
+  open: () => void;
+  close: () => void;
+  defer: () => boolean;
+} {
+  let promptOpen = false;
+  let dirty = false;
+  return {
+    open: () => {
+      promptOpen = true;
+    },
+    close: () => {
+      promptOpen = false;
+      if (dirty) {
+        dirty = false;
+        render();
+      }
+    },
+    defer: () => {
+      if (promptOpen) {
+        dirty = true;
+        return true;
+      }
+      dirty = false;
+      return false;
+    },
+  };
 }
 
 type ActionDeps = {
@@ -676,15 +706,14 @@ export function fallbackTraceId(
   return mostRecentTraceId(roots);
 }
 
-/** The one trace a full id or unique prefix names, as `matchTrace` resolves
- *  one for the CLI; undefined when none or several match. */
+/** The one trace a full id or unique prefix names; undefined when none or
+ *  several match. The same rule the CLI applies (`matchTraceId`). */
 export function resolveTracePrefix(roots: TreeNode[], idOrPrefix: string): string | undefined {
-  const exact = roots.find((root) => root.traceId === idOrPrefix);
-  if (exact !== undefined) {
-    return exact.traceId;
-  }
-  const matches = roots.filter((root) => root.traceId.startsWith(idOrPrefix));
-  return matches.length === 1 ? matches[0].traceId : undefined;
+  const match = matchTraceId(
+    roots.map((root) => root.traceId),
+    idOrPrefix,
+  );
+  return match.kind === "one" ? match.id : undefined;
 }
 
 /** The trace that started last; the last root when none has a start time. */
@@ -1011,7 +1040,13 @@ function makeCommentsSource(args: {
   }
   let showAgentNotes = false;
   const refresh = (): void => {
-    args.host.setMarks(marksFrom(store.read(), { showAgentNotes }));
+    // Runs from the follow tick and from a session request, where a throw
+    // would be uncaught and take the viewer down in raw mode.
+    try {
+      args.host.setMarks(marksFrom(store.read(), { showAgentNotes }));
+    } catch (error) {
+      args.notify(`comments not read: ${(error as Error).message}`);
+    }
     args.render();
   };
   return {
@@ -1028,7 +1063,13 @@ function makeCommentsSource(args: {
       }
       const trace = args.currentTrace();
       const row = trace === undefined ? undefined : findRow(trace, focus.rowId);
-      return { traceId: focus.traceId, rowId: focus.rowId, anchor: row ? anchorFor(row) : {} };
+      if (row === undefined) {
+        // A row the story does not know (a timeline turn header) would
+        // take a comment nothing could find again.
+        args.notify("no row to comment on here");
+        return undefined;
+      }
+      return { traceId: focus.traceId, rowId: focus.rowId, anchor: anchorFor(row) };
     },
     add: (target, text) => {
       // Another writer may hold the lock, or the directory may be read-only;
@@ -1044,8 +1085,9 @@ function makeCommentsSource(args: {
     },
     toggleAgentNotes: () => {
       showAgentNotes = !showAgentNotes;
-      refresh();
+      // Said before the refresh, so a read that fails has the last word.
       args.notify(showAgentNotes ? "agent notes shown" : "agent notes hidden");
+      refresh();
     },
   };
 }

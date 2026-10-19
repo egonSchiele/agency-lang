@@ -125,26 +125,47 @@ const TRACE_ID_USAGE =
  * undefined when the flag was not given; reports and returns `"missing"` when
  * no trace matches, so the caller can stop. Exported for its test.
  */
+export type FocusTrace =
+  | { kind: "none" }
+  | { kind: "trace"; id: string }
+  /** Reported through `onError` already; the caller stops. */
+  | { kind: "missing" };
+
 export function resolveFocusTrace(
   traces: readonly Trace[],
   idOrPrefix: string | undefined,
   onError: (message: string) => void,
-): string | undefined | "missing" {
+): FocusTrace {
   if (idOrPrefix === undefined) {
-    return undefined;
+    return { kind: "none" };
   }
   const match = matchTrace(traces, idOrPrefix);
   if (match.kind === "one") {
-    return match.trace.traceId;
+    return { kind: "trace", id: match.trace.traceId };
   }
   const known = traces.map((trace) => trace.traceId);
   if (match.kind === "ambiguous") {
     onError(`--trace-id ${idOrPrefix} is ambiguous: ${match.ids.join(", ")}`);
-    return "missing";
+    return { kind: "missing" };
   }
   const found = known.length === 0 ? "the log holds no traces" : `found: ${known.join(", ")}`;
   onError(`No trace matches --trace-id ${idOrPrefix} (${found})`);
-  return "missing";
+  return { kind: "missing" };
+}
+
+/** Under --follow the id is passed as given, a prefix the viewer resolves
+ *  once the trace arrives; otherwise it is the resolved focus. */
+type FocusChoice = FocusTrace | string | undefined;
+
+function focusIdOf(focus: FocusChoice): string | undefined {
+  if (focus === undefined || typeof focus === "string") {
+    return focus;
+  }
+  return focus.kind === "trace" ? focus.id : undefined;
+}
+
+function focusIsMissing(focus: FocusChoice): boolean {
+  return typeof focus === "object" && focus.kind === "missing";
 }
 
 function isRegularFile(file: string): boolean {
@@ -366,12 +387,8 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     if (cliOpts.follow) {
       console.error("--follow ignored when reading from stdin");
     }
-    const focusTraceId = resolveFocusTrace(
-      tracesFromText(jsonl).traces,
-      cliOpts.traceId,
-      exitWithError,
-    );
-    if (focusTraceId === "missing") {
+    const focus = resolveFocusTrace(tracesFromText(jsonl).traces, cliOpts.traceId, exitWithError);
+    if (focusIsMissing(focus)) {
       return;
     }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
@@ -381,7 +398,7 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
       jsonl,
       terminalInput: "controlling-tty",
       thresholds: cliOpts.config?.viewer,
-      focusTraceId,
+      focusTraceId: focusIdOf(focus),
     });
     return;
   }
@@ -391,11 +408,11 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
   }
   // Under --follow the named trace may not have started yet, so the viewer
   // waits for it instead of this check refusing it.
-  const focusTraceId =
+  const focus: FocusChoice =
     cliOpts.follow === true
       ? cliOpts.traceId
       : resolveFocusTrace(readTraces(file).traces, cliOpts.traceId, exitWithError);
-  if (focusTraceId === "missing") {
+  if (focusIsMissing(focus)) {
     return;
   }
   await defaultViewerHost({
@@ -403,7 +420,7 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
     thresholds: cliOpts.config?.viewer,
-    focusTraceId,
+    focusTraceId: focusIdOf(focus),
     // A run directory's statelog opened by path (always the case under
     // --follow) keeps its comments in the directory, like every other route.
     comments: openCommentsStore(
@@ -453,11 +470,11 @@ function swapStdinToTty(): () => void {
  *  scores and labels summarised on the trace's row. */
 async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<void> {
   const snapshot = readRunDirectory(dir, { reportWarning: (message) => console.warn(message) });
-  const focusTraceId =
+  const focus: FocusChoice =
     cliOpts.follow === true
       ? cliOpts.traceId
       : resolveFocusTrace(snapshot.traces, cliOpts.traceId, exitWithError);
-  if (focusTraceId === "missing") {
+  if (focusIsMissing(focus)) {
     return;
   }
   await defaultViewerHost({
@@ -466,7 +483,7 @@ async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<voi
     initialFollow: cliOpts.follow === true,
     traceAnnotations: annotationSummaries(snapshot),
     thresholds: cliOpts.config?.viewer,
-    focusTraceId,
+    focusTraceId: focusIdOf(focus),
     comments: openCommentsStore(commentsPathFor({ kind: "runDir", dir }), humanAuthorAtTerminal()),
   });
 }

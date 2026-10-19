@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import * as net from "net";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { request } from "./client.js";
@@ -20,6 +22,9 @@ function fakePort(): SessionPort & { navigated: string[]; reloads: number } {
     },
     reloadComments: () => {
       port.reloads += 1;
+    },
+    pick: () => {
+      port.navigated.push("pick");
     },
     notify: () => {},
   };
@@ -73,6 +78,48 @@ describe("the session server", () => {
     expect(port.navigated).toEqual(["abc/r", "abc/nope"]);
     expect(await request(started.socketPath, { op: "reload" })).toEqual({ ok: true });
     expect(port.reloads).toBe(1);
+    expect(await request(started.socketPath, { op: "pick" })).toEqual({ ok: true });
+    expect(port.navigated.at(-1)).toBe("pick");
+  });
+
+  it("a port that throws answers with an error and the server stays up", async () => {
+    const port = fakePort();
+    port.reloadComments = () => {
+      throw new Error("EACCES: comments.jsonl");
+    };
+    const started = await startSessionServer(port, {
+      dir,
+      logPath: "/logs/run.jsonl",
+      commentsPath: undefined,
+      pid: 4248,
+    });
+    if (isUnavailable(started)) throw new Error(started.unavailable);
+    server = started;
+    const reply = await request(started.socketPath, { op: "reload" });
+    expect(reply).toMatchObject({ ok: false });
+    if (!reply.ok) {
+      expect(reply.error).toContain("EACCES");
+    }
+    expect(await request(started.socketPath, { op: "get" })).toMatchObject({ ok: true });
+  });
+
+  it("stop ends a client that connected and never finished its request", async () => {
+    const started = await startSessionServer(fakePort(), {
+      dir,
+      logPath: "/logs/run.jsonl",
+      commentsPath: undefined,
+      pid: 4249,
+    });
+    if (isUnavailable(started)) throw new Error(started.unavailable);
+    const hung = net.connect(started.socketPath);
+    await new Promise<void>((resolve) => hung.once("connect", () => resolve()));
+    hung.write('{"op":"get"');
+    const stopped = await Promise.race([
+      started.stop().then(() => "stopped" as const),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 2_000)),
+    ]);
+    expect(stopped).toBe("stopped");
+    hung.destroy();
   });
 
   it("rejects a malformed request and stays up; stop removes the record and socket", async () => {

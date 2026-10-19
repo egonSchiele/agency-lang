@@ -1,3 +1,5 @@
+import * as fs from "fs";
+
 import { z } from "zod";
 
 /**
@@ -8,8 +10,9 @@ import { z } from "zod";
  * comment is about one row, has no score, and needs its own id. One
  * append-only `comments.jsonl` per run directory (or `<file>.comments.jsonl`
  * beside a loose statelog); this module owns the row shape, the parse, and
- * the pure fold from rows to top-level comments with their replies. It does
- * no I/O: `commentsStore.ts` reads and `mutations.ts` writes.
+ * the pure fold from rows to top-level comments with their replies, and the
+ * one way a comments file is read (`readCommentsFile`). Writing is
+ * `mutations.ts`'s.
  */
 
 export type CommentAuthor = { kind: "human" | "agent"; id: string };
@@ -85,6 +88,22 @@ function parseRow(raw: string): Comment | undefined {
   }
   const result = CommentSchema.safeParse(value);
   return result.success ? (result.data as Comment) : undefined;
+}
+
+/** Every row of a comments file, with each bad line reported and skipped.
+ *  A missing file is no rows. */
+export function readCommentsFile(
+  commentsPath: string,
+  reportWarning: (message: string) => void,
+): Comment[] {
+  if (!fs.existsSync(commentsPath)) {
+    return [];
+  }
+  const parsed = parseCommentsJsonl(fs.readFileSync(commentsPath, "utf8"));
+  for (const error of parsed.errors) {
+    reportWarning(`${commentsPath}:${error.line}: skipping ${error.detail}`);
+  }
+  return parsed.rows;
 }
 
 /** A top-level comment with the replies that answer it, in file order. */

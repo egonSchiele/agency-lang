@@ -9,7 +9,7 @@ import {
 } from "./annotations.js";
 import type { ParseError } from "@/statelog/parse.js";
 
-import { foldComments, parseCommentsJsonl, type FoldedComments } from "./comments.js";
+import { foldComments, readCommentsFile, type FoldedComments } from "./comments.js";
 
 import { readTraces, type Trace } from "./traces.js";
 
@@ -151,14 +151,7 @@ function readComments(
   paths: RunDirectoryPaths,
   reportWarning: (message: string) => void,
 ): FoldedComments {
-  if (!fs.existsSync(paths.comments)) {
-    return foldComments([]);
-  }
-  const parsed = parseCommentsJsonl(fs.readFileSync(paths.comments, "utf8"));
-  for (const error of parsed.errors) {
-    reportWarning(`${paths.comments}:${error.line}: skipping ${error.detail}`);
-  }
-  return foldComments(parsed.rows);
+  return foldComments(readCommentsFile(paths.comments, reportWarning));
 }
 
 function readStatelog(paths: RunDirectoryPaths): {

@@ -129,6 +129,8 @@ agency logs session show k3Pq9abc/round:span-7f3a:2
 agency logs session comments                 # your comments on the open trace, each with its row
 agency logs session comment add k3Pq9abc/round:span-7f3a:2 "it retries after a cache miss" --reply-to c_8f2a
 agency logs session navigate k3Pq9abc/span-9c01   # move your viewer to a row
+agency logs session navigate k3Pq9abc        # open a trace on its first row
+agency logs session pick                     # put your viewer on the list of traces
 agency logs session list                     # the open viewers
 ```
 
@@ -136,7 +138,8 @@ Each prints the row the way the viewer shows it: its address, a header
 line such as `Thread · reviewer · LLM call 4 of 9 · gpt-5 · 2.1s · $0.004`,
 and the payload. `--json` gives the same facts as fields plus the row's raw
 events. With no viewer open, `show`, `comments`, and `comment add` work on
-the files when given `--log <file>`; `get` and `navigate` need the viewer.
+the files when given `--log <file>`; `get`, `navigate`, and `pick` need the
+viewer.
 A bare row id needs `--trace <id>`; an address carries its trace. The viewer
 registers itself under the agent home (`~/.agency-agent/log-sessions/`) and
 removes the record when it quits; nothing runs in the background on its

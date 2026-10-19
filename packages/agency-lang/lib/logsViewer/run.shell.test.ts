@@ -722,6 +722,28 @@ describe("comments in the viewer", () => {
     expect(out.lastText()).toContain("[2 trace]");
   });
 
+  it("on the transcript, a user message names the round's user turn", async () => {
+    copied.length = 0;
+    await drive(["3", "g", "A"]);
+    expect(copied).toEqual(["abc/round:s2:0:user"]);
+  });
+
+  it("a store that cannot be read is reported and the viewer stays up", async () => {
+    const store = fakeStore();
+    let reads = 0;
+    store.read = () => {
+      reads += 1;
+      if (reads > 1) {
+        throw new Error("EISDIR: comments.jsonl");
+      }
+      return foldComments([]);
+    };
+    // The second read is the refresh C asks for.
+    const out = await driveWithStore(store, ["2", "C"]);
+    expect(out.lastText()).toContain("comments not read: EISDIR");
+    expect(out.lastText()).toContain("[2 trace]");
+  });
+
   it("A on a detail overlay copies the row the overlay shows", async () => {
     copied.length = 0;
     await drive(["2", "d", "A"]);
@@ -829,6 +851,24 @@ describe("the session", () => {
     expect(out.lastText()).not.toContain("from the cli");
     expect(await request(sock, { op: "reload" })).toEqual({ ok: true });
     expect(out.lastText()).toContain("from the cli");
+
+    // A refused navigate changes nothing: the detail overlay stays open.
+    input.feedKey({ key: "d" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(out.lastText()).toContain("[DETAIL]");
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "nope" })).toEqual({
+      ok: false,
+      error: "no such row",
+    });
+    expect(out.lastText()).toContain("[DETAIL]");
+
+    // A trace alone lands on the trace screen; pick opens the list.
+    expect(await request(sock, { op: "navigate", traceId: "abc" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("[2 trace]");
+    expect(await request(sock, { op: "pick" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("TRACES");
+    input.feedKey({ key: "escape" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
 
     input.feedKey({ key: "q" });
     await done;

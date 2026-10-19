@@ -207,11 +207,17 @@ whether comments live in a run directory or in a sidecar.
 The server is built on the same seam as the follow watcher: a request
 arrives between key presses, is answered through a `SessionPort` the
 shell builds from its host and its comments source, and ends with a
-`render()`. The port has four functions: `focus` (the same `focusedRow`
+`render()`. The port has five functions: `focus` (the same `focusedRow`
 lookup `A` uses), `navigate` (`selectTrace` when the trace differs, then
-`switchTo("trace", rowId)`; a row the trace screen's settings or an active
-search hide is reported as hidden and the cursor stays), `reloadComments`
-(`commentsSource.refresh`), and `notify`. There is no request that writes
+`switchTo("trace", rowId)`, or the trace screen alone when no row is
+named; every refusal, a missing trace or row or one the trace screen's
+settings or an active search hide, comes before the host changes, so the
+person's trace, overlays, and screen stay as they were), `reloadComments`
+(`commentsSource.refresh`), `pick` (the trace list, as `t` opens it), and
+`notify`. A port call that throws answers the request with an error and
+leaves the viewer up; a client that never finishes its line is cut off by a
+timeout, and `stop` ends every open connection so quitting never waits on
+one. There is no request that writes
 a comment: it would be saved under the viewer's author, the person, so the
 CLI writes through its own store and sends `reload`. The server is started
 inside the shell's `try`, and a listen failure gives a notice instead of

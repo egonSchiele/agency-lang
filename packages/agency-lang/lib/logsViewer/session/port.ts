@@ -18,5 +18,7 @@ export type SessionPort = {
   navigate(traceId: string, rowId: string | undefined): NavigateResult;
   /** Re-read the comments file and redraw; the CLI sends this after a write. */
   reloadComments(): void;
+  /** Open the list of traces, so the person can choose one. */
+  pick(): void;
   notify(message: string): void;
 };

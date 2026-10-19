@@ -105,10 +105,25 @@ export type TraceMatch =
 
 /** Resolve a full id or a unique prefix (the viewer shows shortened ids). */
 export function matchTrace(traces: readonly Trace[], idOrPrefix: string): TraceMatch {
-  const exact = traces.find((trace) => trace.traceId === idOrPrefix);
-  if (exact !== undefined) return { kind: "one", trace: exact };
-  const matches = traces.filter((trace) => trace.traceId.startsWith(idOrPrefix));
-  if (matches.length === 1) return { kind: "one", trace: matches[0] };
+  const match = matchTraceId(
+    traces.map((trace) => trace.traceId),
+    idOrPrefix,
+  );
+  if (match.kind === "one") {
+    return { kind: "one", trace: traces.find((trace) => trace.traceId === match.id)! };
+  }
+  return match;
+}
+
+export type TraceIdMatch =
+  { kind: "one"; id: string } | { kind: "none" } | { kind: "ambiguous"; ids: string[] };
+
+/** The one rule for what a trace id argument means, over ids alone, so the
+ *  viewer and the CLI agree on which trace `7f3a` is. */
+export function matchTraceId(ids: readonly string[], idOrPrefix: string): TraceIdMatch {
+  if (ids.includes(idOrPrefix)) return { kind: "one", id: idOrPrefix };
+  const matches = ids.filter((id) => id.startsWith(idOrPrefix));
+  if (matches.length === 1) return { kind: "one", id: matches[0] };
   if (matches.length === 0) return { kind: "none" };
-  return { kind: "ambiguous", ids: matches.map((trace) => trace.traceId) };
+  return { kind: "ambiguous", ids: matches };
 }

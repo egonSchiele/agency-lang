@@ -20,7 +20,7 @@ import {
   type ScoreDraft,
 } from "./mutations.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
-import { commentsPathFor } from "./commentsPath.js";
+import { commentsPathFor, commentsSourceForStatelog } from "./commentsPath.js";
 import { openCommentsStore } from "./commentsStore.js";
 import { agentStartLine, statelogLine, tempDir, writeProject } from "./testFixtures.js";
 
@@ -232,8 +232,11 @@ describe("wrapTracesAsRunDirectories", () => {
 
 describe("wrapping a statelog that has a comments sidecar", () => {
   it("copies the trace's comment rows into the child run and leaves the sidecar unchanged", () => {
-    const file = statelogFile(agentStartLine("t1"), agentStartLine("t2"));
-    const store = openCommentsStore(commentsPathFor({ kind: "file", path: file }), human);
+    // A loose log with a name of its own keeps a sidecar beside it.
+    const file = path.join(tempDir("log-"), "run.jsonl");
+    fs.writeFileSync(file, [agentStartLine("t1"), agentStartLine("t2")].join("\n") + "\n");
+    const store = openCommentsStore(commentsPathFor(commentsSourceForStatelog(file)), human);
+    expect(path.basename(store.path)).toBe("run.jsonl.comments.jsonl");
     store.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "on t1" });
     store.add({ traceId: "t2", rowId: "round:s2:0", anchor: {}, text: "on t2" });
     const before = fs.readFileSync(store.path, "utf8");
@@ -250,6 +253,26 @@ describe("wrapping a statelog that has a comments sidecar", () => {
     const secondRun = readRunDirectory(path.join(group, "t2"), quiet);
     expect(secondRun.comments.threads.map((thread) => thread.comment.text)).toEqual(["on t2"]);
     expect(fs.readFileSync(store.path, "utf8")).toBe(before);
+  });
+});
+
+describe("wrapping a loose file named statelog.jsonl", () => {
+  it("copies the comments the viewer kept beside it as comments.jsonl", () => {
+    const file = statelogFile(agentStartLine("t1"));
+    // The viewer's rule for this name: comments.jsonl in the same folder.
+    const store = openCommentsStore(commentsPathFor(commentsSourceForStatelog(file)), human);
+    store.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "kept" });
+    expect(path.basename(store.path)).toBe("comments.jsonl");
+
+    const group = tempDir();
+    wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [file],
+      codeEntries: [],
+      annotationFiles: [],
+    });
+    const run = readRunDirectory(path.join(group, "t1"), quiet);
+    expect(run.comments.threads.map((thread) => thread.comment.text)).toEqual(["kept"]);
   });
 });
 

@@ -530,7 +530,13 @@ export class TraceScreen implements Screen {
    *  row the settings hide, or one a `/` search or `F` filter removed, is
    *  reported by a session's `navigate` instead of landed near or revealed
    *  by clearing the person's filter. */
-  shows(rowId: string): boolean {
+  shows(rowId: string, trace?: TreeNode): boolean {
+    if (trace !== undefined && trace.traceId !== this.traceId) {
+      // Another trace: the screen's settings apply, and a search does not
+      // survive the switch.
+      const rows = outlineRows(trace, { machinery: this.machinery, admin: this.admin });
+      return rows.some((row) => row.id === rowId);
+    }
     const rows = this.filter || this.quick ? this.visible : this.allRows;
     return rows.some((row) => row.id === rowId);
   }

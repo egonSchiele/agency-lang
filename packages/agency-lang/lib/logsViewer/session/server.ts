@@ -12,6 +12,8 @@ import { ensureSessionsDir, recordPaths, removeRecord, writeRecord } from "./reg
 /** macOS and the BSDs limit a Unix socket path to 104 bytes (108 on Linux);
  *  a long agent home on an external volume can go over. */
 const MAX_SOCKET_PATH_BYTES = 104;
+/** How long a connected client may take to send its one line. */
+const REQUEST_TIMEOUT_MS = 5_000;
 
 export type SessionServerOptions = {
   dir: string;
@@ -60,7 +62,20 @@ export function startSessionServer(
       unavailable: `could not prepare ${options.dir}: ${(error as Error).message}`,
     });
   }
+  // Every accepted socket, so `stop` can end one whose client never sent a
+  // full line; `server.close` alone would wait on it forever.
+  const open: net.Socket[] = [];
+  let stopping = false;
   const server = net.createServer((socket) => {
+    if (stopping) {
+      socket.destroy();
+      return;
+    }
+    open.push(socket);
+    socket.on("close", () => {
+      open.splice(open.indexOf(socket), 1);
+    });
+    socket.setTimeout(REQUEST_TIMEOUT_MS, () => socket.destroy());
     let buffer = "";
     socket.setEncoding("utf8");
     socket.on("data", (chunk: string) => {
@@ -97,10 +112,14 @@ export function startSessionServer(
         socketPath: paths.sock,
         stop: () =>
           new Promise<void>((done) => {
+            stopping = true;
             server.close(() => {
               removeRecord(options.dir, pid);
               done();
             });
+            for (const socket of [...open]) {
+              socket.destroy();
+            }
           }),
       });
     });
@@ -132,6 +151,23 @@ function handle(
   options: SessionServerOptions,
   req: SessionRequest,
 ): SessionReply {
+  // A port call runs viewer code; a throw here would be uncaught in the
+  // socket's data handler and take the viewer down in raw mode.
+  try {
+    return answerRequest(port, options, req);
+  } catch (error) {
+    return {
+      ok: false,
+      error: `the viewer could not handle ${req.op}: ${(error as Error).message}`,
+    };
+  }
+}
+
+function answerRequest(
+  port: SessionPort,
+  options: SessionServerOptions,
+  req: SessionRequest,
+): SessionReply {
   switch (req.op) {
     case "get":
       return {
@@ -144,6 +180,9 @@ function handle(
     }
     case "reload":
       port.reloadComments();
+      return { ok: true };
+    case "pick":
+      port.pick();
       return { ok: true };
   }
 }

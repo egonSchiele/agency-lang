@@ -10,7 +10,7 @@ import type { SessionReply, SessionRequest } from "@/logsViewer/session/protocol
 import { buildForest } from "@/logsViewer/tree.js";
 import type { TreeNode } from "@/logsViewer/types.js";
 import { threadsForTrace, type Comment, type CommentThread } from "@/runDirectory/comments.js";
-import { matchTrace, readTraces, type Trace } from "@/runDirectory/traces.js";
+import { matchTrace, matchTraceId, readTraces, type Trace } from "@/runDirectory/traces.js";
 
 import type { Target } from "./target.js";
 
@@ -69,7 +69,7 @@ export function get(target: Target, deps: CommandDeps): CommandResult {
     const text = `${focus.traceId}/ (on the ${focus.screen} screen, no row focused)`;
     return { text, json: { traceId: focus.traceId, screen: focus.screen }, exitCode: 0 };
   }
-  return showRow(target, focus.traceId, focus.rowId, deps);
+  return showRow(target, openLog(target, deps), focus.traceId, focus.rowId);
 }
 
 /** `show <row>`: one row, expanded, with its comments. */
@@ -77,11 +77,12 @@ export function show(target: Target, deps: CommandDeps): CommandResult {
   if (target.kind === "refused") {
     return refused(target.reason);
   }
-  const located = locate(target, deps);
+  const log = openLog(target, deps);
+  const located = locate(target, log);
   if ("error" in located) {
     return refused(located.error);
   }
-  return showRow(target, located.traceId, located.rowId, deps);
+  return showRow(target, log, located.traceId, located.rowId);
 }
 
 /** `comments`: every comment on the target's trace (or every trace), each
@@ -97,15 +98,17 @@ export function comments(target: Target, all: boolean, deps: CommandDeps): Comma
   const folded = store.read();
   // With no viewer there is no current trace to prefer: show them all.
   const everyTrace = all || target.traceId === undefined;
-  const traces = deps.readLog(logPathOf(target));
+  const log = openLog(target, deps);
   const traceId =
-    everyTrace || target.traceId === undefined ? undefined : resolveTraceId(traces, target.traceId);
+    everyTrace || target.traceId === undefined
+      ? undefined
+      : resolveTraceId(log.traces, target.traceId);
   if (traceId !== undefined && "error" in traceId) {
     return refused(traceId.error);
   }
   const threads = traceId === undefined ? folded.threads : threadsForTrace(folded, traceId.id);
   const blocks = threads.map((thread) => {
-    const trace = forestFor(traces, thread.comment.traceId);
+    const trace = log.forest(thread.comment.traceId);
     const expanded =
       trace === undefined ? undefined : expandRow(trace, thread.comment.rowId, [thread]);
     return {
@@ -140,11 +143,12 @@ export async function commentAdd(
   if (target.store === undefined) {
     return refused("this viewer has no comments file");
   }
-  const located = locate(target, deps);
+  const log = openLog(target, deps);
+  const located = locate(target, log);
   if ("error" in located) {
     return refused(located.error);
   }
-  const trace = forestFor(deps.readLog(logPathOf(target)), located.traceId);
+  const trace = log.forest(located.traceId);
   const row = trace === undefined ? undefined : findRow(trace, located.rowId);
   if (row === undefined) {
     return refused(`no row ${located.rowId} in trace ${located.traceId}`);
@@ -184,7 +188,9 @@ export async function commentAdd(
   return { text: saved, json: written, exitCode: 0 };
 }
 
-/** `navigate <row>`: move the open viewer's cursor. */
+/** `navigate <row>`: move the open viewer's cursor. The argument may also be
+ *  a trace id (or unique prefix) alone, which opens that trace on its first
+ *  row. */
 export async function navigate(target: Target, deps: CommandDeps): Promise<CommandResult> {
   if (target.kind === "refused") {
     return refused(target.reason);
@@ -192,7 +198,16 @@ export async function navigate(target: Target, deps: CommandDeps): Promise<Comma
   if (target.kind === "files") {
     return refused(NO_VIEWER);
   }
-  const located = locate(target, deps);
+  const log = openLog(target, deps);
+  const traceOnly =
+    target.rowRef === undefined || target.rowRef.includes("/")
+      ? undefined
+      : matchTraceId(
+          log.traces.map((trace) => trace.traceId),
+          target.rowRef,
+        );
+  const located: { traceId: string; rowId: string | undefined } | { error: string } =
+    traceOnly?.kind === "one" ? { traceId: traceOnly.id, rowId: undefined } : locate(target, log);
   if ("error" in located) {
     return refused(located.error);
   }
@@ -204,21 +219,56 @@ export async function navigate(target: Target, deps: CommandDeps): Promise<Comma
   if (!reply.ok) {
     return refused(reply.error);
   }
-  const address = formatAddress(located.traceId, located.rowId);
+  const address =
+    located.rowId === undefined ? located.traceId : formatAddress(located.traceId, located.rowId);
   return { text: `viewer moved to ${address}`, json: { address }, exitCode: 0 };
+}
+
+/** `pick`: open the viewer's list of traces. */
+export async function pick(target: Target, deps: CommandDeps): Promise<CommandResult> {
+  if (target.kind === "refused") {
+    return refused(target.reason);
+  }
+  if (target.kind === "files") {
+    return refused(NO_VIEWER);
+  }
+  const reply = await deps.request(target.session.socketPath, { op: "pick" });
+  if (!reply.ok) {
+    return refused(reply.error);
+  }
+  return { text: "viewer is on the list of traces", json: { picking: true }, exitCode: 0 };
 }
 
 // --- shared steps -----------------------------------------------------------
 
 type Located = { traceId: string; rowId: string } | { error: string };
 
+/** The log a command works on, read once, with each trace's forest built
+ *  once however many comments sit on it. */
+type OpenLog = { traces: Trace[]; forest(traceId: string): TreeNode | undefined };
+
+function openLog(target: Exclude<Target, { kind: "refused" }>, deps: CommandDeps): OpenLog {
+  const traces = deps.readLog(logPathOf(target));
+  const forests: Record<string, TreeNode | undefined> = Object.create(null);
+  return {
+    traces,
+    forest: (traceId) => {
+      if (!(traceId in forests)) {
+        const trace = traces.find((candidate) => candidate.traceId === traceId);
+        forests[traceId] = trace === undefined ? undefined : buildForest(trace.events)[0];
+      }
+      return forests[traceId];
+    },
+  };
+}
+
 /** The trace and row a command acts on: the row argument, with its trace
  *  from the address, the flag, or the viewer, resolved against the log. */
-function locate(target: Exclude<Target, { kind: "refused" }>, deps: CommandDeps): Located {
+function locate(target: Exclude<Target, { kind: "refused" }>, log: OpenLog): Located {
   if (target.rowRef === undefined) {
     return { error: "say which row: an address <trace id>/<row id>, or a row id with --trace" };
   }
-  const traces = deps.readLog(logPathOf(target));
+  const traces = log.traces;
   const address = splitAddress(
     target.rowRef,
     traces.map((trace) => trace.traceId),
@@ -255,11 +305,11 @@ function resolveTraceId(traces: Trace[], idOrPrefix: string): { id: string } | {
 
 function showRow(
   target: Exclude<Target, { kind: "refused" }>,
+  log: OpenLog,
   traceId: string,
   rowId: string,
-  deps: CommandDeps,
 ): CommandResult {
-  const trace = forestFor(deps.readLog(logPathOf(target)), traceId);
+  const trace = log.forest(traceId);
   if (trace === undefined) {
     return refused(`no trace ${traceId} in ${logPathOf(target)}`);
   }
@@ -292,9 +342,4 @@ function commentById(threads: readonly CommentThread[], id: string): Comment | u
 
 function logPathOf(target: Exclude<Target, { kind: "refused" }>): string {
   return target.kind === "session" ? target.session.record.logPath : target.logPath;
-}
-
-function forestFor(traces: Trace[], traceId: string): TreeNode | undefined {
-  const trace = traces.find((candidate) => candidate.traceId === traceId);
-  return trace === undefined ? undefined : buildForest(trace.events)[0];
 }

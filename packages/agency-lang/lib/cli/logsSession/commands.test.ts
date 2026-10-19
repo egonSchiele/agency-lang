@@ -12,7 +12,16 @@ import { commentsPathFor } from "@/runDirectory/commentsPath.js";
 import { openCommentsStore } from "@/runDirectory/commentsStore.js";
 import { readTraces } from "@/runDirectory/traces.js";
 
-import { commentAdd, comments, get, list, navigate, show, type CommandDeps } from "./commands.js";
+import {
+  commentAdd,
+  comments,
+  get,
+  list,
+  navigate,
+  pick,
+  show,
+  type CommandDeps,
+} from "./commands.js";
 import type { Target } from "./target.js";
 
 /** A loose statelog with two traces, T and U, each the story fixture's loop. */
@@ -56,6 +65,39 @@ describe("the session commands on a files target", () => {
   });
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("navigate takes a trace id alone, and pick needs a viewer", async () => {
+    const requests: SessionRequest[] = [];
+    const live: Target = {
+      kind: "session",
+      session: {
+        record: { pid: 1, logPath, cwd: "/", started: "" },
+        focus: {
+          traceId: "T",
+          screen: "trace",
+          rowId: undefined,
+          logPath,
+          commentsPath: undefined,
+        },
+        socketPath: "/nowhere.sock",
+      },
+      store: undefined,
+      traceId: "T",
+      rowRef: "U",
+    };
+    const answering: CommandDeps = {
+      ...deps,
+      request: async (_socket, req) => {
+        requests.push(req);
+        return { ok: true };
+      },
+    };
+    expect((await navigate(live, answering)).text).toBe("viewer moved to U");
+    expect(requests).toEqual([{ op: "navigate", traceId: "U", rowId: undefined }]);
+    expect((await pick(live, answering)).exitCode).toBe(0);
+    expect(requests.at(-1)).toEqual({ op: "pick" });
+    expect((await pick(target, deps)).exitCode).toBe(1);
   });
 
   it("get and navigate need a viewer", async () => {

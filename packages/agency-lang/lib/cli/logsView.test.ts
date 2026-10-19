@@ -404,12 +404,18 @@ describe("--trace-id", () => {
     const onError = (message: string): void => {
       errors.push(message);
     };
-    expect(resolveFocusTrace(traces, undefined, onError)).toBeUndefined();
-    expect(resolveFocusTrace(traces, "k3Pq9abc", onError)).toBe("k3Pq9abc");
-    expect(resolveFocusTrace(traces, "k3Pq", onError)).toBe("k3Pq9abc");
-    expect(resolveFocusTrace(traces, "k3P", onError)).toBe("missing");
+    expect(resolveFocusTrace(traces, undefined, onError)).toEqual({ kind: "none" });
+    expect(resolveFocusTrace(traces, "k3Pq9abc", onError)).toEqual({
+      kind: "trace",
+      id: "k3Pq9abc",
+    });
+    expect(resolveFocusTrace(traces, "k3Pq", onError)).toEqual({ kind: "trace", id: "k3Pq9abc" });
+    expect(resolveFocusTrace(traces, "k3P", onError)).toEqual({ kind: "missing" });
     expect(errors[0]).toContain("ambiguous");
-    expect(resolveFocusTrace(traces, "nope", onError)).toBe("missing");
+    expect(resolveFocusTrace(traces, "nope", onError)).toEqual({ kind: "missing" });
+    // A trace named like the old failure word is a trace like any other.
+    const named = [{ traceId: "missing", events: [], lines: [], digest: "" }];
+    expect(resolveFocusTrace(named, "missing", onError)).toEqual({ kind: "trace", id: "missing" });
     expect(errors[1]).toContain("k3Pq9abc, k3Pzzzzz");
   });
 });

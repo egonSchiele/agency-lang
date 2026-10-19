@@ -34,8 +34,8 @@ import {
   type WorkdirAttachmentPlan,
 } from "./attachWorkdir.js";
 import { acquireOwnedFileLock, acquireRunDirLock } from "./lock.js";
-import { CommentSchema, parseCommentsJsonl, type Comment, type CommentDraft } from "./comments.js";
-import { commentsLockFor, commentsPathFor } from "./commentsPath.js";
+import { CommentSchema, readCommentsFile, type Comment, type CommentDraft } from "./comments.js";
+import { commentsLockFor, commentsPathFor, commentsSourceForStatelog } from "./commentsPath.js";
 import {
   applyStatelogMerge,
   describeStatelogMerge,
@@ -203,22 +203,15 @@ function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): 
   return { stagingRoot, writes, skipped };
 }
 
-/** Wrapping COPIES a loose statelog's comments into the child run; the
- *  sidecar beside the statelog is read once and never rewritten, as the
- *  statelog itself is left in place. */
+/** Wrapping COPIES a statelog's comments into the child run, from wherever
+ *  the viewer keeps them for that path (`commentsSourceForStatelog`, the
+ *  same rule); the file is read once and never rewritten, as the statelog
+ *  itself is left in place. */
 function readSidecarComments(
   statelogFile: string,
   reportWarning: (message: string) => void,
 ): Comment[] {
-  const sidecar = commentsPathFor({ kind: "file", path: statelogFile });
-  if (!fs.existsSync(sidecar)) {
-    return [];
-  }
-  const parsed = parseCommentsJsonl(fs.readFileSync(sidecar, "utf8"));
-  for (const error of parsed.errors) {
-    reportWarning(`${sidecar}:${error.line}: skipping ${error.detail}`);
-  }
-  return parsed.rows;
+  return readCommentsFile(commentsPathFor(commentsSourceForStatelog(statelogFile)), reportWarning);
 }
 
 /** The traces the request is about, with the same id never carrying two

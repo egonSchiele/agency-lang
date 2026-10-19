@@ -290,6 +290,10 @@ export class OverviewScreen implements Screen {
   focusId(): string | undefined {
     return this.returnFocusId ?? this.selectedId;
   }
+  /** The call the charts highlight, never the tool the person came from. */
+  selectedRowId(): string | undefined {
+    return this.selectedId;
+  }
   setFocus(id: string): void {
     const calls = this.data?.calls ?? [];
     const index = calls.findIndex((call) => call.id === id || call.round?.node.id === id);

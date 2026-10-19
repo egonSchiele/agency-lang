@@ -3,7 +3,7 @@ import * as os from "os";
 
 import {
   foldComments,
-  parseCommentsJsonl,
+  readCommentsFile,
   type Comment,
   type CommentAuthor,
   type CommentDraft,
@@ -52,14 +52,7 @@ export function openCommentsStore(
     path: commentsPath,
     read: () => {
       lastSize = sizeNow();
-      if (!fs.existsSync(commentsPath)) {
-        return foldComments([]);
-      }
-      const parsed = parseCommentsJsonl(fs.readFileSync(commentsPath, "utf8"));
-      for (const error of parsed.errors) {
-        reportWarning(`${commentsPath}:${error.line}: skipping ${error.detail}`);
-      }
-      return foldComments(parsed.rows);
+      return foldComments(readCommentsFile(commentsPath, reportWarning));
     },
     add: (draft) => appendCommentRow(commentsPath, { ...draft, author }, { reportWarning }),
     changedSince: () => sizeNow() !== lastSize,

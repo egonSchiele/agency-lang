@@ -66,11 +66,15 @@ export function addLogsSessionCommands(logs: Command): void {
   withSharedOptions(
     session
       .command("navigate")
-      .description("Move the open viewer's cursor to a row")
-      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace"),
+      .description("Move the open viewer's cursor to a row, or open a trace on its first row")
+      .argument("<row>", "An address <trace id>/<row id>, a row id with --trace, or a trace id"),
   ).action(async (row: string, options: LeafOptions) =>
     exitWith({ name: "navigate" }, optionsFrom(options, row)),
   );
+
+  withSharedOptions(
+    session.command("pick").description("Put the open viewer on its list of traces"),
+  ).action(async (options: LeafOptions) => exitWith({ name: "pick" }, optionsFrom(options)));
 
   const comment = session.command("comment").description("Leave a comment on a row");
   withSharedOptions(

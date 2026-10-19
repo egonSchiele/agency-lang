@@ -476,6 +476,15 @@ function runInBranchAlsFrame<T>(
     : branch.globalsJSON
       ? GlobalStore.fromJSON(branch.globalsJSON)
       : parent.globals.clone();
+  // A branch's own globals live in its store, not in the stack, so a
+  // checkpoint taken while the branch runs (a rolling checkpoint of a
+  // step inside it, a sibling's interrupt) would otherwise hold the
+  // values the branch started with. The refresher writes them into the
+  // branch before any checkpoint is built, for the life of the branch.
+  const refreshGlobals = () => {
+    branch.globalsJSON = branchGlobals.toJSON();
+  };
+  if (!shareGlobals) parent.ctx.beforeCheckpoint.push(refreshGlobals);
   // The branch's own logger: its tag store and its span stack.
   const log = branchLog(parent, branchGlobals, spans);
   // Each branch's thread store logs through the branch's logger. A branch
@@ -517,11 +526,14 @@ function runInBranchAlsFrame<T>(
         // Pointer-shared dials have nothing to snapshot.
         const value = await fn(branchRun);
         if (hasInterrupts(value)) {
-          if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
+          if (!shareGlobals) refreshGlobals();
           if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
         }
         return value;
       } finally {
+        parent.ctx.beforeCheckpoint = parent.ctx.beforeCheckpoint.filter(
+          (refresh) => refresh !== refreshGlobals,
+        );
         // Durable object tags set inside the branch travel back on the
         // returned value (by reference), but the branch's presence flag
         // lives on its discarded cloned store. OR it into the parent so

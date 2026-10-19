@@ -236,6 +236,23 @@ export class Checkpoint implements SourceLocation {
     return this.globals.store?.[this.moduleId] ?? null;
   }
 
+  /** The globals the stack `branchPath` leads to sees. A `fork` or
+   *  `parallel` branch runs on its own copy of the globals (`runBatch`
+   *  saves it as the branch's `globalsJSON` before every checkpoint), so
+   *  a module-level variable it changed has the branch's value here and
+   *  the root's in `globals`. A branch that shares the globals, a tool
+   *  call, has no copy and sees the nearest copy above it, or the root's. */
+  globalsAt(branchPath: string[]): GlobalStoreJSON {
+    let globals = this.globals;
+    let frame = this.rootFrame();
+    for (const key of branchPath) {
+      const branch = frame?.branches?.[key];
+      if (branch?.globalsJSON) globals = branch.globalsJSON;
+      frame = branch?.stack.stack.at(-1);
+    }
+    return globals;
+  }
+
   getFilename(): string {
     return this.moduleId.split("/").pop() || this.moduleId;
   }
@@ -303,6 +320,12 @@ export class Checkpoint implements SourceLocation {
       throw new CheckpointError(
         "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
+    }
+    // Live state that is only written into the stack on demand: a tool
+    // loop's thread, a branch's own globals. Every checkpoint, from any
+    // stack and for any reason, is taken after these run.
+    for (const refresh of ctx.beforeCheckpoint) {
+      refresh();
     }
     const stackJson = stateStack.toJSON();
     // Optional only for contexts built by hand in tests; a real context always
@@ -376,9 +399,6 @@ export class CheckpointStore {
       this.removeDuplicate(opts);
     }
 
-    for (const refresh of ctx.beforeCheckpoint) {
-      refresh();
-    }
     const checkpoint = Checkpoint.fromStateStack(stateStack, ctx, opts);
     this.checkpoints[checkpoint.id] = checkpoint;
     return checkpoint.id;

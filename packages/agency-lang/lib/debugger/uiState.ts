@@ -93,7 +93,8 @@ export class UIState {
     }
     this.checkpoint = cp;
     this.location = stop ?? cp.location;
-    const frame = cp.frameAt(this.location.branchPath ?? []);
+    const branchPath = this.location.branchPath ?? [];
+    const frame = cp.frameAt(branchPath);
     if (!frame) {
       this.log("No current frame available in checkpoint");
       return;
@@ -103,7 +104,7 @@ export class UIState {
 
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globals.store?.[this.location.moduleId] ?? null;
+    const globalsForModule = cp.globalsAt(branchPath).store?.[this.location.moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }

@@ -544,7 +544,7 @@ export class DebuggerDriver {
   }
 
   private lookupVariable(varName: string, interrupt: Interrupt): unknown {
-    const checkpoint = interrupt.checkpoint;
+    const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
     if (!checkpoint) return undefined;
 
     // Check locals and args in the frame the program is stopped in
@@ -554,9 +554,10 @@ export class DebuggerDriver {
       if (varName in frame.args) return frame.args[varName];
     }
 
-    // Check globals
-    const moduleId = stopOf(interrupt)?.moduleId ?? checkpoint.moduleId;
-    const moduleGlobals = checkpoint.globals.store[moduleId];
+    // Check the globals the stopped stack sees: a fork or parallel
+    // branch has its own copy.
+    const location = stopOf(interrupt) ?? checkpoint;
+    const moduleGlobals = checkpoint.globalsAt(location.branchPath).store[location.moduleId];
     if (moduleGlobals && varName in moduleGlobals) {
       return moduleGlobals[varName];
     }

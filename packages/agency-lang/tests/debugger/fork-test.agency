@@ -26,3 +26,17 @@ node withBreakpoint(): number {
   }
   return total
 }
+
+// A branch changes a module-level variable. Each branch runs on its own
+// copy of the globals, so the change is the branch's alone.
+let counter = 0
+
+node withGlobal(): number {
+  const items = [1]
+  const doubled = fork(items) as item {
+    counter = counter + item
+    const twice = item * 2
+    return twice
+  }
+  return counter
+}

@@ -150,6 +150,27 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("step back from a breakpoint reached under continue stays in the tool", async () => {
+    // `continue` runs through the llm() line without stopping. Its frame
+    // keeps the step's flag while the call runs, so the rolling checkpoint
+    // inside the tool carries it and the rewind replays through the
+    // llm() line instead of stopping there.
+    await withLLMMocks(agentMocks({ breakInSearch: true }), async () => {
+      const session = await agentSession();
+      await session.press("c");
+      expect(lineWithMarker(session)).toContain('debugger("in search")');
+      const requestsBefore = modelRequests(session);
+      await session.press("up");
+      expect(lineWithMarker(session)).toContain("if (breakHere)");
+      expect(modelRequests(session)).toBe(requestsBefore);
+      // The breakpoint is met again on the way out.
+      await session.press("c");
+      expect(lineWithMarker(session)).toContain('debugger("in search")');
+      await session.press("c");
+      expect(await session.quit()).toBe(FINAL);
+    });
+  });
+
   it("step back inside the tool lands on its previous statement without a model request", async () => {
     await withLLMMocks(agentMocks(), async () => {
       const session = await agentSession();
@@ -292,5 +313,32 @@ describe("stopping inside a fork branch", () => {
     );
     await session.press("c");
     expect(await session.quit()).toBe(12);
+  });
+
+  it("a global changed in a branch shows the branch's value, and keeps it through a rewind", async () => {
+    const session = await forkSession("withGlobal");
+    await session.press("n", { times: 3 });
+    expect(lineWithMarker(session)).toContain("counter = counter + item");
+    await session.press("n");
+    expect(lineWithMarker(session)).toContain("const twice");
+    // The branch runs on its own copy of the globals; print reads that copy.
+    await session.press("p");
+    await session.type("counter");
+    expect(session.ui.state.getActivityLog()).toContainEqual("counter = 1");
+    // The rolling checkpoint of `const twice` was taken after the
+    // assignment ran, so the branch's copy in it must already hold 1: the
+    // replay skips the assignment.
+    await session.press("n");
+    expect(lineWithMarker(session)).toContain("return twice");
+    await session.press("up");
+    expect(lineWithMarker(session)).toContain("const twice");
+    await session.press("p");
+    await session.type("counter");
+    expect(session.ui.state.getActivityLog().filter((line) => line === "counter = 1")).toHaveLength(
+      2,
+    );
+    await session.press("c");
+    // The branch's change is its own: the node returns the root's value.
+    expect(await session.quit()).toBe(0);
   });
 });

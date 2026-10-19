@@ -171,6 +171,40 @@ describe("Checkpoint", () => {
       expect(cp.frameAt(["tool_0_missing"])).toBeUndefined();
     });
 
+    it("reads the globals of the nearest branch with its own copy", () => {
+      const rootGlobals = makeGlobalsJSON({ m: { counter: 0 } });
+      const forkGlobals = makeGlobalsJSON({ m: { counter: 1 } });
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            scopeName: "runPrompt",
+            branches: {
+              // A tool call shares the globals: no copy of its own.
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  {
+                    scopeName: "search",
+                    branches: {
+                      fork_1: {
+                        stack: makeStackJSON([{ scopeName: "fork", locals: {} }]),
+                        globalsJSON: forkGlobals,
+                      },
+                    },
+                  },
+                ]),
+              },
+            },
+          },
+        ]),
+        globals: rootGlobals,
+        nodeId: "n1",
+      });
+      expect(cp.globalsAt([])).toBe(rootGlobals);
+      expect(cp.globalsAt(["tool_0_abc"])).toBe(rootGlobals);
+      expect(cp.globalsAt(["tool_0_abc", "fork_1"])).toBe(forkGlobals);
+    });
+
     it("writes the branch path to JSON only when it is not empty", () => {
       const root = new Checkpoint({
         id: 0,

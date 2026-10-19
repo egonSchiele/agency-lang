@@ -207,10 +207,13 @@ export class DebuggerDriver {
           // position, so we re-render without a new checkpoint.
           const nonSteppingCommands = ["set", "print", "checkpoint"];
           const skipCheckpoint = lastCommand && nonSteppingCommands.includes(lastCommand.type);
-          await this.ui.render(
-            skipCheckpoint ? undefined : interrupt.checkpoint,
-            stopOf(interrupt),
-          );
+          const stop = stopOf(interrupt);
+          // A stop of the tool loop's own has no source line, so the
+          // activity log says where the loop is.
+          if (!skipCheckpoint && stop && stop.kind !== "step") {
+            this.ui.state.log(`Stopped before ${stop.label}`);
+          }
+          await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches

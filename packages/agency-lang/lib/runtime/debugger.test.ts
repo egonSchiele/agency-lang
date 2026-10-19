@@ -164,6 +164,7 @@ describe("debugStep()", () => {
       stepPath: "1",
       branchPath: [],
       label: "my-label",
+      kind: "step",
     });
   });
 

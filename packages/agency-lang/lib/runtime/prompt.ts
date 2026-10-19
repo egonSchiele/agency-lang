@@ -41,7 +41,13 @@ import { hasInterrupts, isRejected } from "./interrupts.js";
 import { withHostKeys, type PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
-import { BranchRunner, PromptBailout, PromptRunner } from "./promptRunner.js";
+import {
+  BranchRunner,
+  PromptBailout,
+  PromptRunner,
+  toolStopLabel,
+  type LoopStop,
+} from "./promptRunner.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
@@ -727,6 +733,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const pr = new PromptRunner({
     self,
     ctx,
+    run,
     log: run.log,
     stateStack,
     checkpointInfo,
@@ -801,6 +808,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const requestStepWithTripRetry = async (
     key: string,
     body: () => Promise<void>,
+    stop: LoopStop,
   ): Promise<void> => {
     let gateAttempt = 0;
     while (true) {
@@ -818,7 +826,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         continue; // re-probe: each budget is owed its own question
       }
       try {
-        await pr.step(key, body);
+        await pr.step(key, body, stop);
         return;
       } catch (e) {
         if (!(e instanceof GuardTripRetry)) throw e;
@@ -842,59 +850,65 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     });
     // Initial LLM call wrapped in pr.step so it's idempotent on resume
     // (re-entries after a later tool-batch bailout skip this step).
-    await requestStepWithTripRetry("initialLlmCall", async () => {
-      let injectedFactsContent: string | null = null;
-      const recallManager = ctx.getActiveMemoryManager(run.stack);
-      if (memoryOption && recallManager) {
+    // The debugger's `round 1` stop comes before the request, so a person
+    // can change the thread before the model sees it.
+    await requestStepWithTripRetry(
+      "initialLlmCall",
+      async () => {
+        let injectedFactsContent: string | null = null;
+        const recallManager = ctx.getActiveMemoryManager(run.stack);
+        if (memoryOption && recallManager) {
+          try {
+            const facts = await recallManager.recallForInjection(run, promptText(prompt));
+            if (facts) {
+              injectedFactsContent = `Relevant context from memory:\n${facts}`;
+              messages.push(smoltalk.systemMessage(injectedFactsContent));
+            }
+          } catch (err) {
+            // Guard trips are signals, not best-effort failures — let
+            // them bubble to the surrounding `withCostGuard` scope.
+            if (isGuardExceededError(err)) throw err;
+            ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
+          }
+        }
+        // The llmCall span is already open (before the loop). On error,
+        // the outer `finally` closes it. The injected-facts removal is a
+        // finally so a GuardTripRetry unwind cannot leave the recall
+        // message in the thread and duplicate it on re-issue.
         try {
-          const facts = await recallManager.recallForInjection(run, promptText(prompt));
-          if (facts) {
-            injectedFactsContent = `Relevant context from memory:\n${facts}`;
-            messages.push(smoltalk.systemMessage(injectedFactsContent));
-          }
-        } catch (err) {
-          // Guard trips are signals, not best-effort failures — let
-          // them bubble to the surrounding `withCostGuard` scope.
-          if (isGuardExceededError(err)) throw err;
-          ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
-        }
-      }
-      // The llmCall span is already open (before the loop). On error,
-      // the outer `finally` closes it. The injected-facts removal is a
-      // finally so a GuardTripRetry unwind cannot leave the recall
-      // message in the thread and duplicate it on re-issue.
-      try {
-        const result = await _runPrompt({
-          run,
-          messages,
-          tools: tools || [],
-          prompt,
-          responseFormat,
-          clientConfig,
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = result.messages;
-        toolCalls = result.toolCalls;
-        lastStopReason = result.stopReason;
-        lastUsageKind = result.usageKind;
-      } finally {
-        if (injectedFactsContent !== null) {
-          const injectedIndex = messages
-            .getMessages()
-            .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
-          if (injectedIndex !== -1) {
-            // removeAt, not setMessages: this edits ONE message out of
-            // the thread, so it must not reset the labels of all the
-            // others.
-            messages.removeAt(injectedIndex);
+          const result = await _runPrompt({
+            run,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+            callLabel,
+          });
+          messages = result.messages;
+          toolCalls = result.toolCalls;
+          lastStopReason = result.stopReason;
+          lastUsageKind = result.usageKind;
+        } finally {
+          if (injectedFactsContent !== null) {
+            const injectedIndex = messages
+              .getMessages()
+              .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
+            if (injectedIndex !== -1) {
+              // removeAt, not setMessages: this edits ONE message out of
+              // the thread, so it must not reset the labels of all the
+              // others.
+              messages.removeAt(injectedIndex);
+            }
           }
         }
-      }
-      self.messagesJSON = snapshotThread();
-      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-    });
+        self.messagesJSON = snapshotThread();
+        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+      },
+      { kind: "round", label: "round 1" },
+    );
 
     // Inner helper for the per-branch tool invocation. Extracted from
     // the pr.parallel branchFn so that arrow stays within the
@@ -1691,6 +1705,17 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // of a handoff body paused in the second batch.
         self.runnerState.finishedFirstBatches ??= [];
         if (!self.runnerState.finishedFirstBatches.includes(round)) {
+          // The debugger's stop before each tool call, one per call in
+          // order, on this frame rather than inside the call's branch:
+          // a stop inside each branch would raise one debug interrupt per
+          // call in a single batch, which the driver shows one of.
+          for (const item of dispatchItems) {
+            const { namedArgs } = gateInputFor(item.toolCall);
+            await pr.step(`${invocationKeyFor(item)}.before`, async () => undefined, {
+              kind: "tool",
+              label: toolStopLabel(item.toolCall.name, namedArgs),
+            });
+          }
           const firstResult = await runDispatchBatch(
             `round.${round}.tools`,
             dispatchItems,
@@ -1785,28 +1810,32 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // span stays open across rounds (one span per llm() call), so we
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
-        await requestStepWithTripRetry(`round.${round}.nextLlmCall`, async () => {
-          const nextResult = await _runPrompt({
-            run,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = nextResult.messages;
-          toolCalls = nextResult.toolCalls;
-          lastStopReason = nextResult.stopReason;
-          lastUsageKind = nextResult.usageKind;
-          // Increment the round counter only after a successful LLM round,
-          // so resume after a tool-batch interrupt re-enters the SAME round.
-          self.toolCallRound = round + 1;
-          self.messagesJSON = snapshotThread();
-          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-        });
+        await requestStepWithTripRetry(
+          `round.${round}.nextLlmCall`,
+          async () => {
+            const nextResult = await _runPrompt({
+              run,
+              messages,
+              tools: tools || [],
+              prompt,
+              responseFormat,
+              clientConfig,
+              stateStack,
+              retryPolicy,
+              callLabel,
+            });
+            messages = nextResult.messages;
+            toolCalls = nextResult.toolCalls;
+            lastStopReason = nextResult.stopReason;
+            lastUsageKind = nextResult.usageKind;
+            // Increment the round counter only after a successful LLM round,
+            // so resume after a tool-batch interrupt re-enters the SAME round.
+            self.toolCallRound = round + 1;
+            self.messagesJSON = snapshotThread();
+            self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+          },
+          { kind: "round", label: `round ${round + 2}` },
+        );
       }
       // Tool calls are drained. No schema means nothing to validate; the
       // plain-content return after the finally handles it — but first,
@@ -1889,29 +1918,33 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         `validation.${validationAttempt}.guardFeedback`,
         boundaryCtx(),
       );
-      await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
-        const nextResult = await _runPrompt({
-          run,
-          messages,
-          tools: tools || [],
-          prompt,
-          responseFormat,
-          clientConfig,
-          stateStack,
-          retryPolicy,
-          callLabel,
-        });
-        messages = nextResult.messages;
-        toolCalls = nextResult.toolCalls;
-        lastStopReason = nextResult.stopReason;
-        lastUsageKind = nextResult.usageKind;
-        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
-        // bailout before this step completes leaves the counter unchanged,
-        // so resume re-enters the SAME attempt with the same step keys.
-        self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = snapshotThread();
-        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-      });
+      await requestStepWithTripRetry(
+        `validation.${validationAttempt}.llmCall`,
+        async () => {
+          const nextResult = await _runPrompt({
+            run,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+            callLabel,
+          });
+          messages = nextResult.messages;
+          toolCalls = nextResult.toolCalls;
+          lastStopReason = nextResult.stopReason;
+          lastUsageKind = nextResult.usageKind;
+          // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+          // bailout before this step completes leaves the counter unchanged,
+          // so resume re-enters the SAME attempt with the same step keys.
+          self.validationAttempt = validationAttempt + 1;
+          self.messagesJSON = snapshotThread();
+          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+        },
+        { kind: "round", label: `validation retry ${validationAttempt + 1}` },
+      );
       // Loop: the retry response may itself contain tool calls; the inner
       // loop drains them before validation runs again.
     }

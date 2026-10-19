@@ -150,6 +150,7 @@ describe("UIState", () => {
         stepPath: "1",
         branchPath: ["tool_0_abc"],
         label: null,
+        kind: "step",
       });
       expect(ui.getArgs()).toEqual([{ key: "query", value: "grant", override: undefined }]);
       expect(ui.getLocals()).toEqual([
@@ -157,10 +158,28 @@ describe("UIState", () => {
       ]);
     });
 
-    it("without a stop record, shows the checkpoint's own frame", async () => {
+    // A checkpoint whose own location is the tool loop's (scope runPrompt)
+    // is one of the loop's stops, before a request or a tool call. It has
+    // no source line, and its locals are the caller's.
+    it("without a stop record, a loop checkpoint shows the caller's frame", async () => {
       const ui = new UIState();
       await ui.setCheckpoint(sharedCheckpoint());
-      expect(ui.getLocals()).toEqual([{ key: "messagesJSON", value: [], override: undefined }]);
+      expect(ui.getArgs()).toEqual([{ key: "task", value: "research", override: undefined }]);
+      expect(ui.getLocals()).toEqual([{ key: "answer", value: null, override: undefined }]);
+    });
+
+    it("a loop stop keeps the caller's frame and asks for no source line", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(sharedCheckpoint(), {
+        moduleId: "",
+        scopeName: "runPrompt",
+        stepPath: "1/round.0.tool.0_abc.before",
+        branchPath: [],
+        label: 'search(query: "grant")',
+        kind: "tool",
+      });
+      expect(ui.getLocals()).toEqual([{ key: "answer", value: null, override: undefined }]);
+      expect(ui.getActivityLog()).toEqual([]);
     });
   });
 

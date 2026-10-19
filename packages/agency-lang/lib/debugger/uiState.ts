@@ -92,6 +92,24 @@ export class UIState {
       return;
     }
     this.checkpoint = cp;
+    // One of the tool loop's own stops, before a model request or a tool
+    // call, has no source line: the `llm()` statement stays highlighted
+    // and the locals are those of the frame that called it, the one
+    // under the runPrompt frame. A rolling checkpoint taken at such a
+    // stop names the runPrompt scope.
+    const loopStop = stop ? stop.kind !== "step" : cp.scopeName === "runPrompt";
+    if (loopStop) {
+      const caller = cp.stack.stack?.at(-2);
+      if (!caller) {
+        this.log("No calling frame available in checkpoint");
+        return;
+      }
+      this.args = [];
+      this.locals = [];
+      this.setWithOverrides(caller.args, this.args);
+      this.setWithOverrides(caller.locals, this.locals);
+      return;
+    }
     this.location = stop ?? cp.location;
     const frame = cp.frameAt(this.location.branchPath ?? []);
     if (!frame) {

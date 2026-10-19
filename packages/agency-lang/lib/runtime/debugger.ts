@@ -14,6 +14,11 @@ import type { Run } from "./asyncContext.js";
  *  `runPrompt` frame, whose location is the loop's. The driver reads the
  *  source line from this record and finds the stopped frame in the
  *  checkpoint by `branchPath` (`Checkpoint.frameAt`). */
+/** What kind of place a debug stop is at: a statement in Agency code, or
+ *  one of the tool loop's own stops, before a model request (`round`) or
+ *  before a tool call (`tool`). The loop's stops have no source line. */
+export type DebugStopKind = "step" | "round" | "tool";
+
 export type DebugStopData = {
   moduleId: string;
   scopeName: string;
@@ -21,6 +26,7 @@ export type DebugStopData = {
   /** Branch keys from the root down to the stack the step ran on. */
   branchPath: string[];
   label: string | null;
+  kind: DebugStopKind;
 };
 
 export function isDebugStop(data: unknown): data is DebugStopData {
@@ -37,6 +43,8 @@ export async function debugStep(
     label: string | null;
     nodeContext: boolean;
     isUserAdded: boolean;
+    /** Defaults to `"step"`, a statement in Agency code. */
+    kind?: DebugStopKind;
   },
   stack: StateStack,
 ): Promise<Interrupt[] | undefined> {
@@ -123,7 +131,7 @@ export async function debugStep(
   }
 
   dbg.stoppedAt(depth);
-  const stop: DebugStopData = { ...location, label: info.label };
+  const stop: DebugStopData = { ...location, label: info.label, kind: info.kind ?? "step" };
   const debugInterrupt = createDebugInterrupt(stop, checkpointId, checkpoint, ctx.getRunId());
 
   return [debugInterrupt];

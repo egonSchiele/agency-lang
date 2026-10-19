@@ -16,6 +16,8 @@ A `step()` body returns either `void` (happy path) or `Interrupt[]`. The body re
 3. Attaches the checkpoint to every interrupt in the batch and emits a `checkpointCreated` statelog event.
 4. Throws `PromptBailout`, which is caught at the top of `runPrompt` and converted to a return value (the interrupts).
 
+A `step()` may also take a third argument, a `LoopStop` (`{ kind: "round" | "tool", label }`). When a debugger is attached, the step then stops before its body runs, through `debugStep`, with the same bailout as an interrupt from the body. A `__dbg_<key>` flag in the frame's locals makes a resume that re-enters the step skip the stop; the flag is cleared when the body completes. See "Stops between tool calls" in `docs/dev/cli/debugger.md`.
+
 The completed-keys list (`self.runnerState.completedSteps`) is **not** updated on bailout. On resume, the step body re-runs. If the user has responded to the interrupt, the tool's saved `__interruptId_N` matches the response and proceeds normally; the step then runs to completion and gets marked done.
 
 ## Resume re-runs the code between steps

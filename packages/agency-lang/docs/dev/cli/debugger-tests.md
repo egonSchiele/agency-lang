@@ -331,7 +331,7 @@ await withLLMMocks(mocks, async () => {
 });
 ```
 
-Write the queue in the order the program asks for replies. A subagent's request comes while the outer call waits for its tool, so it sits between that tool's call and the next reply to the outer call. A `{ toolCalls: [...] }` entry makes one round call several tools at once. The compiled fixture imports the stdlib by package name, so the stdlib has to be built (`make`) before these tests run. `lib/debugger/agentShaped.test.ts` is the worked example.
+Write the queue in the order the program asks for replies. A subagent's request comes while the outer call waits for its tool, so it sits between that tool's call and the next reply to the outer call. A `{ toolCalls: [...] }` entry makes one round call several tools at once. The compiled fixture imports the runtime and the stdlib by package name, which resolve to `dist/`, so run `make` after a runtime change before these tests, or they run the old runtime. Do not run `agency run` on a fixture in `tests/debugger/`: it leaves a compiled `.js` beside the `.ts`, which registers a second fingerprint for the same module, and the first resume in the suite fails with "the code has changed since this checkpoint was created". `lib/debugger/agentShaped.test.ts` is the worked example.
 
 ### Visual debugging with HTML export
 

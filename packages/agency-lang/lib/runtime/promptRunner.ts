@@ -1,5 +1,6 @@
 import type { Run } from "./asyncContext.js";
 import type { StatelogClient } from "../statelogClient.js";
+import { debugStep } from "./debugger.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
@@ -39,10 +40,33 @@ export type RunnerState = {
   completedSteps: string[];
 };
 
+/** One of the tool loop's own debugger stops: before a model request
+ *  (`round`) or before a tool call (`tool`). The label is what the
+ *  debugger shows, since these stops have no source line. */
+export type LoopStop = {
+  kind: "round" | "tool";
+  label: string;
+};
+
+/** The debugger's label for a stop before a tool call: the call as the
+ *  activity log prints it, with each argument cut to a readable length. */
+export function toolStopLabel(name: string, args: Record<string, unknown>): string {
+  const shown = Object.entries(args).map(([key, value]) => {
+    const text = JSON.stringify(value) ?? "undefined";
+    const cut = text.length > TOOL_STOP_ARG_CHARS ? text.slice(0, TOOL_STOP_ARG_CHARS) + "…" : text;
+    return `${key}: ${cut}`;
+  });
+  return `${name}(${shown.join(", ")})`;
+}
+
+const TOOL_STOP_ARG_CHARS = 40;
+
 export type PromptRunnerOpts = {
   /** Frame-local `self` object (== the function's locals bag). */
   self: any;
   ctx: RuntimeContext<any>;
+  /** The run `runPrompt` was called under, for the debugger's stops. */
+  run: Run;
   /** The logger of the run `runPrompt` was called under. `step()` runs in
    *  that run's own flow, never inside a tool branch. */
   log: StatelogClient;
@@ -104,36 +128,89 @@ export class PromptRunner {
    * `stepPath` and the checkpoint store could not tell them apart on
    * resume.
    */
-  async step(key: string, body: () => Promise<Interrupt[] | void>): Promise<void> {
+  async step(key: string, body: () => Promise<Interrupt[] | void>, stop?: LoopStop): Promise<void> {
     if (this.opts.self.runnerState.completedSteps.includes(key)) return;
+    if (stop) {
+      const halted = await this.debugStop(key, stop);
+      if (halted) {
+        this.bailOut(key, halted);
+      }
+    }
     const result = await body();
     if (result && hasInterrupts(result)) {
-      this.opts.self.messagesJSON = this.opts.snapshotMessages();
-      const basePath = this.opts.checkpointInfo?.stepPath ?? "";
-      const stepPath = basePath ? `${basePath}/${key}` : key;
-      this.opts.stateStack.assertNoExecutingHandlers();
-      const cpId = this.opts.ctx.checkpoints.create(this.opts.stateStack, this.opts.ctx, {
-        moduleId: this.opts.checkpointInfo?.moduleId ?? "",
-        scopeName: this.opts.checkpointInfo?.scopeName ?? "",
-        stepPath,
-      });
-      const cp = this.opts.ctx.checkpoints.get(cpId)!;
-      for (const intr of result) {
-        intr.checkpoint = cp;
-        intr.checkpointId = cpId;
-      }
-      this.opts.log.checkpointCreated({
-        checkpointId: cpId,
-        reason: "interrupt",
-        sourceLocation: {
-          moduleId: cp.moduleId,
-          scopeName: cp.scopeName,
-          stepPath: cp.stepPath,
-        },
-      });
-      throw new PromptBailout(result);
+      this.bailOut(key, result);
+    }
+    if (stop) {
+      delete this.opts.self[debugFlagKey(key)];
     }
     this.opts.self.runnerState.completedSteps.push(key);
+  }
+
+  /** Snapshot the thread, stamp a checkpoint against the runPrompt frame's
+   *  stack at this step, attach it to every interrupt, and throw
+   *  `PromptBailout` so `runPrompt` returns the batch. */
+  private bailOut(key: string, interrupts: Interrupt[]): never {
+    this.opts.self.messagesJSON = this.opts.snapshotMessages();
+    this.opts.stateStack.assertNoExecutingHandlers();
+    const cpId = this.opts.ctx.checkpoints.create(this.opts.stateStack, this.opts.ctx, {
+      moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+      scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+      stepPath: this.stepPathFor(key),
+    });
+    const cp = this.opts.ctx.checkpoints.get(cpId)!;
+    for (const intr of interrupts) {
+      intr.checkpoint = cp;
+      intr.checkpointId = cpId;
+    }
+    this.opts.log.checkpointCreated({
+      checkpointId: cpId,
+      reason: "interrupt",
+      sourceLocation: {
+        moduleId: cp.moduleId,
+        scopeName: cp.scopeName,
+        stepPath: cp.stepPath,
+      },
+    });
+    throw new PromptBailout(interrupts);
+  }
+
+  /** The debugger's stop before a step's body, when a debugger is
+   *  attached. Works like `Runner.maybeDebugHook`: a flag in the
+   *  runPrompt frame's locals is set before the hook fires, so a resume
+   *  that re-enters the same step finds it and skips the stop; `step`
+   *  clears it once the body completes. Scope `runPrompt` and an empty
+   *  module id say the stop has no source line. The stop runs on the
+   *  runPrompt frame, one level under the statement that called `llm()`,
+   *  so `next` at the statement runs the whole call and `next` at a stop
+   *  moves to the loop's next stop over a tool's body. */
+  private async debugStop(key: string, stop: LoopStop): Promise<Interrupt[] | undefined> {
+    if (!this.opts.ctx.hasDebugger()) return undefined;
+    const flag = debugFlagKey(key);
+    if (this.opts.self[flag]) return undefined;
+    this.opts.self[flag] = true;
+    const halted = await debugStep(
+      this.opts.run,
+      {
+        moduleId: "",
+        scopeName: "runPrompt",
+        stepPath: this.stepPathFor(key),
+        label: stop.label,
+        kind: stop.kind,
+        nodeContext: false,
+        isUserAdded: false,
+      },
+      this.opts.stateStack,
+    );
+    if (halted) return halted;
+    delete this.opts.self[flag];
+    return undefined;
+  }
+
+  /** `${checkpointInfo.stepPath}/${key}`, so every step of one `runPrompt`
+   *  has its own checkpoint location. */
+  private stepPathFor(key: string): string {
+    const basePath = this.opts.checkpointInfo?.stepPath ?? "";
+    return basePath ? `${basePath}/${key}` : key;
   }
 
   /**
@@ -174,8 +251,7 @@ export class PromptRunner {
   ): Promise<RunBatchResult<void>> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
     const parentFrame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
-    const basePath = this.opts.checkpointInfo?.stepPath ?? "";
-    const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
+    const stepPath = this.stepPathFor(keyPrefix);
 
     const result = await runBatch<void>({
       run,
@@ -262,6 +338,12 @@ export class PromptRunner {
 
     return result;
   }
+}
+
+/** The same `__dbg_` prefix `Runner` uses, so `removeDebugFlagsFor` strips
+ *  the loop's flags from a rolling checkpoint as it strips a statement's. */
+function debugFlagKey(key: string): string {
+  return `__dbg_${key}`;
 }
 
 /**

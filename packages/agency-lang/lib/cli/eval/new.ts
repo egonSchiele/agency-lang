@@ -159,6 +159,9 @@ const DEFAULT_ROWS = 30;
 
 /** The command as the CLI runs it: a real terminal, and `$EDITOR` when set. */
 export async function runEvalNew(suiteDir: string): Promise<void> {
+  // The directory is checked first, so a wrong path is reported even from
+  // a pipe, where the terminal check below would otherwise speak first.
+  assertSuiteDirectory(suiteDir);
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new Error("eval new needs an interactive terminal");
   }

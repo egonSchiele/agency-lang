@@ -13,6 +13,7 @@ import { runViewer } from "@/logsViewer/run.js";
 import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
+import { matchTrace, readTraces, tracesFromText, type Trace } from "@/runDirectory/traces.js";
 import { csvRowsFromRuns, exportCsv } from "@/runsExplorer/csv.js";
 import { loadAllRuns } from "@/runsExplorer/loader.js";
 import { runExplorer } from "@/runsExplorer/run.js";
@@ -26,6 +27,9 @@ import type { OutputTarget } from "@/tui/output/types.js";
 export type LogsViewOpts = {
   follow?: boolean;
   csv?: boolean;
+  /** Open the viewer on this trace (a full id or unique prefix) instead of
+   *  the trace picker. The other traces stay reachable with `t`. */
+  traceId?: string;
   config?: AgencyConfig;
 };
 
@@ -52,6 +56,10 @@ export async function logsView(
     onError(
       "--follow needs exactly one statelog file and cannot combine with --csv or directories",
     );
+    return;
+  }
+  if (cliOpts.traceId !== undefined && (files.length !== 1 || cliOpts.csv === true)) {
+    onError(TRACE_ID_USAGE);
     return;
   }
   const soleFile = files.length === 1 ? files[0] : undefined;
@@ -91,8 +99,44 @@ export async function logsView(
     await (deps.viewRunDirectory ?? viewRunDirectory)(discovery.sources[0].dir, cliOpts);
     return;
   }
+  if (cliOpts.traceId !== undefined) {
+    onError(TRACE_ID_USAGE);
+    return;
+  }
   const explorer = deps.explorer ?? runExplorerOnTerminal;
   await explorer({ sources: discovery.sources, thresholds: cliOpts.config?.viewer });
+}
+
+const TRACE_ID_USAGE =
+  "--trace-id opens the viewer on one trace: it needs exactly one statelog file or run directory and cannot combine with --csv";
+
+/**
+ * The full id of the trace `--trace-id` names, checked before the terminal is
+ * set up so a miss prints as plain text instead of flashing the viewer. A
+ * unique prefix is accepted, as `agency logs extract` accepts one. Returns
+ * undefined when the flag was not given; reports and returns `"missing"` when
+ * no trace matches, so the caller can stop. Exported for its test.
+ */
+export function resolveFocusTrace(
+  traces: readonly Trace[],
+  idOrPrefix: string | undefined,
+  onError: (message: string) => void,
+): string | undefined | "missing" {
+  if (idOrPrefix === undefined) {
+    return undefined;
+  }
+  const match = matchTrace(traces, idOrPrefix);
+  if (match.kind === "one") {
+    return match.trace.traceId;
+  }
+  const known = traces.map((trace) => trace.traceId);
+  if (match.kind === "ambiguous") {
+    onError(`--trace-id ${idOrPrefix} is ambiguous: ${match.ids.join(", ")}`);
+    return "missing";
+  }
+  const found = known.length === 0 ? "the log holds no traces" : `found: ${known.join(", ")}`;
+  onError(`No trace matches --trace-id ${idOrPrefix} (${found})`);
+  return "missing";
 }
 
 function isRegularFile(file: string): boolean {
@@ -140,7 +184,7 @@ type ViewerSource = (
        *  of annotations per trace id, shown on the trace rows. */
       traceAnnotations?: Record<string, string>;
     }
-) & { thresholds?: Partial<ViewerThresholds> };
+) & { thresholds?: Partial<ViewerThresholds>; focusTraceId?: string };
 
 type ViewerTerminalDependencies = {
   createInput(): InputSource;
@@ -224,6 +268,7 @@ function viewerOptions(
       viewport,
       contextWindowOf,
       thresholds: source.thresholds,
+      focusTraceId: source.focusTraceId,
     };
   }
   return {
@@ -236,6 +281,7 @@ function viewerOptions(
     extract: { sourcePath: source.followPath },
     traceAnnotations: source.traceAnnotations,
     thresholds: source.thresholds,
+    focusTraceId: source.focusTraceId,
     contextWindowOf,
   };
 }
@@ -307,6 +353,14 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     if (cliOpts.follow) {
       console.error("--follow ignored when reading from stdin");
     }
+    const focusTraceId = resolveFocusTrace(
+      tracesFromText(jsonl).traces,
+      cliOpts.traceId,
+      exitWithError,
+    );
+    if (focusTraceId === "missing") {
+      return;
+    }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
     // No extract: stdin has no local file to read a trace back from.
     await defaultViewerHost({
@@ -314,6 +368,7 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
       jsonl,
       terminalInput: "controlling-tty",
       thresholds: cliOpts.config?.viewer,
+      focusTraceId,
     });
     return;
   }
@@ -321,11 +376,21 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
+  // Under --follow the named trace may not have started yet, so the viewer
+  // waits for it instead of this check refusing it.
+  const focusTraceId =
+    cliOpts.follow === true
+      ? cliOpts.traceId
+      : resolveFocusTrace(readTraces(file).traces, cliOpts.traceId, exitWithError);
+  if (focusTraceId === "missing") {
+    return;
+  }
   await defaultViewerHost({
     kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
     thresholds: cliOpts.config?.viewer,
+    focusTraceId,
   });
 }
 
@@ -369,11 +434,19 @@ function swapStdinToTty(): () => void {
  *  scores and labels summarised on the trace's row. */
 async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<void> {
   const snapshot = readRunDirectory(dir, { reportWarning: (message) => console.warn(message) });
+  const focusTraceId =
+    cliOpts.follow === true
+      ? cliOpts.traceId
+      : resolveFocusTrace(snapshot.traces, cliOpts.traceId, exitWithError);
+  if (focusTraceId === "missing") {
+    return;
+  }
   await defaultViewerHost({
     kind: "file",
     followPath: runDirPaths(dir).statelog,
     initialFollow: cliOpts.follow === true,
     traceAnnotations: annotationSummaries(snapshot),
     thresholds: cliOpts.config?.viewer,
+    focusTraceId,
   });
 }

@@ -3,7 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { logsView, createViewerHost, type LogsViewDeps } from "./logsView.js";
+import { logsView, createViewerHost, resolveFocusTrace, type LogsViewDeps } from "./logsView.js";
 import type { InputSource } from "@/tui/input/types.js";
 import type { OutputTarget } from "@/tui/output/types.js";
 import { writeGradedRun, writeMultiTraceStatelog } from "../runsExplorer/testFixtures.js";
@@ -341,5 +341,71 @@ describe("createViewerHost lifecycle", () => {
     expect((error as AggregateError).errors.map((e) => (e as Error).message)).toEqual(
       expect.arrayContaining(["primary", "cleanup"]),
     );
+  });
+});
+
+describe("--trace-id", () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "logs-trace-id-"));
+  });
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("reaches the viewer routes for a file and for a run directory", async () => {
+    const file = writeMultiTraceStatelog(tmpDir);
+    const runDir = writeGradedRun(tmpDir);
+    const seen: (string | undefined)[] = [];
+    const deps: LogsViewDeps = {
+      viewFile: async (_file, opts) => {
+        seen.push(opts.traceId);
+      },
+      viewRunDirectory: async (_dir, opts) => {
+        seen.push(opts.traceId);
+      },
+      onError: (message) => {
+        throw new Error(message);
+      },
+    };
+    await logsView([file], { traceId: "abc" }, deps);
+    await logsView([runDir], { traceId: "abc" }, deps);
+    expect(seen).toEqual(["abc", "abc"]);
+  });
+
+  it("is refused with --csv, several paths, or a directory of runs", async () => {
+    const file = writeMultiTraceStatelog(tmpDir);
+    writeGradedRun(tmpDir, "first-run");
+    writeGradedRun(tmpDir, "second-run");
+    for (const [files, opts] of [
+      [[file], { traceId: "abc", csv: true }],
+      [[file, file], { traceId: "abc" }],
+      [[tmpDir], { traceId: "abc" }],
+    ] as const) {
+      const { deps, calls } = seams();
+      await logsView([...files], { ...opts }, deps);
+      expect(calls.errors).toHaveLength(1);
+      expect(calls.errors[0]).toContain("--trace-id");
+      expect(calls.viewed).toEqual([]);
+      expect(calls.explored).toEqual([]);
+    }
+  });
+
+  it("resolves a full id or a unique prefix, and names the traces on a miss", () => {
+    const traces = [
+      { traceId: "k3Pq9abc", events: [], lines: [], digest: "" },
+      { traceId: "k3Pzzzzz", events: [], lines: [], digest: "" },
+    ];
+    const errors: string[] = [];
+    const onError = (message: string): void => {
+      errors.push(message);
+    };
+    expect(resolveFocusTrace(traces, undefined, onError)).toBeUndefined();
+    expect(resolveFocusTrace(traces, "k3Pq9abc", onError)).toBe("k3Pq9abc");
+    expect(resolveFocusTrace(traces, "k3Pq", onError)).toBe("k3Pq9abc");
+    expect(resolveFocusTrace(traces, "k3P", onError)).toBe("missing");
+    expect(errors[0]).toContain("ambiguous");
+    expect(resolveFocusTrace(traces, "nope", onError)).toBe("missing");
+    expect(errors[1]).toContain("k3Pq9abc, k3Pzzzzz");
   });
 });

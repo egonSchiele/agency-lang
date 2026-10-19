@@ -218,3 +218,49 @@ describe("follow mode", () => {
     expect(out.lastText()).not.toContain("beforeTruncate");
   });
 });
+
+describe("follow mode with a trace asked for by id", () => {
+  let dir: string;
+  let file: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "follow-trace-id-"));
+    file = path.join(dir, "statelog.jsonl");
+    fs.writeFileSync(file, bootLine);
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("waits for a trace that has not started yet and focuses it when it arrives", async () => {
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = runViewer({
+      jsonl: fs.readFileSync(file, "utf8"),
+      followPath: file,
+      followIntervalMs: 20,
+      initialFollow: true,
+      focusTraceId: "second",
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 100 },
+    });
+    // A poll with nothing new for the waited-for trace must not jump away.
+    fs.appendFileSync(file, toolLines("s2", "firstTool", 500));
+    await until(() => out.frames.length > 0 && out.lastText().includes("firstTool"), 500).catch(
+      () => {},
+    );
+    expect(out.lastText()).toContain("second");
+    fs.appendFileSync(
+      file,
+      toolLines("new-trace-tool", "arrived", 1000).replaceAll(
+        '"trace_id":"abc"',
+        '"trace_id":"second"',
+      ),
+    );
+    await until(() => out.frames.length > 0 && out.lastText().includes("trace 2/2"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("second");
+    expect(out.lastText()).toContain("trace 2/2");
+  });
+});

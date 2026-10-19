@@ -28,6 +28,17 @@ timeline views (`t`), search, and follow mode. `agency logs view <file>`
 is the same thing spelled explicitly, and `-` reads from stdin. See the
 viewer's own help (`?`) for keys.
 
+A file that holds several traces opens on a list of them. To skip the
+list and open one trace directly, name it:
+
+```bash
+agency logs run.jsonl --trace-id k3Pq9abc   # a full id, or a unique prefix
+```
+
+The other traces stay reachable with `t`. Under `--follow` the trace may
+not have started yet; the viewer then waits on it and shows it when its
+first event arrives.
+
 ## Labeling a trace from the viewer
 
 When you view a **local** statelog file, the tree's `l` key labels the

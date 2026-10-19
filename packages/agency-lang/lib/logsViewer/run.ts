@@ -217,7 +217,7 @@ async function runSession(
     roots = buildForest(reparsed.events);
     parseErrors = reparsed.errors;
     allEvents = reparsed.events;
-    host.setData(roots, mostRecentTraceId(roots));
+    host.setData(roots, fallbackTraceId(roots, host.currentTraceId(), opts.focusTraceId));
     render();
   };
   const toggleFollow = (): void => {
@@ -440,6 +440,24 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
     }
     render();
   }
+}
+
+/**
+ * Where the cursor goes when its trace is not in a fresh forest. A trace asked
+ * for by id under `--follow` may not have started yet: while the viewer is
+ * still on it, keep waiting for it rather than jumping to the newest trace on
+ * the first poll. Once the person moves to another trace, the usual rule
+ * applies.
+ */
+export function fallbackTraceId(
+  roots: TreeNode[],
+  currentTraceId: string,
+  focusTraceId: string | undefined,
+): string {
+  if (focusTraceId !== undefined && currentTraceId === focusTraceId) {
+    return focusTraceId;
+  }
+  return mostRecentTraceId(roots);
 }
 
 /** The trace that started last; the last root when none has a start time. */

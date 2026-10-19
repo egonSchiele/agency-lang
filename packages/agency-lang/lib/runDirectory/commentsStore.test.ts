@@ -45,6 +45,17 @@ describe("openCommentsStore", () => {
     expect(store.read().threads).toHaveLength(1);
   });
 
+  it("refuses to write through a symlinked comments file", () => {
+    const dir = tempDir();
+    const elsewhere = path.join(dir, "elsewhere.jsonl");
+    fs.writeFileSync(elsewhere, "");
+    const sidecar = commentsPathFor({ kind: "runDir", dir });
+    fs.symlinkSync(elsewhere, sidecar);
+    const store = openCommentsStore(sidecar, adit);
+    expect(() => store.add(draft)).toThrow("symlink");
+    expect(fs.readFileSync(elsewhere, "utf8")).toBe("");
+  });
+
   it("repairs a torn final line before appending", () => {
     const dir = tempDir();
     const store = openCommentsStore(commentsPathFor({ kind: "runDir", dir }), adit);

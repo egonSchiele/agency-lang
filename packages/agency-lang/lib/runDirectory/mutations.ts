@@ -143,8 +143,10 @@ function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): 
   const annotationDrafts = request.annotationFiles.flatMap((file) =>
     readAnnotations(file, reportWarning).map(draftOf),
   );
-  const commentRows = request.statelogFiles.flatMap((file) =>
-    readSidecarComments(file, reportWarning),
+  // The same statelog named twice, or two copies sharing a sidecar, must
+  // not copy a comment twice: the first row for each id is kept.
+  const commentRows = uniqueById(
+    request.statelogFiles.flatMap((file) => readSidecarComments(file, reportWarning)),
   );
   const ids = traces.map((trace) => trace.traceId);
   const orphan = annotationDrafts.find((draft) => !ids.includes(draft.traceId));
@@ -201,6 +203,17 @@ function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): 
       };
     });
   return { stagingRoot, writes, skipped };
+}
+
+function uniqueById(rows: Comment[]): Comment[] {
+  const seen: Record<string, true> = Object.create(null);
+  return rows.filter((row) => {
+    if (seen[row.id]) {
+      return false;
+    }
+    seen[row.id] = true;
+    return true;
+  });
 }
 
 /** Wrapping COPIES a statelog's comments into the child run, from wherever
@@ -681,6 +694,28 @@ function appendRows(
 
 // --- appendCommentRow ------------------------------------------------------
 
+/** A comments file is written in place: the torn-tail repair may cut its
+ *  last line and the append adds one. Both must land in the file named,
+ *  never in whatever a symlink points at, so anything but a plain file is
+ *  refused; a missing file is fine, the append creates it. */
+function refuseUnlessRegularFile(commentsPath: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(commentsPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (stat.isSymbolicLink()) {
+    throw new Error(`${commentsPath} is a symlink; comments are only written to a plain file`);
+  }
+  if (!stat.isFile()) {
+    throw new Error(`${commentsPath} is not a plain file, so comments cannot be written to it`);
+  }
+}
+
 /**
  * Append one comment as a durable line, under the lock the comments path
  * decides (`commentsLockFor`): a run directory's `.lock`, or `<sidecar>.lock`
@@ -696,6 +731,7 @@ export function appendCommentRow(
   const reportWarning = options.reportWarning ?? (() => {});
   const lock = acquireOwnedFileLock({ lockFile: commentsLockFor(commentsPath), reportWarning });
   try {
+    refuseUnlessRegularFile(commentsPath);
     repairTornTail(commentsPath);
     const row = CommentSchema.parse({
       v: 1,

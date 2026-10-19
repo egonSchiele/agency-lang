@@ -310,11 +310,14 @@ appends under the lock the path decides (`commentsLockFor`: a run
 directory's `.lock`, or `<sidecar>.lock` beside a loose statelog's
 `<file>.comments.jsonl`, so no `.lock` lands in whatever folder holds the
 statelog). The append is `repairTornTail` plus `appendDurably`, with no
-snapshot, since a comment validates nothing against the trace. The author
+snapshot, since a comment validates nothing against the trace; a comments
+path that is a symlink or not a plain file is refused first, since both
+steps write the named file in place. The author
 is fixed when the store is opened, by whoever knows who is at the
 terminal; the viewer never computes one. Wrapping a loose statelog with
 `agency runs add` copies its trace's comment rows into the child run,
-inside staging, and never rewrites the sidecar. `humanFeedbackFor` lists
+inside staging, once per comment id when a statelog is named twice, and
+never rewrites the sidecar. `humanFeedbackFor` lists
 a person's comments after `notes.md`, worded by their anchor
 (`reviewer · gpt-5: why does it read the config a second time?`), since a
 row id means nothing to an optimizer's model.

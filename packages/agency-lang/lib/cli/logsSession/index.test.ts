@@ -54,6 +54,7 @@ describe("agency logs session against a headless viewer", () => {
         socketPathFor: (record) => recordPaths(sessions, record.pid).sock,
         openStore: openCommentsStore,
         cwd: dir,
+        pathKind: (absolutePath) => (fs.existsSync(absolutePath) ? "file" : "missing"),
       },
       writeStdout: (text) => {
         printed.push(text);

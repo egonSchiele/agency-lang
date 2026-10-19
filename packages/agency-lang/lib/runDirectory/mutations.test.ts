@@ -254,6 +254,23 @@ describe("wrapping a statelog that has a comments sidecar", () => {
     expect(secondRun.comments.threads.map((thread) => thread.comment.text)).toEqual(["on t2"]);
     expect(fs.readFileSync(store.path, "utf8")).toBe(before);
   });
+
+  it("copies each comment once when the same statelog is named twice", () => {
+    const file = path.join(tempDir("log-"), "run.jsonl");
+    fs.writeFileSync(file, agentStartLine("t1") + "\n");
+    const store = openCommentsStore(commentsPathFor(commentsSourceForStatelog(file)), human);
+    store.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "once" });
+
+    const group = tempDir();
+    wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [file, file],
+      codeEntries: [],
+      annotationFiles: [],
+    });
+    const run = readRunDirectory(path.join(group, "t1"), quiet);
+    expect(run.comments.threads.map((thread) => thread.comment.text)).toEqual(["once"]);
+  });
 });
 
 describe("wrapping a loose file named statelog.jsonl", () => {

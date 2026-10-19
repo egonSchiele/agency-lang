@@ -869,10 +869,9 @@ describe("the session", () => {
     expect(out.lastText()).toContain("[2 trace]");
     const top = await request(sock, { op: "get" });
     expect(top).toMatchObject({ ok: true, focus: { screen: "trace" } });
-    if (top.ok) {
-      expect(top.focus.rowId).toBeDefined();
-      expect(top.focus.rowId).not.toBe("round:s2:0");
-    }
+    const topRow = top.ok ? top.focus?.rowId : undefined;
+    expect(topRow).toBeDefined();
+    expect(topRow).not.toBe("round:s2:0");
     expect(await request(sock, { op: "pick" })).toEqual({ ok: true });
     expect(out.lastText()).toContain("TRACES");
     input.feedKey({ key: "escape" });

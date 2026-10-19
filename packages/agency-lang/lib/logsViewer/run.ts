@@ -1056,18 +1056,25 @@ function makeCommentsSource(args: {
     }
     args.render();
   };
+  let lastStatError: string | undefined;
   return {
     available: true,
     refresh,
     refreshIfChanged: () => {
       // Runs from the follow timer, where a throw would kill the viewer
-      // with the terminal in raw mode; a stat failure is a notice instead.
+      // with the terminal in raw mode; a stat failure is a notice instead,
+      // posted once per distinct message rather than on every tick.
       let changed = false;
       try {
         changed = store.changedSince();
+        lastStatError = undefined;
       } catch (error) {
-        args.notify(`comments not read: ${(error as Error).message}`);
-        args.render();
+        const message = `comments not read: ${(error as Error).message}`;
+        if (message !== lastStatError) {
+          lastStatError = message;
+          args.notify(message);
+          args.render();
+        }
       }
       if (changed) {
         refresh();

@@ -82,13 +82,15 @@ step address a resume can re-enter, so it must stay atomic. A tool body is
 ordinary stepped code.
 
 **The checkpoint comes from the wrong stack.** `debugStep` builds the
-halting checkpoint with `Checkpoint.fromContext(ctx)`, which reads
-`ctx.stateStack`, the root. Inside a branch that breaks the slice rule in
+halting checkpoint with `ctx.checkpoints.create(ctx.stateStack, ...)`, the
+root. Inside a branch that breaks the slice rule in
 `concurrent-interrupts.md`: `setInterruptOnBranch` would store a root
 checkpoint on the branch, `State.toJSON` would put the root's stack in the
 branch's slot, and the resume would consume the wrong frames first. The
 leaf template and `raiseGuardTripsAtStep` both stamp from the local stack
-for this reason.
+for this reason. Fork, race, and parallel-block branches are not tool
+calls, so the hook already fires in them today and already stamps from the
+wrong stack. No debugger test covers a fork, which is why nobody noticed.
 
 **The loop has no hook.** `PromptRunner.step` runs the loop's round and
 tool-call steps as idempotent steps with their own bailout, but never calls
@@ -96,11 +98,14 @@ tool-call steps as idempotent steps with their own bailout, but never calls
 tool runs".
 
 **The driver assumes the root.** The UI reads locals from the checkpoint's
-last frame and maps the checkpoint's `moduleId:scopeName#stepPath` to a
-source line. After the join, the interrupt's checkpoint is the shared one:
-its last frame is the `runPrompt` frame, and its location is the loop's
-batch location, not the tool's step. The debugger would highlight the
-wrong line and show the wrong locals.
+last root frame and maps the checkpoint's `moduleId:scopeName#stepPath` to
+a source line. After the join, the interrupt's checkpoint is the shared
+one: its last root frame is the `runPrompt` frame, and its location is the
+loop's batch location, not the tool's step. The debugger would highlight
+the wrong line and show the wrong locals. Rolling checkpoints have the same
+problem from the other side: they are stamped from the root, so for a step
+inside a tool their last root frame is `runPrompt`'s, and nothing records
+which branch the step ran on.
 
 ## Design
 
@@ -121,32 +126,47 @@ layer between the tool and the node handles it with the code it has.
 
 The hook fires at every step except inside a handler body or a callback
 body, which is the same rule `pauseIfRequested` applies for the same
-reason: neither has a step address.
+reason: neither has a step address. The check is
+`stack.hasExecutingHandlers() || isInsideCallback(run)`, and
+`maybeDebugHook` stops reading `isInsideToolCall()`.
 
-`enterToolCall` and `exitToolCall` stop serving two purposes. The handler
-site in `interrupts.ts` marks handler execution the way it already does on
-the stack (`executingHandlerEntries`), and the debugger checks
-`stack.hasExecutingHandlers()` and `isInsideCallback(run)`. The tool-call
-depth stays for the code that still needs it, and `maybeDebugHook` stops
-reading it.
+`hasExecutingHandlers()` covers the case that matters for handler safety:
+a tool called by an `llm()` inside a handler body. `runBatch` copies the
+parent's handler marks into every branch it starts, so the tool's branch
+stack carries the mark and its steps do not stop.
+
+The `enterToolCall` and `exitToolCall` pair around the handler body in
+`interrupts.ts` stays as it is. Once the debugger no longer reads the
+counter, the pair serves only `_insideToolCall()` in `stdlib/thread.ts`,
+which decides whether `attachToReply` does anything and whether `viewFile`
+may report success. Changing that is a separate change to two stdlib
+functions with its own test, not part of this work.
 
 A `debugger("label")` statement inside a tool body follows the same rule,
 so a breakpoint placed in a tool works under `continue`.
 
-### D3. The halting checkpoint is stamped from the local stack
+### D3. Which stack each checkpoint is stamped from
 
-`debugStep` already receives the runner's stack as its third argument. The
-checkpoint it attaches to the debug interrupt is created from that stack,
-as the leaf template and the guard trip do. At the top level the local
-stack is the root stack, so nothing changes there.
+`debugStep` requires the runner's stack. The checkpoint it attaches to the
+debug interrupt is created from that stack, as the leaf template and the
+guard trip do. At the top level the local stack is the root stack, so
+nothing changes there. This fixes forks, races, and parallel blocks at the
+same time as tool calls.
 
 Rolling checkpoints, the ones the rewind selector lists, keep being stamped
 from the root stack. A root checkpoint taken while a tool runs includes the
 live branch stacks through `State.toJSON`, so it is the one a rewind can
-replay. Whether a rewind to such a checkpoint re-enters the tool at its
-saved step is the question ADI-16 answers with a test; the reading of
-`runBatch` and `State.deserializeMode` says it should, since both recurse
-into branches and `runPrompt` re-invokes any branch without a result.
+replay: `runBatch` and `State.deserializeMode` both recurse into branches,
+and `runPrompt` re-invokes any branch without a result.
+
+Trace checkpoints (`--trace`) keep recording root-stack steps only. A trace
+checkpoint is a copy of the whole root stack, including the `runPrompt`
+frame's `messagesJSON`, so recording one at every step inside every tool
+would multiply a trace of an agent run by the number of tool statements.
+For the motivating run that is about 350 copies of a growing conversation
+in place of two. Tracing inside tools waits for a design that records a
+branch checkpoint as a delta, and until then a trace replay cannot step
+inside a tool.
 
 ### D4. The interrupt carries its own location
 
@@ -159,26 +179,45 @@ type DebugStopData = {
   moduleId: string;
   scopeName: string;
   stepPath: string;
+  /** Branch keys from the root down to the stack the step ran on. */
+  branchPath: string[];
   label: string | null;
-  /** A statement in Agency code, a model request, or a tool dispatch. */
-  kind: "step" | "round" | "tool";
 };
 ```
 
-Today `data` is the label alone. The UI reads the source line from this
-record and uses the checkpoint only for state.
+Today `data` is the label alone. The UI reads the source line and the
+frame from this record and uses the checkpoint only for state. The `:save`
+command writes a rolling checkpoint, not an interrupt, so no saved file
+holds the old shape.
 
-### D5. The halt path: where in the tree the stop is
+### D5. Every checkpoint records its branch path
 
-A checkpoint is a tree of stacks. The driver finds the stopped frame by
-walking it: start at the root's last frame; if it has a branch whose
-`interruptId` is the debug interrupt's id, descend into that branch's stack
-and repeat; the last frame reached is the stopped one. Nothing new is
-stored. The tool loop sets `interruptId` on the branch today through
-`setInterruptOnBranch`, and a fork inside a tool sets it one level down.
+A checkpoint is a tree of stacks. To find the frame a checkpoint was taken
+in, the checkpoint records the path to it: the list of branch keys from
+the root to the stack the step ran on, for example
+`["tool_0_call_abc", "fork_1"]`. The root stack's path is empty.
 
-The UI shows that frame's locals and args in the locals pane, and the whole
-path in the call stack pane: `main › llm() round 3 › search › fork[2]`.
+A branch stack learns its path when `runBatch` starts it: the parent
+stack's path plus the branch key. The path is live state on `StateStack`,
+rebuilt the same way on resume, and never serialized with the stack. It is
+serialized on the checkpoint, as a `branchPath` field next to `moduleId`,
+`scopeName`, and `stepPath`, and omitted when empty so a checkpoint from
+before this change still verifies its signature.
+
+`Checkpoint.getCurrentFrame()` follows the path: the last frame of the
+root, then the last frame of the named branch's stack, and so on. Every
+reader of "the frame this checkpoint was taken in" goes through it: the
+locals pane, `print`, and the flag stripping in D10. This works the same
+for a debug interrupt, a rolling checkpoint in the rewind list, and
+`step back`.
+
+An earlier draft walked down from the root through each branch whose
+`interruptId` matched the debug interrupt. That fails for a rolling
+checkpoint, which has no interrupt, and for a branch that holds two
+stopped sub-branches, since a branch records only its first interrupt.
+
+The call stack pane keeps its hook-fed entries in this work. Drawing the
+path from the checkpoint's frames is ADI-27.
 
 ### D6. Stops between tool calls
 
@@ -186,15 +225,28 @@ path in the call stack pane: `main › llm() round 3 › search › fork[2]`.
 precede so that the existing bailout machinery stamps the checkpoint and
 snapshots the thread:
 
-- At the start of a round, before the request step: kind `round`, label
-  `round 3`.
-- Before each tool's invoke step: kind `tool`, label `search(query: …)`.
+- Before each model request: kind `round`, label `round 3`. The first
+  request is its own step, `initialLlmCall`, outside the loop; later ones
+  are `round.N.nextLlmCall` inside it. Both sites get the hook, or `step`
+  from the `llm()` line would skip `round 1`. The stop comes before the
+  request rather than after, so that milestone four can edit the thread
+  before the model sees it; the `tool` stops already show the reply.
+- Before each tool call, kind `tool`, label `search(query: …)`. These stops
+  run on the `runPrompt` frame, in a step before the parallel batch starts,
+  one stop per call in order. Running them inside each tool's branch would
+  raise one debug interrupt per call in a single batch, which the driver
+  cannot show until ADI-18. On the `runPrompt` frame the stops are
+  sequential, and they give milestone four a natural place to edit a call
+  before it runs.
 
 Each site calls `debugStep` with scope name `runPrompt`, module id `""`,
 and step path `<runPrompt's base>/<step key>`, and returns the interrupts
 it gets back so `PromptRunner.step` surfaces them. Like the runner's hook it
 keeps a flag in the `runPrompt` frame's locals (`__dbg_<key>`) so a resume
-re-entering the same step does not stop twice.
+re-entering the same step does not stop twice. `DebugStopData` gains a
+`kind: "step" | "round" | "tool"` field at that point, and the UI checks
+the kind before asking the source map for a line, since an empty module id
+has no entry.
 
 These stops have no source line. The source pane keeps the `llm()`
 statement highlighted and the activity log says where the loop is.
@@ -204,40 +256,74 @@ next stop after it is its `tool` stop's successor: the next tool in the
 round, or the next round. The activity log says `[ts] fetchPage()` as it
 does today, so the person is not left thinking the debugger hung.
 
-### D7. What the stepping commands mean inside the loop
+### D7. Depth, and what the stepping commands mean
 
-Stops inside `llm()` count one level deeper than the statement that called
-it, so the four commands keep their meaning:
+The debugger decides whether to stop at a step by comparing the step's
+depth with a target. Today the depth is a counter the driver moves on
+every `onFunctionStart` and `onFunctionEnd`. That is one number for the
+whole program, so two tools running in parallel push it twice and `next`
+inside one of them compares against the wrong value. It also leaves the
+counter one too high after a failed tool call if a `tool` level were added
+through hooks, because `onToolCallEnd` runs only on success.
 
-| Command | At the `llm()` statement | Inside the loop |
+Depth is instead read from the stack. A stack knows how many frames it
+holds, and a branch stack learns its base depth from its parent when
+`runBatch` starts it: the parent's base depth plus the parent's frame
+count. The depth of a step is the stack's base depth plus its frame count
+minus one. With `main` at 0, the `runPrompt` frame is at 1, a statement of
+`search` is at 2, and a statement of a fork branch inside `search` is at
+3. Nothing is counted by hooks, nothing drifts, and a resume rebuilds the
+value from the checkpoint.
+
+`DebuggerState` records the depth of the stop it is paused at, and
+`step in`, `next`, and `step out` set their targets from that. The
+counter, `enterCall`, and `exitCall` go away.
+
+After PR 1, with no loop stops yet:
+
+| Command | At the `llm()` statement | Inside a tool's body |
 |---|---|---|
-| `step` | stops at round 1 | stops at the next stop of any kind, including inside a tool |
-| `next` | runs the whole `llm()` | runs to the next stop at the same depth: the next tool or round, over a tool's body |
-| `step in` | stops at round 1 | on a `tool` stop, stops at the tool's first statement |
-| `step out` | runs to the caller | from a tool's body, stops at the loop's next stop; from a loop stop, runs to the statement after `llm()` |
+| `step` | stops at the first statement of the first Agency tool that runs | the next step anywhere, including a subagent's tools |
+| `next` | runs the whole `llm()` | the tool's next statement, over any call |
+| `step in` | same as `step` | the first statement of a called `def` |
+| `step out` | runs to the caller | the statement after `llm()` |
 | `continue` | runs to a breakpoint | the same |
 
-The depth is counted by the existing call-depth hooks for Agency `def`s.
-The loop's own stops pass a depth offset of one to `DebuggerState`, so no
-hook fires for `runPrompt` itself and nothing is replayed on resume.
+After PR 2, with the loop's own stops at depth 1:
+
+| Command | At the `llm()` statement | At a `round` or `tool` stop | Inside a tool's body |
+|---|---|---|---|
+| `step` | stops at `round 1` | the next stop of any kind | the next step anywhere |
+| `next` | runs the whole `llm()` | the next `tool` or `round` stop, over the tool's body | the tool's next statement |
+| `step in` | stops at `round 1` | the tool's first statement | the first statement of a called `def` |
+| `step out` | runs to the caller | the statement after `llm()` | the loop's next stop |
+| `continue` | runs to a breakpoint | the same | the same |
 
 ### D8. Several branches stop at once
 
 Parallel tool calls run under `Promise.allSettled`. A stop in one branch
 does not stop its siblings: they run to their own next stop or to
 completion before the join, and only then does the driver see anything.
-In stepping mode every branch stops at its next step, so the batch that
-reaches the driver holds one debug interrupt per stopped branch, and may
-hold a tool's real interrupt beside them.
+In stepping mode every Agency tool in the round stops at its next step, so
+the batch that reaches the driver holds one debug interrupt per stopped
+branch, and may hold a tool's real interrupt beside them. This is the
+normal case for an agent, not an edge case.
 
-The driver answers the whole batch in one `respondToInterrupts` call, one
-answer per interrupt in order, as `validateResumeBatch` requires: `approve`
-for every debug interrupt, and the person's answer for each real one, asked
-first. The UI focuses the first stopped branch and lists the others; `[`
-and `]` move between them. Stepping then moves every stopped branch one
-step, in lockstep, which is the honest picture of what the runtime does.
+Until ADI-18 lands, the driver keeps the first interrupt of the batch and
+drops the rest. That is safe: the resume never looks up an answer for a
+debug interrupt, because the `__dbg_` flag in each stopped frame makes its
+hook skip, so the other stopped branches continue without showing
+anything. A real interrupt the driver did not answer is not approved; its
+tool replays, finds no answer, and runs its handler chain again. The person
+sees one stop out of several and nothing is approved without being asked.
 
-Answering batches is ADI-18; this spec depends on it.
+With ADI-18, the driver answers the whole batch in one
+`respondToInterrupts` call, one answer per interrupt in order, as
+`validateResumeBatch` requires: `approve` for every debug interrupt, and
+the person's answer for each real one, asked first. The UI focuses the
+first stopped branch and lists the others; `[` and `]` move between them.
+Stepping then moves every stopped branch one step, in lockstep, which is
+the honest picture of what the runtime does.
 
 ### D9. A stop requested from outside
 
@@ -257,10 +343,22 @@ is not repeated (the round's request step is complete, and its reply is in
 `round` stop replays that round's request, which costs a model call. The
 rewind selector says so on those entries.
 
-`removeDebugFlagsFor` and `createRolling`'s duplicate removal both look at
-the checkpoint's last frame only. Both must walk the branch tree, or a flag
-left in a branch frame makes the replayed tool skip its hook, and two
-rolling checkpoints at the same tool step pile up.
+`removeDebugFlagsFor` strips the `__dbg_` flags from the frame the
+checkpoint was taken in, found through the branch path, and from that
+frame only. Ancestors keep their flags so the replay passes through the
+call sites: `main` keeps `__dbg_` for the `llm()` statement, reaches it,
+skips the hook, and re-enters the loop, which re-enters the tool, which
+stops at the chosen step. Sibling branches keep their flags too, so a
+sibling that was mid-step when the checkpoint was taken replays past its
+own stop. An earlier draft stripped every frame in the tree; that would
+make a rewind into any nested call stop at the call site first.
+
+`createRolling` replaces an earlier unpinned checkpoint at the same
+location, and the location now includes the branch path. Two calls of
+`search` in different rounds run on branches with different keys, so each
+call keeps its own rewind entries, and the store's eviction limit bounds
+the total. A loop inside one call of `search` still replaces its earlier
+entries, as a loop at the top level does today.
 
 ## Interactions to keep straight
 
@@ -269,16 +367,22 @@ rolling checkpoints at the same tool step pile up.
   the step re-enters, and the debug hook fires. Both are seen, in that
   order.
 - **The skip after a rewind.** `_skipNextCheckpoint` is consumed by the
-  first `debugStep` after a restore, wherever it is, so a rewind into a tool
-  does not record the checkpoint it just restored.
+  first `debugStep` after a restore, wherever it is. With parallel
+  branches that may be a sibling of the rewind's destination, in which case
+  the destination's checkpoint is recorded a second time and
+  `createRolling`'s duplicate removal collapses the two.
 - **Time guards.** `halt` pauses every guard on the stack and the first
   step after resume re-arms them, so time spent at a debug stop inside a
   tool is not charged, the same as at the top level.
 - **`onCheckpoint` for hosts.** Stays root-only. A host cannot re-enter a
   branch from outside; the debugger can, because it resumes through the
   interrupt path.
-- **The tool-call depth counter.** `prompt.ts` keeps `enterToolCall` for
-  whatever else reads it. The handler site stops calling it, and
+- **The checkpoint gate.** `recordsStepCheckpoints()` decides whether a
+  step builds a checkpoint. On a branch stack only an attached debugger
+  counts; the trace writer and `onCheckpoint` consumers count on the root
+  stack only (D3). A program with neither pays nothing inside tools.
+- **The tool-call counter.** `prompt.ts` and the handler site keep
+  `enterToolCall` for `_insideToolCall()` in the stdlib.
   `isInsideToolCall` is no longer consulted by the debugger.
 
 ## Out of scope
@@ -288,53 +392,59 @@ rolling checkpoints at the same tool step pile up.
   raises no debug interrupts; its own interrupts travel as today.
 - Changing `pauseSignal` or any serve route. No code outside `lib/debugger`
   and the two hook sites learns anything new about debug interrupts.
-- The threads, branches, and guards panes (ADI-8). This spec only requires
-  the locals and call stack panes to follow the halt path.
+- The threads, branches, and guards panes (ADI-8), and the call stack from
+  frames (ADI-27). This spec only requires the locals pane and the source
+  pane to follow the stop.
+- `set` at a stop inside a tool. Resume overrides are applied to the
+  root's last frame, and addressing a branch frame is milestone four's
+  work. The command is refused with a message until then.
+- Trace checkpoints inside tools (D3).
 
 ## Tests
 
 All drive the headless session in `lib/debugger/testSession.ts` with the
 deterministic model client, whose `ToolCallMock` and multi-tool mocks make
-the loop call real `def`s without a network request. The fixture is the
-agent-shaped program from ADI-17: one `llm()` with three tools, two of them
-Agency `def`s and one TypeScript, and a subagent on a thread.
+the loop call real `def`s without a network request. The main fixture is an
+agent-shaped program: one `llm()` with Agency tools, one of which opens a
+`thread { … }` and makes its own model request, and a breakpoint inside a
+tool behind an argument.
 
-1. `step` from the `llm()` statement lands on `round 1`, then on the first
-   tool, then on that tool's first statement. The locals pane shows the
-   tool's locals and the call stack shows `main › llm() round 1 › search`.
+1. `step` from the `llm()` statement lands on the first statement of the
+   first tool. The locals pane shows the tool's argument and the source
+   pane shows the tool's line.
 2. `next` from the `llm()` statement runs the whole call.
-3. `step out` from inside a tool lands on the loop's next stop.
+3. From inside a tool: `next` stops at the tool's next statement, and
+   `step out` lands on the statement after `llm()`.
 4. A `debugger()` inside a tool stops under `continue`.
-5. After a stop inside a tool, resume finishes the tool and its result
-   reaches the thread once; the program's return value is unchanged.
-6. A stop inside a fork branch inside a tool: the call stack shows four
-   levels and the locals are the branch's.
-7. Two tools in parallel in stepping mode: the batch holds two debug
-   interrupts, both are answered, both tools complete.
-8. One tool stops while its sibling raises `std::env`: the person is asked
-   about the real interrupt, the debug one is approved alongside it, and
-   both tools complete.
-9. A guard trips at the same step as a stop: the trip is asked first.
-10. The TypeScript tool: `step` from its `tool` stop lands on the next
-    tool's stop, and the activity log names it.
-11. `runner.test.ts`: the hook fires on a branch stack, and still does not
-    fire inside a handler body.
+5. After a stop inside a tool, the program finishes with the same return
+   value as the unstepped run.
+6. A fork in a node with no `llm()`: stepping stops inside a branch with
+   the branch's locals, and the program finishes with the right value.
+7. Two tools in one round in stepping mode: one stop is shown, both tools
+   complete, the return value is right. ADI-18 changes this test's
+   assertions on purpose.
+8. A tool called by an `llm()` inside a handler body: with the breakpoint
+   on, `continue` does not stop inside it.
+9. Rewind: from a stop inside a tool, `step back` lands on the tool's
+   previous statement, not on the `llm()` line, and makes no model
+   request.
+10. The branch path: `getCurrentFrame()` on a hand-built checkpoint with
+    two levels of branches, and `removeDebugFlagsFor` stripping only the
+    frame at the path.
+11. Depth: `DebuggerState` targets set from the recorded stop depth.
+
+PR 2 adds one test per row of its table, including a round with two tool
+calls, and a `promptRunner.test.ts` case that a resumed step does not stop
+twice.
 
 ## Docs to update
 
 - `docs/dev/cli/debugger.md`: the "Tool calls" limitation becomes a section
-  on stops inside the loop, the halt path, and the depth rule.
+  on stops inside a tool, the branch path, the depth rule, the interim
+  behaviour with several stopped branches, and the `set` refusal.
+- `docs/dev/runtime/checkpointing.md`: the `branchPath` field.
 - `docs/dev/runtime/pause.md`: a note that the debugger's stop is an
   interrupt and is not subject to the branch-stack deferral.
+- `docs/dev/runtime/trace.md`: traces record root-stack steps only.
 - `docs/dev/cli/debugger-tests.md`: how to script the model in a debugger
   test.
-
-## Open questions
-
-1. Should the `round` stop come before or after the request? Before lets a
-   person change the thread (milestone four) before the model sees it;
-   after lets them see the reply before the tools run. This spec puts it
-   before, and the tool stops cover the reply. Decide in review.
-2. `recordsStepCheckpoints()` gates the hook today. It should keep gating
-   on the branch stacks, so a program with no debugger and no trace writer
-   pays nothing. Confirm it reads the context, not the stack.

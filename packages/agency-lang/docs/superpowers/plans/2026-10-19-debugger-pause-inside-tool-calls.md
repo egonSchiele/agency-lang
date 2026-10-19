@@ -5,21 +5,24 @@ Linear: ADI-5, with ADI-14 for the first PR and ADI-15 for the second.
 
 Two PRs against `main`, reviewed on their own. The first is the fix; the
 second is an addition the fix makes possible. Run the built binary after
-each build, not only the tests. Answering a batch of several interrupts is
-ADI-18 and is not part of this plan; until it lands, a test that stops two
-parallel tools at once is expected to fail and is marked so.
+each build, not only the tests, on a program with two Agency tools in one
+round as well as on the fixture.
 
 Reading before starting: the spec; `docs/dev/runtime/concurrent-interrupts.md`,
 the sections "Slice-only checkpoint composition" and "LLM tool calls:
-implementation today"; `docs/dev/cli/debugger-tests.md`.
+implementation today"; `docs/dev/runtime/rewind.md`, since PR 1 changes how
+a rewind finds its frame; `docs/dev/runtime/trace.md`;
+`docs/dev/cli/debugger-tests.md`.
 
 ## PR 1. Stop inside a tool call (ADI-14)
 
-Spec D1 to D5 and D10. After this PR, `step` from the `llm()` statement
-runs the whole call as today, but a `debugger()` placed inside a tool
-stops under `continue`, and once stopped inside a tool, `step`, `next`,
-and `step out` work on the tool's own lines with the right locals and the
-right source line. Stopping between tool calls is PR 2.
+Spec D1 to D5, D7 (the first table), D8 (the interim behaviour), and D10.
+After this PR, `step` from the `llm()` statement stops at the first
+statement of the first Agency tool that runs, `next` runs the whole call,
+a `debugger()` placed inside a tool stops under `continue`, and once
+stopped inside a tool `next` and `step out` work on the tool's own lines
+with the right locals and the right source line. Stopping between tool
+calls is PR 2.
 
 ### The test harness first
 
@@ -28,128 +31,141 @@ mocks `runPrompt` away. The fix cannot be shown without one, so it is the
 first commit of the PR.
 
 - `tests/debugger/agent-shaped.agency`: one node whose `llm()` call offers
-  three tools. `search` and `writeUp` are Agency `def`s with three
-  statements each; `fetchPage` is imported from a TypeScript file beside
-  the fixture. `search` opens a `thread { … }` and calls `llm()` in it, so
-  there is a subagent. `search` holds a `debugger("in search")` statement
-  behind an argument, so a test can turn the breakpoint on.
-- `lib/debugger/testHelpers.ts`: a helper that installs the deterministic
-  model client (`lib/runtime/deterministicClient.ts`) with a queue of
-  `ToolCallMock` entries. Find how `tests/agency` selects that client with
-  a grep for `DeterministicClient` under `lib/runtime` and `lib/cli`, and
-  do the same.
-- `lib/debugger/agentShaped.test.ts`: compile the fixture in `beforeAll`
-  as `driver.test.ts` does, queue `search`, `fetchPage`, `writeUp`, then a
-  plain reply, run it through `DebuggerTestSession` with `continue`, and
-  assert the return value. This proves the harness before any change.
+  Agency tools with a few statements each. One tool opens a
+  `thread { … }` and calls `llm()` in it, so there is a subagent. That tool
+  holds a `debugger("in search")` statement behind a node argument, so a
+  test can turn the breakpoint on. A second node calls the same `llm()`
+  inside a handler body, for the handler-safety test.
+- `tests/debugger/fork-test.agency`: a fork in a node with no `llm()`.
+- `lib/debugger/testHelpers.ts`: a helper that runs a session with the
+  deterministic model client. The runtime builds that client when the host
+  setting `AGENCY_LLM_MOCKS` holds a JSON list of mocks
+  (`lib/runtime/state/context.ts`), so the helper sets the variable around
+  the session's start and restores it after.
+- The mock queue is in the order the program asks for replies, and the
+  subagent's request sits inside the outer tool's call: the outer `llm()`
+  asks for `search`; `search`'s own `llm()` takes the next reply; then the
+  outer `llm()` asks for the remaining tools and gives its final reply.
+- `lib/debugger/agentShaped.test.ts`: compile the fixtures in `beforeAll`
+  as `driver.test.ts` does, run the agent-shaped node through
+  `DebuggerTestSession` with `continue`, and assert the return value. This
+  proves the harness before any change.
 - `docs/dev/cli/debugger-tests.md`: a section "Scripting the model".
 
 ### The runtime change
 
-1. `lib/runtime/interrupts.ts`: remove the `enterToolCall` and
-   `exitToolCall` pair around the handler body. The stack's
-   `executingHandlerEntries` already marks handler execution. Grep for
-   other readers of `isInsideToolCall` and confirm none relied on it for
-   the handler case.
-2. `lib/runtime/runner.ts`, `maybeDebugHook`: replace the
-   `isInsideToolCall()` return with a check of
-   `this.stack?.hasExecutingHandlers()` and `isInsideCallback(run)`.
-3. `lib/runtime/debugger.ts`, `debugStep`: make the `stack` argument
-   required, and create the halting checkpoint from it with
-   `ctx.checkpoints.create(stack, ctx, info)`. The trace checkpoint and the
-   rolling checkpoint keep coming from the root through
-   `Checkpoint.fromContext`.
-4. `lib/runtime/interrupts.ts`, `createDebugInterrupt`: the data becomes
-   the `DebugStopData` record from spec D4, with `kind: "step"` at the
-   runner's call sites. The driver reads the label from it.
-5. `lib/runtime/state/checkpointStore.ts`: `removeDebugFlagsFor` and
-   `removeDuplicate` walk every frame in the branch tree, not only the
-   root's last frame. Add a `forEachFrame` on `StateStackJSON` for it.
+1. `lib/runtime/state/stateStack.ts`: `StateStack` gets two live-only
+   fields, `branchPath: string[]` and `baseDepth: number`, both zero for
+   the root. `runBatch` sets them on every branch it starts, next to the
+   handler-mark copy in `rehydrateInheritedGuards`: the parent's path plus
+   the child key, and the parent's base depth plus the parent's frame
+   count. Neither is serialized; a resume rebuilds them the same way.
+2. `lib/runtime/state/sourceLocation.ts` and `checkpointStore.ts`:
+   `SourceLocation` gains `branchPath?: string[]`. `Checkpoint` stores it
+   (default `[]`), writes it to JSON only when non-empty, and the schema
+   accepts it. `getCurrentFrame()` follows the path. `pathEquals`,
+   `findCheckpoint`, and `removeDuplicate` compare the path too.
+3. `lib/runtime/debugger.ts`, `debugStep`: the `stack` argument is
+   required. It reads the depth and the branch path from the stack, passes
+   the path into the rolling checkpoint's location, creates the halting
+   checkpoint from the stack with `ctx.checkpoints.create(stack, ctx, …)`,
+   and puts a `DebugStopData` record in the interrupt. The trace checkpoint
+   is written only when the stack is the root (spec D3). It asks
+   `DebuggerState` whether to stop at the depth, and tells it the depth
+   when it does.
+4. `lib/runtime/runner.ts`, `maybeDebugHook`: replace the
+   `isInsideToolCall()` return with `this.stack.hasExecutingHandlers()`
+   and `isInsideCallback(run)`. `recordsStepCheckpoints()` counts the trace
+   writer only on the root stack. Fix the comment that says a function
+   context halts with a single interrupt object; it halts with an array.
+5. `lib/runtime/state/checkpointStore.ts`: `removeDebugFlagsFor` strips
+   the flags of `getCurrentFrame()`, which now follows the path.
+6. Delete `lib/templates/backends/typescriptGenerator/debugger.mustache`
+   and its generated `.ts`. The `debugger()` statement compiles to
+   `runner.debugger`, which goes through `maybeDebugHook`; the template is
+   imported by `typescriptBuilder.ts` but never rendered, and it calls
+   `debugStep` without a stack.
 
 ### The debugger change
 
-6. `lib/debugger/uiState.ts`: `haltPath(checkpoint, interruptId)` returns
-   the frames from the root's last frame down through each branch whose
-   `interruptId` matches, ending at the stopped frame. Unit test it on a
-   hand-built checkpoint with two levels.
-7. `setCheckpoint` takes the interrupt too. It reads the source location
-   from `interrupt.data` and the locals and args from the stopped frame.
-8. The call stack pane draws the halt path, `main › llm() › search`. The
-   hook-fed entries for TypeScript functions stay until ADI-27.
-9. `driver.ts`: `print` reads from the stopped frame. `set` inside a tool
-   is refused with "set inside a tool call is not supported yet", because
-   resume overrides land in the root's last frame today and targeting a
-   branch frame is milestone four's work.
+7. `lib/debugger/debuggerState.ts`: `callDepth`, `enterCall`, `exitCall`,
+   and `resetCallDepth` go. In their place `stopDepth`, set by
+   `stoppedAt(depth)`, and `shouldStopAt(depth)`, which compares against
+   the target. `stepIn`, `stepNext`, and `stepOut` set targets from
+   `stopDepth`. The driver's hooks stop moving the counter.
+8. `lib/debugger/uiState.ts`: `setCheckpoint(checkpoint, stop?)`. The
+   location is the stop's when one is given, else the checkpoint's own;
+   the frame is `checkpoint.frameAt(location.branchPath)`. The driver
+   passes the interrupt's `DebugStopData` for a debug interrupt and nothing
+   for a rolling checkpoint or a user interrupt. The driver today passes
+   the interrupt itself as the checkpoint when rendering a user interrupt;
+   it passes the interrupt's checkpoint instead.
+9. `lib/debugger/driver.ts`: `print` reads from the stop's frame. `set` at
+   a stop whose path is not empty is refused with "set inside a tool call
+   is not supported yet".
 
 ### Tests for the PR
 
-With the fixture through `DebuggerTestSession`:
-
-- `continue` with the breakpoint on stops inside `search`; the locals pane
-  shows `query` and the call stack shows `main › llm() › search`.
-- From that stop, `next` twice shows `url` then `page`; `step out` lands on
-  `return answer`.
-- After a stop inside `search`, the program finishes with the same return
-  value as the unstepped run, and the thread holds `search`'s result once.
-- A stop inside a fork branch inside `search`: four levels in the call
-  stack, the branch's locals.
-- A guard trips at the same step as a stop: the trip is asked first.
-- Rewind: from a stop inside `search`, rewind to the rolling checkpoint
-  before `const page = …` and see that line run again without a second
-  model request. If this fails, the likely cause is `State.toJSON`
-  serializing a stale `branch.checkpoint`; the fix is its own small PR.
-- Two tools stopped at once: marked as expected to fail until ADI-18.
-
-In `lib/runtime/runner.test.ts`: the hook fires on a branch stack, and
-still does not fire inside a handler body or a callback body.
+With the fixtures through `DebuggerTestSession`, the eleven cases in the
+spec's list. In `lib/runtime/state/checkpointStore.test.ts` and
+`lib/debugger/uiState.test.ts`, hand-built checkpoints with two levels of
+branches for `getCurrentFrame()` and `removeDebugFlagsFor`. In
+`lib/debugger/debuggerState.test.ts`, the targets from the stop depth.
 
 ### Docs in the PR
 
 - `docs/dev/cli/debugger.md`: the "Tool calls" limitation becomes a section
-  "Stops inside a tool call": the halt path, the local-stack checkpoint,
-  and the `set` refusal.
-- `docs/dev/runtime/pause.md`: one paragraph noting that the debugger's
-  stop is an interrupt and takes the in-tool path.
+  "Stops inside a tool call".
+- `docs/dev/runtime/checkpointing.md`: the `branchPath` field.
+- `docs/dev/runtime/pause.md`: one paragraph on the debugger's stop.
+- `docs/dev/runtime/trace.md`: root-stack steps only.
+- `docs/dev/cli/debugger-tests.md`: "Scripting the model".
 
 ## PR 2. Stop between tool calls (ADI-15)
 
-Spec D6 and D7. After this PR, `step` from the `llm()` statement stops at
-`round 1`, then before each tool, then inside the tool, and the stepping
-commands have the meanings in the spec's table.
+Spec D6 and the second table of D7. After this PR, `step` from the `llm()`
+statement stops at `round 1`, then before each tool, then inside the tool,
+and the stepping commands have the meanings in that table.
 
 1. `lib/runtime/promptRunner.ts`: `debugStop(kind, key, label)`. If the
    `runPrompt` frame local `__dbg_<key>` is set, return; else set it, call
    `debugStep` with scope `runPrompt`, module id `""`, step path
-   `<base>/<key>`, the label, the kind, and a depth offset of one, and
-   return the interrupts. The step that calls it returns them so the
-   bailout stamps the checkpoint and snapshots the thread. Clear the flag
-   when the step completes, as `Runner.step` does.
-2. `lib/runtime/prompt.ts`: call it at the top of each round's request
-   step with label `round N`, and at the top of each tool's invoke step
-   with the tool's name and cut arguments, reusing the formatting the
-   activity log uses for `onToolCallStart`.
-3. `lib/debugger/debuggerState.ts`: `isAtOrBelowTargetDepth(offset)` adds
-   the offset before comparing, so the loop's stops count one level deeper
-   than the statement that called `llm()`.
-4. `lib/debugger/ui.ts` and `uiState.ts`: a `round` or `tool` stop keeps
-   the `llm()` line highlighted and names itself in the activity log and
-   the call stack: `main › llm() round 2 › search(query: …)`. A TypeScript
-   tool's stop says `[ts] fetchPage()` so the next `step` landing on the
-   following stop is not mistaken for a hang.
-5. The rewind selector marks `round` entries with "replays a model
+   `<base>/<key>`, the label, and the kind, and return the interrupts. The
+   step that calls it returns them so the bailout stamps the checkpoint
+   and snapshots the thread. Clear the flag when the step completes, as
+   `Runner.step` does. The `runPrompt` frame is at depth 1 under the node,
+   so no offset is needed: the stack gives the depth.
+2. `lib/runtime/prompt.ts`: call it at the top of the `initialLlmCall`
+   step and of each `round.N.nextLlmCall` step with label `round N`, and in
+   a step on the `runPrompt` frame before each round's parallel batch, once
+   per tool call in order, with the tool's name and cut arguments, reusing
+   the formatting the activity log uses for `onToolCallStart`.
+3. `DebugStopData` gains `kind`. `lib/debugger/ui.ts` and `uiState.ts`: a
+   `round` or `tool` stop keeps the `llm()` line highlighted, asks the
+   source map for nothing, and names itself in the activity log. A
+   TypeScript tool's stop says `[ts] fetchPage()` so the next `step`
+   landing on the following stop is not mistaken for a hang.
+4. The rewind selector marks `round` entries with "replays a model
    request".
+5. PR 1's test that `step out` from inside a tool lands on the statement
+   after `llm()` changes on purpose: it lands on the loop's next stop. Say
+   so in the PR description.
 
-Tests: the spec's table, one case per row, with the fixture; and a
-`promptRunner.test.ts` case that a resumed step does not stop twice.
+Tests: one case per row of the spec's second table, including a round with
+two tool calls, with the fixture; and a `promptRunner.test.ts` case that a
+resumed step does not stop twice.
 
-Docs: `docs/dev/cli/debugger.md` gains the depth table; `CLAUDE.md` and the
-`agency-cli-docs` skill get the updated one-line description.
+Docs: `docs/dev/cli/debugger.md` gains the second depth table; `CLAUDE.md`
+and the `agency-cli-docs` skill get the updated one-line description.
 
 ## Order and size
 
-PR 1 first. PR 2 depends on it and on nothing else. The two-tools test
-turns green when ADI-18 lands, whichever order that happens in.
+PR 1 first. PR 2 depends on it and on nothing else: its `tool` stops run
+on the `runPrompt` frame, so a round with three tool calls is three stops
+in a row, not three interrupts in one batch. Stepping into the bodies of
+two parallel tools still shows one stop until ADI-18, whichever order that
+lands in.
 
-PR 1 is about a week: a day for the harness, two to three for the runtime
-and the handler check, two for the debugger side, and the rewind test may
-add a day if it fails. PR 2 is two to three days.
+PR 1 is about a week: a day for the harness, three for the runtime, the
+branch path, and the depth change, two for the debugger side. PR 2 is two
+to three days.

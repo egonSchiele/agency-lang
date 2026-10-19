@@ -166,7 +166,7 @@ function readHolder(lockFile: string): LockHolder | undefined {
 
 /** Only ESRCH means the process is gone. EPERM means it exists and belongs to
  *  someone else, which is very much alive. */
-function processState(pid: number): "alive" | "gone" | "unknown" {
+export function processState(pid: number): "alive" | "gone" | "unknown" {
   try {
     process.kill(pid, 0);
     return "alive";

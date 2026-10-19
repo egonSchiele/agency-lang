@@ -8,12 +8,17 @@ import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { duplicateKeys } from "./keymap.js";
 // Shell-level behavior: the view stack, action dispatch, help overlay,
 // and the key routing that must NOT misfire (Ctrl+F pages; it is not `f`).
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer, viewerShellBindings } from "./run.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { foldComments, type Comment } from "../runDirectory/comments.js";
+import { request } from "./session/client.js";
+import { listRecords } from "./session/registry.js";
 import type { CommentsStore } from "../runDirectory/commentsStore.js";
 
 // `A` copies through the clipboard the shell detects; swap in a fake that
@@ -715,5 +720,89 @@ describe("comments in the viewer", () => {
     store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
     const out = await driveWithStore(store, ["4"]);
     expect(out.lastText()).toContain("✎");
+  });
+});
+
+describe("the session", () => {
+  let dir: string;
+  let logFile: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "lv-"));
+    logFile = path.join(dir, "run.jsonl");
+    fs.writeFileSync(logFile, sample);
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function sessionRecord(sessions: string) {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      const [record] = listRecords(sessions);
+      if (record !== undefined) return record;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("the viewer never registered");
+  }
+
+  it("a viewer opened without a session writes nothing", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      followPath: logFile,
+      input: new ScriptedInput(["q"]),
+      output: out,
+      viewport: { rows: 20, cols: 120 },
+    });
+    expect(fs.existsSync(path.join(dir, "sessions"))).toBe(false);
+  });
+
+  it("get reports the cursor, navigate moves it or says why not, reload re-reads comments", async () => {
+    const sessions = path.join(dir, "s");
+    const store = fakeStore();
+    const out = new FrameRecorder();
+    const input = new ScriptedInput([]);
+    const done = runViewer({
+      jsonl: sample,
+      followPath: logFile,
+      session: { dir: sessions },
+      comments: store,
+      input,
+      output: out,
+      viewport: { rows: 24, cols: 130 },
+    });
+    const record = await sessionRecord(sessions);
+    expect(record).toMatchObject({ logPath: logFile, commentsPath: "fake", pid: process.pid });
+    const sock = path.join(sessions, `${record.pid}.sock`);
+
+    input.feedKey({ key: "4" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(await request(sock, { op: "get" })).toMatchObject({
+      ok: true,
+      focus: { traceId: "abc", screen: "timeline", rowId: "round:s2:0", logPath: logFile },
+    });
+
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "round:s2:0" })).toEqual({
+      ok: true,
+    });
+    expect(out.lastText()).toContain("[2 trace]");
+    expect(await request(sock, { op: "navigate", traceId: "zzz", rowId: "round:s2:0" })).toEqual({
+      ok: false,
+      error: "no such trace",
+    });
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "nope" })).toEqual({
+      ok: false,
+      error: "no such row",
+    });
+
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "from the cli" });
+    expect(out.lastText()).not.toContain("from the cli");
+    expect(await request(sock, { op: "reload" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("from the cli");
+
+    input.feedKey({ key: "q" });
+    await done;
+    expect(listRecords(sessions)).toEqual([]);
+    expect(fs.existsSync(sock)).toBe(false);
   });
 });

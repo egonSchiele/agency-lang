@@ -526,6 +526,12 @@ export class TraceScreen implements Screen {
     this.marks = marks;
     this.marksVersion += 1;
   }
+  /** Whether `setFocus(id)` would land on that row. An admin or machinery
+   *  row the current settings hide would fall back to an ancestor, and a
+   *  session's `navigate` says so instead of landing there silently. */
+  shows(rowId: string): boolean {
+    return this.allRows.some((row) => row.id === rowId);
+  }
   setTrace(traceId: string): void {
     this.traceId = traceId;
     this.cursorId = "";

@@ -14,6 +14,8 @@ import type { CommentsStore } from "../runDirectory/commentsStore.js";
 import { formatAddress } from "./address.js";
 import { findRow } from "./detailTarget.js";
 import { anchorFor, marksFrom } from "./marks.js";
+import type { Focus, NavigateResult, SessionPort } from "./session/port.js";
+import { isUnavailable, startSessionServer, type SessionServer } from "./session/server.js";
 import { detectClipboard } from "./clipboard.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
@@ -69,6 +71,10 @@ export type RunViewerOpts = {
   // Where this log's comments live, opened by the CLI with the author at
   // the terminal. Undefined (stdin, remote) disables `c`.
   comments?: CommentsStore;
+  // Register with the sessions directory so `agency logs session …` can
+  // find this viewer. Undefined (every unit test) opens no socket and
+  // writes nothing. Needs `followPath`: a session is about a local file.
+  session?: { dir: string };
   contextWindowOf?: (model: string) => number | undefined;
 };
 
@@ -325,6 +331,10 @@ async function runSession(
   }
   commentsSource.refresh();
   render();
+  const session = await startSessionIfAsked(
+    opts,
+    sessionPortFor(host, () => roots, commentsSource, notify, render),
+  );
   try {
     return await runKeyLoop({
       screen,
@@ -341,8 +351,103 @@ async function runSession(
     });
   } finally {
     watcher.stop();
+    await session?.stop();
   }
 }
+
+async function startSessionIfAsked(
+  opts: RunViewerOpts,
+  port: SessionPort,
+): Promise<SessionServer | undefined> {
+  if (opts.session === undefined || opts.followPath === undefined) {
+    return undefined;
+  }
+  const started = await startSessionServer(port, {
+    dir: opts.session.dir,
+    logPath: opts.followPath,
+    commentsPath: opts.comments?.path,
+  });
+  if (isUnavailable(started)) {
+    port.notify(`no session: ${started.unavailable}`);
+    return undefined;
+  }
+  return started;
+}
+
+/** The shell's answers to session requests. Every request redraws, since it
+ *  may have moved the cursor or changed the marks. */
+function sessionPortFor(
+  host: ScreenHost,
+  roots: () => TreeNode[],
+  comments: CommentsSource,
+  notify: (message: string) => void,
+  render: () => void,
+): SessionPort {
+  return {
+    focus: () => sessionFocus(host),
+    navigate: (traceId, rowId) => {
+      const result = navigateTo(host, roots(), traceId, rowId);
+      render();
+      return result;
+    },
+    reloadComments: comments.refresh,
+    notify: (message) => {
+      notify(message);
+      render();
+    },
+  };
+}
+
+/** What `A` would copy: the active screen's focused row. On the picker,
+ *  its highlighted trace and no row. */
+function sessionFocus(host: ScreenHost): Focus {
+  const target = host.target();
+  if (target instanceof TracePicker) {
+    return {
+      traceId: target.selectedTraceId() ?? host.currentTraceId(),
+      screen: host.activeScreen(),
+      rowId: undefined,
+    };
+  }
+  return {
+    traceId: host.currentTraceId(),
+    screen: host.activeScreen(),
+    rowId: host.screen(host.activeScreen()).focusId(),
+  };
+}
+
+/** The session's `navigate`: switch trace when needed, then put the trace
+ *  screen's cursor on the row. A row the screen's settings hide is reported,
+ *  not landed near. */
+function navigateTo(
+  host: ScreenHost,
+  roots: TreeNode[],
+  traceId: string,
+  rowId: string | undefined,
+): NavigateResult {
+  const trace = roots.find((root) => root.traceId === traceId);
+  if (trace === undefined) {
+    return "no such trace";
+  }
+  if (rowId !== undefined && findRow(trace, rowId) === undefined) {
+    return "no such row";
+  }
+  if (traceId !== host.currentTraceId()) {
+    host.selectTrace(traceId);
+  }
+  host.closeHelp();
+  if (rowId === undefined) {
+    host.switchTo("trace");
+    return "ok";
+  }
+  const traceScreen = host.screen("trace");
+  if (traceScreen instanceof TraceScreen && !traceScreen.shows(rowId)) {
+    return "row hidden by filter";
+  }
+  host.switchTo("trace", rowId);
+  return "ok";
+}
+
 type ActionDeps = {
   host: ScreenHost;
   screen: Screen;

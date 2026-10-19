@@ -18,7 +18,7 @@ export function snapshotGraderFiles(dir: string): GraderFilesSnapshot {
   if (fs.lstatSync(dir).isSymbolicLink()) {
     throw new Error(`graderFiles must not be a symlink: ${dir}`);
   }
-  const entries = readTree(dir, "");
+  const entries = readTreeRefusingSymlinks(dir, "graderFiles");
   if (entries.length === 0) {
     throw new Error(`graderFiles is empty: ${dir}`);
   }
@@ -30,18 +30,25 @@ export function snapshotGraderFiles(dir: string): GraderFilesSnapshot {
   };
 }
 
+export type TreeEntry = { rel: string; content: string };
+
 /** Files under `dir`, sorted by relative path with `/` separators. Symlinks
- *  are refused: a stored copy must not depend on what a link pointed at. */
-function readTree(dir: string, prefix: string): { rel: string; content: string }[] {
-  const out: { rel: string; content: string }[] = [];
+ *  are refused: a stored copy must not depend on what a link pointed at.
+ *  `what` names the directory in the refusal ("graderFiles", "files"). */
+export function readTreeRefusingSymlinks(dir: string, what: string): TreeEntry[] {
+  return readTree(dir, "", what);
+}
+
+function readTree(dir: string, prefix: string, what: string): TreeEntry[] {
+  const out: TreeEntry[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort(byName)) {
     const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     const full = path.join(dir, entry.name);
     if (entry.isSymbolicLink()) {
-      throw new Error(`graderFiles must not contain symlinks: ${full}`);
+      throw new Error(`${what} must not contain symlinks: ${full}`);
     }
     if (entry.isDirectory()) {
-      out.push(...readTree(full, rel));
+      out.push(...readTree(full, rel, what));
     } else if (entry.isFile()) {
       out.push({ rel, content: fs.readFileSync(full, "utf8") });
     }

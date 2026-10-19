@@ -29,7 +29,7 @@ export type FormViewArgs = {
 export function renderForm(args: FormViewArgs): Element {
   const { state } = args;
   if (state.mode.kind === "wrote") {
-    return wroteScreen(state.mode.testDir, args.nextCommands);
+    return wroteScreen(state.mode.testDir, args.nextCommands, args.width);
   }
   const footer = footerText(args);
   return column(
@@ -86,12 +86,17 @@ function valueStyle(empty: boolean, selected: boolean): Style {
   return { dim: empty };
 }
 
-function wroteScreen(testDir: string, nextCommands: string[]): Element {
+/** A command longer than the screen continues on the next row, indented,
+ *  so a long suite path never hides the flags after it. */
+function wroteScreen(testDir: string, nextCommands: string[], width: number): Element {
+  const commands = nextCommands.flatMap((text) =>
+    wrapText(text, Math.max(1, width - 2 * INDENT)).map(
+      (part, index) => `${" ".repeat(index === 0 ? INDENT : 2 * INDENT)}${part}`,
+    ),
+  );
   return column(
     { justifyContent: "space-between" },
-    lines([`wrote ${testDir}`, "", "run it with:", ...nextCommands.map((text) => `  ${text}`)], {
-      justifyContent: "flex-start",
-    }),
+    lines([`wrote ${testDir}`, "", "run it with:", ...commands], { justifyContent: "flex-start" }),
     line(WROTE_FOOTER, { dim: true }),
   );
 }

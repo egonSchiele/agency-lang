@@ -82,13 +82,16 @@ describe("renderForm", () => {
     );
   });
 
-  it("the wrote screen names the folder and the commands to run", () => {
+  it("the wrote screen names the folder and the commands to run, wrapping a long one", () => {
     const wrote = reduceForm(filled(), { kind: "saved", testDir: "bar-evals/says-its-name" });
     const text = frame(wrote);
     expect(text).toContain("wrote bar-evals/says-its-name");
     expect(text).toContain(NEXT[0]);
     expect(text).toContain(NEXT[1]);
     expect(text).not.toContain("NEW TEST");
+    const narrow = rows(frame(wrote, 40));
+    const start = narrow.findIndex((row) => row.startsWith("  agency eval run"));
+    expect(narrow[start + 1]).toMatch(/^ {4}\S/);
   });
 
   it("neutralizes control characters in a value", () => {

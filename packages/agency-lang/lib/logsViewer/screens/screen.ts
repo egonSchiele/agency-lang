@@ -4,6 +4,9 @@ export const SCREEN_ORDER: ScreenName[] = ["overview", "trace", "transcript", "t
 export type Screen = Omit<View, "viewName" | "escape"> & {
   screenName: ScreenName;
   focusId(): string | undefined;
+  /** The row under the cursor, as itself, where `focusId` names the row
+   *  focus would travel to. Screens whose cursor row is its own focus omit it. */
+  selectedRowId?(): string | undefined;
   setFocus(id: string): void;
   setTrace(traceId: string): void;
   escape(): boolean;

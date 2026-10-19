@@ -34,6 +34,7 @@ describe("readRunDirectory", () => {
       annotationRows: [],
       effectiveAnnotations: {},
       notes: null,
+      comments: { threads: [] },
     });
   });
 

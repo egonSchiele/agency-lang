@@ -143,6 +143,107 @@ the reader and the accumulator, and the fallback path absorbs the renumbering. R
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
+## Comments
+
+A comment is a note on one row, stored beside the log in the run
+directory's `comments.jsonl` (`docs/dev/evals/run-directory.md` describes
+the store). In the viewer, comments are data in, like trace annotations:
+the shell folds the store into a `RowMarks` map (`marks.ts`, trace ID →
+row ID → threads) and hands it to every screen and open overlay through
+`ScreenHost.setMarks`, next to `setData`. A painter does one lookup
+(`marksForRow`) and draws `✎` for a person's comment or `⚑` for an agent's
+in the gutter (`traceScreen.ts`, `timelineScreen.ts`). `payloadFor` appends
+a `COMMENTS` section when its options carry threads, so the trace pane, the
+detail overlay, and the CLI's `show` list them the same way, each comment
+with its ID so a reply can name it. The picker counts a trace's comments
+from the marks the viewer holds, so a loose file gets a count and it is
+current after every `c`. The dictionaries have no prototype: IDs come from
+logs and comment files.
+
+One object in the shell, the comments source (`makeCommentsSource` in
+`run.ts`), is the only viewer code that reads or writes comments.
+`refresh` reads the store, builds marks, sends them, and redraws; `add`
+writes and then refreshes; a write that fails (another writer holds the
+lock, a read-only directory) is reported in the message bar and the viewer
+stays up. Its callers never repeat that sequence: the `c` key, the follow
+tick, and the session's `reload`. The viewer never computes an author; the
+store it is handed carries one. Without a store (stdin), `c` says comments
+are unavailable, as `f` does for follow.
+
+The row a comment, an address, or a session `get` names is `focusedRow`
+in `run.ts`: the row a detail overlay shows, else the active screen's
+`selectedRowId`, else its `focusId`. A screen's `focusId` is not the
+selected row; it names the row focus travels to on another screen (a user
+turn's round, an interrupt's tool). `c` captures the whole comment target,
+trace, row, and anchor, before its prompt opens, because a session
+`navigate` can switch traces while the person types.
+
+`c` is a shell binding that returns a `promptLine` action; the key loop
+dispatches what a shell binding returns. The prompt owns the bottom row
+while it is open, so `render()` called meanwhile (a follow poll, a
+refresh, a session request) only marks the screen dirty, and the screen is
+drawn once when the prompt closes. The follow watcher runs a second
+callback on every tick, grown or not, because the comments file can change
+while the log is idle; a restart that names no tick keeps the one it had.
+The store compares the file's size before re-reading, since the tick fires
+every 250ms.
+
+An agent's reply to a person's comment is always shown under it; the `C`
+toggle hides only the agent's own notes (`marksFrom` drops a thread no
+human wrote in, so an agent note the person replied to stays). A shell
+binding runs instead of a screen's on the same key, so `run.shell.test.ts`
+checks every shell key against every screen's keys.
+
+## Sessions
+
+With `session: { dir }` in `RunViewerOpts`, the viewer starts a server on
+a Unix socket in that directory and writes a record beside it
+(`session/`). No value means no server, so no unit test opens a socket
+unless it asks to. The CLI's file route and the explorer's drill-in pass
+the sessions directory under the agent home; stdin passes nothing. The
+record names the log and the comments file as absolute paths, because the
+CLI runs from any directory and cannot tell from a statelog path alone
+whether comments live in a run directory or in a sidecar.
+
+The server is built on the same seam as the follow watcher: a request
+arrives between key presses, is answered through a `SessionPort` the
+shell builds from its host and its comments source, and ends with a
+`render()`. The port has five functions: `focus` (the same `focusedRow`
+lookup `A` uses), `navigate` (`selectTrace` when the trace differs, then
+`switchTo("trace", rowId)`, or the trace screen's first visible row when no
+row is named, also when that trace is already open; every refusal, a missing trace or row or one the trace screen's
+settings or an active search hide, comes before the host changes, so the
+person's trace, overlays, and screen stay as they were), `reloadComments`
+(`commentsSource.refresh`), `pick` (the trace list, as `t` opens it), and
+`notify`. A port call that throws answers the request with an error and
+leaves the viewer up; a connection is answered once, on its first line,
+and a client that never finishes its line is cut off by a timeout or a size
+cap, and `stop` ends every open connection so quitting never waits on
+one. A record that cannot be written after `listen` closes the socket and
+leaves the viewer without a session, as a failed `listen` does. There is no request that writes
+a comment: it would be saved under the viewer's author, the person, so the
+CLI writes through its own store and sends `reload`. The server is started
+inside the shell's `try`, and a listen failure gives a notice instead of
+a server, so the follow watcher is always stopped on the way out.
+
+The registry does one thing per function. `listRecords` only lists.
+`probe` tells three states apart: the process is gone (`stale`), it is
+alive and answers (`live`), or it is alive and does not answer within the
+timeout (`not-responding`, which a viewer suspended with Ctrl+Z produces).
+`removeStale` deletes only the stale, with paths built from the directory
+and a pid, so it can only ever touch a viewer's own two files. Before
+listening, the server removes a leftover socket at its own pid's paths,
+since the terminal's signal handlers exit without the shell's `finally`.
+An over-long socket path (104 bytes on macOS) and Windows each give a
+notice instead of a server.
+
+Imperative code lives in four places here: `server.ts` and `client.ts`
+(sockets), `registry.ts` (files), and the wiring in `run.ts`. Everything
+else in `session/` is a type or a pure function. To remove the feature:
+delete `session/`, `lib/cli/logsSession/`, the `/debug-logs` command's
+session steps, and the `session` option with its call sites in `run.ts`
+and the two CLI routes. Comments, addresses, and `A` stay.
+
 ## The story outline
 
 The trace screen shows one row per round, tool, interrupt, error, new user turn, LLM group or subprocess subagent. An `llmCall` span inside a tool becomes an `llmGroup` row, in a bold accent color, titled `Thread · <name> · N LLM calls` (`llmGroupTitle` in `story.ts`). A sub-agent that runs on its caller's thread is named by that thread too, so `Thread · main · 13 LLM calls` can sit under `Thread · main · 2 LLM calls`; naming the nested one by its tool was tried and read as a different kind of row. A top-level `llmCall` span becomes one only when a sibling `llmCall` span runs on a different thread (several `llm()` calls on one thread, as in a loop, stay flat): a conversation that runs beside the main one (an expression check, a watcher) then reads as its own thread, while a run with one conversation keeps its calls at the top and its rows at the same depth as before. A thread a tool started folds when complete; a top-level thread never folds by itself, because folding it would hide the run. Details does not repeat the owning tool, which the nesting already shows.
@@ -243,13 +344,44 @@ The structural linter bans direct text builders under `screens/`. The payload pa
   and resolves with `"back"` (Esc at the bottom of the stack, nothing
   left to clear) or `"quit"` (`q`), so the host can honor the same
   contract.
-- Copying: `y` in trace copies the focused node's JSON; in transcript it copies the full block text. `Y` in the trace screen copies
+- Copying: `y` in trace copies the focused node's JSON; in transcript it copies the full block text. `A` on any screen copies the focused row's address. `Y` in the trace screen copies
   every statelog event of the focused trace as JSONL, one object per line in
   file order. Views only *name* what to copy, through the `copy` and
   `copyTrace` actions. The shell in `run.ts` owns the events and the
   clipboard. `x` in the trace screen extracts the focused trace to a file, and
   only when the source is a local file.
 - The tab strip names the active screen, with no active tab on the traces list. Screens and overlays use `keyFooter` in `screens/chrome.ts` to combine their hints with the shell's shared commands. Trace uses `twoLineKeyFooter` and reserves a second footer row: complete commands fill the first row, and overflow joins the shared commands and title on the second. Other screens use one row. The page title sits at the bottom right in bold accent text on a contrasting background. The footer reserves room for that title and the shared commands, shortening the screen's hints when necessary; `?` lists every binding. The traces list has no separate title or total-count row. Search counts appear beside its query. Other screens keep useful status text above their content.
+
+## Row IDs are a contract
+
+Every row the viewer draws has an ID that survives follow updates, and the
+four screens share them: the overview selects by round ID, the trace
+outline's cursor is a row ID, a transcript block carries its round or span
+ID, and the timeline opens the same rows. The shapes are:
+
+| Row | ID | Example |
+| --- | --- | --- |
+| An LLM call (a round) | `round:<span id>:<ordinal>` | `round:span-7f3a:2` |
+| The user turn before a round | `<round id>:user` | `round:span-7f3a:2:user` |
+| A tool call | its span ID | `span-9c01` |
+| An interrupt, error, or other event under a parent | `leaf:<parent id>:<event type>:<ordinal>` | `leaf:span-9c01:interrupt:0` |
+
+An **address** is `<trace id>/<row id>` (`address.ts`). `A` copies the
+focused row's address on any screen, and a comment is stored against one.
+No single character can split an address: a trace ID may contain slashes
+(a hosted run), and a leaf directly under the trace root embeds the trace
+ID in its own row ID (`leaf:trace-<trace id>:error:0`). `splitAddress`
+therefore takes the trace IDs of the log the address names and uses the
+longest one that starts the text; the CLI reads the log before it splits.
+Text no trace ID starts is a bare row ID. The row ID is otherwise opaque:
+rows are found by looking the ID up in the story (`findRow`), never by
+parsing it. `parseRoundId` exists for rounds and the screens use it to fall
+back to a round's span; do not add a general row-ID parser.
+
+Changing these shapes breaks every stored comment, so treat them as a
+contract. A comment also carries an anchor (the row's time, thread, and
+name) so a reader can still say what it was about when its ID no longer
+resolves.
 
 ## Adding a screen or an overlay
 

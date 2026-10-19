@@ -18,3 +18,5 @@ examples/
 runs/
 # Compiled by the debugger tests themselves (gitignored too)
 tests/debugger/*.ts
+# Workflow snapshots compared as text; the generator decides their quoting.
+lib/cli/schedule/backends/__snapshots__/

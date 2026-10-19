@@ -4,6 +4,7 @@ import { outlineRows, type StoryRow } from "./story.js";
 import { agentLoopTrace, event } from "./storyFixture.js";
 import {
   ARGUMENT_PREVIEW_CHARS,
+  commentsPayload,
   payloadFor,
   roundResponsePayload,
   RESULT_PREVIEW_CHARS,
@@ -504,4 +505,48 @@ it("shows arguments recorded as anything but an object as recorded", () => {
   const texts = payloadFor(row, options).map((line) => ("text" in line ? line.text : line.kind));
   expect(texts).toContain("raw text");
   expect(texts.some((text) => text.startsWith("0:"))).toBe(false);
+});
+
+describe("commentsPayload", () => {
+  const at = "2026-10-19T14:30:02.000Z";
+  const question = {
+    v: 1 as const,
+    id: "c1",
+    traceId: "T",
+    rowId: "round:L:0",
+    anchor: {},
+    author: { kind: "human" as const, id: "adit" },
+    text: "why twice?",
+    created: at,
+  };
+  const answer = {
+    ...question,
+    id: "c2",
+    author: { kind: "agent" as const, id: "claude" },
+    text: "it retries",
+    replyTo: "c1",
+  };
+
+  it("is empty with no threads and lists each thread with its replies indented", () => {
+    expect(commentsPayload([])).toEqual([]);
+    const lines = commentsPayload([{ comment: question, replies: [answer] }]);
+    expect(lines[1]).toEqual({ kind: "rule", text: "COMMENTS · 1", tone: "accent" });
+    expect(lines[2]).toMatchObject({ kind: "text", indent: 0 });
+    expect((lines[2] as { text: string }).text).toContain("✎ adit");
+    expect((lines[2] as { text: string }).text).toContain("why twice?");
+    expect(lines[3]).toMatchObject({ kind: "text", indent: 1 });
+    expect((lines[3] as { text: string }).text).toContain("⚑ claude");
+  });
+
+  it("is appended to a row's payload when the options carry threads", () => {
+    const row = roundRow("answer text");
+    const plain = payloadFor(row, { raw: false });
+    const withComments = payloadFor(row, {
+      raw: false,
+      comments: [{ comment: question, replies: [] }],
+    });
+    expect(withComments.slice(0, plain.length)).toEqual(plain);
+    expect(withComments.at(-1)).toMatchObject({ kind: "text" });
+    expect((withComments.at(-1) as { text: string }).text).toContain("why twice?");
+  });
 });

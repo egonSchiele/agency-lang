@@ -28,6 +28,17 @@ timeline views (`t`), search, and follow mode. `agency logs view <file>`
 is the same thing spelled explicitly, and `-` reads from stdin. See the
 viewer's own help (`?`) for keys.
 
+A file that holds several traces opens on a list of them. To skip the
+list and open one trace directly, name it:
+
+```bash
+agency logs run.jsonl --trace-id k3Pq9abc   # a full id, or a unique prefix
+```
+
+The other traces stay reachable with `t`. Under `--follow` the trace may
+not have started yet; the viewer then waits on it and shows it when its
+first event arrives.
+
 ## Labeling a trace from the viewer
 
 When you view a **local** statelog file, the tree's `l` key labels the
@@ -91,6 +102,50 @@ sparkrows per agent, bucketed by day or week to fit the terminal.
 
 Drilling into a test hands the same terminal to the log viewer; `Esc`
 backs out to the table, `q` quits the whole program.
+
+## Comments and sessions
+
+When you review a run with a coding agent, the slow part is pointing: "the
+fourth LLM call on the reviewer thread, where it reads the config again".
+The viewer can hand the agent that spot directly.
+
+**Addresses.** Every row has an address, `<trace id>/<row id>`. `A` copies
+the focused row's address on any screen; paste it to the agent.
+
+**Comments.** `c` leaves a comment on the focused row (or on the row a
+detail view shows). The row gains a `✎` in the gutter, and its comments are
+listed under its payload. Comments live beside the log, in
+`comments.jsonl` for a run directory or `<file>.comments.jsonl` beside a
+loose statelog. The log itself is left as the runtime wrote it. Logs read from stdin or a remote server have no comments.
+An agent's answer to your comment shows under it. An agent's own notes are
+hidden until `C` shows them, so your reading stays yours; a note you replied
+to stays, since your reply is part of it.
+
+**Sessions.** While the viewer is open, the `agency logs session` commands
+can talk to it from another terminal. That is what the agent uses:
+
+```bash
+agency logs session get                      # the row under your cursor, expanded
+agency logs session show k3Pq9abc/round:span-7f3a:2
+agency logs session comments                 # your comments on the open trace, each with its row
+agency logs session comment add k3Pq9abc/round:span-7f3a:2 "it retries after a cache miss" --reply-to c_8f2a
+agency logs session navigate k3Pq9abc/span-9c01   # move your viewer to a row
+agency logs session navigate k3Pq9abc        # open a trace on its first row
+agency logs session pick                     # put your viewer on the list of traces
+agency logs session list                     # the open viewers
+```
+
+Each prints the row the way the viewer shows it: its address, a header
+line such as `Thread · reviewer · LLM call 4 of 9 · gpt-5 · 2.1s · $0.004`,
+and the payload. `--json` gives the same facts as fields plus the row's raw
+events. With no viewer open, `show`, `comments`, and `comment add` work on
+the files when given `--log <file>`, where the file may also be a run
+directory, as for `agency logs`; `get`, `navigate`, and `pick` need the
+viewer.
+A bare row id needs `--trace <id>`; an address carries its trace. The viewer
+registers itself under the agent home (`~/.agency-agent/log-sessions/`) and
+removes the record when it quits; nothing runs in the background on its
+own. The `/debug-logs` command in this repo teaches the agent these steps.
 
 ## CSV export
 

@@ -20,6 +20,8 @@ import {
   type ScoreDraft,
 } from "./mutations.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
+import { commentsPathFor } from "./commentsPath.js";
+import { openCommentsStore } from "./commentsStore.js";
 import { agentStartLine, statelogLine, tempDir, writeProject } from "./testFixtures.js";
 
 const human = { kind: "human" as const, id: "adit" };
@@ -225,6 +227,29 @@ describe("wrapTracesAsRunDirectories", () => {
       }),
     ).toThrow(/t1/);
     expect(fs.existsSync(path.join(other, "t9"))).toBe(false);
+  });
+});
+
+describe("wrapping a statelog that has a comments sidecar", () => {
+  it("copies the trace's comment rows into the child run and leaves the sidecar unchanged", () => {
+    const file = statelogFile(agentStartLine("t1"), agentStartLine("t2"));
+    const store = openCommentsStore(commentsPathFor({ kind: "file", path: file }), human);
+    store.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "on t1" });
+    store.add({ traceId: "t2", rowId: "round:s2:0", anchor: {}, text: "on t2" });
+    const before = fs.readFileSync(store.path, "utf8");
+
+    const group = tempDir();
+    wrapTracesAsRunDirectories({
+      groupDir: group,
+      statelogFiles: [file],
+      codeEntries: [],
+      annotationFiles: [],
+    });
+    const firstRun = readRunDirectory(path.join(group, "t1"), quiet);
+    expect(firstRun.comments.threads.map((thread) => thread.comment.text)).toEqual(["on t1"]);
+    const secondRun = readRunDirectory(path.join(group, "t2"), quiet);
+    expect(secondRun.comments.threads.map((thread) => thread.comment.text)).toEqual(["on t2"]);
+    expect(fs.readFileSync(store.path, "utf8")).toBe(before);
   });
 });
 

@@ -9,6 +9,8 @@ import {
 } from "./annotations.js";
 import type { ParseError } from "@/statelog/parse.js";
 
+import { foldComments, parseCommentsJsonl, type FoldedComments } from "./comments.js";
+
 import { readTraces, type Trace } from "./traces.js";
 
 /**
@@ -33,6 +35,9 @@ export type RunDirectoryPaths = {
   workdirDir: string;
   workdirSidecar: string;
   checklistsDir: string;
+  /** Comments on rows of the trace (`comments.ts`); read like `notes.md`,
+   *  outside the statelog coherence check. */
+  comments: string;
   lock: string;
 };
 
@@ -47,6 +52,7 @@ export function runDirPaths(dir: string): RunDirectoryPaths {
     workdirDir: path.join(dir, "workdir"),
     workdirSidecar: path.join(dir, "workdir.json"),
     checklistsDir: path.join(dir, "checklists"),
+    comments: path.join(dir, "comments.jsonl"),
     lock: path.join(dir, ".lock"),
   };
 }
@@ -59,6 +65,8 @@ export type RunDirectorySnapshot = {
   effectiveAnnotations: Record<string, EffectiveTraceAnnotations>;
   /** The text of `notes.md`, written by a person with any editor; null when absent. */
   notes: string | null;
+  /** Comments on rows of the trace, folded into threads; empty when there are none. */
+  comments: FoldedComments;
 };
 
 export type ReadRunDirectoryOptions = { reportWarning(message: string): void };
@@ -84,6 +92,7 @@ export function readRunDirectory(
     const annotationRows = readAnnotations(paths.annotations, options.reportWarning);
     const after = readStatelog(paths);
     const notes = readNotes(paths);
+    const comments = readComments(paths, options.reportWarning);
     if (before.fingerprint === after.fingerprint) {
       // Only the read we keep reports its problems, so a warning shows once.
       for (const error of after.errors) {
@@ -97,6 +106,7 @@ export function readRunDirectory(
         annotationRows,
         effectiveAnnotations: foldAnnotations(annotationRows),
         notes,
+        comments,
       };
     }
   }
@@ -133,6 +143,22 @@ function readNotes(paths: RunDirectoryPaths): string | null {
     }
     throw error;
   }
+}
+
+/** Comments are a person's or an agent's, appended under the lock but read
+ *  without it, like `notes.md`: best effort, outside the coherence check. */
+function readComments(
+  paths: RunDirectoryPaths,
+  reportWarning: (message: string) => void,
+): FoldedComments {
+  if (!fs.existsSync(paths.comments)) {
+    return foldComments([]);
+  }
+  const parsed = parseCommentsJsonl(fs.readFileSync(paths.comments, "utf8"));
+  for (const error of parsed.errors) {
+    reportWarning(`${paths.comments}:${error.line}: skipping ${error.detail}`);
+  }
+  return foldComments(parsed.rows);
 }
 
 function readStatelog(paths: RunDirectoryPaths): {

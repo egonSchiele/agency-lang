@@ -66,6 +66,7 @@ import {
   addRunDirectoryCommands,
   runDirectoryCommandDependencies,
 } from "@/cli/runDirectory/commands.js";
+import { addLogsSessionCommands } from "@/cli/logsSession/register.js";
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
@@ -983,6 +984,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (file: string, _options: Record<string, never>, command: Command) => {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
+
+  addLogsSessionCommands(logsCmd);
 
   const runDirectoryDeps = runDirectoryCommandDependencies();
   addLogsExtractCommand(logsCmd, runDirectoryDeps);

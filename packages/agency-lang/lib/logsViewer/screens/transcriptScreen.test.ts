@@ -183,7 +183,8 @@ it("pages inside a long block by display lines and keeps j/k on blocks", () => {
   const screen = make(
     buildForest([event("promptCompletion", 100, "L", null, { completion: { output: answer } })]),
   );
-  const small = { cols: 100, rows: 13 };
+  // Header, context row, footer, and a pane of eleven rows.
+  const small = { cols: 100, rows: 14 };
   expect(text(screen, small.cols, small.rows)).toContain("line 0");
   screen.handleKey({ key: "d", ctrl: true }, small);
   expect(text(screen, small.cols, small.rows)).toContain("line 4");
@@ -455,7 +456,7 @@ describe("the call list and header", () => {
     expect(spineOf()).toContain("▶ ▾     researchAgent");
   });
 
-  it("paints a breadcrumb over the first row when the pane is scrolled into a sub-agent's group", () => {
+  it("states the thread path of the pane's first row in the context row, titles uncovered", () => {
     const calls = Array.from({ length: 12 }, (_unused, position) =>
       event("promptCompletion", 150 + position, "B", "t", {
         threadIdentity: "main",
@@ -489,17 +490,19 @@ describe("the call list and header", () => {
     // Search opens the fold on the way to its match and lands inside the group.
     screen.applySearch("did 9");
     expect(screen.focusId()).toBe("round:B:9");
-    const first = text(screen).split("\n")[2].split("│")[1];
-    expect(first).toContain("researchAgent › Thread · researchAgent · 12 LLM calls");
-    // Scrolled so a box's title is the first row, the title shows instead.
-    press(screen, "k");
-    press(screen, "k");
-    screen.handleKey({ key: "d", ctrl: true }, viewport);
+    // With a search on, the status row sits above the context row.
     const rows = text(screen).split("\n");
-    const top = rows[2].split("│")[1];
-    if (top.includes("┌─") || top.includes("┏━")) {
-      expect(top).not.toContain("›");
-    }
+    expect(rows[2].split("│")[1]).toContain(
+      "Thread · unnamed · 1 LLM call › researchAgent › Thread · researchAgent · 12 LLM calls",
+    );
+    // The context row is its own row: a title on the pane's first row is
+    // not covered, and moving up keeps the path in view.
+    press(screen, "k");
+    press(screen, "k");
+    const after = text(screen).split("\n");
+    expect(after[2].split("│")[1]).toContain("researchAgent › Thread · researchAgent");
+    // The pane's own rows are all content: nothing is painted over them.
+    expect(after.slice(3).some((line) => line.includes("›"))).toBe(false);
   });
   it("keeps a group the reader opened open through a follow update, and unfolds one that runs again", () => {
     const events = [
@@ -584,14 +587,14 @@ describe("the call list and header", () => {
   });
   it("keeps the active box where it is until it would leave the pane", () => {
     const screen = make(buildForest(loopEvents()));
-    expect(text(screen).split("\n")[1]).toContain("┏━ USER");
+    expect(text(screen).split("\n")[2]).toContain("┏━ USER");
     press(screen, "j");
     press(screen, "j");
     // Moving down within the pane does not scroll: the first box is still
     // at the top, and the heavy rule marks the active one further down.
     const moved = text(screen).split("\n");
-    expect(moved[1]).toContain("┌─ USER");
-    expect(moved.findIndex((line) => line.includes("┏━"))).toBeGreaterThan(1);
+    expect(moved[2]).toContain("┌─ USER");
+    expect(moved.findIndex((line) => line.includes("┏━"))).toBeGreaterThan(2);
   });
   it("cuts a long argument on the call and shows what the model read on the tool", () => {
     const long = "x".repeat(200);

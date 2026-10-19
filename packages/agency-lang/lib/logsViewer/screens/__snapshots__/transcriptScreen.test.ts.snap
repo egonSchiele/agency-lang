@@ -2,6 +2,7 @@
 
 exports[`transcript screen > renders the final answer at 100 columns 1`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ ┏━ ASSISTANT · LLM call 10 ━━━━━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ ┃ response                                                       ┃
     LLM call 1                  │ ┃   code                                                         ┃
@@ -39,12 +40,12 @@ exports[`transcript screen > renders the final answer at 100 columns 1`] = `
                                 │ ┃           return pass()                                        ┃
                                 │ ┃         }                                                      ┃
                                 │ ┃       } with (intr) {                                          ┃
-                                │ ┃         // Outer handler: rejects notes::archive when count >  ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy   [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 100 columns 2`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ 145 ┏━ ASSISTANT · LLM call 10 ━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ 146 ┃ response                                                   ┃
     LLM call 1                  │ 147 ┃   code                                                     ┃
@@ -82,12 +83,12 @@ exports[`transcript screen > renders the final answer at 100 columns 2`] = `
                                 │ 179 ┃             return approve()                               ┃
                                 │ 180 ┃           }                                                ┃
                                 │ 181 ┃           return pass()                                    ┃
-                                │ 182 ┃         }                                                  ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy   [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 130 columns 1`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ ┏━ ASSISTANT · LLM call 10 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ ┃ response                                                                                     ┃
     LLM call 1                  │ ┃   code                                                                                       ┃
@@ -125,12 +126,12 @@ exports[`transcript screen > renders the final answer at 130 columns 1`] = `
                                 │ ┃         if (intr.effect == "notes::archive") {                                               ┃
                                 │ ┃           if (intr.data.count > 10) {                                                        ┃
                                 │ ┃             return reject()                                                                  ┃
-                                │ ┃           }                                                                                  ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy                                 [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 130 columns 2`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ 141 ┏━ ASSISTANT · LLM call 10 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ 142 ┃ response                                                                                 ┃
     LLM call 1                  │ 143 ┃   code                                                                                   ┃
@@ -168,12 +169,12 @@ exports[`transcript screen > renders the final answer at 130 columns 2`] = `
                                 │ 175 ┃       } with (intr) {                                                                    ┃
                                 │ 176 ┃         // Outer handler: rejects notes::archive when count > 10, otherwise passes.      ┃
                                 │ 177 ┃         if (intr.effect == "notes::archive") {                                           ┃
-                                │ 178 ┃           if (intr.data.count > 10) {                                                    ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy                                 [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 200 columns 1`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ ┏━ ASSISTANT · LLM call 10 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ ┃ response                                                                                                                                                           ┃
     LLM call 1                  │ ┃   code                                                                                                                                                             ┃
@@ -211,12 +212,12 @@ exports[`transcript screen > renders the final answer at 200 columns 1`] = `
                                 │ ┃           if (intr.data.count > 10) {                                                                                                                              ┃
                                 │ ┃             return reject()                                                                                                                                        ┃
                                 │ ┃           }                                                                                                                                                        ┃
-                                │ ┃         }                                                                                                                                                          ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy                                                                                                       [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 200 columns 2`] = `
 "Elapsed 1m24s · block 21 of 21
+                                │
   ▸ system                      │ 139 ┏━ ASSISTANT · LLM call 10 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 22.0s · 20k in · $0.0034 ━━┓
     user                        │ 140 ┃ response                                                                                                                                                       ┃
     LLM call 1                  │ 141 ┃   code                                                                                                                                                         ┃
@@ -254,6 +255,5 @@ exports[`transcript screen > renders the final answer at 200 columns 2`] = `
                                 │ 173 ┃           if (intr.data.count > 10) {                                                                                                                          ┃
                                 │ 174 ┃             return reject()                                                                                                                                    ┃
                                 │ 175 ┃           }                                                                                                                                                    ┃
-                                │ 176 ┃         }                                                                                                                                                      ┃
 # numbers   j k move   ⏎ expand   s system   p approvals   / find   d detail   y copy                                                                                                       [TRANSCRIPT]"
 `;

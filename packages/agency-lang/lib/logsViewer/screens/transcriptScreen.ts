@@ -38,7 +38,8 @@ import type { Screen } from "./screen.js";
 const LAYOUT = {
   spineWidth: 32,
   dividerWidth: 2,
-  fixedRows: 2,
+  /** The header, the context row above the pane, and the footer. */
+  fixedRows: 3,
   gap: 1,
   half: 2,
   /** Cells per level in the call list, as on the trace. */
@@ -488,33 +489,24 @@ export class TranscriptScreen implements Screen {
       folded,
     }).map((line) => nested(line, block.depth, width)));
   }
-  /** `researchAgent › Thread · main · 13 LLM calls`: what the first row
-   *  of the pane is inside, when that is a sub-agent's group and the row
-   *  is neither the group's own nor a box's title. Painted over the
-   *  first row. */
-  private breadcrumb(): Painted | undefined {
+  /** The context row above the pane: the thread path of the block on the
+   *  pane's first row, `Thread · main · 2 LLM calls › researchAgent ›
+   *  Thread · main · 13 LLM calls`, so what the top of the pane is inside
+   *  is always stated and never covers a row of it. Blank for a trace with
+   *  no thread rows. */
+  private breadcrumb(): Painted {
     const atTop = this.painted.filter((block) => block.start <= this.scrollTop).at(-1);
     const block = this.visible.find((candidate) => candidate.id === atTop?.id);
-    // A block's first row is its title and is never covered.
-    if (
-      block === undefined ||
-      block.depth === 0 ||
-      block.kind === "thread" ||
-      atTop?.start === this.scrollTop
-    ) {
-      return undefined;
-    }
-    const crumbs = block.groupPath
-      .slice(1)
+    const crumbs = (block?.groupPath ?? [])
       .map((spanId) => this.blocks.find((candidate) => candidate.id === `group:${spanId}`))
       .filter(
         (group): group is Extract<TranscriptBlock, { kind: "thread" }> => group?.kind === "thread",
       )
-      .map((group) => `${group.tool ?? "?"} › Thread · ${group.label} · ${callsText(group.calls)}`);
-    if (crumbs.length === 0) {
-      return undefined;
-    }
-    return segment(` ${crumbs.join("  ›  ")} `, this.width, {
+      .map(
+        (group) =>
+          `${group.tool === undefined ? "" : `${group.tool} › `}Thread · ${group.label} · ${callsText(group.calls)}`,
+      );
+    return segment(crumbs.length === 0 ? "" : ` ${crumbs.join(" › ")} `, this.width, {
       style: { fg: THEME.accent, bg: THEME.rule, bold: true },
     });
   }
@@ -551,10 +543,6 @@ export class TranscriptScreen implements Screen {
     const lines = this.painted
       .flatMap((block) => block.lines)
       .slice(this.scrollTop, this.scrollTop + this.page);
-    const crumb = this.breadcrumb();
-    if (crumb !== undefined && lines.length > 0) {
-      lines[0] = crumb;
-    }
     const status = [
       this.query ? `/${this.query} · ${this.matches.length} matches` : "",
       this.following ? "following" : "",
@@ -567,6 +555,13 @@ export class TranscriptScreen implements Screen {
       ...(status
         ? [paintedLine(segment(status, viewport.cols, { style: { fg: THEME.muted } }))]
         : []),
+      paintedLine(
+        joinPainted(
+          segment("", LAYOUT.spineWidth),
+          paint("│ ", { fg: THEME.chrome }),
+          this.breadcrumb(),
+        ),
+      ),
       row(
         { height: this.page },
         column(

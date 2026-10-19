@@ -4,12 +4,18 @@ import * as path from "path";
 
 import * as net from "net";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { request } from "./client.js";
 import type { SessionPort } from "./port.js";
-import { listRecords, recordPaths } from "./registry.js";
+import { listRecords, recordPaths, writeRecord } from "./registry.js";
 import { isUnavailable, startSessionServer, type SessionServer } from "./server.js";
+
+// The record write is real everywhere but in the one test that makes it fail.
+vi.mock("./registry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./registry.js")>();
+  return { ...actual, writeRecord: vi.fn(actual.writeRecord) };
+});
 
 function fakePort(): SessionPort & { navigated: string[]; reloads: number } {
   const port = {
@@ -120,6 +126,40 @@ describe("the session server", () => {
     ]);
     expect(stopped).toBe("stopped");
     hung.destroy();
+  });
+
+  it("answers the first line only, so a second line cannot run a navigate twice", async () => {
+    const port = fakePort();
+    const started = await startSessionServer(port, {
+      dir,
+      logPath: "/logs/run.jsonl",
+      commentsPath: undefined,
+      pid: 4250,
+    });
+    if (isUnavailable(started)) throw new Error(started.unavailable);
+    server = started;
+    const client = net.connect(started.socketPath);
+    client.resume();
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+    client.write('{"op":"navigate","traceId":"abc"}\n{"op":"navigate","traceId":"abc"}\n');
+    await new Promise<void>((resolve) => client.once("close", () => resolve()));
+    expect(port.navigated).toEqual(["abc/"]);
+  });
+
+  it("a record that cannot be written leaves the viewer without a session and nothing listening", async () => {
+    vi.mocked(writeRecord).mockImplementationOnce(() => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+    const started = await startSessionServer(fakePort(), {
+      dir,
+      logPath: "/logs/run.jsonl",
+      commentsPath: undefined,
+      pid: 4251,
+    });
+    expect(isUnavailable(started)).toBe(true);
+    if (!isUnavailable(started)) return;
+    expect(started.unavailable).toContain("could not write");
+    await expect(request(recordPaths(dir, 4251).sock, { op: "get" })).rejects.toThrow();
   });
 
   it("rejects a malformed request and stays up; stop removes the record and socket", async () => {

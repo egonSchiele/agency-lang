@@ -118,7 +118,8 @@ listed under its payload. Comments live beside the log, in
 `comments.jsonl` for a run directory or `<file>.comments.jsonl` beside a
 loose statelog. The log itself is left as the runtime wrote it. Logs read from stdin or a remote server have no comments.
 An agent's answer to your comment shows under it. An agent's own notes are
-hidden until `C` shows them, so your reading stays yours.
+hidden until `C` shows them, so your reading stays yours; a note you replied
+to stays, since your reply is part of it.
 
 **Sessions.** While the viewer is open, the `agency logs session` commands
 can talk to it from another terminal. That is what the agent uses:
@@ -138,7 +139,8 @@ Each prints the row the way the viewer shows it: its address, a header
 line such as `Thread · reviewer · LLM call 4 of 9 · gpt-5 · 2.1s · $0.004`,
 and the payload. `--json` gives the same facts as fields plus the row's raw
 events. With no viewer open, `show`, `comments`, and `comment add` work on
-the files when given `--log <file>`; `get`, `navigate`, and `pick` need the
+the files when given `--log <file>`, where the file may also be a run
+directory, as for `agency logs`; `get`, `navigate`, and `pick` need the
 viewer.
 A bare row id needs `--trace <id>`; an address carries its trace. The viewer
 registers itself under the agent home (`~/.agency-agent/log-sessions/`) and

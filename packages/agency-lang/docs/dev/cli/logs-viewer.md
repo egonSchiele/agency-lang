@@ -189,7 +189,8 @@ The store compares the file's size before re-reading, since the tick fires
 every 250ms.
 
 An agent's reply to a person's comment is always shown under it; the `C`
-toggle hides only the agent's own notes (`marksFrom` drops them). A shell
+toggle hides only the agent's own notes (`marksFrom` drops a thread no
+human wrote in, so an agent note the person replied to stays). A shell
 binding runs instead of a screen's on the same key, so `run.shell.test.ts`
 checks every shell key against every screen's keys.
 
@@ -209,15 +210,17 @@ arrives between key presses, is answered through a `SessionPort` the
 shell builds from its host and its comments source, and ends with a
 `render()`. The port has five functions: `focus` (the same `focusedRow`
 lookup `A` uses), `navigate` (`selectTrace` when the trace differs, then
-`switchTo("trace", rowId)`, or the trace screen alone when no row is
-named; every refusal, a missing trace or row or one the trace screen's
+`switchTo("trace", rowId)`, or the trace screen's first visible row when no
+row is named, also when that trace is already open; every refusal, a missing trace or row or one the trace screen's
 settings or an active search hide, comes before the host changes, so the
 person's trace, overlays, and screen stay as they were), `reloadComments`
 (`commentsSource.refresh`), `pick` (the trace list, as `t` opens it), and
 `notify`. A port call that throws answers the request with an error and
-leaves the viewer up; a client that never finishes its line is cut off by a
-timeout, and `stop` ends every open connection so quitting never waits on
-one. There is no request that writes
+leaves the viewer up; a connection is answered once, on its first line,
+and a client that never finishes its line is cut off by a timeout or a size
+cap, and `stop` ends every open connection so quitting never waits on
+one. A record that cannot be written after `listen` closes the socket and
+leaves the viewer without a session, as a failed `listen` does. There is no request that writes
 a comment: it would be saved under the viewer's author, the person, so the
 CLI writes through its own store and sends `reload`. The server is started
 inside the shell's `try`, and a listen failure gives a notice instead of

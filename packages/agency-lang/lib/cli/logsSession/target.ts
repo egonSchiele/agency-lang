@@ -9,6 +9,7 @@ import type { SessionRecord } from "@/logsViewer/session/record.js";
 import type { CommentAuthor } from "@/runDirectory/comments.js";
 import { commentsPathFor, commentsSourceForStatelog } from "@/runDirectory/commentsPath.js";
 import type { CommentsStore } from "@/runDirectory/commentsStore.js";
+import { runDirPaths } from "@/runDirectory/runDir.js";
 
 export type TargetArgs = {
   /** `--log`: the statelog to act on, which also picks the viewer on it. */
@@ -49,6 +50,9 @@ export type TargetDeps = {
   openStore(commentsPath: string, author: CommentAuthor): CommentsStore;
   author: CommentAuthor;
   cwd: string;
+  /** What `--log` names on disk, so a run directory can stand for its
+   *  statelog and a typo is refused before anything reads it. */
+  pathKind(absolutePath: string): "file" | "directory" | "missing";
 };
 
 export function resolveTarget(
@@ -57,7 +61,7 @@ export function resolveTarget(
   deps: TargetDeps,
 ): Target {
   const live = liveSessions(probed, deps);
-  const chosen = chooseSession(args.log, live, deps.cwd);
+  const chosen = chooseSession(args.log, live, deps);
   if (chosen.kind === "refused") {
     return chosen;
   }
@@ -102,14 +106,24 @@ function liveSessions(probed: readonly ProbedRecord[], deps: TargetDeps): LiveSe
  * `--log` picks the viewer on that log, else the files; with no `--log`, the
  * only open viewer; several open viewers need `--log`; none open and no
  * `--log` is a refusal that says both ways forward.
+ *
+ * `--log` takes what `agency logs` takes: a statelog file or a run
+ * directory, which stands for the `statelog.jsonl` inside it. A path that
+ * is not there is refused here, so no command reads a log that does not
+ * exist.
  */
 function chooseSession(
   log: string | undefined,
   live: LiveSession[],
-  cwd: string,
+  deps: TargetDeps,
 ): { kind: "session"; session: LiveSession } | { kind: "files"; logPath: string } | Target {
   if (log !== undefined) {
-    const logPath = path.resolve(cwd, log);
+    const given = path.resolve(deps.cwd, log);
+    const kind = deps.pathKind(given);
+    if (kind === "missing") {
+      return { kind: "refused", reason: `no log at ${given}` };
+    }
+    const logPath = kind === "directory" ? runDirPaths(given).statelog : given;
     const session = live.find((candidate) => path.resolve(candidate.record.logPath) === logPath);
     return session === undefined ? { kind: "files", logPath } : { kind: "session", session };
   }

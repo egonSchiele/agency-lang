@@ -11,6 +11,12 @@ const deps: TargetDeps = {
   openStore: (commentsPath) => ({ path: commentsPath }) as CommentsStore,
   author,
   cwd: "/work",
+  pathKind: (absolutePath) =>
+    absolutePath.endsWith("/missing.jsonl")
+      ? "missing"
+      : absolutePath.endsWith(".jsonl")
+        ? "file"
+        : "directory",
 };
 
 function live(pid: number, logPath: string, commentsPath?: string): ProbedRecord {
@@ -78,6 +84,24 @@ describe("resolveTarget", () => {
         kind: "files",
         store: { path: "/logs/loose.jsonl.comments.jsonl" },
       });
+    });
+
+    it("--log <run directory> stands for the statelog inside it, for a viewer or the files", () => {
+      const sessions = [live(1, "/work/runs/a/statelog.jsonl")];
+      expect(resolveTarget({ log: "runs/a" }, sessions, deps)).toMatchObject({
+        kind: "session",
+        session: { record: { pid: 1 } },
+      });
+      expect(resolveTarget({ log: "runs/b" }, sessions, deps)).toMatchObject({
+        kind: "files",
+        logPath: "/work/runs/b/statelog.jsonl",
+        store: { path: "/work/runs/b/comments.jsonl" },
+      });
+    });
+
+    it("--log on a path that is not there is refused, not read", () => {
+      const target = resolveTarget({ log: "runs/missing.jsonl" }, [], deps);
+      expect(target).toEqual({ kind: "refused", reason: "no log at /work/runs/missing.jsonl" });
     });
   });
 

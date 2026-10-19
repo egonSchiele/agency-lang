@@ -14,6 +14,9 @@ import { ensureSessionsDir, recordPaths, removeRecord, writeRecord } from "./reg
 const MAX_SOCKET_PATH_BYTES = 104;
 /** How long a connected client may take to send its one line. */
 const REQUEST_TIMEOUT_MS = 5_000;
+/** A request is one short JSON line; a client that sends more than this
+ *  without a newline is not speaking the protocol and is dropped. */
+const MAX_REQUEST_BYTES = 64 * 1024;
 
 export type SessionServerOptions = {
   dir: string;
@@ -76,17 +79,25 @@ export function startSessionServer(
       open.splice(open.indexOf(socket), 1);
     });
     socket.setTimeout(REQUEST_TIMEOUT_MS, () => socket.destroy());
+    // One request per connection: the first line is answered and the rest
+    // of the stream is ignored, so a second line cannot run a navigate or
+    // a reload twice, and a stream that never ends a line is cut off.
     let buffer = "";
     socket.setEncoding("utf8");
-    socket.on("data", (chunk: string) => {
+    const onData = (chunk: string): void => {
       buffer += chunk;
       const newline = buffer.indexOf("\n");
       if (newline === -1) {
+        if (buffer.length > MAX_REQUEST_BYTES) {
+          socket.destroy();
+        }
         return;
       }
+      socket.removeListener("data", onData);
       const reply = answer(port, { ...options, ...absolutePaths }, buffer.slice(0, newline));
       socket.end(JSON.stringify(reply) + "\n");
-    });
+    };
+    socket.on("data", onData);
     socket.on("error", () => {
       // The client went away mid-request; there is nobody to answer.
     });
@@ -101,13 +112,22 @@ export function startSessionServer(
     server.once("error", unavailable);
     server.listen(paths.sock, () => {
       server.removeListener("error", unavailable);
-      writeRecord(options.dir, {
-        pid,
-        logPath: absolutePaths.logPath,
-        commentsPath: absolutePaths.commentsPath,
-        cwd: process.cwd(),
-        started: new Date().toISOString(),
-      });
+      try {
+        writeRecord(options.dir, {
+          pid,
+          logPath: absolutePaths.logPath,
+          commentsPath: absolutePaths.commentsPath,
+          cwd: process.cwd(),
+          started: new Date().toISOString(),
+        });
+      } catch (error) {
+        // A record that cannot be written (a full disk, a directory made
+        // read-only between mkdir and now) leaves no session; the socket
+        // is closed so nothing listens that no CLI can find.
+        server.close();
+        resolve({ unavailable: `could not write ${paths.json}: ${(error as Error).message}` });
+        return;
+      }
       resolve({
         socketPath: paths.sock,
         stop: () =>

@@ -46,6 +46,20 @@ describe("marksFrom", () => {
     expect(commentCount(marks, "T")).toBe(2);
   });
 
+  it("keeps an agent note the person replied to while agent notes are hidden", () => {
+    const replied = foldComments([
+      comment("note", { author: { kind: "agent", id: "claude" }, rowId: "span-9" }),
+      comment("still wrong", { replyTo: "note", rowId: "span-9" }),
+      comment("aside", { author: { kind: "agent", id: "claude" }, rowId: "span-10" }),
+    ]);
+    const marks = marksFrom(replied, { showAgentNotes: false });
+    const row = marksForRow(marks, "T", "span-9");
+    expect(row.threads.map((thread) => thread.comment.id)).toEqual(["note"]);
+    expect(row.threads[0].replies.map((reply) => reply.id)).toEqual(["still wrong"]);
+    expect(marksForRow(marks, "T", "span-10").threads).toEqual([]);
+    expect(commentCount(marks, "T")).toBe(1);
+  });
+
   it("keeps row ids apart by trace", () => {
     const marks = marksFrom(folded, { showAgentNotes: false });
     expect(marksForRow(marks, "U", "round:L:0").threads.map((t) => t.comment.id)).toEqual([

@@ -1,6 +1,8 @@
 // `agency logs session …`: probe the registry, drop the dead records, work
 // out the target, run the command, print. The commands themselves are in
 // commands.ts and the target rules in target.ts; this file only sequences.
+import * as fs from "fs";
+
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { request } from "@/logsViewer/session/client.js";
 import {
@@ -59,9 +61,17 @@ export function defaultSessionCliDeps(): SessionCliDeps {
       socketPathFor: (record: SessionRecord) => recordPaths(dir, record.pid).sock,
       openStore: openCommentsStore,
       cwd: process.cwd(),
+      pathKind,
     },
     writeStdout: (text) => process.stdout.write(text),
   };
+}
+
+function pathKind(absolutePath: string): "file" | "directory" | "missing" {
+  if (!fs.existsSync(absolutePath)) {
+    return "missing";
+  }
+  return fs.statSync(absolutePath).isDirectory() ? "directory" : "file";
 }
 
 export async function logsSession(

@@ -526,6 +526,11 @@ export class TraceScreen implements Screen {
     this.marks = marks;
     this.marksVersion += 1;
   }
+  /** The top of the outline as the person sees it: the first row a search
+   *  or quick filter left, else the first row at all. */
+  firstRowId(): string | undefined {
+    return (this.visible[0] ?? this.allRows[0])?.id;
+  }
   /** Whether `setFocus(id)` would land on that row. An admin or machinery
    *  row the settings hide, or one a `/` search or `F` filter removed, is
    *  reported by a session's `navigate` instead of landed near or revealed

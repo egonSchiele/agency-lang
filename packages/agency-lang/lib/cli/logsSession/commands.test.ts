@@ -8,7 +8,8 @@ import { loopEvents } from "@/logsViewer/storyFixture.js";
 import { outlineRows } from "@/logsViewer/story.js";
 import { buildForest } from "@/logsViewer/tree.js";
 import type { SessionRequest } from "@/logsViewer/session/protocol.js";
-import { commentsPathFor } from "@/runDirectory/commentsPath.js";
+import { commentsLockFor, commentsPathFor } from "@/runDirectory/commentsPath.js";
+import { acquireOwnedFileLock } from "@/runDirectory/lock.js";
 import { openCommentsStore } from "@/runDirectory/commentsStore.js";
 import { readTraces } from "@/runDirectory/traces.js";
 
@@ -24,10 +25,11 @@ import {
 } from "./commands.js";
 import type { Target } from "./target.js";
 
-/** A loose statelog with two traces, T and U, each the story fixture's loop. */
-function writeLog(dir: string): string {
+/** A loose statelog with two traces, T and U by default, each the story
+ *  fixture's loop. */
+function writeLog(dir: string, traceIds: string[] = ["T", "U"]): string {
   const file = path.join(dir, "run.jsonl");
-  const lines = ["T", "U"].flatMap((traceId) =>
+  const lines = traceIds.flatMap((traceId) =>
     loopEvents().map((event) => JSON.stringify({ ...event, trace_id: traceId })),
   );
   fs.writeFileSync(file, lines.join("\n") + "\n");
@@ -98,6 +100,46 @@ describe("the session commands on a files target", () => {
     expect((await pick(live, answering)).exitCode).toBe(0);
     expect(requests.at(-1)).toEqual({ op: "pick" });
     expect((await pick(target, deps)).exitCode).toBe(1);
+  });
+
+  it("navigate takes a trace id with slashes in it alone", async () => {
+    const slashed = writeLog(fs.mkdtempSync(path.join(os.tmpdir(), "lsc-")), ["hosted/run/42"]);
+    const live: Target = {
+      kind: "session",
+      session: {
+        record: { pid: 1, logPath: slashed, cwd: "/", started: "" },
+        focus: {
+          traceId: "hosted/run/42",
+          screen: "trace",
+          rowId: undefined,
+          logPath: slashed,
+          commentsPath: undefined,
+        },
+        socketPath: "/nowhere.sock",
+      },
+      store: undefined,
+      traceId: "hosted/run/42",
+      rowRef: "hosted/run/42",
+    };
+    expect((await navigate(live, deps)).text).toBe("viewer moved to hosted/run/42");
+    expect(requests).toEqual([{ op: "navigate", traceId: "hosted/run/42", rowId: undefined }]);
+    const address = await navigate({ ...live, rowRef: `hosted/run/42/${roundId}` }, deps);
+    expect(address.exitCode).toBe(0);
+    expect(requests.at(-1)).toEqual({ op: "navigate", traceId: "hosted/run/42", rowId: roundId });
+  });
+
+  it("a comment that cannot be written is a refusal, not a crash", async () => {
+    const held = acquireOwnedFileLock({
+      lockFile: commentsLockFor(target.store.path),
+      reportWarning: () => {},
+    });
+    try {
+      const result = await commentAdd({ ...target, traceId: "T", rowRef: roundId }, "x", {}, deps);
+      expect(result.exitCode).toBe(1);
+      expect(result.text).toContain("comment not saved");
+    } finally {
+      held.release();
+    }
   });
 
   it("get and navigate need a viewer", async () => {

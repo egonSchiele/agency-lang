@@ -415,7 +415,11 @@ function focusedRow(host: ScreenHost): { traceId: string; rowId: string | undefi
     return { traceId: host.currentTraceId(), rowId: undefined };
   }
   const screen = host.screen(host.activeScreen());
-  return { traceId: host.currentTraceId(), rowId: screen.selectedRowId?.() ?? screen.focusId() };
+  // A screen that answers `selectedRowId` has the last word, including
+  // "no row here" (undefined) on a turn header or a system block. Only a
+  // screen with no such method falls back to its focus id.
+  const rowId = screen.selectedRowId === undefined ? screen.focusId() : screen.selectedRowId();
+  return { traceId: host.currentTraceId(), rowId };
 }
 
 function sessionFocus(host: ScreenHost): Focus {
@@ -452,7 +456,10 @@ function navigateTo(
     host.selectTrace(traceId);
   }
   host.closeHelp();
-  host.switchTo("trace", rowId);
+  // A trace alone means its first row, also when that trace is already
+  // open and the cursor sits further down.
+  const first = traceScreen instanceof TraceScreen ? traceScreen.firstRowId() : undefined;
+  host.switchTo("trace", rowId ?? first);
   return "ok";
 }
 
@@ -1053,7 +1060,16 @@ function makeCommentsSource(args: {
     available: true,
     refresh,
     refreshIfChanged: () => {
-      if (store.changedSince()) {
+      // Runs from the follow timer, where a throw would kill the viewer
+      // with the terminal in raw mode; a stat failure is a notice instead.
+      let changed = false;
+      try {
+        changed = store.changedSince();
+      } catch (error) {
+        args.notify(`comments not read: ${(error as Error).message}`);
+        args.render();
+      }
+      if (changed) {
         refresh();
       }
     },

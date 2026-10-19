@@ -862,9 +862,17 @@ describe("the session", () => {
     });
     expect(out.lastText()).toContain("[DETAIL]");
 
-    // A trace alone lands on the trace screen; pick opens the list.
+    // A trace alone lands on the trace screen's first row, also when that
+    // trace is already open with the cursor further down; pick opens the
+    // list.
     expect(await request(sock, { op: "navigate", traceId: "abc" })).toEqual({ ok: true });
     expect(out.lastText()).toContain("[2 trace]");
+    const top = await request(sock, { op: "get" });
+    expect(top).toMatchObject({ ok: true, focus: { screen: "trace" } });
+    if (top.ok) {
+      expect(top.focus.rowId).toBeDefined();
+      expect(top.focus.rowId).not.toBe("round:s2:0");
+    }
     expect(await request(sock, { op: "pick" })).toEqual({ ok: true });
     expect(out.lastText()).toContain("TRACES");
     input.feedKey({ key: "escape" });

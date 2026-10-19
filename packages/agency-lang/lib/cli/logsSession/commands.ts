@@ -97,12 +97,9 @@ export function comments(target: Target, all: boolean, deps: CommandDeps): Comma
   }
   const folded = store.read();
   // With no viewer there is no current trace to prefer: show them all.
-  const everyTrace = all || target.traceId === undefined;
   const log = openLog(target, deps);
   const traceId =
-    everyTrace || target.traceId === undefined
-      ? undefined
-      : resolveTraceId(log.traces, target.traceId);
+    all || target.traceId === undefined ? undefined : resolveTraceId(log.traces, target.traceId);
   if (traceId !== undefined && "error" in traceId) {
     return refused(traceId.error);
   }
@@ -164,13 +161,20 @@ export async function commentAdd(
       );
     }
   }
-  const written: Comment = target.store.add({
-    traceId: located.traceId,
-    rowId: located.rowId,
-    anchor: anchorFor(row),
-    text,
-    replyTo: options.replyTo,
-  });
+  let written: Comment;
+  try {
+    written = target.store.add({
+      traceId: located.traceId,
+      rowId: located.rowId,
+      anchor: anchorFor(row),
+      text,
+      replyTo: options.replyTo,
+    });
+  } catch (error) {
+    // A held lock (the viewer saving at the same moment, `agency eval
+    // label` on the run) or an unwritable file is a refusal, not a crash.
+    return refused(`comment not saved: ${(error as Error).message}`);
+  }
   const saved = `saved ${written.id} on ${formatAddress(written.traceId, written.rowId)}`;
   if (target.kind === "session") {
     // The comment is on disk either way: a viewer that quit or stalled
@@ -199,8 +203,11 @@ export async function navigate(target: Target, deps: CommandDeps): Promise<Comma
     return refused(NO_VIEWER);
   }
   const log = openLog(target, deps);
+  // A trace id may hold slashes (`hosted/run/42`), so the argument is tried
+  // as a trace first, whatever it looks like, and read as an address only
+  // when no trace matches it.
   const traceOnly =
-    target.rowRef === undefined || target.rowRef.includes("/")
+    target.rowRef === undefined
       ? undefined
       : matchTraceId(
           log.traces.map((trace) => trace.traceId),

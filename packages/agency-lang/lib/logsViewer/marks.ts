@@ -31,8 +31,7 @@ export function emptyMarks(): RowMarks {
 export function marksFrom(folded: FoldedComments, options: MarkOptions): RowMarks {
   const marks = emptyMarks();
   for (const thread of folded.threads) {
-    const unprompted = thread.comment.author.kind === "agent";
-    if (unprompted && !options.showAgentNotes) {
+    if (!options.showAgentNotes && !hasHumanWords(thread)) {
       continue;
     }
     const { traceId, rowId } = thread.comment;
@@ -41,6 +40,16 @@ export function marksFrom(folded: FoldedComments, options: MarkOptions): RowMark
     marks[traceId][rowId].threads.push(thread);
   }
   return marks;
+}
+
+/** A thread the person took part in stays visible while agent notes are
+ *  hidden: hiding the agent's note must not hide the person's own reply
+ *  under it. */
+function hasHumanWords(thread: CommentThread): boolean {
+  return (
+    thread.comment.author.kind === "human" ||
+    thread.replies.some((reply) => reply.author.kind === "human")
+  );
 }
 
 export function marksForRow(marks: RowMarks, traceId: string, rowId: string): RowMarkSet {

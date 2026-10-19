@@ -12,4 +12,4 @@ If I gave an address with this command, start with step 1's `show` on it: $ARGUM
 3. **Explaining a row I am not on.** Run `agency logs session navigate <address>` first, so my viewer shows what you are describing. `navigate <trace id>` opens another run on its first row, and `agency logs session pick` puts me on the list of runs. A note you leave with `comment add` and no `--reply-to` is hidden in my viewer until I press `C`; tell me when you leave one.
 4. **Reading deeper.** Use `agency logs session show <address> --json` for the raw events of one row. Do not grep the log file.
 
-With no viewer open, `show`, `comments`, and `comment add` still work on the files when you pass `--log <file>`; `get`, `navigate`, and `pick` need the viewer. A bare row id needs `--trace <id>`; an address needs nothing.
+With no viewer open, `show`, `comments`, and `comment add` still work on the files when you pass `--log <file or run directory>`; `get`, `navigate`, and `pick` need the viewer. A bare row id needs `--trace <id>`; an address needs nothing.

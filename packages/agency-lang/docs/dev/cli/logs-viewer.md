@@ -251,6 +251,34 @@ The structural linter bans direct text builders under `screens/`. The payload pa
   only when the source is a local file.
 - The tab strip names the active screen, with no active tab on the traces list. Screens and overlays use `keyFooter` in `screens/chrome.ts` to combine their hints with the shell's shared commands. Trace uses `twoLineKeyFooter` and reserves a second footer row: complete commands fill the first row, and overflow joins the shared commands and title on the second. Other screens use one row. The page title sits at the bottom right in bold accent text on a contrasting background. The footer reserves room for that title and the shared commands, shortening the screen's hints when necessary; `?` lists every binding. The traces list has no separate title or total-count row. Search counts appear beside its query. Other screens keep useful status text above their content.
 
+## Row IDs are a contract
+
+Every row the viewer draws has an ID that survives follow updates, and the
+four screens share them: the overview selects by round ID, the trace
+outline's cursor is a row ID, a transcript block carries its round or span
+ID, and the timeline opens the same rows. The shapes are:
+
+| Row | ID | Example |
+| --- | --- | --- |
+| An LLM call (a round) | `round:<span id>:<ordinal>` | `round:span-7f3a:2` |
+| The user turn before a round | `<round id>:user` | `round:span-7f3a:2:user` |
+| A tool call | its span ID | `span-9c01` |
+| An interrupt, error, or other event under a parent | `leaf:<parent id>:<event type>:<ordinal>` | `leaf:span-9c01:interrupt:0` |
+
+An **address** is `<trace id>/<row id>` (`address.ts`). `A` copies the
+focused row's address on any screen, and a comment is stored against one.
+`parseAddress` splits on the last slash: a trace ID can be anything the
+statelog config or the trace-ID environment variable supplied, slashes
+included, while a row ID never contains one. The row ID is opaque to
+everything outside the story: rows are found by looking the ID up, never
+by parsing it (`parseRoundId` exists for rounds and the screens use it to
+fall back to a round's span; do not add a general row-ID parser).
+
+Changing these shapes breaks every stored comment, so treat them as a
+contract. A comment also carries an anchor (the row's time, thread, and
+name) so a reader can still say what it was about when its ID no longer
+resolves.
+
 ## Adding a screen or an overlay
 
 Add the painter under `screens/` and implement `Screen` for a numbered slot or `View` for an overlay. Declare its keys in one table. Give shared computations a pure module outside the painter. Keep follow state as IDs or absolute times, and use `forest.ts` for tree traversal. Round detail overlays retain the original round ID and resolve it again after every update, because event leaf IDs can change.

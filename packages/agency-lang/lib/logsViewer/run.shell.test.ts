@@ -8,11 +8,18 @@ import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { duplicateKeys } from "./keymap.js";
 // Shell-level behavior: the view stack, action dispatch, help overlay,
 // and the key routing that must NOT misfire (Ctrl+F pages; it is not `f`).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer, viewerShellBindings } from "./run.js";
+
+// `A` copies through the clipboard the shell detects; swap in a fake that
+// records what was written, as copyTrace.test.ts does.
+const copied: string[] = [];
+vi.mock("./clipboard.js", () => ({
+  detectClipboard: () => ({ write: (text: string) => copied.push(text) }),
+}));
 
 const events = [
   { type: "agentStart", timestamp: "2026-05-16T00:00:00.000Z", entryNode: "main" },
@@ -546,4 +553,46 @@ it("embedded focused traces return to their host on the first Esc", async () => 
   });
   expect(resolution).toBe("back");
   expect(texts(output).join("\n")).not.toContain("The overview lands");
+});
+
+describe("the address key", () => {
+  it("A copies the focused row's address on every screen", async () => {
+    for (const screenKey of ["1", "2", "3", "4"]) {
+      copied.length = 0;
+      const out = await drive([screenKey, "A"]);
+      expect(copied, `screen ${screenKey}`).toEqual(["abc/round:s2:0"]);
+      expect(out.lastText()).toContain("copied");
+    }
+  });
+
+  it("A on the trace picker says there is no address", async () => {
+    copied.length = 0;
+    const out = await driveJsonl(twoTraceSample, ["A"]);
+    expect(copied).toEqual([]);
+    expect(out.lastText()).not.toContain("copied");
+  });
+
+  it("no shell key is also a screen key, so a shell binding never hides a screen's", () => {
+    const screens = {
+      overview: new OverviewScreen([], "T", () => undefined),
+      trace: new TraceScreen([], "T", DEFAULT_THRESHOLDS, { extractEnabled: true }),
+      transcript: new TranscriptScreen([], "T"),
+      timeline: new TimelineScreen([], "T", DEFAULT_THRESHOLDS),
+    };
+    const host = new ScreenHost(screens, "trace", "T");
+    const shellKeys = viewerShellBindings(
+      host,
+      () => [],
+      () => {},
+      () => {},
+    ).flatMap((binding) => binding.keys);
+    for (const [name, screen] of Object.entries(screens)) {
+      const screenKeys = screen
+        .helpLines()
+        .map((line) => line.slice(0, line.indexOf(" — ")))
+        .flatMap((keys) => keys.split(" / "));
+      const shared = shellKeys.filter((key) => screenKeys.includes(key));
+      expect(shared, name).toEqual([]);
+    }
+  });
 });

@@ -10,6 +10,7 @@ import { formatKey } from "../tui/input/format.js";
 import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
 import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
+import { formatAddress } from "./address.js";
 import { detectClipboard } from "./clipboard.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
@@ -433,7 +434,12 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
       await dispatch(host.target().handleKey(event, innerViewport()));
     } else {
       if (binding !== undefined) {
-        binding.run();
+        // A shell binding may answer with an action, as a screen's does
+        // (`A` copies, `c` opens the comment prompt).
+        const action = binding.run();
+        if (action !== undefined) {
+          await dispatch(action);
+        }
       } else {
         await dispatch(host.target().handleKey(event, innerViewport()));
       }
@@ -593,6 +599,19 @@ export function viewerShellBindings(
       hint: "t traces",
       when: several,
       run: openPicker,
+    },
+    {
+      keys: ["A"],
+      help: "copy the focused row's address (<trace id>/<row id>)",
+      when: () => onScreen() && !controls.typing,
+      run: () => {
+        const rowId = host.screen(host.activeScreen()).focusId();
+        if (rowId === undefined) {
+          host.target().notify("no address here");
+          return;
+        }
+        return { kind: "copy", text: formatAddress(host.currentTraceId(), rowId) };
+      },
     },
     {
       keys: ["<"],

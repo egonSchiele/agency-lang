@@ -228,12 +228,27 @@ export class TerminalInput implements InputSource {
     process.kill(process.pid, "SIGTSTP");
   }
 
+  /** Stop reading the terminal so another process can. Pausing the stream
+   *  matters: with the listener gone but the stream still flowing, Node keeps
+   *  reading bytes from the terminal and dropping them, and a child editor
+   *  reading the same terminal loses keystrokes. Ctrl+Z goes through here
+   *  too; a paused stream is harmless to it. */
+  release(): void {
+    this.suspendForSigtstp();
+  }
+
+  /** Take the terminal back after `release()`. */
+  reclaim(): void {
+    this.resumeFromSuspend();
+  }
+
   private suspendForSigtstp(): void {
     if (this.suspended) return;
     this.suspended = true;
     if (this.dataHandler) {
       process.stdin.removeListener("data", this.dataHandler);
     }
+    process.stdin.pause();
     if (process.stdin.isTTY && process.stdin.isRaw) {
       // Turn off bracketed paste before handing control back to the
       // shell, then turn it on again on resume. Otherwise the parent

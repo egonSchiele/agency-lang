@@ -37,6 +37,12 @@ export type PayloadLine = (
       tone: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome" | "accent";
     }
   | { kind: "meta"; text: string }
+  /** A rule across the width with a label on it: `── RESULT · ~4.4k tokens ──`. */
+  | {
+      kind: "rule";
+      text: string;
+      tone?: "assistant" | "tool" | "interrupt" | "error" | "user" | "chrome" | "accent";
+    }
   | { kind: "text"; text: string; indent: number; role: FlatRole | "plain" | "error" }
   /** A field with its value on the same line; the painter colors the key. */
   | { kind: "pair"; key: string; text: string; indent: number }
@@ -259,7 +265,7 @@ export function roundResponsePayload(
 
 /** The arguments with every value longer than `cap` characters cut to
  *  that many and an ellipsis, measured as the text the viewer would print. */
-function cutArguments(args: unknown, cap: number): unknown {
+export function cutArguments(args: unknown, cap: number): unknown {
   const shorten = (value: unknown): unknown => {
     const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
     return text.length <= cap ? value : `${text.slice(0, cap)}…`;
@@ -363,7 +369,7 @@ function argumentsWithDropped(args: unknown, dropped: string[]): unknown {
   }
   return restored;
 }
-function resultTokenEstimate(output: unknown): number {
+export function resultTokenEstimate(output: unknown): number {
   const result = output as { __type?: string; success?: boolean; value?: unknown } | null;
   const value = result?.__type === "resultType" && result.success === true ? result.value : output;
   const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");

@@ -23,14 +23,14 @@ function systems(rounds = 2) {
     event("promptCompletion", 100, "L", null, {
       threadIdentity: "parent",
       messages: [
-        { role: "system", content: "parent-only prompt" },
-        { role: "system", content: "second parent prompt" },
+        { role: "system", content: "parent-only prompt\nparent second line" },
+        { role: "system", content: "second parent prompt\nsecond parent line" },
       ],
       completion: { output: "parent answer" },
     }),
     event("promptCompletion", 200, "child", null, {
       threadIdentity: "child",
-      messages: [{ role: "system", content: "child-only prompt" }],
+      messages: [{ role: "system", content: "child-only prompt\nchild second line" }],
       completion: { output: "child answer" },
     }),
     ...(rounds > 2
@@ -38,8 +38,8 @@ function systems(rounds = 2) {
           event("promptCompletion", 300, "L", null, {
             threadIdentity: "parent",
             messages: [
-              { role: "system", content: "parent-only prompt" },
-              { role: "system", content: "second parent prompt" },
+              { role: "system", content: "parent-only prompt\nparent second line" },
+              { role: "system", content: "second parent prompt\nsecond parent line" },
             ],
             completion: { output: "later" },
           }),
@@ -50,24 +50,29 @@ function systems(rounds = 2) {
 describe("transcript screen", () => {
   it("starts collapsed and reveals a system prompt on s", () => {
     const screen = make(systems());
-    expect(text(screen)).not.toContain("parent-only prompt");
-    press(screen, "s");
+    // The first line is a signpost, as on the overview; the rest waits for s.
+    expect(text(screen)).toContain("SYSTEM");
     expect(text(screen)).toContain("parent-only prompt");
-    expect(text(screen)).not.toContain("second parent prompt");
+    expect(text(screen)).toContain("… (+1 more line · s to show)");
+    expect(text(screen)).not.toContain("parent second line");
+    press(screen, "s");
+    expect(text(screen)).toContain("parent second line");
+    expect(text(screen)).toContain("s to hide");
+    expect(text(screen)).not.toContain("child second line");
   });
   it("expands systems independently by thread and preserves them through follow", () => {
     const screen = make(systems());
     screen.setFocus("round:child:0");
     press(screen, "s");
-    expect(text(screen)).toContain("child-only prompt");
-    expect(text(screen)).not.toContain("parent-only prompt");
+    expect(text(screen)).toContain("child second line");
+    expect(text(screen)).not.toContain("parent second line");
     screen.setData(systems(3));
-    expect(text(screen)).toContain("child-only prompt");
+    expect(text(screen)).toContain("child second line");
     press(screen, "s");
-    expect(text(screen)).not.toContain("child-only prompt");
+    expect(text(screen)).not.toContain("child second line");
     screen.setFocus("round:L:0");
     press(screen, "s");
-    expect(text(screen)).toContain("second parent prompt");
+    expect(text(screen)).toContain("second parent line");
   });
   it("decodes the final answer as Agency source", () => {
     const screen = make();
@@ -78,7 +83,15 @@ describe("transcript screen", () => {
   it("shows tool size, time, interrupts and recorded status", () => {
     const screen = make(buildForest(loopEvents()));
     screen.setFocus("guide");
-    expect(text(screen)).toMatch(/→ agencyGuide\(handlers.md\)\s+1 lines\s+6ms/);
+    // The title rule names the tool and carries its size and time; the
+    // arguments sit in the box, cut as on the trace's call row.
+    expect(text(screen)).toMatch(/TOOL CALL · agencyGuide .*1 line · 6ms/);
+    expect(text(screen)).toContain("filename: handlers.md");
+    // An approved interrupt is hidden until p, as on the trace; a plain
+    // success has no status line.
+    expect(text(screen)).not.toContain("⚠ std::read  approved");
+    expect(text(screen)).not.toMatch(/\n\s*completed\n/);
+    press(screen, "p");
     expect(text(screen)).toContain("⚠ std::read  approved");
     screen.setFocus("grep");
     expect(text(screen)).toContain("interrupt rejected; completion not recorded");
@@ -170,7 +183,8 @@ it("pages inside a long block by display lines and keeps j/k on blocks", () => {
   const screen = make(
     buildForest([event("promptCompletion", 100, "L", null, { completion: { output: answer } })]),
   );
-  const small = { cols: 100, rows: 12 };
+  // Header, context row, footer, and a pane of eleven rows.
+  const small = { cols: 100, rows: 14 };
   expect(text(screen, small.cols, small.rows)).toContain("line 0");
   screen.handleKey({ key: "d", ctrl: true }, small);
   expect(text(screen, small.cols, small.rows)).toContain("line 4");
@@ -207,7 +221,7 @@ it("follow replaces pending approval with completion and preserves tool focus", 
   );
   screen.setData(buildForest(events));
   expect(screen.focusId()).toBe("tool");
-  expect(text(screen)).toContain("completed");
+  expect(text(screen)).toContain("TOOL CALL · read");
   expect(text(screen)).not.toContain("pending");
   screen.setData(buildForest(events.slice(0, 1)));
   expect(screen.focusId()).toBe("round:L:0");
@@ -221,7 +235,7 @@ it("scrolls to a search match deep inside an expanded result", () => {
   ).join("\n");
   const screen = make(buildForest(events));
   screen.applySearch("needle inside result");
-  expect(text(screen)).toContain("│ needle inside result");
+  expect(text(screen)).toContain("needle inside result");
   expect(screen.focusId()).toBe("guide");
 });
 
@@ -243,7 +257,7 @@ it("keeps a searched tool visible when collapsing its long result", () => {
   screen.applySearch("needle inside result");
   text(screen);
   press(screen, "enter");
-  expect(text(screen)).toContain("→ agencyGuide(handlers.md)");
+  expect(text(screen)).toContain("TOOL CALL · agencyGuide");
   expect(screen.focusId()).toBe("guide");
 });
 
@@ -256,7 +270,7 @@ it("finds and copies an owned final tool error without a later prompt snapshot",
   const screen = make(roots);
   screen.applySearch("disk quota exceeded");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│ disk quota exceeded");
+  expect(text(screen)).toContain("disk quota exceeded");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("disk quota exceeded"),
@@ -302,11 +316,82 @@ it("reveals an interrupt message found inside a collapsed tool", () => {
   );
   screen.applySearch("Approve replacing the archived notes?");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│ Approve replacing the archived notes?");
+  expect(text(screen)).toContain("Approve replacing the archived notes?");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("Approve replacing the archived notes?"),
   });
+});
+
+it("reveals approvals when a match is only in an approved interrupt's message", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 100, "L"),
+      event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+      event("interruptThrown", 102, "write", "L", {
+        interruptId: "write",
+        interrupt: { effect: "std::write", message: "Approve replacing the archived notes?" },
+      }),
+      event("interruptResolved", 103, "write", "L", {
+        interruptId: "write",
+        outcome: "approved",
+        interrupt: { effect: "std::write", message: "Approve replacing the archived notes?" },
+      }),
+      event("toolCall", 104, "write", "L", { toolName: "write", output: "ok" }),
+    ]),
+  );
+  expect(text(screen)).not.toContain("std::write");
+  screen.applySearch("archived notes");
+  expect(screen.focusId()).toBe("write");
+  expect(text(screen)).toContain("Approve replacing the archived notes?");
+});
+
+it("scrolls a search match into view when its block starts inside the pane", () => {
+  const events = loopEvents();
+  events.find((event) => event.data.type === "toolCall")!.data.output = Array.from(
+    { length: 100 },
+    (_unused, position) => (position === 90 ? "needle inside result" : `ordinary ${position}`),
+  ).join("\n");
+  const screen = make(buildForest(events));
+  // The tool's block starts a few rows down the pane; the match is far
+  // below its start.
+  text(screen);
+  screen.applySearch("needle inside result");
+  expect(text(screen)).toContain("needle inside result");
+});
+
+it("keeps a fold the reader made on a top-level thread through a follow update", () => {
+  const events = [
+    event("promptCompletion", 100, "A", null, {
+      threadIdentity: "main",
+      messages: [{ role: "user", content: "go" }],
+      completion: { output: "one" },
+    }),
+    event("promptCompletion", 200, "T", null, {
+      threadIdentity: "title",
+      messages: [{ role: "user", content: "title it" }],
+      completion: { output: "A title" },
+    }),
+  ];
+  const screen = make(buildForest(events));
+  screen.setFocus("group:T");
+  press(screen, "enter");
+  expect(text(screen)).not.toContain("title it");
+  screen.setData(
+    buildForest([
+      ...events,
+      event("promptCompletion", 300, "A", null, {
+        threadIdentity: "main",
+        messages: [
+          { role: "user", content: "go" },
+          { role: "assistant", content: "one" },
+          { role: "user", content: "more" },
+        ],
+        completion: { output: "two" },
+      }),
+    ]),
+  );
+  expect(text(screen)).not.toContain("title it");
 });
 
 it("cycles to the last or first match after moving to a nonmatching block", () => {
@@ -362,4 +447,274 @@ it("searches payload text rather than the numbered gutter", () => {
   screen.handleKey({ key: "#" }, viewport);
   screen.applySearch("42");
   expect(text(screen, 100, 12)).toContain("target 42");
+});
+
+describe("the call list and header", () => {
+  it("heads the screen with the elapsed time and the cursor's place", () => {
+    const screen = make(systems());
+    expect(text(screen).split("\n")[0]).toMatch(/^Elapsed 100ms · block 1 of \d+/);
+    press(screen, "j");
+    expect(text(screen).split("\n")[0]).toContain("block 2 of");
+  });
+
+  it("indents a sub-agent's rows under the tool that started it and marks what Enter opens", () => {
+    const ask = { id: "r", name: "researchAgent", arguments: {} };
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "A", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: { output: "", toolCalls: [ask] },
+        }),
+        event("toolCallStart", 101, "t", "A", { toolName: "researchAgent", args: {} }),
+        event("promptCompletion", 150, "B", "t", {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            { role: "system", content: "You research." },
+            { role: "user", content: "research this" },
+          ],
+          completion: { output: "found" },
+        }),
+        event("toolCall", 160, "t", "A", { toolName: "researchAgent", output: "found" }),
+        event("promptCompletion", 300, "A", null, {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            { role: "user", content: "[researchAgent finished. found]\nContinue." },
+          ],
+          completion: { output: "done" },
+        }),
+      ]),
+    );
+    const spineOf = () =>
+      text(screen)
+        .split("\n")
+        .map((line) => line.split("│")[0].trimEnd());
+    // The outline is the trace's: a thread row at its tool depth, its
+    // messages one level in, a tool one level under its call, and the
+    // sub-agent's thread row under the tool. The fold marker keeps one
+    // column; the indent follows it.
+    let spine = spineOf();
+    expect(spine).toContain("▶ ▾ Thread · unnamed");
+    expect(spine).toContain("      user");
+    expect(spine).toContain("      LLM call 1");
+    expect(spine).toContain("  ▸     researchAgent");
+    expect(spine).toContain("  ▸       Thread · researchAgent");
+    expect(spine).toContain("      ↩ researchAgent");
+    // The sub-agent's group is complete, so it starts folded, as on the
+    // trace: its prompt is not in the pane, and its row says so.
+    expect(spine).not.toContain("            prompt");
+    expect(text(screen)).toContain(
+      "══ THREAD · researchAgent · 1 LLM call ══ ▸ folded · Enter opens",
+    );
+    expect(text(screen)).not.toContain("─ PROMPT · researchAgent ─");
+    screen.setFocus("group:B");
+    press(screen, "enter");
+    spine = spineOf();
+    expect(spine).toContain("▶ ▾       Thread · researchAgent");
+    expect(spine).toContain("  ▸         system");
+    expect(spine).toContain("            prompt");
+    expect(spine).toContain("            LLM call 2");
+    const body = text(screen);
+    expect(body).toContain("─ PROMPT · researchAgent ─");
+    expect(body).toContain("─ HAND-BACK · researchAgent ─");
+    // Inside the group the pane rows carry a rail and the level's tint.
+    const railed = body.split("\n").find((line) => line.includes("PROMPT · researchAgent"))!;
+    expect(railed.split("│")[1]).toMatch(/^ ┃ /);
+    screen.setFocus("t");
+    press(screen, "enter");
+    expect(spineOf()).toContain("▶ ▾     researchAgent");
+  });
+
+  it("states the thread path of the pane's first row in the context row, titles uncovered", () => {
+    const calls = Array.from({ length: 12 }, (_unused, position) =>
+      event("promptCompletion", 150 + position, "B", "t", {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: `step ${position}\n`.repeat(6) }],
+        completion: { output: `did ${position}` },
+      }),
+    );
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "A", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [{ id: "c1", name: "researchAgent", arguments: {} }],
+          },
+        }),
+        event("toolCallStart", 101, "t", "A", {
+          toolName: "researchAgent",
+          toolCallId: "c1",
+          args: {},
+        }),
+        ...calls,
+        event("toolCall", 400, "t", "A", {
+          toolName: "researchAgent",
+          toolCallId: "c1",
+          output: "found",
+        }),
+      ]),
+    );
+    // Search opens the fold on the way to its match and lands inside the group.
+    screen.applySearch("did 9");
+    expect(screen.focusId()).toBe("round:B:9");
+    // With a search on, the status row sits above the context row.
+    const rows = text(screen).split("\n");
+    expect(rows[2].split("│")[1]).toContain(
+      "Thread · unnamed · 1 LLM call › researchAgent › Thread · researchAgent · 12 LLM calls",
+    );
+    // The context row is its own row: a title on the pane's first row is
+    // not covered, and moving up keeps the path in view.
+    press(screen, "k");
+    press(screen, "k");
+    const after = text(screen).split("\n");
+    expect(after[2].split("│")[1]).toContain("researchAgent › Thread · researchAgent");
+    // The pane's own rows are all content: nothing is painted over them.
+    expect(after.slice(3).some((line) => line.includes("›"))).toBe(false);
+  });
+  it("keeps a group the reader opened open through a follow update, and unfolds one that runs again", () => {
+    const events = [
+      event("promptCompletion", 100, "A", null, {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: "go" }],
+        completion: { output: "", toolCalls: [{ id: "c1", name: "researchAgent", arguments: {} }] },
+      }),
+      event("toolCallStart", 101, "t", "A", {
+        toolName: "researchAgent",
+        toolCallId: "c1",
+        args: {},
+      }),
+      event("promptCompletion", 150, "B", "t", {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: "research this" }],
+        completion: { output: "found" },
+      }),
+      event("toolCall", 160, "t", "A", {
+        toolName: "researchAgent",
+        toolCallId: "c1",
+        output: "found",
+      }),
+    ];
+    const screen = make(buildForest(events));
+    expect(text(screen)).toContain("▸ folded");
+    screen.setFocus("group:B");
+    press(screen, "enter");
+    expect(text(screen)).not.toContain("▸ folded");
+    screen.setData(
+      buildForest([
+        ...events,
+        event("promptCompletion", 300, "A", null, { completion: { output: "done" } }),
+      ]),
+    );
+    expect(text(screen)).not.toContain("▸ folded");
+  });
+  it("previews a tool's result under a rule, and grows the box in place on Enter", () => {
+    const events = loopEvents();
+    events.find((event) => event.data.type === "toolCall")!.data.output = Array.from(
+      { length: 30 },
+      (_unused, position) => `result line ${position}`,
+    ).join("\n");
+    const screen = make(buildForest(events));
+    screen.setFocus("guide");
+    const before = text(screen).split("\n");
+    const title = before.findIndex((line) => line.includes("TOOL CALL · agencyGuide"));
+    expect(before.join("\n")).toMatch(/── RESULT · ~\d+ tokens ─+/);
+    expect(before.join("\n")).toContain("result line 0");
+    expect(before.join("\n")).toContain("… (+29 more lines · Enter opens)");
+    expect(before.join("\n")).not.toContain("result line 1");
+    press(screen, "enter");
+    const after = text(screen).split("\n");
+    // The box opens where it stands: its title row has not moved.
+    expect(after.findIndex((line) => line.includes("TOOL CALL · agencyGuide"))).toBe(title);
+    expect(after.join("\n")).toContain("result line 1");
+    expect(after.join("\n")).toMatch(/── RESULT · ~\d+ tokens ─+/);
+  });
+  it("names a reply's tool calls on one line and shows a request no tool ran whole", () => {
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [
+              { id: "c1", name: "grep", arguments: { pattern: "a" } },
+              {
+                id: "c2",
+                name: "imaginary",
+                arguments: { what: "never ran", long: "x".repeat(200) },
+              },
+            ],
+          },
+        }),
+        event("toolCallStart", 101, "g", "L", { toolName: "grep", toolCallId: "c1", args: {} }),
+        event("toolCall", 102, "g", "L", { toolName: "grep", toolCallId: "c1", output: "x" }),
+      ]),
+    );
+    const body = text(screen);
+    expect(body).toContain("→ 2 tool calls · grep, imaginary");
+    expect(body).not.toContain("TOOL CALL · grep · c1");
+    expect(body).toContain("TOOL CALL · imaginary · c2");
+    expect(body).toContain("what: never ran");
+    // With no box of its own to open, its arguments are not cut.
+    expect(body).toContain("x".repeat(60));
+  });
+  it("keeps the active box where it is until it would leave the pane", () => {
+    const screen = make(buildForest(loopEvents()));
+    expect(text(screen).split("\n")[2]).toContain("┏━ USER");
+    press(screen, "j");
+    press(screen, "j");
+    // Moving down within the pane does not scroll: the first box is still
+    // at the top, and the heavy rule marks the active one further down.
+    const moved = text(screen).split("\n");
+    expect(moved[2]).toContain("┌─ USER");
+    expect(moved.findIndex((line) => line.includes("┏━"))).toBeGreaterThan(2);
+  });
+  it("cuts a long argument on the call and shows what the model read on the tool", () => {
+    const long = "x".repeat(200);
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [{ id: "c", name: "read", arguments: { path: long } }],
+          },
+        }),
+        event("toolCallStart", 101, "tool", "L", { toolName: "read", args: { path: long } }),
+        event("toolCall", 102, "tool", "L", { toolName: "read", output: "a".repeat(10) }),
+        event("promptCompletion", 200, "L", null, {
+          threadIdentity: "main",
+          messages: [
+            { role: "user", content: "go" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ id: "c", name: "read", arguments: { path: long } }],
+            },
+            {
+              role: "tool",
+              name: "read",
+              tool_call_id: "c",
+              content: "aaa [tool result truncated]",
+            },
+          ],
+          completion: { output: "done" },
+        }),
+      ]),
+    );
+    const before = text(screen, 300, 40);
+    expect(before).toContain(`path: ${"x".repeat(120)}…`);
+    expect(before).not.toContain("── WHAT THE MODEL READ");
+    screen.setFocus("tool");
+    press(screen, "enter");
+    const after = text(screen, 300, 40);
+    expect(after).toContain(`path: ${"x".repeat(200)}`);
+    expect(after).toContain("── WHAT THE MODEL READ");
+    expect(after).toContain("aaa [tool result truncated]");
+  });
 });

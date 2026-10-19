@@ -159,6 +159,29 @@ function divider(
   return { kind: "heading", tone: "chrome", text: `── ${parts.join(" · ")} ──` };
 }
 
+/** `SYSTEM`, the prompt's first line as a signpost for where the reader
+ *  is, and `… (+10 more lines · s to show)`; expanded, the whole prompt
+ *  and `s to hide`. The overview and the transcript both draw this. */
+export function systemPromptPayload(
+  role: string,
+  content: unknown,
+  expanded: boolean,
+): PayloadLine[] {
+  const heading: PayloadLine = { kind: "heading", tone: "chrome", text: role.toUpperCase() };
+  if (expanded) {
+    return [heading, ...contentPayload(content), { kind: "meta", text: "s to hide" }];
+  }
+  const lines = contentText(content).split("\n");
+  const more = lines.length - 1;
+  const shown: PayloadLine[] = [
+    heading,
+    { kind: "text", text: lines[0], indent: 0, role: "plain" },
+  ];
+  if (more > 0) {
+    shown.push({ kind: "meta", text: `… (+${more} more ${plural(more, "line")} · s to show)` });
+  }
+  return shown;
+}
 function plural(count: number, noun: string): string {
   return count === 1 ? noun : `${noun}s`;
 }
@@ -225,20 +248,7 @@ function messagePayload(
     return toolResultMessagePayload(message, fullResults);
   }
   if (isSystem(message)) {
-    const lines = contentText(message.content).split("\n");
-    const heading = { kind: "heading" as const, tone, text: message.role.toUpperCase() };
-    if (systemsExpanded) {
-      return [heading, ...contentPayload(message.content), { kind: "meta", text: "s to hide" }];
-    }
-    const more = lines.length - 1;
-    const shown: PayloadLine[] = [
-      heading,
-      { kind: "text", text: lines[0], indent: 0, role: "plain" },
-    ];
-    if (more > 0) {
-      shown.push({ kind: "meta", text: `… (+${more} more ${plural(more, "line")} · s to show)` });
-    }
-    return shown;
+    return systemPromptPayload(message.role, message.content, systemsExpanded);
   }
   return [
     {

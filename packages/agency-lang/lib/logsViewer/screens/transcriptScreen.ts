@@ -23,19 +23,53 @@ import {
   transcriptText,
   type TranscriptBlock,
 } from "../transcript.js";
-import { transcriptPayload } from "../transcriptPayload.js";
+import { transcriptPayload, type TranscriptPayloadOptions } from "../transcriptPayload.js";
+import { traceTimes } from "../timeline/turns.js";
+import { fmtOffset } from "../views/shared.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
+import { boxInnerWidth, boxLines, SIDES_MIN_WIDTH, withBackground } from "./blockBox.js";
 import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
 import { keyFooter } from "./chrome.js";
 import type { Screen } from "./screen.js";
-const LAYOUT = { spineWidth: 28, dividerWidth: 2, fixedRows: 1, gap: 1, half: 2 };
+/** `indent` is per level of tool depth: a sub-agent's rows sit two cells
+ *  further in than the tool rows of the call that started it. */
+const LAYOUT = {
+  spineWidth: 32,
+  dividerWidth: 2,
+  /** The header, the context row above the pane, and the footer. */
+  fixedRows: 3,
+  gap: 1,
+  half: 2,
+  /** Cells per level in the call list, as on the trace. */
+  indent: 2,
+  /** Cells of rail per level of tool depth in the pane. */
+  rail: 2,
+  /** The pane keeps at least this many cells of text under the rails. */
+  minBoxWidth: 24,
+};
 type BlockLines = { id: string; start: number; lines: Painted[] };
+/** Blocks Enter opens: the ones that hold something back until asked, and
+ *  a thread row, which folds its group. */
+const EXPANDABLE = ["system", "tool", "thread"];
+/** Blocks drawn as a box. A turn or thread divider, a pause and a rewrite
+ *  are rules across the pane, not messages. */
+const BOXED = ["system", "user", "handback", "assistant", "tool", "history", "error"];
 
 export class TranscriptScreen implements Screen {
   readonly screenName = "transcript" as const;
   private blocks: TranscriptBlock[] = [];
+  /** The blocks not hidden by a folded thread group. */
+  private visible: TranscriptBlock[] = [];
+  /** Folded thread groups, by block id. A sub-agent's group folds on
+   *  first sight when complete, by the trace's rule; a top-level thread is
+   *  the conversation itself and never folds by itself. */
+  private folded: string[] = [];
+  private foldDefaultsApplied: string[] = [];
+  /** Whether the trace has thread rows; without them the outline starts
+   *  at the left. */
+  private hasGroups = false;
   private cursor = "";
   private expanded: string[] = [];
   private scrollTop = 0;
@@ -49,6 +83,12 @@ export class TranscriptScreen implements Screen {
   private painted: BlockLines[] = [];
   private needsReveal = true;
   private revealMatch = false;
+  private showApprovals = false;
+  /** The run's wall time split into work and waits for the person. */
+  private times = { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
+  /** Painted blocks by id, expansion, approvals and width; cleared when
+   *  the blocks are rebuilt. */
+  private paintCache: Record<string, Painted[]> = Object.create(null);
   constructor(
     private roots: TreeNode[],
     private traceId: string,
@@ -94,6 +134,14 @@ export class TranscriptScreen implements Screen {
         help: "reveal or hide this thread's system prompt",
         hint: "s system",
         run: () => this.toggleSystem(),
+      },
+      {
+        keys: ["p"],
+        help: "show or hide approved interrupts",
+        hint: "p approvals",
+        run: () => {
+          this.showApprovals = !this.showApprovals;
+        },
       },
       {
         keys: ["/"],
@@ -149,6 +197,8 @@ export class TranscriptScreen implements Screen {
     const old = this.selected();
     const trace = this.trace();
     this.blocks = trace ? transcriptBlocks(trace) : [];
+    this.times = trace ? traceTimes(trace) : { elapsedMs: 0, workingMs: 0, waitingMs: 0 };
+    this.paintCache = Object.create(null);
     this.expanded = this.expanded.filter((id) => this.blocks.some((block) => block.id === id));
     if (!this.blocks.some((block) => block.id === this.cursor)) {
       this.cursor =
@@ -157,7 +207,57 @@ export class TranscriptScreen implements Screen {
         "";
       this.needsReveal = true;
     }
+    this.applyFoldDefaults();
     this.updateMatches();
+  }
+  /** Fold each complete sub-agent group the first time it is seen, unless
+   *  the cursor is inside it; unfold one that runs again. */
+  private applyFoldDefaults(): void {
+    const inside = this.selected()?.groupPath ?? [];
+    for (const block of this.blocks) {
+      if (block.kind !== "thread") {
+        continue;
+      }
+      const completed = block.tool !== undefined && block.complete;
+      if (!completed) {
+        // Only a fold this rule made is undone when the group runs again;
+        // one the reader made stays.
+        if (this.foldDefaultsApplied.includes(block.id)) {
+          this.folded = this.folded.filter((id) => id !== block.id);
+          this.foldDefaultsApplied = this.foldDefaultsApplied.filter((id) => id !== block.id);
+        }
+        continue;
+      }
+      if (this.foldDefaultsApplied.includes(block.id)) {
+        continue;
+      }
+      this.foldDefaultsApplied.push(block.id);
+      if (!inside.includes(block.groupPath.at(-1)!)) {
+        this.folded.push(block.id);
+      }
+    }
+    this.refreshVisible();
+  }
+  private refreshVisible(): void {
+    this.visible = this.blocks.filter((block) => this.hiddenBy(block) === undefined);
+    this.hasGroups = this.blocks.some((block) => block.kind === "thread");
+  }
+  /** The folded group that hides a block: one on its path other than its
+   *  own row. */
+  private hiddenBy(block: TranscriptBlock): string | undefined {
+    return block.groupPath
+      .map((spanId) => `group:${spanId}`)
+      .find((id) => id !== block.id && this.folded.includes(id));
+  }
+  /** Open every fold on the way to a block, so it can be selected. */
+  private unfoldTo(block: TranscriptBlock): void {
+    const hiding = block.groupPath
+      .map((spanId) => `group:${spanId}`)
+      .filter((id) => id !== block.id && this.folded.includes(id));
+    if (hiding.length > 0) {
+      this.folded = this.folded.filter((id) => !hiding.includes(id));
+      this.refreshVisible();
+    }
   }
   setData(roots: TreeNode[]): void {
     this.roots = roots;
@@ -167,6 +267,8 @@ export class TranscriptScreen implements Screen {
     this.traceId = traceId;
     this.cursor = "";
     this.expanded = [];
+    this.folded = [];
+    this.foldDefaultsApplied = [];
     this.query = "";
     this.scrollTop = 0;
     this.derive();
@@ -207,30 +309,48 @@ export class TranscriptScreen implements Screen {
     }
   }
   private select(id: string): void {
+    const block = this.blocks.find((candidate) => candidate.id === id);
+    if (block) {
+      this.unfoldTo(block);
+    }
     this.cursor = id;
     this.needsReveal = true;
     this.revealMatch = false;
   }
   private move(delta: number): void {
-    const position = this.blocks.findIndex((block) => block.id === this.cursor);
+    const position = this.visible.findIndex((block) => block.id === this.cursor);
     this.select(
-      this.blocks[Math.max(0, Math.min(this.blocks.length - 1, position + delta))]?.id ?? "",
+      this.visible[Math.max(0, Math.min(this.visible.length - 1, position + delta))]?.id ?? "",
     );
   }
+  /** Scroll by lines and move the cursor to the block at the top of the
+   *  pane. A page that cannot scroll, at the end or when everything fits,
+   *  leaves the cursor where it is. */
   private pageBy(delta: number): void {
     const total = this.painted.flatMap((block) => block.lines).length;
-    this.scrollTop = Math.max(
+    const scrollTop = Math.max(
       0,
       Math.min(this.scrollTop + delta, Math.max(this.scrollTop, total - this.page)),
     );
+    this.needsReveal = false;
+    if (scrollTop === this.scrollTop) {
+      return;
+    }
+    this.scrollTop = scrollTop;
     const atTop = this.painted.filter((block) => block.start <= this.scrollTop).at(-1);
     if (atTop) {
       this.cursor = atTop.id;
     }
-    this.needsReveal = false;
   }
   private toggle(id: string): void {
     this.needsReveal = true;
+    if (this.blocks.find((block) => block.id === id)?.kind === "thread") {
+      this.folded = this.folded.includes(id)
+        ? this.folded.filter((value) => value !== id)
+        : [...this.folded, id];
+      this.refreshVisible();
+      return;
+    }
     this.expanded = this.expanded.includes(id)
       ? this.expanded.filter((value) => value !== id)
       : [...this.expanded, id];
@@ -270,8 +390,26 @@ export class TranscriptScreen implements Screen {
     if (!this.expanded.includes(id)) {
       this.expanded.push(id);
     }
+    if (this.matchOnlyInApprovals(id)) {
+      this.showApprovals = true;
+    }
     this.select(id);
     this.revealMatch = true;
+  }
+  /** Whether a tool matches the query only in an approved interrupt's
+   *  message, which `p` hides by default and the match must reveal. */
+  private matchOnlyInApprovals(id: string): boolean {
+    const block = this.blocks.find((candidate) => candidate.id === id);
+    if (block?.kind !== "tool" || this.showApprovals) {
+      return false;
+    }
+    const query = this.query.toLowerCase();
+    const approved = block.interrupts.filter((interrupt) => interrupt.outcome === "approved");
+    const rest = { ...block, interrupts: block.interrupts.filter((i) => !approved.includes(i)) };
+    return (
+      approved.some((interrupt) => (interrupt.message ?? "").toLowerCase().includes(query)) &&
+      !transcriptText(rest).toLowerCase().includes(query)
+    );
   }
   private nextMatch(direction: number): void {
     if (this.matches.length === 0) {
@@ -297,12 +435,15 @@ export class TranscriptScreen implements Screen {
     this.width = Math.max(1, viewport.cols - LAYOUT.spineWidth - LAYOUT.dividerWidth);
     const renderBlocks = (width: number): BlockLines[] => {
       let start = 0;
-      return this.blocks.map((block) => {
-        const lines = paintBlock(block, this.expanded.includes(block.id), width);
+      return this.visible.map((block) => {
+        const lines = this.paintBlockCached(block, width);
         const placed = {
           id: block.id,
           start,
-          lines: [...lines, ...Array.from({ length: LAYOUT.gap }, () => paint(""))],
+          lines: [
+            ...lines,
+            ...Array.from({ length: LAYOUT.gap }, () => nested(paint(""), block.depth, width)),
+          ],
         };
         start += placed.lines.length;
         return placed;
@@ -314,7 +455,7 @@ export class TranscriptScreen implements Screen {
     const total = this.painted.reduce((sum, block) => sum + block.lines.length, 0);
     if (this.needsReveal) {
       const focused = this.painted.find((block) => block.id === this.cursor);
-      this.scrollTop = focused?.start ?? 0;
+      this.keepVisible(focused);
       if (this.revealMatch && focused) {
         const line = focused.lines.findIndex((line) =>
           parseStyledText(line)
@@ -324,25 +465,101 @@ export class TranscriptScreen implements Screen {
             .toLowerCase()
             .includes(this.query.toLowerCase()),
         );
-        this.scrollTop += Math.max(0, line - this.page + 1);
+        this.scrollTop = focused.start + Math.max(0, line - this.page + 1);
       }
       this.needsReveal = false;
       this.revealMatch = false;
     }
     this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, total - 1)));
   }
+  /** Scroll only as far as it takes to bring the block into the pane, so
+   *  the active box stays where the eye left it. A block whose top is
+   *  already in the pane leaves the scroll alone, so a box that Enter
+   *  opens grows downward in place; one above scrolls up to its top; one
+   *  below scrolls down to its bottom, or to its top when it is taller
+   *  than the pane. */
+  private keepVisible(focused: BlockLines | undefined): void {
+    if (focused === undefined) {
+      this.scrollTop = 0;
+      return;
+    }
+    const end = focused.start + focused.lines.length - LAYOUT.gap;
+    if (focused.start < this.scrollTop) {
+      this.scrollTop = focused.start;
+    } else if (focused.start >= this.scrollTop + this.page) {
+      this.scrollTop = end - focused.start > this.page ? focused.start : end - this.page;
+    }
+  }
+  /** `▸` or `▾` on a block Enter opens or closes; the same width of
+   *  nothing on the rest, so labels line up. */
+  private spineMarker(block: TranscriptBlock): string {
+    if (!EXPANDABLE.includes(block.kind)) {
+      return "  ";
+    }
+    if (block.kind === "thread") {
+      return this.folded.includes(block.id) ? "▸ " : "▾ ";
+    }
+    return this.expanded.includes(block.id) ? "▾ " : "▸ ";
+  }
+  private paintBlockCached(block: TranscriptBlock, width: number): Painted[] {
+    const expanded = this.expanded.includes(block.id);
+    const active = block.id === this.cursor;
+    const folded = this.folded.includes(block.id);
+    const key = `${block.id}|${expanded}|${this.showApprovals}|${width}|${active}|${folded}`;
+    return (this.paintCache[key] ??= paintBlock(block, expanded, width, active, {
+      showApprovals: this.showApprovals,
+      folded,
+    }).map((line) => nested(line, block.depth, width)));
+  }
+  /** The context row above the pane: the thread path of the block on the
+   *  pane's first row, `Thread · main · 2 LLM calls › researchAgent ›
+   *  Thread · main · 13 LLM calls`, so what the top of the pane is inside
+   *  is always stated and never covers a row of it. Blank for a trace with
+   *  no thread rows. */
+  private breadcrumb(): Painted {
+    const atTop = this.painted.filter((block) => block.start <= this.scrollTop).at(-1);
+    const block = this.visible.find((candidate) => candidate.id === atTop?.id);
+    const crumbs = (block?.groupPath ?? [])
+      .map((spanId) => this.blocks.find((candidate) => candidate.id === `group:${spanId}`))
+      .filter(
+        (group): group is Extract<TranscriptBlock, { kind: "thread" }> => group?.kind === "thread",
+      )
+      .map(
+        (group) =>
+          `${group.tool === undefined ? "" : `${group.tool} › `}Thread · ${group.label} · ${callsText(group.calls)}`,
+      );
+    return segment(crumbs.length === 0 ? "" : ` ${crumbs.join(" › ")} `, this.width, {
+      style: { fg: THEME.accent, bg: THEME.rule, bold: true },
+    });
+  }
+  /** `Elapsed 26m37s · 7m25s working · 19m12s waiting for the user · block 12 of 87`;
+   *  the split appears only when the trace has turns to split by. */
+  private headerText(position: number): string {
+    const split =
+      this.times.waitingMs > 0
+        ? ` · ${fmtOffset(this.times.workingMs)} working · ${fmtOffset(this.times.waitingMs)} waiting for the user`
+        : "";
+    const where =
+      this.visible.length === 0 ? "" : ` · block ${position + 1} of ${this.visible.length}`;
+    return `Elapsed ${fmtOffset(this.times.elapsedMs)}${split}${where}`;
+  }
   render(viewport: Viewport, sharedHints = ""): Element {
     this.prepare(viewport);
-    const position = this.blocks.findIndex((block) => block.id === this.cursor);
+    const position = this.visible.findIndex((block) => block.id === this.cursor);
     const spineTop = Math.max(0, position - this.page + 1);
-    const spine = this.blocks.slice(spineTop, spineTop + this.page).map((block) =>
+    const spine = this.visible.slice(spineTop, spineTop + this.page).map((block) =>
       paintedLine(
-        segment(`${block.id === this.cursor ? "▶" : " "} ${spineLabel(block)}`, LAYOUT.spineWidth, {
-          style: {
-            fg: spineColor(block),
-            ...(block.id === this.cursor ? { bg: THEME.cursorBg } : {}),
+        segment(
+          `${block.id === this.cursor ? "▶" : " "} ${this.spineMarker(block)}${spineLabel(block, this.hasGroups)}`,
+          LAYOUT.spineWidth,
+          {
+            style: {
+              fg: spineColor(block),
+              ...(block.kind === "thread" || block.kind === "turn" ? { bold: true } : {}),
+              ...(block.id === this.cursor ? { bg: THEME.cursorBg } : {}),
+            },
           },
-        }),
+        ),
       ),
     );
     const lines = this.painted
@@ -356,9 +573,17 @@ export class TranscriptScreen implements Screen {
       .join(" · ");
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
+      paintedLine(segment(this.headerText(position), viewport.cols, { style: { fg: THEME.text } })),
       ...(status
         ? [paintedLine(segment(status, viewport.cols, { style: { fg: THEME.muted } }))]
         : []),
+      paintedLine(
+        joinPainted(
+          segment("", LAYOUT.spineWidth),
+          paint("│ ", { fg: THEME.chrome }),
+          this.breadcrumb(),
+        ),
+      ),
       row(
         { height: this.page },
         column(
@@ -385,23 +610,67 @@ export class TranscriptScreen implements Screen {
     );
   }
 }
-function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): Painted[] {
-  const body = paintPayload(transcriptPayload(block, expanded), width);
-  if (block.kind !== "assistant") {
-    return body;
+/** A message block as a box titled by its payload's first heading, with
+ *  its stats on the title rule; a divider block as its lines across the
+ *  pane. The box is indented by tool depth, as the call list is. */
+function paintBlock(
+  block: TranscriptBlock,
+  expanded: boolean,
+  width: number,
+  active: boolean,
+  options: TranscriptPayloadOptions,
+): Painted[] {
+  const payload = transcriptPayload(block, expanded, options);
+  const [first, ...rest] = payload;
+  if (!BOXED.includes(block.kind) || first?.kind !== "heading") {
+    return paintPayload(payload, width - railWidth(block.depth, width));
   }
-  const stats = `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} in · ${fmtUsd(block.round.costUsd)}`;
-  const heading = joinPainted(
-    segment(
-      `── ASSISTANT · LLM call ${block.round.index + 1} ──`,
-      Math.max(0, width - stats.length),
-      {
-        style: { fg: THEME.kind.assistant, bold: true },
-      },
-    ),
-    segment(stats, Math.min(width, stats.length), { align: "right", style: { fg: THEME.muted } }),
-  );
-  return [heading, ...body];
+  const boxWidth = width - railWidth(block.depth, width);
+  const spec = {
+    title: first.text,
+    stats: blockStats(block),
+    color: spineColor(block),
+    indent: 0,
+    active,
+    sides: boxWidth >= SIDES_MIN_WIDTH,
+  };
+  return boxLines(paintPayload(rest, boxInnerWidth(boxWidth, spec)), boxWidth, spec);
+}
+/** Cells the rails of a block this deep take, capped so text keeps room. */
+function railWidth(depth: number, width: number): number {
+  return Math.min(depth * LAYOUT.rail, Math.max(0, width - LAYOUT.minBoxWidth));
+}
+/** A pane line of a nested block: one rail per level of tool depth on
+ *  the left, and the level's tint behind the whole row, so a sub-agent's
+ *  conversation reads as a band inside its caller's wherever the pane is
+ *  scrolled to. The tint is the overview's, one shade per level. */
+function nested(line: Painted, depth: number, width: number): Painted {
+  if (depth === 0) {
+    return line;
+  }
+  const tint = THEME.groupBg[Math.min(depth, THEME.groupBg.length) - 1];
+  const rails = railWidth(depth, width);
+  const rail = paint("┃ ".repeat(Math.ceil(rails / 2)).slice(0, rails), {
+    fg: THEME.accent,
+    bg: tint,
+  });
+  return joinPainted(rail, withBackground(line, width - rails, tint));
+}
+function callsText(calls: number): string {
+  return `${calls} LLM ${calls === 1 ? "call" : "calls"}`;
+}
+/** What the title rule says on the right: an LLM call's time, context
+ *  and cost; a tool's result size and time. */
+function blockStats(block: TranscriptBlock): string {
+  if (block.kind === "assistant") {
+    return `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} in · ${fmtUsd(block.round.costUsd)}`;
+  }
+  if (block.kind === "tool") {
+    const duration =
+      block.row.durationMs === undefined ? "no duration" : fmtDuration(block.row.durationMs);
+    return `${block.outputLines} ${block.outputLines === 1 ? "line" : "lines"} · ${duration}`;
+  }
+  return "";
 }
 /** Only a problem gets a mark in the call list; a plain result does not. */
 function toolMark(status: ToolStatus): string {
@@ -409,31 +678,65 @@ function toolMark(status: ToolStatus): string {
     ? `${TOOL_STATUS_MARK[status]} `
     : "";
 }
-function spineLabel(block: TranscriptBlock): string {
+/** The call list's row for a block, indented by how many tool calls deep
+ *  its thread runs, so a sub-agent's calls sit under the tool that
+ *  started them. */
+function spineLabel(block: TranscriptBlock, hasGroups: boolean): string {
+  const indent = " ".repeat(outlineLevel(block, hasGroups) * LAYOUT.indent);
   switch (block.kind) {
     case "assistant": {
       const suffix = block.round.decision === undefined ? "" : " · decision";
-      return `LLM call ${block.round.index + 1}${suffix}`;
+      return `${indent}LLM call ${block.round.index + 1}${suffix}`;
     }
     case "tool":
-      return `  ${toolMark(block.row.status)}${block.row.name}`;
+      return `${indent}${toolMark(block.row.status)}${block.row.name}`;
+    case "thread":
+      return `${indent}Thread · ${block.label}`;
+    case "turn": {
+      const title = block.turn.userText?.split("\n")[0].trim();
+      return `turn ${block.turn.index + 1}${title ? ` · ${title}` : ""}`;
+    }
+    case "user":
+      return `${indent}${block.promptTo === undefined ? "user" : "prompt"}`;
+    case "handback":
+      return `${indent}↩ ${block.tool}`;
     case "error":
-      return "✖ error";
+      return `${indent}✖ error`;
     case "pause":
-      return block.resumed ? "⏸ paused · resumed" : "⏸ paused";
+      return `${indent}${block.resumed ? "⏸ paused · resumed" : "⏸ paused"}`;
     case "rewrite":
-      return "⚠ changed";
+      return `${indent}⚠ changed`;
     case "history":
-      return block.message.role;
+      return `${indent}history · ${block.message.role}`;
     default:
-      return block.kind;
+      return `${indent}${block.kind}`;
   }
 }
 
+/** The trace's colors by kind, so a tool reads as a tool on every screen
+ *  and a system prompt sits back in chrome. */
+/** The call list's outline, as the trace draws it: a thread row at its
+ *  tool depth, the messages of its conversation one level in, and a tool
+ *  one level under the call that asked for it. A turn divider spans the
+ *  threads and sits at the left. */
+function outlineLevel(block: TranscriptBlock, hasGroups: boolean): number {
+  if (block.kind === "turn") {
+    return 0;
+  }
+  const groups = Math.max(1, block.groupPath.length);
+  const base = (groups - 1) * 3;
+  if (block.kind === "thread") {
+    return base;
+  }
+  return base + (block.kind === "tool" ? 2 : 1) - (hasGroups ? 0 : 1);
+}
 function spineColor(block: TranscriptBlock): string {
   const role = block.kind === "history" ? block.message.role : block.kind;
-  if (role === "user") {
+  if (role === "user" || role === "turn") {
     return THEME.kind.user;
+  }
+  if (block.kind === "handback") {
+    return THEME.kind.tool;
   }
   if (role === "assistant") {
     return THEME.kind.assistant;
@@ -453,5 +756,8 @@ function spineColor(block: TranscriptBlock): string {
   if (block.kind === "tool" && block.row.status === "awaitingApproval") {
     return THEME.kind.interrupt;
   }
-  return THEME.text;
+  if (block.kind === "tool") {
+    return THEME.kind.tool;
+  }
+  return block.kind === "system" ? THEME.chrome : THEME.text;
 }

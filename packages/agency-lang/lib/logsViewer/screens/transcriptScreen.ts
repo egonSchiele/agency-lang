@@ -450,19 +450,21 @@ export class TranscriptScreen implements Screen {
     this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, total - 1)));
   }
   /** Scroll only as far as it takes to bring the block into the pane, so
-   *  the active box stays where the eye left it: up to its top when it is
-   *  above, down to its bottom when it is below, and to its top when it is
-   *  taller than the pane. */
+   *  the active box stays where the eye left it. A block whose top is
+   *  already in the pane leaves the scroll alone, so a box that Enter
+   *  opens grows downward in place; one above scrolls up to its top; one
+   *  below scrolls down to its bottom, or to its top when it is taller
+   *  than the pane. */
   private keepVisible(focused: BlockLines | undefined): void {
     if (focused === undefined) {
       this.scrollTop = 0;
       return;
     }
     const end = focused.start + focused.lines.length - LAYOUT.gap;
-    if (focused.start < this.scrollTop || end - focused.start > this.page) {
+    if (focused.start < this.scrollTop) {
       this.scrollTop = focused.start;
-    } else if (end > this.scrollTop + this.page) {
-      this.scrollTop = end - this.page;
+    } else if (focused.start >= this.scrollTop + this.page) {
+      this.scrollTop = end - focused.start > this.page ? focused.start : end - this.page;
     }
   }
   /** `▸` or `▾` on a block Enter opens or closes; the same width of
@@ -487,12 +489,19 @@ export class TranscriptScreen implements Screen {
     }).map((line) => nested(line, block.depth, width)));
   }
   /** `researchAgent › Thread · main · 13 LLM calls`: what the first row
-   *  of the pane is inside, when that is a sub-agent's group and the
-   *  group's own row is not the one showing. Painted over the first row. */
+   *  of the pane is inside, when that is a sub-agent's group and the row
+   *  is neither the group's own nor a box's title. Painted over the
+   *  first row. */
   private breadcrumb(): Painted | undefined {
     const atTop = this.painted.filter((block) => block.start <= this.scrollTop).at(-1);
     const block = this.visible.find((candidate) => candidate.id === atTop?.id);
-    if (block === undefined || block.depth === 0 || block.kind === "thread") {
+    // A block's first row is its title and is never covered.
+    if (
+      block === undefined ||
+      block.depth === 0 ||
+      block.kind === "thread" ||
+      atTop?.start === this.scrollTop
+    ) {
       return undefined;
     }
     const crumbs = block.groupPath

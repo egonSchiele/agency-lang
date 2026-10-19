@@ -39,6 +39,11 @@ function paintPayloadLine(line: PayloadLine, width: number): Painted[] {
   if (line.kind === "pair") {
     return paintPair(line.key, line.text, line.indent, width);
   }
+  if (line.kind === "rule") {
+    const label = `── ${escapeControls(line.text)} `;
+    const text = label.length >= width ? label.slice(0, width) : label.padEnd(width, "─");
+    return [paint(text, { fg: HEADING_COLORS[line.tone ?? "chrome"] })];
+  }
   if (line.kind === "table") {
     return paintTable(line, width);
   }

@@ -491,6 +491,15 @@ describe("the call list and header", () => {
     expect(screen.focusId()).toBe("round:B:9");
     const first = text(screen).split("\n")[2].split("│")[1];
     expect(first).toContain("researchAgent › Thread · researchAgent · 12 LLM calls");
+    // Scrolled so a box's title is the first row, the title shows instead.
+    press(screen, "k");
+    press(screen, "k");
+    screen.handleKey({ key: "d", ctrl: true }, viewport);
+    const rows = text(screen).split("\n");
+    const top = rows[2].split("│")[1];
+    if (top.includes("┌─") || top.includes("┏━")) {
+      expect(top).not.toContain("›");
+    }
   });
   it("keeps a group the reader opened open through a follow update, and unfolds one that runs again", () => {
     const events = [
@@ -527,6 +536,27 @@ describe("the call list and header", () => {
       ]),
     );
     expect(text(screen)).not.toContain("▸ folded");
+  });
+  it("previews a tool's result under a rule, and grows the box in place on Enter", () => {
+    const events = loopEvents();
+    events.find((event) => event.data.type === "toolCall")!.data.output = Array.from(
+      { length: 30 },
+      (_unused, position) => `result line ${position}`,
+    ).join("\n");
+    const screen = make(buildForest(events));
+    screen.setFocus("guide");
+    const before = text(screen).split("\n");
+    const title = before.findIndex((line) => line.includes("TOOL CALL · agencyGuide"));
+    expect(before.join("\n")).toMatch(/── RESULT · ~\d+ tokens ─+/);
+    expect(before.join("\n")).toContain("result line 0");
+    expect(before.join("\n")).toContain("… (+29 more lines · Enter opens)");
+    expect(before.join("\n")).not.toContain("result line 1");
+    press(screen, "enter");
+    const after = text(screen).split("\n");
+    // The box opens where it stands: its title row has not moved.
+    expect(after.findIndex((line) => line.includes("TOOL CALL · agencyGuide"))).toBe(title);
+    expect(after.join("\n")).toContain("result line 1");
+    expect(after.join("\n")).toMatch(/── RESULT · ~\d+ tokens ─+/);
   });
   it("names a reply's tool calls on one line and shows a request no tool ran whole", () => {
     const screen = make(
@@ -599,12 +629,12 @@ describe("the call list and header", () => {
     );
     const before = text(screen, 300, 40);
     expect(before).toContain(`path: ${"x".repeat(120)}…`);
-    expect(before).not.toContain("→ WHAT THE MODEL READ");
+    expect(before).not.toContain("── WHAT THE MODEL READ");
     screen.setFocus("tool");
     press(screen, "enter");
     const after = text(screen, 300, 40);
     expect(after).toContain(`path: ${"x".repeat(200)}`);
-    expect(after).toContain("→ WHAT THE MODEL READ");
+    expect(after).toContain("── WHAT THE MODEL READ");
     expect(after).toContain("aaa [tool result truncated]");
   });
 });

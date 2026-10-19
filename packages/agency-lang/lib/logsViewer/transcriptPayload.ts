@@ -4,6 +4,7 @@ import {
   ARGUMENT_PREVIEW_CHARS,
   cutArguments,
   payloadFor,
+  resultTokenEstimate,
   valuePayload,
   type PayloadLine,
 } from "./payload.js";
@@ -174,8 +175,9 @@ function turnPayload(block: Extract<TranscriptBlock, { kind: "turn" }>): Payload
 }
 /** `TOOL CALL · name`, the arguments cut as on the trace's call row, the
  *  tool's interrupts, its status when it did not complete, its errors, and
- *  on Enter the arguments and result whole in the trace's tool-row shape,
- *  then what the model read when that differs. */
+ *  the result's first line under a `RESULT` rule; on Enter the arguments
+ *  and result whole in the trace's tool-row shape, then what the model
+ *  read when that differs. */
 function toolPayload(
   block: Extract<TranscriptBlock, { kind: "tool" }>,
   expanded: boolean,
@@ -216,13 +218,52 @@ function toolPayload(
       indent: 0,
       role: "error" as const,
     })),
-    ...(expanded ? payloadFor(block.row, { raw: false }).slice(3) : []),
-    ...(expanded && block.modelSaw !== undefined
-      ? [
-          { kind: "heading" as const, text: "→ WHAT THE MODEL READ", tone: "chrome" as const },
+    ...(expanded ? expandedToolBody(block) : resultPreview(block)),
+  ];
+}
+/** The trace's tool detail after its three header lines, with its
+ *  `→ RESULT` heading drawn as the rule the collapsed box used, so the
+ *  box keeps its shape when it opens; then what the model read. */
+function expandedToolBody(block: Extract<TranscriptBlock, { kind: "tool" }>): PayloadLine[] {
+  const detail = payloadFor(block.row, { raw: false })
+    .slice(3)
+    .map((line): PayloadLine =>
+      line.kind === "heading" && line.text.startsWith("→ RESULT")
+        ? { kind: "rule", text: line.text.slice(2), tone: "tool" }
+        : line,
+    );
+  return [
+    ...detail,
+    ...(block.modelSaw === undefined
+      ? []
+      : [
+          { kind: "rule" as const, text: "WHAT THE MODEL READ", tone: "chrome" as const },
           ...valuePayload(block.modelSaw),
-        ]
-      : []),
+        ]),
+  ];
+}
+/** The result's first line under its rule, and how much more Enter has. */
+function resultPreview(block: Extract<TranscriptBlock, { kind: "tool" }>): PayloadLine[] {
+  const finished = childEvent(block.row.node, "toolCall");
+  if (block.output === undefined || finished === undefined) {
+    return [];
+  }
+  const lines = block.output.split("\n");
+  const more = lines.length - 1;
+  return [
+    {
+      kind: "rule",
+      tone: "tool",
+      text: `RESULT · ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+    },
+    { kind: "text", text: lines[0], indent: 0, role: "plain", oneRow: true },
+    {
+      kind: "meta",
+      text:
+        more > 0
+          ? `… (+${more} more ${more === 1 ? "line" : "lines"} · Enter opens)`
+          : "(Enter opens)",
+    },
   ];
 }
 

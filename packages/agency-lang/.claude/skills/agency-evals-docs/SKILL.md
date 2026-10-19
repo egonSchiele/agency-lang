@@ -11,6 +11,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/evals/eval-grading.md` — Why running and grading are separate, joined only by the run directory.
 - `docs/dev/evals/eval-tracking.md` — Running a suite over several trials, then uploading the results to statelog for a trend.
 - `docs/dev/evals/eval-labeling.md` — Answering a checklist about a group of runs by hand, and how those answers are recorded.
+- `docs/dev/evals/eval-new.md` — `agency eval new`: the form that writes a test folder, the one table that defines its fields, the modes and intents in its state, and the stdin pause the `$EDITOR` hand-off depends on.
 - `docs/dev/evals/eval-command-agents.md` — Running an arbitrary CLI as the eval agent instead of an `.agency` file.
 - `docs/dev/evals/writing-optimizers.md` — Adding a new `optimize` strategy alongside `greedy` and `gepa`.
 - `docs/dev/evals/optimize-text-targets.md` — How a prompt travels between the source file and the mutator model, and why every `${...}` in a reply is an interpolation.

@@ -320,9 +320,9 @@ function rehydrateInheritedGuards(branch: BranchState, parentStack: StateStack, 
   // the branch's first rehydration. A branch started inside a handler
   // inherits its exclusion identity and the no-pause refusal (#616).
   branch.stack.adoptExecutingHandlersFrom(parentStack);
-  // Also on every entry: the branch's place in the tree and its depth are
-  // live state a resumed stack does not carry.
-  branch.stack.placeUnder(parentStack, key);
+  // Also on every entry: the link to the parent stack is live state a
+  // resumed stack does not carry.
+  branch.stack.parent = { stack: parentStack, key };
   if (branch.guardsRehydrated) return;
   branch.stack.rehydrateInheritedGuardsFrom(parentStack);
   branch.guardsRehydrated = true;

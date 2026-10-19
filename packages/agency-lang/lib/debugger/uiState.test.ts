@@ -149,6 +149,7 @@ describe("UIState", () => {
         scopeName: "search",
         stepPath: "1",
         branchPath: ["tool_0_abc"],
+        depth: 1,
         label: null,
       });
       expect(ui.getArgs()).toEqual([{ key: "query", value: "grant", override: undefined }]);

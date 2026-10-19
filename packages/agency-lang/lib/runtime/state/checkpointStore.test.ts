@@ -891,4 +891,37 @@ describe("CheckpointStore inside a tool call", () => {
     };
     expect(store.findBefore(shared.id, stop)!.id).toBe(1);
   });
+
+  it("findBefore passes over a sibling branch's steps and reaches the stack above", () => {
+    const store = new CheckpointStore();
+    const at = (id: number, scopeName: string, stepPath: string, branchPath?: string[]) =>
+      new Checkpoint({
+        id,
+        stack: makeStackJSON([{}]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+        moduleId: "m.agency",
+        scopeName,
+        stepPath,
+        branchPath,
+      });
+    // The node's llm() step, then the two tools of a round stepping in turn.
+    store.add(at(1, "main", "0"));
+    store.add(at(2, "search", "0", ["tool_0_abc"]));
+    store.add(at(3, "writeUp", "0", ["tool_1_def"]));
+    store.add(at(4, "search", "1", ["tool_0_abc"]));
+    store.add(at(5, "writeUp", "1", ["tool_1_def"]));
+    const stoppedInSearch = {
+      moduleId: "m.agency",
+      scopeName: "search",
+      stepPath: "1",
+      branchPath: ["tool_0_abc"],
+    };
+    // From search's second statement: its first, not writeUp's.
+    expect(store.findBefore(6, stoppedInSearch)!.id).toBe(2);
+    // From search's first statement, before the later steps existed: the
+    // llm() line on the stack above, not writeUp's first statement.
+    const atSearchStart = { ...stoppedInSearch, stepPath: "0" };
+    expect(store.findBefore(4, atSearchStart)!.id).toBe(1);
+  });
 });

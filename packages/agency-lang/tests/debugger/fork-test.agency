@@ -11,3 +11,18 @@ node main(): number {
   }
   return total
 }
+
+// The same fork with a breakpoint inside each branch.
+node withBreakpoint(): number {
+  const items = [1, 2, 3]
+  const doubled = fork(items) as item {
+    const twice = item * 2
+    debugger("in branch")
+    return twice
+  }
+  let total = 0
+  for (value in doubled) {
+    total = total + value
+  }
+  return total
+}

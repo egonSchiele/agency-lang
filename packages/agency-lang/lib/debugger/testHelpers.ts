@@ -121,13 +121,11 @@ export async function getInitialResult(mod: any, driver: DebuggerDriver, ...args
   return initialResult;
 }
 
-/** Run `fn` with every `llm()` call answered from `mocks`, in order. The
- *  runtime builds the deterministic client when the host setting
- *  `AGENCY_LLM_MOCKS` holds a JSON list of mocks, once, when the module's
- *  context is created on import (`lib/runtime/state/context.ts`), and every
- *  execution context shares that client. So the variable is set before
- *  `fn` imports the module, and the queue survives every resume and
- *  rewind in the session `fn` drives. */
+/** Run `fn` with every `llm()` call answered from `mocks`, in order, by
+ *  the deterministic client. `fn` must import the module itself: the
+ *  client is built from `AGENCY_LLM_MOCKS` when the module is imported,
+ *  and one queue then serves the whole session, resumes and rewinds
+ *  included. */
 export async function withLLMMocks<T>(mocks: LLMMock[], fn: () => Promise<T>): Promise<T> {
   const previous = process.env.AGENCY_LLM_MOCKS;
   process.env.AGENCY_LLM_MOCKS = JSON.stringify(mocks);

@@ -733,6 +733,18 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     snapshotMessages: snapshotThread,
   });
 
+  // Any checkpoint built while this call runs, from any stack, carries
+  // the thread as it is at that moment. The debugger's rolling checkpoint
+  // inside a tool is one: without this, a sibling tool that had already
+  // finished would be marked done in the checkpoint but its reply missing
+  // from the thread, and a rewind would send the model a call with no
+  // reply. Registered for the life of the call; the `finally` below
+  // removes it.
+  const refreshMessages = () => {
+    self.messagesJSON = snapshotThread();
+  };
+  ctx.beforeCheckpoint.push(refreshMessages);
+
   // One llmCall span covers the WHOLE `llm()` call — every tool-loop
   // round plus the tool executions they trigger. So all rounds'
   // promptCompletion events and all toolExecution spans nest under a
@@ -1936,6 +1948,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     // (the resumed run reopens the same span from its saved id).
     // endSpan is a no-op when no span is open.
     run.log.endSpan(llmSpanId);
+    ctx.beforeCheckpoint = ctx.beforeCheckpoint.filter((refresh) => refresh !== refreshMessages);
     if (shouldPop) stateStack.pop();
   }
 

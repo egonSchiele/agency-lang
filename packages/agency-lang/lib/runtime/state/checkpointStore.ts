@@ -34,6 +34,15 @@ export function sameLocation(a: SourceLocationOpts, b: SourceLocationOpts): bool
     aPath.every((key, index) => key === bPath[index])
   );
 }
+
+/** Whether `a`'s step ran on the same stack as `b`'s or on a stack above
+ *  it: `a`'s branch path is a prefix of `b`'s. */
+function onStackOrAbove(a: SourceLocationOpts, b: SourceLocationOpts): boolean {
+  const aPath = a.branchPath ?? [];
+  const bPath = b.branchPath ?? [];
+  return aPath.length <= bPath.length && aPath.every((key, index) => key === bPath[index]);
+}
+
 /** Reset the global checkpoint ID counter. For use in tests only. */
 export function resetGlobalCheckpointCounter(): void {
   globalCheckpointCounter = 0;
@@ -367,6 +376,9 @@ export class CheckpointStore {
       this.removeDuplicate(opts);
     }
 
+    for (const refresh of ctx.beforeCheckpoint) {
+      refresh();
+    }
     const checkpoint = Checkpoint.fromStateStack(stateStack, ctx, opts);
     this.checkpoints[checkpoint.id] = checkpoint;
     return checkpoint.id;
@@ -401,16 +413,20 @@ export class CheckpointStore {
     return sorted[currentIdx - 1];
   }
 
-  /** The newest unpinned checkpoint older than `beforeId` that is not at
-   *  `location`, the step the program is stopped at. `step back` rewinds
-   *  to it. The stopped location is passed on its own because the
-   *  checkpoint on a stop inside a tool call is the shared one stamped at
-   *  the join, whose own location is the loop's. */
+  /** The newest unpinned checkpoint older than `beforeId` whose step ran
+   *  on the stack the program is stopped on, or on a stack above it, and
+   *  not at `location`, the step it is stopped at. `step back` rewinds to
+   *  it. A sibling branch's steps are passed over: stopped inside one tool
+   *  of a round, `step back` must not land in the other tool. The stopped
+   *  location is passed on its own because the checkpoint on a stop
+   *  inside a tool call is the shared one stamped at the join, whose own
+   *  location is the loop's. */
   findBefore(beforeId: number, location: SourceLocationOpts): Checkpoint | null {
     const sorted = this.getSorted(); // sorted by id ascending
     sorted.reverse();
     for (const cp of sorted) {
-      if (cp.id < beforeId && !sameLocation(cp, location) && !cp.pinned) {
+      if (cp.id >= beforeId || cp.pinned) continue;
+      if (onStackOrAbove(cp, location) && !sameLocation(cp, location)) {
         return cp;
       }
     }

@@ -34,7 +34,9 @@ function agentMocks(opts: { breakInSearch?: boolean } = {}): LLMMock[] {
 
 const FINAL = "final report";
 
-async function agentSession(mocks: LLMMock[], node = "main", args: unknown[] = ["research"]) {
+/** A session on `node` of the agent fixture. The model's replies come
+ *  from the `withLLMMocks` the caller is inside. */
+async function agentSession(node = "main", args: unknown[] = ["research"]) {
   const mod = await freshImport(agentCompiled);
   return await DebuggerTestSession.create({ mod: { ...mod, main: mod[node] }, args });
 }
@@ -54,7 +56,7 @@ function modelRequests(session: DebuggerTestSession): number {
 describe("the harness", () => {
   it("runs the tool loop against scripted replies", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       await session.press("c");
       expect(await session.quit()).toBe(FINAL);
     });
@@ -71,7 +73,7 @@ function lineWithMarker(session: DebuggerTestSession): string {
 describe("stopping inside a tool call", () => {
   it("step from the llm() line lands on the tool's first statement", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       expect(lineWithMarker(session)).toContain("llm(task");
       await session.press("s");
       expect(lineWithMarker(session)).toContain("const url");
@@ -82,9 +84,19 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("step in from the llm() line lands on the tool's first statement too", async () => {
+    await withLLMMocks(agentMocks(), async () => {
+      const session = await agentSession();
+      await session.press("i");
+      expect(lineWithMarker(session)).toContain("const url");
+      await session.press("n");
+      expect(lineWithMarker(session)).toContain("if (breakHere)");
+    });
+  });
+
   it("next from the llm() line runs the whole call", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       await session.press("n");
       expect(lineWithMarker(session)).toContain("return answer");
       expect(modelRequests(session)).toBe(4);
@@ -95,7 +107,7 @@ describe("stopping inside a tool call", () => {
 
   it("inside the tool, next walks its statements and step out leaves the llm() call", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       await session.press("s"); // const url
       await session.press("n"); // if (breakHere)
       await session.press("n"); // let summary
@@ -111,9 +123,9 @@ describe("stopping inside a tool call", () => {
   it("a debugger() inside the tool stops under continue", async () => {
     const mocks = agentMocks({ breakInSearch: true });
     await withLLMMocks(mocks, async () => {
-      const session = await agentSession(mocks);
+      const session = await agentSession();
       await session.press("c");
-      expect(sourceText(session)).toContain("agent-shaped.agency");
+      expect(lineWithMarker(session)).toContain('debugger("in search")');
       expect(localsText(session)).toContain('url = "https://example.test/grant"');
       await session.press("c");
       expect(await session.quit()).toBe(FINAL);
@@ -122,7 +134,7 @@ describe("stopping inside a tool call", () => {
 
   it("print reads the tool's variables and set is refused", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       await session.press("s"); // const url
       await session.press("n"); // if (breakHere)
       await session.press("p");
@@ -133,14 +145,14 @@ describe("stopping inside a tool call", () => {
       await session.press(":");
       await session.type('set url = "other"');
       expect(session.ui.state.getActivityLog()).toContainEqual(
-        "set inside a tool call is not supported yet",
+        "set inside a tool call, a fork, or a parallel block is not supported yet",
       );
     });
   });
 
   it("step back inside the tool lands on its previous statement without a model request", async () => {
     await withLLMMocks(agentMocks(), async () => {
-      const session = await agentSession(agentMocks());
+      const session = await agentSession();
       await session.press("s"); // const url
       await session.press("n"); // if (breakHere)
       await session.press("n"); // let summary
@@ -161,7 +173,7 @@ describe("stopping inside a tool call", () => {
       { return: "done" },
     ];
     await withLLMMocks(mocks, async () => {
-      const session = await agentSession(mocks, "insideHandler", []);
+      const session = await agentSession("insideHandler", []);
       await session.press("c");
       expect(session.ui.state.getActivityLog()).toContainEqual(
         'Program finished. Return value: "handled"',
@@ -170,37 +182,115 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  const twoToolMocks: LLMMock[] = [
+    {
+      toolCalls: [
+        { name: "search", args: { query: "grant", breakHere: false } },
+        { name: "writeUp", args: { notes: "notes" } },
+      ],
+    },
+    { return: "grant summary" },
+    { return: FINAL },
+  ];
+
   it("two tools in one round: one stop is shown, both tools complete", async () => {
-    const mocks: LLMMock[] = [
-      {
-        toolCalls: [
-          { name: "search", args: { query: "grant", breakHere: false } },
-          { name: "writeUp", args: { notes: "notes" } },
-        ],
-      },
-      { return: "grant summary" },
-      { return: FINAL },
-    ];
-    await withLLMMocks(mocks, async () => {
-      const session = await agentSession(mocks);
+    await withLLMMocks(twoToolMocks, async () => {
+      const session = await agentSession();
       await session.press("s");
       expect(lineWithMarker(session)).toContain("const url");
       await session.press("s", { times: 20 });
       expect(await session.quit()).toBe(FINAL);
     });
   });
+
+  it("step back stays in the stopped tool, and a rewind point taken after a sibling finished keeps its reply", async () => {
+    await withLLMMocks(twoToolMocks, async () => {
+      const session = await agentSession();
+      // writeUp has three statements and finishes while search is still
+      // stepping. One more step after that, so the current step's rolling
+      // checkpoint was taken after writeUp's reply reached the thread.
+      await session.press("s");
+      for (let i = 0; i < 10 && !toolDone(session, "writeUp"); i++) {
+        await session.press("s");
+      }
+      expect(toolDone(session, "writeUp")).toBe(true);
+      await session.press("s");
+      expect(searchLines.some((line) => lineWithMarker(session).includes(line))).toBe(true);
+      // The rolling checkpoint of the current step is stamped from the
+      // root, and its runPrompt frame holds the thread the loop would
+      // resume with. writeUp's reply is in it.
+      const latest = session.driver.debuggerState.getCheckpoints().sort((a, b) => b.id - a.id)[0];
+      expect(latest.scopeName).toBe("search");
+      const promptFrame = latest.stack.stack[1];
+      expect(JSON.stringify(promptFrame.locals.messagesJSON)).toContain("# Report");
+      // step back lands on search's previous statement, not on writeUp's.
+      await session.press("up");
+      expect(searchLines.some((line) => lineWithMarker(session).includes(line))).toBe(true);
+      await session.press("c");
+      expect(await session.quit()).toBe(FINAL);
+    });
+  });
 });
 
+const searchLines = [
+  "const url",
+  "if (breakHere)",
+  "let summary",
+  "thread {",
+  "summary = llm",
+  "return summary",
+];
+
+function toolDone(session: DebuggerTestSession, name: string): boolean {
+  return session.ui.state.getActivityLog().some((line) => line.startsWith(`Tool done: ${name}`));
+}
+
 describe("stopping inside a fork branch", () => {
-  it("steps into a branch with the branch's locals", async () => {
+  async function forkSession(node = "main") {
     const mod = await freshImport(forkCompiled);
-    const session = await DebuggerTestSession.create({ mod });
+    return await DebuggerTestSession.create({ mod: { ...mod, main: mod[node] } });
+  }
+
+  it("steps into a branch with the branch's locals", async () => {
+    const session = await forkSession();
     const seen: string[] = [];
     for (let i = 0; i < 12 && !session.isFinished; i++) {
       await session.press("s");
       seen.push(localsText(session));
     }
     expect(seen.some((text) => text.includes("item = 1"))).toBe(true);
+    expect(await session.quit()).toBe(12);
+  });
+
+  it("next walks a branch's statements as it does a loop body, and step out runs to the node's end", async () => {
+    const session = await forkSession();
+    await session.press("n");
+    expect(lineWithMarker(session)).toContain("fork(items)");
+    // The fork statement has a second step on its own line before the
+    // branches start.
+    await session.press("n", { times: 2 });
+    expect(lineWithMarker(session)).toContain("const twice");
+    expect(localsText(session)).toContain("item = 1");
+    await session.press("n");
+    expect(lineWithMarker(session)).toContain("return twice");
+    expect(localsText(session)).toContain("twice = 2");
+    // A branch is at its node's depth, so step out leaves the node.
+    await session.press("o");
+    expect(session.ui.state.getActivityLog()).toContainEqual("Program finished. Return value: 12");
+    expect(await session.quit()).toBe(12);
+  });
+
+  it("a debugger() inside a branch stops under continue, with the branch's locals", async () => {
+    const session = await forkSession("withBreakpoint");
+    await session.press("c");
+    expect(lineWithMarker(session)).toContain('debugger("in branch")');
+    expect(localsText(session)).toContain("twice = 2");
+    await session.press(":");
+    await session.type("set twice = 5");
+    expect(session.ui.state.getActivityLog()).toContainEqual(
+      "set inside a tool call, a fork, or a parallel block is not supported yet",
+    );
+    await session.press("c");
     expect(await session.quit()).toBe(12);
   });
 });

@@ -207,10 +207,12 @@ export class DebuggerDriver {
           // position, so we re-render without a new checkpoint.
           const nonSteppingCommands = ["set", "print", "checkpoint"];
           const skipCheckpoint = lastCommand && nonSteppingCommands.includes(lastCommand.type);
-          await this.ui.render(
-            skipCheckpoint ? undefined : interrupt.checkpoint,
-            stopOf(interrupt),
-          );
+          // The stepping commands work from the depth of the stop that is
+          // shown. Several branches can stop in one round, so the runtime
+          // does not record a depth; the stop record carries it.
+          const stop = stopOf(interrupt);
+          if (stop) this.debuggerState.stoppedAt(stop.depth);
+          await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches
@@ -323,11 +325,14 @@ export class DebuggerDriver {
       }
       case "set": {
         // A resume applies overrides to the root's last frame
-        // (applyLocalOverrides in resumeSetup.ts). Addressing the frame of
-        // a tool call is milestone four's work.
+        // (applyLocalOverrides in resumeSetup.ts), so a stop on a branch
+        // stack, inside a tool call, a fork, or a parallel block, cannot
+        // take one yet.
         const stop = stopOf(interrupt);
         if (stop && stop.branchPath.length > 0) {
-          this.ui.state.log("set inside a tool call is not supported yet");
+          this.ui.state.log(
+            "set inside a tool call, a fork, or a parallel block is not supported yet",
+          );
           return { data: interrupt };
         }
         this.ui.state.setOverride(command.varName, command.value);

@@ -7,10 +7,10 @@ import { color } from "@/utils/termcolors.js";
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
   public checkpoints: CheckpointStore;
-  /** The depth of the step the debugger last stopped at. The runtime
-   *  reads a step's depth from its stack (`StateStack.stepDepth`) and
-   *  reports it through `stoppedAt`; the stepping commands set their
-   *  targets from it. */
+  /** The depth of the step the debugger is stopped at: how many Agency
+   *  calls deep it is, with the node's statements at 0. The driver sets it
+   *  from the stop it shows (`DebugStopData.depth`); the stepping commands
+   *  set their targets from it. */
   public stopDepth = 0;
   public stepTarget: {
     type: "stepIn" | "stepOut" | "next";

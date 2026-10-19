@@ -32,8 +32,10 @@ export function humanFeedbackFor(snapshot: RunDirectorySnapshot, traceId: string
   // comments and no annotations must keep them. Worded by anchor, since a row
   // id means nothing to a model.
   for (const thread of threadsForTrace(snapshot.comments, traceId)) {
-    if (thread.comment.author.kind === "human") {
-      notes.push(commentWithAnchor(thread.comment));
+    for (const comment of [thread.comment, ...thread.replies]) {
+      if (comment.author.kind === "human") {
+        notes.push(commentWithAnchor(comment));
+      }
     }
   }
   const effective = snapshot.effectiveAnnotations[traceId];

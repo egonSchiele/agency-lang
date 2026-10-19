@@ -78,11 +78,14 @@ An address names one row of one trace:
 k3Pq9abc/round:span-7f3a:2
 ```
 
-The part before the last slash is the trace ID. The part after is the
-row ID the viewer already uses for cursor and focus state. The split is
-on the last slash because a trace ID can be anything a config or the
-trace-ID environment variable supplies, slashes included, while a row ID
-never contains one. These IDs exist
+The part before the slash is the trace ID. The part after is the row ID
+the viewer already uses for cursor and focus state. No single character
+can split an address: a trace ID can be anything a config or the trace-ID
+environment variable supplies, slashes included, and a leaf directly under
+the trace root embeds the trace ID in its row ID. An address is split
+against the trace IDs of the log it names, longest match first; the CLI
+reads the log before it splits, and text no trace ID starts is a bare row
+ID. These IDs exist
 today in `lib/logsViewer/story.ts` and `tree.ts`:
 
 | Row | ID | Example |
@@ -342,7 +345,8 @@ it is in.
 
 A row ID is only unique inside one trace, so a command that takes a row
 needs a trace. A full address carries it. A bare row ID takes it from
-`--trace-id`, else from the open viewer's current trace, else the
+`--trace` (the flag is `--trace` on the session commands, since `logs`
+already declares `--trace-id`), else from the open viewer's current trace, else the
 command refuses and lists the trace IDs in the file. With no viewer
 open, `comments` shows every trace in the file, grouped, since there is
 no current trace to prefer. With a viewer open, `comments` shows

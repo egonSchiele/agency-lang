@@ -13,6 +13,7 @@ import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
 import type { CommentsStore } from "../runDirectory/commentsStore.js";
 import { formatAddress } from "./address.js";
 import { findRow } from "./detailTarget.js";
+import type { Anchor } from "../runDirectory/comments.js";
 import { anchorFor, marksFrom } from "./marks.js";
 import type { Focus, NavigateResult, SessionPort } from "./session/port.js";
 import { isUnavailable, startSessionServer, type SessionServer } from "./session/server.js";
@@ -215,7 +216,10 @@ async function runSession(
   const viewport: Viewport = opts.viewport;
   const tooNarrowNow = viewport.cols < MIN_COLS;
   const annotations = opts.traceAnnotations ?? {};
-  const bootTraceId = opts.focusTraceId ?? mostRecentTraceId(roots);
+  const bootTraceId =
+    opts.focusTraceId === undefined
+      ? mostRecentTraceId(roots)
+      : (resolveTracePrefix(roots, opts.focusTraceId) ?? opts.focusTraceId);
 
   const host = createHost(roots, opts, thresholds, bootTraceId);
   const notify = (message: string): void => host.target().notify(message);
@@ -331,11 +335,12 @@ async function runSession(
   }
   commentsSource.refresh();
   render();
-  const session = await startSessionIfAsked(
-    opts,
-    sessionPortFor(host, () => roots, commentsSource, notify, render),
-  );
+  let session: SessionServer | undefined;
   try {
+    session = await startSessionIfAsked(
+      opts,
+      sessionPortFor(host, () => roots, commentsSource, notify, render),
+    );
     return await runKeyLoop({
       screen,
       host,
@@ -398,22 +403,30 @@ function sessionPortFor(
   };
 }
 
-/** What `A` would copy: the active screen's focused row. On the picker,
- *  its highlighted trace and no row. */
-function sessionFocus(host: ScreenHost): Focus {
+/**
+ * The row the person is on: the row a detail overlay shows, else the active
+ * screen's selected row. `A`, `c`, and the session's `get` all use this, so
+ * they cannot name different rows. A screen's `focusId` is not it: that
+ * names the row focus travels to on another screen (a user turn's round, an
+ * interrupt's tool). On the picker there is no row.
+ */
+function focusedRow(host: ScreenHost): { traceId: string; rowId: string | undefined } {
   const target = host.target();
-  if (target instanceof TracePicker) {
-    return {
-      traceId: target.selectedTraceId() ?? host.currentTraceId(),
-      screen: host.activeScreen(),
-      rowId: undefined,
-    };
+  if (target instanceof DetailScreen) {
+    return { traceId: host.currentTraceId(), rowId: target.rowId };
   }
-  return {
-    traceId: host.currentTraceId(),
-    screen: host.activeScreen(),
-    rowId: host.screen(host.activeScreen()).focusId(),
-  };
+  if (target instanceof TracePicker) {
+    return { traceId: target.selectedTraceId() ?? host.currentTraceId(), rowId: undefined };
+  }
+  if (host.overlayOpen()) {
+    return { traceId: host.currentTraceId(), rowId: undefined };
+  }
+  const screen = host.screen(host.activeScreen());
+  return { traceId: host.currentTraceId(), rowId: screen.selectedRowId?.() ?? screen.focusId() };
+}
+
+function sessionFocus(host: ScreenHost): Focus {
+  return { ...focusedRow(host), screen: host.activeScreen() };
 }
 
 /** The session's `navigate`: switch trace when needed, then put the trace
@@ -656,9 +669,22 @@ export function fallbackTraceId(
   focusTraceId: string | undefined,
 ): string {
   if (focusTraceId !== undefined && currentTraceId === focusTraceId) {
-    return focusTraceId;
+    // The id may be a prefix: `--trace-id 7f3a` for a trace the viewer
+    // could not resolve before it started. Resolve it once it can.
+    return resolveTracePrefix(roots, focusTraceId) ?? focusTraceId;
   }
   return mostRecentTraceId(roots);
+}
+
+/** The one trace a full id or unique prefix names, as `matchTrace` resolves
+ *  one for the CLI; undefined when none or several match. */
+export function resolveTracePrefix(roots: TreeNode[], idOrPrefix: string): string | undefined {
+  const exact = roots.find((root) => root.traceId === idOrPrefix);
+  if (exact !== undefined) {
+    return exact.traceId;
+  }
+  const matches = roots.filter((root) => root.traceId.startsWith(idOrPrefix));
+  return matches.length === 1 ? matches[0].traceId : undefined;
 }
 
 /** The trace that started last; the last root when none has a start time. */
@@ -828,27 +854,22 @@ function rowBindings(
   controls: ShellControls,
   comments: CommentsSource,
 ): ShellBinding[] {
-  const onScreen = (): boolean => !host.overlayOpen();
-  const commentTarget = (): string | undefined => {
-    const target = host.target();
-    if (target instanceof DetailScreen) {
-      return target.rowId;
-    }
-    return onScreen() ? host.screen(host.activeScreen()).focusId() : undefined;
-  };
+  const rowNow = (): string | undefined => focusedRow(host).rowId;
   return [
     {
       keys: ["c"],
       help: "comment on the focused row",
       hint: comments.available ? "c comment" : undefined,
-      when: () => !controls.typing && commentTarget() !== undefined,
+      when: () => !controls.typing && rowNow() !== undefined,
       run: () => {
         if (!comments.available) {
           host.target().notify("comments unavailable for this log");
           return;
         }
-        const rowId = commentTarget();
-        if (rowId === undefined) {
+        // Captured whole before the prompt opens: a session `navigate`
+        // can switch traces while the person types.
+        const target = comments.targetFor(focusedRow(host));
+        if (target === undefined) {
           return;
         }
         return {
@@ -856,7 +877,7 @@ function rowBindings(
           label: "comment: ",
           onResult: (text) => {
             if (text.trim().length > 0) {
-              comments.add(rowId, text.trim());
+              comments.add(target, text.trim());
             }
           },
         };
@@ -871,14 +892,14 @@ function rowBindings(
     {
       keys: ["A"],
       help: "copy the focused row's address (<trace id>/<row id>)",
-      when: () => onScreen() && !controls.typing,
+      when: () => !controls.typing,
       run: () => {
-        const rowId = host.screen(host.activeScreen()).focusId();
+        const { traceId, rowId } = focusedRow(host);
         if (rowId === undefined) {
           host.target().notify("no address here");
           return;
         }
-        return { kind: "copy", text: formatAddress(host.currentTraceId(), rowId) };
+        return { kind: "copy", text: formatAddress(traceId, rowId) };
       },
     },
   ];
@@ -934,7 +955,9 @@ function makeFollowWatcher(opts: RunViewerOpts): {
     bootText: accum,
     start: (callback, tick) => {
       onText = callback;
-      onTick = tick ?? (() => {});
+      // A restart that names no tick (the extract prompt's) keeps the one
+      // it had, so comments keep appearing while follow stays on.
+      onTick = tick ?? onTick;
       if (opts.followPath === undefined || pollTimer !== undefined) return;
       pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
     },
@@ -957,14 +980,20 @@ export type CommentsSource = {
   refresh(): void;
   /** For a poller: re-read only when the file's size changed. */
   refreshIfChanged(): void;
-  add(rowId: string, text: string): void;
+  /** Everything a comment needs, taken while the row is still the one the
+   *  person is on. Undefined with no row. */
+  targetFor(focus: { traceId: string; rowId: string | undefined }): CommentTarget | undefined;
+  add(target: CommentTarget, text: string): void;
   toggleAgentNotes(): void;
 };
+
+export type CommentTarget = { traceId: string; rowId: string; anchor: Anchor };
 
 const NO_COMMENTS: CommentsSource = {
   available: false,
   refresh: () => {},
   refreshIfChanged: () => {},
+  targetFor: () => undefined,
   add: () => {},
   toggleAgentNotes: () => {},
 };
@@ -993,15 +1022,23 @@ function makeCommentsSource(args: {
         refresh();
       }
     },
-    add: (rowId, text) => {
+    targetFor: (focus) => {
+      if (focus.rowId === undefined) {
+        return undefined;
+      }
       const trace = args.currentTrace();
-      const row = trace === undefined ? undefined : findRow(trace, rowId);
-      store.add({
-        traceId: args.host.currentTraceId(),
-        rowId,
-        anchor: row === undefined ? {} : anchorFor(row),
-        text,
-      });
+      const row = trace === undefined ? undefined : findRow(trace, focus.rowId);
+      return { traceId: focus.traceId, rowId: focus.rowId, anchor: row ? anchorFor(row) : {} };
+    },
+    add: (target, text) => {
+      // Another writer may hold the lock, or the directory may be read-only;
+      // the viewer says so and stays up.
+      try {
+        store.add({ ...target, text });
+      } catch (error) {
+        args.notify(`comment not saved: ${(error as Error).message}`);
+        return;
+      }
       refresh();
       args.notify("comment saved");
     },

@@ -105,11 +105,19 @@ describe("humanFeedbackFor", () => {
       text: "why read the config twice?",
     });
     const agent = openCommentsStore(runDirPaths(dir).comments, { kind: "agent", id: "claude" });
-    agent.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "it retries" });
+    const note = agent.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "it retries" });
+    store.add({
+      traceId: "t1",
+      rowId: "round:s1:0",
+      anchor: {},
+      text: "still wrong",
+      replyTo: note.id,
+    });
     fs.writeFileSync(runDirPaths(dir).notes, "too slow\n");
     expect(humanFeedbackFor(snapshot(), "t1").notes).toEqual([
       "too slow",
       "reviewer · gpt-5: why read the config twice?",
+      "still wrong",
     ]);
   });
 

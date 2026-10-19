@@ -14,7 +14,7 @@ import {
 import type { Screen } from "./screen.js";
 import { keyFooter } from "./chrome.js";
 import { lineNumber, lineNumberWidth } from "./lineNumbers.js";
-import { markGlyphs, marksForRow, type RowMarks } from "../marks.js";
+import { markGlyphs, marksForRow, type RowMarks, emptyMarks } from "../marks.js";
 import type { WidthSplit } from "../views/shared.js";
 const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
@@ -125,7 +125,7 @@ export class TimelineScreen implements Screen {
   private message = "";
   private following = false;
   private lineNumbers = false;
-  private marks: RowMarks = {};
+  private marks: RowMarks = emptyMarks();
   private index: TreeIndex | undefined;
   /** Every row of the drill view, folded ones included. */
   private allRows: FlameRow[] = [];

@@ -146,81 +146,94 @@ End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, trun
 ## Comments
 
 A comment is a note on one row, stored beside the log in the run
-directory's `comments.jsonl` (see `docs/dev/evals/run-directory.md` for
-the store). In the viewer they are **data in, like trace annotations**: the
-shell folds the store into a `RowMarks` map (`marks.ts`, trace id → row id
-→ threads) and hands it to every screen and open overlay through
+directory's `comments.jsonl` (`docs/dev/evals/run-directory.md` describes
+the store). In the viewer, comments are data in, like trace annotations:
+the shell folds the store into a `RowMarks` map (`marks.ts`, trace ID →
+row ID → threads) and hands it to every screen and open overlay through
 `ScreenHost.setMarks`, next to `setData`. A painter does one lookup
 (`marksForRow`) and draws `✎` for a person's comment or `⚑` for an agent's
-in the gutter (`traceScreen.ts`, `timelineScreen.ts`); `payloadFor` appends
-a `COMMENTS` section when the options carry threads, so the trace pane, the
-detail overlay, and the CLI's `show` all list them the same way. The picker
-counts a trace's comments from the marks the viewer holds, so a loose file
-gets a count and it is current after every `c`.
+in the gutter (`traceScreen.ts`, `timelineScreen.ts`). `payloadFor` appends
+a `COMMENTS` section when its options carry threads, so the trace pane, the
+detail overlay, and the CLI's `show` list them the same way, each comment
+with its ID so a reply can name it. The picker counts a trace's comments
+from the marks the viewer holds, so a loose file gets a count and it is
+current after every `c`. The dictionaries have no prototype: IDs come from
+logs and comment files.
 
 One object in the shell, the comments source (`makeCommentsSource` in
-`run.ts`), is the only viewer code that reads or writes comments. `refresh`
-reads the store, builds marks, sends them, and redraws; `add` writes and
-then refreshes. Its three callers never repeat that sequence: the `c` key,
-the follow tick, and the session's `reload`. The viewer never computes an
-author; the store it is handed carries one. Without a store (stdin), `c`
-says comments are unavailable, as `f` does for follow.
+`run.ts`), is the only viewer code that reads or writes comments.
+`refresh` reads the store, builds marks, sends them, and redraws; `add`
+writes and then refreshes; a write that fails (another writer holds the
+lock, a read-only directory) is reported in the message bar and the viewer
+stays up. Its callers never repeat that sequence: the `c` key, the follow
+tick, and the session's `reload`. The viewer never computes an author; the
+store it is handed carries one. Without a store (stdin), `c` says comments
+are unavailable, as `f` does for follow.
+
+The row a comment, an address, or a session `get` names is `focusedRow`
+in `run.ts`: the row a detail overlay shows, else the active screen's
+`selectedRowId`, else its `focusId`. A screen's `focusId` is not the
+selected row; it names the row focus travels to on another screen (a user
+turn's round, an interrupt's tool). `c` captures the whole comment target,
+trace, row, and anchor, before its prompt opens, because a session
+`navigate` can switch traces while the person types.
 
 `c` is a shell binding that returns a `promptLine` action; the key loop
-dispatches what a shell binding returns, which it once discarded. The
-prompt owns the bottom row while it is open, so `render()` called meanwhile
-(a follow poll, a refresh, a session request) only marks the screen dirty,
-and the screen is drawn once when the prompt closes. The follow watcher
-runs a second callback on every tick, grown or not, because the comments
-file can change while the log is idle; the store compares the file's size
-before re-reading, since the tick fires every 250ms.
+dispatches what a shell binding returns. The prompt owns the bottom row
+while it is open, so `render()` called meanwhile (a follow poll, a
+refresh, a session request) only marks the screen dirty, and the screen is
+drawn once when the prompt closes. The follow watcher runs a second
+callback on every tick, grown or not, because the comments file can change
+while the log is idle; a restart that names no tick keeps the one it had.
+The store compares the file's size before re-reading, since the tick fires
+every 250ms.
 
 An agent's reply to a person's comment is always shown under it; the `C`
-toggle hides only the agent's own notes (`marksFrom` drops them). `a` was
-not available for the toggle: the trace and timeline screens bind it to
-admin rows, and a shell binding runs instead of a screen's on the same key.
-`run.shell.test.ts` now checks every shell key against every screen's keys.
+toggle hides only the agent's own notes (`marksFrom` drops them). A shell
+binding runs instead of a screen's on the same key, so `run.shell.test.ts`
+checks every shell key against every screen's keys.
 
 ## Sessions
 
 With `session: { dir }` in `RunViewerOpts`, the viewer starts a server on
 a Unix socket in that directory and writes a record beside it
 (`session/`). No value means no server, so no unit test opens a socket
-unless it asks to. The CLI and the explorer pass the sessions directory
-under the agent home. The record names the log and the comments file,
-because the CLI cannot tell from a statelog path alone whether comments
-live in a run directory or in a sidecar.
+unless it asks to. The CLI's file route and the explorer's drill-in pass
+the sessions directory under the agent home; stdin passes nothing. The
+record names the log and the comments file as absolute paths, because the
+CLI runs from any directory and cannot tell from a statelog path alone
+whether comments live in a run directory or in a sidecar.
 
 The server is built on the same seam as the follow watcher: a request
 arrives between key presses, is answered through a `SessionPort` the
 shell builds from its host and its comments source, and ends with a
-`render()`. The port has four functions: `focus` (the same lookup `A`
-uses), `navigate` (`selectTrace` when the trace differs, then
-`switchTo("trace", rowId)`; a row the trace screen's settings hide is
-reported as hidden and the cursor stays), `reloadComments`
+`render()`. The port has four functions: `focus` (the same `focusedRow`
+lookup `A` uses), `navigate` (`selectTrace` when the trace differs, then
+`switchTo("trace", rowId)`; a row the trace screen's settings or an active
+search hide is reported as hidden and the cursor stays), `reloadComments`
 (`commentsSource.refresh`), and `notify`. There is no request that writes
 a comment: it would be saved under the viewer's author, the person, so the
-CLI writes through its own store and sends `reload`.
+CLI writes through its own store and sends `reload`. The server is started
+inside the shell's `try`, and a listen failure gives a notice instead of
+a server, so the follow watcher is always stopped on the way out.
 
 The registry does one thing per function. `listRecords` only lists.
 `probe` tells three states apart: the process is gone (`stale`), it is
 alive and answers (`live`), or it is alive and does not answer within the
 timeout (`not-responding`, which a viewer suspended with Ctrl+Z produces).
 `removeStale` deletes only the stale, with paths built from the directory
-and a pid, so it can only ever touch a viewer's own two files;
-`safeDeleteFile` was the wrong tool (it dry-runs by default, refuses paths
-outside the project, and refuses a socket). Before listening, the server
-removes a leftover socket at its own pid's paths, since the terminal's
-signal handlers exit without the shell's `finally`. An over-long socket
-path (104 bytes on macOS) and Windows each give a notice instead of a
-server.
+and a pid, so it can only ever touch a viewer's own two files. Before
+listening, the server removes a leftover socket at its own pid's paths,
+since the terminal's signal handlers exit without the shell's `finally`.
+An over-long socket path (104 bytes on macOS) and Windows each give a
+notice instead of a server.
 
-Imperative code is allowed in four places here: `server.ts` and
-`client.ts` (sockets), `registry.ts` (files), and the wiring in `run.ts`.
-Everything else in `session/` is a type or a pure function. To remove the
-feature: delete `session/`, `lib/cli/logsSession/`, the `/debug-logs`
-command's session steps, and the `session` option with its two call sites
-in `run.ts`. Comments, addresses, and `A` stay.
+Imperative code lives in four places here: `server.ts` and `client.ts`
+(sockets), `registry.ts` (files), and the wiring in `run.ts`. Everything
+else in `session/` is a type or a pure function. To remove the feature:
+delete `session/`, `lib/cli/logsSession/`, the `/debug-logs` command's
+session steps, and the `session` option with its call sites in `run.ts`
+and the two CLI routes. Comments, addresses, and `A` stay.
 
 ## The story outline
 
@@ -346,12 +359,15 @@ ID, and the timeline opens the same rows. The shapes are:
 
 An **address** is `<trace id>/<row id>` (`address.ts`). `A` copies the
 focused row's address on any screen, and a comment is stored against one.
-`parseAddress` splits on the last slash: a trace ID can be anything the
-statelog config or the trace-ID environment variable supplied, slashes
-included, while a row ID never contains one. The row ID is opaque to
-everything outside the story: rows are found by looking the ID up, never
-by parsing it (`parseRoundId` exists for rounds and the screens use it to
-fall back to a round's span; do not add a general row-ID parser).
+No single character can split an address: a trace ID may contain slashes
+(a hosted run), and a leaf directly under the trace root embeds the trace
+ID in its own row ID (`leaf:trace-<trace id>:error:0`). `splitAddress`
+therefore takes the trace IDs of the log the address names and uses the
+longest one that starts the text; the CLI reads the log before it splits.
+Text no trace ID starts is a bare row ID. The row ID is otherwise opaque:
+rows are found by looking the ID up in the story (`findRow`), never by
+parsing it. `parseRoundId` exists for rounds and the screens use it to fall
+back to a round's span; do not add a general row-ID parser.
 
 Changing these shapes breaks every stored comment, so treat them as a
 contract. A comment also carries an anchor (the row's time, thread, and

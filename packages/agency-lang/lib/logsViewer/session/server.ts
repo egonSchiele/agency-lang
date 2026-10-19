@@ -3,6 +3,7 @@
 // connection through the port, and removes both files on stop. The server
 // never touches a comments file: a `reload` tells the port to re-read.
 import * as net from "net";
+import * as path from "path";
 
 import { SessionRequestSchema, type SessionReply, type SessionRequest } from "./protocol.js";
 import type { SessionPort } from "./port.js";
@@ -35,6 +36,13 @@ export function startSessionServer(
   }
   const pid = options.pid ?? process.pid;
   const paths = recordPaths(options.dir, pid);
+  // The viewer may have been given relative paths; the CLI that reads the
+  // record runs from any directory, so the record carries absolute ones.
+  const absolutePaths = {
+    logPath: path.resolve(options.logPath),
+    commentsPath:
+      options.commentsPath === undefined ? undefined : path.resolve(options.commentsPath),
+  };
   if (Buffer.byteLength(paths.sock) > MAX_SOCKET_PATH_BYTES) {
     return Promise.resolve({
       unavailable:
@@ -44,8 +52,14 @@ export function startSessionServer(
   }
   // A viewer that exited through a signal handler left its files behind, and
   // a reused pid would hit EADDRINUSE on them. They are ours by pid.
-  ensureSessionsDir(options.dir);
-  removeRecord(options.dir, pid);
+  try {
+    ensureSessionsDir(options.dir);
+    removeRecord(options.dir, pid);
+  } catch (error) {
+    return Promise.resolve({
+      unavailable: `could not prepare ${options.dir}: ${(error as Error).message}`,
+    });
+  }
   const server = net.createServer((socket) => {
     let buffer = "";
     socket.setEncoding("utf8");
@@ -55,21 +69,27 @@ export function startSessionServer(
       if (newline === -1) {
         return;
       }
-      const reply = answer(port, options, buffer.slice(0, newline));
+      const reply = answer(port, { ...options, ...absolutePaths }, buffer.slice(0, newline));
       socket.end(JSON.stringify(reply) + "\n");
     });
     socket.on("error", () => {
       // The client went away mid-request; there is nobody to answer.
     });
   });
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
+  return new Promise((resolve) => {
+    // A listen failure (a sessions directory that cannot be written, a
+    // path the platform refuses) leaves the viewer running without a
+    // session, as Windows does; it never takes the viewer down.
+    const unavailable = (error: Error): void => {
+      resolve({ unavailable: `could not listen on ${paths.sock}: ${error.message}` });
+    };
+    server.once("error", unavailable);
     server.listen(paths.sock, () => {
-      server.removeListener("error", reject);
+      server.removeListener("error", unavailable);
       writeRecord(options.dir, {
         pid,
-        logPath: options.logPath,
-        commentsPath: options.commentsPath,
+        logPath: absolutePaths.logPath,
+        commentsPath: absolutePaths.commentsPath,
         cwd: process.cwd(),
         started: new Date().toISOString(),
       });

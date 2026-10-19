@@ -17,6 +17,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { foldComments, type Comment } from "../runDirectory/comments.js";
+import { parseStatelogJsonl } from "./parse.js";
+import { buildForest } from "./tree.js";
+function buildForestFrom(jsonl: string) {
+  return buildForest(parseStatelogJsonl(jsonl).events);
+}
 import { request } from "./session/client.js";
 import { listRecords } from "./session/registry.js";
 import type { CommentsStore } from "../runDirectory/commentsStore.js";
@@ -707,6 +712,22 @@ describe("comments in the viewer", () => {
     expect(reply.lastText()).toContain("because it retries");
   });
 
+  it("a comment the store cannot write is reported and the viewer stays up", async () => {
+    const store = fakeStore();
+    store.add = () => {
+      throw new Error("Another writer holds .lock");
+    };
+    const out = await driveWithStore(store, ["2", "c"], ["lost?"]);
+    expect(out.lastText()).toContain("comment not saved: Another writer holds .lock");
+    expect(out.lastText()).toContain("[2 trace]");
+  });
+
+  it("A on a detail overlay copies the row the overlay shows", async () => {
+    copied.length = 0;
+    await drive(["2", "d", "A"]);
+    expect(copied).toEqual(["abc/round:s2:0"]);
+  });
+
   it("the trace picker counts a trace's comments", async () => {
     const store = fakeStore();
     store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
@@ -772,14 +793,23 @@ describe("the session", () => {
       viewport: { rows: 24, cols: 130 },
     });
     const record = await sessionRecord(sessions);
-    expect(record).toMatchObject({ logPath: logFile, commentsPath: "fake", pid: process.pid });
+    expect(record).toMatchObject({
+      logPath: path.resolve(logFile),
+      commentsPath: path.resolve("fake"),
+      pid: process.pid,
+    });
     const sock = path.join(sessions, `${record.pid}.sock`);
 
     input.feedKey({ key: "4" });
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(await request(sock, { op: "get" })).toMatchObject({
       ok: true,
-      focus: { traceId: "abc", screen: "timeline", rowId: "round:s2:0", logPath: logFile },
+      focus: {
+        traceId: "abc",
+        screen: "timeline",
+        rowId: "round:s2:0",
+        logPath: path.resolve(logFile),
+      },
     });
 
     expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "round:s2:0" })).toEqual({
@@ -804,5 +834,16 @@ describe("the session", () => {
     await done;
     expect(listRecords(sessions)).toEqual([]);
     expect(fs.existsSync(sock)).toBe(false);
+  });
+});
+
+describe("TraceScreen.shows", () => {
+  it("is false for a row a search filtered out, so navigate reports it instead of clearing the search", () => {
+    const screen = new TraceScreen(buildForestFrom(sample), "abc", DEFAULT_THRESHOLDS, {
+      extractEnabled: false,
+    });
+    expect(screen.shows("round:s2:0")).toBe(true);
+    screen.applySearch("no such text anywhere");
+    expect(screen.shows("round:s2:0")).toBe(false);
   });
 });

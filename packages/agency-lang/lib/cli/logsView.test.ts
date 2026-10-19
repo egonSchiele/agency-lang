@@ -223,6 +223,8 @@ describe("createViewerHost lifecycle", () => {
     expect(runViewer).toHaveBeenCalledWith(
       expect.objectContaining({ jsonl: "L", thresholds: { expensiveUsd: 2 } }),
     );
+    // Stdin has no file to register a session on.
+    expect(runViewer.mock.calls[0][0].session).toBeUndefined();
     runViewer.mockClear();
     await host({
       kind: "file",
@@ -235,6 +237,8 @@ describe("createViewerHost lifecycle", () => {
         followPath: "/f",
         initialFollow: true,
         thresholds: { slowMs: 600000 },
+        // A local file registers a session; the directory is under the agent home.
+        session: { dir: expect.stringContaining("log-sessions") },
       }),
     );
   });

@@ -21,15 +21,22 @@ export type MarkOptions = {
 export const HUMAN_MARK = "✎";
 export const AGENT_MARK = "⚑";
 
+/** Ids come from logs and comment files, so the dictionaries have no
+ *  prototype: a trace named `__proto__` or a row named `constructor` is
+ *  just a key. */
+export function emptyMarks(): RowMarks {
+  return Object.create(null) as RowMarks;
+}
+
 export function marksFrom(folded: FoldedComments, options: MarkOptions): RowMarks {
-  const marks: RowMarks = {};
+  const marks = emptyMarks();
   for (const thread of folded.threads) {
     const unprompted = thread.comment.author.kind === "agent";
     if (unprompted && !options.showAgentNotes) {
       continue;
     }
     const { traceId, rowId } = thread.comment;
-    marks[traceId] ??= {};
+    marks[traceId] ??= Object.create(null) as TraceMarks;
     marks[traceId][rowId] ??= { threads: [] };
     marks[traceId][rowId].threads.push(thread);
   }
@@ -37,7 +44,10 @@ export function marksFrom(folded: FoldedComments, options: MarkOptions): RowMark
 }
 
 export function marksForRow(marks: RowMarks, traceId: string, rowId: string): RowMarkSet {
-  return marks[traceId]?.[rowId] ?? { threads: [] };
+  if (!Object.hasOwn(marks, traceId) || !Object.hasOwn(marks[traceId], rowId)) {
+    return { threads: [] };
+  }
+  return marks[traceId][rowId];
 }
 
 /** The gutter text for a row: `✎` when a person commented, `⚑` when an agent
@@ -51,7 +61,10 @@ export function markGlyphs(set: RowMarkSet): string {
 /** Comments on a trace, for the picker's `N comments`. Counts every thread
  *  the marks hold, so it follows the agent-notes toggle. */
 export function commentCount(marks: RowMarks, traceId: string): number {
-  return Object.values(marks[traceId] ?? {}).reduce((sum, set) => sum + set.threads.length, 0);
+  if (!Object.hasOwn(marks, traceId)) {
+    return 0;
+  }
+  return Object.values(marks[traceId]).reduce((sum, set) => sum + set.threads.length, 0);
 }
 
 /** A leaf row's own event time, else the earliest time under its span. */

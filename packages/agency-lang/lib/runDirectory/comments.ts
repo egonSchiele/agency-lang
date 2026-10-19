@@ -97,12 +97,26 @@ export type FoldedComments = {
 };
 
 export function foldComments(rows: readonly Comment[]): FoldedComments {
-  const ids = rows.map((row) => row.id);
-  const topLevel = rows.filter((row) => row.replyTo === undefined || !ids.includes(row.replyTo));
+  const byId: Record<string, Comment> = Object.create(null);
+  for (const row of rows) {
+    byId[row.id] = row;
+  }
+  // A reply to a reply belongs to the same thread: follow the chain up to
+  // the comment that started it.
+  const rootOf = (row: Comment): Comment => {
+    let current = row;
+    const seen: string[] = [];
+    while (current.replyTo !== undefined && current.replyTo in byId && !seen.includes(current.id)) {
+      seen.push(current.id);
+      current = byId[current.replyTo];
+    }
+    return current;
+  };
+  const roots = rows.filter((row) => rootOf(row) === row);
   return {
-    threads: topLevel.map((comment) => ({
+    threads: roots.map((comment) => ({
       comment,
-      replies: rows.filter((row) => row.replyTo === comment.id),
+      replies: rows.filter((row) => row !== comment && rootOf(row) === comment),
     })),
   };
 }

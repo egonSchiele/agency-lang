@@ -14,7 +14,9 @@ import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { matchTrace, readTraces, tracesFromText, type Trace } from "@/runDirectory/traces.js";
-import { commentsPathFor } from "@/runDirectory/commentsPath.js";
+import { commentsPathFor, commentsSourceForStatelog } from "@/runDirectory/commentsPath.js";
+import { nodeHost } from "@/host/node/nodeHost.js";
+import { sessionsDir } from "@/logsViewer/session/registry.js";
 import {
   humanAuthorAtTerminal,
   openCommentsStore,
@@ -290,6 +292,9 @@ function viewerOptions(
     thresholds: source.thresholds,
     focusTraceId: source.focusTraceId,
     comments: source.comments,
+    // A local file: register with the sessions directory so `agency logs
+    // session …` can find this viewer.
+    session: { dir: sessionsDir(nodeHost()) },
     contextWindowOf,
   };
 }
@@ -399,8 +404,10 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     initialFollow: cliOpts.follow ?? false,
     thresholds: cliOpts.config?.viewer,
     focusTraceId,
+    // A run directory's statelog opened by path (always the case under
+    // --follow) keeps its comments in the directory, like every other route.
     comments: openCommentsStore(
-      commentsPathFor({ kind: "file", path: file }),
+      commentsPathFor(commentsSourceForStatelog(file)),
       humanAuthorAtTerminal(),
     ),
   });

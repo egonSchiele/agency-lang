@@ -2,7 +2,7 @@
 // person dictates by hand today ("the fourth LLM call on the reviewer
 // thread, where it calls readFile…"). The text comes from the viewer's own
 // payload functions, so the agent reads what the person reads.
-import type { Comment, CommentThread } from "../runDirectory/comments.js";
+import type { CommentThread } from "../runDirectory/comments.js";
 import { formatAddress } from "./address.js";
 import { findRow } from "./detailTarget.js";
 import { fmtUsd } from "./format.js";
@@ -99,15 +99,17 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
   }
 }
 
-/** A comment whose row no longer resolves is listed by its anchor and marked
- *  re-anchored, never dropped. */
-export function unresolvedCommentText(comment: Comment): string {
+/** A thread whose row no longer resolves is listed by its anchor and marked
+ *  re-anchored, replies included, never dropped. */
+export function unresolvedCommentText(thread: CommentThread): string {
+  const { comment } = thread;
   const where = [comment.anchor.thread, comment.anchor.name, comment.anchor.at]
     .filter((part) => part !== undefined)
     .join(" · ");
   return [
     `${formatAddress(comment.traceId, comment.rowId)} (re-anchored: the row id no longer resolves)`,
     `  ${where.length === 0 ? "no anchor recorded" : where}`,
-    `  ${comment.author.id}: ${comment.text}`,
+    `  ${comment.id} ${comment.author.id}: ${comment.text}`,
+    ...thread.replies.map((reply) => `    ${reply.id} ${reply.author.id}: ${reply.text}`),
   ].join("\n");
 }

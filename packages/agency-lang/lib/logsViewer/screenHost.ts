@@ -1,7 +1,7 @@
 // The viewer's screens and overlays, and the focus they share. No terminal
 // in here: the shell draws whatever target() is and sends it keys.
 import type { Screen, ScreenName } from "./screens/screen.js";
-import type { RowMarks } from "./marks.js";
+import { emptyMarks, type RowMarks } from "./marks.js";
 import type { TreeNode } from "./types.js";
 import { makeViewStack, type View } from "./views/view.js";
 
@@ -13,7 +13,7 @@ export class ScreenHost {
   private traceId: string;
   private help = false;
   private following = false;
-  private marks: RowMarks = {};
+  private marks: RowMarks = emptyMarks();
 
   constructor(
     private readonly screens: HostScreens,

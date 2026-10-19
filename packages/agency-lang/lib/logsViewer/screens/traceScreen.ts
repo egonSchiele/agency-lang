@@ -32,7 +32,7 @@ import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
 import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
-import { markGlyphs, marksForRow, type RowMarks } from "../marks.js";
+import { markGlyphs, marksForRow, type RowMarks, emptyMarks } from "../marks.js";
 import type { Screen } from "./screen.js";
 const LAYOUT = {
   outlineShare: 0.5,
@@ -54,7 +54,7 @@ export class TraceScreen implements Screen {
   private admin = false;
   private raw = false;
   private lineNumbers = false;
-  private marks: RowMarks = {};
+  private marks: RowMarks = emptyMarks();
   /** Bumped on every setMarks, so the payload cache misses. */
   private marksVersion = 0;
   private collapsed: string[] = [];
@@ -527,10 +527,18 @@ export class TraceScreen implements Screen {
     this.marksVersion += 1;
   }
   /** Whether `setFocus(id)` would land on that row. An admin or machinery
-   *  row the current settings hide would fall back to an ancestor, and a
-   *  session's `navigate` says so instead of landing there silently. */
+   *  row the settings hide, or one a `/` search or `F` filter removed, is
+   *  reported by a session's `navigate` instead of landed near or revealed
+   *  by clearing the person's filter. */
   shows(rowId: string): boolean {
-    return this.allRows.some((row) => row.id === rowId);
+    const rows = this.filter || this.quick ? this.visible : this.allRows;
+    return rows.some((row) => row.id === rowId);
+  }
+  /** The row under the cursor, as itself. `focusId` is for carrying focus to
+   *  another screen and names a round or tool a user turn or interrupt sits
+   *  under; a comment or an address wants the row that is selected. */
+  selectedRowId(): string | undefined {
+    return this.selected()?.id;
   }
   setTrace(traceId: string): void {
     this.traceId = traceId;

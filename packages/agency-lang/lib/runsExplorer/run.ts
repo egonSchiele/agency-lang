@@ -14,7 +14,9 @@
 // the runs variant, then goes inert; q quits from anywhere.
 import * as fs from "fs";
 
+import { nodeHost } from "../host/node/nodeHost.js";
 import { runViewer } from "../logsViewer/run.js";
+import { sessionsDir } from "../logsViewer/session/registry.js";
 import { commentsPathFor, commentsSourceForStatelog } from "../runDirectory/commentsPath.js";
 import { humanAuthorAtTerminal, openCommentsStore } from "../runDirectory/commentsStore.js";
 import type { ViewerThresholds } from "../logsViewer/thresholds.js";
@@ -273,6 +275,7 @@ class ExplorerShell {
           commentsPathFor(commentsSourceForStatelog(statelogPath)),
           humanAuthorAtTerminal(),
         ),
+        session: { dir: sessionsDir(nodeHost()) },
       });
       if (resolution === "quit") {
         return true;

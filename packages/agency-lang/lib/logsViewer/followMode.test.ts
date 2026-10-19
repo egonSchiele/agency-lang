@@ -233,6 +233,34 @@ describe("follow mode with a trace asked for by id", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it("resolves a unique prefix once the trace arrives", async () => {
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = runViewer({
+      jsonl: fs.readFileSync(file, "utf8"),
+      followPath: file,
+      followIntervalMs: 20,
+      initialFollow: true,
+      focusTraceId: "sec",
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 100 },
+    });
+    fs.appendFileSync(
+      file,
+      toolLines("new-trace-tool", "arrived", 1000).replaceAll(
+        '"trace_id":"abc"',
+        '"trace_id":"second"',
+      ),
+    );
+    await until(() => out.frames.length > 0 && out.lastText().includes("trace 2/2"));
+    input.feedKey({ key: "2" });
+    await until(() => out.lastText().includes("arrived"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("arrived");
+  });
+
   it("waits for a trace that has not started yet and focuses it when it arrives", async () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();

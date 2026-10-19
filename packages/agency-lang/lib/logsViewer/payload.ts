@@ -113,7 +113,7 @@ export function commentsPayload(threads: readonly CommentThread[]): PayloadLine[
   }
   const line = (comment: Comment, indent: number): PayloadLine => ({
     kind: "text",
-    text: `${comment.author.kind === "human" ? HUMAN_MARK : AGENT_MARK} ${comment.author.id} · ${fmtClock(comment.created)}: ${comment.text}`,
+    text: `${comment.author.kind === "human" ? HUMAN_MARK : AGENT_MARK} ${comment.author.id} · ${fmtClock(comment.created)} · ${comment.id}: ${comment.text}`,
     indent,
     role: "plain",
   });

@@ -22,11 +22,12 @@ export function commentsPathFor(source: CommentsSource): string {
  *  `statelog.jsonl` keeps comments in the directory; any other file gets a
  *  sidecar. */
 export function commentsSourceForStatelog(statelogPath: string): CommentsSource {
-  const dir = path.dirname(statelogPath);
-  if (runDirPaths(dir).statelog === statelogPath) {
+  const resolved = path.resolve(statelogPath);
+  const dir = path.dirname(resolved);
+  if (runDirPaths(dir).statelog === resolved) {
     return { kind: "runDir", dir };
   }
-  return { kind: "file", path: statelogPath };
+  return { kind: "file", path: resolved };
 }
 
 /** The lock a write to this comments file takes: a run directory's own `.lock`,

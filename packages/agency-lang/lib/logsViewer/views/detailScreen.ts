@@ -16,7 +16,7 @@ import {
 import { payloadFor } from "../payload.js";
 import { paintPayload } from "../screens/payloadPaint.js";
 import { keyFooter } from "../screens/chrome.js";
-import { marksForRow, type RowMarks } from "../marks.js";
+import { marksForRow, type RowMarks, emptyMarks } from "../marks.js";
 import type { StoryRow } from "../story.js";
 import { THEME } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
@@ -35,7 +35,7 @@ export class DetailScreen implements View {
   private totalRows = 0;
   private message = "";
   private cache: PayloadCache | undefined;
-  private marks: RowMarks = {};
+  private marks: RowMarks = emptyMarks();
   constructor(
     roots: TreeNode[],
     /** The row this overlay shows; the shell's `c` comments on it. */

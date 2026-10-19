@@ -56,6 +56,16 @@ describe("foldComments", () => {
     expect(folded.threads[1].replies).toEqual([]);
   });
 
+  it("keeps a reply to a reply in the thread it started from", () => {
+    const folded = foldComments([
+      row("c1"),
+      row("c2", { replyTo: "c1" }),
+      row("c3", { replyTo: "c2", text: "and again" }),
+    ]);
+    expect(folded.threads.map((thread) => thread.comment.id)).toEqual(["c1"]);
+    expect(folded.threads[0].replies.map((reply) => reply.id)).toEqual(["c2", "c3"]);
+  });
+
   it("keeps a reply whose parent is missing, as a comment of its own", () => {
     const folded = foldComments([row("c9", { replyTo: "gone" })]);
     expect(folded.threads.map((thread) => thread.comment.id)).toEqual(["c9"]);

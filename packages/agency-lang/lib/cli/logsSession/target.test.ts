@@ -81,34 +81,22 @@ describe("resolveTarget", () => {
     });
   });
 
-  describe("choosing a trace and a row", () => {
+  describe("choosing a trace", () => {
     const session = [live(1, "/logs/a.jsonl", "/logs/a.comments")];
 
-    it("an address names both", () => {
-      expect(resolveTarget({ row: "k3Pq/round:s1:2" }, session, deps)).toMatchObject({
-        traceId: "k3Pq",
-        rowId: "round:s1:2",
-      });
-    });
-
-    it("a bare row id takes --trace, else the viewer's trace, else nothing", () => {
+    it("takes --trace, else the viewer's trace, else nothing; the row argument passes through", () => {
       expect(resolveTarget({ row: "round:s1:2", traceId: "flag" }, session, deps)).toMatchObject({
         traceId: "flag",
-        rowId: "round:s1:2",
+        rowRef: "round:s1:2",
       });
-      expect(resolveTarget({ row: "round:s1:2" }, session, deps)).toMatchObject({
+      expect(resolveTarget({ row: "k3Pq/round:s1:2" }, session, deps)).toMatchObject({
         traceId: "focused",
+        rowRef: "k3Pq/round:s1:2",
       });
       expect(resolveTarget({ row: "round:s1:2", log: "/logs/x.jsonl" }, [], deps)).toMatchObject({
         kind: "files",
         traceId: undefined,
-        rowId: "round:s1:2",
-      });
-    });
-
-    it("a malformed address is refused", () => {
-      expect(resolveTarget({ row: "/round:s1:2" }, session, deps)).toMatchObject({
-        kind: "refused",
+        rowRef: "round:s1:2",
       });
     });
   });

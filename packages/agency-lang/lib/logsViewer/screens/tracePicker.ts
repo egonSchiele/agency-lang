@@ -15,7 +15,7 @@ import {
 import { fmtDuration } from "../spanText.js";
 import { THEME, costTone, durationTone, toneStyle, hotMark } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { commentCount, type RowMarks } from "../marks.js";
+import { commentCount, type RowMarks, emptyMarks } from "../marks.js";
 import { traceSummaries, type TraceSummary } from "../traceSummaries.js";
 import {
   traceTexts,
@@ -46,7 +46,7 @@ export type TracePickerOptions = {
 };
 type ShownTraces = { summaries: TraceSummary[]; hits: TraceHit[]; searching: boolean };
 export class TracePicker implements View {
-  private marks: RowMarks = {};
+  private marks: RowMarks = emptyMarks();
   readonly viewName = "tracePicker" as const;
   private summaries: TraceSummary[] = [];
   private texts: TraceText[] = [];

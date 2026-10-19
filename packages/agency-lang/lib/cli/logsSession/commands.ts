@@ -1,7 +1,7 @@
 // The `agency logs session` commands, each a function of a Target (from
 // target.ts) and its own arguments, returning what to print. None of them
 // looks at a flag or a registry record; that was done by resolveTarget.
-import { formatAddress } from "@/logsViewer/address.js";
+import { formatAddress, splitAddress } from "@/logsViewer/address.js";
 import { expandRow, unresolvedCommentText, type ExpandedRow } from "@/logsViewer/rowText.js";
 import { findRow } from "@/logsViewer/detailTarget.js";
 import { anchorFor } from "@/logsViewer/marks.js";
@@ -110,14 +110,18 @@ export function comments(target: Target, all: boolean, deps: CommandDeps): Comma
       trace === undefined ? undefined : expandRow(trace, thread.comment.rowId, [thread]);
     return {
       thread,
-      text: expanded?.text ?? unresolvedCommentText(thread.comment),
-      resolved: expanded !== undefined,
+      text: expanded?.text ?? unresolvedCommentText(thread),
+      row: expanded?.json ?? null,
     };
   });
   const text = blocks.length === 0 ? "no comments" : blocks.map((block) => block.text).join("\n\n");
   return {
     text,
-    json: blocks.map((block) => ({ ...block.thread, resolved: block.resolved })),
+    json: blocks.map((block) => ({
+      ...block.thread,
+      resolved: block.row !== null,
+      row: block.row,
+    })),
     exitCode: 0,
   };
 }
@@ -145,6 +149,17 @@ export async function commentAdd(
   if (row === undefined) {
     return refused(`no row ${located.rowId} in trace ${located.traceId}`);
   }
+  if (options.replyTo !== undefined) {
+    const parent = commentById(target.store.read().threads, options.replyTo);
+    if (parent === undefined) {
+      return refused(`no comment ${options.replyTo} to reply to`);
+    }
+    if (parent.traceId !== located.traceId || parent.rowId !== located.rowId) {
+      return refused(
+        `comment ${options.replyTo} is on ${formatAddress(parent.traceId, parent.rowId)}, not on this row`,
+      );
+    }
+  }
   const written: Comment = target.store.add({
     traceId: located.traceId,
     rowId: located.rowId,
@@ -152,14 +167,21 @@ export async function commentAdd(
     text,
     replyTo: options.replyTo,
   });
+  const saved = `saved ${written.id} on ${formatAddress(written.traceId, written.rowId)}`;
   if (target.kind === "session") {
-    await deps.request(target.session.socketPath, { op: "reload" });
+    // The comment is on disk either way: a viewer that quit or stalled
+    // between the probe and now must not turn the write into a failure.
+    try {
+      await deps.request(target.session.socketPath, { op: "reload" });
+    } catch (error) {
+      return {
+        text: `${saved}; the viewer did not reload (${(error as Error).message})`,
+        json: { ...written, viewerReloaded: false },
+        exitCode: 0,
+      };
+    }
   }
-  return {
-    text: `saved ${written.id} on ${formatAddress(written.traceId, written.rowId)}`,
-    json: written,
-    exitCode: 0,
-  };
+  return { text: saved, json: written, exitCode: 0 };
 }
 
 /** `navigate <row>`: move the open viewer's cursor. */
@@ -193,10 +215,17 @@ type Located = { traceId: string; rowId: string } | { error: string };
 /** The trace and row a command acts on: the row argument, with its trace
  *  from the address, the flag, or the viewer, resolved against the log. */
 function locate(target: Exclude<Target, { kind: "refused" }>, deps: CommandDeps): Located {
-  if (target.rowId === undefined) {
+  if (target.rowRef === undefined) {
     return { error: "say which row: an address <trace id>/<row id>, or a row id with --trace" };
   }
   const traces = deps.readLog(logPathOf(target));
+  const address = splitAddress(
+    target.rowRef,
+    traces.map((trace) => trace.traceId),
+  );
+  if (address !== undefined) {
+    return address;
+  }
   if (target.traceId === undefined) {
     return {
       error: `a bare row id needs a trace: pass --trace <id>, or use an address. Traces in the log: ${traces
@@ -208,7 +237,7 @@ function locate(target: Exclude<Target, { kind: "refused" }>, deps: CommandDeps)
   if ("error" in resolved) {
     return resolved;
   }
-  return { traceId: resolved.id, rowId: target.rowId };
+  return { traceId: resolved.id, rowId: target.rowRef };
 }
 
 function resolveTraceId(traces: Trace[], idOrPrefix: string): { id: string } | { error: string } {
@@ -253,6 +282,12 @@ function threadsOnRow(
   return threadsForTrace(target.store.read(), traceId).filter(
     (thread) => thread.comment.rowId === rowId,
   );
+}
+
+function commentById(threads: readonly CommentThread[], id: string): Comment | undefined {
+  return threads
+    .flatMap((thread) => [thread.comment, ...thread.replies])
+    .find((comment) => comment.id === id);
 }
 
 function logPathOf(target: Exclude<Target, { kind: "refused" }>): string {

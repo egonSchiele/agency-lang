@@ -13,23 +13,20 @@ export function formatAddress(traceId: string, rowId: string): string {
 }
 
 /**
- * Split on the LAST slash. A trace id is whatever the statelog config or the
- * trace-id environment variable supplied, slashes included; a row id never
- * contains one (span ids, ordinals, and fixed event types).
+ * Split an address against the trace ids of the log it names. No character
+ * can do it alone: a trace id may contain slashes (a hosted run), and a row
+ * directly under the trace root embeds the trace id in its own id
+ * (`leaf:trace-<trace id>:error:0`). The longest trace id that starts the
+ * text, followed by a slash, is the trace; the rest is the row. Undefined
+ * when no trace id starts it, in which case the text is a bare row id.
  */
-export function parseAddress(text: string): Address | { error: string } {
-  const at = text.lastIndexOf(SEPARATOR);
-  if (at === -1) {
-    return { error: `${text} is not an address: expected <trace id>/<row id>` };
+export function splitAddress(text: string, traceIds: readonly string[]): Address | undefined {
+  const traceId = [...traceIds]
+    .filter((candidate) => text.startsWith(`${candidate}${SEPARATOR}`))
+    .sort((first, second) => second.length - first.length)[0];
+  if (traceId === undefined) {
+    return undefined;
   }
-  const traceId = text.slice(0, at);
-  const rowId = text.slice(at + 1);
-  if (traceId.length === 0 || rowId.length === 0) {
-    return { error: `${text} is not an address: both the trace id and the row id are needed` };
-  }
-  return { traceId, rowId };
-}
-
-export function isAddress(value: Address | { error: string }): value is Address {
-  return !("error" in value);
+  const rowId = text.slice(traceId.length + SEPARATOR.length);
+  return rowId.length === 0 ? undefined : { traceId, rowId };
 }

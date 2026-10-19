@@ -3,7 +3,6 @@
 // the commands are functions of that value and never look at flags.
 import * as path from "path";
 
-import { isAddress, parseAddress } from "@/logsViewer/address.js";
 import type { ProbedRecord } from "@/logsViewer/session/registry.js";
 import type { FocusReply } from "@/logsViewer/session/protocol.js";
 import type { SessionRecord } from "@/logsViewer/session/record.js";
@@ -28,15 +27,20 @@ export type Target =
       session: LiveSession;
       /** Undefined when the viewer has no comments file (stdin). */
       store: CommentsStore | undefined;
+      /** `--trace`, else the viewer's current trace. A full address wins
+       *  over both once the command reads the log. */
       traceId: string;
-      rowId: string | undefined;
+      /** The row argument as given: an address or a bare row id. Which it
+       *  is can only be told against the log's trace ids, so the command
+       *  decides (`locate` in commands.ts). */
+      rowRef: string | undefined;
     }
   | {
       kind: "files";
       logPath: string;
       store: CommentsStore;
       traceId: string | undefined;
-      rowId: string | undefined;
+      rowRef: string | undefined;
     }
   | { kind: "refused"; reason: string };
 
@@ -52,10 +56,6 @@ export function resolveTarget(
   probed: readonly ProbedRecord[],
   deps: TargetDeps,
 ): Target {
-  const row = args.row === undefined ? undefined : parseRowArgument(args.row);
-  if (row !== undefined && "error" in row) {
-    return { kind: "refused", reason: row.error };
-  }
   const live = liveSessions(probed, deps);
   const chosen = chooseSession(args.log, live, deps.cwd);
   if (chosen.kind === "refused") {
@@ -70,8 +70,8 @@ export function resolveTarget(
         session.record.commentsPath === undefined
           ? undefined
           : deps.openStore(session.record.commentsPath, deps.author),
-      traceId: row?.traceId ?? args.traceId ?? session.focus.traceId,
-      rowId: row?.rowId,
+      traceId: args.traceId ?? session.focus.traceId,
+      rowRef: args.row,
     };
   }
   const logPath = chosen.logPath;
@@ -79,21 +79,9 @@ export function resolveTarget(
     kind: "files",
     logPath,
     store: deps.openStore(commentsPathFor(commentsSourceForStatelog(logPath)), deps.author),
-    traceId: row?.traceId ?? args.traceId,
-    rowId: row?.rowId,
+    traceId: args.traceId,
+    rowRef: args.row,
   };
-}
-
-/** A full address names its trace; a bare row id leaves it to the flag or
- *  the viewer. Row ids never contain a slash, so the slash decides. */
-function parseRowArgument(
-  text: string,
-): { traceId: string | undefined; rowId: string } | { error: string } {
-  if (!text.includes("/")) {
-    return { traceId: undefined, rowId: text };
-  }
-  const parsed = parseAddress(text);
-  return isAddress(parsed) ? parsed : { error: parsed.error };
 }
 
 function liveSessions(probed: readonly ProbedRecord[], deps: TargetDeps): LiveSession[] {

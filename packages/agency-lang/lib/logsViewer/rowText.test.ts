@@ -45,8 +45,8 @@ describe("expandRow", () => {
 });
 
 describe("unresolvedCommentText", () => {
-  it("lists a comment by its anchor and says it was re-anchored", () => {
-    const text = unresolvedCommentText({
+  it("lists a thread by its anchor, replies included, and says it was re-anchored", () => {
+    const comment: Comment = {
       v: 1,
       id: "c1",
       traceId: "T",
@@ -55,9 +55,18 @@ describe("unresolvedCommentText", () => {
       author: { kind: "human", id: "adit" },
       text: "why?",
       created: "2026-10-19T14:30:02.000Z",
-    });
+    };
+    const reply: Comment = {
+      ...comment,
+      id: "c2",
+      author: { kind: "agent", id: "claude" },
+      text: "it retries",
+      replyTo: "c1",
+    };
+    const text = unresolvedCommentText({ comment, replies: [reply] });
     expect(text).toContain("T/round:gone:3 (re-anchored");
     expect(text).toContain("reviewer · gpt-5 · 2026-10-19T14:02:11.408Z");
-    expect(text).toContain("adit: why?");
+    expect(text).toContain("c1 adit: why?");
+    expect(text).toContain("c2 claude: it retries");
   });
 });

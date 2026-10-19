@@ -94,6 +94,34 @@ describe("the session server", () => {
     expect(fs.existsSync(sock)).toBe(false);
   });
 
+  it("publishes absolute paths, whatever directory the viewer was started from", async () => {
+    const started = await startSessionServer(fakePort(), {
+      dir,
+      logPath: "runs/x/statelog.jsonl",
+      commentsPath: "runs/x/comments.jsonl",
+      pid: 4246,
+    });
+    if (isUnavailable(started)) throw new Error(started.unavailable);
+    server = started;
+    const [record] = listRecords(dir);
+    expect(record.logPath).toBe(path.resolve("runs/x/statelog.jsonl"));
+    expect(record.commentsPath).toBe(path.resolve("runs/x/comments.jsonl"));
+    const got = await request(started.socketPath, { op: "get" });
+    expect(got).toMatchObject({ focus: { logPath: path.resolve("runs/x/statelog.jsonl") } });
+  });
+
+  it("a sessions directory that cannot be made leaves the viewer without a session", async () => {
+    const file = path.join(dir, "not-a-dir");
+    fs.writeFileSync(file, "");
+    const started = await startSessionServer(fakePort(), {
+      dir: path.join(file, "s"),
+      logPath: "/logs/run.jsonl",
+      commentsPath: undefined,
+      pid: 4247,
+    });
+    expect(isUnavailable(started)).toBe(true);
+  });
+
   it("replaces a leftover socket at its own pid's path", async () => {
     fs.writeFileSync(recordPaths(dir, 4244).sock, "");
     fs.writeFileSync(recordPaths(dir, 4244).json, "{}");

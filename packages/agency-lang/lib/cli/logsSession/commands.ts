@@ -194,12 +194,12 @@ type Located = { traceId: string; rowId: string } | { error: string };
  *  from the address, the flag, or the viewer, resolved against the log. */
 function locate(target: Exclude<Target, { kind: "refused" }>, deps: CommandDeps): Located {
   if (target.rowId === undefined) {
-    return { error: "say which row: an address <trace id>/<row id>, or a row id with --trace-id" };
+    return { error: "say which row: an address <trace id>/<row id>, or a row id with --trace" };
   }
   const traces = deps.readLog(logPathOf(target));
   if (target.traceId === undefined) {
     return {
-      error: `a bare row id needs a trace: pass --trace-id, or use an address. Traces in the log: ${traces
+      error: `a bare row id needs a trace: pass --trace <id>, or use an address. Traces in the log: ${traces
         .map((trace) => trace.traceId)
         .join(", ")}`,
     };

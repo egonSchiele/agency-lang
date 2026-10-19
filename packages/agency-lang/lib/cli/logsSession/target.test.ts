@@ -91,7 +91,7 @@ describe("resolveTarget", () => {
       });
     });
 
-    it("a bare row id takes --trace-id, else the viewer's trace, else nothing", () => {
+    it("a bare row id takes --trace, else the viewer's trace, else nothing", () => {
       expect(resolveTarget({ row: "round:s1:2", traceId: "flag" }, session, deps)).toMatchObject({
         traceId: "flag",
         rowId: "round:s1:2",

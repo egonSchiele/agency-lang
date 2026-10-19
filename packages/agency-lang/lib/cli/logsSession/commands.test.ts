@@ -108,7 +108,7 @@ describe("the session commands on a files target", () => {
     expect(comments(target, false, deps).text).toContain("it retries");
   });
 
-  it("with no viewer, comments lists every trace; --trace-id narrows it", async () => {
+  it("with no viewer, comments lists every trace; --trace narrows it", async () => {
     await commentAdd({ ...target, traceId: "T", rowId: roundId }, "on T", {}, deps);
     await commentAdd({ ...target, traceId: "U", rowId: roundId }, "on U", {}, deps);
     const every = comments(target, false, deps);

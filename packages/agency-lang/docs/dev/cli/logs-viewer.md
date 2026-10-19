@@ -143,6 +143,85 @@ the reader and the accumulator, and the fallback path absorbs the renumbering. R
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
+## Comments
+
+A comment is a note on one row, stored beside the log in the run
+directory's `comments.jsonl` (see `docs/dev/evals/run-directory.md` for
+the store). In the viewer they are **data in, like trace annotations**: the
+shell folds the store into a `RowMarks` map (`marks.ts`, trace id → row id
+→ threads) and hands it to every screen and open overlay through
+`ScreenHost.setMarks`, next to `setData`. A painter does one lookup
+(`marksForRow`) and draws `✎` for a person's comment or `⚑` for an agent's
+in the gutter (`traceScreen.ts`, `timelineScreen.ts`); `payloadFor` appends
+a `COMMENTS` section when the options carry threads, so the trace pane, the
+detail overlay, and the CLI's `show` all list them the same way. The picker
+counts a trace's comments from the marks the viewer holds, so a loose file
+gets a count and it is current after every `c`.
+
+One object in the shell, the comments source (`makeCommentsSource` in
+`run.ts`), is the only viewer code that reads or writes comments. `refresh`
+reads the store, builds marks, sends them, and redraws; `add` writes and
+then refreshes. Its three callers never repeat that sequence: the `c` key,
+the follow tick, and the session's `reload`. The viewer never computes an
+author; the store it is handed carries one. Without a store (stdin), `c`
+says comments are unavailable, as `f` does for follow.
+
+`c` is a shell binding that returns a `promptLine` action; the key loop
+dispatches what a shell binding returns, which it once discarded. The
+prompt owns the bottom row while it is open, so `render()` called meanwhile
+(a follow poll, a refresh, a session request) only marks the screen dirty,
+and the screen is drawn once when the prompt closes. The follow watcher
+runs a second callback on every tick, grown or not, because the comments
+file can change while the log is idle; the store compares the file's size
+before re-reading, since the tick fires every 250ms.
+
+An agent's reply to a person's comment is always shown under it; the `C`
+toggle hides only the agent's own notes (`marksFrom` drops them). `a` was
+not available for the toggle: the trace and timeline screens bind it to
+admin rows, and a shell binding runs instead of a screen's on the same key.
+`run.shell.test.ts` now checks every shell key against every screen's keys.
+
+## Sessions
+
+With `session: { dir }` in `RunViewerOpts`, the viewer starts a server on
+a Unix socket in that directory and writes a record beside it
+(`session/`). No value means no server, so no unit test opens a socket
+unless it asks to. The CLI and the explorer pass the sessions directory
+under the agent home. The record names the log and the comments file,
+because the CLI cannot tell from a statelog path alone whether comments
+live in a run directory or in a sidecar.
+
+The server is built on the same seam as the follow watcher: a request
+arrives between key presses, is answered through a `SessionPort` the
+shell builds from its host and its comments source, and ends with a
+`render()`. The port has four functions: `focus` (the same lookup `A`
+uses), `navigate` (`selectTrace` when the trace differs, then
+`switchTo("trace", rowId)`; a row the trace screen's settings hide is
+reported as hidden and the cursor stays), `reloadComments`
+(`commentsSource.refresh`), and `notify`. There is no request that writes
+a comment: it would be saved under the viewer's author, the person, so the
+CLI writes through its own store and sends `reload`.
+
+The registry does one thing per function. `listRecords` only lists.
+`probe` tells three states apart: the process is gone (`stale`), it is
+alive and answers (`live`), or it is alive and does not answer within the
+timeout (`not-responding`, which a viewer suspended with Ctrl+Z produces).
+`removeStale` deletes only the stale, with paths built from the directory
+and a pid, so it can only ever touch a viewer's own two files;
+`safeDeleteFile` was the wrong tool (it dry-runs by default, refuses paths
+outside the project, and refuses a socket). Before listening, the server
+removes a leftover socket at its own pid's paths, since the terminal's
+signal handlers exit without the shell's `finally`. An over-long socket
+path (104 bytes on macOS) and Windows each give a notice instead of a
+server.
+
+Imperative code is allowed in four places here: `server.ts` and
+`client.ts` (sockets), `registry.ts` (files), and the wiring in `run.ts`.
+Everything else in `session/` is a type or a pure function. To remove the
+feature: delete `session/`, `lib/cli/logsSession/`, the `/debug-logs`
+command's session steps, and the `session` option with its two call sites
+in `run.ts`. Comments, addresses, and `A` stay.
+
 ## The story outline
 
 The trace screen shows one row per round, tool, interrupt, error, new user turn, LLM group or subprocess subagent. An `llmCall` span inside a tool becomes an `llmGroup` row, in a bold accent color, titled `Thread · <name> · N LLM calls` (`llmGroupTitle` in `story.ts`). A sub-agent that runs on its caller's thread is named by that thread too, so `Thread · main · 13 LLM calls` can sit under `Thread · main · 2 LLM calls`; naming the nested one by its tool was tried and read as a different kind of row. A top-level `llmCall` span becomes one only when a sibling `llmCall` span runs on a different thread (several `llm()` calls on one thread, as in a loop, stay flat): a conversation that runs beside the main one (an expression check, a watcher) then reads as its own thread, while a run with one conversation keeps its calls at the top and its rows at the same depth as before. A thread a tool started folds when complete; a top-level thread never folds by itself, because folding it would hide the run. Details does not repeat the owning tool, which the nesting already shows.
@@ -243,7 +322,7 @@ The structural linter bans direct text builders under `screens/`. The payload pa
   and resolves with `"back"` (Esc at the bottom of the stack, nothing
   left to clear) or `"quit"` (`q`), so the host can honor the same
   contract.
-- Copying: `y` in trace copies the focused node's JSON; in transcript it copies the full block text. `Y` in the trace screen copies
+- Copying: `y` in trace copies the focused node's JSON; in transcript it copies the full block text. `A` on any screen copies the focused row's address. `Y` in the trace screen copies
   every statelog event of the focused trace as JSONL, one object per line in
   file order. Views only *name* what to copy, through the `copy` and
   `copyTrace` actions. The shell in `run.ts` owns the events and the

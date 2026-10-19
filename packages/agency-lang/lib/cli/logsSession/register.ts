@@ -1,24 +1,25 @@
 // `agency logs session …` on the command tree. The shared flags are declared
-// on each leaf, not once on `session`: the vendored commander gives a parent
-// priority, so a second declaration on a child would read undefined.
+// on each leaf: the vendored commander gives a parent priority and refuses
+// a flag that an ancestor already declares, which is why the trace flag here
+// is `--trace` (as `logs extract` has it) and not the `--trace-id` of `logs`.
 import type { Command } from "@/vendor/commander/index.js";
 
 import { logsSession, type SessionCliOptions, type SessionCommand } from "./index.js";
 
-type LeafOptions = { json?: boolean; log?: string; traceId?: string; author?: string };
+type LeafOptions = { json?: boolean; log?: string; trace?: string; author?: string };
 
 function withSharedOptions(command: Command): Command {
   return command
     .option("--json", "Print JSON for a program to read instead of text")
     .option("--log <file>", "The statelog to act on; also picks the viewer that has it open")
-    .option("--trace-id <id>", "The trace a bare row id belongs to (a full id or unique prefix)");
+    .option("--trace <id>", "The trace a bare row id belongs to (a full id or unique prefix)");
 }
 
 function optionsFrom(options: LeafOptions, row?: string): SessionCliOptions {
   return {
     json: options.json === true,
     log: options.log,
-    traceId: options.traceId,
+    traceId: options.trace,
     author: options.author,
     row,
   };
@@ -48,7 +49,7 @@ export function addLogsSessionCommands(logs: Command): void {
     session
       .command("show")
       .description("One row, expanded, with its comments")
-      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace-id"),
+      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace"),
   ).action(async (row: string, options: LeafOptions) =>
     exitWith({ name: "show" }, optionsFrom(options, row)),
   );
@@ -66,7 +67,7 @@ export function addLogsSessionCommands(logs: Command): void {
     session
       .command("navigate")
       .description("Move the open viewer's cursor to a row")
-      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace-id"),
+      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace"),
   ).action(async (row: string, options: LeafOptions) =>
     exitWith({ name: "navigate" }, optionsFrom(options, row)),
   );
@@ -76,7 +77,7 @@ export function addLogsSessionCommands(logs: Command): void {
     comment
       .command("add")
       .description("Write a comment on a row, and tell an open viewer to show it")
-      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace-id")
+      .argument("<row>", "An address <trace id>/<row id>, or a row id with --trace")
       .argument("<text>", "The comment")
       .option("--reply-to <id>", "The comment this one answers")
       .option("--author <name>", "Who is writing (default: claude)"),

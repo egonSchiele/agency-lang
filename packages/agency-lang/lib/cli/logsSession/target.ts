@@ -14,7 +14,7 @@ import type { CommentsStore } from "@/runDirectory/commentsStore.js";
 export type TargetArgs = {
   /** `--log`: the statelog to act on, which also picks the viewer on it. */
   log?: string;
-  /** `--trace-id`, a full id or unique prefix; resolved by the command. */
+  /** `--trace`, a full id or unique prefix; resolved by the command. */
   traceId?: string;
   /** A row argument: a full address, or a bare row id. */
   row?: string;

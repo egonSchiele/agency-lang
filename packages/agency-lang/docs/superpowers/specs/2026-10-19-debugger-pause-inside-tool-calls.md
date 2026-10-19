@@ -209,7 +209,10 @@ root, then the last frame of the named branch's stack, and so on. Every
 reader of "the frame this checkpoint was taken in" goes through it: the
 locals pane, `print`, and the flag stripping in D10. This works the same
 for a debug interrupt, a rolling checkpoint in the rewind list, and
-`step back`.
+`step back`. `step back` has one more detail: it skips the rolling
+checkpoint at the step the program is stopped at, and that step is the
+stop's location, not the shared checkpoint's, so the driver passes the
+stop's location to `findBefore`.
 
 An earlier draft walked down from the root through each branch whose
 `interruptId` matched the debug interrupt. That fails for a rolling

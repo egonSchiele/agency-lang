@@ -42,7 +42,6 @@ import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
-import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
@@ -435,7 +434,7 @@ export class TypeScriptBuilder {
   // ------- Lookup helpers -------
 
   /** Returns the template opts for checkpoint creation (moduleId, scopeName, stepPath as JSON-quoted strings). */
-  private checkpointOpts(): Record<keyof SourceLocationOpts, string> {
+  private checkpointOpts(): Record<"moduleId" | "scopeName" | "stepPath", string> {
     return {
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(this.scopes.currentName()),

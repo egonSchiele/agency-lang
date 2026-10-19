@@ -1,5 +1,10 @@
 import { SourceMap } from "@/backends/sourceMap.js";
-import { Checkpoint, type ThreadMessages } from "../runtime/state/checkpointStore.js";
+import {
+  Checkpoint,
+  type SourceLocationOpts,
+  type ThreadMessages,
+} from "../runtime/state/checkpointStore.js";
+import type { DebugStopData } from "../runtime/debugger.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -20,6 +25,10 @@ export class UIState {
   private pendingOverrides: Record<string, unknown>;
   private mode: "stepping" | "running";
   private checkpoint?: Checkpoint;
+  /** Where the program is stopped: the stop's location when the driver
+   *  gave one, else the checkpoint's own. Names the frame whose locals
+   *  are shown and the source line that is highlighted. */
+  private location?: SourceLocationOpts;
   private sourceMap?: SourceMap;
   private currentLine?: number;
   private args: ValWithOverride[] = [];
@@ -76,14 +85,15 @@ export class UIState {
     return this.resolveModulePath(agencyFile, [".js", ".ts"]);
   }
 
-  async setCheckpoint(checkpoint: Checkpoint | undefined) {
+  async setCheckpoint(checkpoint: Checkpoint | undefined, stop?: DebugStopData) {
     const cp = Checkpoint.fromJSON(checkpoint);
     if (!cp) {
       this.log("Invalid checkpoint provided, cannot set checkpoint");
       return;
     }
     this.checkpoint = cp;
-    const frame = this.checkpoint.getCurrentFrame();
+    this.location = stop ?? cp.location;
+    const frame = cp.frameAt(this.location.branchPath ?? []);
     if (!frame) {
       this.log("No current frame available in checkpoint");
       return;
@@ -93,7 +103,7 @@ export class UIState {
 
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = this.checkpoint.getGlobalsForModule();
+    const globalsForModule = cp.globals.store?.[this.location.moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }
@@ -118,11 +128,12 @@ export class UIState {
   }
 
   async setSourceMap() {
-    if (!this.checkpoint) {
+    if (!this.checkpoint || !this.location) {
       this.log("No checkpoint set, cannot determine source map");
       return;
     }
-    const moduleId = this.checkpoint.moduleId;
+    const location = this.location;
+    const moduleId = location.moduleId;
 
     if (this.sourceMapCache[moduleId]) {
       this.sourceMap = this.sourceMapCache[moduleId];
@@ -152,27 +163,20 @@ export class UIState {
       this.sourceMapCache[moduleId] = this.sourceMap;
     }
     // Look up source location from the source map
-    const scopeKey = this.checkpoint.getScopeKey();
+    const scopeKey = `${location.moduleId}:${location.scopeName}`;
     const scopeMap = this.sourceMap?.[scopeKey];
     if (!scopeMap) {
+      this.log(`No source map entry found for scope ${scopeKey}, stepPath: ${location.stepPath}`);
+      return;
+    }
+    if (!scopeMap[location.stepPath]) {
       this.log(
-        `No source map entry found for scope ${scopeKey}, stepPath: ${this.checkpoint.stepPath}`,
+        `No source map entry found for step path ${location.stepPath}, scopeKey: ${scopeKey}`,
       );
       return;
     }
-    if (!scopeMap[this.checkpoint.stepPath]) {
-      this.log(
-        `No source map entry found for step path ${this.checkpoint.stepPath}, scopeKey: ${scopeKey}`,
-      );
-      return;
-    }
-    if (scopeMap && scopeMap[this.checkpoint.stepPath]) {
-      // we actually want to highlight the next line (i.e. the line we're about to execute)
-      this.currentLine = scopeMap[this.checkpoint.stepPath].line + 1;
-      /* this.log(
-        `Mapped checkpoint to source line: ${this.currentLine} (scopeKey: ${scopeKey}, stepPath: ${this.checkpoint.stepPath})`,
-      ); */
-    }
+    // we actually want to highlight the next line (i.e. the line we're about to execute)
+    this.currentLine = scopeMap[location.stepPath].line + 1;
   }
 
   setMode(mode: "stepping" | "running") {
@@ -189,7 +193,7 @@ export class UIState {
   }
 
   getModuleId() {
-    return this.checkpoint?.moduleId || "unknown module";
+    return this.location?.moduleId || "unknown module";
   }
 
   getCurrentLine() {

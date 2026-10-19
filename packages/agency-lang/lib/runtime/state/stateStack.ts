@@ -437,6 +437,33 @@ export class StateStack {
   mode: "serialize" | "deserialize" = "serialize";
   lockOwnerId?: string;
 
+  /** The branch keys from the root stack down to this one, empty on the
+   *  root. A checkpoint records it as `branchPath`, so a reader can find
+   *  the frame a step ran in (`Checkpoint.getCurrentFrame`). Live only:
+   *  `runBatch` sets it on every branch it starts, so a resume rebuilds
+   *  it; it is never serialized with the stack. */
+  branchPath: string[] = [];
+
+  /** How many frames sit above this stack's first frame, counting from
+   *  the node: 0 on the root, and on a branch the parent's base depth plus
+   *  the parent's frame count. The debugger reads a step's depth from it
+   *  (`stepDepth`), so two branches running at once never share a
+   *  counter. Live only, like `branchPath`. */
+  baseDepth = 0;
+
+  /** The depth of the step the last frame is executing: the frames above
+   *  it on this stack and on every stack above. The node's statements are
+   *  at depth 0. */
+  stepDepth(): number {
+    return this.baseDepth + this.stack.length - 1;
+  }
+
+  /** Record that this stack is the branch `key` of `parent`'s last frame. */
+  placeUnder(parent: StateStack, key: string): void {
+    this.branchPath = [...parent.branchPath, key];
+    this.baseDepth = parent.baseDepth + parent.stack.length;
+  }
+
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;
 

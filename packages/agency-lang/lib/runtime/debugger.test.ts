@@ -13,9 +13,12 @@ const baseInfo = {
   isUserAdded: false,
 };
 
-/** Run debugStep under a frame built from the test's own ctx. */
+/** Run debugStep under a frame built from the test's own ctx, on the
+ *  ctx's root stack. */
 function debugStepIn(ctx: any, info: Parameters<typeof debugStep>[1]) {
-  return runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) => debugStep(run, info));
+  return runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) =>
+    debugStep(run, info, ctx.stateStack),
+  );
 }
 
 describe("debugStep()", () => {
@@ -90,40 +93,39 @@ describe("debugStep()", () => {
     expect(dbg.getCheckpoints().length).toBe(1);
   });
 
-  it("respects stepTarget: does NOT pause when callDepth > targetDepth", async () => {
+  // The depth of a step is read from its stack: the stack's base depth
+  // plus its frame count minus one. The mock root stack holds one frame.
+  it("does not pause at a step deeper than the target", async () => {
     const dbg = new DebuggerState(10);
-    // Set targetDepth=3 by entering 3 calls then calling stepNext
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3
-    // Now go deeper: callDepth = 5
-    dbg.enterCall();
-    dbg.enterCall();
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
+    ctx.stateStack.baseDepth = 5;
     const result = await debugStepIn(ctx, baseInfo);
     expect(result).toBeUndefined();
   });
 
-  it("respects stepTarget: DOES pause when callDepth < targetDepth", async () => {
+  it("pauses at a step above the target", async () => {
     const dbg = new DebuggerState(10);
-    // Set targetDepth=3 by entering 3 calls then calling stepNext
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3
-    // Now go shallower: callDepth = 2
-    dbg.exitCall();
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
+    ctx.stateStack.baseDepth = 2;
     const result = await debugStepIn(ctx, baseInfo);
     expect(result).toBeDefined();
     expect(result![0].type).toBe("interrupt");
   });
 
-  it("respects stepTarget: DOES pause when callDepth === targetDepth", async () => {
+  it("pauses at a step at the target depth, and records that depth", async () => {
     const dbg = new DebuggerState(10);
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3, callDepth = 3
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
+    ctx.stateStack.baseDepth = 3;
     const result = await debugStepIn(ctx, baseInfo);
     expect(result).toBeDefined();
     expect(result![0].type).toBe("interrupt");
+    expect(dbg.stopDepth).toBe(3);
   });
 
   it("the returned interrupt has debugger: true", async () => {
@@ -146,7 +148,7 @@ describe("debugStep()", () => {
     expect(result![0].checkpoint!.pinned).toBe(false);
   });
 
-  it("the interrupt data is the label when label is set", async () => {
+  it("the interrupt data says where the stop is, with the label", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
     const ctx = makeMockCtx({ debuggerState: dbg });
@@ -156,10 +158,16 @@ describe("debugStep()", () => {
       isUserAdded: true,
     });
     expect(result).toBeDefined();
-    expect(result![0].data).toBe("my-label");
+    expect(result![0].data).toEqual({
+      moduleId: "main.agency",
+      scopeName: "main",
+      stepPath: "1",
+      branchPath: [],
+      label: "my-label",
+    });
   });
 
-  it("the interrupt data is undefined when no label (stepping mode)", async () => {
+  it("the interrupt data carries a null label when there is none", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();
     const ctx = makeMockCtx({ debuggerState: dbg });
@@ -168,6 +176,17 @@ describe("debugStep()", () => {
       label: null,
     });
     expect(result).toBeDefined();
-    expect(result![0].data).toBeUndefined();
+    expect(result![0].data.label).toBeNull();
+  });
+
+  it("stamps the halting checkpoint from the stack it is given", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepNext();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    ctx.stateStack.branchPath = ["tool_0_abc"];
+    const result = await debugStepIn(ctx, baseInfo);
+    expect(result).toBeDefined();
+    expect(result![0].data.branchPath).toEqual(["tool_0_abc"]);
+    expect(result![0].checkpoint!.branchPath).toEqual(["tool_0_abc"]);
   });
 });

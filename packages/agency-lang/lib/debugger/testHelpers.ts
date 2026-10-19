@@ -8,6 +8,8 @@ import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
 import { isInterrupt, hasInterrupts } from "@/runtime/interrupts.js";
 import { color } from "@/utils/termcolors.js";
+import type { LLMMock } from "../runtime/deterministicClient.js";
+import type { DebugStopData } from "../runtime/debugger.js";
 
 export const fixtureDir = path.join(getTestDir(), "debugger");
 
@@ -24,7 +26,7 @@ export class TestDebuggerIO implements DebuggerIO {
     this.commands = commands;
   }
 
-  async render(_checkpoint?: Checkpoint): Promise<void> {
+  async render(_checkpoint?: Checkpoint, _stop?: DebugStopData): Promise<void> {
     if (_checkpoint) {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
       if (checkpoint) {
@@ -117,4 +119,25 @@ export async function getInitialResult(mod: any, driver: DebuggerDriver, ...args
   expect(initialResult?.data).toBeDefined();
   expect(hasInterrupts(initialResult.data)).toBe(true);
   return initialResult;
+}
+
+/** Run `fn` with every `llm()` call answered from `mocks`, in order. The
+ *  runtime builds the deterministic client when the host setting
+ *  `AGENCY_LLM_MOCKS` holds a JSON list of mocks, once, when the module's
+ *  context is created on import (`lib/runtime/state/context.ts`), and every
+ *  execution context shares that client. So the variable is set before
+ *  `fn` imports the module, and the queue survives every resume and
+ *  rewind in the session `fn` drives. */
+export async function withLLMMocks<T>(mocks: LLMMock[], fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.AGENCY_LLM_MOCKS;
+  process.env.AGENCY_LLM_MOCKS = JSON.stringify(mocks);
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AGENCY_LLM_MOCKS;
+    } else {
+      process.env.AGENCY_LLM_MOCKS = previous;
+    }
+  }
 }

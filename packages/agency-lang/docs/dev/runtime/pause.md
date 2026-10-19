@@ -91,6 +91,13 @@ the pause does.
 - A guard trip is due at the same step. The trip is raised first, so its
   answer is recorded before the pause lands.
 
+The debugger's stop is not a pause in this sense. It is an interrupt, raised
+through the same path a tool's own interrupt takes, so it lands inside a
+branch: the tool loop records it on the branch, the join stamps the shared
+checkpoint, and the resume re-enters the branch. The first two rules apply to
+it (`maybeDebugHook` in `runner.ts` checks the same two conditions); the
+branch-stack rule does not. See `docs/dev/cli/debugger.md`.
+
 ## Resume
 
 `resumeFromCheckpoint` (`lib/runtime/interrupts.ts`) takes the whole

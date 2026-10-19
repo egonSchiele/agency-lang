@@ -8,14 +8,37 @@ import type { SourceLocation } from "./state/sourceLocation.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { Run } from "./asyncContext.js";
 
+/** Where a debug stop happened, carried in the debug interrupt's `data`.
+ *  The interrupt's checkpoint cannot say: once a stop inside a tool call
+ *  joins its batch, that checkpoint is the shared one stamped from the
+ *  `runPrompt` frame, whose location is the loop's. The driver reads the
+ *  source line from this record and finds the stopped frame in the
+ *  checkpoint by `branchPath` (`Checkpoint.frameAt`). */
+export type DebugStopData = {
+  moduleId: string;
+  scopeName: string;
+  stepPath: string;
+  /** Branch keys from the root down to the stack the step ran on. */
+  branchPath: string[];
+  label: string | null;
+};
+
+export function isDebugStop(data: unknown): data is DebugStopData {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  const record = data as Record<string, unknown>;
+  return typeof record.stepPath === "string" && Array.isArray(record.branchPath);
+}
+
 export async function debugStep(
   run: Run,
-  info: Omit<SourceLocation, "nodeId"> & {
+  info: Omit<SourceLocation, "nodeId" | "branchPath"> & {
     label: string | null;
     nodeContext: boolean;
     isUserAdded: boolean;
   },
-  stack?: StateStack,
+  stack: StateStack,
 ): Promise<Interrupt[] | undefined> {
   const ctx: RuntimeContext<any> = run.ctx;
   // Global initialization runs outside any graph node, so there's no node
@@ -24,23 +47,29 @@ export async function debugStep(
     return undefined;
   }
 
+  const onRootStack = stack === ctx.stateStack;
+  const location = {
+    moduleId: info.moduleId,
+    scopeName: info.scopeName,
+    stepPath: info.stepPath,
+    branchPath: stack.branchPath,
+  };
+
   // A rewind marks the checkpoint at its destination as already recorded.
   // Consume that marker here so later steps continue writing trace checkpoints.
   const skipCheckpoint = ctx._skipNextCheckpoint;
   ctx._skipNextCheckpoint = false;
-  if (!skipCheckpoint && ctx.stateStack.currentNodeId()) {
-    const cp = Checkpoint.fromContext(ctx, info);
+  // A trace checkpoint and an `onCheckpoint` report cover root-stack steps
+  // only. A trace checkpoint is a copy of the whole root stack, so one per
+  // step inside every tool would multiply an agent run's trace by its
+  // tool statements; and a host cannot re-enter a branch from outside.
+  if (!skipCheckpoint && onRootStack) {
+    const cp = Checkpoint.fromContext(ctx, location);
     await ctx.writeCheckpointToTraceWriter(cp);
-    // Only a checkpoint on the top-level stack is reported: a branch (fork,
-    // parallel block, tool call) cannot be re-entered from outside, the same
-    // rule a pause follows. The payload goes through nativeTypeReplacer so
-    // a scoped Agency callback becomes a function ref the host can store
-    // and the resume path can revive.
-    if (
-      stack !== undefined &&
-      stack === ctx.stateStack &&
-      hasCallbackConsumer(ctx, "onCheckpoint", stack)
-    ) {
+    // The payload goes through nativeTypeReplacer so a scoped Agency
+    // callback becomes a function ref the host can store and the resume
+    // path can revive.
+    if (hasCallbackConsumer(ctx, "onCheckpoint", stack)) {
       await callHook(run, {
         name: "onCheckpoint",
         data: {
@@ -56,68 +85,33 @@ export async function debugStep(
     return undefined;
   }
 
-  // Decide whether to pause
-  const isUserBreakpoint = info.isUserAdded;
-  const isStepping = dbg.isStepping();
+  // The depth of this step, read from the stack: the node's statements are
+  // at 0, a called function's at 1, a tool's at 2 (under the runPrompt
+  // frame). When stepping, the debugger stops at or above the depth the
+  // last command targeted: `next` targets the depth it stopped at, `step
+  // out` one less, `step in` one more. When running, only a `debugger()`
+  // statement stops it.
+  const depth = stack.stepDepth();
+  const shouldPause = dbg.isStepping() ? dbg.shouldStopAt(depth) : info.isUserAdded;
 
-  /* The driver listens for the function start and function end hooks
-  and sets the current call depth. Then, when you say "step in,"
-  you increase the target depth by one, and if you step out,
-  you decrease the target depth by one.
-
-  Here, we ask "Should I stop at the step?" First of all, it's only
-  going to stop if you are stepping or there is a user breakpoint,
-  like a manually inserted breakpoint in the code. So if you're not
-  stepping and you're in continue mode, it's not going to pause until
-  it hits an actual breakpoint in the code.
-
-  But if you are stepping, it asks, "Am I at the target depth?" What does
-  target depth mean? Well, there are three types of target depth:
-  - target depth equals current depth (step)
-  - target depth is one less than the current depth (step out)
-  - target depth is one greater than the current depth (step in)
-
-  Now, if the target depth is equal to or greater than the current depth—
-  so step or step in—there's nothing special to do. You just keep pausing
-  at every step, and that'll be the correct thing to do. However, if the
-  target depth is *less* than the current depth, that means that you need
-  to keep running until the current function you're in returns, and you
-  get out of the current depth. That's what this logic does.
-  */
-  const shouldPause = isStepping ? dbg.isAtOrBelowTargetDepth() : isUserBreakpoint;
-
-  dbg.createRollingCheckpoint(ctx, {
-    moduleId: info.moduleId,
-    scopeName: info.scopeName,
-    stepPath: info.stepPath,
-  });
+  // The rolling checkpoint is stamped from the root even inside a branch:
+  // the root holds every live branch stack, which is what a rewind
+  // replays. Its location names the branch, so `getCurrentFrame` finds
+  // the frame the step ran in.
+  dbg.createRollingCheckpoint(ctx, location);
 
   if (!shouldPause) {
-    // Not pausing — just take a rolling checkpoint for rewind history
-    // console.log(`[debugStep] ${isStepping ? "Stepping" : "No breakpoint"} at step ${info.stepPath}, not pausing, continuing execution. call depth: ${dbg.callDepth}, target: ${dbg.stepTarget ? JSON.stringify(dbg.stepTarget) : "n/a"}`);
     return undefined;
   }
 
-  // NOTE: In the old system, advanceDebugStep was called here to skip past
-  // the debug step on resume. With the Runner, the debug hook uses a flag
-  // in frame.locals (__dbg_<stepPath>) to skip the hook on resume instead,
-  // so we no longer advance the step counter here.
-
-  // Create a single rolling checkpoint that also serves as the interrupt's checkpoint.
-  // No separate pinned checkpoint — avoids duplicate entries in the rewind selector.
-  /*   const checkpointId = dbg.createRollingCheckpoint(ctx, {
-      moduleId: info.moduleId,
-      scopeName: info.scopeName,
-      stepPath: info.stepPath,
-    });
-    
-   */
-
-  const checkpointId = ctx.checkpoints.create(ctx.stateStack, ctx, {
-    moduleId: info.moduleId,
-    scopeName: info.scopeName,
-    stepPath: info.stepPath,
-  });
+  // The halting checkpoint is stamped from the local stack, as a tool's
+  // own interrupt and a guard trip are (the slice rule in
+  // docs/dev/runtime/concurrent-interrupts.md). Inside a tool call the
+  // tool loop stores it on the branch, and the shared checkpoint stamped
+  // at the join carries the branch's frames in its slot. On resume the
+  // `__dbg_` flag in the stopped frame makes the hook skip, so the stop
+  // is not taken twice.
+  const checkpointId = ctx.checkpoints.create(stack, ctx, location);
   const checkpoint = ctx.checkpoints.get(checkpointId);
 
   if (!checkpoint) {
@@ -128,12 +122,9 @@ export async function debugStep(
     throw new Error(`Failed to create debug checkpoint: ${JSON.stringify(debugData)}`);
   }
 
-  const debugInterrupt = createDebugInterrupt(
-    info.label ?? undefined,
-    checkpointId,
-    checkpoint,
-    ctx.getRunId(),
-  );
+  dbg.stoppedAt(depth);
+  const stop: DebugStopData = { ...location, label: info.label };
+  const debugInterrupt = createDebugInterrupt(stop, checkpointId, checkpoint, ctx.getRunId());
 
   return [debugInterrupt];
 }

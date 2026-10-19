@@ -102,7 +102,10 @@ first commit of the PR.
    it passes the interrupt's checkpoint instead.
 9. `lib/debugger/driver.ts`: `print` reads from the stop's frame. `set` at
    a stop whose path is not empty is refused with "set inside a tool call
-   is not supported yet".
+   is not supported yet". `step back` passes the stop's location to
+   `findBefore`, which takes an id and a location instead of a checkpoint,
+   so it skips the current step rather than the shared checkpoint's
+   location.
 
 ### Tests for the PR
 

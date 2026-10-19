@@ -9,7 +9,7 @@ import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { SourceLocation } from "./sourceLocation.js";
-import type { StateStackJSON } from "./stateStack.js";
+import type { StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
 
@@ -19,6 +19,21 @@ export const RESULT_ENTRY_LABEL = "result-entry";
 let globalCheckpointCounter = 0;
 
 export type SourceLocationOpts = Omit<SourceLocation, "nodeId">;
+
+/** Whether two locations name the same step on the same stack. A step
+ *  inside a tool call is told from the same step in another call of that
+ *  tool by its branch path. */
+export function sameLocation(a: SourceLocationOpts, b: SourceLocationOpts): boolean {
+  const aPath = a.branchPath ?? [];
+  const bPath = b.branchPath ?? [];
+  return (
+    a.moduleId === b.moduleId &&
+    a.scopeName === b.scopeName &&
+    a.stepPath === b.stepPath &&
+    aPath.length === bPath.length &&
+    aPath.every((key, index) => key === bPath[index])
+  );
+}
 /** Reset the global checkpoint ID counter. For use in tests only. */
 export function resetGlobalCheckpointCounter(): void {
   globalCheckpointCounter = 0;
@@ -39,6 +54,7 @@ export type CheckpointArgs = {
   moduleId?: string;
   scopeName?: string;
   stepPath?: string;
+  branchPath?: string[];
   label?: string | null;
   pinned?: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -55,6 +71,9 @@ export type CheckpointJSON = {
   moduleId: string;
   scopeName: string;
   stepPath: string;
+  /** Present only for a checkpoint taken on a branch stack, so a
+   *  checkpoint from before the field keeps its signature. */
+  branchPath?: string[];
   label: string | null;
   pinned: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -71,6 +90,9 @@ export class Checkpoint implements SourceLocation {
   public moduleId: string;
   public scopeName: string;
   public stepPath: string;
+  /** The branch keys from the root stack down to the stack the step ran
+   *  on, empty for the root. `getCurrentFrame` follows it. */
+  public branchPath: string[];
   public label: string | null;
   public pinned: boolean;
   /** The fingerprint (a hash of the generated code) of each module with a
@@ -97,6 +119,7 @@ export class Checkpoint implements SourceLocation {
     this.moduleId = args.moduleId ?? "";
     this.scopeName = args.scopeName ?? "";
     this.stepPath = args.stepPath ?? "";
+    this.branchPath = args.branchPath ?? [];
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
     this.moduleFingerprints = args.moduleFingerprints;
@@ -109,21 +132,46 @@ export class Checkpoint implements SourceLocation {
     return `${this.moduleId}:${this.scopeName}`;
   }
 
+  /** The location, with `branchPath` only when the step ran on a branch
+   *  stack, as `toJSON` writes it. */
   get location(): SourceLocation {
-    return {
+    const location: SourceLocation = {
       nodeId: this.nodeId,
       moduleId: this.moduleId,
       scopeName: this.scopeName,
       stepPath: this.stepPath,
     };
+    if (this.branchPath.length > 0) {
+      location.branchPath = this.branchPath;
+    }
+    return location;
   }
 
-  getCurrentFrame() {
+  /** The frame the checkpoint was taken in: the last frame of the stack
+   *  its branch path leads to. For a step inside a tool call that is the
+   *  tool's frame, not the root's last frame. Undefined when the path
+   *  names a branch the checkpoint does not hold. */
+  getCurrentFrame(): StateJSON | undefined {
+    return this.frameAt(this.branchPath);
+  }
+
+  /** The last frame of the stack `branchPath` leads to, from the root. */
+  frameAt(branchPath: string[]): StateJSON | undefined {
+    let frame = this.rootFrame();
+    for (const key of branchPath) {
+      const branch = frame?.branches?.[key];
+      frame = branch?.stack.stack.at(-1);
+    }
+    return frame;
+  }
+
+  /** The last frame of the root stack. */
+  private rootFrame(): StateJSON | undefined {
     return this.stack.stack?.at(-1);
   }
 
   getThreadMessages(displayIndex?: number): ThreadMessages | null {
-    const frame = this.getCurrentFrame();
+    const frame = this.rootFrame();
     if (!frame?.threads) return null;
 
     const { threads, activeStack } = frame.threads;
@@ -184,11 +232,7 @@ export class Checkpoint implements SourceLocation {
   }
 
   pathEquals(other: Checkpoint): boolean {
-    return (
-      this.moduleId === other.moduleId &&
-      this.scopeName === other.scopeName &&
-      this.stepPath === other.stepPath
-    );
+    return sameLocation(this, other);
   }
 
   equals(other: Checkpoint): boolean {
@@ -207,6 +251,9 @@ export class Checkpoint implements SourceLocation {
       label: this.label,
       pinned: this.pinned,
     };
+    if (this.branchPath.length > 0) {
+      json.branchPath = this.branchPath;
+    }
     if (this.moduleFingerprints !== undefined) {
       json.moduleFingerprints = this.moduleFingerprints;
     }
@@ -349,22 +396,21 @@ export class CheckpointStore {
 
   findCheckpoint(location: SourceLocationOpts): Checkpoint | null {
     const sorted = this.getSorted(); // sorted by id ascending
-    const currentIdx = sorted.findIndex(
-      (cp) =>
-        cp.moduleId === location.moduleId &&
-        cp.scopeName === location.scopeName &&
-        cp.stepPath === location.stepPath,
-    );
+    const currentIdx = sorted.findIndex((cp) => sameLocation(cp, location));
     if (currentIdx <= 0) return null;
     return sorted[currentIdx - 1];
   }
 
-  findBefore(checkpoint: Checkpoint): Checkpoint | null {
+  /** The newest unpinned checkpoint older than `beforeId` that is not at
+   *  `location`, the step the program is stopped at. `step back` rewinds
+   *  to it. The stopped location is passed on its own because the
+   *  checkpoint on a stop inside a tool call is the shared one stamped at
+   *  the join, whose own location is the loop's. */
+  findBefore(beforeId: number, location: SourceLocationOpts): Checkpoint | null {
     const sorted = this.getSorted(); // sorted by id ascending
-    const checkpointId = checkpoint.id;
     sorted.reverse();
     for (const cp of sorted) {
-      if (cp.id < checkpointId && !cp.pathEquals(checkpoint) && !cp.pinned) {
+      if (cp.id < beforeId && !sameLocation(cp, location) && !cp.pinned) {
         return cp;
       }
     }
@@ -384,6 +430,11 @@ export class CheckpointStore {
     return id;
   }
 
+  /** Strip the `__dbg_` flags from the frame the checkpoint was taken in,
+   *  and from that frame only, so a replay stops there again. Ancestor
+   *  frames keep theirs: a rewind into a tool call must pass through the
+   *  `llm()` statement without stopping, and a sibling branch that was
+   *  mid-step keeps its flag so it replays past its own stop. */
   removeDebugFlagsFor(id: number): void {
     const cp = this.checkpoints[id];
     if (!cp) return;
@@ -398,12 +449,7 @@ export class CheckpointStore {
 
   private removeDuplicate(location: SourceLocationOpts): void {
     for (const [id, cp] of Object.entries(this.checkpoints)) {
-      if (
-        !cp.pinned &&
-        cp.moduleId === location.moduleId &&
-        cp.scopeName === location.scopeName &&
-        cp.stepPath === location.stepPath
-      ) {
+      if (!cp.pinned && sameLocation(cp, location)) {
         delete this.checkpoints[Number(id)];
         return;
       }

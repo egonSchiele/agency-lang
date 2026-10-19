@@ -1,0 +1,13 @@
+// A fork in a node with no llm() call. Each branch runs on its own stack.
+node main(): number {
+  const items = [1, 2, 3]
+  const doubled = fork(items) as item {
+    const twice = item * 2
+    return twice
+  }
+  let total = 0
+  for (value in doubled) {
+    total = total + value
+  }
+  return total
+}

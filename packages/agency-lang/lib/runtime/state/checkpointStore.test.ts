@@ -133,6 +133,63 @@ describe("Checkpoint", () => {
       });
       expect(cp!.getCurrentFrame()).toBeUndefined();
     });
+
+    // A step inside a tool call runs on a branch stack under the runPrompt
+    // frame, and a fork inside the tool one level further down. The
+    // checkpoint's branch path leads to the frame the step ran in.
+    it("follows the branch path to the frame the step ran in", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          { scopeName: "main", locals: { answer: null } },
+          {
+            scopeName: "runPrompt",
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  {
+                    scopeName: "search",
+                    locals: { url: "https://example.test/grant" },
+                    branches: {
+                      fork_1: {
+                        stack: makeStackJSON([{ scopeName: "fork", locals: { item: 2 } }]),
+                      },
+                    },
+                  },
+                ]),
+              },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+        branchPath: ["tool_0_abc", "fork_1"],
+      });
+      expect(cp.getCurrentFrame()!.locals).toEqual({ item: 2 });
+      expect(cp.frameAt(["tool_0_abc"])!.locals).toEqual({ url: "https://example.test/grant" });
+      expect(cp.frameAt([])!.scopeName).toBe("runPrompt");
+      expect(cp.frameAt(["tool_0_missing"])).toBeUndefined();
+    });
+
+    it("writes the branch path to JSON only when it is not empty", () => {
+      const root = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{}]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect("branchPath" in root.toJSON()).toBe(false);
+      const inTool = new Checkpoint({
+        id: 1,
+        stack: makeStackJSON([{}]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+        branchPath: ["tool_0_abc"],
+      });
+      expect(inTool.toJSON().branchPath).toEqual(["tool_0_abc"]);
+      expect(Checkpoint.fromJSON(inTool.toJSON())!.branchPath).toEqual(["tool_0_abc"]);
+      expect(Checkpoint.fromJSON(root.toJSON())!.branchPath).toEqual([]);
+    });
   });
 
   describe("getThreadMessages", () => {
@@ -747,5 +804,91 @@ describe("checkpoint signing at creation", () => {
       stepPath: "0",
     });
     expect(cp.signature).toBeUndefined();
+  });
+});
+
+describe("CheckpointStore inside a tool call", () => {
+  function stackWithToolBranch(): StateStackJSON {
+    return makeStackJSON([
+      { scopeName: "main", locals: { __dbg_1: true } },
+      {
+        scopeName: "runPrompt",
+        locals: { __dbg_round: true },
+        branches: {
+          tool_0_abc: {
+            stack: makeStackJSON([{ scopeName: "search", locals: { __dbg_0: true, url: "u" } }]),
+          },
+          tool_1_def: {
+            stack: makeStackJSON([{ scopeName: "writeUp", locals: { __dbg_0: true } }]),
+          },
+        },
+      },
+    ]);
+  }
+
+  it("removeDebugFlagsFor strips the flags of the stopped frame only", () => {
+    const store = new CheckpointStore();
+    const cp = new Checkpoint({
+      id: 7,
+      stack: stackWithToolBranch(),
+      globals: makeGlobalsJSON(),
+      nodeId: "n1",
+      branchPath: ["tool_0_abc"],
+    });
+    store.add(cp);
+    store.removeDebugFlagsFor(7);
+    // The stopped frame loses its flag and keeps its locals.
+    expect(cp.frameAt(["tool_0_abc"])!.locals).toEqual({ url: "u" });
+    // Ancestors keep theirs, so a replay passes through the llm() call.
+    expect(cp.frameAt([])!.locals).toEqual({ __dbg_round: true });
+    expect(cp.stack.stack[0].locals).toEqual({ __dbg_1: true });
+    // A sibling branch keeps its flag, so it replays past its own stop.
+    expect(cp.frameAt(["tool_1_def"])!.locals).toEqual({ __dbg_0: true });
+  });
+
+  it("a rolling checkpoint at the same step of another call of the tool is kept", () => {
+    const ctx = makeMockCtx();
+    const store = new CheckpointStore();
+    const location = { moduleId: "m.agency", scopeName: "search", stepPath: "0" };
+    const first = store.createRolling(ctx, { ...location, branchPath: ["tool_0_abc"] });
+    const second = store.createRolling(ctx, { ...location, branchPath: ["tool_0_xyz"] });
+    const again = store.createRolling(ctx, { ...location, branchPath: ["tool_0_abc"] });
+    expect(store.get(first)).toBeUndefined();
+    expect(store.get(second)).toBeDefined();
+    expect(store.get(again)).toBeDefined();
+  });
+
+  it("findBefore skips the stopped location, not the checkpoint's own", () => {
+    const store = new CheckpointStore();
+    const inTool = (id: number, stepPath: string) =>
+      new Checkpoint({
+        id,
+        stack: makeStackJSON([{}]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+        moduleId: "m.agency",
+        scopeName: "search",
+        stepPath,
+        branchPath: ["tool_0_abc"],
+      });
+    store.add(inTool(1, "0"));
+    store.add(inTool(2, "1"));
+    // The checkpoint on the stop is the shared one from the join, at the
+    // loop's location, with a later id.
+    const shared = new Checkpoint({
+      id: 3,
+      stack: makeStackJSON([{}]),
+      globals: makeGlobalsJSON(),
+      nodeId: "n1",
+      scopeName: "runPrompt",
+      stepPath: "round.1",
+    });
+    const stop = {
+      moduleId: "m.agency",
+      scopeName: "search",
+      stepPath: "1",
+      branchPath: ["tool_0_abc"],
+    };
+    expect(store.findBefore(shared.id, stop)!.id).toBe(1);
   });
 });

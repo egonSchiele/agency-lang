@@ -1,3 +1,4 @@
+import type { DebugStopData } from "../runtime/debugger.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import type { UIState } from "./uiState.js";
@@ -24,7 +25,10 @@ export type DebuggerCommand =
 
 export type DebuggerIO = {
   state: UIState;
-  render(checkpoint?: Checkpoint, full?: boolean): Promise<void>;
+  /** Show `checkpoint`, at `stop` when the stop happened somewhere other
+   *  than the checkpoint's own location (a stop inside a tool call, whose
+   *  checkpoint is the shared one stamped at the join). */
+  render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void>;
   waitForCommand(): Promise<DebuggerCommand>;
   showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null>;
   showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void>;

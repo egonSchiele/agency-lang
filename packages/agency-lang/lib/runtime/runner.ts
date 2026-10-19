@@ -421,7 +421,15 @@ export class Runner {
     isUserAdded: boolean = false,
   ): Promise<boolean> {
     if (!this.recordsStepCheckpoints()) return false;
-    if (this.ctx.isInsideToolCall()) return false;
+    // A handler body and a callback body have no step address, so a stop
+    // taken inside one could never be resumed; the same rule as
+    // pauseIfRequested. A tool call is ordinary stepped code on a branch
+    // stack, and a tool called from a handler body still does not stop:
+    // runBatch copies the handler mark into every branch it starts.
+    const stack = this.stack;
+    if (stack === undefined || stack.hasExecutingHandlers() || isInsideCallback(run)) {
+      return false;
+    }
 
     // On resume after a debug pause, skip the hook.
     // Don't delete the flag yet — step() will clean it up after the
@@ -446,7 +454,7 @@ export class Runner {
         nodeContext: this.nodeContext,
         isUserAdded,
       },
-      this.stack,
+      stack,
     );
 
     if (dbg) {
@@ -455,9 +463,10 @@ export class Runner {
         // this.frame.threads is the live ThreadStore set by setupNode.
         this.halt({ messages: this.frame.threads, data: dbg });
       } else {
-        // Function context: halt with raw single interrupt object. The
-        // caller pattern unwraps and uses isInterrupt for debug pauses
-        // (debugger pauses are always single, not array-shaped batches).
+        // Function context: halt with the `Interrupt[]` itself, the shape
+        // every generated call site passes up and `hasInterrupts` in the
+        // tool loop recognizes, so a stop inside a tool travels the path a
+        // tool's own interrupt travels.
         this.halt(dbg);
       }
       return true;
@@ -479,15 +488,13 @@ export class Runner {
   /** Whether this step should build a checkpoint: the debugger wants one, a
    *  trace sink wants one, or a host or Agency callback registered for
    *  `onCheckpoint` wants one. `debugHook` and `clearDebugFlag` must agree,
-   *  so both read this. The `onCheckpoint` reason applies only on the
-   *  top-level stack, because a branch checkpoint is not reported. */
+   *  so both read this. The debugger counts on every stack; the trace and
+   *  `onCheckpoint` reasons apply only on the top-level stack, because
+   *  `debugStep` records neither for a branch (see its comment). */
   private recordsStepCheckpoints(): boolean {
-    if (this.ctx.hasDebugger() || this.ctx.hasTraceWriter()) return true;
-    return (
-      this.stack !== undefined &&
-      this.stack === this.ctx.stateStack &&
-      hasCallbackConsumer(this.ctx, "onCheckpoint", this.stack)
-    );
+    if (this.ctx.hasDebugger()) return true;
+    if (this.stack === undefined || this.stack !== this.ctx.stateStack) return false;
+    return this.ctx.hasTraceWriter() || hasCallbackConsumer(this.ctx, "onCheckpoint", this.stack);
   }
 
   private stepPath(id: number): string {

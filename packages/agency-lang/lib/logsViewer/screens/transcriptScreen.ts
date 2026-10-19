@@ -220,8 +220,12 @@ export class TranscriptScreen implements Screen {
       }
       const completed = block.tool !== undefined && block.complete;
       if (!completed) {
-        this.folded = this.folded.filter((id) => id !== block.id);
-        this.foldDefaultsApplied = this.foldDefaultsApplied.filter((id) => id !== block.id);
+        // Only a fold this rule made is undone when the group runs again;
+        // one the reader made stays.
+        if (this.foldDefaultsApplied.includes(block.id)) {
+          this.folded = this.folded.filter((id) => id !== block.id);
+          this.foldDefaultsApplied = this.foldDefaultsApplied.filter((id) => id !== block.id);
+        }
         continue;
       }
       if (this.foldDefaultsApplied.includes(block.id)) {
@@ -386,8 +390,26 @@ export class TranscriptScreen implements Screen {
     if (!this.expanded.includes(id)) {
       this.expanded.push(id);
     }
+    if (this.matchOnlyInApprovals(id)) {
+      this.showApprovals = true;
+    }
     this.select(id);
     this.revealMatch = true;
+  }
+  /** Whether a tool matches the query only in an approved interrupt's
+   *  message, which `p` hides by default and the match must reveal. */
+  private matchOnlyInApprovals(id: string): boolean {
+    const block = this.blocks.find((candidate) => candidate.id === id);
+    if (block?.kind !== "tool" || this.showApprovals) {
+      return false;
+    }
+    const query = this.query.toLowerCase();
+    const approved = block.interrupts.filter((interrupt) => interrupt.outcome === "approved");
+    const rest = { ...block, interrupts: block.interrupts.filter((i) => !approved.includes(i)) };
+    return (
+      approved.some((interrupt) => (interrupt.message ?? "").toLowerCase().includes(query)) &&
+      !transcriptText(rest).toLowerCase().includes(query)
+    );
   }
   private nextMatch(direction: number): void {
     if (this.matches.length === 0) {
@@ -443,7 +465,7 @@ export class TranscriptScreen implements Screen {
             .toLowerCase()
             .includes(this.query.toLowerCase()),
         );
-        this.scrollTop += Math.max(0, line - this.page + 1);
+        this.scrollTop = focused.start + Math.max(0, line - this.page + 1);
       }
       this.needsReveal = false;
       this.revealMatch = false;

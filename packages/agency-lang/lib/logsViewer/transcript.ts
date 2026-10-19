@@ -309,6 +309,11 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     // questions and the answers, so its input is not shown as a
     // conversation that led up to a reply.
     const matched = round.decision === undefined ? matchShown(now, state.shown) : now;
+    // After a rewrite only the messages the input kept stay shown, so a
+    // message the rewrite removed cannot stand for a later one like it.
+    if (rewrite !== undefined && round.decision === undefined) {
+      state.shown = matched.filter((message): message is WireMessage => message !== undefined);
+    }
     for (const [position, message] of now.entries()) {
       const already = matched[position];
       if (already !== undefined) {
@@ -669,6 +674,7 @@ export function transcriptText(block: TranscriptBlock): string {
             ?.data.args,
         ),
         block.output,
+        block.modelSaw,
         ...block.interrupts.map(
           (interrupt) => `${interrupt.effect} ${interrupt.outcome} ${interrupt.message}`,
         ),

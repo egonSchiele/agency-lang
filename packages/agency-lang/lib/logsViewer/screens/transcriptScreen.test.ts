@@ -323,6 +323,77 @@ it("reveals an interrupt message found inside a collapsed tool", () => {
   });
 });
 
+it("reveals approvals when a match is only in an approved interrupt's message", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 100, "L"),
+      event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+      event("interruptThrown", 102, "write", "L", {
+        interruptId: "write",
+        interrupt: { effect: "std::write", message: "Approve replacing the archived notes?" },
+      }),
+      event("interruptResolved", 103, "write", "L", {
+        interruptId: "write",
+        outcome: "approved",
+        interrupt: { effect: "std::write", message: "Approve replacing the archived notes?" },
+      }),
+      event("toolCall", 104, "write", "L", { toolName: "write", output: "ok" }),
+    ]),
+  );
+  expect(text(screen)).not.toContain("std::write");
+  screen.applySearch("archived notes");
+  expect(screen.focusId()).toBe("write");
+  expect(text(screen)).toContain("Approve replacing the archived notes?");
+});
+
+it("scrolls a search match into view when its block starts inside the pane", () => {
+  const events = loopEvents();
+  events.find((event) => event.data.type === "toolCall")!.data.output = Array.from(
+    { length: 100 },
+    (_unused, position) => (position === 90 ? "needle inside result" : `ordinary ${position}`),
+  ).join("\n");
+  const screen = make(buildForest(events));
+  // The tool's block starts a few rows down the pane; the match is far
+  // below its start.
+  text(screen);
+  screen.applySearch("needle inside result");
+  expect(text(screen)).toContain("needle inside result");
+});
+
+it("keeps a fold the reader made on a top-level thread through a follow update", () => {
+  const events = [
+    event("promptCompletion", 100, "A", null, {
+      threadIdentity: "main",
+      messages: [{ role: "user", content: "go" }],
+      completion: { output: "one" },
+    }),
+    event("promptCompletion", 200, "T", null, {
+      threadIdentity: "title",
+      messages: [{ role: "user", content: "title it" }],
+      completion: { output: "A title" },
+    }),
+  ];
+  const screen = make(buildForest(events));
+  screen.setFocus("group:T");
+  press(screen, "enter");
+  expect(text(screen)).not.toContain("title it");
+  screen.setData(
+    buildForest([
+      ...events,
+      event("promptCompletion", 300, "A", null, {
+        threadIdentity: "main",
+        messages: [
+          { role: "user", content: "go" },
+          { role: "assistant", content: "one" },
+          { role: "user", content: "more" },
+        ],
+        completion: { output: "two" },
+      }),
+    ]),
+  );
+  expect(text(screen)).not.toContain("title it");
+});
+
 it("cycles to the last or first match after moving to a nonmatching block", () => {
   const screen = make(
     buildForest([
@@ -571,7 +642,11 @@ describe("the call list and header", () => {
             output: "",
             toolCalls: [
               { id: "c1", name: "grep", arguments: { pattern: "a" } },
-              { id: "c2", name: "imaginary", arguments: { what: "never ran" } },
+              {
+                id: "c2",
+                name: "imaginary",
+                arguments: { what: "never ran", long: "x".repeat(200) },
+              },
             ],
           },
         }),
@@ -584,6 +659,8 @@ describe("the call list and header", () => {
     expect(body).not.toContain("TOOL CALL · grep · c1");
     expect(body).toContain("TOOL CALL · imaginary · c2");
     expect(body).toContain("what: never ran");
+    // With no box of its own to open, its arguments are not cut.
+    expect(body).toContain("x".repeat(60));
   });
   it("keeps the active box where it is until it would leave the pane", () => {
     const screen = make(buildForest(loopEvents()));

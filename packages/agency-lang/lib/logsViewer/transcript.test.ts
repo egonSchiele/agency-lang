@@ -207,6 +207,70 @@ describe("transcript blocks", () => {
       expect(blocks.filter((block) => block.kind === "history")).toEqual([]);
     },
   );
+  it("shows a message repeated after a compaction removed its earlier copy", () => {
+    const go = { role: "user", content: "continue" };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [system, user, go],
+          completion: { output: "first" },
+        }),
+        event("memoryCompaction", 150, "L"),
+        event("promptCompletion", 200, "L", null, {
+          threadIdentity: "main",
+          messages: [system, { role: "system", content: "summary" }, go],
+          completion: { output: "second" },
+        }),
+      ])[0],
+    );
+    expect(blocks.find((block) => block.kind === "rewrite")).toBeDefined();
+    // The second input keeps one `continue`, matched to the first; the
+    // third input's `continue` is new, since the compaction removed the
+    // kept copy's predecessor and only the kept one stays shown.
+    expect(blocks.filter((block) => block.kind === "user").map((block) => block.text)).toEqual([
+      "a module",
+      "continue",
+    ]);
+  });
+  it("shows a message that a compaction kept once, and one it removed again when it recurs", () => {
+    const go = { role: "user", content: "continue" };
+    const blocks = transcriptBlocks(
+      buildForest([
+        event("promptCompletion", 100, "L", null, {
+          threadIdentity: "main",
+          messages: [system, user, go],
+          completion: { output: "first" },
+        }),
+        event("memoryCompaction", 150, "L"),
+        event("promptCompletion", 200, "L", null, {
+          threadIdentity: "main",
+          messages: [
+            system,
+            { role: "system", content: "summary" },
+            { role: "assistant", content: "first" },
+          ],
+          completion: { output: "second" },
+        }),
+        event("promptCompletion", 300, "L", null, {
+          threadIdentity: "main",
+          messages: [
+            system,
+            { role: "system", content: "summary" },
+            { role: "assistant", content: "first" },
+            { role: "assistant", content: "second" },
+            go,
+          ],
+          completion: { output: "third" },
+        }),
+      ])[0],
+    );
+    expect(blocks.filter((block) => block.kind === "user").map((block) => block.text)).toEqual([
+      "a module",
+      "continue",
+      "continue",
+    ]);
+  });
   it("gives distinct stable system IDs per thread and full input position", () => {
     const events = [
       event("promptCompletion", 100, "L", null, {

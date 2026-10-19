@@ -274,8 +274,9 @@ function changedWhere(block: { firstChangedAt: number; messagesAfter: number }):
     ? `from message ${block.firstChangedAt + 1}`
     : `after message ${block.messagesAfter}`;
 }
-/** The calls a reply requested. Each argument is cut, as on the trace's
- *  call row, since the tool's own block follows with the arguments whole. */
+/** Requested calls that have no tool block of their own: a request no
+ *  tool ran, or one in seeded history. Their arguments are shown whole,
+ *  since nothing else will show them. */
 function requestLines(calls: ToolCallRequest[]): PayloadLine[] {
   return calls.flatMap((call) => [
     {
@@ -283,6 +284,6 @@ function requestLines(calls: ToolCallRequest[]): PayloadLine[] {
       tone: "tool" as const,
       text: `TOOL CALL · ${call.name ?? "tool"} · ${call.id ?? "no call ID"}`,
     },
-    ...valuePayload(cutArguments(call.arguments, ARGUMENT_PREVIEW_CHARS)),
+    ...valuePayload(call.arguments),
   ]);
 }

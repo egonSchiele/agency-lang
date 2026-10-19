@@ -415,28 +415,119 @@ describe("the call list and header", () => {
         }),
       ]),
     );
-    const lines = text(screen).split("\n");
-    const spine = lines.map((line) => line.split("│")[0].trimEnd());
-    // The fold marker keeps one column; the indent follows it.
-    expect(spine).toContain("▶   user");
-    expect(spine).toContain("    LLM call 1");
-    expect(spine).toContain("  ▸   researchAgent");
-    expect(spine).toContain("  ▸     system");
-    expect(spine).toContain("        prompt");
-    expect(spine).toContain("        LLM call 2");
-    expect(spine).toContain("    ↩ researchAgent");
+    const spineOf = () =>
+      text(screen)
+        .split("\n")
+        .map((line) => line.split("│")[0].trimEnd());
+    // The outline is the trace's: a thread row at its tool depth, its
+    // messages one level in, a tool one level under its call, and the
+    // sub-agent's thread row under the tool. The fold marker keeps one
+    // column; the indent follows it.
+    let spine = spineOf();
+    expect(spine).toContain("▶ ▾ Thread · unnamed");
+    expect(spine).toContain("      user");
+    expect(spine).toContain("      LLM call 1");
+    expect(spine).toContain("  ▸     researchAgent");
+    expect(spine).toContain("  ▸       Thread · researchAgent");
+    expect(spine).toContain("      ↩ researchAgent");
+    // The sub-agent's group is complete, so it starts folded, as on the
+    // trace: its prompt is not in the pane, and its row says so.
+    expect(spine).not.toContain("            prompt");
+    expect(text(screen)).toContain(
+      "══ THREAD · researchAgent · 1 LLM call ══ ▸ folded · Enter opens",
+    );
+    expect(text(screen)).not.toContain("─ PROMPT · researchAgent ─");
+    screen.setFocus("group:B");
+    press(screen, "enter");
+    spine = spineOf();
+    expect(spine).toContain("▶ ▾       Thread · researchAgent");
+    expect(spine).toContain("  ▸         system");
+    expect(spine).toContain("            prompt");
+    expect(spine).toContain("            LLM call 2");
     const body = text(screen);
     expect(body).toContain("─ PROMPT · researchAgent ─");
     expect(body).toContain("─ HAND-BACK · researchAgent ─");
+    // Inside the group the pane rows carry a rail and the level's tint.
+    const railed = body.split("\n").find((line) => line.includes("PROMPT · researchAgent"))!;
+    expect(railed.split("│")[1]).toMatch(/^ ┃ /);
     screen.setFocus("t");
     press(screen, "enter");
-    expect(
-      text(screen)
-        .split("\n")
-        .map((line) => line.split("│")[0].trimEnd()),
-    ).toContain("▶ ▾   researchAgent");
+    expect(spineOf()).toContain("▶ ▾     researchAgent");
   });
 
+  it("paints a breadcrumb over the first row when the pane is scrolled into a sub-agent's group", () => {
+    const calls = Array.from({ length: 12 }, (_unused, position) =>
+      event("promptCompletion", 150 + position, "B", "t", {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: `step ${position}\n`.repeat(6) }],
+        completion: { output: `did ${position}` },
+      }),
+    );
+    const screen = make(
+      buildForest([
+        event("promptCompletion", 100, "A", null, {
+          threadIdentity: "main",
+          messages: [{ role: "user", content: "go" }],
+          completion: {
+            output: "",
+            toolCalls: [{ id: "c1", name: "researchAgent", arguments: {} }],
+          },
+        }),
+        event("toolCallStart", 101, "t", "A", {
+          toolName: "researchAgent",
+          toolCallId: "c1",
+          args: {},
+        }),
+        ...calls,
+        event("toolCall", 400, "t", "A", {
+          toolName: "researchAgent",
+          toolCallId: "c1",
+          output: "found",
+        }),
+      ]),
+    );
+    // Search opens the fold on the way to its match and lands inside the group.
+    screen.applySearch("did 9");
+    expect(screen.focusId()).toBe("round:B:9");
+    const first = text(screen).split("\n")[2].split("│")[1];
+    expect(first).toContain("researchAgent › Thread · researchAgent · 12 LLM calls");
+  });
+  it("keeps a group the reader opened open through a follow update, and unfolds one that runs again", () => {
+    const events = [
+      event("promptCompletion", 100, "A", null, {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: "go" }],
+        completion: { output: "", toolCalls: [{ id: "c1", name: "researchAgent", arguments: {} }] },
+      }),
+      event("toolCallStart", 101, "t", "A", {
+        toolName: "researchAgent",
+        toolCallId: "c1",
+        args: {},
+      }),
+      event("promptCompletion", 150, "B", "t", {
+        threadIdentity: "main",
+        messages: [{ role: "user", content: "research this" }],
+        completion: { output: "found" },
+      }),
+      event("toolCall", 160, "t", "A", {
+        toolName: "researchAgent",
+        toolCallId: "c1",
+        output: "found",
+      }),
+    ];
+    const screen = make(buildForest(events));
+    expect(text(screen)).toContain("▸ folded");
+    screen.setFocus("group:B");
+    press(screen, "enter");
+    expect(text(screen)).not.toContain("▸ folded");
+    screen.setData(
+      buildForest([
+        ...events,
+        event("promptCompletion", 300, "A", null, { completion: { output: "done" } }),
+      ]),
+    );
+    expect(text(screen)).not.toContain("▸ folded");
+  });
   it("names a reply's tool calls on one line and shows a request no tool ran whole", () => {
     const screen = make(
       buildForest([

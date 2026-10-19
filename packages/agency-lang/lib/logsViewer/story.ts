@@ -376,7 +376,9 @@ export function llmGroupTitle(node: TreeNode, allRounds: Round[]): string {
   const count = `${rounds.length} LLM ${rounds.length === 1 ? "call" : "calls"}`;
   return `Thread · ${threadLabelOf(rounds)} · ${count}`;
 }
-function threadLabelOf(rounds: Round[]): string {
+/** The thread name a group of rounds shares, `main`, or the names joined
+ *  when they differ. */
+export function threadLabelOf(rounds: Round[]): string {
   const names = rounds
     .map((round) => round.threadLabel)
     .filter((name): name is string => Boolean(name));

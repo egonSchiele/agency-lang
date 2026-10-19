@@ -72,10 +72,14 @@ describe("transcript blocks", () => {
         }),
       ])[0],
     );
+    // The sub-agent's calls get their own thread row, as on the trace,
+    // though they ran on the caller's thread.
     expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
+      "0 thread",
       "0 user",
       "0 assistant",
       "0 tool",
+      "1 thread",
       "1 user",
       "1 assistant",
       "0 assistant",
@@ -494,7 +498,8 @@ describe("thread dividers", () => {
       ])[0],
     );
     // The tool block sits with the call that requested it, before the
-    // sub-agent's thread it started; the main thread resumes after.
+    // sub-agent's thread it started; the main thread resumes after with
+    // no second row, as on the trace, where it is one group.
     expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
       "0 thread",
       "0 user",
@@ -503,13 +508,11 @@ describe("thread dividers", () => {
       "1 thread",
       "1 user",
       "1 assistant",
-      "0 thread",
       "0 assistant",
     ]);
-    expect(blocks.filter((block) => block.kind === "thread").map((block) => block.label)).toEqual([
-      "mainConversation",
-      "subagent",
-      "mainConversation",
+    expect(blocks.filter((block) => block.kind === "thread")).toMatchObject([
+      { label: "mainConversation", calls: 2, tool: undefined, id: "group:main" },
+      { label: "subagent", calls: 1, tool: "subagent", complete: true, id: "group:inner" },
     ]);
   });
 
@@ -525,7 +528,6 @@ describe("thread dividers", () => {
     expect(blocks.filter((block) => block.kind === "thread").map((block) => block.label)).toEqual([
       "mainConversation",
       "expressionCheck",
-      "mainConversation",
     ]);
     expect(blocks.find((block) => block.kind === "error")).toMatchObject({
       threadLabel: "mainConversation",
@@ -710,9 +712,11 @@ describe("a handoff on the caller's thread", () => {
   it("shows the sub-agent's work once, names its prompt, and marks the hand-back", () => {
     const blocks = transcriptBlocks(handoff());
     expect(blocks.map((block) => `${block.depth} ${block.kind}`)).toEqual([
+      "0 thread",
       "0 user",
       "0 assistant",
       "0 tool",
+      "1 thread",
       "1 system",
       "1 user",
       "1 assistant",
@@ -721,9 +725,11 @@ describe("a handoff on the caller's thread", () => {
       "0 handback",
       "0 assistant",
     ]);
-    expect(blocks[0]).toMatchObject({ promptTo: undefined });
-    expect(blocks[4]).toMatchObject({ promptTo: "researchAgent", text: "look it up" });
-    expect(blocks[8]).toMatchObject({ tool: "researchAgent" });
+    expect(blocks[1]).toMatchObject({ promptTo: undefined });
+    expect(blocks[6]).toMatchObject({ promptTo: "researchAgent", text: "look it up" });
+    expect(blocks.find((block) => block.kind === "handback")).toMatchObject({
+      tool: "researchAgent",
+    });
     expect(blocks.find((block) => block.kind === "rewrite")).toBeUndefined();
   });
 });
@@ -801,11 +807,14 @@ describe("turns", () => {
   }
   it("opens each of the person's messages with a turn block carrying the wait before it", () => {
     const blocks = transcriptBlocks(session());
+    // Each turn's llm() is its own span, so each gets a thread row, as on
+    // the trace.
     expect(blocks.map((block) => block.kind)).toEqual([
       "thread",
       "turn",
       "user",
       "assistant",
+      "thread",
       "turn",
       "user",
       "assistant",
@@ -814,12 +823,14 @@ describe("turns", () => {
       "assistant",
     ]);
     expect(blocks[1]).toMatchObject({ waitedMs: undefined, turn: { index: 0 } });
-    expect(blocks[4]).toMatchObject({ waitedMs: 595_000, turn: { index: 1 } });
+    expect(blocks[5]).toMatchObject({ waitedMs: 595_000, turn: { index: 1 } });
     // The person's messages are the turn starts; the helper's prompt is not.
     expect(blocks[2]).toMatchObject({ promptTo: undefined });
-    expect(blocks[8]).toMatchObject({ promptTo: "sessionTitle" });
+    expect(blocks.filter((block) => block.kind === "user").at(-1)).toMatchObject({
+      promptTo: "sessionTitle",
+    });
     expect(
-      transcriptPayload(blocks[4], false).map((line) => ("text" in line ? line.text : "")),
+      transcriptPayload(blocks[5], false).map((line) => ("text" in line ? line.text : "")),
     ).toEqual([
       "⏸ waited 9m55s for the user",
       "══ TURN 2 · second question ══",

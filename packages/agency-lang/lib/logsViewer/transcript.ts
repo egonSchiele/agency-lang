@@ -12,6 +12,8 @@ import { childEvent, spanDetail } from "./spanText.js";
 import {
   storyChildren,
   storyOutline,
+  threadComplete,
+  threadLabelOf,
   toolErrorMessages,
   toolResultText,
   toolStatusText,
@@ -36,13 +38,20 @@ type BlockBase = {
   threadLabel: string | undefined;
   /** How many tool calls deep the thread was started: the call list indents by it. */
   depth: number;
+  /** The `llmCall` spans the block is inside, outermost first, as the
+   *  trace groups them: the top-level conversation, then the sub-agent's
+   *  thread under its tool, and so on. A fold on a group hides every block
+   *  whose path holds it. */
+  groupPath: string[];
 };
 export type TranscriptBlock = BlockBase &
   (
     | { kind: "system"; text: string }
-    /** Where the conversation moves to another thread; `calls` counts the
-     *  LLM calls in the run of blocks it opens. */
-    | { kind: "thread"; label: string; calls: number }
+    /** A thread group, one per `llmCall` span, named as the trace names
+     *  it: `calls` counts the span's own LLM calls, `tool` is the tool
+     *  that started it (undefined for a top-level thread), and `complete`
+     *  is the trace's fold rule for it. Its id is `group:<span id>`. */
+    | { kind: "thread"; label: string; calls: number; tool: string | undefined; complete: boolean }
     /** A message the person sent, when the trace has more than one. The
      *  wait before it is the end of the previous turn. */
     | { kind: "turn"; turn: Turn; waitedMs: number | undefined }
@@ -276,6 +285,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
       at: round.start,
       threadLabel: round.threadLabel,
       depth: toolDepth(round.node, index),
+      groupPath: groupPathOf(round, index),
     };
     const now = messagesOf(round);
     const rewrite = rewriteOf(round, now, state);
@@ -378,7 +388,15 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     state.previousEnd = round.end;
     return blocks;
   });
-  return withThreadDividers(withLooseBlocks(roundBlocks, loose));
+  return withGroupDividers(withLooseBlocks(roundBlocks, loose), rounds, index);
+}
+/** The `llmCall` spans a round sits in, outermost first, ending with its own. */
+function groupPathOf(round: Round, index: TreeIndex): string[] {
+  const outer = ancestorsOf(round.node, index)
+    .filter((ancestor) => ancestor.label === "llmCall" && ancestor.id !== round.spanId)
+    .map((ancestor) => ancestor.id)
+    .reverse();
+  return [...outer, round.spanId];
 }
 /** The reply the model read, kept on the tool block when it is not the
  *  recorded output as the block already shows it. */
@@ -410,36 +428,49 @@ function turnBlocks(trace: TreeNode, rounds: Round[]): LooseBlock[] {
     },
   }));
 }
-/** A `thread` block wherever the conversation moves to another thread, so
- *  a sub-agent's calls no longer sit in one flat list with the main
- *  conversation's. The divider takes the thread of the block it opens. */
-function withThreadDividers(blocks: TranscriptBlock[]): TranscriptBlock[] {
-  const keys = blocks.map((block) => threadKey(block.thread));
-  // One thread needs no dividers.
-  if (keys.every((key) => key === keys[0])) {
+/** A `thread` block before the first block of each `llmCall` span, the
+ *  group the trace and the timeline show for it, so a sub-agent's calls
+ *  sit under their own thread row and not in one flat list with the main
+ *  conversation's. A group that resumes after a nested one, as the caller
+ *  does after a hand-back, gets no second row, as on the trace. A trace
+ *  that is one group needs no row. */
+function withGroupDividers(
+  blocks: TranscriptBlock[],
+  rounds: Round[],
+  index: TreeIndex,
+): TranscriptBlock[] {
+  const paths = blocks.map((block) => block.groupPath.join("/"));
+  if (
+    blocks.every((block) => block.groupPath.length === 1) &&
+    paths.every((path) => path === paths[0])
+  ) {
     return blocks;
   }
+  const opened: string[] = [];
   const out: TranscriptBlock[] = [];
-  let current: string | undefined;
-  for (const [position, block] of blocks.entries()) {
-    const key = threadKey(block.thread);
-    if (key !== current) {
-      current = key;
-      const run = blocks.slice(position);
-      const end = run.findIndex((candidate) => threadKey(candidate.thread) !== key);
-      const calls = run
-        .slice(0, end === -1 ? run.length : end)
-        .filter((candidate) => candidate.kind === "assistant").length;
+  for (const block of blocks) {
+    for (const [position, spanId] of block.groupPath.entries()) {
+      if (opened.includes(spanId)) {
+        continue;
+      }
+      opened.push(spanId);
+      const node = index.byId[spanId];
+      const own = rounds.filter((round) => round.spanId === spanId);
+      const tool =
+        node && ancestorsOf(node, index).find((ancestor) => ancestor.label === "toolExecution");
       out.push({
         kind: "thread",
-        id: `thread:${block.id}`,
+        id: `group:${spanId}`,
         roundId: undefined,
-        thread: block.thread,
+        thread: own[0]?.thread ?? block.thread,
         at: block.at,
-        threadLabel: block.threadLabel,
-        depth: block.depth,
-        label: block.threadLabel ?? "unnamed",
-        calls,
+        threadLabel: own[0]?.threadLabel ?? block.threadLabel,
+        depth: node ? toolDepth(node, index) : block.depth,
+        groupPath: block.groupPath.slice(0, position + 1),
+        label: threadLabelOf(own),
+        calls: own.length,
+        tool: tool === undefined ? undefined : (spanDetail(tool) ?? tool.label),
+        complete: tool !== undefined && node !== undefined && threadComplete(node),
       });
     }
     out.push(block);
@@ -454,7 +485,12 @@ function toolDepth(node: TreeNode, index: TreeIndex): number {
  *  before the first later block anywhere when its thread is unknown, so
  *  the transcript reads in time order. An error after every block goes
  *  at the end. */
-type BlockThread = { key: ThreadKey; label: string | undefined; depth: number };
+type BlockThread = {
+  key: ThreadKey;
+  label: string | undefined;
+  depth: number;
+  groupPath: string[];
+};
 /** A block that comes from an event rather than a round: an error between
  *  calls, or a pause. It goes before the first later block on its thread,
  *  or before the first later block anywhere when its thread is unknown,
@@ -475,6 +511,7 @@ function withLooseBlocks(blocks: TranscriptBlock[], loose: LooseBlock[]): Transc
       at,
       threadLabel: thread?.label,
       depth: thread?.depth ?? 0,
+      groupPath: thread?.groupPath ?? [],
     };
     const position = out.findIndex(
       (candidate) =>
@@ -489,6 +526,7 @@ function withLooseBlocks(blocks: TranscriptBlock[], loose: LooseBlock[]): Transc
         thread: neighbor.thread,
         threadLabel: neighbor.threadLabel,
         depth: neighbor.depth,
+        groupPath: neighbor.groupPath,
       });
     }
     out.splice(position === -1 ? out.length : position, 0, placed);
@@ -505,7 +543,12 @@ function blockThread(node: TreeNode, rounds: Round[], index: TreeIndex): BlockTh
     }
     const first = enclosing[0];
     return enclosing.every((round) => threadKey(round.thread) === threadKey(first.thread))
-      ? { key: first.thread, label: first.threadLabel, depth: toolDepth(first.node, index) }
+      ? {
+          key: first.thread,
+          label: first.threadLabel,
+          depth: toolDepth(first.node, index),
+          groupPath: groupPathOf(first, index),
+        }
       : undefined;
   }
   return undefined;
@@ -528,6 +571,7 @@ function toolBlock(
     at: row.node.firstTs ?? round.end,
     threadLabel: round.threadLabel,
     depth: toolDepth(round.node, index),
+    groupPath: groupPathOf(round, index),
     row,
     interrupts,
     output,

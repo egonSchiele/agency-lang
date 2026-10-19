@@ -21,6 +21,8 @@ const REQUEST_NAMES_CHARS = 60;
 export type TranscriptPayloadOptions = {
   /** Show interrupts that were approved; hidden by default, as on the trace. */
   showApprovals?: boolean;
+  /** The block is a thread row whose group is folded away. */
+  folded?: boolean;
 };
 
 export function transcriptPayload(
@@ -49,8 +51,13 @@ export function transcriptPayload(
       return turnPayload(block);
     case "thread": {
       const calls = `${block.calls} LLM ${block.calls === 1 ? "call" : "calls"}`;
+      const folded = options.folded ? " ▸ folded · Enter opens" : "";
       return [
-        { kind: "heading", tone: "accent", text: `══ THREAD · ${block.label} · ${calls} ══` },
+        {
+          kind: "heading",
+          tone: "accent",
+          text: `══ THREAD · ${block.label} · ${calls} ══${folded}`,
+        },
       ];
     }
     case "pause":

@@ -97,8 +97,9 @@ function fillRule(
 function pieceWidth(pieces: Piece[]): number {
   return pieces.reduce((total, piece) => total + piece.text.length, 0);
 }
-/** A painted line padded to `width`, every span and the padding on `bg`. */
-function withBackground(line: Painted, width: number, bg: string | undefined): Painted {
+/** A painted line padded to `width`, every span and the padding on `bg`;
+ *  a span that has a background of its own keeps it. */
+export function withBackground(line: Painted, width: number, bg: string | undefined): Painted {
   const pieces: Piece[] = parseStyledText(line).map(({ text, ...style }) => ({
     text,
     style: { ...style, bg: style.bg ?? bg },

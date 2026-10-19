@@ -12,13 +12,12 @@ import {
   labelScreen,
   paneHeightFor,
   renderChecklist,
-  pastedText,
   renderMarkdownSafely,
   runLabelTui,
-  sanitizeUntrusted,
   scrollDelta,
   stripAnsi,
 } from "./labelTui.js";
+import { pastedText, sanitizeUntrusted } from "@/tui/untrusted.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
 
 const TRACE_ID = "trace-1";

@@ -2,9 +2,11 @@ import { stripAnsi, visualWidth, wrapText } from "@/stdlib/layout/ansi.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
 import { column, line, lines, row } from "@/tui/builders.js";
 import { escapeStyleTags } from "@/tui/styleParser.js";
+import { pastedText, sanitizeUntrusted, stripControlCharacters } from "@/tui/untrusted.js";
 import type { Element, Style } from "@/tui/elements.js";
 import type { KeyEvent } from "@/tui/input/types.js";
 import type { Screen } from "@/tui/screen.js";
+import { lineEditAction, type LineEditAction } from "@/tui/lineEditor.js";
 import { followCursor } from "@/tui/scroll.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -19,66 +21,6 @@ const LEFT_PANE_FRACTION = 0.6;
 const CHROME_ROWS = 7;
 
 export { stripAnsi, visualWidth };
-
-/**
- * Neutralize control characters in text this tool did not author.
- *
- * Agent output, task text, question text and notes are all untrusted: a model
- * can emit cursor movement, clear-screen, or OSC 52 clipboard writes, and
- * rendering those raw would let the thing being judged hide or forge the
- * evidence on screen. Only newline and tab survive, because the layout uses
- * them; everything else in C0, C1 and DEL becomes a visible replacement so the
- * reader can see something was there.
- *
- * Style tags are escaped too. The TUI parser reads `{black-fg}` as markup, so
- * plain text alone is enough to restyle or hide the very evidence being
- * judged — control characters are not the only way into a terminal.
- *
- * Styling is applied afterwards, so the tool's own colour is unaffected.
- */
-export function stripControlCharacters(text: string): string {
-  let out = "";
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0;
-    if (character === "\n" || character === "\t") {
-      out += character;
-      continue;
-    }
-    const isC0 = code < 0x20;
-    const isDelete = code === 0x7f;
-    const isC1 = code >= 0x80 && code <= 0x9f;
-    out += isC0 || isDelete || isC1 ? "�" : character;
-  }
-  return out;
-}
-
-export function sanitizeUntrusted(text: string): string {
-  return escapeStyleTags(stripControlCharacters(text));
-}
-
-/**
- * Clipboard text, made safe for a single-line editor.
- *
- * Newlines and tabs are collapsed to spaces because the draft renders on one
- * footer row, and every other control character is dropped rather than
- * replaced — a paste is the user's own text, so a visible replacement marker
- * would be noise rather than evidence.
- */
-export function pastedText(text: string): string {
-  let out = "";
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0;
-    if (character === "\n" || character === "\r" || character === "\t") {
-      out += " ";
-      continue;
-    }
-    const isControl = code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
-    if (!isControl) {
-      out += character;
-    }
-  }
-  return out;
-}
 
 function contentWords(text: string): string[] {
   const withoutUrls = text.replace(/https?:\/\/\S+/g, " ");
@@ -323,23 +265,7 @@ function pane(contentLines: string[], style: Style): Element {
  */
 export function actionForKey(event: KeyEvent, editing: boolean): SessionAction | null {
   if (editing) {
-    if (event.key === "enter") return { kind: "submitEditor" };
-    if (event.key === "escape") return { kind: "cancelEditor" };
-    if (event.key === "backspace") return { kind: "backspaceEditor" };
-    // Bracketed paste arrives as ONE event carrying the whole clipboard, not
-    // as a stream of characters. Dropping it would make paste silently do
-    // nothing, which is worse than the keystroke-at-a-time behaviour it
-    // replaced.
-    if (event.key === "paste") {
-      const pasted = pastedText(event.text ?? "");
-      return pasted.length === 0 ? null : { kind: "appendEditorText", text: pasted };
-    }
-    // A stray Ctrl-F while typing must not land in the text.
-    if (event.ctrl === true) return null;
-    if (event.key.length === 1 && event.key >= " ") {
-      return { kind: "appendEditorText", text: event.key };
-    }
-    return null;
+    return editorActionFor(lineEditAction(event));
   }
   if (event.ctrl === true) {
     return null;
@@ -365,6 +291,21 @@ export function actionForKey(event: KeyEvent, editing: boolean): SessionAction |
       return { kind: "beginNote" };
     default:
       return null;
+  }
+}
+
+/** The session's name for each line edit. */
+function editorActionFor(edit: LineEditAction | null): SessionAction | null {
+  if (edit === null) return null;
+  switch (edit.kind) {
+    case "append":
+      return { kind: "appendEditorText", text: edit.text };
+    case "backspace":
+      return { kind: "backspaceEditor" };
+    case "cancel":
+      return { kind: "cancelEditor" };
+    case "submit":
+      return { kind: "submitEditor" };
   }
 }
 

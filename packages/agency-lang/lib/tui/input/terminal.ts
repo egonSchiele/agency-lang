@@ -228,12 +228,35 @@ export class TerminalInput implements InputSource {
     process.kill(process.pid, "SIGTSTP");
   }
 
+  /** Stop reading the terminal so a child process can. Pausing the stream
+   *  matters: with the listener gone but the stream still flowing, Node keeps
+   *  reading bytes from the terminal and dropping them, and a child editor
+   *  reading the same terminal loses keystrokes. The SIGCONT handler comes
+   *  off too: a child that was stopped and continued must not find stdin
+   *  back in raw mode. Ctrl+Z shares the suspend path, which a paused
+   *  stream does not disturb. */
+  release(): void {
+    this.suspendForSigtstp();
+    if (this.sigcontHandler) {
+      process.removeListener("SIGCONT", this.sigcontHandler);
+    }
+  }
+
+  /** Take the terminal back after `release()`. */
+  reclaim(): void {
+    if (this.sigcontHandler) {
+      process.on("SIGCONT", this.sigcontHandler);
+    }
+    this.resumeFromSuspend();
+  }
+
   private suspendForSigtstp(): void {
     if (this.suspended) return;
     this.suspended = true;
     if (this.dataHandler) {
       process.stdin.removeListener("data", this.dataHandler);
     }
+    process.stdin.pause();
     if (process.stdin.isTTY && process.stdin.isRaw) {
       // Turn off bracketed paste before handing control back to the
       // shell, then turn it on again on resume. Otherwise the parent

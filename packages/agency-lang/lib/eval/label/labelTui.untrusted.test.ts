@@ -5,7 +5,8 @@ import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
-import { labelScreen, renderFields, sanitizeUntrusted } from "./labelTui.js";
+import { sanitizeUntrusted } from "@/tui/untrusted.js";
+import { labelScreen, renderFields } from "./labelTui.js";
 import type { SessionSnapshot } from "./session.js";
 
 const TRACE_ID = "trace-1";

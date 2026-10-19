@@ -159,6 +159,33 @@ agency eval run a.agency --suite 'github.com/you/evals//tests?ref=v1.2'
 
 An agent that reads a project file that was never seeded gets a file-not-found error inside the workdir, and the run's error names what was seeded.
 
+## Creating a test with a form
+
+`agency eval new <suite-dir>` asks for the parts of a test and writes the folder, so you never have to remember the layout or the keys of `test.json`. Point it at a suite directory in the test-directory form, existing or empty:
+
+```bash
+agency eval new bar-evals
+```
+
+```text
+NEW TEST  bar-evals
+
+  id            says-its-name
+  description   The script is told its name and asked for it.
+  input         What's your name?
+  files         a directory to seed into the working directory, relative to the suite
+  goal          The reply says its name is 'the amazing Agency language'. It
+                may add a greeting, but it must not give any other name.
+
+↑↓ move   Enter edit   s save   q quit
+```
+
+Move with the arrow keys and press Enter to type into a field. `input` and `goal` are often several sentences: when `$EDITOR` is set, Enter opens them in your editor and the text comes back when you close it (`code --wait` works, and a quoted path with a space in it does not). Without `$EDITOR` they edit in place on one line. `id` is the folder name and `goal` is required; the rest is optional. An empty `input` means the agent takes none.
+
+`s` writes `bar-evals/says-its-name/test.json`, copies the files directory to `files/` when you named one, and prints the run and grade commands to copy. Nothing else is written. A test with a `goal` and no `graders.ts` is scored by the bundled goal judge, so this is all a plain test needs. Add a `graders.ts` beside the file by hand when you want more.
+
+The form creates tests. It does not open an existing one, and it does not take structured inputs, tags or timeouts; write those by hand.
+
 ## The run directory
 
 Each run writes one directory:

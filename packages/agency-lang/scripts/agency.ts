@@ -69,6 +69,7 @@ import {
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
+import { runEvalNew } from "@/cli/eval/new.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
@@ -1099,6 +1100,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
         failProjectCommand(error);
       }
       for (const line of lines) console.log(line);
+    });
+
+  evalCmd
+    .command("new")
+    .description("Create a test in a suite directory with a form")
+    .argument("<suite-dir>", "A directory of test folders, existing or empty")
+    .action(async (suiteDir: string) => {
+      try {
+        await runEvalNew(suiteDir);
+      } catch (error) {
+        failProjectCommand(error);
+      }
     });
 
   evalCmd

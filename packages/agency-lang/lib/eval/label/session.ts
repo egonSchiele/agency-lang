@@ -1,3 +1,4 @@
+import { applyLineEdit } from "@/tui/lineEditor.js";
 import type {
   ChecklistAnnotation,
   EffectiveChecklistJudgement,
@@ -278,9 +279,11 @@ export function reduceSession(state: SessionState, event: SessionEvent): Session
       return { ...state, editor: { kind: "note", draft } };
     }
     case "appendEditorText":
-      return withEditorDraft(state, (draft) => draft + event.text);
+      return withEditorDraft(state, (draft) =>
+        applyLineEdit(draft, { kind: "append", text: event.text }),
+      );
     case "backspaceEditor":
-      return withEditorDraft(state, (draft) => draft.slice(0, -1));
+      return withEditorDraft(state, (draft) => applyLineEdit(draft, { kind: "backspace" }));
     case "cancelEditor":
       return { ...state, editor: { kind: "none" } };
     case "questionAdded":

@@ -77,7 +77,11 @@ export class TerminalOutput implements OutputTarget {
   // and SIGCONT can be delivered independently of our SIGTSTP path
   // (e.g. from a foreign SIGSTOP), so the resume path must be idempotent.
   private sigtstpInstalled = false;
+  // Whether `init()` has installed the signal handlers, so a release before
+  // the first frame does not add a second set on reclaim.
+  private handlersInstalled = false;
   private exitHandler = () => this.destroy();
+  private ignoreSignal = () => {};
   private sigintHandler = () => {
     this.destroy();
     process.exit(130);
@@ -121,6 +125,7 @@ export class TerminalOutput implements OutputTarget {
     process.on("SIGTSTP", this.sigtstpHandler);
     this.sigtstpInstalled = true;
     process.on("SIGCONT", this.sigcontHandler);
+    this.handlersInstalled = true;
   }
 
   write(frame: Frame, _label?: string): void {
@@ -149,6 +154,38 @@ export class TerminalOutput implements OutputTarget {
     this.removeSignalHandlers();
   }
 
+  /** Hand the terminal to a child process. The screen is suspended, and the
+   *  signals a key in the child would send to this process too are left to
+   *  their defaults until `reclaim()`: Ctrl+Z must stop this process along
+   *  with the child, or the shell never sees the job stop, and SIGCONT must
+   *  not redraw while the child still owns the terminal. Ctrl+C is ignored,
+   *  because the child is the one meant to act on it. */
+  release(): void {
+    this.suspend();
+    if (!this.handlersInstalled) return;
+    process.removeListener("SIGTSTP", this.sigtstpHandler);
+    this.sigtstpInstalled = false;
+    process.removeListener("SIGCONT", this.sigcontHandler);
+    process.removeListener("SIGINT", this.sigintHandler);
+    process.on("SIGINT", this.ignoreSignal);
+  }
+
+  /** Take the terminal back after `release()`. */
+  reclaim(): void {
+    if (this.handlersInstalled) {
+      process.removeListener("SIGINT", this.ignoreSignal);
+      if (this.manageInterruptSignals) {
+        process.on("SIGINT", this.sigintHandler);
+      }
+      process.on("SIGCONT", this.sigcontHandler);
+      if (!this.sigtstpInstalled) {
+        process.on("SIGTSTP", this.sigtstpHandler);
+        this.sigtstpInstalled = true;
+      }
+    }
+    this.resume();
+  }
+
   suspend(): void {
     if (this.inAltScreen) {
       process.stdout.write(SHOW_CURSOR + EXIT_ALT_SCREEN);
@@ -171,6 +208,8 @@ export class TerminalOutput implements OutputTarget {
     process.removeListener("SIGTERM", this.sigtermHandler);
     process.removeListener("SIGTSTP", this.sigtstpHandler);
     process.removeListener("SIGCONT", this.sigcontHandler);
+    process.removeListener("SIGINT", this.ignoreSignal);
     this.sigtstpInstalled = false;
+    this.handlersInstalled = false;
   }
 }

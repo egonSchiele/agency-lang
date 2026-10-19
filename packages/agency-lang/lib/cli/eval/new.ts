@@ -15,7 +15,7 @@ import {
   type FormState,
 } from "@/eval/newTest/form.js";
 import { renderForm } from "@/eval/newTest/formView.js";
-import { nextCommands, validateForm, writeTest } from "@/eval/newTest/write.js";
+import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
 import { formatKey } from "@/tui/input/format.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import type { InputSource, KeyEvent } from "@/tui/input/types.js";
@@ -29,12 +29,19 @@ import { terminalDimension } from "./label.js";
 /** Opens the user's editor on a field's text; null when `$EDITOR` is unset. */
 export type OpenEditor = ((text: string) => string | null) | null;
 
-export type EvalNewOptions = {
-  suiteDir: string;
+/** Where the form draws and reads keys, and how it opens an editor. */
+export type FormTerminal = {
   input: InputSource;
   output: OutputTarget;
   size: { width: number; height: number };
   openEditor: OpenEditor;
+};
+
+export type EvalNewOptions = {
+  suiteDir: string;
+  /** Called once the suite directory has passed its check, so a wrong path
+   *  is reported before the terminal is touched or refused. */
+  openTerminal: () => FormTerminal;
 };
 
 /** Refuse anything the loader would not read as a directory of test folders:
@@ -104,11 +111,16 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
   }
 }
 
-/** The two actions that touch the world, each answered with its outcome. */
+/** The two actions that touch the world, each answered with its outcome.
+ *  A failure becomes the footer message; nothing typed is lost to it. */
 function performIntent(state: FormState, action: FormAction, openEditor: OpenEditor): FormState {
   if (action.kind === "editInEditor" && openEditor !== null) {
-    const text = openEditor(state.values[state.cursor]);
-    return reduceForm(state, { kind: "editorReturned", text });
+    try {
+      const text = openEditor(state.values[state.cursor]);
+      return reduceForm(state, { kind: "editorReturned", text });
+    } catch (error) {
+      return reduceForm(state, { kind: "editorFailed", text: messageOf(error) });
+    }
   }
   if (action.kind === "save") {
     const problems = validateForm(state);
@@ -118,25 +130,31 @@ function performIntent(state: FormState, action: FormAction, openEditor: OpenEdi
     try {
       return reduceForm(state, { kind: "saved", testDir: writeTest(state) });
     } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      return reduceForm(state, { kind: "saveFailed", problems: [{ field: "id", text }] });
+      const field = error instanceof TestWriteError ? error.field : "id";
+      const problems = [{ field, text: messageOf(error) }];
+      return reduceForm(state, { kind: "saveFailed", problems });
     }
   }
   return state;
 }
 
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function evalNew(options: EvalNewOptions): Promise<void> {
   assertSuiteDirectory(options.suiteDir);
-  const screen = new Screen({ input: options.input, output: options.output, ...options.size });
-  const { openEditor } = options;
+  const terminal = options.openTerminal();
+  const { openEditor, size } = terminal;
+  const screen = new Screen({ input: terminal.input, output: terminal.output, ...size });
   try {
     await screen.runLoop<FormState>({
       initialState: initialForm(options.suiteDir),
       render: (state) =>
         renderForm({
           state,
-          width: options.size.width,
-          height: options.size.height,
+          width: size.width,
+          height: size.height,
           hints: formHints(state, openEditor),
           nextCommands: nextCommands(options.suiteDir, state.values.id),
         }),
@@ -157,11 +175,8 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
 const DEFAULT_COLUMNS = 100;
 const DEFAULT_ROWS = 30;
 
-/** The command as the CLI runs it: a real terminal, and `$EDITOR` when set. */
-export async function runEvalNew(suiteDir: string): Promise<void> {
-  // The directory is checked first, so a wrong path is reported even from
-  // a pipe, where the terminal check below would otherwise speak first.
-  assertSuiteDirectory(suiteDir);
+/** The real terminal, and `$EDITOR` when set. */
+function openRealTerminal(): FormTerminal {
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new Error("eval new needs an interactive terminal");
   }
@@ -170,8 +185,7 @@ export async function runEvalNew(suiteDir: string): Promise<void> {
   const editor = editorCommand(process.env);
   const openEditor: OpenEditor =
     editor === null ? null : (text) => openInEditor(text, editor, { input, output });
-  await evalNew({
-    suiteDir,
+  return {
     input,
     output,
     size: {
@@ -179,5 +193,10 @@ export async function runEvalNew(suiteDir: string): Promise<void> {
       height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
     },
     openEditor,
-  });
+  };
+}
+
+/** The command as the CLI runs it. */
+export async function runEvalNew(suiteDir: string): Promise<void> {
+  await evalNew({ suiteDir, openTerminal: openRealTerminal });
 }

@@ -14,7 +14,7 @@ scripts/agency.ts              registers `eval new`
 lib/cli/eval/new.ts            the terminal, one key table per mode, handleKey, runLoop
 lib/eval/newTest/form.ts       FormState, FormAction, reduceForm, FIELDS          (pure)
 lib/eval/newTest/formView.ts   renderForm(state): Element                          (pure)
-lib/eval/newTest/write.ts      validateForm, testJsonFor, writeTest, nextCommands
+lib/eval/newTest/write.ts      validateForm, testJsonFor, writeTest, TestWriteError, nextCommands
 lib/eval/newTest/editor.ts     editorCommand, withTerminalReleased, openInEditor
 lib/tui/lineEditor.ts          one-line editing keys, shared with the label screen
 lib/tui/untrusted.ts           sanitizeUntrusted and pastedText, shared the same way
@@ -54,32 +54,92 @@ from the same table that handles the keys.
 ## The write
 
 `writeTest` builds the folder under `<suite>/.staging-<id>/` and renames it
-into place, so a failure part way leaves nothing. A stale staging folder
-from a crash is removed first with `safeDeleteDirectoryWithin`. The files
-directory is copied through `readTreeRefusingSymlinks` from the
-grader-files snapshot: a symlink anywhere in it is refused, not followed.
-The target is checked again right before the rename, because a rename onto
-an existing empty directory can succeed silently.
+into place. If anything fails before the rename, the staging folder is
+removed, so a failure part way leaves nothing: the loader treats every
+subdirectory holding a `test.json` as a test, and a half-written staging
+folder would otherwise run as one. A stale staging folder from a crash is
+removed first with `safeDeleteDirectoryWithin`, and its refusal (a file at
+that path, or a link that escapes the suite) stops the write rather than
+being built on. The target is checked again right before the rename,
+because a rename onto an existing empty directory can succeed silently.
+
+A problem the user can fix is thrown as a `TestWriteError` that names the
+field, so the footer message lands the cursor on `files` for a bad files
+directory and on `id` for the rest.
+
+The files directory is copied byte for byte with `copyFileSync`, walking
+the tree with `walkTreeRefusingSymlinks` from the grader-files snapshot. A
+fixture can be a PNG or a database, so the copy must not go through a
+string. The directory is copied only when it passes these checks, made in
+`validateForm` and again at write time in case the disk changed:
+
+- It must sit inside the suite by name: `isStrictDescendant` on the
+  resolved path, which lets `..cache` through and refuses `..`, `.` and
+  `/elsewhere`.
+- It must exist as a directory.
+- It must be reached without a symlink: its real path must equal the
+  suite's real path plus the typed name. That one comparison refuses a
+  link as the directory itself, a link anywhere above it, and a link that
+  points back inside the suite, without any code that follows links.
+
+An empty files directory is copied as an empty `files/`, so the test shows
+what it was given.
 
 ## Handing the terminal to `$EDITOR`
 
 `input` and `goal` open in `$EDITOR` when it is set. The hand-off has an
-order, and it lives in one function, `withTerminalReleased`: suspend the
-output (leave the alternate screen, drop the cached grid, so the next
-render is a full redraw), release the input, run the editor, reclaim the
-input, resume the output, with the last two in a `finally`.
+order, and it lives in one function, `withTerminalReleased`: release the
+output, release the input, run the editor, reclaim the input, reclaim the
+output, with the last two in a `finally`. Both terminal classes have a
+`release()` and a `reclaim()`.
 
-`TerminalInput.release()` does one thing the Ctrl+Z path did not: after removing its
-`data` listener it calls `process.stdin.pause()`. Without the pause the
-stream stays flowing with no listener, Node keeps reading the terminal and
-dropping the bytes, and a child editor reading the same terminal loses
-keystrokes at random. Ctrl+Z goes through the same function and is
-unharmed by a paused stream. The headless tests cannot see this; typing
-fast into vim from the form is the test.
+`TerminalOutput.release()` leaves the alternate screen and drops the cached
+grid, so the next render is a full redraw. It then takes its `SIGTSTP` and
+`SIGCONT` handlers off, and replaces its `SIGINT` handler with one that
+does nothing, until `reclaim()`. The keys a user presses inside the editor
+reach this process too, because both share the terminal's process group:
+
+- Ctrl+Z in the editor sends `SIGTSTP` to the group. With the handler
+  installed this process would not stop, and the handler could not run
+  either while `spawnSync` blocks, so the editor stops, this process waits,
+  and the shell never shows a prompt. With the handler off, both stop and
+  `fg` continues both.
+- `SIGCONT` after that `fg` must not redraw the form or put stdin back in
+  raw mode while the editor still owns the terminal, so both classes take
+  their `SIGCONT` handler off.
+- Ctrl+C in the editor sends `SIGINT` to the group. With no handler at all
+  this process would die; with its usual handler it would tear the form
+  down once the editor exits. Ignoring it leaves the editor to act on it.
+
+`TerminalInput.release()` removes its `data` listener and calls
+`process.stdin.pause()`. Without the pause the stream stays flowing with no
+listener, Node keeps reading the terminal and dropping the bytes, and a
+child editor reading the same terminal loses keystrokes at random. The
+headless tests cannot see this; typing fast into vim from the form is the
+test.
+
+The text comes back from a temp folder under `.agency-tmp/`, which is
+removed whole with `safeDeleteDirectory`, so a backup or swap file the
+editor left does not stop the saved text reaching the form. The final
+newline an editor ends a file with is dropped, so the value matches what
+typing it in place gives. An editor that cannot start (`$EDITOR` names a
+missing program) becomes the footer message; the form and everything
+typed stay.
 
 `$EDITOR` is split on spaces, so `code --wait` works. A quoted path with a
 space in it is not supported. When the variable is unset, the long fields
 edit in place on one line like the others.
+
+## What is drawn
+
+Every string that came from outside the form goes through
+`sanitizeUntrusted` before it is drawn: field values, the suite path from
+the command line, the footer message (which quotes paths), and the test
+path and commands on the "wrote" screen. A path can carry an escape
+sequence or a `{red-fg}` style tag as easily as a value can. The one
+exception is the draft of the field being typed into, drawn as a
+`textInput`: that element reads no style tags, so the draft only has its
+control characters removed, or a typed `{` would show as `\{`.
 
 ## Testing
 
@@ -88,3 +148,7 @@ edit in place on one line like the others.
 pins the rows. `new.test.ts` drives the whole command with a
 `ScriptedInput`, feeding each key once the frame shows the state a person
 would react to, the way `lib/runsExplorer/run.test.ts` drives the explorer.
+`evalNew` takes the terminal as a factory, `openTerminal`, so the tests
+hand it a scripted one and the suite-directory check runs before any
+terminal is opened. The signal handling in the hand-off needs a real
+terminal and a real editor, and has no test.

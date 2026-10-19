@@ -1,11 +1,13 @@
 // Draws the `agency eval new` form from its state: one row per field, the
 // cursor row marked, the field being edited drawn as a text input, and a
 // footer that is the key hints or the current message. The discard question
-// and the "wrote" screen are the same state in other modes.
+// and the "wrote" screen are the same state in other modes. Every string
+// that came from outside, the suite path included, is sanitized before it
+// is drawn.
 import { wrapText } from "@/stdlib/layout/ansi.js";
 import { column, line, lines, row, textInput } from "@/tui/builders.js";
 import type { Element, Style } from "@/tui/elements.js";
-import { sanitizeUntrusted } from "@/tui/untrusted.js";
+import { sanitizeUntrusted, stripControlCharacters } from "@/tui/untrusted.js";
 
 import { FIELDS, type FieldSpec, type FormState } from "./form.js";
 
@@ -36,7 +38,7 @@ export function renderForm(args: FormViewArgs): Element {
     { justifyContent: "space-between" },
     column(
       { justifyContent: "flex-start" },
-      line(`NEW TEST  ${state.suiteDir}`, { bold: true }),
+      line(`NEW TEST  ${sanitizeUntrusted(state.suiteDir)}`, { bold: true }),
       line(""),
       ...FIELDS.flatMap((field) => fieldRows(field, state, args.width)),
     ),
@@ -49,13 +51,15 @@ function footerText(args: FormViewArgs): string {
   if (state.mode.kind === "confirmQuit") {
     return CONFIRM_FOOTER;
   }
-  return state.message === "" ? args.hints : state.message;
+  return state.message === "" ? args.hints : sanitizeUntrusted(state.message);
 }
 
 /** A field's label and value. A value that does not fit on one line
  *  continues on the lines below, under the value column. The field being
  *  edited shows its draft as a text input, so the cursor looks like every
- *  other input in the toolkit. */
+ *  other input in the toolkit. A text input draws its value as is, with no
+ *  style tags read, so the draft only has its control characters removed;
+ *  escaping braces there would show the backslashes. */
 function fieldRows(field: FieldSpec, state: FormState, width: number): Element[] {
   const selected = state.cursor === field.name;
   const label = `${" ".repeat(INDENT)}${field.label.padEnd(LABEL_WIDTH)}`;
@@ -65,7 +69,7 @@ function fieldRows(field: FieldSpec, state: FormState, width: number): Element[]
       row(
         { height: 1 },
         line(label, { width: label.length, bg: CURSOR_BG }),
-        textInput({ bg: CURSOR_BG }, sanitizeUntrusted(state.editor.draft)),
+        textInput({ bg: CURSOR_BG }, stripControlCharacters(state.editor.draft)),
       ),
     ];
   }
@@ -90,13 +94,15 @@ function valueStyle(empty: boolean, selected: boolean): Style {
  *  so a long suite path never hides the flags after it. */
 function wroteScreen(testDir: string, nextCommands: string[], width: number): Element {
   const commands = nextCommands.flatMap((text) =>
-    wrapText(text, Math.max(1, width - 2 * INDENT)).map(
+    wrapText(sanitizeUntrusted(text), Math.max(1, width - 2 * INDENT)).map(
       (part, index) => `${" ".repeat(index === 0 ? INDENT : 2 * INDENT)}${part}`,
     ),
   );
   return column(
     { justifyContent: "space-between" },
-    lines([`wrote ${testDir}`, "", "run it with:", ...commands], { justifyContent: "flex-start" }),
+    lines([`wrote ${sanitizeUntrusted(testDir)}`, "", "run it with:", ...commands], {
+      justifyContent: "flex-start",
+    }),
     line(WROTE_FOOTER, { dim: true }),
   );
 }

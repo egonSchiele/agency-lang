@@ -6,14 +6,15 @@ import { spawnSync } from "node:child_process";
 import * as fs from "fs";
 import * as path from "path";
 
-import { safeDeleteFile } from "@/utils.js";
+import { safeDeleteDirectory } from "@/utils.js";
 import { makeAgencyTempDir } from "@/utils/agencyTempDir.js";
 
+/** One half of the terminal: it can be handed to a child process and taken
+ *  back. Both `TerminalInput` and `TerminalOutput` are one. */
+export type Releasable = { release: () => void; reclaim: () => void };
+
 /** The two halves of the terminal the form owns. */
-export type ReleasableTerminal = {
-  input: { release: () => void; reclaim: () => void };
-  output: { suspend: () => void; resume: () => void };
-};
+export type ReleasableTerminal = { input: Releasable; output: Releasable };
 
 export type EditorCommand = { command: string; args: string[] };
 
@@ -27,23 +28,24 @@ export function editorCommand(env: Record<string, string | undefined>): EditorCo
   return { command: parts[0], args: parts.slice(1) };
 }
 
-/** Run `fn` with the terminal handed back to the shell, then take it back.
- *  The output leaves the alternate screen and drops its cached grid, so the
- *  next render is a full redraw; the input stops reading stdin, so the
- *  child is the only reader of the terminal while it runs. */
+/** Run `fn` with the terminal handed to a child process, then take it back.
+ *  The output leaves the alternate screen and stops answering the signals
+ *  the child's keys send; the input stops reading stdin, so the child is the
+ *  only reader of the terminal while it runs. */
 export function withTerminalReleased<T>(terminal: ReleasableTerminal, fn: () => T): T {
-  terminal.output.suspend();
+  terminal.output.release();
   terminal.input.release();
   try {
     return fn();
   } finally {
     terminal.input.reclaim();
-    terminal.output.resume();
+    terminal.output.reclaim();
   }
 }
 
 /** Open `text` in the editor and return what was saved, or null when the
- *  editor exited with a non-zero status. */
+ *  editor exited with a non-zero status. Editors end a file with a newline;
+ *  that one is dropped, so the value matches what typing it in place gives. */
 export function openInEditor(
   text: string,
   editor: EditorCommand,
@@ -63,9 +65,15 @@ export function openInEditor(
     if (result.status !== 0) {
       return null;
     }
-    return fs.readFileSync(file, "utf8");
+    return withoutFinalNewline(fs.readFileSync(file, "utf8"));
   } finally {
-    safeDeleteFile(file, false);
-    fs.rmdirSync(dir);
+    // The whole folder goes, with any backup or swap file the editor left.
+    safeDeleteDirectory(dir, false);
   }
+}
+
+function withoutFinalNewline(text: string): string {
+  if (text.endsWith("\r\n")) return text.slice(0, -2);
+  if (text.endsWith("\n")) return text.slice(0, -1);
+  return text;
 }

@@ -95,6 +95,12 @@ describe("reduceForm", () => {
     expect(run([{ kind: "beginEdit" }], kept).message).toBe("");
   });
 
+  it("an editor that could not run leaves the value and says why", () => {
+    const state = run([...typed("x"), { kind: "editorFailed", text: "spawn vim ENOENT" }]);
+    expect(state.values.id).toBe("x");
+    expect(state.message).toBe("could not run the editor: spawn vim ENOENT");
+  });
+
   it("saved shows the wrote screen and any key dismisses it", () => {
     const wrote = run([{ kind: "saved", testDir: "suite/says-its-name" }]);
     expect(wrote.mode).toEqual({ kind: "wrote", testDir: "suite/says-its-name" });

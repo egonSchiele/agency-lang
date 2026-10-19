@@ -17,10 +17,8 @@ export function lineEditAction(event: KeyEvent): LineEditAction | null {
   if (event.key === "enter") return { kind: "submit" };
   if (event.key === "escape") return { kind: "cancel" };
   if (event.key === "backspace") return { kind: "backspace" };
-  // Bracketed paste arrives as ONE event carrying the whole clipboard, not
-  // as a stream of characters. Dropping it would make paste silently do
-  // nothing, which is worse than the keystroke-at-a-time behaviour it
-  // replaced.
+  // Bracketed paste arrives as one event carrying the whole clipboard, not
+  // as a stream of characters.
   if (event.key === "paste") {
     const pasted = pastedText(event.text ?? "");
     return pasted.length === 0 ? null : { kind: "append", text: pasted };
@@ -34,13 +32,15 @@ export function lineEditAction(event: KeyEvent): LineEditAction | null {
 }
 
 /** The draft after an edit. Cancel and submit leave the draft alone: what
- *  they mean belongs to the caller. */
+ *  they mean belongs to the caller. Backspace removes a whole code point:
+ *  an emoji arrives as two UTF-16 halves, and leaving one behind would put
+ *  a broken character in the draft. */
 export function applyLineEdit(draft: string, action: LineEditAction): string {
   switch (action.kind) {
     case "append":
       return draft + action.text;
     case "backspace":
-      return draft.slice(0, -1);
+      return [...draft].slice(0, -1).join("");
     case "cancel":
     case "submit":
       return draft;

@@ -51,7 +51,10 @@ describe("evalNew", () => {
   let recorder: FrameRecorder;
 
   function options(openEditor: OpenEditor = null): EvalNewOptions {
-    return { suiteDir: suite, input, output: recorder, size: SIZE, openEditor };
+    return {
+      suiteDir: suite,
+      openTerminal: () => ({ input, output: recorder, size: SIZE, openEditor }),
+    };
   }
 
   beforeEach(() => {
@@ -140,6 +143,46 @@ describe("evalNew", () => {
     expect(opened).toEqual([""]);
   });
 
+  it("a failed save on the files field moves the cursor there", async () => {
+    fs.mkdirSync(path.join(suite, "fixtures"));
+    fs.symlinkSync(path.join(suite, "fixtures"), path.join(suite, "fixtures", "loop"));
+    const shown = (text: string) => (frame: string) => frame.includes(text);
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: "enter" },
+      ...typing("t"),
+      { when: shown("t█"), key: "enter" },
+      { when: (frame) => !frame.includes("█"), key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "enter" },
+      ...typing("fixtures"),
+      { when: shown("fixtures█"), key: "enter" },
+      { when: (frame) => !frame.includes("█"), key: "down" },
+      { when: () => true, key: "enter" },
+      ...typing("g"),
+      { when: shown("g█"), key: "enter" },
+      { when: (frame) => !frame.includes("█"), key: "s" },
+      // Enter now edits the files field, which shows the cursor moved there.
+      { when: shown("files must not contain symlinks"), key: "enter" },
+      { when: shown("fixtures█"), key: "escape" },
+      { when: (frame) => !frame.includes("█"), key: "q" },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
+  });
+
+  it("an editor that cannot run keeps the form and shows why", async () => {
+    const editor: OpenEditor = () => {
+      throw new Error("spawn vim ENOENT");
+    };
+    await drive(options(editor), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "enter" },
+      { when: (frame) => frame.includes("could not run the editor: spawn vim ENOENT"), key: "q" },
+    ]);
+  });
+
   it("an editor that exits without saving leaves the field and says so", async () => {
     await drive(
       options(() => null),
@@ -171,6 +214,19 @@ describe("assertSuiteDirectory", () => {
     fs.mkdirSync(path.join(dir, "a"));
     fs.writeFileSync(path.join(dir, "a", "test.json"), "{}");
     expect(() => assertSuiteDirectory(dir)).not.toThrow();
+  });
+
+  it("evalNew checks the directory before opening the terminal", async () => {
+    let opened = false;
+    const bad = {
+      suiteDir: path.join(dir, "missing"),
+      openTerminal: () => {
+        opened = true;
+        throw new Error("terminal opened");
+      },
+    };
+    await expect(evalNew(bad)).rejects.toThrow(/not a directory/);
+    expect(opened).toBe(false);
   });
 
   it("refuses a file, a single test folder, and the JSON file form", () => {

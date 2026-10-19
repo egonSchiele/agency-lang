@@ -6,9 +6,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadInputs } from "@/eval/loadInputs.js";
 
 import { initialForm, type FormState } from "./form.js";
-import { nextCommands, testJsonFor, validateForm, writeTest, type FileChecks } from "./write.js";
+import {
+  nextCommands,
+  testJsonFor,
+  TestWriteError,
+  validateForm,
+  writeTest,
+  type FileChecks,
+} from "./write.js";
 
-const NOTHING_ON_DISK: FileChecks = { exists: () => false, isDirectory: () => false };
+const NOTHING_ON_DISK: FileChecks = {
+  exists: () => false,
+  isDirectory: () => false,
+  realPath: (file) => file,
+};
 
 function form(suiteDir: string, values: Partial<FormState["values"]>): FormState {
   const base = initialForm(suiteDir);
@@ -31,24 +42,39 @@ describe("validateForm", () => {
   });
 
   it("refuses a test folder that already exists", () => {
-    const checks: FileChecks = { exists: () => true, isDirectory: () => false };
+    const checks: FileChecks = { ...NOTHING_ON_DISK, exists: () => true };
     const problems = validateForm(form("suite", { id: "dup", goal: "g" }), checks);
     expect(problems[0].text).toContain("already exists");
   });
 
   it("refuses a files directory outside the suite or that is not a directory", () => {
-    const outside = validateForm(form("suite", { id: "t", goal: "g", files: "../elsewhere" }), {
-      exists: () => false,
-      isDirectory: () => true,
-    });
-    expect(outside).toEqual([
-      { field: "files", text: "files must be a directory inside the suite" },
-    ]);
+    const anyDirectory: FileChecks = { ...NOTHING_ON_DISK, isDirectory: () => true };
+    for (const files of ["../elsewhere", ".", "/tmp", "a/../.."]) {
+      expect(validateForm(form("suite", { id: "t", goal: "g", files }), anyDirectory)).toEqual([
+        { field: "files", text: "files must be a directory inside the suite" },
+      ]);
+    }
+    // A name that merely starts with two dots is inside the suite.
+    expect(
+      validateForm(form("suite", { id: "t", goal: "g", files: "..cache" }), anyDirectory),
+    ).toEqual([]);
     const missing = validateForm(
       form("suite", { id: "t", goal: "g", files: "fixtures" }),
       NOTHING_ON_DISK,
     );
     expect(missing[0].text).toContain("is not a directory");
+  });
+
+  it("refuses a files directory reached through a symlink", () => {
+    const linked: FileChecks = {
+      ...NOTHING_ON_DISK,
+      isDirectory: () => true,
+      realPath: (file) => (file.endsWith("link") ? "/elsewhere/real" : file),
+    };
+    const problems = validateForm(form("/suite", { id: "t", goal: "g", files: "link" }), linked);
+    expect(problems).toEqual([
+      { field: "files", text: "files must not be reached through a symlink: /suite/link" },
+    ]);
   });
 
   it("passes a complete form", () => {
@@ -118,15 +144,56 @@ describe("writeTest", () => {
     expect(fs.realpathSync(test.files ?? "")).toBe(fs.realpathSync(path.join(dir, "files")));
   });
 
-  it("refuses a symlink inside files and writes nothing", () => {
+  it("copies a binary file byte for byte", () => {
+    const fixtures = path.join(suite, "fixtures");
+    fs.mkdirSync(fixtures);
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x80]);
+    fs.writeFileSync(path.join(fixtures, "logo.png"), bytes);
+    const dir = writeTest(form(suite, { id: "binary", goal: "g", files: "fixtures" }));
+    expect(fs.readFileSync(path.join(dir, "files", "logo.png"))).toEqual(bytes);
+  });
+
+  it("keeps an empty files directory as an empty files folder", () => {
+    fs.mkdirSync(path.join(suite, "fixtures"));
+    const dir = writeTest(form(suite, { id: "empty", goal: "g", files: "fixtures" }));
+    expect(fs.readdirSync(path.join(dir, "files"))).toEqual([]);
+  });
+
+  it("refuses a symlink inside files, names the field, and leaves no staging folder", () => {
     const fixtures = path.join(suite, "fixtures");
     fs.mkdirSync(fixtures);
     fs.writeFileSync(path.join(fixtures, "real.txt"), "R");
     fs.symlinkSync(path.join(fixtures, "real.txt"), path.join(fixtures, "link.txt"));
-    expect(() => writeTest(form(suite, { id: "linked", goal: "g", files: "fixtures" }))).toThrow(
-      /files must not contain symlinks/,
+    let thrown: unknown;
+    try {
+      writeTest(form(suite, { id: "linked", goal: "g", files: "fixtures" }));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(TestWriteError);
+    expect((thrown as TestWriteError).field).toBe("files");
+    expect((thrown as TestWriteError).message).toMatch(/files must not contain symlinks/);
+    expect(fs.readdirSync(suite)).toEqual(["fixtures"]);
+  });
+
+  it("refuses a files directory that is itself a symlink, even to a place inside the suite", () => {
+    const real = path.join(suite, "real");
+    fs.mkdirSync(real);
+    fs.writeFileSync(path.join(real, "a.txt"), "A");
+    fs.symlinkSync(real, path.join(suite, "link"));
+    expect(() => writeTest(form(suite, { id: "t", goal: "g", files: "link" }))).toThrow(
+      /files must not be reached through a symlink/,
     );
-    expect(fs.existsSync(path.join(suite, "linked"))).toBe(false);
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "eval-new-outside-"));
+    try {
+      fs.symlinkSync(outside, path.join(suite, "away"));
+      expect(() => writeTest(form(suite, { id: "t", goal: "g", files: "away/." }))).toThrow(
+        /files must not be reached through a symlink/,
+      );
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+    expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
   });
 
   it("replaces a stale staging folder and refuses an existing target", () => {
@@ -136,6 +203,21 @@ describe("writeTest", () => {
     expect(fs.existsSync(path.join(dir, "junk"))).toBe(false);
     expect(() => writeTest(form(suite, { id: "t", goal: "g" }))).toThrow(/already exists/);
     expect(fs.existsSync(path.join(suite, ".staging-t"))).toBe(false);
+  });
+
+  it("stops when the stale staging path cannot be removed, instead of writing through it", () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "eval-new-outside-"));
+    try {
+      fs.symlinkSync(outside, path.join(suite, ".staging-t"));
+      expect(() => writeTest(form(suite, { id: "t", goal: "g" }))).toThrow(/not strictly inside/);
+      expect(fs.readdirSync(outside)).toEqual([]);
+      expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+    fs.rmSync(path.join(suite, ".staging-t"));
+    fs.writeFileSync(path.join(suite, ".staging-t"), "a file");
+    expect(() => writeTest(form(suite, { id: "t", goal: "g" }))).toThrow(/Not a directory/);
   });
 });
 

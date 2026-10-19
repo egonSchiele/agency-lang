@@ -94,8 +94,22 @@ describe("renderForm", () => {
     expect(narrow[start + 1]).toMatch(/^ {4}\S/);
   });
 
-  it("neutralizes control characters in a value", () => {
+  it("neutralizes control characters and style tags in a value, the suite path, and the message", () => {
     const hostile = { ...filled(), values: { ...filled().values, input: "safe\x1b[2Jhidden" } };
     expect(frame(hostile)).not.toContain("\x1b[2J");
+    const styled = { ...initialForm("evals\x1b[2J{red-fg}"), message: "bad {bold}path\x07" };
+    const text = frame(styled);
+    expect(text).not.toContain("\x1b[2J");
+    expect(text).not.toContain("\x07");
+    expect(text).toContain("{red-fg}");
+    expect(text).toContain("bad {bold}path");
+    const wrote = reduceForm(filled(), { kind: "saved", testDir: "evals\x1b[2J/t" });
+    expect(frame(wrote)).not.toContain("\x1b[2J");
+  });
+
+  it("shows a brace typed into a field as it is", () => {
+    const state = reduceForm(filled(), { kind: "beginEdit" });
+    const braced = { ...state, editor: { ...state.editor, draft: "a {b}" } } as FormState;
+    expect(frame(braced)).toContain("a {b}█");
   });
 });

@@ -14,7 +14,10 @@ const EDITOR = { command: "fake-editor", args: ["--wait"] };
 function recordingTerminal(calls: string[]): ReleasableTerminal {
   return {
     input: { release: () => calls.push("release"), reclaim: () => calls.push("reclaim") },
-    output: { suspend: () => calls.push("suspend"), resume: () => calls.push("resume") },
+    output: {
+      release: () => calls.push("output.release"),
+      reclaim: () => calls.push("output.reclaim"),
+    },
   };
 }
 
@@ -46,7 +49,7 @@ describe("withTerminalReleased", () => {
     const calls: string[] = [];
     const terminal = recordingTerminal(calls);
     expect(withTerminalReleased(terminal, () => "done")).toBe("done");
-    expect(calls).toEqual(["suspend", "release", "reclaim", "resume"]);
+    expect(calls).toEqual(["output.release", "release", "reclaim", "output.reclaim"]);
 
     calls.length = 0;
     expect(() =>
@@ -54,7 +57,7 @@ describe("withTerminalReleased", () => {
         throw new Error("editor missing");
       }),
     ).toThrow("editor missing");
-    expect(calls).toEqual(["suspend", "release", "reclaim", "resume"]);
+    expect(calls).toEqual(["output.release", "release", "reclaim", "output.reclaim"]);
   });
 });
 
@@ -68,14 +71,46 @@ describe("openInEditor", () => {
       appendingEditor(calls),
     );
     expect(text).toBe("first line\nadded by the editor");
-    expect(calls).toEqual(["suspend", "release", "spawn fake-editor --wait", "reclaim", "resume"]);
+    expect(calls).toEqual([
+      "output.release",
+      "release",
+      "spawn fake-editor --wait",
+      "reclaim",
+      "output.reclaim",
+    ]);
   });
 
   it("returns null when the editor exits non-zero", () => {
     const calls: string[] = [];
     const text = openInEditor("kept", EDITOR, recordingTerminal(calls), appendingEditor(calls, 1));
     expect(text).toBeNull();
-    expect(calls.at(-1)).toBe("resume");
+    expect(calls.at(-1)).toBe("output.reclaim");
+  });
+
+  it("drops the newline an editor ends the file with, and only that one", () => {
+    const saving = (text: string): FakeSpawn =>
+      ((_command: string, args: string[]) => {
+        fs.writeFileSync(args[args.length - 1], text);
+        return { status: 0, error: undefined };
+      }) as unknown as FakeSpawn;
+    const terminal = recordingTerminal([]);
+    expect(openInEditor("", EDITOR, terminal, saving("one line\n"))).toBe("one line");
+    expect(openInEditor("", EDITOR, terminal, saving("two\nlines\n\n"))).toBe("two\nlines\n");
+    expect(openInEditor("", EDITOR, terminal, saving("windows\r\n"))).toBe("windows");
+    expect(openInEditor("", EDITOR, terminal, saving("no newline"))).toBe("no newline");
+  });
+
+  it("returns the text even when the editor left a backup file beside it", () => {
+    const leaving: FakeSpawn = ((_command: string, args: string[]) => {
+      const file = args[args.length - 1];
+      fs.writeFileSync(`${file}~`, "backup");
+      fs.writeFileSync(file, "saved");
+      return { status: 0, error: undefined };
+    }) as unknown as FakeSpawn;
+    expect(openInEditor("", EDITOR, recordingTerminal([]), leaving)).toBe("saved");
+    expect(fs.readdirSync(".agency-tmp").filter((name) => name.startsWith("eval-new-"))).toEqual(
+      [],
+    );
   });
 
   it("throws when the editor cannot be started", () => {

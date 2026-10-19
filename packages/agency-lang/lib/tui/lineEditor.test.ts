@@ -28,6 +28,8 @@ describe("applyLineEdit", () => {
   it("changes the draft only for append and backspace", () => {
     expect(applyLineEdit("ab", { kind: "append", text: "c" })).toBe("abc");
     expect(applyLineEdit("ab", { kind: "backspace" })).toBe("a");
+    // An emoji is two UTF-16 units; backspace takes the whole character.
+    expect(applyLineEdit("a\u{1F600}", { kind: "backspace" })).toBe("a");
     expect(applyLineEdit("ab", { kind: "cancel" })).toBe("ab");
     expect(applyLineEdit("ab", { kind: "submit" })).toBe("ab");
   });

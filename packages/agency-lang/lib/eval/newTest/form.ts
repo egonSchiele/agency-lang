@@ -70,7 +70,7 @@ export type FormState = {
   cursor: FieldName;
   editor: FieldEditor;
   mode: FormMode;
-  /** The footer message: the first problem, or what the editor did. */
+  /** The footer message: the first problem, or what happened to the editor. */
   message: string;
   done: boolean;
 };
@@ -86,6 +86,7 @@ export type FormAction =
   /** An intent: the command opens the editor and reports `editorReturned`. */
   | { kind: "editInEditor" }
   | { kind: "editorReturned"; text: string | null }
+  | { kind: "editorFailed"; text: string }
   | { kind: "requestQuit" }
   | { kind: "confirmQuit" }
   | { kind: "cancelQuit" }
@@ -160,6 +161,8 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return action.text === null
         ? { ...state, message: EDITOR_EXITED_MESSAGE }
         : withValue(state, state.cursor, action.text);
+    case "editorFailed":
+      return { ...state, message: `could not run the editor: ${action.text}` };
     case "requestQuit":
       return isDirty(state)
         ? { ...state, mode: { kind: "confirmQuit" } }

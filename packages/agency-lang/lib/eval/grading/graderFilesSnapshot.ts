@@ -32,15 +32,27 @@ export function snapshotGraderFiles(dir: string): GraderFilesSnapshot {
 
 export type TreeEntry = { rel: string; content: string };
 
+/** A file under the walked directory: its path relative to that directory
+ *  with `/` separators, and its absolute path. */
+export type TreeFile = { rel: string; full: string };
+
+/** Files under `dir`, sorted by relative path, read as text. */
+export function readTreeRefusingSymlinks(dir: string, what: string): TreeEntry[] {
+  return walkTreeRefusingSymlinks(dir, what).map((file) => ({
+    rel: file.rel,
+    content: fs.readFileSync(file.full, "utf8"),
+  }));
+}
+
 /** Files under `dir`, sorted by relative path with `/` separators. Symlinks
  *  are refused: a stored copy must not depend on what a link pointed at.
  *  `what` names the directory in the refusal ("graderFiles", "files"). */
-export function readTreeRefusingSymlinks(dir: string, what: string): TreeEntry[] {
-  return readTree(dir, "", what);
+export function walkTreeRefusingSymlinks(dir: string, what: string): TreeFile[] {
+  return walkTree(dir, "", what);
 }
 
-function readTree(dir: string, prefix: string, what: string): TreeEntry[] {
-  const out: TreeEntry[] = [];
+function walkTree(dir: string, prefix: string, what: string): TreeFile[] {
+  const out: TreeFile[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort(byName)) {
     const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     const full = path.join(dir, entry.name);
@@ -48,9 +60,9 @@ function readTree(dir: string, prefix: string, what: string): TreeEntry[] {
       throw new Error(`${what} must not contain symlinks: ${full}`);
     }
     if (entry.isDirectory()) {
-      out.push(...readTree(full, rel, what));
+      out.push(...walkTree(full, rel, what));
     } else if (entry.isFile()) {
-      out.push({ rel, content: fs.readFileSync(full, "utf8") });
+      out.push({ rel, full });
     }
   }
   return out;

@@ -126,11 +126,11 @@ type ThreadView = {
 function loopThreadCopy(frame: StateJSON): MessageThreadJSON | null {
   if (frame.scopeName !== "runPrompt") return null;
   const copy = frame.locals?.messagesJSON;
-  const messagesOf = (list: unknown[]) =>
-    list.filter((m): m is MessageJSON => typeof m === "object" && m !== null);
-  if (Array.isArray(copy)) return { messages: messagesOf(copy) };
-  if (copy && Array.isArray(copy.messages)) return { ...copy, messages: messagesOf(copy.messages) };
-  return null;
+  if (!copy || !Array.isArray(copy.messages)) return null;
+  const messages = copy.messages.filter(
+    (m: unknown): m is MessageJSON => typeof m === "object" && m !== null,
+  );
+  return { ...copy, messages };
 }
 
 export class Checkpoint implements SourceLocation {
@@ -257,6 +257,9 @@ export class Checkpoint implements SourceLocation {
     let frame = this.rootFrame();
     let activeStack: string[] | undefined;
     for (const key of branchPath) {
+      // A tool call runs on a fresh store that is not serialized, so an
+      // arm below it names threads the checkpoint does not hold.
+      if (key.startsWith("tool_")) return undefined;
       const branch = frame?.branches?.[key];
       if (branch?.activeStack) activeStack = branch.activeStack;
       frame = branch?.stack.stack.at(-1);
@@ -271,8 +274,7 @@ export class Checkpoint implements SourceLocation {
    *  frame carries `messagesJSON`, the thread it is working on, refreshed
    *  on every checkpoint. When its `id` matches a store thread it is the
    *  copy shown, since a resume continues from it, whatever the lengths.
-   *  An older checkpoint holds a bare message list with no id, so there
-   *  the longer copy is shown. A loop inside a tool runs on a fresh store
+   *  A loop inside a tool runs on a fresh store
    *  that is not serialized, so its copy is the only record of the
    *  thread: it is listed under its own id, named after the function that
    *  called `llm()`, with no parent, since its `parentId` names a thread
@@ -296,13 +298,7 @@ export class Checkpoint implements SourceLocation {
         stored.newer = copy.messages;
         return;
       }
-      if (copy.id === undefined) {
-        const active = views.find((view) => view.active);
-        if (active && copy.messages.length > active.thread.messages.length) {
-          active.newer = copy.messages;
-        }
-        return;
-      }
+      if (copy.id === undefined) return;
       for (const view of views) view.active = false;
       views.push({
         key: copy.id,

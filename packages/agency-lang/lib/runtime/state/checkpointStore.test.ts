@@ -387,33 +387,6 @@ describe("Checkpoint", () => {
       expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Summary"]);
     });
 
-    it("an older checkpoint's bare message list is shown when it is the longer one", () => {
-      const cp = new Checkpoint({
-        id: 0,
-        stack: makeStackJSON([
-          {
-            threads: {
-              threads: { "0": { messages: [{ role: "user", content: "Hello" }] } },
-              counter: 1,
-              activeStack: ["0"],
-            },
-          },
-          {
-            scopeName: "runPrompt",
-            locals: {
-              messagesJSON: [
-                { role: "user", content: "Hello" },
-                { role: "assistant", content: "Hi" },
-              ],
-            },
-          },
-        ]),
-        globals: makeGlobalsJSON(),
-        nodeId: "n1",
-      });
-      expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Hello", "Hi"]);
-    });
-
     it("a local named messagesJSON in user code is not a thread", () => {
       const cp = new Checkpoint({
         id: 0,

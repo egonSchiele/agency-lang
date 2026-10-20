@@ -424,6 +424,13 @@ export class DebuggerUI implements DebuggerIO {
     return frame;
   }
 
+  /** Show thread `id`. Picking the active thread means following it,
+   *  so the pane moves with the program again. */
+  private showThread(id: string): void {
+    const active = this.state.listThreads().find((thread) => thread.active)?.id;
+    this.threadDisplayId = id === active ? undefined : id;
+  }
+
   // --- DebuggerIO implementation ---
 
   async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
@@ -546,7 +553,7 @@ export class DebuggerUI implements DebuggerIO {
         if (threads.length === 0) return null;
         const shown = this.state.getThreadMessages(this.threadDisplayId)?.threadId;
         const picked = await showThreadPicker(this.overlayContext(), threads, shown);
-        if (picked !== null) this.threadDisplayId = picked;
+        if (picked !== null) this.showThread(picked);
         this.renderUI();
         return null;
       }
@@ -558,7 +565,7 @@ export class DebuggerUI implements DebuggerIO {
         if (threads.length === 0 || !shown) return null;
         const next =
           (shown.threadIndex + (keyEvent.key === "]" ? 1 : -1) + threads.length) % threads.length;
-        this.threadDisplayId = threads[next].id;
+        this.showThread(threads[next].id);
         this.renderUI();
         return null;
       }

@@ -43,10 +43,9 @@ export type EvalNewOptions = {
   /** Called once the suite directory has passed its check, so a wrong path
    *  is reported before the terminal is touched or refused. */
   openTerminal: () => FormTerminal;
-  /** Prints a line once the screen is gone. The "wrote" screen is dismissed
-   *  by any key, and a second Enter from key repeat can dismiss it before
-   *  it is read, so what it showed is printed again here and stays in the
-   *  terminal's scrollback. */
+  /** Prints a line once the screen is gone: the folder written and the
+   *  commands to run next. They stay in the terminal's scrollback, which a
+   *  screen that any key dismisses could not promise. */
   print: (text: string) => void;
 };
 
@@ -94,7 +93,7 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
       help: "save the test",
       hint: "Enter save",
       when: () => last,
-      run: () => ({ kind: "save" }),
+      run: () => ({ kind: "requestSave" }),
     },
     {
       keys: ["Ctrl+E"],
@@ -103,14 +102,26 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
       when: () => longField,
       run: () => ({ kind: "editInEditor" }),
     },
-    { keys: ["Ctrl+S"], help: "save the test", hint: "Ctrl+S save", run: () => ({ kind: "save" }) },
+    {
+      keys: ["Ctrl+S"],
+      help: "save the test",
+      hint: "Ctrl+S save",
+      run: () => ({ kind: "requestSave" }),
+    },
     { keys: ["Ctrl+C"], help: "quit", hint: "Ctrl+C quit", run: () => ({ kind: "requestQuit" }) },
   ];
 }
 
-const CONFIRM_BINDINGS: KeyBinding<FormAction>[] = [
-  { keys: ["y", "Ctrl+C"], help: "discard and quit", run: () => ({ kind: "confirmQuit" }) },
+/** The two questions answer to `y` alone, never to the key that asked
+ *  them: a held Ctrl+C or Enter would otherwise ask and answer in one go. */
+const CONFIRM_QUIT_BINDINGS: KeyBinding<FormAction>[] = [
+  { keys: ["y"], help: "discard and quit", run: () => ({ kind: "confirmQuit" }) },
   { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelQuit" }) },
+];
+
+const CONFIRM_SAVE_BINDINGS: KeyBinding<FormAction>[] = [
+  { keys: ["y"], help: "write the test", run: () => ({ kind: "save" }) },
+  { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelSave" }) },
 ];
 
 /** The hints the form footer shows, from the same table that handles the keys. */
@@ -126,14 +137,18 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
     case "form":
       return runKey(formBindings(state, openEditor), key, NO_ACTION) ?? editActionFor(event);
     case "confirmQuit":
-      return runKey(CONFIRM_BINDINGS, key, NO_ACTION);
-    case "wrote":
-      return { kind: "dismiss" };
+      return runKey(CONFIRM_QUIT_BINDINGS, key, NO_ACTION);
+    case "confirmSave":
+      return runKey(CONFIRM_SAVE_BINDINGS, key, NO_ACTION);
   }
 }
 
-/** The two actions that touch the world, each answered with its outcome.
- *  A failure becomes the footer message; nothing typed is lost to it. */
+/** The actions that touch the world, each answered with its outcome. A
+ *  failure becomes the footer message; nothing typed is lost to it. A save
+ *  is asked for in two steps: `requestSave` validates and, when the form
+ *  is complete, asks "write this test?", and `save` is the `y` to that. So
+ *  an Enter meant as a line break, or a pasted newline, cannot write a
+ *  half-finished test by itself. */
 function performIntent(state: FormState, action: FormAction, openEditor: OpenEditor): FormState {
   if (action.kind === "editInEditor" && openEditor !== null) {
     try {
@@ -143,11 +158,13 @@ function performIntent(state: FormState, action: FormAction, openEditor: OpenEdi
       return reduceForm(state, { kind: "editorFailed", text: messageOf(error) });
     }
   }
-  if (action.kind === "save") {
+  if (action.kind === "requestSave") {
     const problems = validateForm(state);
-    if (problems.length > 0) {
-      return reduceForm(state, { kind: "saveFailed", problems });
-    }
+    return problems.length > 0
+      ? reduceForm(state, { kind: "saveFailed", problems })
+      : reduceForm(state, { kind: "askSave" });
+  }
+  if (action.kind === "save") {
     try {
       return reduceForm(state, { kind: "saved", testDir: writeTest(state) });
     } catch (error) {
@@ -178,7 +195,6 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
           width: size.width,
           height: size.height,
           hints: formHints(state, openEditor),
-          nextCommands: nextCommands(options.suiteDir, state.values.id),
         }),
       handleKey: (state, event) => {
         const action = actionFor(state, event, openEditor);
@@ -192,9 +208,9 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
   } finally {
     screen.destroy();
   }
-  if (final !== null && final.mode.kind === "wrote") {
+  if (final !== null && final.written !== null) {
     for (const text of wroteSummary(
-      final.mode.testDir,
+      final.written,
       nextCommands(options.suiteDir, final.values.id),
     )) {
       options.print(text);

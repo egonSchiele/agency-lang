@@ -21,6 +21,12 @@ describe("formatKey", () => {
 });
 
 describe("keyMatches", () => {
+  it("prefixes an Alt chord with Alt+ and uppercases its letter", () => {
+    expect(formatKey({ key: "b", alt: true })).toBe("Alt+B");
+    expect(formatKey({ key: "backspace", alt: true })).toBe("Alt+Backspace");
+    expect(formatKey({ key: "x", ctrl: true, alt: true, shift: true })).toBe("Ctrl+Alt+Shift+X");
+  });
+
   it("matches by canonical name, case-insensitively", () => {
     expect(keyMatches({ key: "j" }, "j")).toBe(true);
     expect(keyMatches({ key: "c", ctrl: true }, "ctrl+c")).toBe(true);

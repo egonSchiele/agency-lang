@@ -41,7 +41,7 @@ export const FIELDS: FieldSpec[] = [
     label: "input",
     required: false,
     long: true,
-    help: "passed to the entry node as its one parameter; empty for an agent that takes none (optional)",
+    help: "what the agent is given: the entry node's one parameter, or {input} in a command (optional)",
   },
   {
     name: "files",
@@ -61,8 +61,7 @@ export const FIELDS: FieldSpec[] = [
 
 export type Problem = { field: FieldName; text: string };
 
-export type FormMode =
-  { kind: "form" } | { kind: "confirmQuit" } | { kind: "wrote"; testDir: string };
+export type FormMode = { kind: "form" } | { kind: "confirmQuit" } | { kind: "confirmSave" };
 
 export type FormState = {
   suiteDir: string;
@@ -72,6 +71,9 @@ export type FormState = {
   /** The footer message: the first problem, or what happened to the editor. */
   message: string;
   done: boolean;
+  /** The test folder, once it is written. The command prints it after the
+   *  screen closes. */
+  written: string | null;
 };
 
 export type FormAction =
@@ -79,6 +81,7 @@ export type FormAction =
   | { kind: "moveDown" }
   | { kind: "appendText"; text: string }
   | { kind: "backspace" }
+  | { kind: "backspaceWord" }
   /** An intent: the command opens the editor and reports `editorReturned`. */
   | { kind: "editInEditor" }
   | { kind: "editorReturned"; text: string | null }
@@ -86,11 +89,14 @@ export type FormAction =
   | { kind: "requestQuit" }
   | { kind: "confirmQuit" }
   | { kind: "cancelQuit" }
-  /** An intent: the command validates and writes, then reports one of the next two. */
+  /** An intent: the command validates, then reports `saveFailed` or `askSave`. */
+  | { kind: "requestSave" }
+  | { kind: "askSave" }
+  | { kind: "cancelSave" }
+  /** An intent: the command writes, then reports one of the next two. */
   | { kind: "save" }
   | { kind: "saveFailed"; problems: Problem[] }
-  | { kind: "saved"; testDir: string }
-  | { kind: "dismiss" };
+  | { kind: "saved"; testDir: string };
 
 const EMPTY_VALUES: Record<FieldName, string> = {
   id: "",
@@ -110,6 +116,7 @@ export function initialForm(suiteDir: string): FormState {
     mode: { kind: "form" },
     message: "",
     done: false,
+    written: null,
   };
 }
 
@@ -135,13 +142,15 @@ export function fieldSpec(name: FieldName): FieldSpec {
 export function reduceForm(state: FormState, action: FormAction): FormState {
   switch (action.kind) {
     case "moveUp":
-      return { ...state, cursor: neighbour(state.cursor, -1) };
+      return { ...state, message: "", cursor: neighbour(state.cursor, -1) };
     case "moveDown":
-      return { ...state, cursor: neighbour(state.cursor, 1) };
+      return { ...state, message: "", cursor: neighbour(state.cursor, 1) };
     case "appendText":
       return withEdit(state, { kind: "append", text: action.text });
     case "backspace":
       return withEdit(state, { kind: "backspace" });
+    case "backspaceWord":
+      return withEdit(state, { kind: "backspaceWord" });
     case "editInEditor":
       return { ...state, message: "" };
     case "editorReturned":
@@ -158,16 +167,21 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return { ...state, done: true };
     case "cancelQuit":
       return { ...state, mode: { kind: "form" } };
+    case "requestSave":
     case "save":
       return { ...state, message: "" };
+    case "askSave":
+      return { ...state, mode: { kind: "confirmSave" } };
+    case "cancelSave":
+      return { ...state, mode: { kind: "form" } };
     case "saveFailed": {
       const first = action.problems[0];
-      return first === undefined ? state : { ...state, message: first.text, cursor: first.field };
+      return first === undefined
+        ? state
+        : { ...state, mode: { kind: "form" }, message: first.text, cursor: first.field };
     }
     case "saved":
-      return { ...state, mode: { kind: "wrote", testDir: action.testDir } };
-    case "dismiss":
-      return state.mode.kind === "wrote" ? { ...state, done: true } : state;
+      return { ...state, done: true, written: action.testDir };
   }
 }
 
@@ -184,6 +198,8 @@ export function editActionFor(event: KeyEvent): FormAction | null {
       return { kind: "appendText", text: edit.text };
     case "backspace":
       return { kind: "backspace" };
+    case "backspaceWord":
+      return { kind: "backspaceWord" };
     case "cancel":
     case "submit":
       return null;

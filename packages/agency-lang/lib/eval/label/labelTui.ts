@@ -301,6 +301,7 @@ function editorActionFor(edit: LineEditAction | null): SessionAction | null {
     case "append":
       return { kind: "appendEditorText", text: edit.text };
     case "backspace":
+    case "backspaceWord":
       return { kind: "backspaceEditor" };
     case "cancel":
       return { kind: "cancelEditor" };

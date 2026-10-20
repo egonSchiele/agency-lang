@@ -70,7 +70,7 @@ describe("evalNew", () => {
     fs.rmSync(suite, { recursive: true, force: true });
   });
 
-  it("types into each field, Enter moves on, and Enter on goal writes the folder", async () => {
+  it("types into each field, Enter moves on, and Enter on goal asks, then writes the folder", async () => {
     const shown = (text: string) => (frame: string) => frame.includes(text);
     await drive(options(), input, recorder, [
       { when: shown("NEW TEST"), key: "s" },
@@ -83,7 +83,9 @@ describe("evalNew", () => {
       { when: shown("Enter next"), key: "enter" },
       ...typing("Says the name."),
       { when: shown("Says the name.█"), key: "enter" },
-      { when: shown("wrote "), key: "x" },
+      // A second Enter is not an answer: the question needs a y.
+      { when: shown("write this test?"), key: "enter" },
+      { when: shown("write this test?"), key: "y" },
     ]);
     const json = JSON.parse(
       fs.readFileSync(path.join(suite, "says-its-name", "test.json"), "utf8"),
@@ -93,13 +95,43 @@ describe("evalNew", () => {
       input: "What is your name?",
       goal: "Says the name.",
     });
-    const text = recorder.lastText();
-    expect(text).toContain("agency eval run <agent> --suite");
-    expect(text.replace(/\s+/g, " ")).toContain("--test says-its-name");
-    // Printed again once the screen is gone, so a second Enter that
-    // dismisses the screen at once still leaves the commands to copy.
+    // Printed once the screen is gone, where it stays in the scrollback.
     expect(printed[0]).toBe(`wrote ${path.join(suite, "says-its-name")}`);
+    expect(printed.some((line) => line.includes("agency eval run <agent> --suite"))).toBe(true);
     expect(printed.some((line) => line.includes("--test says-its-name"))).toBe(true);
+  });
+
+  it("n to the save question returns to the form with nothing written", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("goal is required"), key: "g" },
+      { when: (frame) => frame.includes("g█"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("write this test?"), key: "n" },
+      { when: (frame) => frame.includes("Enter save"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+    expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
+    expect(printed).toEqual([]);
+  });
+
+  it("a second Ctrl+C does not answer the discard question", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "n" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+  });
+
+  it("an arrow key clears a failed save's message and brings the hints back", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("folder name is required"), key: "down" },
+      { when: (frame) => frame.includes("Enter next"), key: { key: "c", ctrl: true } },
+    ]);
   });
 
   it("a long value wraps on the cursor row and keeps the cursor at its end", async () => {
@@ -210,10 +242,11 @@ describe("evalNew", () => {
     expect(text).not.toContain("could not run the editor");
   });
 
-  it("a bare Escape, as an Option chord sends, types nothing and does not quit", async () => {
+  it("a bare Escape and an Alt chord type nothing and do not quit", async () => {
     await drive(options(), input, recorder, [
       { when: (frame) => frame.includes("NEW TEST"), key: "t" },
       { when: (frame) => frame.includes("t█"), key: "escape" },
+      { when: () => true, key: { key: "b", alt: true } },
       { when: () => true, key: "x" },
       { when: (frame) => frame.includes("tx█"), key: { key: "c", ctrl: true } },
       { when: (frame) => frame.includes("discard this test?"), key: "y" },
@@ -233,6 +266,7 @@ describe("evalNew", () => {
       { when: shown("fixtures█"), key: "enter" },
       ...typing("g"),
       { when: shown("g█"), key: "enter" },
+      { when: shown("write this test?"), key: "y" },
       // The cursor is back on files, so typing lands there.
       { when: shown("files must not contain symlinks"), key: "2" },
       { when: shown("fixtures2█"), key: { key: "c", ctrl: true } },

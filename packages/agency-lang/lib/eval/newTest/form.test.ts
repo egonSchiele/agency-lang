@@ -101,11 +101,27 @@ describe("reduceForm", () => {
     expect(state.message).toBe("could not run the editor: spawn vim ENOENT");
   });
 
-  it("saved shows the wrote screen and any key dismisses it", () => {
-    const wrote = run([{ kind: "saved", testDir: "suite/says-its-name" }]);
-    expect(wrote.mode).toEqual({ kind: "wrote", testDir: "suite/says-its-name" });
-    expect(run([{ kind: "dismiss" }]).done).toBe(false);
-    expect(run([{ kind: "dismiss" }], wrote).done).toBe(true);
+  it("a save is asked about first, and n returns to the form", () => {
+    const asked = run([{ kind: "askSave" }]);
+    expect(asked.mode).toEqual({ kind: "confirmSave" });
+    expect(run([{ kind: "cancelSave" }], asked).mode).toEqual({ kind: "form" });
+  });
+
+  it("saved finishes the form and records the folder for the command to print", () => {
+    const wrote = run([{ kind: "askSave" }, { kind: "saved", testDir: "suite/says-its-name" }]);
+    expect(wrote.done).toBe(true);
+    expect(wrote.written).toBe("suite/says-its-name");
+    expect(initialForm("suite").written).toBeNull();
+  });
+
+  it("a save that fails after the question returns to the form with the problem", () => {
+    const failed = run([
+      { kind: "askSave" },
+      { kind: "saveFailed", problems: [{ field: "id", text: "suite/t already exists" }] },
+    ]);
+    expect(failed.mode).toEqual({ kind: "form" });
+    expect(failed.message).toBe("suite/t already exists");
+    expect(failed.done).toBe(false);
   });
 });
 
@@ -117,6 +133,8 @@ describe("editActionFor", () => {
     expect(editActionFor({ key: "enter" })).toBeNull();
     expect(editActionFor({ key: "up" })).toBeNull();
     expect(editActionFor({ key: "s", ctrl: true })).toBeNull();
+    expect(editActionFor({ key: "b", alt: true })).toBeNull();
+    expect(editActionFor({ key: "backspace", alt: true })).toEqual({ kind: "backspaceWord" });
   });
 });
 

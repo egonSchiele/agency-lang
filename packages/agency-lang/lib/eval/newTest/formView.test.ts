@@ -5,7 +5,7 @@ import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
 import { FIELDS, initialForm, reduceForm, type FormAction, type FormState } from "./form.js";
-import { renderForm, wroteSummary } from "./formView.js";
+import { cursorRows, renderForm, wroteSummary } from "./formView.js";
 
 const HINTS = "↑↓ move   Enter next   Ctrl+S save   Ctrl+C quit";
 /** Two of indent, the widest label, three of gap: where values start. */
@@ -18,7 +18,7 @@ const NEXT = [
 function frame(state: FormState, width = 80, height = 24): string {
   const recorder = new FrameRecorder();
   const screen = new Screen({ input: new ScriptedInput(), output: recorder, width, height });
-  screen.render(renderForm({ state, width, height, hints: HINTS, nextCommands: NEXT }));
+  screen.render(renderForm({ state, width, height, hints: HINTS }));
   return recorder.lastText();
 }
 
@@ -83,14 +83,38 @@ describe("renderForm", () => {
     expect(lines[goalRow + 1]).toBe(`${" ".repeat(VALUE_COLUMN)}█`);
   });
 
-  it("the wrote summary is the screen's lines, unwrapped", () => {
-    expect(wroteSummary("bar-evals/says-its-name", NEXT)).toEqual([
-      "wrote bar-evals/says-its-name",
+  it("the printed summary keeps braces, since it goes to the terminal, and drops control characters", () => {
+    expect(wroteSummary("evals/{v2}/t", NEXT)).toEqual([
+      "wrote evals/{v2}/t",
       "",
       "run it with:",
       `  ${NEXT[0]}`,
       `  ${NEXT[1]}`,
     ]);
+    const stripped = wroteSummary("evals\x1b[2J/t", ["run\x07"]).join("\n");
+    expect(stripped).not.toContain("\x1b");
+    expect(stripped).not.toContain("\x07");
+  });
+
+  it("a trailing space typed into a wrapped value stays on the last row", () => {
+    const wide = "word ".repeat(10).trimEnd();
+    expect(cursorRows(wide, 30).length).toBeGreaterThan(1);
+    expect(cursorRows(`${wide} `, 30).at(-1)).toMatch(/word $/);
+    expect(cursorRows(`${wide}  `, 30).at(-1)).toMatch(/word {2}$/);
+    expect(cursorRows("a ", 80)).toEqual(["a "]);
+  });
+
+  it("a last row that fills the width gets a row for the cursor", () => {
+    const full = "x".repeat(20);
+    expect(cursorRows(full, 20)).toEqual([full, ""]);
+    expect(cursorRows(full, 21)).toEqual([full]);
+    // Trailing spaces fill a row too.
+    expect(cursorRows("x".repeat(18) + "  ", 20)).toEqual(["x".repeat(18) + "  ", ""]);
+  });
+
+  it("the footer asks before writing", () => {
+    const asking = reduceForm(filled(), { kind: "askSave" });
+    expect(rows(frame(asking)).at(-1)).toBe("write this test?  y / n");
   });
 
   it("draws the cursor row as a text input with a cursor, and no other row", () => {
@@ -113,18 +137,6 @@ describe("renderForm", () => {
     );
   });
 
-  it("the wrote screen names the folder and the commands to run, wrapping a long one", () => {
-    const wrote = reduceForm(filled(), { kind: "saved", testDir: "bar-evals/says-its-name" });
-    const text = frame(wrote);
-    expect(text).toContain("wrote bar-evals/says-its-name");
-    expect(text).toContain(NEXT[0]);
-    expect(text).toContain(NEXT[1]);
-    expect(text).not.toContain("NEW TEST");
-    const narrow = rows(frame(wrote, 40));
-    const start = narrow.findIndex((row) => row.startsWith("  agency eval run"));
-    expect(narrow[start + 1]).toMatch(/^ {4}\S/);
-  });
-
   it("neutralizes control characters and style tags in a value, the suite path, and the message", () => {
     const hostile = { ...filled(), values: { ...filled().values, input: "safe\x1b[2Jhidden" } };
     expect(frame(hostile)).not.toContain("\x1b[2J");
@@ -134,8 +146,6 @@ describe("renderForm", () => {
     expect(text).not.toContain("\x07");
     expect(text).toContain("{red-fg}");
     expect(text).toContain("bad {bold}path");
-    const wrote = reduceForm(filled(), { kind: "saved", testDir: "evals\x1b[2J/t" });
-    expect(frame(wrote)).not.toContain("\x1b[2J");
   });
 
   it("shows a brace typed into a field as it is", () => {

@@ -48,29 +48,37 @@ bound in the form's key table: `s` is a letter someone types into a goal.
 Save is Ctrl+S, quit is Ctrl+C, and the editor hand-off is Ctrl+E. Enter
 moves down, and on the last field it saves: two bindings on the same key,
 each guarded by `when`, so the hint follows the cursor. Escape is not
-bound, because the terminal sends a bare Escape for an Alt or Option
-chord it does not know (Option+Backspace, Option+Left), and quitting on
-one of those partway through a word would throw the form away. The
-"wrote" screen is dismissed by any key, and a second Enter from key repeat
-can dismiss it before it is read, so the command prints the same lines
-again after `screen.destroy()`, where they stay in the scrollback.
+bound in the form. The terminal reads an Option chord as an Alt chord now
+(see `docs/dev/cli/tui/dev/input-output.md`), but an older terminal can
+still send a bare Escape for a key it does not know, and quitting on one
+of those partway through a word would throw the form away.
 
-The cursor row wraps like the others: the value is wrapped first and
-handed to the `textInput` with a newline per row, since a text input clips
-a long line rather than wrapping it. A row that fills the width gets an
-empty row after it, because a text input leaves the cursor out when its
-last row is full.
+Both saving and quitting ask first, and both questions answer to `y`
+alone: never to the key that asked them, so a held Ctrl+C or Enter cannot
+ask and answer in one go, and `n` or Escape goes back to the form. The
+save question is there because Enter is the save key on `goal`, the field
+most likely to hold several sentences: an Enter meant as a line break, or
+a `\r` from a paste in a terminal without bracketed paste, must not write
+a half-finished test. `requestSave` validates and, when the form is
+complete, asks; `save` is the `y`. A write that fails after the question
+(the folder appeared meanwhile) returns to the form with the problem.
+
+There is no "wrote" screen. `saved` sets `done` and records the folder in
+`written`, and the command prints the folder and the next commands after
+`screen.destroy()`, where they stay in the scrollback. A screen that any
+key dismisses could not promise that.
 
 A keystroke clears the footer message. A failed save puts the cursor on
 the field with the problem, so the next thing typed fixes it in place.
 
 ## Modes and intents
 
-The form, the "discard?" question and the "wrote" screen are one state
-with a `mode`. Every transition is a reducer case, including the two that
-depend on the outside world. `editInEditor` and `save` are intents: the
+The form and its two questions are one state with a `mode`. Every
+transition is a reducer case, including the three that depend on the
+outside world. `editInEditor`, `requestSave` and `save` are intents: the
 reducer leaves the state alone, the command performs the effect, and the
-outcome comes back as `editorReturned`, `saved` or `saveFailed`. So
+outcome comes back as `editorReturned`, `askSave`, `saved` or
+`saveFailed`. So
 "a failed save shows the first problem and moves the cursor to its field"
 is a reducer test, and `handleKey` in `new.ts` is: pick the action (the
 mode's key table, else the line editor), reduce, and for an intent run the
@@ -162,12 +170,23 @@ nothing and the long fields are typed on one line like the others.
 
 Every string that came from outside the form goes through
 `sanitizeUntrusted` before it is drawn: field values, the suite path from
-the command line, the footer message (which quotes paths), and the test
-path and commands on the "wrote" screen. A path can carry an escape
-sequence or a `{red-fg}` style tag as easily as a value can. The one
-exception is the cursor row, drawn as a `textInput`: that element reads no
-style tags, so its value only has its control characters removed, or a
-typed `{` would show as `\{`.
+the command line, and the footer message (which quotes paths). A path can
+carry an escape sequence or a `{red-fg}` style tag as easily as a value
+can. The one exception is the cursor row, drawn as a `textInput`: that
+element reads no style tags, so its value only has its control characters
+removed, or a typed `{` would show as `\{`. The lines printed after the
+screen closes are not drawn by the style parser at all, so they too only
+have their control characters removed: a `{` in a suite path must print
+as `{`, or the command could not be copied.
+
+The cursor row wraps like the others, in `cursorRows`: the value is
+wrapped first and handed to the `textInput` with a newline per row, since
+a text input clips a long line rather than wrapping it. `wrapText` drops
+the spaces at the end of a row once a value wraps, which would make a
+space typed at the end of a long goal look like nothing happened, so the
+value is wrapped without its trailing spaces and they are put back on the
+last row. A row that fills the width gets an empty row after it, because
+a text input leaves the cursor out when its last row is full.
 
 ## Testing
 

@@ -57,6 +57,32 @@ describe("escape sequences split across chunks", () => {
   });
 });
 
+describe("sequences the table does not know", () => {
+  it("drops a complete unknown CSI or SS3 sequence whole, with no letters typed", () => {
+    for (const sequence of [`${ESC}[1;5D`, `${ESC}[1;3D`, `${ESC}[15~`, `${ESC}OP`]) {
+      expect(feed(new TerminalInput(), [`${sequence}x`])).toEqual([{ key: "x" }]);
+    }
+  });
+
+  it("holds an unknown sequence that is split, then drops it", () => {
+    expect(feed(new TerminalInput(), [`${ESC}[1;`, "5Dx"])).toEqual([{ key: "x" }]);
+  });
+
+  it("reads ESC and a character as an Alt chord", () => {
+    expect(feed(new TerminalInput(), [`${ESC}b`])).toEqual([{ key: "b", alt: true }]);
+    expect(feed(new TerminalInput(), [`${ESC}y`])).toEqual([{ key: "y", alt: true }]);
+    expect(feed(new TerminalInput(), [`${ESC}\x7f`])).toEqual([{ key: "backspace", alt: true }]);
+  });
+
+  it("keeps Alt+Enter as Shift+Enter and a doubled ESC as two Escapes", () => {
+    expect(feed(new TerminalInput(), [`${ESC}\r`])).toEqual([{ key: "enter", shift: true }]);
+    expect(feed(new TerminalInput(), [`${ESC}${ESC}`])).toEqual([
+      { key: "escape" },
+      { key: "escape" },
+    ]);
+  });
+});
+
 describe("suppressSigint", () => {
   it("emits ctrl-c as a key without raising SIGINT when asked", () => {
     const raised: string[] = [];

@@ -19,14 +19,16 @@ const TITLE_CASED: Record<string, string> = {
 };
 
 // Canonical string for a KeyEvent — single chars verbatim ("j", "G"),
-// named keys title-cased ("Up", "PageDown"), with "Ctrl+" / "Shift+"
-// prefixes in a stable order. Letter keys after Ctrl+ are uppercased
+// named keys title-cased ("Up", "PageDown"), with "Ctrl+" / "Alt+" /
+// "Shift+" prefixes in a stable order. Letter keys after Ctrl+ are uppercased
 // so "Ctrl+C" matches what most docs and bindings use.
 export function formatKey(event: KeyEvent): string {
   const base = TITLE_CASED[event.key] ?? event.key;
-  const body = event.ctrl && base.length === 1 ? base.toUpperCase() : base;
+  const chord = event.ctrl === true || event.alt === true;
+  const body = chord && base.length === 1 ? base.toUpperCase() : base;
   const parts: string[] = [];
   if (event.ctrl) parts.push("Ctrl");
+  if (event.alt) parts.push("Alt");
   if (event.shift) parts.push("Shift");
   parts.push(body);
   return parts.join("+");

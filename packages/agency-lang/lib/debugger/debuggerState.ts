@@ -137,10 +137,3 @@ export class DebuggerState {
     this.checkpoints.deleteAfterCheckpoint(checkpointId);
   }
 }
-
-export type DebuggerUIState = {
-  callStack: { functionName: string; moduleId: string; line: number }[];
-  activityLog: string[];
-  pendingOverrides: Record<string, unknown>;
-  mode: "stepping" | "running";
-};

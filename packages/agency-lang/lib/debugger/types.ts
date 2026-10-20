@@ -30,7 +30,7 @@ export type DebuggerIO = {
   /** Show `checkpoint`, at `stop` when the stop happened somewhere other
    *  than the checkpoint's own location (a stop inside a tool call, whose
    *  checkpoint is the shared one stamped at the join). */
-  render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void>;
+  render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void>;
   waitForCommand(): Promise<DebuggerCommand>;
   showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null>;
   /** Ask how to answer a guard trip; see `showGuardTripForm`. */

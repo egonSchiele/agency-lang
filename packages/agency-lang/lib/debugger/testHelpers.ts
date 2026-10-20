@@ -28,7 +28,11 @@ export class TestDebuggerIO implements DebuggerIO {
     this.commands = commands;
   }
 
-  async render(_checkpoint?: Checkpoint, _stop?: DebugStopData): Promise<void> {
+  async render(
+    _checkpoint?: Checkpoint,
+    _stop?: DebugStopData,
+    _interruptId?: string,
+  ): Promise<void> {
     if (_checkpoint) {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
       if (checkpoint) {
@@ -109,7 +113,6 @@ export function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Check
       __setDebugger: mod.__setDebugger,
       __getCheckpoints: mod.__getCheckpoints,
     },
-    sourceMap: mod.__sourceMap ?? {},
     rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
     ui,
     checkpoints: opts.checkpoints,

@@ -22,6 +22,7 @@ import {
   showRewindSelector,
   showCheckpointsPanel,
   showGuardTripForm,
+  showThreadPicker,
   type OverlayContext,
 } from "./overlays.js";
 import type { GuardTripData } from "./guardAnswer.js";
@@ -114,7 +115,8 @@ export class DebuggerUI implements DebuggerIO {
 
   private focusIndex = 0;
   private zoomedPane: string | null = null;
-  private threadDisplayIndex: number | undefined = undefined;
+  /** The thread the threads pane shows; the active one when unset. */
+  private threadDisplayId: string | undefined = undefined;
   private scrollOffsets: Record<string, number> = {};
 
   // Spinner
@@ -144,7 +146,7 @@ export class DebuggerUI implements DebuggerIO {
 
   private getPanes(): PaneSlot[] {
     const moduleId = this.state.getModuleId();
-    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    const threadData = this.state.getThreadMessages(this.threadDisplayId);
 
     const panes: PaneSlot[] = [
       {
@@ -160,10 +162,11 @@ export class DebuggerUI implements DebuggerIO {
         threadData.threadCount > 1
           ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
           : "";
+      const name = threadData.label ?? `id: ${threadData.threadId}`;
       panes.push({
         name: "threads",
         color: "cyan",
-        label: ` threads: (id: ${threadData.threadId})${countLabel} `,
+        label: ` threads: ${escapeStyleTags(name)}${countLabel} `,
         content: () => this.buildThreadsContent(),
       });
     }
@@ -235,7 +238,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildThreadsContent(): string {
-    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    const threadData = this.state.getThreadMessages(this.threadDisplayId);
     if (!threadData) return "";
     const isZoomed = this.zoomedPane === "threads";
     return threadData.messages
@@ -274,7 +277,8 @@ export class DebuggerUI implements DebuggerIO {
       .map((entry, i) => {
         const prefix = i === callStack.length - 1 ? " > " : "   ";
         const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
-        return `${prefix}${escapeStyleTags(entry.functionName)} (${escapeStyleTags(fileName)}:${entry.line})`;
+        const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
+        return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
       })
       .join("\n");
   }
@@ -421,12 +425,22 @@ export class DebuggerUI implements DebuggerIO {
     return frame;
   }
 
+  /** Show thread `id`. Picking the active thread means following it,
+   *  so the pane moves with the program again. */
+  private showThread(id: string): void {
+    const active = this.state.listThreads().find((thread) => thread.active)?.id;
+    this.threadDisplayId = id === active ? undefined : id;
+  }
+
   // --- DebuggerIO implementation ---
 
-  async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+  async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {
     if (checkpoint) {
-      await this.state.setCheckpoint(checkpoint, stop);
-      this.threadDisplayIndex = undefined;
+      await this.state.setCheckpoint(checkpoint, stop, interruptId);
+      // A picked thread stays shown while it is still listed, so a
+      // person can follow one that is not the active one while stepping.
+      const listed = this.state.listThreads().some((thread) => thread.id === this.threadDisplayId);
+      if (!listed) this.threadDisplayId = undefined;
     }
     this.renderUI();
   }
@@ -535,11 +549,27 @@ export class DebuggerUI implements DebuggerIO {
         this.zoomedPane = this.zoomedPane ? null : focusedName || null;
         this.renderUI();
         return null;
-      case "[":
-      case "]":
-        this.threadDisplayIndex = (this.threadDisplayIndex ?? 0) + (keyEvent.key === "]" ? 1 : -1);
+      case "t": {
+        const threads = this.state.listThreads();
+        if (threads.length === 0) return null;
+        const shown = this.state.getThreadMessages(this.threadDisplayId)?.threadId;
+        const picked = await showThreadPicker(this.overlayContext(), threads, shown);
+        if (picked !== null) this.showThread(picked);
         this.renderUI();
         return null;
+      }
+      case "[":
+      case "]": {
+        // Cycle through the store's threads from the one shown.
+        const threads = this.state.listThreads();
+        const shown = this.state.getThreadMessages(this.threadDisplayId);
+        if (threads.length === 0 || !shown) return null;
+        const next =
+          (shown.threadIndex + (keyEvent.key === "]" ? 1 : -1) + threads.length) % threads.length;
+        this.showThread(threads[next].id);
+        this.renderUI();
+        return null;
+      }
       default:
         if (keyEvent.key >= "1" && keyEvent.key <= "9") {
           const idx = parseInt(keyEvent.key, 10) - 1;

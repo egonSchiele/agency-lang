@@ -32,7 +32,12 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import { settleStops, type LegOptions } from "./attachedDebugger.js";
+import {
+  settleFunctionStops,
+  settleStops,
+  type LegOptions,
+  type SettleHooks,
+} from "./attachedDebugger.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
   tokenStatsOf,
@@ -334,9 +339,10 @@ async function runExportedFunctionCore({
 }
 
 /** Public entry point — unchanged contract: returns the raw function value or
- *  throws the identical original error. */
+ *  throws the identical original error. An attached debugger answers the
+ *  function's debug stops before it returns (`settleFunctionStops`). */
 export async function runExportedFunction(args: RunExportedFunctionArgs): Promise<unknown> {
-  return unwrapServedInvocationOutcome(await runExportedFunctionCore(args));
+  return unwrapServedInvocationOutcome(await settledFunction(args));
 }
 
 /** Serve-only entry point: the same execution, but the outcome (value/error +
@@ -344,7 +350,14 @@ export async function runExportedFunction(args: RunExportedFunctionArgs): Promis
 export async function runExportedFunctionForServe(
   args: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  return runExportedFunctionCore(args);
+  return settledFunction(args);
+}
+
+async function settledFunction(
+  args: RunExportedFunctionArgs,
+): Promise<ServedInvocationOutcome<unknown>> {
+  const outcome = await runExportedFunctionCore(args);
+  return settleFunctionStops(args.ctx, outcome, { invocation: args.invocation });
 }
 
 type RunNodeArgs = {
@@ -592,7 +605,7 @@ async function runNodeCore({
  *  answers the leg's debug stops here, after the leg has finished, so the
  *  caller never sees one (`settleStops`). */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
-  return unwrapWithUsage(await settleStops(args.ctx, await runNodeCore(args), legOf(args)));
+  return unwrapWithUsage(await settledNode(args));
 }
 
 /** Serve-only entry point: hands the outcome (RunNodeResult/error + usage
@@ -600,7 +613,33 @@ export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
 export async function runNodeForServe(
   args: RunNodeArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  return settleStops(args.ctx, await runNodeCore(args), legOf(args));
+  return settledNode(args);
+}
+
+/** The node's outcome with its debug stops settled. `runNodeCore` fires
+ *  the caller's `onAgentEnd` when its own leg ends with a value; when the
+ *  debugger ran the leg that ended, it fires here instead, once, with the
+ *  final value and the run's usage, so attaching a debugger does not
+ *  change what the caller sees. */
+async function settledNode(
+  args: RunNodeArgs,
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  const outcome = await runNodeCore(args);
+  const hooks: SettleHooks = {
+    onFinished: async (final) => {
+      const onAgentEnd = args.callbacks?.onAgentEnd;
+      if (onAgentEnd === undefined) {
+        return;
+      }
+      await runInBootstrapFrame(args.ctx, () =>
+        onAgentEnd({
+          nodeName: args.nodeName,
+          result: { ...final.value, usage: final.usage, traceId: final.traceId },
+        }),
+      );
+    },
+  };
+  return settleStops(args.ctx, outcome, legOf(args), hooks);
 }
 
 function legOf(args: RunNodeArgs): LegOptions {

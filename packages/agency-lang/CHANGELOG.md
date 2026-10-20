@@ -2,7 +2,7 @@
 
 ### Debugger
 
-- **A debugger can be installed on a program something else is running.** The runtime answers debug stops before a node call returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, and cancel signal survive a step. This is the runtime half of attaching to a running program; the `agency debug --attach` command follows.
+- **A debugger can be installed on a program something else is running.** The runtime answers debug stops before any of its entry points returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, cancel signal, and usage figure are the same with the debugger as without it. This is the runtime half of attaching to a running program; the `agency debug --attach` command follows.
 
 ### Runtime
 

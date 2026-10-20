@@ -68,9 +68,9 @@ export type BranchStateJSON = {
   activeStack?: string[];
 };
 
-// the state for each frame (a node, or a function call)
 const SUBSTEP_PREFIX = "__substep_";
 
+// the state for each frame (a node, or a function call)
 export class State {
   args: Record<string, any>;
   locals: Record<string, any>;
@@ -244,6 +244,12 @@ export class State {
         branch.stack.markReentry();
       }
     }
+  }
+
+  /** Whether this frame was restored by a resume from an interrupt (see
+   *  `markReentry`), for a step that has no counter of its own. */
+  wasReentered(): boolean {
+    return this.restoredCounters !== undefined;
   }
 
   /** The counter this frame was restored with for `key`, consumed: the

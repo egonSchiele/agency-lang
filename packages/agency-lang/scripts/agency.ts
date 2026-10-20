@@ -1881,7 +1881,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   program
-    .command("debug", { hidden: true })
+    .command("debug")
     .description("Debug an Agency file interactively")
     .argument("<file>", "Agency file to debug")
     .option("--node <name>", "Node to execute")

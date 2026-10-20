@@ -124,8 +124,7 @@ export async function debug(
       absOutput = compiledPath;
     } else {
       // Normal mode: compile the .agency file to .js on the fly
-      const debugConfig: AgencyConfig = { ...config, debugger: true };
-      const outputFile = compile(debugConfig, inputFile, undefined, {
+      const outputFile = compile(config, inputFile, undefined, {
         importStrategy: new RunStrategy(),
       });
       if (outputFile === null) {
@@ -199,7 +198,6 @@ export async function debug(
         __setDebugger: mod.__setDebugger,
         __getCheckpoints: mod.__getCheckpoints,
       },
-      sourceMap,
       rewindSize,
       ui: (() => {
         // Remove any existing keypress data handlers on stdin left behind by
@@ -255,7 +253,8 @@ export async function debug(
       await driver.run(initialResult);
     }
   } finally {
-    if (tempDir && (tempDir as string).startsWith(path.resolve(".agency"))) {
+    // The extracted bundle is this run's own; remove it on the way out.
+    if (tempDir && (tempDir as string).startsWith(path.resolve(".tmp/bundle"))) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   }

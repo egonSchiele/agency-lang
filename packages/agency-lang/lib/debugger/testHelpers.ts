@@ -109,7 +109,6 @@ export function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Check
       __setDebugger: mod.__setDebugger,
       __getCheckpoints: mod.__getCheckpoints,
     },
-    sourceMap: mod.__sourceMap ?? {},
     rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
     ui,
     checkpoints: opts.checkpoints,

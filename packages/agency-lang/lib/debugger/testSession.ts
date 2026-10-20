@@ -132,7 +132,6 @@ export class DebuggerTestSession {
         __setDebugger: opts.mod.__setDebugger,
         __getCheckpoints: opts.mod.__getCheckpoints,
       },
-      sourceMap: opts.mod.__sourceMap ?? {},
       rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
       ui,
       checkpoints: opts.checkpoints,
@@ -235,7 +234,7 @@ async function getInitialResult(opts: TestSessionOpts, driver: DebuggerDriver): 
 
   if (!result?.data || !hasInterrupts(result.data)) {
     throw new Error(
-      "Program did not produce a debug interrupt. Was it compiled with debugger: true?",
+      "Program did not produce a debug interrupt. Was it compiled with instrumentation on?",
     );
   }
 

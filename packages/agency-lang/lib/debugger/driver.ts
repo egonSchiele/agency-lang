@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { SourceMap } from "../backends/sourceMap.js";
 import { DebuggerState } from "./debuggerState.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import type { AgencyCallbacks } from "../runtime/hooks.js";
@@ -39,7 +38,6 @@ type ModuleFunctions = {
 
 type DriverOpts = {
   mod: ModuleFunctions;
-  sourceMap: SourceMap;
   rewindSize: number;
   ui: DebuggerIO;
   checkpoints?: Checkpoint[];
@@ -52,7 +50,6 @@ type DriverRunOpts = Partial<{
 
 export class DebuggerDriver {
   private mod: ModuleFunctions;
-  private sourceMap: SourceMap;
   private ui: DebuggerIO;
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
@@ -61,7 +58,6 @@ export class DebuggerDriver {
 
   constructor(opts: DriverOpts) {
     this.mod = opts.mod;
-    this.sourceMap = opts.sourceMap;
     this.ui = opts.ui;
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
@@ -603,15 +599,6 @@ export class DebuggerDriver {
     }
 
     return undefined;
-  }
-
-  private isInSourceMap(functionName: string): boolean {
-    for (const key of Object.keys(this.sourceMap)) {
-      // Source map keys are "moduleId:scopeName"
-      const scopeName = key.split(":").slice(1).join(":");
-      if (scopeName === functionName) return true;
-    }
-    return false;
   }
 }
 

@@ -27,12 +27,12 @@ const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
 // exportFrames.test.ts) so we compile but don't clean up — tests/debugger/*.ts
 // is in .gitignore to exclude generated files from git.
 beforeAll(() => {
-  compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
-  compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
-  compile({ debugger: true }, interruptAgency, interruptCompiled, { ts: true });
-  compile({ debugger: true }, loopAgency, loopCompiled, { ts: true });
-  compile({ debugger: true }, ifElseAgency, ifElseCompiled, { ts: true });
-  compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
+  compile({}, stepTestAgency, stepTestCompiled, { ts: true });
+  compile({}, fnCallAgency, fnCallCompiled, { ts: true });
+  compile({}, interruptAgency, interruptCompiled, { ts: true });
+  compile({}, loopAgency, loopCompiled, { ts: true });
+  compile({}, ifElseAgency, ifElseCompiled, { ts: true });
+  compile({}, nestedAgency, nestedCompiled, { ts: true });
 });
 
 // --- Helpers ---

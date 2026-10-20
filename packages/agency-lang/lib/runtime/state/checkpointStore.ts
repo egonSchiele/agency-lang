@@ -55,6 +55,34 @@ export type ThreadMessages = {
   messages: { role: string; content: string }[];
 };
 
+/** One branch of a frame, as the branches pane lists it: a tool call, a
+ *  fork branch, or a parallel item, with its own stack. */
+export type BranchSummary = {
+  /** The branch keys from the root down to this branch. */
+  path: string[];
+  key: string;
+  /** The frame that owns the branch; the tool loop's is `llm()`. */
+  owner: string;
+  /** The scope the branch runs: the tool's name, or the block's. */
+  label: string;
+  status: "running" | "interrupted" | "done";
+};
+
+/** One guard on the stacks the stopped code runs under. */
+export type GuardSummary = {
+  label: string | null;
+  dimension: "cost" | "time";
+  /** Dollars, or milliseconds. */
+  limit: number;
+  spent: number;
+  disarmed: boolean;
+  root: boolean;
+};
+
+/** The tool loop the stopped code is in: its round, counted from 1, and
+ *  the tools the loop has removed. */
+export type LoopState = { round: number; removedTools: string[] };
+
 export type CheckpointArgs = {
   id?: number;
   stack: StateStackJSON;
@@ -253,6 +281,89 @@ export class Checkpoint implements SourceLocation {
       return "(no content)";
     }
     return JSON.stringify(message.content);
+  }
+
+  /** The frames from the root down the branch path, the deepest last. */
+  private framesAlong(branchPath: string[]): StateJSON[] {
+    const frames: StateJSON[] = [];
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
+    }
+    return frames;
+  }
+
+  /** The stack `branchPath` leads to, as serialized. */
+  private stackJSONAt(branchPath: string[]): StateStackJSON | undefined {
+    let stack: StateStackJSON | undefined = this.stack;
+    for (const key of branchPath) {
+      stack = stack?.stack?.at(-1)?.branches?.[key]?.stack;
+    }
+    return stack;
+  }
+
+  /** Every branch in the checkpoint, from the root stack down through
+   *  the stacks of the branches themselves, in the order the checkpoint
+   *  holds them. Stopped inside one tool, a person sees its siblings. */
+  listBranches(): BranchSummary[] {
+    const branches: BranchSummary[] = [];
+    const visit = (frames: StateJSON[] | undefined, path: string[]) => {
+      for (const frame of frames ?? []) {
+        for (const [key, branch] of Object.entries(frame.branches ?? {})) {
+          const branchPathHere = [...path, key];
+          branches.push({
+            path: branchPathHere,
+            key,
+            owner: frame.scopeName === "runPrompt" ? "llm()" : (frame.scopeName ?? ""),
+            label: branch.stack.stack?.[0]?.scopeName ?? key,
+            status:
+              branch.interruptId !== undefined
+                ? "interrupted"
+                : branch.result !== undefined
+                  ? "done"
+                  : "running",
+          });
+          visit(branch.stack.stack, branchPathHere);
+        }
+      }
+    };
+    visit(this.stack.stack, []);
+    return branches;
+  }
+
+  /** The guards the stopped code runs under: those owned by each stack
+   *  along `branchPath`, outermost first. A branch stack serializes the
+   *  time guards it inherited as well, since their elapsed time is its
+   *  own; a cost guard it inherited is the parent's and is listed there. */
+  listGuards(branchPath: string[] = []): GuardSummary[] {
+    const guards: GuardSummary[] = [];
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      const stack = this.stackJSONAt(branchPath.slice(0, depth));
+      for (const guard of [...(stack?.guards ?? []), ...(stack?.inheritedTimeGuards ?? [])]) {
+        guards.push({
+          label: guard.label ?? null,
+          dimension: guard.kind,
+          limit: guard.kind === "cost" ? guard.costLimit : guard.timeLimit,
+          spent: guard.kind === "cost" ? guard.spent : guard.elapsedMs,
+          disarmed: guard.disarmed === true,
+          root: guard.isRootBudget === true,
+        });
+      }
+    }
+    return guards;
+  }
+
+  /** The tool loop the stopped code is in, from the deepest loop frame
+   *  along `branchPath`; null outside any `llm()` call. */
+  loopState(branchPath: string[] = []): LoopState | null {
+    const frame = this.framesAlong(branchPath).findLast(
+      (candidate) =>
+        candidate.scopeName === "runPrompt" && candidate.locals?.toolCallRound !== undefined,
+    );
+    if (!frame) return null;
+    return {
+      round: frame.locals.toolCallRound + 1,
+      removedTools: Array.isArray(frame.locals.removedTools) ? frame.locals.removedTools : [],
+    };
   }
 
   getGlobalsForModule(): Record<string, any> | null {

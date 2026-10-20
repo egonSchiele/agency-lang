@@ -8,6 +8,7 @@ import { formatValue } from "./util.js";
  * Keeps overlays decoupled from DebuggerUI internals.
  */
 import type { InterruptResponse } from "../runtime/interrupts.js";
+import type { BranchSummary } from "../runtime/state/checkpointStore.js";
 import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
 import {
   MESSAGE_PROMPT,
@@ -197,6 +198,58 @@ function amountProblem(data: GuardTripData, typed: string): string | null {
       : "Type a duration, such as 30s, 2m, or 500 for milliseconds";
   }
   return checkGrant(data, amount);
+}
+
+// ---------------------------------------------------------------------------
+// Branch picker
+// ---------------------------------------------------------------------------
+
+/** Pick a branch to look at: the stopped frame's own stack first, then
+ *  every branch with its status and owner. Returns the branch path, an
+ *  empty path for the stopped frame, or null on escape. */
+export async function showBranchPicker(
+  ctx: OverlayContext,
+  branches: BranchSummary[],
+): Promise<string[] | null> {
+  const entries: { path: string[]; line: string }[] = [
+    { path: [], line: "the stopped frame" },
+    ...branches.map((branch) => ({
+      path: branch.path,
+      line: `${"  ".repeat(branch.path.length - 1)}${branch.label} [${branch.status}] under ${branch.owner}`,
+    })),
+  ];
+  let selected = 0;
+  const render = () =>
+    ctx.screen.render(
+      column(
+        ...ctx.buildTopRows(),
+        box(
+          {
+            flex: 1,
+            border: true,
+            borderColor: "yellow",
+            label: " branches (Enter=view, Esc=cancel) ",
+          },
+          text(entries.map((entry, i) => `${i === selected ? ">" : " "} ${entry.line}`).join("\n")),
+        ),
+        ctx.buildStatsBar(),
+        box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
+      ),
+    );
+  while (true) {
+    render();
+    const keyEvent = await ctx.screen.nextKey();
+    if (keyEvent.key === "c" && keyEvent.ctrl) {
+      ctx.cleanup();
+      return null;
+    }
+    if ((keyEvent.key === "up" || keyEvent.key === "k") && selected > 0) selected--;
+    if ((keyEvent.key === "down" || keyEvent.key === "j") && selected < entries.length - 1) {
+      selected++;
+    }
+    if (keyEvent.key === "enter") return entries[selected].path;
+    if (keyEvent.key === "escape" || keyEvent.key === "q") return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

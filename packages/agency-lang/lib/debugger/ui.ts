@@ -20,6 +20,7 @@ import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
 import {
   showRewindSelector,
+  showBranchPicker,
   showCheckpointsPanel,
   showGuardTripForm,
   type OverlayContext,
@@ -187,6 +188,24 @@ export class DebuggerUI implements DebuggerIO {
         label: " call stack ",
         content: () => this.buildCallStackContent(),
       },
+    );
+    if (this.state.listBranches().length > 0) {
+      panes.push({
+        name: "branches",
+        color: "magenta",
+        label: " branches ",
+        content: () => this.buildBranchesContent(),
+      });
+    }
+    if (this.state.listGuards().length > 0 || this.state.loopState() !== null) {
+      panes.push({
+        name: "guards",
+        color: "magenta",
+        label: " guards ",
+        content: () => this.buildGuardsContent(),
+      });
+    }
+    panes.push(
       {
         name: "activity",
         color: "yellow",
@@ -279,6 +298,46 @@ export class DebuggerUI implements DebuggerIO {
       .join("\n");
   }
 
+  /** One line per branch: its status, its label, and the owner it runs
+   *  under; the branch being viewed is marked. */
+  private buildBranchesContent(): string {
+    const viewed = this.state.getLocation()?.branchPath ?? [];
+    return this.state
+      .listBranches()
+      .map((branch) => {
+        const marker = branch.path.join("/") === viewed.join("/") ? ">" : " ";
+        const indent = "  ".repeat(branch.path.length - 1);
+        return `${marker} ${indent}${escapeStyleTags(branch.label)} [${branch.status}] under ${escapeStyleTags(branch.owner)}`;
+      })
+      .join("\n");
+  }
+
+  /** The tool loop's round and removed tools, then one line per guard:
+   *  `research · cost $0.42 of $0.50`. */
+  private buildGuardsContent(): string {
+    const lines: string[] = [];
+    const loop = this.state.loopState();
+    if (loop) {
+      const removed =
+        loop.removedTools.length > 0 ? `; removed: ${loop.removedTools.join(", ")}` : "";
+      lines.push(`  tool loop: round ${loop.round}${removed}`);
+    }
+    for (const guard of this.state.listGuards()) {
+      const name = guard.label ?? (guard.root ? "root budget" : "guard");
+      const amount =
+        guard.dimension === "cost"
+          ? `$${Number(guard.spent.toFixed(6))} of $${guard.limit}`
+          : `${formatElapsed(guard.spent)} of ${formatElapsed(guard.limit)}`;
+      const note = guard.disarmed
+        ? " (disarmed)"
+        : guard.root && guard.label
+          ? " (root budget)"
+          : "";
+      lines.push(`  ${escapeStyleTags(name)} · ${guard.dimension} ${amount}${note}`);
+    }
+    return lines.join("\n");
+  }
+
   private buildActivityContent(): string {
     return this.state
       .getActivityLog()
@@ -362,18 +421,22 @@ export class DebuggerUI implements DebuggerIO {
         this.renderPane(
           panes.find((p) => p.name === "locals")!,
           focusedName,
-          { width: "40%" },
+          { width: "30%" },
         ),
         this.renderPane(
           panes.find((p) => p.name === "globals")!,
           focusedName,
-          { width: "40%" },
+          { width: "25%" },
         ),
         this.renderPane(
           panes.find((p) => p.name === "callStack")!,
           focusedName,
           { flex: 1 },
         ),
+        ...["branches", "guards"]
+          .map((name) => panes.find((p) => p.name === name))
+          .filter((pane) => pane !== undefined)
+          .map((pane) => this.renderPane(pane, focusedName, { width: "20%" })),
       ),
     ];
   }
@@ -535,6 +598,21 @@ export class DebuggerUI implements DebuggerIO {
         this.zoomedPane = this.zoomedPane ? null : focusedName || null;
         this.renderUI();
         return null;
+      case "b": {
+        const branches = this.state.listBranches();
+        if (branches.length === 0) return null;
+        const picked = await showBranchPicker(this.overlayContext(), branches);
+        if (picked !== null) {
+          this.state.viewBranch(picked);
+          this.state.log(
+            picked.length === 0
+              ? "Viewing the stopped frame"
+              : `Viewing branch ${picked.join("/")}`,
+          );
+        }
+        this.renderUI();
+        return null;
+      }
       case "[":
       case "]":
         this.threadDisplayIndex = (this.threadDisplayIndex ?? 0) + (keyEvent.key === "]" ? 1 : -1);
@@ -689,4 +767,16 @@ export class DebuggerUI implements DebuggerIO {
     this.stopSpinner();
     this.screen.destroy();
   }
+}
+
+/** A duration for the guards pane: `4m10s`, `30s`, `250ms`. */
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours === 0) return `${minutes}m${seconds > 0 ? `${seconds}s` : ""}`;
+  return `${hours}h${minutes % 60 > 0 ? `${minutes % 60}m` : ""}`;
 }

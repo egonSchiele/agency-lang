@@ -38,6 +38,18 @@ describe("a guard trip in the debugger", () => {
       expect(screen(session)).toContain('A reject may return the saved draft: "draft"');
       expect(screen(session)).toContain("> Approve with more budget");
       expect(screen(session)).toContain("Remove the cost limit");
+      // The guards pane lists the tripped guard against its limit.
+      expect(session.ui.state.listGuards()).toEqual([
+        {
+          label: "research",
+          dimension: "cost",
+          limit: 0.000001,
+          spent: 0.000002,
+          disarmed: false,
+          root: false,
+        },
+      ]);
+      expect(session.frame().findByKey("guards")!.toPlainText()).toContain("research");
       // The source pane shows the llm() statement the trip happened under.
       expect(session.frame().findByKey("source")!.toPlainText()).toMatch(
         /│>\s+\d+\s+.*llm\("first"\)/,

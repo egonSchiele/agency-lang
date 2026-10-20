@@ -142,6 +142,13 @@ Several branches can stop at once: in stepping mode every Agency tool in a round
 
 The call stack pane still shows the hook-fed entries (`onFunctionStart`), not the branch path. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
+### The branches and guards panes
+
+Two panes appear when the checkpoint has something for them (`UIState.listBranches`, `listGuards`, `loopState`, each read from the checkpoint on every render):
+
+- **branches**: every branch in the checkpoint, from the root stack down through the branches' own stacks, so a person stopped inside one tool sees its siblings: a tool call, a fork branch, or a parallel item, each with the scope it runs, its status (`running`, `interrupted` when it stopped on an interrupt, `done` when it returned), and the frame that owns it. This is where a subagent appears. `b` opens a picker; choosing a branch makes the locals, globals, and call stack panes show its last frame while the source pane keeps the stop's line, and choosing "the stopped frame" returns. `set` still applies to the stopped frame, not the viewed one.
+- **guards**: the tool loop the stopped code is in (its round, counted from 1, and the tools the loop has removed), then one line per guard along the branch path, outermost first: `research · cost $0.42 of $0.5`, `root budget · time 4m10s of 30m`, marked `(disarmed)` when it is. A branch stack lists the time guards it inherited, since their elapsed time is its own; a cost guard it inherited is the parent's and is listed once. The run's tokens and cost stay in the stats bar.
+
 ### User code interrupts
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
@@ -202,6 +209,7 @@ This avoids exporting `__globalCtx` directly.
 | `k` | pin the current checkpoint, with an optional label |
 | `p` | print variable |
 | `z` | zoom the focused pane |
+| `b` | pick a branch (a tool call, a fork branch, a parallel item) to look at |
 | `[` / `]` | cycle which message thread the threads pane shows |
 | `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |
 | `Tab` | cycle pane focus (`Shift+Tab` goes backwards) |

@@ -3,10 +3,14 @@ import {
   Checkpoint,
   type SourceLocationOpts,
   type ThreadMessages,
+  type BranchSummary,
+  type GuardSummary,
+  type LoopState,
 } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
+import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
@@ -30,6 +34,8 @@ export class UIState {
    *  gave one, else the checkpoint's own. Names the frame whose locals
    *  are shown and the source line that is highlighted. */
   private location?: SourceLocationOpts;
+  /** The stop's own location, kept while a branch is being viewed. */
+  private stopLocation?: SourceLocationOpts;
   private sourceMap?: SourceMap;
   private currentLine?: number;
   private args: ValWithOverride[] = [];
@@ -99,23 +105,75 @@ export class UIState {
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
-    this.location = { ...location, stepPath: statementStepPath(location.stepPath) };
-    const branchPath = this.location.branchPath ?? [];
+    this.stopLocation = { ...location, stepPath: statementStepPath(location.stepPath) };
+    this.location = this.stopLocation;
+    if (!this.showFrame(location)) return;
+    await this.setSourceMap();
+  }
+
+  /** Fill the args, locals, and globals panes from the frame at
+   *  `location`. False when the checkpoint has no such frame. */
+  private showFrame(location: {
+    moduleId: string;
+    branchPath?: string[];
+    loopStop?: LoopStopKind;
+  }): boolean {
+    const cp = this.checkpoint!;
     const frame = cp.shownFrame(location);
     if (!frame) {
       this.log("No current frame available in checkpoint");
-      return;
+      return false;
     }
     this.args = [];
     this.locals = [];
-
+    this.globals = [];
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globalsAt(branchPath).store?.[this.location.moduleId] ?? null;
+    const globalsForModule =
+      cp.globalsAt(location.branchPath ?? []).store?.[location.moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }
-    await this.setSourceMap();
+    return true;
+  }
+
+  /** Look at a branch's stack: the locals, globals, and call stack panes
+   *  show its last frame, and the source pane keeps the stop's line. An
+   *  empty path returns to the stop. */
+  viewBranch(path: string[]): void {
+    if (!this.checkpoint || !this.stopLocation) return;
+    if (path.length === 0) {
+      this.location = this.stopLocation;
+      this.showFrame(this.stopLocation);
+      return;
+    }
+    const frame = this.checkpoint.frameAt(path);
+    if (!frame) {
+      this.log(`No branch at ${path.join("/")}`);
+      return;
+    }
+    this.location = {
+      moduleId: frame.moduleId ?? this.stopLocation.moduleId,
+      scopeName: frame.scopeName ?? "",
+      stepPath: this.stopLocation.stepPath,
+      branchPath: path,
+    };
+    this.showFrame(this.location);
+  }
+
+  /** Every branch in the checkpoint; see `Checkpoint.listBranches`. */
+  listBranches(): BranchSummary[] {
+    return this.checkpoint?.listBranches() ?? [];
+  }
+
+  /** The guards the stopped code runs under, outermost first. */
+  listGuards(): GuardSummary[] {
+    return this.checkpoint?.listGuards(this.location?.branchPath ?? []) ?? [];
+  }
+
+  /** The tool loop the stopped code is in, or null. */
+  loopState(): LoopState | null {
+    return this.checkpoint?.loopState(this.location?.branchPath ?? []) ?? null;
   }
 
   setWithOverrides(obj: Record<string, unknown>, array: ValWithOverride[]) {

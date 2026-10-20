@@ -256,6 +256,98 @@ describe("Checkpoint", () => {
     });
   });
 
+  describe("branches, guards, and the loop", () => {
+    function agentCheckpoint() {
+      const stack = makeStackJSON([
+        { scopeName: "main", locals: {} },
+        {
+          scopeName: "runPrompt",
+          locals: { toolCallRound: 1, removedTools: ["writeUp"] },
+          branches: {
+            tool_0_abc: {
+              stack: makeStackJSON([
+                { scopeName: "search", locals: { url: "u" } },
+                {
+                  scopeName: "runPrompt",
+                  locals: { toolCallRound: 0, removedTools: [] },
+                  branches: { fork_1: { stack: makeStackJSON([{ scopeName: "fork" }]) } },
+                },
+              ]),
+              interruptId: "i-1",
+            },
+            tool_1_def: {
+              stack: makeStackJSON([{ scopeName: "writeUp" }]),
+              result: { result: "done" },
+            },
+          },
+        },
+      ]);
+      stack.guards = [{ kind: "cost", label: "research", costLimit: 0.5, spent: 0.42 }];
+      const inner = stack.stack[1].branches!.tool_0_abc.stack;
+      inner.guards = [{ kind: "time", timeLimit: 60000, elapsedMs: 1500, isRootBudget: true }];
+      return new Checkpoint({ id: 0, stack, globals: makeGlobalsJSON(), nodeId: "n1" });
+    }
+
+    it("lists every branch with its status and owner, nested ones under their parent", () => {
+      const cp = agentCheckpoint();
+      expect(cp.listBranches()).toEqual([
+        {
+          path: ["tool_0_abc"],
+          key: "tool_0_abc",
+          owner: "llm()",
+          label: "search",
+          status: "interrupted",
+        },
+        {
+          path: ["tool_0_abc", "fork_1"],
+          key: "fork_1",
+          owner: "llm()",
+          label: "fork",
+          status: "running",
+        },
+        {
+          path: ["tool_1_def"],
+          key: "tool_1_def",
+          owner: "llm()",
+          label: "writeUp",
+          status: "done",
+        },
+      ]);
+    });
+
+    it("lists the guards along the branch path, outermost first", () => {
+      const cp = agentCheckpoint();
+      expect(cp.listGuards()).toEqual([
+        {
+          label: "research",
+          dimension: "cost",
+          limit: 0.5,
+          spent: 0.42,
+          disarmed: false,
+          root: false,
+        },
+      ]);
+      expect(cp.listGuards(["tool_0_abc"]).map((g) => [g.dimension, g.root])).toEqual([
+        ["cost", false],
+        ["time", true],
+      ]);
+    });
+
+    it("reads the deepest tool loop's round and removed tools", () => {
+      const cp = agentCheckpoint();
+      expect(cp.loopState()).toEqual({ round: 2, removedTools: ["writeUp"] });
+      expect(cp.loopState(["tool_0_abc"])).toEqual({ round: 1, removedTools: [] });
+      expect(
+        new Checkpoint({
+          id: 1,
+          stack: makeStackJSON([{ scopeName: "main" }]),
+          globals: makeGlobalsJSON(),
+          nodeId: "n1",
+        }).loopState(),
+      ).toBeNull();
+    });
+  });
+
   describe("getThreadMessages", () => {
     it("should return null when frame has no threads", () => {
       const cp = new Checkpoint({

@@ -1930,9 +1930,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
         checkpoint?: string;
         distDir?: string;
       },
+      command: Command,
     ) => {
       const { attach, node, rewindSize, trace, checkpoint, distDir, ...runFlags } = options;
-      const target = attachTarget({ attach, file });
+      // The flags typed on the command line other than --attach itself,
+      // by name, so --attach can refuse them: a default such as
+      // --rewind-size 30 is not one the person typed.
+      const others = command.options
+        .filter(
+          (option: { attributeName(): string }) =>
+            option.attributeName() !== "attach" &&
+            command.getOptionValueSource(option.attributeName()) === "cli",
+        )
+        .map((option: { long?: string; short?: string }) => option.long ?? option.short ?? "");
+      const target = attachTarget({ attach, file, others });
       if ("refused" in target) {
         console.error(`Error: ${target.refused}`);
         process.exit(2);

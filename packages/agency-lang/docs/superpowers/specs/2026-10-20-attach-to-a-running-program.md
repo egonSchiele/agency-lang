@@ -85,10 +85,11 @@ $ agency debug --attach 48213    # in another
 The debugger opens stopped at the run's next step, wherever it is,
 inside a tool call included, and from there `step`, `next`, `step in`,
 `step out`, `continue`, `rewind`, and the inspection commands mean what
-they mean today. The status line says `attached to 48213 agent.agency`.
+they mean today. The status line says `attached to 48213 agent.js`.
 The checkpoint window starts filling at the moment of attach, so rewind
-reaches back as far as the attach and no further; the status line says
-so while the window is shorter than the configured size.
+reaches back as far as the attach and no further. (A status-line note
+while the window is still short is listed in
+`docs/dev/cli/debugger-future-work.md`.)
 
 `continue` lets the program run until its next `debugger()` statement, a
 question, or the end. While it runs the debugger waits and reads no keys;

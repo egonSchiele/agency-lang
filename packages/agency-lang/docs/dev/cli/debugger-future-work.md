@@ -7,6 +7,16 @@ still exported because `thread.test.ts` and `trace.test.ts` import them. Those
 two files test runtime behavior (LLM thread tracking, trace file I/O) rather
 than UI. Port them to `DebuggerTestSession` and the old helpers can go.
 
+## Attach
+
+### The status line while the rewind window is short
+
+After an attach the rolling checkpoint window holds only what the program has done since, so `stepBack` and `rewind` reach back to the attach and no further. The spec wanted the status line to say so while the window is shorter than the configured size. The window's size is known only on the run side (`DebuggerState`), and the UI learns nothing about it today; a notice with the count on each stop would do.
+
+### The attached UI imports the program's compiled module for its source map
+
+`UIState.setSourceMap` imports the compiled module to read `__sourceMap`, as `agency debug` does in the program's own process. Attached, that import runs in the debugger's process: the program's JavaScript dependencies are initialised a second time, with whatever top-level side effects they have, and an import that fails is reported to the run as an ordinary error, which now ends the session. Module ids are also resolved against the debugger's working directory rather than the compilation directory, so attaching from elsewhere can lose the source pane or show a same-named file. The fix is to send source locations or the source text from the run, which has the map, instead of loading anything on the UI side.
+
 ## UI improvements
 
 ### Text input improvements

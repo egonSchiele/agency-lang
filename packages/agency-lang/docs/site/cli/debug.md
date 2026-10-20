@@ -50,8 +50,8 @@ agency debug --attach
 lists the programs that can take a debugger, with their process ids:
 
 ```
-  PID    PROGRAM        NODE  STARTED
-  48213  agent.agency   main  4m12s ago
+  PID    PROGRAM   NODE  STARTED
+  48213  agent.js  main  4m12s ago
 ```
 
 and
@@ -60,7 +60,7 @@ and
 agency debug --attach 48213
 ```
 
-opens the debugger on that program. It stops at the program's next statement, wherever it is, inside a tool call included, and from there stepping, inspecting, `set`, and rewind work as they do when the debugger started the program. Rewind reaches back as far as the attach and no further. `c` lets the program run until its next `debugger()` statement, a question, or the end; while it runs the debugger waits and reads no keys. `q` detaches: the program runs on without a debugger, and if it was stopped it is let go first. When the program finishes while attached, the debugger says so and exits.
+opens the debugger on that program. The listing shows the compiled file the process is running, `agent.js` for `agency run agent.agency`, relative to the current directory when it is under it. It stops at the program's next statement, wherever it is, inside a tool call included, and from there stepping, inspecting, `set`, and rewind work as they do when the debugger started the program. Rewind reaches back as far as the attach and no further. `c` lets the program run until its next `debugger()` statement, a question, or the end. Keys typed while the program runs are kept and acted on at its next stop, so pressing `q` while it runs detaches at the next stop, not before. Ctrl-C detaches at any time and leaves the program running. At a stop, `q` detaches: the program runs on without a debugger, and it is let go first. Escape does nothing while attached, so a stray key cannot detach. When the program finishes while attached, the debugger says so and exits.
 
 A program's own interrupts keep going wherever the program sends them: a policy, the `--approve` and `--reject` flags, or the program's terminal under `--interactive`. The debugger shows them going by and does not answer them. A question asked with `input()` goes to the program's terminal as well.
 
@@ -68,6 +68,7 @@ How it works: a running program listens for the `SIGUSR2` signal and opens a Uni
 
 ## Options
 
+- `--attach [pid]` — attach to the running program with that pid, or with no pid, list the programs that can take a debugger. It takes no file and none of the other flags: the program keeps the options it was started with, so `--policy` or `--rewind-size` with `--attach` is refused rather than ignored.
 - `--node <name>` — node to execute (defaults to `main`).
 - `--rewind-size <n>` — size of the rolling checkpoint window. Defaults to 30. Larger values let you rewind further at the cost of memory.
 - `--trace <file>` — load and inspect an existing `.trace` file instead of running the program live.

@@ -424,6 +424,11 @@ describe("stopping inside a tool call", () => {
       // The interrupt has no stop record; the pane finds the tool by the
       // interrupt's id in the branch state.
       expect(callStackNames(session)).toEqual(["main", "llm()", "confirm"]);
+      // An answer the driver does not understand is asked for again.
+      await session.type("maybe");
+      expect(activity(session)).toContainEqual(
+        'Unknown response: "maybe". Try: approve, reject, resolve <value>',
+      );
       await session.type("approve");
       expect(await session.quit()).toBe(FINAL);
       const batch = resumes.find((resume) => resume.interrupts === 2)!;

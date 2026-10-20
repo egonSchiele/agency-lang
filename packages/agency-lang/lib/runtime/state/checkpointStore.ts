@@ -193,18 +193,22 @@ export class Checkpoint implements SourceLocation {
    *  undefined when no branch is. A user interrupt raised inside a tool,
    *  a fork, or a parallel arm has no stop record to say which branch it
    *  came from, but the branch's own state records the interrupt's id.
-   *  Only the last frame of a stack holds branches, as `stackAt` reads. */
+   *  An interrupt bubbles up unchanged, so every enclosing branch records
+   *  the same id (`setInterruptOnBranch` in `prompt.ts` and `runBatch.ts`);
+   *  the deepest match is the branch that raised it. Only the last frame
+   *  of a stack holds branches, as `stackAt` reads. */
   branchPathOf(interruptId: string): string[] | undefined {
     const search = (frames: StateJSON[], path: string[]): string[] | undefined => {
       const branches = frames.at(-1)?.branches ?? {};
       for (const key of Object.keys(branches)) {
         const branch = branches[key];
-        if (branch.interruptId === interruptId) {
-          return [...path, key];
-        }
-        const below = search(branch.stack.stack, [...path, key]);
+        const here = [...path, key];
+        const below = search(branch.stack.stack, here);
         if (below) {
           return below;
+        }
+        if (branch.interruptId === interruptId) {
+          return here;
         }
       }
       return undefined;

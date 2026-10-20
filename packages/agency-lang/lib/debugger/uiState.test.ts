@@ -382,12 +382,26 @@ describe("UIState", () => {
                 tool_0_abc: {
                   stack: makeStackJSON([{ scopeName: "search", moduleId: "mod.agency" }]),
                 },
+                // The interrupt bubbled out of a nested tool, so the
+                // enclosing branch records the same id; the nested one
+                // is the branch that asked.
                 tool_1_def: {
                   interruptId: "intr-1",
                   stack: makeStackJSON([
                     { scopeName: "confirm", moduleId: "mod.agency" },
-                    { scopeName: "__block_0", moduleId: "mod.agency" },
-                    { moduleId: "mod.agency" },
+                    {
+                      scopeName: "runPrompt",
+                      moduleId: "mod.agency",
+                      branches: {
+                        tool_0_ghi: {
+                          interruptId: "intr-1",
+                          stack: makeStackJSON([
+                            { scopeName: "__block_0", moduleId: "mod.agency" },
+                            { moduleId: "mod.agency" },
+                          ]),
+                        },
+                      },
+                    },
                   ]),
                 },
               },
@@ -401,10 +415,11 @@ describe("UIState", () => {
         "main",
         "llm()",
         "confirm",
+        "llm()",
         "block",
         "(unknown)",
       ]);
-      expect(ui.getLocation()?.branchPath).toEqual(["tool_1_def"]);
+      expect(ui.getLocation()?.branchPath).toEqual(["tool_1_def", "tool_0_ghi"]);
     });
 
     it("is empty without a checkpoint", () => {

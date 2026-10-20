@@ -104,22 +104,8 @@ export class DebuggerDriver {
 
   getCallbacks(): AgencyCallbacks {
     return {
-      onFunctionStart: (data) => {
-        const isAgency = data.moduleId?.endsWith(".agency");
-        this.ui.state.pushCallStackEntry({
-          functionName: data.functionName,
-          moduleId: isAgency ? data.moduleId : "(ts)",
-          line: 0,
-        });
-        if (!isAgency) {
-          this.ui.state.log(`[ts] ${data.functionName}()`);
-        }
-        this.ui.render();
-      },
-      onFunctionEnd: (data) => {
-        this.ui.state.removeWithFuncName(data.functionName);
-        this.ui.render();
-      },
+      // The call stack pane reads the checkpoint's frames, so no function
+      // hook is needed.
       onNodeStart: (data) => {
         // gets triggered on every statement, as debugger resumes node execution.
         // this.ui.state.log(`-> node: ${data.nodeName}`);
@@ -241,10 +227,9 @@ export class DebuggerDriver {
             return finalResult;
           }
         } else {
-          // User code interrupts: show the first, ask about each in turn,
-          // then answer the batch at once.
+          // User code interrupts: ask about each in turn (`askAbout`
+          // renders for each), then answer the batch at once.
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt.checkpoint);
           result = await this.handleInterrupts(batch, asked);
         }
       }
@@ -263,7 +248,6 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    this.ui.state.resetCallStack();
     return await this.respond(batch, answers);
   }
 
@@ -272,6 +256,9 @@ export class DebuggerDriver {
    *  grant, a disarm, a message, or a reject instead; a raise that
    *  expects a value, such as a `question`, takes the typed text. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    // The batch shares one checkpoint; the panes follow the interrupt
+    // being asked about, so they name the tool that raised it.
+    await this.ui.render(interrupt.checkpoint, undefined, interrupt.interruptId);
     if (isGuardTrip(interrupt.effect, interrupt.data)) {
       return await this.askAboutGuardTrip(interrupt, position);
     }
@@ -500,12 +487,10 @@ export class DebuggerDriver {
       }
       case "reject": {
         this.ui.state.log("Rejected interrupt");
-        this.ui.state.resetCallStack();
         return await this.respond(batch, { [interrupt.interruptId]: { type: "reject" } });
       }
       case "resolve": {
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
-        this.ui.state.resetCallStack();
         return await this.respond(batch, {
           [interrupt.interruptId]: { type: "approve", value: command.value } as InterruptResponse,
         });
@@ -584,7 +569,6 @@ export class DebuggerDriver {
     // Reset state for replay
     this.programFinished = false;
     this.debuggerState.reset();
-    this.ui.state.resetCallStack();
     this.ui.state.log(`Rewinding to checkpoint #${checkpoint.id}`);
 
     const overrides = this.ui.state.getOverrides();

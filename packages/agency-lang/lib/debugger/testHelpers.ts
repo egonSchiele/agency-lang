@@ -28,7 +28,11 @@ export class TestDebuggerIO implements DebuggerIO {
     this.commands = commands;
   }
 
-  async render(_checkpoint?: Checkpoint, _stop?: DebugStopData): Promise<void> {
+  async render(
+    _checkpoint?: Checkpoint,
+    _stop?: DebugStopData,
+    _interruptId?: string,
+  ): Promise<void> {
     if (_checkpoint) {
       const checkpoint = Checkpoint.fromJSON(_checkpoint);
       if (checkpoint) {

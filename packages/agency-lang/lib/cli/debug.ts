@@ -12,6 +12,7 @@ import { TraceReader } from "@/runtime/trace/traceReader.js";
 import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import { createDebugInterrupt } from "@/runtime/interrupts.js";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -62,7 +63,7 @@ export async function debug(
       // debugger screen is up, Ctrl-C is a plain SIGINT, which would end
       // the process without the exit event, so it is turned into an exit.
       const extracted = tempDir;
-      process.on("exit", () => fs.rmSync(extracted, { recursive: true, force: true }));
+      process.on("exit", () => safeDeleteDirectoryWithin(bundleRoot, extracted));
       process.on("SIGINT", () => process.exit(130));
       reader.writeSourcesToDisk(tempDir);
       console.log(`Bundle extracted to: ${tempDir} (removed on exit)`);

@@ -230,7 +230,7 @@ await session.press("s"); // the interrupt fires
 await session.type("resolve 5");
 ```
 
-Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`.
+Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. For a raise used as a value, such as a `question`, the prompt is `answer:` and the typed text is the answer (see `lib/debugger/question.test.ts`).
 
 ### Testing print
 

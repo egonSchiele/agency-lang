@@ -146,6 +146,8 @@ The call stack pane still shows the hook-fed entries (`onFunctionStart`), not th
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
 
+A raise used as a value (`const x = raise ...`, which the runtime marks `expectsValue`; `question` from `std::agent` is one) wants an answer rather than an approve or a reject. The activity log shows the question, the prompt is `answer:`, and the typed text is the answer, as a string, the way the CLI's approval prompt takes it. `resolve <value>` still gives a JSON value, `reject` rejects, and an empty answer is asked for again.
+
 ### Source mapping
 
 The builder records source locations in a `SourceMap` exported as `__sourceMap` from the compiled module. Keys are `"moduleId:scopeName"`, values map step paths to `{line, col}`. The UI uses this to highlight the current line in the source pane. For cross-file debugging, the UI loads the new file when the `moduleId` changes.

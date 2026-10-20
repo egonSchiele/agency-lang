@@ -264,9 +264,6 @@ export class DebuggerDriver {
     const answers: Record<string, InterruptResponse> = {};
     for (const [index, interrupt] of asked.entries()) {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
-      const data =
-        Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
-      this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
     this.ui.state.resetCallStack();
@@ -274,8 +271,15 @@ export class DebuggerDriver {
   }
 
   /** One interrupt's answer, asked for until the input is one of
-   *  approve, reject, or resolve with a value. */
+   *  approve, reject, or resolve with a value. A raise that expects a
+   *  value, such as a `question`, takes the typed text as its answer. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    if (interrupt.expectsValue) {
+      return await this.askForValue(interrupt, position);
+    }
+    const data =
+      Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
+    this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
     while (true) {
       // The label shares one row with the typed answer, so it stays
       // short; the message is in the activity log.
@@ -292,17 +296,41 @@ export class DebuggerDriver {
         return { type: "reject" };
       }
       if (trimmed.startsWith("resolve ")) {
-        const valueStr = trimmed.slice("resolve ".length).trim();
-        let value: unknown;
-        try {
-          value = JSON.parse(valueStr);
-        } catch {
-          value = valueStr;
-        }
+        const value = jsonOrText(trimmed.slice("resolve ".length));
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
         return { type: "approve", value } as InterruptResponse;
       }
       this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
+    }
+  }
+
+  /** The answer to a raise used as a value (`const x = raise ...`, or
+   *  `question` from `std::agent`): the typed text, as a string, the way
+   *  the CLI's approval prompt takes it. `resolve <value>` still gives a
+   *  JSON value, `reject` rejects, and a bare `approve` resolves the
+   *  variable to `true`. */
+  private async askForValue(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    this.ui.state.log(`Question${position}: ${interrupt.message}`);
+    while (true) {
+      const input = await this.ui.promptForInput(`answer${position}:`);
+      const trimmed = input.trim();
+      if (trimmed === "") {
+        this.ui.state.log("Type the answer, or reject");
+        continue;
+      }
+      if (trimmed === "approve") {
+        this.ui.state.log("Approved the question with no answer");
+        return { type: "approve" };
+      }
+      if (trimmed === "reject") {
+        this.ui.state.log("Rejected the question");
+        return { type: "reject" };
+      }
+      const value = trimmed.startsWith("resolve ")
+        ? jsonOrText(trimmed.slice("resolve ".length))
+        : input;
+      this.ui.state.log(`Answered: ${JSON.stringify(value)}`);
+      return { type: "approve", value } as InterruptResponse;
     }
   }
 
@@ -595,6 +623,17 @@ export class DebuggerDriver {
 
 /** The stop a debug interrupt carries, or nothing for a user interrupt
  *  and for the placeholder interrupt a trace replay starts from. */
+/** `resolve <value>` takes JSON, so a number or a list can be given,
+ *  and falls back to the text itself. */
+function jsonOrText(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
 function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
 }

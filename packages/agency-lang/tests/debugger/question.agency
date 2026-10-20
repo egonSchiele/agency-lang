@@ -1,0 +1,13 @@
+import { question } from "std::agent"
+
+// A question to the person, and a plain raise used as a value. Both
+// expect an answer rather than an approve or a reject.
+node main(): string {
+  const name = question("What is your name?")
+  return "Hello, " + name
+}
+
+node pick(): string {
+  const chosen = interrupt("Pick a number")
+  return chosen
+}

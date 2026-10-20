@@ -1,0 +1,14 @@
+// Two arms of a parallel block each raise an interrupt, so the program
+// pauses with a batch of two and the debugger must answer both at once.
+def ask(label: string): string {
+  const v = interrupt("${label}?")
+  return "${label}:${v}"
+}
+
+node main() {
+  parallel {
+    let a = ask("A")
+    let b = ask("B")
+  }
+  return [a, b]
+}

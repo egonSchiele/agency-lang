@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
-import { freshImport, fixtureDir, withLLMMocks } from "./testHelpers.js";
+import {
+  freshImport,
+  fixtureDir,
+  withLLMMocks,
+  recordingResumes,
+  type RecordedResume,
+} from "./testHelpers.js";
 import { DebuggerTestSession } from "./testSession.js";
 import type { LLMMock } from "../runtime/deterministicClient.js";
 
@@ -36,9 +42,14 @@ const FINAL = "final report";
 
 /** A session on `node` of the agent fixture. The model's replies come
  *  from the `withLLMMocks` the caller is inside. */
-async function agentSession(node = "main", args: unknown[] = ["research"]) {
+async function agentSession(
+  node = "main",
+  args: unknown[] = ["research"],
+  resumes: RecordedResume[] = [],
+) {
   const mod = await freshImport(agentCompiled);
-  return await DebuggerTestSession.create({ mod: { ...mod, main: mod[node] }, args });
+  const recording = recordingResumes({ ...mod, main: mod[node] }, resumes);
+  return await DebuggerTestSession.create({ mod: recording, args });
 }
 
 function sourceText(session: DebuggerTestSession): string {
@@ -356,6 +367,47 @@ describe("stopping inside a tool call", () => {
       expect(lineWithMarker(session)).toMatch(/const url|const heading/);
       await session.press("s", { times: 20 });
       expect(await session.quit()).toBe(FINAL);
+    });
+  });
+
+  it("print at one of two stops keeps the batch, and continue moves both", async () => {
+    await withLLMMocks(twoToolMocks, async () => {
+      const resumes: RecordedResume[] = [];
+      const session = await agentSession("main", ["research"], resumes);
+      await session.press("s", { times: 4 }); // round 1, two tool stops, both bodies
+      expect(lineWithMarker(session)).toMatch(/const url|const heading/);
+      await session.press("p");
+      await session.type("query");
+      await session.press("c");
+      expect(await session.quit()).toBe(FINAL);
+      const last = resumes.at(-1)!;
+      expect(last.interrupts).toBe(2);
+      expect(last.responses).toEqual([{ type: "approve" }, { type: "approve" }]);
+    });
+  });
+
+  it("a stop and a real interrupt in one batch: the interrupt is asked about, the stop moves with it", async () => {
+    const mocks: LLMMock[] = [
+      {
+        toolCalls: [
+          { name: "search", args: { query: "grant", breakHere: true } },
+          { name: "confirm", args: { note: "send" } },
+        ],
+      },
+      { return: "grant summary" },
+      { return: FINAL },
+    ];
+    await withLLMMocks(mocks, async () => {
+      const resumes: RecordedResume[] = [];
+      const session = await agentSession("main", ["research"], resumes);
+      await session.press("c");
+      expect(activity(session)).toContainEqual("Interrupt: confirm send?");
+      expect(activity(session).filter((line) => line.startsWith("Interrupt"))).toHaveLength(1);
+      await session.type("approve");
+      expect(await session.quit()).toBe(FINAL);
+      const batch = resumes.find((resume) => resume.interrupts === 2)!;
+      expect(batch.responses).toEqual([{ type: "approve" }, { type: "approve" }]);
+      expect(activity(session).some((line) => line.startsWith("Tool done: confirm"))).toBe(true);
     });
   });
 

@@ -126,6 +126,22 @@ export async function getInitialResult(mod: any, driver: DebuggerDriver, ...args
  *  client is built from `AGENCY_LLM_MOCKS` when the module is imported,
  *  and one queue then serves the whole session, resumes and rewinds
  *  included. */
+/** One resume the driver sent: how many interrupts it answered, and the
+ *  responses in the batch's order. */
+export type RecordedResume = { interrupts: number; responses: unknown[] };
+
+/** A copy of a compiled module whose `respondToInterrupts` records every
+ *  resume into `resumes` before forwarding it. */
+export function recordingResumes(mod: any, resumes: RecordedResume[]): any {
+  return {
+    ...mod,
+    respondToInterrupts: (interrupts: unknown[], responses: unknown[], opts: unknown) => {
+      resumes.push({ interrupts: interrupts.length, responses });
+      return mod.respondToInterrupts(interrupts, responses, opts);
+    },
+  };
+}
+
 export async function withLLMMocks<T>(mocks: LLMMock[], fn: () => Promise<T>): Promise<T> {
   const previous = process.env.AGENCY_LLM_MOCKS;
   process.env.AGENCY_LLM_MOCKS = JSON.stringify(mocks);

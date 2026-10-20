@@ -22,6 +22,7 @@ import {
   showRewindSelector,
   showCheckpointsPanel,
   showGuardTripForm,
+  showThreadPicker,
   type OverlayContext,
 } from "./overlays.js";
 import type { GuardTripData } from "./guardAnswer.js";
@@ -114,7 +115,8 @@ export class DebuggerUI implements DebuggerIO {
 
   private focusIndex = 0;
   private zoomedPane: string | null = null;
-  private threadDisplayIndex: number | undefined = undefined;
+  /** The thread the threads pane shows; the active one when unset. */
+  private threadDisplayId: string | undefined = undefined;
   private scrollOffsets: Record<string, number> = {};
 
   // Spinner
@@ -144,7 +146,7 @@ export class DebuggerUI implements DebuggerIO {
 
   private getPanes(): PaneSlot[] {
     const moduleId = this.state.getModuleId();
-    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    const threadData = this.state.getThreadMessages(this.threadDisplayId);
 
     const panes: PaneSlot[] = [
       {
@@ -160,10 +162,11 @@ export class DebuggerUI implements DebuggerIO {
         threadData.threadCount > 1
           ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
           : "";
+      const name = threadData.label ?? `id: ${threadData.threadId}`;
       panes.push({
         name: "threads",
         color: "cyan",
-        label: ` threads: (id: ${threadData.threadId})${countLabel} `,
+        label: ` threads: ${escapeStyleTags(name)}${countLabel} `,
         content: () => this.buildThreadsContent(),
       });
     }
@@ -235,7 +238,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildThreadsContent(): string {
-    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    const threadData = this.state.getThreadMessages(this.threadDisplayId);
     if (!threadData) return "";
     const isZoomed = this.zoomedPane === "threads";
     return threadData.messages
@@ -426,7 +429,7 @@ export class DebuggerUI implements DebuggerIO {
   async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
     if (checkpoint) {
       await this.state.setCheckpoint(checkpoint, stop);
-      this.threadDisplayIndex = undefined;
+      this.threadDisplayId = undefined;
     }
     this.renderUI();
   }
@@ -535,11 +538,27 @@ export class DebuggerUI implements DebuggerIO {
         this.zoomedPane = this.zoomedPane ? null : focusedName || null;
         this.renderUI();
         return null;
-      case "[":
-      case "]":
-        this.threadDisplayIndex = (this.threadDisplayIndex ?? 0) + (keyEvent.key === "]" ? 1 : -1);
+      case "t": {
+        const threads = this.state.listThreads();
+        if (threads.length === 0) return null;
+        const shown = this.state.getThreadMessages(this.threadDisplayId)?.threadId;
+        const picked = await showThreadPicker(this.overlayContext(), threads, shown);
+        if (picked !== null) this.threadDisplayId = picked;
         this.renderUI();
         return null;
+      }
+      case "[":
+      case "]": {
+        // Cycle through the store's threads from the one shown.
+        const threads = this.state.listThreads();
+        const shown = this.state.getThreadMessages(this.threadDisplayId);
+        if (threads.length === 0 || !shown) return null;
+        const next =
+          (shown.threadIndex + (keyEvent.key === "]" ? 1 : -1) + threads.length) % threads.length;
+        this.threadDisplayId = threads[next].id;
+        this.renderUI();
+        return null;
+      }
       default:
         if (keyEvent.key >= "1" && keyEvent.key <= "9") {
           const idx = parseInt(keyEvent.key, 10) - 1;

@@ -142,6 +142,10 @@ Several branches can stop at once: in stepping mode every Agency tool in a round
 
 The call stack pane still shows the hook-fed entries (`onFunctionStart`), not the branch path. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
+### The threads pane
+
+The pane shows one thread of the checkpoint's thread store, the active one until the person picks another with `t` (a picker listing every thread by label, with its parent, its message count, and a mark on the active one) or cycles with `[` and `]`. The threads come from two places in the checkpoint (`Checkpoint.listThreads`). The node frame carries the thread store. A tool loop's frame carries `messagesJSON`, the thread it is working on, refreshed on every checkpoint: for the node's own loop that is a newer copy of a store thread, shown when it is the longer one, since the store's copy dates from the thread's last pop; for a loop inside a tool it is the only record, because a tool runs on a fresh store that is not serialized, so inside a tool the subagent's thread is listed, named after the function that called `llm()`, and marked active. Both are matched by the thread's own `id`, not the store's key.
+
 ### User code interrupts
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
@@ -202,6 +206,7 @@ This avoids exporting `__globalCtx` directly.
 | `k` | pin the current checkpoint, with an optional label |
 | `p` | print variable |
 | `z` | zoom the focused pane |
+| `t` | pick which message thread the threads pane shows |
 | `[` / `]` | cycle which message thread the threads pane shows |
 | `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |
 | `Tab` | cycle pane focus (`Shift+Tab` goes backwards) |

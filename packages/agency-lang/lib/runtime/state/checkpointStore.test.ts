@@ -256,6 +256,151 @@ describe("Checkpoint", () => {
     });
   });
 
+  describe("listThreads", () => {
+    it("lists every thread with its label, parent, count, and the active mark", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            threads: {
+              threads: {
+                "0": { messages: [{ role: "user", content: "Hello" }], label: "main" },
+                "1": { messages: [], parentId: "0", label: "research", hidden: true },
+              },
+              counter: 2,
+              activeStack: ["0", "1"],
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listThreads()).toEqual([
+        { id: "0", label: "main", parentId: null, messageCount: 1, active: false, hidden: false },
+        { id: "1", label: "research", parentId: "0", messageCount: 0, active: true, hidden: true },
+      ]);
+    });
+
+    it("reads the store the stopped branch sees, and a thread by id", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            threads: {
+              threads: { "0": { messages: [{ role: "user", content: "outer" }] } },
+              counter: 1,
+              activeStack: ["0"],
+            },
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  {
+                    threads: {
+                      threads: {
+                        "0": { messages: [{ role: "user", content: "outer" }] },
+                        "1": { messages: [{ role: "user", content: "inner" }] },
+                      },
+                      counter: 2,
+                      activeStack: ["0", "1"],
+                    },
+                  },
+                ]),
+              },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listThreads().map((t) => t.id)).toEqual(["0"]);
+      expect(cp.listThreads(["tool_0_abc"]).map((t) => [t.id, t.active])).toEqual([
+        ["0", false],
+        ["1", true],
+      ]);
+      expect(cp.getThreadMessages("0", ["tool_0_abc"])!.messages[0].content).toBe("outer");
+      expect(cp.getThreadMessages(undefined, ["tool_0_abc"])!.threadId).toBe("1");
+    });
+
+    it("shows the tool loop's newer copy of the active thread", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            threads: {
+              threads: { "0": { id: "t-abc", messages: [{ role: "user", content: "Hello" }] } },
+              counter: 1,
+              activeStack: ["0"],
+            },
+          },
+          {
+            scopeName: "runPrompt",
+            locals: {
+              messagesJSON: {
+                id: "t-abc",
+                messages: [
+                  { role: "user", content: "Hello" },
+                  { role: "assistant", content: "Hi" },
+                ],
+              },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Hello", "Hi"]);
+      expect(cp.listThreads()[0].messageCount).toBe(2);
+    });
+
+    it("lists a tool's own loop thread, which only its frame records", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            scopeName: "main",
+            threads: {
+              threads: { "0": { id: "t-outer", messages: [{ role: "user", content: "task" }] } },
+              counter: 1,
+              activeStack: ["0"],
+            },
+          },
+          {
+            scopeName: "runPrompt",
+            locals: {
+              messagesJSON: { id: "t-outer", messages: [{ role: "user", content: "task" }] },
+            },
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  { scopeName: "search" },
+                  {
+                    scopeName: "runPrompt",
+                    locals: {
+                      messagesJSON: {
+                        id: "t-inner",
+                        messages: [{ role: "user", content: "summarize" }],
+                      },
+                    },
+                  },
+                ]),
+              },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listThreads().map((t) => [t.id, t.active])).toEqual([["0", true]]);
+      expect(cp.listThreads(["tool_0_abc"]).map((t) => [t.id, t.label, t.active])).toEqual([
+        ["0", null, false],
+        ["t-inner", "search", true],
+      ]);
+      expect(cp.getThreadMessages(undefined, ["tool_0_abc"])!.messages[0].content).toBe(
+        "summarize",
+      );
+    });
+  });
+
   describe("getThreadMessages", () => {
     it("should return null when frame has no threads", () => {
       const cp = new Checkpoint({

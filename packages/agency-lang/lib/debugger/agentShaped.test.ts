@@ -282,6 +282,29 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("the threads pane lists the subagent's thread, and the picker and ] show it", async () => {
+    await withLLMMocks(agentMocks(), async () => {
+      const session = await agentSession();
+      await session.press("s"); // round 1
+      await session.press("s"); // before search
+      await session.press("s"); // const url
+      await session.press("n", { times: 4 }); // to summary = llm(...)
+      await session.press("s"); // the subagent's round 1, in the thread block
+      const threads = session.ui.state.listThreads();
+      expect(threads).toHaveLength(2);
+      expect(threads.filter((thread) => thread.active)).toHaveLength(1);
+      const label = () => session.frame().findByKey("threads")?.toPlainText() ?? "";
+      // The picker lists both; moving to the other one shows it.
+      await session.press("t");
+      expect(session.frame().toPlainText()).toContain("* = active");
+      await session.press("up");
+      await session.press("enter");
+      expect(label()).toContain("[1/2]");
+      await session.press("]");
+      expect(label()).toContain("[2/2]");
+    });
+  });
+
   it("print reads the tool's variables and set is refused", async () => {
     await withLLMMocks(agentMocks(), async () => {
       const session = await agentSession();

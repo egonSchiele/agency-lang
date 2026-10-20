@@ -179,7 +179,7 @@ export class DebuggerUI implements DebuggerIO {
       {
         name: "globals",
         color: "green",
-        label: " globals ",
+        label: ` globals: ${escapeStyleTags(this.state.getGlobalsModuleId())} `,
         content: () => this.buildGlobalsContent(),
       },
       {
@@ -450,7 +450,9 @@ export class DebuggerUI implements DebuggerIO {
     if (extras.length === 0) return [];
     return [
       row(
-        { height: "15%" },
+        // A small fixed height, so the activity log keeps its room on a
+        // short terminal; `z` zooms a pane that needs more.
+        { height: 6 },
         ...extras.map((pane) => this.renderPane(pane, focusedName, { flex: 1 })),
       ),
     ];

@@ -143,7 +143,10 @@ function toolCallName(frame: StateJSON | undefined, key: string): string | undef
   if (frame?.scopeName !== "runPrompt") return undefined;
   const copy = frame.locals?.messagesJSON;
   const messages: unknown[] = Array.isArray(copy) ? copy : (copy?.messages ?? []);
-  for (const message of messages) {
+  // Branches are dropped at the end of each round, so only the latest
+  // assistant message can own a live branch; searched from the end, so a
+  // missing id (Gemini sends none) cannot match an earlier round's call.
+  for (const message of [...messages].reverse()) {
     const calls = (message as { toolCalls?: { id?: string; name?: string }[] } | null)?.toolCalls;
     if (!Array.isArray(calls)) continue;
     const index = calls.findIndex((call, i) => `tool_${i}_${call.id ?? ""}` === key);

@@ -140,6 +140,9 @@ describe("the tool loop's own stops", () => {
       await session.press("s"); // before search
       await session.press("n");
       expect(activity(session)).toContainEqual("Stopped before round 2");
+      // The loop counts a round when the request returns, so the pane
+      // reads the round from the stop's label here.
+      expect(session.frame().findByKey("guards")!.toPlainText()).toContain("tool loop: round 2");
       expect(activity(session)).toContainEqual(`Tool call: ${SEARCH_STOP}`);
       await session.press("n");
       expect(activity(session)).toContainEqual('Stopped before writeUp(notes: "grant summary")');

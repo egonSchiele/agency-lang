@@ -9,7 +9,6 @@ import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
 import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
-import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
@@ -599,7 +598,3 @@ export class DebuggerDriver {
 function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
 }
-
-/** The frame the program is stopped in: the one the stop's location
- *  leads to, else the checkpoint's own. At one of the tool loop's own
- *  stops that is the frame that called `llm()`. */

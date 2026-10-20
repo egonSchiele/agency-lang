@@ -279,6 +279,12 @@ export class UIState {
     return this.location?.moduleId || "unknown module";
   }
 
+  /** The module the globals pane shows: the viewed frame's, which after
+   *  `b` can differ from the source pane's. */
+  getGlobalsModuleId() {
+    return this.globalsModuleId ?? this.getModuleId();
+  }
+
   /** Where the program is stopped, as the panes show it. */
   getLocation(): SourceLocationOpts | undefined {
     return this.location;

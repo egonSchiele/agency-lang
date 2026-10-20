@@ -314,12 +314,15 @@ function chargeAndResumeParentTimeGuards(
  *  is live-only — automatically reset on deserialize). Must run before
  *  any code reads `branch.stack.guards` or before the branch is
  *  `invoke`d. */
-function rehydrateInheritedGuards(branch: BranchState, parentStack: StateStack): void {
+function rehydrateInheritedGuards(branch: BranchState, parentStack: StateStack, key: string): void {
   // Before the rehydration flag: the executing-handler snapshot must
   // track the parent's CURRENT list on every entry, not the list from
   // the branch's first rehydration. A branch started inside a handler
   // inherits its exclusion identity and the no-pause refusal (#616).
   branch.stack.adoptExecutingHandlersFrom(parentStack);
+  // Also on every entry: the link to the parent stack is live state a
+  // resumed stack does not carry.
+  branch.stack.parent = { stack: parentStack, key };
   if (branch.guardsRehydrated) return;
   branch.stack.rehydrateInheritedGuardsFrom(parentStack);
   branch.guardsRehydrated = true;
@@ -363,7 +366,7 @@ function startInvoke<T>(
   // overwrites `stack.abortSignal`, so the arming must come last. For
   // CostGuard, the child's stack.guards just holds a shared reference
   // to the parent's instance — no install plumbing involved.
-  rehydrateInheritedGuards(t.branch, parentStack);
+  rehydrateInheritedGuards(t.branch, parentStack, t.child.key);
   inheritBranchMemory(t.branch.stack, parentStack);
   const signal = composeBranchAbortSignal(t.branch, parentStack);
   // Arm inherited time-guard clones NOW rather than lazily at the
@@ -473,6 +476,15 @@ function runInBranchAlsFrame<T>(
     : branch.globalsJSON
       ? GlobalStore.fromJSON(branch.globalsJSON)
       : parent.globals.clone();
+  // A branch's own globals live in its store, not in the stack, so a
+  // checkpoint taken while the branch runs (a rolling checkpoint of a
+  // step inside it, a sibling's interrupt) would otherwise hold the
+  // values the branch started with. The refresher writes them into the
+  // branch before any checkpoint is built, for the life of the branch.
+  const refreshGlobals = () => {
+    branch.globalsJSON = branchGlobals.toJSON();
+  };
+  if (!shareGlobals) parent.ctx.beforeCheckpoint.push(refreshGlobals);
   // The branch's own logger: its tag store and its span stack.
   const log = branchLog(parent, branchGlobals, spans);
   // Each branch's thread store logs through the branch's logger. A branch
@@ -514,11 +526,14 @@ function runInBranchAlsFrame<T>(
         // Pointer-shared dials have nothing to snapshot.
         const value = await fn(branchRun);
         if (hasInterrupts(value)) {
-          if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
+          if (!shareGlobals) refreshGlobals();
           if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
         }
         return value;
       } finally {
+        parent.ctx.beforeCheckpoint = parent.ctx.beforeCheckpoint.filter(
+          (refresh) => refresh !== refreshGlobals,
+        );
         // Durable object tags set inside the branch travel back on the
         // returned value (by reference), but the branch's presence flag
         // lives on its discarded cloned store. OR it into the parent so
@@ -938,7 +953,7 @@ async function runRaceResume<T>(
   // discipline as startInvoke. Idempotent via branch.guardsRehydrated;
   // safe to call here even if startInvoke already handled it (e.g.
   // re-entry without serialize in between).
-  rehydrateInheritedGuards(branch, parentStack);
+  rehydrateInheritedGuards(branch, parentStack, child.key);
 
   // Compose the resumed winner's abort signal with the current parent
   // stack's signal so an outer abort (e.g. a surrounding race that

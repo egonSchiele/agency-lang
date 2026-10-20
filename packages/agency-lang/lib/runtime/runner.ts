@@ -406,13 +406,18 @@ export class Runner {
    * wants to pause (in which case the caller should halt).
    *
    * Uses a flag in frame.locals to avoid re-triggering on resume:
-   * - First entry: no flag → fire hook → if it halts, set flag
-   * - Resume: flag exists → skip hook → run code → clean up flag
+   * - First entry: no flag → set flag → fire hook → run code
+   * - Resume: flag exists → skip hook → run code
    *
-   * The flag is NOT deleted here on resume. Instead, step() deletes it
-   * after the callback completes without halting. This handles the case
-   * where a step halts due to a nested interrupt (e.g., function call
-   * that pauses) — the flag stays set so the next resume skips the hook.
+   * The flag stays set for as long as the step runs, whether or not the
+   * hook halted, and the step clears it once its body completes. So a
+   * checkpoint taken while the body is running, by a nested interrupt or
+   * by a rolling checkpoint inside a called function or a tool, always
+   * carries the flag in this frame, and a resume or a rewind from that
+   * checkpoint passes through this statement without stopping at it.
+   * Clearing the flag before the body, when the hook did not halt, would
+   * make a rewind into a tool reached under `continue` stop at the `llm()`
+   * line instead of at the chosen step.
    */
   private async maybeDebugHook(
     id: number,
@@ -421,19 +426,24 @@ export class Runner {
     isUserAdded: boolean = false,
   ): Promise<boolean> {
     if (!this.recordsStepCheckpoints()) return false;
-    if (this.ctx.isInsideToolCall()) return false;
+    // A handler body and a callback body have no step address, so a stop
+    // taken inside one could never be resumed; the same rule as
+    // pauseIfRequested. A tool call is ordinary stepped code on a branch
+    // stack, and a tool called from a handler body still does not stop:
+    // runBatch copies the handler mark into every branch it starts.
+    const stack = this.stack;
+    if (stack === undefined || stack.hasExecutingHandlers() || isInsideCallback(run)) {
+      return false;
+    }
 
-    // On resume after a debug pause, skip the hook.
-    // Don't delete the flag yet — step() will clean it up after the
-    // callback completes. If the callback halts (nested interrupt),
-    // the flag stays set for the next resume.
+    // On resume after a debug pause, skip the hook. The step clears the
+    // flag once its body completes.
     if (this.frame.locals[this.debugFlagKey(id)]) {
       //console.log(`[Runner] Resuming past debug hook at step ${stepPath}, skipping hook. node context: ${this.nodeContext}. locals: ${JSON.stringify(this.frame.locals)}`);
       return false;
     }
 
-    // Set flag BEFORE calling debugStep so the checkpoint captures it.
-    // If debugStep doesn't pause, we clear it below.
+    // Set the flag before calling debugStep so the checkpoint captures it.
     this.frame.locals[this.debugFlagKey(id)] = true;
 
     const dbg = await debugStep(
@@ -446,7 +456,7 @@ export class Runner {
         nodeContext: this.nodeContext,
         isUserAdded,
       },
-      this.stack,
+      stack,
     );
 
     if (dbg) {
@@ -455,16 +465,15 @@ export class Runner {
         // this.frame.threads is the live ThreadStore set by setupNode.
         this.halt({ messages: this.frame.threads, data: dbg });
       } else {
-        // Function context: halt with raw single interrupt object. The
-        // caller pattern unwraps and uses isInterrupt for debug pauses
-        // (debugger pauses are always single, not array-shaped batches).
+        // Function context: halt with the `Interrupt[]` itself, the shape
+        // every generated call site passes up and `hasInterrupts` in the
+        // tool loop recognizes, so a stop inside a tool travels the path a
+        // tool's own interrupt travels.
         this.halt(dbg);
       }
       return true;
     }
 
-    // debugStep didn't pause — clear the flag
-    this.clearDebugFlag(id);
     return false;
   }
 
@@ -479,15 +488,13 @@ export class Runner {
   /** Whether this step should build a checkpoint: the debugger wants one, a
    *  trace sink wants one, or a host or Agency callback registered for
    *  `onCheckpoint` wants one. `debugHook` and `clearDebugFlag` must agree,
-   *  so both read this. The `onCheckpoint` reason applies only on the
-   *  top-level stack, because a branch checkpoint is not reported. */
+   *  so both read this. The debugger counts on every stack; the trace and
+   *  `onCheckpoint` reasons apply only on the top-level stack, because
+   *  `debugStep` records neither for a branch (see its comment). */
   private recordsStepCheckpoints(): boolean {
-    if (this.ctx.hasDebugger() || this.ctx.hasTraceWriter()) return true;
-    return (
-      this.stack !== undefined &&
-      this.stack === this.ctx.stateStack &&
-      hasCallbackConsumer(this.ctx, "onCheckpoint", this.stack)
-    );
+    if (this.ctx.hasDebugger()) return true;
+    if (this.stack === undefined || this.stack !== this.ctx.stateStack) return false;
+    return this.ctx.hasTraceWriter() || hasCallbackConsumer(this.ctx, "onCheckpoint", this.stack);
   }
 
   private stepPath(id: number): string {

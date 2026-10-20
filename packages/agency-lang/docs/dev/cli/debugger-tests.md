@@ -312,6 +312,27 @@ const session = await DebuggerTestSession.create({ mod, checkpoints });
 // Session starts at the last checkpoint, program already "finished"
 ```
 
+### Scripting the model
+
+A fixture with an `llm()` call needs replies. `withLLMMocks` in `testHelpers.ts` runs a test body with every model call answered from a list, in order, by the deterministic client (`lib/runtime/deterministicClient.ts`). Import the module inside the body: the client is built when the module is imported, and one queue then serves the whole session, resumes and rewinds included.
+
+```typescript
+const mocks: LLMMock[] = [
+  { toolCall: { name: "search", args: { query: "grant", breakHere: false } } },
+  { return: "grant summary" }, // search's own llm(), inside the tool
+  { toolCall: { name: "writeUp", args: { notes: "grant summary" } } },
+  { return: "final report" },
+];
+await withLLMMocks(mocks, async () => {
+  const mod = await freshImport(agentCompiled);
+  const session = await DebuggerTestSession.create({ mod, args: ["research"] });
+  await session.press("s"); // lands on the first statement of search
+  // ...
+});
+```
+
+Write the queue in the order the program asks for replies. A subagent's request comes while the outer call waits for its tool, so it sits between that tool's call and the next reply to the outer call. A `{ toolCalls: [...] }` entry makes one round call several tools at once. The compiled fixture imports the stdlib by package name, so the stdlib has to be built (`make`) before these tests run. `lib/debugger/agentShaped.test.ts` is the worked example.
+
 ### Visual debugging with HTML export
 
 When a test fails and you can't figure out why, export the frames:
@@ -338,7 +359,7 @@ Run the test, then `open /tmp/debug-frames.html` in a browser. Use left/right ar
 | File | Purpose |
 |------|---------|
 | `lib/debugger/testSession.ts` | `DebuggerTestSession` class |
-| `lib/debugger/testHelpers.ts` | `freshImport`, `fixtureDir` |
+| `lib/debugger/testHelpers.ts` | `freshImport`, `fixtureDir`, `withLLMMocks` |
 | `lib/debugger/driver.test.ts` | Main debugger test suite |
 | `lib/debugger/testSession.test.ts` | Smoke tests for `DebuggerTestSession` itself |
 | `lib/debugger/exportFrames.test.ts` | Generates HTML frame exports for visual inspection |

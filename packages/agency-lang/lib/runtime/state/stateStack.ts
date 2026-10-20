@@ -437,6 +437,22 @@ export class StateStack {
   mode: "serialize" | "deserialize" = "serialize";
   lockOwnerId?: string;
 
+  /** The stack this one branched from, and the key of the branch on that
+   *  stack's last frame. Unset on the root. Live only: `runBatch` sets it
+   *  on every branch it starts, so a resume rebuilds it, and `toJSON`
+   *  leaves it out. */
+  parent?: { stack: StateStack; key: string };
+
+  /** The branch keys from the root stack down to this one, empty on the
+   *  root: `["tool_0_abc"]` for a tool call, `["tool_0_abc", "fork_1"]`
+   *  for a fork inside that tool. A checkpoint records it as
+   *  `branchPath`, so a reader can find the frame a step ran in
+   *  (`Checkpoint.getCurrentFrame`). */
+  branchPath(): string[] {
+    if (!this.parent) return [];
+    return [...this.parent.stack.branchPath(), this.parent.key];
+  }
+
   other: Record<string, any> = {};
   deserializeStackLength: number = 0;
 

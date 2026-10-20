@@ -117,6 +117,54 @@ describe("UIState", () => {
     });
   });
 
+  describe("setCheckpoint at a stop inside a tool call", () => {
+    // The checkpoint on such a stop is the shared one stamped at the join:
+    // its last root frame is runPrompt's and its location is the loop's.
+    // The stop record says where the program really is.
+    function sharedCheckpoint() {
+      return makeCheckpoint({
+        scopeName: "runPrompt",
+        stepPath: "round.1",
+        stack: makeStackJSON([
+          { args: { task: "research" }, locals: { answer: null } },
+          {
+            scopeName: "runPrompt",
+            locals: { messagesJSON: [] },
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  { args: { query: "grant" }, locals: { url: "https://example.test/grant" } },
+                ]),
+              },
+            },
+          },
+        ]),
+      });
+    }
+
+    it("shows the stopped frame's args and locals", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(sharedCheckpoint(), {
+        moduleId: "mod.agency",
+        scopeName: "search",
+        stepPath: "1",
+        branchPath: ["tool_0_abc"],
+        depth: 1,
+        label: null,
+      });
+      expect(ui.getArgs()).toEqual([{ key: "query", value: "grant", override: undefined }]);
+      expect(ui.getLocals()).toEqual([
+        { key: "url", value: "https://example.test/grant", override: undefined },
+      ]);
+    });
+
+    it("without a stop record, shows the checkpoint's own frame", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(sharedCheckpoint());
+      expect(ui.getLocals()).toEqual([{ key: "messagesJSON", value: [], override: undefined }]);
+    });
+  });
+
   describe("getThreadMessages", () => {
     it("should return null for getThreadMessages when no threads in frame", async () => {
       const ui = new UIState();

@@ -117,7 +117,7 @@ so this replay is the only thing that puts them back.
 | `lib/runtime/interrupts.ts` | lifecycle-complete CLI resume |
 | `lib/runtime/checkpoint.ts` | `checkpoint()`, `getCheckpoint()`, `restore()` |
 | `lib/runtime/state/checkpointStore.ts` | `Checkpoint`, `CheckpointStore` |
-| `lib/runtime/debugger.ts` | `debugStep` — trace write plus rolling checkpoints |
+| `lib/runtime/debugger.ts` | `debugStep` — trace write plus rolling checkpoints; a rolling checkpoint taken inside a tool call names the tool's branch in `branchPath` |
 | `lib/runtime/state/context.ts` | `_skipNextCheckpoint` flag |
 | `lib/templates/backends/typescriptGenerator/imports.mustache` | the exported `rewindFrom` / `__getCheckpoints` wrappers |
 | `lib/debugger/driver.ts` | the debugger's rewind command |

@@ -128,6 +128,12 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
+  /** Called before any checkpoint is built, from whichever stack. An
+   *  `llm()` call in progress registers one that copies its live thread
+   *  into its frame, so a checkpoint built while its tools run (the
+   *  debugger's rolling checkpoint inside a tool) carries the replies of
+   *  the tools that have already finished. */
+  beforeCheckpoint: Array<() => void>;
   /** Set by an external pause signal. The runner honours it at the next
    *  step boundary by stamping a checkpoint and throwing PauseSignal. */
   pauseRequested: boolean;
@@ -372,6 +378,7 @@ export class RuntimeContext<T> {
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
     this._skipNextCheckpoint = false;
+    this.beforeCheckpoint = [];
     this.pauseRequested = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;
@@ -524,6 +531,7 @@ export class RuntimeContext<T> {
     execCtx.lockWaiters = {};
     execCtx.lockReleasers = {};
     execCtx._skipNextCheckpoint = false;
+    execCtx.beforeCheckpoint = [];
     execCtx.pauseRequested = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;

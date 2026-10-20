@@ -50,6 +50,29 @@ describe("SourceMapBuilder", () => {
     expect(result["foo.agency:main"]).toHaveProperty("2.0.1");
   });
 
+  it("records a block's statements relative to the block, and returns to the scope around it", () => {
+    const builder = new SourceMapBuilder();
+    builder.enterScope("foo.agency", "main");
+    builder.record([2], { line: 3, col: 2, start: 0, end: 10 });
+    // The fork body at statement 2 runs under its own runner, so its
+    // first statement is step 0 there, not 2.0.
+    builder.enterBlockScope("foo.agency", "__block_0", 1);
+    builder.record([2, 0], { line: 4, col: 4, start: 20, end: 30 });
+    builder.record([2, 1, 0], { line: 5, col: 6, start: 40, end: 50 });
+    builder.exitBlockScope();
+    builder.record([3], { line: 8, col: 2, start: 60, end: 70 });
+
+    const result = builder.build();
+    expect(result["foo.agency:__block_0"]).toEqual({
+      "0": { line: 4, col: 4 },
+      "1.0": { line: 5, col: 6 },
+    });
+    expect(result["foo.agency:main"]).toEqual({
+      "2": { line: 3, col: 2 },
+      "3": { line: 8, col: 2 },
+    });
+  });
+
   it("returns empty object when nothing recorded", () => {
     const builder = new SourceMapBuilder();
     expect(builder.build()).toEqual({});

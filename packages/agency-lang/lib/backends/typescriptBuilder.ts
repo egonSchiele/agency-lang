@@ -42,7 +42,6 @@ import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
-import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
 import * as renderInterruptReturn from "../templates/backends/typescriptGenerator/interruptReturn.js";
@@ -435,7 +434,7 @@ export class TypeScriptBuilder {
   // ------- Lookup helpers -------
 
   /** Returns the template opts for checkpoint creation (moduleId, scopeName, stepPath as JSON-quoted strings). */
-  private checkpointOpts(): Record<keyof SourceLocationOpts, string> {
+  private checkpointOpts(): Record<"moduleId" | "scopeName" | "stepPath", string> {
     return {
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(this.scopes.currentName()),
@@ -1916,7 +1915,7 @@ export class TypeScriptBuilder {
       blockName,
       declaredYieldType: block.declaredYieldType,
     });
-    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    this._sourceMapBuilder.enterBlockScope(this.moduleId, blockName, this.steps.snapshot().length);
     const compiledFinalize = this.stepped(() =>
       this.finalize.compileScope({
         body: block.body,
@@ -1925,7 +1924,7 @@ export class TypeScriptBuilder {
         compileBodyRest: (rest) => this.processBodyAsParts(rest),
       }),
     );
-    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this._sourceMapBuilder.exitBlockScope();
     this.scopes.pop();
 
     const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
@@ -1971,7 +1970,7 @@ export class TypeScriptBuilder {
     const blockName = this.steps.nextBlockName();
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
-    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    this._sourceMapBuilder.enterBlockScope(this.moduleId, blockName, this.steps.snapshot().length);
     const compiledFinalize = this.stepped(() =>
       this.finalize.compileScope({
         body: block.body,
@@ -1980,7 +1979,7 @@ export class TypeScriptBuilder {
         compileBodyRest: (rest) => this.processBodyAsParts(rest),
       }),
     );
-    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this._sourceMapBuilder.exitBlockScope();
     this.scopes.pop();
 
     const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
@@ -2989,9 +2988,9 @@ export class TypeScriptBuilder {
     const isNestedInForkBlock = this.steps.isNestedInForkBlock();
     this.steps.enterForkBlock();
     this.scopes.push({ type: "block", blockName });
-    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    this._sourceMapBuilder.enterBlockScope(this.moduleId, blockName, this.steps.snapshot().length);
     const bodyParts = this.stepped(() => this.processBodyAsParts(block.body));
-    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this._sourceMapBuilder.exitBlockScope();
     this.scopes.pop();
     this.steps.exitForkBlock();
 
@@ -3860,6 +3859,10 @@ export class TypeScriptBuilder {
       return ts.empty();
     }
 
+    // The call runs under the step's own runner, so its path is the
+    // step's with the id repeated (`1.1` for the second statement). Record
+    // it, or the debugger could not show the line a breakpoint stopped on.
+    this._sourceMapBuilder.record([...this.steps.snapshot(), this.steps.currentId()], node.loc);
     return ts.runnerDebugger({
       id: this.steps.currentId(),
       label: node.label || "",

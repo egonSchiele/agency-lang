@@ -7,7 +7,8 @@ import type { AgencyCallbacks } from "../runtime/hooks.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
-import { StateStack } from "../runtime/state/stateStack.js";
+import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
+import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
@@ -108,7 +109,6 @@ export class DebuggerDriver {
     return {
       onFunctionStart: (data) => {
         const isAgency = data.moduleId?.endsWith(".agency");
-        this.debuggerState.enterCall();
         this.ui.state.pushCallStackEntry({
           functionName: data.functionName,
           moduleId: isAgency ? data.moduleId : "(ts)",
@@ -120,7 +120,6 @@ export class DebuggerDriver {
         this.ui.render();
       },
       onFunctionEnd: (data) => {
-        this.debuggerState.exitCall();
         this.ui.state.removeWithFuncName(data.functionName);
         this.ui.render();
       },
@@ -208,7 +207,12 @@ export class DebuggerDriver {
           // position, so we re-render without a new checkpoint.
           const nonSteppingCommands = ["set", "print", "checkpoint"];
           const skipCheckpoint = lastCommand && nonSteppingCommands.includes(lastCommand.type);
-          await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint);
+          // The stepping commands work from the depth of the stop that is
+          // shown. Several branches can stop in one round, so the runtime
+          // does not record a depth; the stop record carries it.
+          const stop = stopOf(interrupt);
+          if (stop) this.debuggerState.stoppedAt(stop.depth);
+          await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches
@@ -223,7 +227,7 @@ export class DebuggerDriver {
           // User code interrupt — show it and collect input from the user
           this.ui.state.log(`Interrupt: ${JSON.stringify((interrupt as Interrupt).data)}`);
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt);
+          await this.ui.render((interrupt as Interrupt).checkpoint);
           result = await this.handleInterrupt(interrupt);
           if (result && result.__debuggerQuit) {
             return finalResult;
@@ -242,7 +246,6 @@ export class DebuggerDriver {
 
     if (trimmed === "approve" || trimmed === "a" || trimmed === "") {
       this.ui.state.log("Approved interrupt");
-      this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
         this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
@@ -256,7 +259,6 @@ export class DebuggerDriver {
 
     if (trimmed === "reject" || trimmed === "r") {
       this.ui.state.log("Rejected interrupt");
-      this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
         this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
@@ -277,7 +279,6 @@ export class DebuggerDriver {
         value = valueStr;
       }
       this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
-      this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
         this.mod.respondToInterrupts([interrupt], [{ type: "approve", value } as any], {
@@ -323,6 +324,17 @@ export class DebuggerDriver {
         return await this.resume(interrupt);
       }
       case "set": {
+        // A resume applies overrides to the root's last frame
+        // (applyLocalOverrides in resumeSetup.ts), so a stop on a branch
+        // stack, inside a tool call, a fork, or a parallel block, cannot
+        // take one yet.
+        const stop = stopOf(interrupt);
+        if (stop && stop.branchPath.length > 0) {
+          this.ui.state.log(
+            "set inside a tool call, a fork, or a parallel block is not supported yet",
+          );
+          return { data: interrupt };
+        }
         this.ui.state.setOverride(command.varName, command.value);
         this.ui.state.log(`Set ${command.varName} = ${JSON.stringify(command.value)}`);
         return { data: interrupt };
@@ -366,7 +378,7 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
 
-        const previous = this.debuggerState.findBefore(cp);
+        const previous = this.debuggerState.findBefore(cp.id, stopOf(interrupt) ?? cp);
 
         if (!previous) {
           this.ui.state.log("Already at earliest checkpoint");
@@ -400,7 +412,6 @@ export class DebuggerDriver {
       }
       case "reject": {
         this.ui.state.log("Rejected interrupt");
-        this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
         return await this.resumeInterrupt(() =>
           this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
@@ -413,7 +424,6 @@ export class DebuggerDriver {
       }
       case "resolve": {
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
-        this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
         return await this.resumeInterrupt(() =>
           this.mod.respondToInterrupts(
@@ -492,18 +502,6 @@ export class DebuggerDriver {
 
     this.ui.state.resetOverrides();
 
-    // NOTE: we deliberately do NOT reset callDepth here. onFunctionStart
-    // fires once at function entry via inline `await callHook(...)` —
-    // it isn't a resumable substep, so on resume the call is skipped
-    // (the surrounding code is past it). enterCall therefore is not
-    // called again during replay. The callDepth tracked at the moment
-    // of the pause is already correct — we preserve it so that stepOut
-    // and next can compare against it accurately.
-    //
-    // exitCall still fires for each function we leave because
-    // onFunctionEnd is emitted from the finally block, so it runs
-    // whenever the function unwinds.
-
     return await this.resumeInterrupt(() =>
       this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
         overrides,
@@ -546,18 +544,20 @@ export class DebuggerDriver {
   }
 
   private lookupVariable(varName: string, interrupt: Interrupt): unknown {
-    const checkpoint = interrupt.checkpoint;
+    const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
     if (!checkpoint) return undefined;
 
-    // Check locals and args in the last frame
-    const frame = StateStack.lastFrameJSON(checkpoint.stack);
+    // Check locals and args in the frame the program is stopped in
+    const frame = stoppedFrame(interrupt);
     if (frame) {
       if (varName in frame.locals) return frame.locals[varName];
       if (varName in frame.args) return frame.args[varName];
     }
 
-    // Check globals
-    const moduleGlobals = checkpoint.globals.store[checkpoint.moduleId];
+    // Check the globals the stopped stack sees: a fork or parallel
+    // branch has its own copy.
+    const location = stopOf(interrupt) ?? checkpoint;
+    const moduleGlobals = checkpoint.globalsAt(location.branchPath).store[location.moduleId];
     if (moduleGlobals && varName in moduleGlobals) {
       return moduleGlobals[varName];
     }
@@ -573,4 +573,19 @@ export class DebuggerDriver {
     }
     return false;
   }
+}
+
+/** The stop a debug interrupt carries, or nothing for a user interrupt
+ *  and for the placeholder interrupt a trace replay starts from. */
+function stopOf(interrupt: Interrupt): DebugStopData | undefined {
+  return isDebugStop(interrupt.data) ? interrupt.data : undefined;
+}
+
+/** The frame the program is stopped in: the one the stop's branch path
+ *  leads to, else the checkpoint's own. */
+function stoppedFrame(interrupt: Interrupt): StateJSON | undefined {
+  const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
+  if (!checkpoint) return undefined;
+  const stop = stopOf(interrupt);
+  return stop ? checkpoint.frameAt(stop.branchPath) : checkpoint.getCurrentFrame();
 }

@@ -8,7 +8,7 @@ __setDebugger(dbg);
 
 let result = await main();
 const hitDebugger = hasInterrupts(result.data) && result.data[0].debugger === true;
-const label = result.data[0].data;
+const label = result.data[0].data.label;
 const resumed = await respondToInterrupts(result.data, [approve()]);
 
 

@@ -26,6 +26,7 @@ class Checkpoint {
   moduleId: string;         // source location, three parts
   scopeName: string;
   stepPath: string;
+  branchPath: string[];     // branch keys from the root to the stack the step ran on
   label: string | null;     // a human-readable tag, used by pinned checkpoints
   pinned: boolean;          // pinned checkpoints survive rolling eviction and dedup
   traceId?: string;         // the statelog trace the run was logging to
@@ -44,6 +45,10 @@ trace.
 A checkpoint is a deep clone of the `StateStack` and `GlobalStore` at the moment it was created, so checkpoint data is always JSON-serializable.
 
 The three source-location fields identify where in the program the checkpoint was taken. `getLocation()` renders them as `moduleId:scopeName#stepPath`, which is the key the per-location restore cap uses.
+
+`branchPath` says which stack the step ran on. It is empty for a step on the root stack and is then left out of the JSON, so a checkpoint from before the field keeps its signature. For a step inside a tool call it holds the tool's branch key, `["tool_0_call_abc"]`, and for a fork inside that tool one more key. `getCurrentFrame()` follows it: the last frame of the root, then the last frame of the named branch's stack, and so on, which is the frame the step ran in. The debugger reads a stop's locals through it and strips the stop's `__dbg_` flags from that frame only.
+
+Before `CheckpointStore.create` copies the stack it runs `ctx.beforeCheckpoint`, a list of refreshers. An `llm()` call in progress registers one that copies its live thread into its frame, so a checkpoint built while its tools run carries the replies of the tools that have already finished.
 
 ### CheckpointStore
 

@@ -1,0 +1,42 @@
+// A fork in a node with no llm() call. Each branch runs on its own stack.
+node main(): number {
+  const items = [1, 2, 3]
+  const doubled = fork(items) as item {
+    const twice = item * 2
+    return twice
+  }
+  let total = 0
+  for (value in doubled) {
+    total = total + value
+  }
+  return total
+}
+
+// The same fork with a breakpoint inside each branch.
+node withBreakpoint(): number {
+  const items = [1, 2, 3]
+  const doubled = fork(items) as item {
+    const twice = item * 2
+    debugger("in branch")
+    return twice
+  }
+  let total = 0
+  for (value in doubled) {
+    total = total + value
+  }
+  return total
+}
+
+// A branch changes a module-level variable. Each branch runs on its own
+// copy of the globals, so the change is the branch's alone.
+let counter = 0
+
+node withGlobal(): number {
+  const items = [1]
+  const doubled = fork(items) as item {
+    counter = counter + item
+    const twice = item * 2
+    return twice
+  }
+  return counter
+}

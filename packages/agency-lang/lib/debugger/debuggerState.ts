@@ -7,7 +7,11 @@ import { color } from "@/utils/termcolors.js";
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
   public checkpoints: CheckpointStore;
-  public callDepth = 0;
+  /** The depth of the step the debugger is stopped at: how many Agency
+   *  calls deep it is, with the node's statements at 0. The driver sets it
+   *  from the stop it shows (`DebugStopData.depth`); the stepping commands
+   *  set their targets from it. */
+  public stopDepth = 0;
   public stepTarget: {
     type: "stepIn" | "stepOut" | "next";
     targetDepth: number;
@@ -35,32 +39,22 @@ export class DebuggerState {
     return this.mode === "running";
   }
 
-  isAtTargetDepth() {
+  /** Whether a step at `depth` is one the current command stops at: any
+   *  step when the command set no target (`step`), else a step no deeper
+   *  than the target. A deeper step is inside a call the command runs
+   *  over. */
+  shouldStopAt(depth: number): boolean {
     if (!this.stepTarget) return true;
-    return this.callDepth === this.stepTarget.targetDepth;
+    return depth <= this.stepTarget.targetDepth;
   }
 
-  isAtOrBelowTargetDepth() {
-    if (!this.stepTarget) return true;
-    return this.callDepth <= this.stepTarget.targetDepth;
-  }
-
-  enterCall() {
-    this.callDepth++;
-  }
-
-  exitCall() {
-    if (this.callDepth > 0) {
-      this.callDepth--;
-    }
-  }
-
-  resetCallDepth() {
-    this.callDepth = 0;
+  /** Record the depth of the step the debugger is stopping at. */
+  stoppedAt(depth: number) {
+    this.stopDepth = depth;
   }
 
   reset() {
-    this.resetCallDepth();
+    this.stopDepth = 0;
     this.stepping();
   }
 
@@ -72,7 +66,7 @@ export class DebuggerState {
     this.stepping();
     this.stepTarget = {
       type: "stepIn",
-      targetDepth: this.callDepth + 1,
+      targetDepth: this.stopDepth + 1,
     };
   }
 
@@ -80,7 +74,7 @@ export class DebuggerState {
     this.stepping();
     this.stepTarget = {
       type: "next",
-      targetDepth: this.callDepth,
+      targetDepth: this.stopDepth,
     };
   }
 
@@ -88,7 +82,7 @@ export class DebuggerState {
     this.stepping();
     this.stepTarget = {
       type: "stepOut",
-      targetDepth: this.callDepth - 1,
+      targetDepth: this.stopDepth - 1,
     };
   }
 
@@ -131,8 +125,8 @@ export class DebuggerState {
     return this.checkpoints.findCheckpoint(location);
   }
 
-  findBefore(checkpoint: Checkpoint) {
-    return this.checkpoints.findBefore(checkpoint);
+  findBefore(beforeId: number, location: SourceLocationOpts) {
+    return this.checkpoints.findBefore(beforeId, location);
   }
 
   prettyPrint(): string {

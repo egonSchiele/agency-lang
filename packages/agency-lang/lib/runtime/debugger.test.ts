@@ -3,6 +3,8 @@ import { debugStep } from "./debugger.js";
 import { DebuggerState } from "../debugger/debuggerState.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { runInTestContext } from "./asyncContext.js";
+import { withCallDepth } from "./callDepth.js";
+import { StateStack } from "./state/stateStack.js";
 
 const baseInfo = {
   moduleId: "main.agency",
@@ -13,9 +15,18 @@ const baseInfo = {
   isUserAdded: false,
 };
 
-/** Run debugStep under a frame built from the test's own ctx. */
-function debugStepIn(ctx: any, info: Parameters<typeof debugStep>[1]) {
-  return runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) => debugStep(run, info));
+/** Run debugStep under a frame built from the test's own ctx, on the
+ *  ctx's root stack, `depth` Agency calls deep. */
+function debugStepIn(ctx: any, info: Parameters<typeof debugStep>[1], depth = 0) {
+  return runInTestContext(ctx, ctx.stateStack, ctx.threads, (run) =>
+    atDepth(run, depth, (deeper) => debugStep(deeper, info, ctx.stateStack)),
+  );
+}
+
+/** Call `fn` under `depth` nested Agency calls. */
+function atDepth<T>(run: any, depth: number, fn: (run: any) => T): T {
+  if (depth === 0) return fn(run);
+  return withCallDepth(run, `call${depth}`, (deeper) => atDepth(deeper, depth - 1, fn));
 }
 
 describe("debugStep()", () => {
@@ -90,40 +101,38 @@ describe("debugStep()", () => {
     expect(dbg.getCheckpoints().length).toBe(1);
   });
 
-  it("respects stepTarget: does NOT pause when callDepth > targetDepth", async () => {
+  // The depth of a step is how many Agency calls deep the run is.
+  it("does not pause at a step deeper than the target", async () => {
     const dbg = new DebuggerState(10);
-    // Set targetDepth=3 by entering 3 calls then calling stepNext
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3
-    // Now go deeper: callDepth = 5
-    dbg.enterCall();
-    dbg.enterCall();
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
-    const result = await debugStepIn(ctx, baseInfo);
+    const result = await debugStepIn(ctx, baseInfo, 5);
     expect(result).toBeUndefined();
   });
 
-  it("respects stepTarget: DOES pause when callDepth < targetDepth", async () => {
+  it("pauses at a step above the target", async () => {
     const dbg = new DebuggerState(10);
-    // Set targetDepth=3 by entering 3 calls then calling stepNext
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3
-    // Now go shallower: callDepth = 2
-    dbg.exitCall();
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
-    const result = await debugStepIn(ctx, baseInfo);
+    const result = await debugStepIn(ctx, baseInfo, 2);
     expect(result).toBeDefined();
     expect(result![0].type).toBe("interrupt");
   });
 
-  it("respects stepTarget: DOES pause when callDepth === targetDepth", async () => {
+  it("pauses at a step at the target depth, and the stop record carries the depth", async () => {
     const dbg = new DebuggerState(10);
-    for (let i = 0; i < 3; i++) dbg.enterCall();
-    dbg.stepNext(); // targetDepth = 3, callDepth = 3
+    dbg.stoppedAt(3);
+    dbg.stepNext(); // target 3
     const ctx = makeMockCtx({ debuggerState: dbg });
-    const result = await debugStepIn(ctx, baseInfo);
+    const result = await debugStepIn(ctx, baseInfo, 3);
     expect(result).toBeDefined();
     expect(result![0].type).toBe("interrupt");
+    expect(result![0].data.depth).toBe(3);
+    // The driver sets the debugger's depth from the stop it shows, since
+    // several branches can stop at once.
+    expect(dbg.stopDepth).toBe(3);
   });
 
   it("the returned interrupt has debugger: true", async () => {
@@ -146,7 +155,7 @@ describe("debugStep()", () => {
     expect(result![0].checkpoint!.pinned).toBe(false);
   });
 
-  it("the interrupt data is the label when label is set", async () => {
+  it("the interrupt data says where the stop is, with the label", async () => {
     const dbg = new DebuggerState(10);
     dbg.running();
     const ctx = makeMockCtx({ debuggerState: dbg });
@@ -156,10 +165,17 @@ describe("debugStep()", () => {
       isUserAdded: true,
     });
     expect(result).toBeDefined();
-    expect(result![0].data).toBe("my-label");
+    expect(result![0].data).toEqual({
+      moduleId: "main.agency",
+      scopeName: "main",
+      stepPath: "1",
+      branchPath: [],
+      depth: 0,
+      label: "my-label",
+    });
   });
 
-  it("the interrupt data is undefined when no label (stepping mode)", async () => {
+  it("the interrupt data carries a null label when there is none", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();
     const ctx = makeMockCtx({ debuggerState: dbg });
@@ -168,6 +184,34 @@ describe("debugStep()", () => {
       label: null,
     });
     expect(result).toBeDefined();
-    expect(result![0].data).toBeUndefined();
+    expect(result![0].data.label).toBeNull();
+  });
+
+  it("names the branch in the stop record, and the halting checkpoint is the branch stack's own", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepNext();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    const root = new StateStack();
+    root.getNewState();
+    ctx.stateStack.parent = { stack: root, key: "tool_0_abc" };
+    const result = await debugStepIn(ctx, baseInfo);
+    expect(result).toBeDefined();
+    expect(result![0].data.branchPath).toEqual(["tool_0_abc"]);
+    // The checkpoint holds the branch stack itself, so its frame is that
+    // stack's last one and it records no path.
+    expect(result![0].checkpoint!.branchPath).toEqual([]);
+  });
+
+  it("calls the context's refreshers before building a checkpoint", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepNext();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    ctx.stateStack.lastFrame().locals.messagesJSON = "stale";
+    ctx.beforeCheckpoint.push(() => {
+      ctx.stateStack.lastFrame().locals.messagesJSON = "fresh";
+    });
+    const result = await debugStepIn(ctx, baseInfo);
+    expect(result![0].checkpoint!.getCurrentFrame()!.locals.messagesJSON).toBe("fresh");
+    expect(dbg.getCheckpoints()[0].getCurrentFrame()!.locals.messagesJSON).toBe("fresh");
   });
 });

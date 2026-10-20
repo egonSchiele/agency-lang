@@ -106,6 +106,7 @@ export const checkpointSchema = z.object({
   moduleId: z.string().optional().default(""),
   scopeName: z.string().optional().default(""),
   stepPath: z.string().optional().default(""),
+  branchPath: z.array(z.string()).optional().default([]),
   label: z.string().nullable().optional().default(null),
   pinned: z.boolean().optional().default(false),
   moduleFingerprints: z

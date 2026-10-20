@@ -1,0 +1,39 @@
+// An agent-shaped program: one llm() call with Agency tools. `search`
+// opens a thread and makes its own model request, so it is a subagent,
+// and it holds a breakpoint behind an argument the model mock sets.
+def search(query: string, breakHere: boolean): string {
+  """Searches for a query."""
+  const url = "https://example.test/" + query
+  if (breakHere) {
+    debugger("in search")
+  }
+  let summary = ""
+  thread {
+    summary = llm("summarize the page at " + url)
+  }
+  return summary
+}
+
+def writeUp(notes: string): string {
+  """Writes up the notes."""
+  const heading = "# Report"
+  const body = heading + "\n" + notes
+  return body
+}
+
+node main(task: string): string {
+  const answer = llm(task, { tools: [search, writeUp] })
+  return answer
+}
+
+// The same tools, called from an llm() inside a handler body. A handler
+// has no step address, so the debugger must not stop inside the tool.
+node insideHandler(): string {
+  handle {
+    interrupt("may I?")
+  } with (intr) {
+    const decision = llm("decide", { tools: [search] })
+    return approve()
+  }
+  return "handled"
+}

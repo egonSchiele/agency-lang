@@ -28,6 +28,7 @@ function makeRunner(overrides: Partial<any> = {}) {
       get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
     },
     statelogClient: stubStatelogClient(),
+    beforeCheckpoint: [],
   };
   const stateStack = new StateStack();
   const parentFrame = new State();
@@ -183,6 +184,7 @@ describe("PromptRunner.step interrupt handling", () => {
         get: () => ({ moduleId: "m", scopeName: "s", stepPath: "p/a" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const self: any = {};
     const snapshots: any[] = [];
@@ -220,6 +222,7 @@ describe("PromptRunner.step interrupt handling", () => {
         get: () => ({ moduleId: "", scopeName: "", stepPath: "a" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const runner = new PromptRunner({
       self: {},
@@ -304,6 +307,7 @@ describe("PromptRunner.parallel", () => {
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const { parallel } = makeRunner({ ctx });
     const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
@@ -353,6 +357,7 @@ describe("PromptRunner.parallel", () => {
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const { parallel } = makeRunner({ ctx });
     const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
@@ -397,6 +402,7 @@ describe("PromptRunner.parallel", () => {
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const runner = new PromptRunner({
       self,
@@ -434,6 +440,7 @@ describe("PromptRunner.parallel", () => {
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
       statelogClient: stubStatelogClient(),
+      beforeCheckpoint: [],
     };
     const { parallel } = makeRunner({ ctx });
     const result = await parallel("group", [], keyFor, async () => {});

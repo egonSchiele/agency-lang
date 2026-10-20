@@ -48,22 +48,22 @@ await runner.debugger(0, "some-label");
 
 ### The `maybeDebugHook()` hook (`lib/runtime/runner.ts`)
 
-`maybeDebugHook(id, label, isUserAdded)` runs before each step body. It returns early when the context has neither a debugger nor a trace writer, and when the runner is inside a tool call.
+`maybeDebugHook(id, run, label, isUserAdded)` runs before each step body. It returns early when the context has nothing that wants a checkpoint at this step (`recordsStepCheckpoints()`: a debugger on any stack; a trace writer or an `onCheckpoint` consumer on the root stack only), and inside a handler body or a callback body, which have no step address a resume could re-enter. A tool call is ordinary stepped code on a branch stack, so the hook fires there; see "Stops inside a tool call" below.
 
-To avoid re-triggering on resume, it stores a flag in `frame.locals` under a per-step key. First entry sets the flag and fires the hook. On resume the flag is present, so the hook is skipped and the step body runs. `step()` deletes the flag only after the callback completes without halting, so a step that halts on a nested interrupt keeps its flag for the next resume.
+To avoid re-triggering on resume, it stores a flag in `frame.locals` under a per-step key. First entry sets the flag and fires the hook. On resume the flag is present, so the hook is skipped and the step body runs. The flag stays set for as long as the step runs, whether or not the hook halted, and `step()` deletes it once the body completes. So any checkpoint taken while the body runs, by a nested interrupt or by a rolling checkpoint inside a called function or a tool, carries the flag in this frame, and a resume or a rewind from it passes through the statement without stopping. Under `continue` the hook does not halt at the `llm()` line, but the flag it set still lets `step back` from a breakpoint inside a tool land on the tool's previous statement rather than on the `llm()` line.
 
 When `debugStep()` returns an interrupt, the hook halts the runner. In node context it halts with `{ messages, data }`; in function context it halts with the raw interrupt.
 
 ### The `debugStep()` function (`lib/runtime/debugger.ts`)
 
-Signature: `debugStep(ctx, info)`, where `info` carries `moduleId`, `scopeName`, `stepPath`, `label`, `nodeContext`, and `isUserAdded`. On every call it:
+Signature: `debugStep(run, info, stack)`, where `info` carries `moduleId`, `scopeName`, `stepPath`, `label`, `nodeContext`, and `isUserAdded`, and `stack` is the runner's own stack: the root stack at the top level, a branch stack inside a tool call, fork, or parallel block. On every call it:
 
 1. Returns `undefined` when the stack has no current node id. Global initialization runs outside any graph node, so there is nothing to checkpoint against.
-2. Writes a trace checkpoint, independent of whether a debugger is attached. This is how `agency debug --trace` gets its recording.
+2. On the root stack only, writes a trace checkpoint, independent of whether a debugger is attached. This is how `agency debug --trace` gets its recording. A trace checkpoint is a copy of the whole root stack, so one per step inside every tool would multiply an agent run's trace by its tool statements; a trace therefore cannot replay a step inside a tool.
 3. Returns `undefined` if `ctx.debuggerState` is null (not in debug mode).
-4. Takes a rolling checkpoint via `DebuggerState.createRollingCheckpoint()` for rewind history.
-5. Decides whether to pause. When stepping, it pauses if the runner is at or below the target call depth. When running, it pauses only on a user-added `debugger()` breakpoint.
-6. If pausing: creates a checkpoint on the regular `CheckpointStore` for interrupt resumption and returns a debug interrupt.
+4. Reads the step's depth from the run (`run.callDepth`, the call counter `withCallDepth` keeps for every Agency call) and asks `DebuggerState.shouldStopAt(depth)`. When running, it stops only on a user-added `debugger()` breakpoint.
+5. Takes a rolling checkpoint via `DebuggerState.createRollingCheckpoint()` for rewind history. It is stamped from the root stack, which holds every live branch stack, with the location's `branchPath` naming the stack the step ran on.
+6. If stopping: creates the halting checkpoint on the regular `CheckpointStore` from the runner's own stack, as a tool's interrupt and a guard trip do (the slice rule in `docs/dev/runtime/concurrent-interrupts.md`), and returns a debug interrupt whose `data` is a `DebugStopData`: the location, the branch path, the depth, and the label.
 
 `debugStep()` does not advance the step counter. An earlier design called `StateStack.advanceDebugStep()` here so the resumed step guard would skip past the debug block. The `frame.locals` flag in `maybeDebugHook()` replaced it. `advanceDebugStep()` still exists on `StateStack` but the debugger no longer calls it.
 
@@ -73,7 +73,7 @@ A class that encapsulates all debugger state. Owned by the driver, passed to the
 
 Key state:
 - `mode`: "stepping" or "running"
-- `callDepth`: tracked via `onFunctionStart`/`onFunctionEnd` hooks
+- `stopDepth`: the depth of the step it is stopped at, set by the driver from the stop it shows
 - `stepTarget`: for next/stepIn/stepOut commands — stores the target depth
 - `checkpoints`: a `DebugCheckpointStore` with rolling window
 
@@ -96,12 +96,30 @@ The driver uses four wrapper functions the compiled module exports (`respondToIn
 
 ### Stepping commands
 
-- **step/stepIn**: `mode = "stepping"`, no target. Pauses at the next `debugStep()`.
-- **next**: `mode = "stepping"`, `targetDepth = callDepth`. Skips over function calls.
-- **stepOut**: `mode = "stepping"`, `targetDepth = callDepth - 1`. Runs until current function returns.
+- **step**: `mode = "stepping"`, no target. Pauses at the next `debugStep()`, at any depth.
+- **stepIn**: `mode = "stepping"`, `targetDepth = stopDepth + 1`.
+- **next**: `mode = "stepping"`, `targetDepth = stopDepth`. Skips over function calls.
+- **stepOut**: `mode = "stepping"`, `targetDepth = stopDepth - 1`. Runs until current function returns.
 - **continue**: `mode = "running"`. Runs until a user-placed `debugger()` statement.
 
-Only Agency function calls (`def`) change call depth. If/else, loops, and match blocks are stepped through normally — they are not step-in targets.
+A step's depth is how many Agency calls deep the run is, read from `run.callDepth`, the counter `withCallDepth` keeps on every call (see `lib/runtime/callDepth.ts`). The node's statements are at 0, a called `def`'s at 1, and a tool's at one more than the function that called `llm()`, so `step in` from an `llm()` line lands on the tool's first statement. The counter follows the lineage of calls, not a global count, so two tools running at once each have their own depth, and a resume rebuilds it as the calls re-enter. If/else, loops, match blocks, `thread` blocks, and the branches of a `fork` or `parallel` block are at their enclosing block's depth and are stepped through normally: `next` at a `fork` statement stops at the first statement of a branch, as it does for a loop body.
+
+### Stops inside a tool call
+
+A tool is a `def` called by the loop `runPrompt` runs for `llm()`. Its body runs on a branch stack under the `runPrompt` frame, and its statements are steps like any other, so the hook fires there and a stop inside it is an ordinary debug interrupt. It travels the path a tool's own interrupt travels: the tool loop records it on the branch, `runBatch` stamps the shared checkpoint at the join, `PromptRunner` bails out, and the node halts. On resume the `__dbg_` flag in the stopped frame makes the hook skip, so the tool finishes and its result reaches the thread once.
+
+Two things make the driver work at such a stop:
+
+- **The branch path.** Every checkpoint records `branchPath`, the branch keys from the root down to the stack the step ran on (`["tool_0_call_abc"]` for a tool, `["tool_0_call_abc", "fork_1"]` for a fork inside it). `Checkpoint.getCurrentFrame()` follows it, so the locals pane, `print`, `removeDebugFlagsFor`, and the rewind list all find the frame the step ran in. A branch stack derives the path from `parent`, the link to the stack it branched from that `runBatch` sets when it starts the branch; the path is serialized on the checkpoint only.
+- **The stop record.** After the join, the interrupt's `checkpoint` is the shared one, whose location is the loop's. The interrupt's `data` (`DebugStopData` in `lib/runtime/debugger.ts`) says where the stop really is and how deep it is. The driver sets `stopDepth` from it when it shows the stop, and passes it to `UIState.setCheckpoint(checkpoint, stop)`, which reads the source line from the stop and the frame from `checkpoint.frameAt(stop.branchPath)`. A rolling checkpoint carries its own path, so the rewind list and `step back` need no stop record.
+
+Rolling checkpoints inside a tool are keyed by location including the path, so two calls of the same tool in different rounds each keep their rewind entries, bounded by the store's eviction limit. `removeDebugFlagsFor` strips the flags of the stopped frame only: `main` keeps its flag for the `llm()` statement so a rewind replays through it into the loop and the tool, and a sibling branch keeps its flag so it replays past its own stop. `step back` (`CheckpointStore.findBefore`) rewinds to a step on the stopped stack or on a stack above it, so from inside one tool of a round it never lands in the other tool.
+
+A rolling checkpoint taken inside a tool must carry the replies of the tools that have already finished, or a rewind would send the model a call with no reply. The tool loop keeps the thread in its frame as `messagesJSON`, refreshed when it checkpoints; for a checkpoint built from elsewhere, `runPrompt` registers a refresher in `ctx.beforeCheckpoint` for the life of the call, and `Checkpoint.fromStateStack` runs the list before it copies the stack. A `fork` or `parallel` branch registers one the same way for its own copy of the globals, written into the branch as `globalsJSON`, so a rewind into the branch after it changed a module-level variable replays with the changed value. `Checkpoint.globalsAt(branchPath)` returns that copy, and `print` and the globals pane read through it; a tool call shares the root's globals and has no copy.
+
+Several branches can stop at once: in stepping mode every Agency tool in a round stops at its next step, so the batch holds one debug interrupt per tool. Until the driver can answer a batch (ADI-18), it keeps the first and drops the rest. That is safe, since the resume never looks up a debug interrupt's answer and an unanswered real interrupt is asked again when its tool replays, but the person sees one stop out of several.
+
+The call stack pane still shows the hook-fed entries (`onFunctionStart`), not the branch path. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
 ### User code interrupts
 
@@ -176,4 +194,8 @@ Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [val
 - **TypeScript functions**: cannot step into them. The driver detects them (not in source map) and shows "Executing TypeScript: functionName()" in the activity log.
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
-- **Tool calls**: `maybeDebugHook()` returns early while the runner is inside a tool call, so the debugger does not step into tool dispatch.
+- **Between tool calls**: the loop's own steps, one per model request and one per tool call, do not call the hook yet, so there is no stop between "the model answered" and "the next tool runs". `step` from the `llm()` line lands on the first statement of the first Agency tool that runs.
+- **Several stops at once**: one is shown (see "Stops inside a tool call").
+- **`set` on a branch stack**: refused inside a tool call, a fork, or a parallel block.
+- **`debugger()` inside a handler body**: does not stop. A handler body has no step address a resume could re-enter, so the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.
+- **Trace replay inside a tool call**: a trace records root-stack steps only.

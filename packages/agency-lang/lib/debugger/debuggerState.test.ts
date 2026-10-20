@@ -24,106 +24,71 @@ describe("DebuggerState", () => {
       expect(state.isStepping()).toBe(true);
     });
 
-    it("running clears stepTarget", () => {
+    it("running clears the step target", () => {
       const state = new DebuggerState(10);
+      state.stoppedAt(0);
       state.stepNext();
-      expect(state.isAtTargetDepth()).toBe(true); // target = 0, depth = 0
+      expect(state.shouldStopAt(1)).toBe(false);
       state.running();
-      // After running(), stepTarget is null, so isAtTargetDepth returns true
-      expect(state.isAtTargetDepth()).toBe(true);
+      expect(state.shouldStopAt(1)).toBe(true);
     });
   });
 
-  describe("call depth", () => {
-    it("starts at depth 0", () => {
-      const state = new DebuggerState(10);
-      // At depth 0 with no target, isAtTargetDepth is true
-      expect(state.isAtTargetDepth()).toBe(true);
-    });
-
-    it("enterCall increments depth", () => {
-      const state = new DebuggerState(10);
-      state.stepNext(); // target = 0
-      state.enterCall();
-      // depth = 1, target = 0 → not at target
-      expect(state.isAtTargetDepth()).toBe(false);
-    });
-
-    it("exitCall decrements depth", () => {
-      const state = new DebuggerState(10);
-      state.enterCall();
-      state.enterCall();
-      state.stepNext(); // target = 2
-      state.exitCall();
-      // depth = 1, target = 2 → not at target
-      expect(state.isAtTargetDepth()).toBe(false);
-    });
-
-    it("exitCall does not go below 0", () => {
-      const state = new DebuggerState(10);
-      state.exitCall();
-      state.stepNext(); // target = 0
-      expect(state.isAtTargetDepth()).toBe(true);
-    });
-
-    it("resetCallDepth resets to 0", () => {
-      const state = new DebuggerState(10);
-      state.enterCall();
-      state.enterCall();
-      state.resetCallDepth();
-      state.stepNext(); // target = 0
-      expect(state.isAtTargetDepth()).toBe(true);
-    });
-  });
-
+  // Depth comes from the stack: the node's statements are at 0, a called
+  // function's at 1, a tool's statements at 2 (under the runPrompt frame).
   describe("step targeting", () => {
-    it("stepIn targets callDepth + 1", () => {
+    it("step stops at any depth", () => {
       const state = new DebuggerState(10);
-      state.stepIn(); // target = 1
-      // depth = 0, target = 1 → not at target
-      expect(state.isAtTargetDepth()).toBe(false);
-      state.enterCall(); // depth = 1
-      expect(state.isAtTargetDepth()).toBe(true);
+      state.stoppedAt(0);
+      state.stepping();
+      expect(state.shouldStopAt(0)).toBe(true);
+      expect(state.shouldStopAt(2)).toBe(true);
     });
 
-    it("stepNext targets current callDepth", () => {
+    it("next stops at the depth it stopped at and above, not below", () => {
       const state = new DebuggerState(10);
-      state.enterCall();
-      state.stepNext(); // target = 1
-      expect(state.isAtTargetDepth()).toBe(true);
-      state.enterCall(); // depth = 2
-      expect(state.isAtTargetDepth()).toBe(false);
+      state.stoppedAt(2);
+      state.stepNext();
+      expect(state.shouldStopAt(2)).toBe(true);
+      expect(state.shouldStopAt(3)).toBe(false);
+      expect(state.shouldStopAt(0)).toBe(true);
     });
 
-    it("stepOut targets callDepth - 1", () => {
+    it("step in stops one level deeper", () => {
       const state = new DebuggerState(10);
-      state.enterCall();
-      state.enterCall(); // depth = 2
-      state.stepOut(); // target = 1
-      expect(state.isAtTargetDepth()).toBe(false);
-      state.exitCall(); // depth = 1
-      expect(state.isAtTargetDepth()).toBe(true);
+      state.stoppedAt(0);
+      state.stepIn();
+      expect(state.shouldStopAt(1)).toBe(true);
+      expect(state.shouldStopAt(2)).toBe(false);
     });
 
-    it("isAtTargetDepth returns true when no target is set", () => {
+    it("step out stops one level up", () => {
       const state = new DebuggerState(10);
-      state.enterCall();
-      state.enterCall();
-      // No stepTarget set → always true
-      expect(state.isAtTargetDepth()).toBe(true);
+      state.stoppedAt(2);
+      state.stepOut();
+      expect(state.shouldStopAt(2)).toBe(false);
+      expect(state.shouldStopAt(1)).toBe(true);
+    });
+
+    it("the next stop sets the depth the following command works from", () => {
+      const state = new DebuggerState(10);
+      state.stoppedAt(0);
+      state.stepIn();
+      state.stoppedAt(1);
+      state.stepNext();
+      expect(state.shouldStopAt(1)).toBe(true);
+      expect(state.shouldStopAt(2)).toBe(false);
     });
   });
 
   describe("reset", () => {
-    it("resets call depth and mode to stepping", () => {
+    it("resets the stop depth and the mode", () => {
       const state = new DebuggerState(10);
       state.running();
-      state.enterCall();
-      state.enterCall();
+      state.stoppedAt(3);
       state.reset();
       expect(state.isStepping()).toBe(true);
-      state.stepNext(); // target = 0 (verifies depth was reset)
-      expect(state.isAtTargetDepth()).toBe(true);
+      expect(state.stopDepth).toBe(0);
     });
   });
 });

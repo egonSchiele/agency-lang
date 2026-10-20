@@ -119,6 +119,8 @@ Prefer `TraceWriter.create({ runId, traceConfig, files })`, which picks the sink
 
 The trace reuses the debugger's step instrumentation (`debugStep()`) but is otherwise independent. When only tracing is active, `debugStep` writes to the trace and returns, with no pause and no interrupts. When both are active, both code paths run.
 
+A trace records steps on the root stack only. The debugger also stops at steps inside a tool call, fork, or parallel block, which run on branch stacks, but a trace checkpoint is a copy of the whole root stack, so writing one at every step inside every tool would multiply an agent run's trace by its tool statements. A trace replay therefore cannot land inside a tool.
+
 Each execution context gets its own `traceWriter`, built in `createExecutionContext()`. The write path respects `_skipNextCheckpoint` to avoid duplicate checkpoints during rewind, and it skips global initialization, which runs outside any graph node and so has no node to checkpoint against.
 
 ## Relationship to checkpoints

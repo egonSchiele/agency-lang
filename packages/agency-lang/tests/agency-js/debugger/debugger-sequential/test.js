@@ -10,11 +10,11 @@ const labels = [];
 let result = await main();
 
 if (hasInterrupts(result.data) && result.data[0].debugger === true) {
-  labels.push(result.data[0].data);
+  labels.push(result.data[0].data.label);
   result = await respondToInterrupts(result.data, [approve()]);
 }
 if (hasInterrupts(result.data) && result.data[0].debugger === true) {
-  labels.push(result.data[0].data);
+  labels.push(result.data[0].data.label);
   result = await respondToInterrupts(result.data, [approve()]);
 }
 

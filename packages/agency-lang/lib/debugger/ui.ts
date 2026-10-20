@@ -1,3 +1,4 @@
+import type { DebugStopData } from "../runtime/debugger.js";
 import {
   Screen,
   box,
@@ -415,9 +416,9 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- DebuggerIO implementation ---
 
-  async render(checkpoint?: Checkpoint, _full = true): Promise<void> {
+  async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
     if (checkpoint) {
-      await this.state.setCheckpoint(checkpoint);
+      await this.state.setCheckpoint(checkpoint, stop);
       this.threadDisplayIndex = undefined;
     }
     this.renderUI();

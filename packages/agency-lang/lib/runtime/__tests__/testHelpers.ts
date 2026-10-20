@@ -159,6 +159,7 @@ export function makeMockCtx(
     handlers: [] as any[],
     callbacks: {},
     _skipNextCheckpoint: false,
+    beforeCheckpoint: [] as Array<() => void>,
     pauseRequested: false,
     abortController: new AbortController(),
     throwIfCancelled() {

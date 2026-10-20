@@ -1357,16 +1357,22 @@ async function runTsTestDir(
     const useDeterministic =
       !!process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
       fs.existsSync(path.join(dir, "useTestLLMProvider"));
-    let mocksEnv: Record<string, string> = {};
-    let agentHomeCleanup: (() => void) | undefined;
+    // The child registers for attach, which writes under the Agency home;
+    // every test child gets a throwaway one, deterministic or not, so a
+    // case killed by its timeout never leaves a record in the real home.
+    const agencyHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-home-"));
+    let mocksEnv: Record<string, string> = { AGENCY_HOME: agencyHome };
+    let agentHomeCleanup = (): void => {
+      fs.rmSync(agencyHome, { recursive: true, force: true });
+    };
     if (useDeterministic) {
       const mocks = fs.existsSync(mocksFile) ? fs.readFileSync(mocksFile, "utf-8") : "[]";
-      mocksEnv = { AGENCY_LLM_MOCKS: mocks };
+      mocksEnv = { ...mocksEnv, AGENCY_LLM_MOCKS: mocks };
       // Same agent-home sandbox as executeNodeAsync (issue #469).
       const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
       mocksEnv.AGENCY_AGENT_HOME = agentHome;
-      mocksEnv.AGENCY_HOME = agentHome;
       agentHomeCleanup = () => {
+        fs.rmSync(agencyHome, { recursive: true, force: true });
         fs.rmSync(agentHome, { recursive: true, force: true });
       };
     }
@@ -1401,7 +1407,7 @@ async function runTsTestDir(
       return { success: false, dir };
     } finally {
       fetchMocksCleanup?.();
-      agentHomeCleanup?.();
+      agentHomeCleanup();
     }
 
     if (!fs.existsSync(resultFile)) {

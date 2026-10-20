@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
-import { freshImport, fixtureDir } from "./testHelpers.js";
+import { freshImport, fixtureDir, recordingResumes, type RecordedResume } from "./testHelpers.js";
 import { DebuggerTestSession } from "./testSession.js";
 
 const agencyFile = path.join(fixtureDir, "parallel-interrupts.agency");
@@ -14,15 +14,8 @@ beforeAll(() => {
 /** A session on the fixture that records every resume the driver sends. */
 async function batchSession() {
   const mod = await freshImport(compiledFile);
-  const resumes: { interrupts: number; responses: unknown[] }[] = [];
-  const recording = {
-    ...mod,
-    respondToInterrupts: (interrupts: unknown[], responses: unknown[], opts: unknown) => {
-      resumes.push({ interrupts: interrupts.length, responses });
-      return mod.respondToInterrupts(interrupts, responses, opts);
-    },
-  };
-  const session = await DebuggerTestSession.create({ mod: recording });
+  const resumes: RecordedResume[] = [];
+  const session = await DebuggerTestSession.create({ mod: recordingResumes(mod, resumes) });
   return { session, resumes };
 }
 

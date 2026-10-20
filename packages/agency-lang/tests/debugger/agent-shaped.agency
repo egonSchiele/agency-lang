@@ -14,6 +14,12 @@ def search(query: string, breakHere: boolean): string {
   return summary
 }
 
+def confirm(note: string): string {
+  """Asks before going on."""
+  interrupt("confirm " + note + "?")
+  return "confirmed " + note
+}
+
 def writeUp(notes: string): string {
   """Writes up the notes."""
   const heading = "# Report"
@@ -22,7 +28,7 @@ def writeUp(notes: string): string {
 }
 
 node main(task: string): string {
-  const answer = llm(task, { tools: [search, writeUp] })
+  const answer = llm(task, { tools: [search, writeUp, confirm] })
   return answer
 }
 

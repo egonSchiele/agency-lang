@@ -1,0 +1,12 @@
+// A guarded llm() whose cost limit is below one request's cost under the
+// deterministic client, so the guard trips as the first request's cost
+// lands. The draft saved before it is what a reject returns.
+node main(): string {
+  const result = guard(label: "research", cost: 0.000001) {
+    saveDraft("draft")
+    const first = llm("first")
+    const second = llm("second")
+    return first + second
+  }
+  return result
+}

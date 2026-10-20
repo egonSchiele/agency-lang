@@ -18,7 +18,14 @@ import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
-import { showRewindSelector, showCheckpointsPanel, type OverlayContext } from "./overlays.js";
+import {
+  showRewindSelector,
+  showCheckpointsPanel,
+  showGuardTripForm,
+  type OverlayContext,
+} from "./overlays.js";
+import type { GuardTripData } from "./guardAnswer.js";
+import type { InterruptResponse } from "../runtime/interrupts.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -661,6 +668,12 @@ export class DebuggerUI implements DebuggerIO {
     this.prevState = null;
     await this.render();
     return result;
+  }
+
+  async answerGuardTrip(data: GuardTripData): Promise<InterruptResponse> {
+    const response = await showGuardTripForm(this.overlayContext(), data);
+    await this.render();
+    return response;
   }
 
   async showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void> {

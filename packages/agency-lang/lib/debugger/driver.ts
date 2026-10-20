@@ -8,6 +8,7 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
+import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
@@ -271,9 +272,13 @@ export class DebuggerDriver {
   }
 
   /** One interrupt's answer, asked for until the input is one of
-   *  approve, reject, or resolve with a value. A raise that expects a
-   *  value, such as a `question`, takes the typed text as its answer. */
+   *  approve, reject, or resolve with a value. A guard trip takes a
+   *  grant, a disarm, a message, or a reject instead; a raise that
+   *  expects a value, such as a `question`, takes the typed text. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    if (isGuardTrip(interrupt.effect, interrupt.data)) {
+      return await this.askAboutGuardTrip(interrupt, position);
+    }
     if (interrupt.expectsValue) {
       return await this.askForValue(interrupt, position);
     }
@@ -332,6 +337,23 @@ export class DebuggerDriver {
       this.ui.state.log(`Answered: ${JSON.stringify(value)}`);
       return { type: "approve", value } as InterruptResponse;
     }
+  }
+
+  /** A guard trip's answer comes from the form (`showGuardTripForm`),
+   *  which only offers answers the runtime accepts. */
+  private async askAboutGuardTrip(
+    interrupt: Interrupt,
+    position: string,
+  ): Promise<InterruptResponse> {
+    this.ui.state.log(`${describeGuardTrip(interrupt.data)}${position}`);
+    this.ui.state.log(draftNote(interrupt.data));
+    const response = await this.ui.answerGuardTrip(interrupt.data);
+    this.ui.state.log(
+      response.type === "reject"
+        ? "Rejected the guard trip"
+        : `Approved the guard trip with ${JSON.stringify((response as { value?: unknown }).value)}`,
+    );
+    return response;
   }
 
   /** Resume the program with one response per interrupt of `batch`, in

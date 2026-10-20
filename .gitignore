@@ -89,3 +89,4 @@ __pycache__/
 packages/whisper-local/build/*
 # The JavaScript helper of a debugger fixture (waiter.js, imported by awaits-helper.agency)
 !**/tests/debugger/waiter.js
+!**/tests/debugger/waiter.d.ts

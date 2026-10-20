@@ -112,7 +112,22 @@ export async function debug(
 
     let absOutput: string;
 
-    if (distDir) {
+    // `--agency-only` is checked before `distDir`: a safety flag must not be
+    // dropped because `agency.json` points at precompiled output. Naming both
+    // on the command line is a contradiction, so it is refused.
+    if (options.agencyOnly && options.distDir) {
+      console.error("Error: --agency-only compiles the program itself; drop --dist-dir.");
+      process.exit(1);
+    }
+    if (options.agencyOnly) {
+      const compiled = compileAgencyOnly(inputFile);
+      if (!compiled.ok) {
+        console.error("Error: agency-only compile refused:");
+        for (const error of compiled.errors) console.error(`  ${error}`);
+        process.exit(1);
+      }
+      absOutput = path.resolve(compiled.scriptPath);
+    } else if (distDir) {
       // distDir mode: import pre-compiled JS from the dist directory
       let compiledPath: string;
       try {
@@ -133,14 +148,6 @@ export async function debug(
       }
 
       absOutput = compiledPath;
-    } else if (options.agencyOnly) {
-      const compiled = compileAgencyOnly(inputFile);
-      if (!compiled.ok) {
-        console.error("Error: agency-only compile refused:");
-        for (const error of compiled.errors) console.error(`  ${error}`);
-        process.exit(1);
-      }
-      absOutput = path.resolve(compiled.scriptPath);
     } else {
       // Normal mode: compile the .agency file to .js on the fly
       const debugConfig: AgencyConfig = { ...config, debugger: true };
@@ -267,10 +274,10 @@ export async function debug(
       await driver.run({ data: interrupt });
     } else {
       // Normal mode: run the node, it will pause at the first debugStep()
-      const initialResult = await nodeFunction(...args, {
-        callbacks,
-        invocation: driver.invocation,
-      });
+      // The generated node function takes its options flat (`policy`,
+      // `config`, `host`, ...), so the invocation is spread; under an
+      // `invocation:` key it would be dropped without an error.
+      const initialResult = await nodeFunction(...args, { callbacks, ...driver.invocation });
       await driver.run(initialResult);
     }
   } finally {

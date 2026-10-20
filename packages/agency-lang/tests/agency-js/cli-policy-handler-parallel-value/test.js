@@ -14,7 +14,7 @@ const policyFile = join(dir, "policy.json");
 // offered that answer.
 const answers = ["aa", "aa"];
 let prompts = 0;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   prompts += 1;
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
@@ -22,7 +22,7 @@ globalThis.__agencyInputOverride = async () => {
 };
 
 try {
-  await main({ policyFile });
+  await main({ inputOverride, policyFile });
   writeFileSync("__result.json", JSON.stringify({
     prompts,
     remainingAnswers: answers.length,

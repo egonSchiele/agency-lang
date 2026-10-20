@@ -6,12 +6,12 @@ import { tmpdir } from "os";
 const dir = mkdtempSync(join(tmpdir(), "cli-policy-headless-value-"));
 const policyFile = join(dir, "policy.json");
 
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   throw new Error("Prompted in a non-interactive run");
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ inputOverride, policyFile });
   const text = String(result.data);
   writeFileSync("__result.json", JSON.stringify({
     rejected: text.startsWith("failure:"),

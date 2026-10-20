@@ -8,7 +8,7 @@ const policyFile = join(dir, "policy.json");
 writeFileSync(policyFile, JSON.stringify({ "myapp::other": [{ action: "reject" }] }));
 
 const answers = ["aa"];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
   return a;
@@ -19,7 +19,7 @@ const realLog = console.log;
 console.log = (...a) => { printed += a.join(" ") + "\n"; };
 
 try {
-  await main({ policyFile });
+  await main({ inputOverride, policyFile });
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

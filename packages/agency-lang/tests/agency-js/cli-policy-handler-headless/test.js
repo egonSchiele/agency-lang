@@ -7,12 +7,12 @@ const dir = mkdtempSync(join(tmpdir(), "cli-policy-headless-"));
 const policyFile = join(dir, "policy.json");
 
 // Any prompt is the bug under test: a headless run has no one to answer.
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   throw new Error("Prompted in a non-interactive run");
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ inputOverride, policyFile });
   const text = String(result.data);
   writeFileSync("__result.json", JSON.stringify({
     rejected: text.startsWith("failure:"),

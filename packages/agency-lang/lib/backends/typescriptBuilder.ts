@@ -4607,6 +4607,7 @@ export class TypeScriptBuilder {
                     traceId: ts.id("__invocationTraceId"),
                     policy: ts.id("__invocationPolicy"),
                     host: ts.id("__invocationHost"),
+                    inputOverride: ts.id("__invocationInputOverride"),
                   }),
                   input: ts.id("__invocationInput"),
                   abortSignal: ts.id("__invocationAbortSignal"),

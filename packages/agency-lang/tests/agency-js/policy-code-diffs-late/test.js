@@ -10,7 +10,7 @@ const policyFile = join(dir, "policy.json");
 // saves, so it must not ask.
 const answers = ["aa"];
 let prompts = 0;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   prompts += 1;
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
@@ -22,7 +22,7 @@ const realLog = console.log;
 console.log = (...args) => { printed += args.join(" ") + "\n"; };
 
 try {
-  await main({ policyFile });
+  await main({ inputOverride, policyFile });
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

@@ -9,7 +9,7 @@ const policyFile = join(dir, "policy.json");
 // "a" approves each of the two interrupts at the menu.
 const answers = ["a", "a"];
 let asked = 0;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   asked += 1;
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
@@ -26,9 +26,9 @@ console.log = (...args) => {
 };
 
 try {
-  await main({ policyFile });
-  await autoApproved({ policyFile });
-  survivedNullPayload = (await nullPayload({ policyFile })).data;
+  await main({ inputOverride, policyFile });
+  await autoApproved({ inputOverride, policyFile });
+  survivedNullPayload = (await nullPayload({ inputOverride, policyFile })).data;
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

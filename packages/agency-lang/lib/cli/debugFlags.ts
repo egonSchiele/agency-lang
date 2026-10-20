@@ -1,6 +1,6 @@
 import type { CliFlags } from "@/config/config.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
-import { parseDurationMs } from "@/duration.js";
+import { resolveBudget } from "./budget.js";
 import { resolveRunPolicy } from "./runPolicy.js";
 
 /** The run flags `agency debug` shares with `agency run`. The compile
@@ -11,9 +11,6 @@ export type DebugRunFlags = CliFlags & {
   policy?: string;
   approve?: string;
   reject?: string;
-  /** Accepted for symmetry with `run`. The debugger prompts for every
-   *  interrupt no handler answers, so it is always interactive. */
-  interactive?: boolean;
   maxCost?: string;
   maxTime?: string;
   local?: string;
@@ -36,19 +33,22 @@ export function invocationFromRunFlags(flags: DebugRunFlags, cwd: string): Invoc
     reject: flags.reject,
     cwd,
   });
-  if (runPolicy) invocation.policy = runPolicy.policy;
+  if (runPolicy) {
+    invocation.policy = runPolicy.policy;
+  }
+  // `resolveBudget` checks both flags and owns their error messages; the
+  // values it returns are strings for `run`'s child, so the flags themselves
+  // are kept, in the shape `AgencyConfig.budget` takes.
+  const checked = resolveBudget({ maxCost: flags.maxCost, maxTime: flags.maxTime });
   const budget: { maxCost?: number; maxTime?: string } = {};
-  if (flags.maxCost !== undefined) {
-    const dollars = Number(flags.maxCost);
-    if (!Number.isFinite(dollars)) {
-      throw new Error(`--max-cost: expected a number of dollars (got "${flags.maxCost}")`);
-    }
-    budget.maxCost = dollars;
+  if (checked.maxCost !== undefined) {
+    budget.maxCost = Number(checked.maxCost);
   }
   if (flags.maxTime !== undefined) {
-    parseDurationMs(flags.maxTime, "--max-time");
     budget.maxTime = flags.maxTime;
   }
-  if (Object.keys(budget).length > 0) invocation.config = { budget };
+  if (Object.keys(budget).length > 0) {
+    invocation.config = { budget };
+  }
   return invocation;
 }

@@ -230,7 +230,7 @@ await session.press("s"); // the interrupt fires
 await session.type("resolve 5");
 ```
 
-Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. When several branches paused at once the driver asks about each in turn, so `type()` one answer per interrupt. A guard trip opens a form instead: `press("enter")` on a choice (`down` to move), then `type()` the amount and the message (see `lib/debugger/guardTrip.test.ts`).
+Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. When several branches paused at once the driver asks about each in turn, so `type()` one answer per interrupt. A guard trip opens a form instead: `press("enter")` on a choice (`down` to move), then `type()` the amount and the message (see `lib/debugger/guardTrip.test.ts`). For a raise used as a value, such as a `question`, the prompt is `answer:` and the typed text is the answer (see `lib/debugger/question.test.ts`).
 
 ### Testing print
 

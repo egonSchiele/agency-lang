@@ -8,14 +8,14 @@ const policyFile = join(dir, "policy.json");
 
 // "r" picks reject at the menu; "" skips the reject-reason follow-up.
 const answers = ["r", ""];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
   return a;
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ inputOverride, policyFile });
   const asText = JSON.stringify(result.data);
   writeFileSync("__result.json", JSON.stringify({
     // The bug surfaced as a render exception while drawing the prompt.

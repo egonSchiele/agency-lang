@@ -10,14 +10,14 @@ const policyFile = join(dir, "policy.json");
 // prompts than we have answers, the override throws — surfacing the
 // over-prompting as a clear test failure instead of a hang.
 const answers = ["aa", "ap", "a"];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
   return a;
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ inputOverride, policyFile });
 
   writeFileSync("__result.json", JSON.stringify({
     result: result.data,

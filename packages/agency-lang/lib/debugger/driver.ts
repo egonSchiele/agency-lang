@@ -327,7 +327,7 @@ export class DebuggerDriver {
       this.ui.state.log(line);
     }
     while (true) {
-      const input = await this.ui.promptForInput(`Guard tripped${position}: ${GUARD_ANSWER_HELP}`);
+      const input = await this.ui.promptForInput(`guard${position}: ${GUARD_ANSWER_HELP}`);
       const answer = parseGuardAnswer(input);
       if ("error" in answer) {
         this.ui.state.log(answer.error);

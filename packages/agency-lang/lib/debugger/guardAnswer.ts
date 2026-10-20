@@ -29,8 +29,11 @@ export function describeGuardTrip(data: GuardTripData): string[] {
   return [`${name} tripped on ${data.dimension}: ${amount}`, draft];
 }
 
+/** The answers, as the input field's label. It shares one row with the
+ *  typed answer, so it is kept short; the trip itself is described in
+ *  the activity log. */
 export const GUARD_ANSWER_HELP =
-  "grant cost <dollars> / grant time <duration> / disarm cost|time / message <text> / reject";
+  "grant cost|time <amount> / disarm cost|time / message <text> / reject";
 
 type GuardGrant = {
   maxCost?: number;

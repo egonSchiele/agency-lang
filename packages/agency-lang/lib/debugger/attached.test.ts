@@ -12,6 +12,8 @@ import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "./testHel
 import type { DebuggerCommand } from "./types.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
 import { isPaused } from "@/runtime/pause.js";
+import type { Checkpoint } from "@/runtime/state/checkpointStore.js";
+import type { DebugStopData } from "@/runtime/debugger.js";
 import * as helper from "../../tests/debugger/waiter.js";
 
 const fixtures = {
@@ -22,7 +24,43 @@ const fixtures = {
   mixedBatch: "mixed-batch",
   llmAfterStep: "llm-after-step",
   agentShaped: "agent-shaped",
+  echo: "echo",
+  nestedRun: "nested-run",
+  agentEndCallback: "agent-end-callback",
 };
+
+/** An IO that never answers: the program stays at its stop until the
+ *  test does something else, such as detach or cancel. */
+class SilentIO extends TestDebuggerIO {
+  override async waitForCommand(): Promise<DebuggerCommand> {
+    return await new Promise(() => {});
+  }
+}
+
+/** An IO with one script per run, told apart by the run id of the
+ *  checkpoint last rendered; the scripts go to the runs in the order
+ *  their first stop is shown. */
+class PerRunIO extends TestDebuggerIO {
+  private runs: string[] = [];
+  private shownRun = "";
+  constructor(private readonly scripts: DebuggerCommand[][]) {
+    super([]);
+  }
+  override async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+    await super.render(checkpoint, stop);
+    const runId = checkpoint?.traceId;
+    if (runId !== undefined) {
+      this.shownRun = runId;
+      if (!this.runs.includes(runId)) {
+        this.runs.push(runId);
+      }
+    }
+  }
+  override async waitForCommand(): Promise<DebuggerCommand> {
+    const script = this.scripts[this.runs.indexOf(this.shownRun)] ?? [];
+    return script.shift() ?? { type: "quit" };
+  }
+}
 
 function compiledPath(name: string): string {
   return path.join(fixtureDir, `${name}.ts`);
@@ -41,8 +79,10 @@ function attachTo(mod: any, commands: DebuggerCommand[], io = new TestDebuggerIO
   const driver = new DebuggerDriver({
     mod: {
       respondToInterrupts: mod.respondToInterrupts,
+      respondToInterruptsForServe: mod.__respondToInterruptsForServe,
       rewindFrom: mod.rewindFrom,
       __setDebugger: mod.__setDebugger,
+      __getDebugger: mod.__getDebugger,
       __getCheckpoints: mod.__getCheckpoints,
     },
     rewindSize: 30,
@@ -51,6 +91,31 @@ function attachTo(mod: any, commands: DebuggerCommand[], io = new TestDebuggerIO
   });
   driver.attach();
   return { driver, io };
+}
+
+/** Resolves once `io` has rendered `count` checkpoints. */
+async function untilRendered(io: TestDebuggerIO, count: number): Promise<void> {
+  for (let i = 0; i < 200 && io.renderCalls.length < count; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect(io.renderCalls.length).toBeGreaterThanOrEqual(count);
+}
+
+/** `promise`, or a failure when it has not settled within `ms`. */
+function withinMs<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`not settled within ${ms} ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 /** A caller must never be handed a debug stop. */
@@ -127,6 +192,100 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expectNoStop(approving);
     expect(rejecting.data).toBe("rejected");
     expect(approving.data).toBe("the secret");
+  });
+
+  it("a step back in one run never lands in another run's state", async () => {
+    // Both runs pass the same statements, so the window holds a
+    // checkpoint of each at each; the step back must pick this run's.
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    // The stepping mode is one for the debugger, so neither run says
+    // `continue` before the step back has happened.
+    const io = new PerRunIO([
+      [{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }],
+      [{ type: "step" }, { type: "step" }, { type: "step" }],
+    ]);
+    attachTo(mod, [], io);
+
+    const [alice, bob] = await Promise.all([mod.main("alice"), mod.main("bob")]);
+
+    expect(alice.data).toBe("alice");
+    expect(bob.data).toBe("bob");
+    expect(io.logLines.filter((line) => line.startsWith("Rewinding"))).toHaveLength(1);
+  });
+
+  it("a run that calls another node of the same module from its own code does not deadlock", async () => {
+    const mod = await freshImport(compiledPath(fixtures.nestedRun));
+    helper.setInnerModule(mod);
+    attachTo(mod, [{ type: "step" }, { type: "step" }, { type: "continue" }]);
+
+    const result = await mod.outer();
+
+    expect(result.data).toBe(5);
+  });
+
+  it("a run that finishes does not wait on another run's unanswered stop", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new SilentIO([]);
+    const { driver } = attachTo(mod, [], io);
+    const stopped = mod.main();
+    await untilRendered(io, 1);
+    driver.debuggerState.running();
+
+    const finished = await withinMs<any>(mod.main(), 2000);
+
+    expect(finished.data).toBe(3);
+    driver.detach();
+    expect((await stopped).data).toBe(3);
+  });
+
+  it("the caller can cancel a run that waits at a stop", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new SilentIO([]);
+    attachTo(mod, [], io);
+    const cancel = new AbortController();
+    const running = mod.main({ abortSignal: cancel.signal });
+    await untilRendered(io, 1);
+
+    cancel.abort();
+
+    // The cancelled leg throws; the driver hands the thrown outcome back
+    // (`AttachedLegThrew`) and the public entry point throws it.
+    await expect(withinMs(running, 2000)).rejects.toThrow(/cancel/i);
+  });
+
+  it("the caller can cancel a run that waits for its turn on the UI", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const io = new SilentIO([]);
+    const { driver } = attachTo(mod, [], io);
+    const first = mod.main("alice");
+    await untilRendered(io, 1);
+    const cancel = new AbortController();
+    const second = mod.main("bob", { abortSignal: cancel.signal });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    cancel.abort();
+
+    await expect(withinMs(second, 2000)).rejects.toThrow(/cancel/i);
+    driver.detach();
+    expect((await first).data).toBe("alice");
+  });
+
+  it("the program's own onAgentEnd callback fires, and a throwing caller's callback is logged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.agentEndCallback));
+    helper.clearAgentEndNotes();
+    attachTo(mod, [{ type: "step" }, { type: "continue" }]);
+
+    const result = await mod.main({
+      callbacks: {
+        onAgentEnd: () => {
+          helper.noteAgentEnd("ts");
+          throw new Error("the callback failed");
+        },
+      },
+    });
+
+    expect(result.data).toBe(2);
+    expect(helper.agentEndNotes().sort()).toEqual(["agency", "ts"]);
   });
 
   it("the caller's answer to a tool's interrupt survives attaching between legs", async () => {

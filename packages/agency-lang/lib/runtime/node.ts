@@ -32,12 +32,8 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import {
-  settleFunctionStops,
-  settleStops,
-  type LegOptions,
-  type SettleHooks,
-} from "./attachedDebugger.js";
+import { settleFunctionStops, settleStops, type LegOptions } from "./attachedDebugger.js";
+import { fireAgentEnd } from "./agentEnd.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
   tokenStatsOf,
@@ -531,33 +527,7 @@ async function runNodeCore({
               timeTaken: performance.now() - agentStartTime,
               tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
             });
-            // onAgentEnd fires AFTER the run finished, so seed ALS with
-            // the real per-run ThreadStore: user callbacks that inspect
-            // the final conversation through stdlib helpers see the
-            // actual messages, not a sentinel.
-            await withRun(
-              {
-                ctx: execCtx,
-                stack: execCtx.stateStack,
-                threads: threadStore,
-                globals: execCtx.globals,
-                log: logOf(execCtx, execCtx.globals),
-                state: freshState(),
-                ...lineage,
-              },
-              (run) =>
-                callHook(run, {
-                  name: "onAgentEnd",
-                  data: {
-                    nodeName,
-                    result: {
-                      ...returnObject,
-                      usage: execCtx.invocationUsage.snapshot(),
-                      traceId: execCtx.getRunId(),
-                    },
-                  },
-                }),
-            );
+            await fireAgentEnd(execCtx, nodeName, returnObject, threadStore, lineage);
             await execCtx.closeTraceWriter();
           }
           return { status: "returned" as const, value: returnObject };
@@ -617,29 +587,14 @@ export async function runNodeForServe(
 }
 
 /** The node's outcome with its debug stops settled. `runNodeCore` fires
- *  the caller's `onAgentEnd` when its own leg ends with a value; when the
- *  debugger ran the leg that ended, it fires here instead, once, with the
- *  final value and the run's usage, so attaching a debugger does not
- *  change what the caller sees. */
+ *  `onAgentEnd` when its own leg ends with a value; when the debugger ran
+ *  the leg that ended, that leg fires it (`agentEnd` in the leg options,
+ *  see `fireAgentEnd`), so attaching a debugger does not change what the
+ *  caller sees. */
 async function settledNode(
   args: RunNodeArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  const outcome = await runNodeCore(args);
-  const hooks: SettleHooks = {
-    onFinished: async (final) => {
-      const onAgentEnd = args.callbacks?.onAgentEnd;
-      if (onAgentEnd === undefined) {
-        return;
-      }
-      await runInBootstrapFrame(args.ctx, () =>
-        onAgentEnd({
-          nodeName: args.nodeName,
-          result: { ...final.value, usage: final.usage, traceId: final.traceId },
-        }),
-      );
-    },
-  };
-  return settleStops(args.ctx, outcome, legOf(args), hooks);
+  return settleStops(args.ctx, await runNodeCore(args), legOf(args));
 }
 
 function legOf(args: RunNodeArgs): LegOptions {
@@ -648,5 +603,6 @@ function legOf(args: RunNodeArgs): LegOptions {
     callbacks: args.callbacks,
     abortSignal: args.abortSignal,
     pauseSignal: args.pauseSignal,
+    agentEnd: true,
   };
 }

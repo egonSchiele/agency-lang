@@ -403,6 +403,11 @@ describe("stopping inside a tool call", () => {
       await session.press("c");
       expect(activity(session)).toContainEqual("Interrupt: confirm send?");
       expect(activity(session).filter((line) => line.startsWith("Interrupt"))).toHaveLength(1);
+      // An answer the driver does not understand is asked for again.
+      await session.type("maybe");
+      expect(activity(session)).toContainEqual(
+        'Unknown response: "maybe". Try: approve, reject, resolve <value>',
+      );
       await session.type("approve");
       expect(await session.quit()).toBe(FINAL);
       const batch = resumes.find((resume) => resume.interrupts === 2)!;

@@ -15,7 +15,7 @@ const myTestAgency = path.join(fixtureDir, "my-test.agency");
 const myTestCompiled = path.join(fixtureDir, "my-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, myTestAgency, myTestCompiled, { ts: true });
+  compile({}, myTestAgency, myTestCompiled, { ts: true });
 });
 
 describe("My debugger test", () => {
@@ -54,11 +54,11 @@ const myTestAgency = path.join(fixtureDir, "my-test.agency");
 const myTestCompiled = path.join(fixtureDir, "my-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, myTestAgency, myTestCompiled, { ts: true });
+  compile({}, myTestAgency, myTestCompiled, { ts: true });
 });
 ```
 
-The `{ debugger: true }` flag inserts debug pause points at every statement. The `{ ts: true }` flag outputs `.ts` instead of `.js` so vitest can import it directly.
+The empty config compiles with `instrument` on, its default, which emits the `debugStep()` call before every statement that the debugger stops at. The `{ ts: true }` flag outputs `.ts` instead of `.js` so vitest can import it directly.
 
 **Important**: `fixtureDir` is exported from `testHelpers.ts` and points to `tests/debugger/`.
 

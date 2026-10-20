@@ -27,13 +27,15 @@ describe("node wrapper per-invocation options", () => {
     expect(ts).toContain("abortSignal?: AbortSignal; pauseSignal?: AbortSignal }");
   });
 
+  // Anchored to the runNode call, since the destructuring at the top of
+  // the wrapper contains the same names.
   it("forwards the cancel and pause signals to runNode", () => {
-    expect(ts).toContain("abortSignal: __invocationAbortSignal,");
-    expect(ts).toContain("pauseSignal: __invocationPauseSignal,");
+    expect(ts).toMatch(/runNode\(\{[\s\S]*abortSignal: __invocationAbortSignal,/);
+    expect(ts).toMatch(/runNode\(\{[\s\S]*pauseSignal: __invocationPauseSignal,/);
   });
 
   it("forwards the input override as part of the runNode invocation", () => {
-    expect(ts).toContain("inputOverride: __invocationInputOverride");
+    expect(ts).toMatch(/invocation: \{[^}]*inputOverride: __invocationInputOverride/);
   });
 
   it("types the options object with InvocationOptions", () => {

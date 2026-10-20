@@ -13,6 +13,7 @@ import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import { createDebugInterrupt } from "@/runtime/interrupts.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
+import { compileChoice } from "./debugFlags.js";
 import { compileAgencyOnly } from "@/compiler/compileSandboxed.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -107,19 +108,18 @@ export async function debug(
       }
       traceCheckpoints = [cp];
     }
-    // Resolve distDir from CLI flag or config
-    const distDir = options.distDir ?? config.distDir;
-
     let absOutput: string;
 
-    // `--agency-only` is checked before `distDir`: a safety flag must not be
-    // dropped because `agency.json` points at precompiled output. Naming both
-    // on the command line is a contradiction, so it is refused.
-    if (options.agencyOnly && options.distDir) {
-      console.error("Error: --agency-only compiles the program itself; drop --dist-dir.");
+    const choice = compileChoice({
+      agencyOnly: options.agencyOnly,
+      distDir: options.distDir,
+      configDistDir: config.distDir,
+    });
+    if ("refused" in choice) {
+      console.error(`Error: ${choice.refused}`);
       process.exit(1);
     }
-    if (options.agencyOnly) {
+    if (choice.mode === "agency-only") {
       const compiled = compileAgencyOnly(inputFile);
       if (!compiled.ok) {
         console.error("Error: agency-only compile refused:");
@@ -127,8 +127,9 @@ export async function debug(
         process.exit(1);
       }
       absOutput = path.resolve(compiled.scriptPath);
-    } else if (distDir) {
+    } else if (choice.mode === "dist-dir") {
       // distDir mode: import pre-compiled JS from the dist directory
+      const distDir = choice.distDir;
       let compiledPath: string;
       try {
         compiledPath = resolveCompiledFile(distDir, inputFile);
@@ -168,7 +169,7 @@ export async function debug(
     // Get the source map from the module
     const sourceMap = mod.__sourceMap ?? {};
 
-    if (distDir && Object.keys(sourceMap).length === 0) {
+    if (choice.mode === "dist-dir" && Object.keys(sourceMap).length === 0) {
       console.warn(
         "Warning: The compiled module has an empty source map. Was it compiled with instrument: false?\n" +
           "The debugger may not be able to step through code.",

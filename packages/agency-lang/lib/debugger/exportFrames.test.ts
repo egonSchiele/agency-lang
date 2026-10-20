@@ -13,8 +13,8 @@ const fnCallCompiled = path.join(fixtureDir, "function-call-test.ts");
 const framesDir = path.join(fixtureDir, "..", "test-frames");
 
 beforeAll(() => {
-  compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
-  compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
+  compile({}, stepTestAgency, stepTestCompiled, { ts: true });
+  compile({}, fnCallAgency, fnCallCompiled, { ts: true });
 });
 
 // These tests generate HTML frame exports for visual debugging.

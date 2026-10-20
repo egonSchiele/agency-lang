@@ -8,7 +8,7 @@ The interactive debugger lets users step through `.agency` source code line by l
 agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>]
 ```
 
-The command is hidden from `agency --help`, but it works. If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
+If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
 
 `--trace` and `--checkpoint` load a recorded run instead of executing one. If the file is a bundle, `agency debug` extracts its sources to a temp directory and debugs those. `--dist-dir` imports pre-compiled JS from a directory rather than compiling on the fly.
 
@@ -44,7 +44,7 @@ Instrumentation is controlled by one compiler flag, `instrument`. When `agencyCo
 await runner.debugger(0, "some-label");
 ```
 
-`agency debug` also sets `{ debugger: true }` on the config it compiles with. Nothing in the builder or runtime reads that field today; instrumentation is on by default, so the flag is currently inert.
+`agency debug` compiles with `instrument` forced on, since the debugger stops at `debugStep()` calls. `--dist-dir` compiles nothing, so it warns when the imported module has an empty source map.
 
 ### The `maybeDebugHook()` hook (`lib/runtime/runner.ts`)
 

@@ -8,7 +8,7 @@ const agencyFile = path.join(fixtureDir, "parallel-interrupts.agency");
 const compiledFile = path.join(fixtureDir, "parallel-interrupts.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agencyFile, compiledFile, { ts: true });
+  compile({}, agencyFile, compiledFile, { ts: true });
 });
 
 /** A session on the fixture that records every resume the driver sends. */

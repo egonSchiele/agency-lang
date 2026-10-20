@@ -18,8 +18,8 @@ const forkAgency = path.join(fixtureDir, "fork-test.agency");
 const forkCompiled = path.join(fixtureDir, "fork-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agentAgency, agentCompiled, { ts: true });
-  compile({ debugger: true }, forkAgency, forkCompiled, { ts: true });
+  compile({}, agentAgency, agentCompiled, { ts: true });
+  compile({}, forkAgency, forkCompiled, { ts: true });
 });
 
 /** The replies in the order the program asks for them. The subagent's

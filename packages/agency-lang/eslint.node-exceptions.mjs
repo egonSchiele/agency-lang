@@ -18,7 +18,7 @@ export const NODE_ONLY = {
   "lib/host/node/**":
     "the host for Node, built from Node modules on purpose, and default.node.ts, which the default condition of #default-host picks",
   "lib/debugger/debuggerState.ts":
-    "the debugger's state, which imports the whole compiler through lib/index.ts; the runtime names only its type",
+    "the debugger's state, which every program loads through the attach server; it reaches the checkpoint store through lib/index.ts",
   "lib/runtime/agencyGlobals.node.ts":
     "re-exports Node's path and os for Agency code; the browser entry point exports portable ones",
   "lib/runtime/cliEntry.ts": "starts a program from the command line",
@@ -28,7 +28,7 @@ export const NODE_ONLY = {
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
   "lib/runtime/platform.node.ts":
-    "the Node side of #platform: provider modules from disk, the coverage collector, local models",
+    "the Node side of #platform: provider modules from disk, the coverage collector, local models, and registering a program for attach",
   "lib/runtime/providerModules.ts": "loads provider modules from disk",
   "lib/runtime/subprocess-bootstrap.ts": "the child end of ipc.ts",
   "lib/runtime/template/**":

@@ -10,13 +10,15 @@ import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
 import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
+import { functionRefReviver, nativeTypeReplacer } from "@/runtime/revivers/index.js";
+import { AgencyFunction } from "@/runtime/agencyFunction.js";
 import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "../testHelpers.js";
 import type { DebuggerCommand, DebuggerIO } from "../types.js";
 import { memoryChannelPair, type Channel } from "./channel.js";
 import { lineChannel } from "./lineChannel.js";
 import { readRecord, recordPaths, sessionsDir } from "./registry.js";
 import { attachOverChannel, type AttachedSession } from "./server.js";
-import { serveDebuggerIO, type ServeEvents } from "./serveIO.js";
+import { checkpointFromWire, serveDebuggerIO, type ServeEvents } from "./serveIO.js";
 import type { Hello } from "./protocol.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import * as helper from "../../../tests/debugger/waiter.js";
@@ -134,6 +136,66 @@ describe("a debugger attached over a channel", () => {
     expect(rendersBeforeClose).toBe(2);
     expect(io.renderCalls.length).toBe(rendersBeforeClose);
     expect(session.driver.debuggerState.attached).toBeUndefined();
+  });
+
+  it("a UI that throws ends the session and the program runs on", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new (class extends TestDebuggerIO {
+      private renders = 0;
+      override async render(): Promise<void> {
+        this.renders += 1;
+        if (this.renders === 2) {
+          throw new Error("the panel could not be drawn");
+        }
+      }
+    })([{ type: "step" }, { type: "step" }, { type: "step" }]);
+    const { session, uiSide } = attachWithMemoryChannel(mod, [], io);
+    const uiSideClosed = new Promise<void>((resolve) => uiSide.onClose(resolve));
+
+    const result = await mod.main();
+
+    expect(result.data).toBe(3);
+    await uiSideClosed;
+    expect(session.driver.debuggerState.attached).toBeUndefined();
+  });
+
+  it("a reply of the wrong shape ends the session and the program runs on", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        return null as never;
+      }
+    })([]);
+    const { session, uiSide } = attachWithMemoryChannel(mod, [], io);
+    const uiSideClosed = new Promise<void>((resolve) => uiSide.onClose(resolve));
+
+    const result = await mod.main();
+
+    expect(result.data).toBe(3);
+    await uiSideClosed;
+    expect(session.driver.debuggerState.attached).toBeUndefined();
+  });
+
+  it("a checkpoint holding a function is rebuilt in a process that loaded no program", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const { io } = attachWithMemoryChannel(mod, [{ type: "continue" }]);
+    await mod.main();
+    const wire = JSON.parse(JSON.stringify(io.renderCalls[0]!.toJSON(), nativeTypeReplacer));
+    wire.stack.stack[0].locals.fn = {
+      __nativeType: "FunctionRef",
+      name: "search",
+      module: "agent.agency",
+    };
+
+    const registry = functionRefReviver.registry;
+    functionRefReviver.registry = null;
+    try {
+      const rebuilt = checkpointFromWire(wire);
+      expect(rebuilt).toBeDefined();
+      expect(AgencyFunction.isAgencyFunction(rebuilt!.stack.stack[0]!.locals.fn)).toBe(true);
+    } finally {
+      functionRefReviver.registry = registry;
+    }
   });
 
   it("the stop inside a tool call reaches the UI side with its branch", async () => {

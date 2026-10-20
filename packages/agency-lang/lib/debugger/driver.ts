@@ -10,7 +10,8 @@ import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
 import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
 import { DebuggerDetached, type DebuggerCommand, type DebuggerIO } from "./types.js";
 import { composeCallbacks } from "../runtime/hooks.js";
-import { emptyRunUsage, sumRunUsage, type RunUsage } from "../runtime/invocationUsage.js";
+import type { RunUsage } from "../runtime/invocationUsage.js";
+import { isPaused } from "../runtime/pause.js";
 import {
   ATTACHED_RESUME,
   type AttachFunctions,
@@ -68,10 +69,17 @@ export class DebuggerDriver {
   private pendingOverrides: Record<string, unknown> = {};
   private readonly attached: boolean;
   /** Attached: what the leg that stopped was started with; every resume
-   *  and rewind passes it back. */
+   *  and rewind passes it back. It belongs to the run being shown: two
+   *  runs that stop at once take turns (`takeTurn`), so the second never
+   *  resumes with the first one's policy or signals. */
   private leg: LegOptions = {};
-  /** Attached: the usage of the legs run since `runAttached` began. */
-  private legUsage: RunUsage = emptyRunUsage();
+  /** Attached: the usage of the last leg the driver ran, which is the
+   *  run's total so far. */
+  private legUsage: RunUsage | undefined;
+  /** Attached: the call in progress on the UI. The UI shows one stop at
+   *  a time, so a second run's stop waits until the first run's call
+   *  returns. */
+  private attachedTurn: Promise<unknown> = Promise.resolve();
   private detachRequested = false;
   private detachWaiters: (() => void)[] = [];
 
@@ -115,6 +123,7 @@ export class DebuggerDriver {
     if (!this.attached) {
       throw new Error("attach needs a driver built with attached: true");
     }
+    this.detachRequested = false;
     this.debuggerState.attached = {
       run: (result, leg) => this.runAttached(result, leg),
       finished: (result) => this.finishedAttached(result),
@@ -132,30 +141,75 @@ export class DebuggerDriver {
     }
     this.detachWaiters = [];
     delete this.debuggerState.attached;
-    this.mod.__setDebugger(null);
-  }
-
-  private async runAttached(result: any, leg: LegOptions): Promise<AttachedRunResult> {
-    this.leg = leg;
-    this.legUsage = emptyRunUsage();
-    const final = await this.run(result, { interceptConsole: false });
-    return { result: final, usage: this.legUsage };
-  }
-
-  private async finishedAttached(result: any): Promise<void> {
-    this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
-    this.programFinished = true;
-    await this.renderIfAttached();
-  }
-
-  /** A render the other side may no longer be there for. */
-  private async renderIfAttached(): Promise<void> {
-    try {
-      await this.ui.render();
-    } catch (error) {
-      if (!(error instanceof DebuggerDetached)) throw error;
-      this.detach();
+    // Another debugger may have been installed since; only this one is
+    // removed. A module compiled before `__getDebugger` existed cannot
+    // say, and is cleared.
+    const installed = this.mod.__getDebugger?.();
+    if (installed === undefined || installed === this.debuggerState) {
+      this.mod.__setDebugger(null);
     }
+  }
+
+  private runAttached(result: any, leg: LegOptions): Promise<AttachedRunResult> {
+    return this.takeTurn(async () => {
+      this.leg = leg;
+      this.legUsage = undefined;
+      // A stop after the program finished belongs to a new run on the
+      // same module, such as a TypeScript program calling `main()` again:
+      // the forward commands work again, and the window holds no
+      // checkpoint of the run that ended.
+      if (this.programFinished) {
+        this.programFinished = false;
+        this.debuggerState.startRun();
+      }
+      const final = await this.run(result, { interceptConsole: false });
+      return { result: final, usage: this.legUsage };
+    });
+  }
+
+  private finishedAttached(result: any): Promise<void> {
+    return this.takeTurn(async () => {
+      this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
+      this.programFinished = true;
+      // Not awaited: at a stop, waiting on the debugger is what the person
+      // asked for; at the end of the program nobody asked, and a debugger
+      // that never answers must not keep the program from finishing.
+      this.renderInBackground();
+    });
+  }
+
+  /** Run `fn` once the attached call in progress, if any, has returned. */
+  private takeTurn<T>(fn: () => Promise<T>): Promise<T> {
+    const turn = this.attachedTurn.then(fn, fn);
+    this.attachedTurn = turn.catch(() => undefined);
+    return turn;
+  }
+
+  /** A call on the UI. Attached, the UI reporting the other side gone is
+   *  a detach, and the call has no answer; any other failure is the
+   *  caller's. */
+  private async uiCall<T>(fn: () => Promise<T>): Promise<T | undefined> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (this.attached && error instanceof DebuggerDetached) {
+        this.detach();
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  /** A render from a callback, which the program does not wait for. */
+  private renderInBackground(): void {
+    void this.uiCall(() => this.ui.render());
+  }
+
+  /** Whether the driver has been detached from the program it was on,
+   *  so its callbacks, still composed into the leg that was running, do
+   *  nothing more. */
+  private detachedNow(): boolean {
+    return this.attached && this.detachRequested;
   }
 
   /** The command the person gives, or `continue` when the driver is
@@ -170,15 +224,8 @@ export class DebuggerDriver {
     const detached = new Promise<DebuggerCommand>((resolve) => {
       this.detachWaiters.push(() => resolve({ type: "continue" }));
     });
-    try {
-      return await Promise.race([this.ui.waitForCommand(), detached]);
-    } catch (error) {
-      if (error instanceof DebuggerDetached) {
-        this.detach();
-        return { type: "continue" };
-      }
-      throw error;
-    }
+    const command = await this.uiCall(() => Promise.race([this.ui.waitForCommand(), detached]));
+    return command ?? { type: "continue" };
   }
 
   /** The options every resume and rewind carries. Attached, they are the
@@ -204,7 +251,7 @@ export class DebuggerDriver {
     }
     return {
       invocation: this.invocation,
-      metadata: { callbacks: this.getCallbacks(), debugger: this.debuggerState },
+      metadata: { callbacks: this.getCallbacks() },
     };
   }
 
@@ -233,31 +280,46 @@ export class DebuggerDriver {
         // this.ui.log(`-> node: ${data.nodeName}`);
       },
       onNodeEnd: (data) => {
+        if (this.detachedNow()) {
+          return;
+        }
         this.ui.log(`<- node: ${data.nodeName}`);
-        this.ui.render();
+        this.renderInBackground();
       },
       onLLMCallStart: (data) => {
+        if (this.detachedNow()) {
+          return;
+        }
         const model = typeof data.model === "string" ? data.model : "unknown";
         this.ui.log(`Calling LLM: ${model}...`);
-        this.ui.render();
+        this.renderInBackground();
       },
       onLLMCallEnd: (data) => {
+        if (this.detachedNow()) {
+          return;
+        }
         const tokens = data.usage ? `${data.usage.totalTokens} tokens` : "unknown tokens";
         const time = `${round(data.timeTaken)}ms`;
         this.ui.log(`LLM returned (${tokens}, ${time})`);
-        this.ui.render();
+        this.renderInBackground();
       },
       onToolCallStart: (data) => {
+        if (this.detachedNow()) {
+          return;
+        }
         this.ui.log(
           `Tool call: ${data.toolName}(${Object.entries(data.args)
             .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
             .join(", ")})`,
         );
-        this.ui.render();
+        this.renderInBackground();
       },
       onToolCallEnd: (data) => {
+        if (this.detachedNow()) {
+          return;
+        }
         this.ui.log(`Tool done: ${data.toolName} (${round(data.timeTaken)}ms)`);
-        this.ui.render();
+        this.renderInBackground();
       },
     };
   }
@@ -288,6 +350,11 @@ export class DebuggerDriver {
           // batch it belongs to stays.
           if (result.data !== shown) batch = [result.data];
         } else {
+          // Attached, the caller's pause signal fired: the paused
+          // checkpoint is the caller's, and the program has not ended.
+          if (this.attached && isPaused(result?.data)) {
+            return result;
+          }
           if (batch.length === 0) {
             throw new Error(
               "Program finished without any interrupts. This shouldn't happen with the debugger enabled.",
@@ -298,17 +365,24 @@ export class DebuggerDriver {
           );
           this.programFinished = true;
           finalResult = result;
-          // Attached, the value belongs to whoever is running the program.
+          // Attached, the value belongs to whoever is running the program,
+          // and the last render does not wait (see `finishedAttached`).
           if (this.attached) {
-            await this.renderIfAttached();
+            this.renderInBackground();
             return result;
           }
           // When the program finishes, keep the last batch so the user can
           // keep interacting (step back, rewind, print, etc.)
         }
         // Attached, the program's own interrupts are the caller's to
-        // answer; the stop's checkpoint has been shown as it went by.
+        // answer. The stops in the batch are dropped (`settleStops`), so
+        // the person is told the breakpoint went by.
         if (this.attached && batch.some((intr) => !isDebugger(intr))) {
+          for (const stop of batch.filter((intr) => isDebugger(intr))) {
+            this.ui.log(
+              `Passed the stop ${describeStop(stop)} while the program waits on its own interrupt`,
+            );
+          }
           return result;
         }
         // The interrupt shown: the first that asks the person something,
@@ -347,25 +421,16 @@ export class DebuggerDriver {
             const others = batch.slice(1).map((intr) => stopOf(intr)?.scopeName ?? "a branch");
             this.ui.log(`Also stopped in ${others.join(", ")}; the next command moves all`);
           }
+          await this.uiCall(() =>
+            this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop),
+          );
+          const command = await this.nextCommand();
+          lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches
           // (e.g. :save / :load handle file errors and log them via
           // ui.log). Anything that escapes is an internal bug that
           // should crash the driver, not silently continue with stale state.
-          // The one exception is the other side going away while attached,
-          // at any of the IO calls: the stop is answered with continue and
-          // the program runs on without a debugger.
-          try {
-            await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
-            const command = await this.nextCommand();
-            lastCommand = command;
-            result = await this.handleCommand(command, interrupt, batch);
-          } catch (error) {
-            if (!(error instanceof DebuggerDetached)) throw error;
-            this.detach();
-            this.debuggerState.running();
-            lastCommand = { type: "continue" };
-            result = await this.resume(batch);
-          }
+          result = await this.handleCommand(command, interrupt, batch);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }
@@ -603,9 +668,9 @@ export class DebuggerDriver {
           (a, b) => a.id - b.id,
         );
 
-        const selectedId = await this.ui.showRewindSelector(allCheckpoints);
-        if (selectedId === null) {
-          // User cancelled — stay where we are
+        const selectedId = await this.uiCall(() => this.ui.showRewindSelector(allCheckpoints));
+        if (selectedId === null || selectedId === undefined) {
+          // User cancelled, or detached — stay where we are
           return { data: interrupt };
         }
         const checkpoint = allCheckpoints.find((c) => c.id === selectedId);
@@ -633,7 +698,7 @@ export class DebuggerDriver {
         const allCheckpoints = [...debugCheckpoints, ...userCheckpoints].sort(
           (a, b) => a.id - b.id,
         );
-        await this.ui.showCheckpointsPanel(allCheckpoints);
+        await this.uiCall(() => this.ui.showCheckpointsPanel(allCheckpoints));
         return { data: interrupt };
       }
       case "save": {
@@ -697,7 +762,7 @@ export class DebuggerDriver {
     try {
       const result = await fn();
       if (this.attached && result?.usage !== undefined) {
-        this.legUsage = sumRunUsage(this.legUsage, result.usage);
+        this.legUsage = result.usage;
       }
       return result;
     } finally {
@@ -727,11 +792,19 @@ export class DebuggerDriver {
 
     this.debuggerState.deleteAfterCheckpoint(checkpoint.id);
 
-    const { invocation, metadata } = this.resumeOptions();
-    return await this.resumeInterrupt(() =>
-      this.mod.rewindFrom(checkpoint, overrides, { invocation, metadata }),
-    );
+    const options = this.resumeOptions();
+    return await this.resumeInterrupt(() => this.mod.rewindFrom(checkpoint, overrides, options));
   }
+}
+
+/** Where a debug stop is, for the activity log: the scope, and the label
+ *  a `debugger("...")` statement gave it. */
+function describeStop(interrupt: Interrupt): string {
+  const stop = stopOf(interrupt);
+  if (!stop) {
+    return "in a branch";
+  }
+  return stop.label ? `in ${stop.scopeName} ("${stop.label}")` : `in ${stop.scopeName}`;
 }
 
 /** `resolve <value>` takes JSON, so a number or a list can be given,

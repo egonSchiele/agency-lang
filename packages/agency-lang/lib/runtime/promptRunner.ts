@@ -40,6 +40,9 @@ export class PromptBailout extends Error {
  */
 export type RunnerState = {
   completedSteps: string[];
+  /** The step whose body raised the interrupts the frame paused on
+   *  (`bailOut`), so the resume knows which step it re-enters. */
+  pendingStep?: string;
 };
 
 /** Which model request of the tool loop a step is: the first one, the
@@ -164,6 +167,7 @@ export class PromptRunner {
    */
   async step(key: string, body: () => Promise<Interrupt[] | void>): Promise<void> {
     if (this.opts.self.runnerState.completedSteps.includes(key)) return;
+    this.forgetPendingStep(key);
     const result = await body();
     if (result && hasInterrupts(result)) {
       this.bailOut(key, result);
@@ -189,17 +193,21 @@ export class PromptRunner {
    * The debugger's stop before the tool call `invocationKey` names,
    * labelled with the call and its arguments. Nothing happens without a
    * debugger: the stop is a step of its own, `${invocationKey}.before`,
-   * and recording it would cost every run a key per call.
+   * and recording it would cost every run a key per call. `branchKey` is
+   * the branch the call runs on, for a call that was already running when
+   * the frame was restored; see `resumesInto`.
    */
   async beforeToolCall(
     invocationKey: string,
     toolCall: { name: string; arguments: Record<string, unknown> },
+    branchKey?: string,
   ): Promise<void> {
     if (!this.opts.ctx.hasDebugger()) return;
     await this.stepWithStop(
       `${invocationKey}.before`,
       { loopStop: "tool", label: toolStopLabel(toolCall.name, toolCall.arguments) },
       async () => undefined,
+      branchKey,
     );
   }
 
@@ -208,12 +216,15 @@ export class PromptRunner {
     key: string,
     stop: LoopStop,
     body: () => Promise<Interrupt[] | void>,
+    branchKey?: string,
   ): Promise<void> {
     if (this.opts.self.runnerState.completedSteps.includes(key)) return;
-    const halted = await this.debugStop(key, stop);
-    if (halted) {
-      // debugStep stamped the stop's checkpoint on this stack already.
-      this.halt(halted, halted[0].checkpointId!);
+    if (!this.resumesInto(key, branchKey)) {
+      const halted = await this.debugStop(key, stop);
+      if (halted) {
+        // debugStep stamped the stop's checkpoint on this stack already.
+        this.halt(halted, halted[0].checkpointId!);
+      }
     }
     const result = await body();
     if (result && hasInterrupts(result)) {
@@ -223,10 +234,39 @@ export class PromptRunner {
     this.opts.self.runnerState.completedSteps.push(key);
   }
 
+  /** Whether the resume that restored this frame re-enters the step
+   *  `key`: the step was in progress at the pause, so the leg before
+   *  passed its stop already, and this leg starts its body again with the
+   *  interrupt's answer rather than stopping before it. The same rule as
+   *  `Runner.maybeDebugHook`, which a frame restored from a checkpoint
+   *  taken with no debugger needs, since it has no flag. Two signs: the
+   *  frame paused inside the step's own body (`pendingStep`), or a tool
+   *  call's branch, `branchKey`, was restored with the frame and waits to
+   *  be claimed. A rewind restores no reentry mark, so it stops as
+   *  before. */
+  private resumesInto(key: string, branchKey: string | undefined): boolean {
+    const frame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
+    if (!frame.wasReentered()) {
+      return false;
+    }
+    if (this.opts.self.runnerState.pendingStep === key) {
+      this.forgetPendingStep(key);
+      return true;
+    }
+    return branchKey !== undefined && frame.getBranch(branchKey) !== undefined;
+  }
+
+  private forgetPendingStep(key: string): void {
+    if (this.opts.self.runnerState.pendingStep === key) {
+      delete this.opts.self.runnerState.pendingStep;
+    }
+  }
+
   /** Snapshot the thread, stamp a checkpoint against the runPrompt frame's
    *  stack at this step, attach it to every interrupt, and throw
    *  `PromptBailout` so `runPrompt` returns the batch. */
   private bailOut(key: string, interrupts: Interrupt[]): never {
+    this.opts.self.runnerState.pendingStep = key;
     this.opts.self.messagesJSON = this.opts.snapshotMessages();
     const cpId = this.opts.ctx.checkpoints.create(this.opts.stateStack, this.opts.ctx, {
       moduleId: this.opts.checkpointInfo?.moduleId ?? "",

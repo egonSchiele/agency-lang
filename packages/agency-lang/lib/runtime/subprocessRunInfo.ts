@@ -11,6 +11,7 @@
  */
 
 import { defaultHost } from "#default-host";
+import type { Host } from "../host/host.js";
 import type { RootLog } from "../statelogClient.js";
 
 export type SubprocessRunInfo = {
@@ -36,8 +37,8 @@ export type SubprocessRunInfo = {
 /** Whether this process is a forked Agency subprocess (AGENCY_IPC=1 is set
  * by `buildForkOptions` before every fork). The single source of truth for
  * the mode signal — ipc.ts and the telemetry leaf both read it from here. */
-export function isIpcMode(): boolean {
-  return defaultHost().settings.read("AGENCY_IPC") === "1";
+export function isIpcMode(host: Pick<Host, "settings"> = defaultHost()): boolean {
+  return host.settings.read("AGENCY_IPC") === "1";
 }
 
 /** Emit one child-side IPC diagnostic. Shared by callbackForwarding.ts and

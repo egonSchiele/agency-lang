@@ -24,9 +24,11 @@ type Listeners = {
   close: (() => void)[];
 };
 
-/** Two channels wired to each other: what one sends, the other receives,
- *  on a later turn of the event loop so a listener registered right after
- *  `send` still sees the message. Closing either closes both. */
+/** Two channels wired to each other: what one sends, the other receives
+ *  on a microtask, so a listener registered right after `send` still sees
+ *  the message. Closing either closes both, and a message sent just
+ *  before the close is still delivered after the close listeners ran,
+ *  where a socket delivers it first. */
 export function memoryChannelPair(): [Channel, Channel] {
   const left: Listeners = { message: [], close: [] };
   const right: Listeners = { message: [], close: [] };

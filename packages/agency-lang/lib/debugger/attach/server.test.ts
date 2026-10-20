@@ -56,7 +56,7 @@ describe("the attach server", () => {
     const mod = await freshImport(fixtureCompiled);
     const sock = recordPaths(dir, record.pid).sock;
     fs.writeFileSync(sock, "leftover");
-    const started = await startAttachServer({ dir, record, functions: functionsOf(mod) });
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
     expect("unavailable" in started).toBe(false);
     server = started as AttachServer;
     expect(server.socketPath).toBe(sock);
@@ -70,13 +70,49 @@ describe("the attach server", () => {
   it("refuses a socket path the platform cannot take", async () => {
     const mod = await freshImport(fixtureCompiled);
     const longDir = path.join(dir, "x".repeat(120));
-    const started = await startAttachServer({ dir: longDir, record, functions: functionsOf(mod) });
+    const started = await startAttachServer({
+      dir: longDir,
+      record,
+      functions: () => functionsOf(mod),
+    });
     expect(started).toMatchObject({ unavailable: expect.stringContaining("over the 104") });
+  });
+
+  it("refuses a directory at the socket path instead of throwing", async () => {
+    const mod = await freshImport(fixtureCompiled);
+    fs.mkdirSync(recordPaths(dir, record.pid).sock);
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
+    expect(started).toMatchObject({ unavailable: expect.stringContaining("could not remove") });
+  });
+
+  it("refuses a sessions directory other users can read", async () => {
+    const mod = await freshImport(fixtureCompiled);
+    fs.chmodSync(dir, 0o755);
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
+    expect(started).toMatchObject({ unavailable: expect.stringContaining("readable by other") });
+  });
+
+  it("attaches to the context the getter names when the debugger connects", async () => {
+    const first = await freshImport(fixtureCompiled);
+    const second = await freshImport(fixtureCompiled);
+    let current = functionsOf(first);
+    const started = await startAttachServer({ dir, record, functions: () => current });
+    server = started as AttachServer;
+    current = functionsOf(second);
+
+    const client = await connect(server.socketPath);
+    const io = new TestDebuggerIO([{ type: "continue" }]);
+    await new Promise<void>((resolve) => serveDebuggerIO(client, io, { hello: () => resolve() }));
+
+    expect((await first.main()).data).toBe(3);
+    expect(io.renderCalls).toHaveLength(0);
+    expect((await second.main()).data).toBe(3);
+    expect(io.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("drives the program from a client, refuses a second client, and says when it ends", async () => {
     const mod = await freshImport(fixtureCompiled);
-    const started = await startAttachServer({ dir, record, functions: functionsOf(mod) });
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
     server = started as AttachServer;
 
     const first = await connect(server.socketPath);

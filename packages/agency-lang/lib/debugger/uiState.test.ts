@@ -50,7 +50,6 @@ describe("UIState", () => {
       expect(ui.getGlobals()).toEqual([]);
       expect(ui.getCallStack()).toEqual([]);
       expect(ui.getActivityLog()).toEqual([]);
-      expect(ui.getOverrides()).toEqual({});
     });
   });
 
@@ -95,8 +94,7 @@ describe("UIState", () => {
 
     it("should include pending overrides in populated values", async () => {
       const ui = new UIState();
-      ui.setOverride("input", "overridden");
-      ui.setOverride("count", 99);
+      ui.setOverrides({ input: "overridden", count: 99 });
       await ui.setCheckpoint(makeCheckpoint());
 
       expect(ui.getArgs()).toEqual([{ key: "input", value: "hello", override: "overridden" }]);
@@ -475,22 +473,6 @@ describe("UIState", () => {
       ui.viewBranch([]);
       expect(ui.getLocals().map((e) => e.key)).toEqual(["url"]);
       expect(ui.getGlobals().map((e) => e.key)).toEqual(["count"]);
-    });
-  });
-
-  describe("overrides", () => {
-    it("should set and get overrides", () => {
-      const ui = new UIState();
-      ui.setOverride("x", 10);
-      ui.setOverride("y", "hello");
-      expect(ui.getOverrides()).toEqual({ x: 10, y: "hello" });
-    });
-
-    it("should reset overrides", () => {
-      const ui = new UIState();
-      ui.setOverride("x", 10);
-      ui.resetOverrides();
-      expect(ui.getOverrides()).toEqual({});
     });
   });
 

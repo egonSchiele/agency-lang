@@ -2,9 +2,9 @@
 
 ### Debugger
 
-- **A debugger can be installed on a program something else is running.** The runtime answers debug stops before a node call returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, and cancel signal survive a step. This is the runtime half of attaching to a running program; the `agency debug --attach` command follows.
+- **A debugger can be installed on a program something else is running.** The runtime answers debug stops before any of its entry points returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, cancel signal, and usage figure are the same with the debugger as without it. This is the runtime half of attaching to a running program; the `agency debug --attach` command follows.
 - **`agency debug --attach [pid]` attaches the debugger to a running program.** With no pid it lists the programs that can take one. The debugger opens stopped at the program's next statement; `q` detaches and the program runs on. Nothing has to be planned in advance: no flag, no trace mode.
-- **A running program opens a debug socket on `SIGUSR2`.** Every program run on Node (not a serve, a test, or an IPC child) writes a record under `~/.agency/debug-sessions` and listens for the signal; the socket takes one debugger at a time. The command that sends the signal and connects follows.
+- **A running program opens a debug socket on `SIGUSR2`.** Every program run on Node (not a serve or an IPC child) writes a record under `~/.agency/debug-sessions` and listens for the signal; the socket takes one debugger at a time. A failure on the debugger's side ends the session and the program runs on. The command that sends the signal and connects follows.
 
 ### Runtime
 

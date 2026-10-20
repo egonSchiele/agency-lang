@@ -82,6 +82,22 @@ describe("records", () => {
     expect(fs.existsSync(recordPaths(dir, 4242).sock)).toBe(false);
   });
 
+  it("a record whose pid is not its file name is ignored", () => {
+    fs.writeFileSync(recordPaths(dir, 123).json, JSON.stringify(record(456)));
+    expect(readRecord(dir, 123)).toBeNull();
+    expect(listRecords(dir)).toEqual([]);
+  });
+
+  it("a symlink at the record path is replaced, not followed", () => {
+    const elsewhere = path.join(path.dirname(dir), "elsewhere.json");
+    fs.writeFileSync(elsewhere, "untouched");
+    fs.symlinkSync(elsewhere, recordPaths(dir, 4242).json);
+    writeRecord(dir, record(4242));
+    expect(fs.lstatSync(recordPaths(dir, 4242).json).isSymbolicLink()).toBe(false);
+    expect(fs.readFileSync(elsewhere, "utf8")).toBe("untouched");
+    expect(readRecord(dir, 4242)).toEqual(record(4242));
+  });
+
   it("are listed in pid order, ignoring files a run did not write", () => {
     writeRecord(dir, record(20));
     writeRecord(dir, record(3));

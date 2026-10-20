@@ -78,10 +78,45 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
 export type AttachMessage = z.infer<typeof AttachMessageSchema>;
 export type Hello = z.infer<typeof HelloSchema>;
 
-/** A message as JSON text, or null when it is not one of ours. The
- *  sender is the other half of this package, so a bad message is a bug,
- *  logged by the caller rather than thrown across the channel. */
+/** A parsed JSON value as one of our messages, or null when it is not
+ *  one. The sender is the other half of this package, so a bad message is
+ *  a bug; the run side drops it and the UI side reports it through its
+ *  `malformed` event. Neither throws across the channel. */
 export function parseAttachMessage(message: unknown): AttachMessage | null {
   const parsed = AttachMessageSchema.safeParse(message);
   return parsed.success ? parsed.data : null;
 }
+
+const DebuggerCommandSchema = z.union([
+  z.object({ type: z.enum(["step", "next", "stepIn", "stepOut", "continue", "rewind"]) }),
+  z.object({ type: z.literal("checkpoint"), label: z.string().optional() }),
+  z.object({ type: z.literal("set"), varName: z.string(), value: z.unknown() }),
+  z.object({ type: z.literal("approve") }),
+  z.object({ type: z.literal("reject"), value: z.unknown().optional() }),
+  z.object({ type: z.literal("resolve"), value: z.unknown() }),
+  z.object({ type: z.literal("modify"), overrides: z.record(z.string(), z.unknown()) }),
+  z.object({ type: z.literal("stepBack"), preserveOverrides: z.boolean() }),
+  z.object({ type: z.literal("showCheckpoints") }),
+  z.object({ type: z.literal("save"), path: z.string() }),
+  z.object({ type: z.literal("load"), path: z.string() }),
+  z.object({ type: z.literal("quit") }),
+]);
+
+const InterruptResponseSchema = z.object({
+  type: z.enum(["approve", "reject"]),
+  value: z.unknown().optional(),
+});
+
+/** What each request's reply must carry. The run side checks a reply
+ *  against this before handing it to the driver, so a UI that answers
+ *  with the wrong shape ends the session instead of crashing the
+ *  program. */
+export const REPLY_SCHEMAS: Record<RequestMethod, z.ZodType> = {
+  render: z.undefined(),
+  waitForCommand: DebuggerCommandSchema,
+  showRewindSelector: z.number().nullable(),
+  answerGuardTrip: InterruptResponseSchema,
+  showCheckpointsPanel: z.undefined(),
+  promptForNodeArgs: z.array(z.unknown()),
+  promptForInput: z.string(),
+};

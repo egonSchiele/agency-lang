@@ -25,8 +25,18 @@ export class DebuggerState {
     targetDepth: number;
   } | null = null;
 
+  private readonly rewindSize: number;
+
   constructor(rewindSize: number) {
+    this.rewindSize = rewindSize;
     this.checkpoints = new CheckpointStore(100, rewindSize);
+  }
+
+  /** A new run on the same debugger: stepping from its first stop, with
+   *  no checkpoint of the run that ended for `stepBack` to land in. */
+  startRun(): void {
+    this.checkpoints = new CheckpointStore(100, this.rewindSize);
+    this.reset();
   }
 
   stepping() {

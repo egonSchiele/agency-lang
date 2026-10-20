@@ -21,6 +21,7 @@ import type { AttachFunctions } from "./attachedDebugger.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { loadProviderModules } from "./providerModules.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
+import { isIpcMode } from "./subprocessRunInfo.js";
 import type { ProviderLoadingContext, RegisterAttachArgs } from "./platform.js";
 
 /** Registers the configured LLM providers before a run starts: the
@@ -65,14 +66,34 @@ export const ATTACH_SIGNAL = "SIGUSR2";
  *  attaching now means. */
 let attachTarget: { functions: AttachFunctions; pid: number } | null = null;
 
+/** A sessions directory this process was refused, so a program that runs
+ *  a node in a loop does not repeat the check and the log line each
+ *  time. */
+let refusedDir: string | null = null;
+
 /** Where the process keeps its one attach listener. A process can hold
  *  more than one copy of the runtime (a test worker re-evaluates modules
  *  per file; a program can have the package twice in node_modules), and
  *  each copy has its own `attachTarget`. The signal must reach one
- *  listener, the last copy to register, or two servers would race for
- *  one socket and the loser would answer with a context whose modules it
- *  cannot see. */
+ *  listener, the copy that most recently registered, or two servers would
+ *  race for one socket and the loser would answer with a context whose
+ *  modules it cannot see. Every registration claims the slot, so copies
+ *  registering A, B, A leave A's listener in place. */
 const ATTACH_LISTENER_SLOT = Symbol.for("agency.debug.attachListener");
+let attachListener: (() => void) | null = null;
+
+function claimAttachListener(listener: () => void): void {
+  const slot = process as unknown as Record<symbol, (() => void) | undefined>;
+  const previous = slot[ATTACH_LISTENER_SLOT];
+  if (previous === listener) {
+    return;
+  }
+  if (previous !== undefined) {
+    process.removeListener(ATTACH_SIGNAL, previous);
+  }
+  slot[ATTACH_LISTENER_SLOT] = listener;
+  process.on(ATTACH_SIGNAL, listener);
+}
 
 /** Make the program attachable: write its record in the sessions
  *  directory, listen for `ATTACH_SIGNAL`, and open the debug socket when
@@ -88,17 +109,23 @@ const ATTACH_LISTENER_SLOT = Symbol.for("agency.debug.attachListener");
  *  cannot be used is logged under DEBUG and the run goes on without
  *  attach: a program must never fail because it cannot be debugged. */
 export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttachArgs): void {
-  const ipcChild = host.settings.read("AGENCY_IPC") === "1";
-  if (host.name !== "node" || ctx.hasDebugger() || ipcChild) {
+  if (host.name !== "node" || ctx.hasDebugger() || isIpcMode(host)) {
     return;
   }
   if (attachTarget !== null) {
     attachTarget.functions = functions;
+    if (attachListener !== null) {
+      claimAttachListener(attachListener);
+    }
     return;
   }
   const dir = sessionsDir(host);
+  if (refusedDir === dir) {
+    return;
+  }
   const refusal = ensureSessionsDir(dir);
   if (refusal !== null) {
+    refusedDir = dir;
     debugLine(`not attachable: ${refusal.refused}`);
     return;
   }
@@ -121,7 +148,9 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     if (server !== null) {
       return;
     }
-    void startAttachServer({ dir, record, functions: target.functions }).then((started) => {
+    // The server reads the target when a debugger connects, so the
+    // context running then is the one it attaches to.
+    void startAttachServer({ dir, record, functions: () => target.functions }).then((started) => {
       if ("unavailable" in started) {
         console.error(`[agency debug] ${started.unavailable}`);
         return;
@@ -129,13 +158,8 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
       server = started;
     });
   };
-  const slot = process as unknown as Record<symbol, (() => void) | undefined>;
-  const previous = slot[ATTACH_LISTENER_SLOT];
-  if (previous !== undefined) {
-    process.removeListener(ATTACH_SIGNAL, previous);
-  }
-  slot[ATTACH_LISTENER_SLOT] = listener;
-  process.on(ATTACH_SIGNAL, listener);
+  attachListener = listener;
+  claimAttachListener(listener);
   host.system.onExit(() => removeRecord(dir, record.pid));
 }
 

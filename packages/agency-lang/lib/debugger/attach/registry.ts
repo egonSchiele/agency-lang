@@ -82,10 +82,12 @@ export function ensureSessionsDir(dir: string): DirectoryRefusal | null {
   return null;
 }
 
+/** Write `<pid>.json`. The path is removed first and the file created
+ *  anew (`wx`), so a symlink left at that name is replaced, not followed. */
 export function writeRecord(dir: string, record: AttachRecord): void {
-  fs.writeFileSync(recordPaths(dir, record.pid).json, JSON.stringify(record) + "\n", {
-    mode: 0o600,
-  });
+  const file = recordPaths(dir, record.pid).json;
+  fs.rmSync(file, { force: true });
+  fs.writeFileSync(file, JSON.stringify(record) + "\n", { mode: 0o600, flag: "wx" });
 }
 
 /** Remove one run's record and socket. Paths are built here from the
@@ -101,6 +103,10 @@ export function removeRecord(dir: string, pid: number): void {
   }
 }
 
+/** The record in `<pid>.json`, or null when there is none, it is not a
+ *  record, or its pid is not the file's: a record is only trusted to say
+ *  what its name says, so a hand-edited file cannot point the CLI at
+ *  another process. */
 export function readRecord(dir: string, pid: number): AttachRecord | null {
   const file = recordPaths(dir, pid).json;
   if (!fs.existsSync(file)) {
@@ -108,7 +114,10 @@ export function readRecord(dir: string, pid: number): AttachRecord | null {
   }
   try {
     const parsed = AttachRecordSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
-    return parsed.success ? parsed.data : null;
+    if (!parsed.success || parsed.data.pid !== pid) {
+      return null;
+    }
+    return parsed.data;
   } catch {
     return null;
   }

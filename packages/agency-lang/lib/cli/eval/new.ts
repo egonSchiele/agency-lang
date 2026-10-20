@@ -10,11 +10,12 @@ import {
   editActionFor,
   fieldSpec,
   initialForm,
+  isLastField,
   reduceForm,
   type FormAction,
   type FormState,
 } from "@/eval/newTest/form.js";
-import { renderForm } from "@/eval/newTest/formView.js";
+import { renderForm, wroteSummary } from "@/eval/newTest/formView.js";
 import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
 import { formatKey } from "@/tui/input/format.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
@@ -42,6 +43,10 @@ export type EvalNewOptions = {
   /** Called once the suite directory has passed its check, so a wrong path
    *  is reported before the terminal is touched or refused. */
   openTerminal: () => FormTerminal;
+  /** Prints a line once the screen is gone: the folder written and the
+   *  commands to run next. They stay in the terminal's scrollback, which a
+   *  screen that any key dismisses could not promise. */
+  print: (text: string) => void;
 };
 
 /** Refuse anything the loader would not read as a directory of test folders:
@@ -65,30 +70,58 @@ export function assertSuiteDirectory(suiteDir: string): void {
 
 const NO_ACTION: FormAction | null = null;
 
+/** The keys that are not typing. Letters are never bound here, because a
+ *  letter goes into the field under the cursor. Escape is not bound
+ *  either: the terminal sends a bare Escape for any Alt or Option chord it
+ *  does not know, such as Option+Backspace, and quitting on one of those
+ *  partway through a word would throw the form away. */
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
   const longField = fieldSpec(state.cursor).long && openEditor !== null;
+  const last = isLastField(state.cursor);
   return [
-    { keys: ["Up", "k"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
-    { keys: ["Down", "j"], help: "next field", run: () => ({ kind: "moveDown" }) },
+    { keys: ["Up"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
+    { keys: ["Down"], help: "next field", run: () => ({ kind: "moveDown" }) },
     {
       keys: ["Enter"],
-      help: "edit the field",
-      hint: "Enter edit",
-      run: () => (longField ? { kind: "editInEditor" } : { kind: "beginEdit" }),
+      help: "next field",
+      hint: "Enter next",
+      when: () => !last,
+      run: () => ({ kind: "moveDown" }),
     },
-    { keys: ["s"], help: "save the test", hint: "s save", run: () => ({ kind: "save" }) },
     {
-      keys: ["q", "Escape", "Ctrl+C"],
-      help: "quit",
-      hint: "q quit",
-      run: () => ({ kind: "requestQuit" }),
+      keys: ["Enter"],
+      help: "save the test",
+      hint: "Enter save",
+      when: () => last,
+      run: () => ({ kind: "requestSave" }),
     },
+    {
+      keys: ["Ctrl+E"],
+      help: "open the field in $EDITOR",
+      hint: "Ctrl+E editor",
+      when: () => longField,
+      run: () => ({ kind: "editInEditor" }),
+    },
+    {
+      keys: ["Ctrl+S"],
+      help: "save the test",
+      hint: "Ctrl+S save",
+      run: () => ({ kind: "requestSave" }),
+    },
+    { keys: ["Ctrl+C"], help: "quit", hint: "Ctrl+C quit", run: () => ({ kind: "requestQuit" }) },
   ];
 }
 
-const CONFIRM_BINDINGS: KeyBinding<FormAction>[] = [
-  { keys: ["y", "Ctrl+C"], help: "discard and quit", run: () => ({ kind: "confirmQuit" }) },
+/** The two questions answer to `y` alone, never to the key that asked
+ *  them: a held Ctrl+C or Enter would otherwise ask and answer in one go. */
+const CONFIRM_QUIT_BINDINGS: KeyBinding<FormAction>[] = [
+  { keys: ["y"], help: "discard and quit", run: () => ({ kind: "confirmQuit" }) },
   { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelQuit" }) },
+];
+
+const CONFIRM_SAVE_BINDINGS: KeyBinding<FormAction>[] = [
+  { keys: ["y"], help: "write the test", run: () => ({ kind: "save" }) },
+  { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelSave" }) },
 ];
 
 /** The hints the form footer shows, from the same table that handles the keys. */
@@ -96,23 +129,26 @@ export function formHints(state: FormState, openEditor: OpenEditor): string {
   return hintsFrom(formBindings(state, openEditor));
 }
 
+/** The mode's key table first, then the line editor: a key the table does
+ *  not name is typed into the field under the cursor. */
 function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): FormAction | null {
-  if (state.editor.kind === "field") {
-    return editActionFor(event);
-  }
   const key = formatKey(event);
   switch (state.mode.kind) {
     case "form":
-      return runKey(formBindings(state, openEditor), key, NO_ACTION);
+      return runKey(formBindings(state, openEditor), key, NO_ACTION) ?? editActionFor(event);
     case "confirmQuit":
-      return runKey(CONFIRM_BINDINGS, key, NO_ACTION);
-    case "wrote":
-      return { kind: "dismiss" };
+      return runKey(CONFIRM_QUIT_BINDINGS, key, NO_ACTION);
+    case "confirmSave":
+      return runKey(CONFIRM_SAVE_BINDINGS, key, NO_ACTION);
   }
 }
 
-/** The two actions that touch the world, each answered with its outcome.
- *  A failure becomes the footer message; nothing typed is lost to it. */
+/** The actions that touch the world, each answered with its outcome. A
+ *  failure becomes the footer message; nothing typed is lost to it. A save
+ *  is asked for in two steps: `requestSave` validates and, when the form
+ *  is complete, asks "write this test?", and `save` is the `y` to that. So
+ *  an Enter meant as a line break, or a pasted newline, cannot write a
+ *  half-finished test by itself. */
 function performIntent(state: FormState, action: FormAction, openEditor: OpenEditor): FormState {
   if (action.kind === "editInEditor" && openEditor !== null) {
     try {
@@ -122,11 +158,13 @@ function performIntent(state: FormState, action: FormAction, openEditor: OpenEdi
       return reduceForm(state, { kind: "editorFailed", text: messageOf(error) });
     }
   }
-  if (action.kind === "save") {
+  if (action.kind === "requestSave") {
     const problems = validateForm(state);
-    if (problems.length > 0) {
-      return reduceForm(state, { kind: "saveFailed", problems });
-    }
+    return problems.length > 0
+      ? reduceForm(state, { kind: "saveFailed", problems })
+      : reduceForm(state, { kind: "askSave" });
+  }
+  if (action.kind === "save") {
     try {
       return reduceForm(state, { kind: "saved", testDir: writeTest(state) });
     } catch (error) {
@@ -147,8 +185,9 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
   const terminal = options.openTerminal();
   const { openEditor, size } = terminal;
   const screen = new Screen({ input: terminal.input, output: terminal.output, ...size });
+  let final: FormState | null = null;
   try {
-    await screen.runLoop<FormState>({
+    final = await screen.runLoop<FormState>({
       initialState: initialForm(options.suiteDir),
       render: (state) =>
         renderForm({
@@ -156,7 +195,6 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
           width: size.width,
           height: size.height,
           hints: formHints(state, openEditor),
-          nextCommands: nextCommands(options.suiteDir, state.values.id),
         }),
       handleKey: (state, event) => {
         const action = actionFor(state, event, openEditor);
@@ -169,6 +207,14 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
     });
   } finally {
     screen.destroy();
+  }
+  if (final !== null && final.written !== null) {
+    for (const text of wroteSummary(
+      final.written,
+      nextCommands(options.suiteDir, final.values.id),
+    )) {
+      options.print(text);
+    }
   }
 }
 
@@ -198,5 +244,5 @@ function openRealTerminal(): FormTerminal {
 
 /** The command as the CLI runs it. */
 export async function runEvalNew(suiteDir: string): Promise<void> {
-  await evalNew({ suiteDir, openTerminal: openRealTerminal });
+  await evalNew({ suiteDir, openTerminal: openRealTerminal, print: (text) => console.log(text) });
 }

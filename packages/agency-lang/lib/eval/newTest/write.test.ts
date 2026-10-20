@@ -29,7 +29,7 @@ function form(suiteDir: string, values: Partial<FormState["values"]>): FormState
 describe("validateForm", () => {
   it("requires an id and a goal, in field order", () => {
     expect(validateForm(form("suite", {}), NOTHING_ON_DISK)).toEqual([
-      { field: "id", text: "id is required" },
+      { field: "id", text: "folder name is required" },
       { field: "goal", text: "goal is required" },
     ]);
   });

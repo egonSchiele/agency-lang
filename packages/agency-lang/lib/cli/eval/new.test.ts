@@ -49,11 +49,13 @@ describe("evalNew", () => {
   let suite: string;
   let input: ScriptedInput;
   let recorder: FrameRecorder;
+  let printed: string[];
 
   function options(openEditor: OpenEditor = null): EvalNewOptions {
     return {
       suiteDir: suite,
       openTerminal: () => ({ input, output: recorder, size: SIZE, openEditor }),
+      print: (text) => printed.push(text),
     };
   }
 
@@ -61,71 +63,135 @@ describe("evalNew", () => {
     suite = fs.mkdtempSync(path.join(os.tmpdir(), "eval-new-cmd-"));
     input = new ScriptedInput();
     recorder = new FrameRecorder();
+    printed = [];
   });
 
   afterEach(() => {
     fs.rmSync(suite, { recursive: true, force: true });
   });
 
-  it("fills the fields by key, saves, and writes the folder", async () => {
+  it("types into each field, Enter moves on, and Enter on goal asks, then writes the folder", async () => {
     const shown = (text: string) => (frame: string) => frame.includes(text);
     await drive(options(), input, recorder, [
-      { when: shown("NEW TEST"), key: "enter" },
-      ...typing("says-its-name"),
+      { when: shown("NEW TEST"), key: "s" },
+      ...typing("ays-its-name"),
       { when: shown("says-its-name█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "down" },
-      { when: () => true, key: "down" },
-      { when: () => true, key: "enter" },
+      ...typing("The script is asked its name."),
+      { when: shown("name.█"), key: "enter" },
       ...typing("What is your name?"),
       { when: shown("What is your name?█"), key: "enter" },
-      { when: () => true, key: "down" },
-      { when: () => true, key: "down" },
-      { when: () => true, key: "enter" },
+      { when: shown("Enter next"), key: "enter" },
       ...typing("Says the name."),
       { when: shown("Says the name.█"), key: "enter" },
-      { when: (frame) => frame.includes("goal") && !frame.includes("█"), key: "s" },
-      { when: shown("wrote "), key: "x" },
+      // A second Enter is not an answer: the question needs a y.
+      { when: shown("write this test?"), key: "enter" },
+      { when: shown("write this test?"), key: "y" },
     ]);
     const json = JSON.parse(
       fs.readFileSync(path.join(suite, "says-its-name", "test.json"), "utf8"),
     );
-    expect(json).toEqual({ input: "What is your name?", goal: "Says the name." });
-    const text = recorder.lastText();
-    expect(text).toContain("agency eval run <agent> --suite");
-    expect(text.replace(/\s+/g, " ")).toContain("--test says-its-name");
+    expect(json).toEqual({
+      description: "The script is asked its name.",
+      input: "What is your name?",
+      goal: "Says the name.",
+    });
+    // Printed once the screen is gone, where it stays in the scrollback.
+    expect(printed[0]).toBe(`wrote ${path.join(suite, "says-its-name")}`);
+    expect(printed.some((line) => line.includes("agency eval run <agent> --suite"))).toBe(true);
+    expect(printed.some((line) => line.includes("--test says-its-name"))).toBe(true);
   });
 
-  it("s with no goal shows the problem, moves the cursor to it, and writes nothing", async () => {
+  it("n to the save question returns to the form with nothing written", async () => {
     await drive(options(), input, recorder, [
-      { when: (frame) => frame.includes("NEW TEST"), key: "enter" },
-      ...typing("t"),
-      { when: (frame) => frame.includes("t█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "s" },
-      { when: (frame) => frame.includes("goal is required"), key: "q" },
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("goal is required"), key: "g" },
+      { when: (frame) => frame.includes("g█"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("write this test?"), key: "n" },
+      { when: (frame) => frame.includes("Enter save"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+    expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
+    expect(printed).toEqual([]);
+  });
+
+  it("a second Ctrl+C does not answer the discard question", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "n" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+  });
+
+  it("an arrow key clears a failed save's message and brings the hints back", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("folder name is required"), key: "down" },
+      { when: (frame) => frame.includes("Enter next"), key: { key: "c", ctrl: true } },
+    ]);
+  });
+
+  it("a long value wraps on the cursor row and keeps the cursor at its end", async () => {
+    const long =
+      "a goal that is long enough to need a second row on a hundred column screen, and then a few more words, twice";
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      ...typing(long),
+      { when: (frame) => frame.includes("twice█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+    const shown = recorder.frames
+      .map((_, index) => recorder.textAt(index))
+      .find((text) => text.includes("twice█"));
+    expect(shown).toBeDefined();
+    // The value is wider than the row, so it continues on the next line.
+    expect(shown).not.toContain(long);
+  });
+
+  it("the last field offers Enter save, the others Enter next", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("Enter next"), key: "up" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: (frame) => frame.includes("Enter save"), key: { key: "c", ctrl: true } },
+    ]);
+  });
+
+  it("Ctrl+S with no goal shows the problem, moves the cursor to it, and writes nothing", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "s", ctrl: true } },
+      { when: (frame) => frame.includes("goal is required"), key: { key: "c", ctrl: true } },
       { when: (frame) => frame.includes("discard this test?"), key: "y" },
     ]);
     expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
   });
 
-  it("q after typing asks first, and n returns to the form", async () => {
+  it("Ctrl+C after typing asks first, and n returns to the form", async () => {
     await drive(options(), input, recorder, [
-      { when: (frame) => frame.includes("NEW TEST"), key: "enter" },
-      ...typing("t"),
-      { when: (frame) => frame.includes("t█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "q" },
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
       { when: (frame) => frame.includes("discard this test?"), key: "n" },
-      { when: (frame) => frame.includes("s save"), key: "q" },
+      { when: (frame) => frame.includes("Ctrl+S save"), key: { key: "c", ctrl: true } },
       { when: (frame) => frame.includes("discard this test?"), key: "y" },
     ]);
   });
 
   it("quits at once when nothing was typed", async () => {
     await drive(options(), input, recorder, [
-      { when: (frame) => frame.includes("NEW TEST"), key: "q" },
+      { when: (frame) => frame.includes("NEW TEST"), key: { key: "c", ctrl: true } },
     ]);
   });
 
-  it("Enter on goal opens the editor when one is set, and takes its text", async () => {
+  it("Ctrl+E on goal opens the editor when one is set, and takes its text", async () => {
     const opened: string[] = [];
     const editor: OpenEditor = (text) => {
       opened.push(text);
@@ -136,11 +202,55 @@ describe("evalNew", () => {
       { when: () => true, key: "down" },
       { when: () => true, key: "down" },
       { when: () => true, key: "down" },
-      { when: () => true, key: "enter" },
-      { when: (frame) => frame.includes("paragraphs from the editor"), key: "q" },
+      { when: (frame) => frame.includes("Ctrl+E editor"), key: { key: "e", ctrl: true } },
+      { when: (frame) => frame.includes("paragraphs from the editor"), key: "up" },
+      { when: (frame) => frame.includes("Two"), key: { key: "c", ctrl: true } },
       { when: (frame) => frame.includes("discard this test?"), key: "y" },
     ]);
     expect(opened).toEqual([""]);
+  });
+
+  it("Ctrl+E on a short field never opens the editor", async () => {
+    let opened = 0;
+    const editor: OpenEditor = () => {
+      opened += 1;
+      return "from the editor";
+    };
+    await drive(options(editor), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: { key: "e", ctrl: true } },
+      { when: () => true, key: "t" },
+      { when: (frame) => frame.includes("t█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+    expect(opened).toBe(0);
+    expect(recorder.lastText()).not.toContain("from the editor");
+  });
+
+  it("Ctrl+E on a long field with no editor set does nothing", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: () => true, key: "down" },
+      { when: (frame) => frame.includes("Enter save"), key: { key: "e", ctrl: true } },
+      { when: () => true, key: "g" },
+      { when: (frame) => frame.includes("g█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
+    const text = recorder.lastText();
+    expect(text).not.toContain("Ctrl+E editor");
+    expect(text).not.toContain("could not run the editor");
+  });
+
+  it("a bare Escape and an Alt chord type nothing and do not quit", async () => {
+    await drive(options(), input, recorder, [
+      { when: (frame) => frame.includes("NEW TEST"), key: "t" },
+      { when: (frame) => frame.includes("t█"), key: "escape" },
+      { when: () => true, key: { key: "b", alt: true } },
+      { when: () => true, key: "x" },
+      { when: (frame) => frame.includes("tx█"), key: { key: "c", ctrl: true } },
+      { when: (frame) => frame.includes("discard this test?"), key: "y" },
+    ]);
   });
 
   it("a failed save on the files field moves the cursor there", async () => {
@@ -148,24 +258,18 @@ describe("evalNew", () => {
     fs.symlinkSync(path.join(suite, "fixtures"), path.join(suite, "fixtures", "loop"));
     const shown = (text: string) => (frame: string) => frame.includes(text);
     await drive(options(), input, recorder, [
-      { when: shown("NEW TEST"), key: "enter" },
-      ...typing("t"),
+      { when: shown("NEW TEST"), key: "t" },
       { when: shown("t█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "down" },
-      { when: () => true, key: "down" },
-      { when: () => true, key: "down" },
+      { when: () => true, key: "enter" },
       { when: () => true, key: "enter" },
       ...typing("fixtures"),
       { when: shown("fixtures█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "down" },
-      { when: () => true, key: "enter" },
       ...typing("g"),
       { when: shown("g█"), key: "enter" },
-      { when: (frame) => !frame.includes("█"), key: "s" },
-      // Enter now edits the files field, which shows the cursor moved there.
-      { when: shown("files must not contain symlinks"), key: "enter" },
-      { when: shown("fixtures█"), key: "escape" },
-      { when: (frame) => !frame.includes("█"), key: "q" },
+      { when: shown("write this test?"), key: "y" },
+      // The cursor is back on files, so typing lands there.
+      { when: shown("files must not contain symlinks"), key: "2" },
+      { when: shown("fixtures2█"), key: { key: "c", ctrl: true } },
       { when: shown("discard this test?"), key: "y" },
     ]);
     expect(fs.existsSync(path.join(suite, "t"))).toBe(false);
@@ -178,8 +282,11 @@ describe("evalNew", () => {
     await drive(options(editor), input, recorder, [
       { when: (frame) => frame.includes("NEW TEST"), key: "down" },
       { when: () => true, key: "down" },
-      { when: () => true, key: "enter" },
-      { when: (frame) => frame.includes("could not run the editor: spawn vim ENOENT"), key: "q" },
+      { when: (frame) => frame.includes("Ctrl+E editor"), key: { key: "e", ctrl: true } },
+      {
+        when: (frame) => frame.includes("could not run the editor: spawn vim ENOENT"),
+        key: { key: "c", ctrl: true },
+      },
     ]);
   });
 
@@ -191,8 +298,11 @@ describe("evalNew", () => {
       [
         { when: (frame) => frame.includes("NEW TEST"), key: "down" },
         { when: () => true, key: "down" },
-        { when: () => true, key: "enter" },
-        { when: (frame) => frame.includes("editor exited without saving"), key: "q" },
+        { when: (frame) => frame.includes("Ctrl+E editor"), key: { key: "e", ctrl: true } },
+        {
+          when: (frame) => frame.includes("editor exited without saving"),
+          key: { key: "c", ctrl: true },
+        },
       ],
     );
   });
@@ -218,12 +328,13 @@ describe("assertSuiteDirectory", () => {
 
   it("evalNew checks the directory before opening the terminal", async () => {
     let opened = false;
-    const bad = {
+    const bad: EvalNewOptions = {
       suiteDir: path.join(dir, "missing"),
       openTerminal: () => {
         opened = true;
         throw new Error("terminal opened");
       },
+      print: () => {},
     };
     await expect(evalNew(bad)).rejects.toThrow(/not a directory/);
     expect(opened).toBe(false);

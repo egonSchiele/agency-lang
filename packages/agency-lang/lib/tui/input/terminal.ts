@@ -142,6 +142,40 @@ export function readEscapeSequence(
   return null;
 }
 
+/** A complete CSI (`ESC [ ... final`) or SS3 (`ESC O x`) sequence at the
+ *  start of `rest`, whatever it means. */
+const COMPLETE_SEQUENCE = /^\x1b(\[[\d;?]*[\x40-\x7e]|O.)/;
+
+/**
+ * How many bytes a complete escape sequence that KEY_MAP does not know
+ * takes up at `i`, or 0 when there is none. Ctrl+Left (`ESC [ 1 ; 5 D`),
+ * F5 (`ESC [ 1 5 ~`) and the like are swallowed whole: read byte by byte
+ * they would be Escape and then the letters `[1;5D`, typed into whatever
+ * is being edited.
+ */
+export function unknownSequenceLength(str: string, i: number): number {
+  const match = COMPLETE_SEQUENCE.exec(str.slice(i));
+  return match === null ? 0 : match[0].length;
+}
+
+/**
+ * The Alt chord an `ESC <char>` pair means at `i`, or null when the byte
+ * after the ESC is not a character a terminal sends that way. Terminal.app
+ * and iTerm2 send Option+Left as `ESC b`, Option+Backspace as `ESC DEL`,
+ * and Alt+y as `ESC y`. Read as Escape and then the character, `ESC b`
+ * would type a `b`, and `ESC y` would answer a yes-or-no question that the
+ * Escape had just opened. A real Escape key followed by a typed character
+ * is read the same way only when both land in one read, which a person
+ * cannot do by hand.
+ */
+export function altChord(str: string, i: number): { event: KeyEvent; consumed: number } | null {
+  if (str[i] !== "\x1b" || i + 1 >= str.length) return null;
+  const next = str[i + 1];
+  if (next === "\x7f") return { event: { key: "backspace", alt: true }, consumed: 2 };
+  if (next < " " || next === "\x1b") return null;
+  return { event: { key: next, alt: true }, consumed: 2 };
+}
+
 /**
  * True when `str` from `i` begins an escape sequence that has not finished
  * arriving, so the caller should hold it for the next chunk.
@@ -157,7 +191,7 @@ function isIncompleteEscape(str: string, i: number): boolean {
     return false;
   }
   // Complete once a final byte arrives (@ through ~ for CSI, a letter for SS3).
-  return !/^\x1b(\[[\d;?]*[\x40-\x7e]|O.)/.test(rest);
+  return !COMPLETE_SEQUENCE.test(rest);
 }
 
 export type TerminalInputOptions = {
@@ -333,6 +367,8 @@ export class TerminalInput implements InputSource {
    *   3. Ctrl+Z (0x1a) — raises SIGTSTP and stops parsing
    *   4. Ctrl+C (0x03) — raises SIGINT, emits, keeps parsing
    *   5. A known escape sequence (longest-prefix match)
+   *   5b. A complete escape sequence the table does not know: dropped
+   *   5c. ESC and a character: an Alt chord
    *   6. A single character (printable or ctrl+letter)
    */
   private parseAndEmit(input: string): void {
@@ -407,6 +443,22 @@ export class TerminalInput implements InputSource {
       if (esc !== null) {
         this.emitKey(esc.event);
         i += esc.consumed;
+        continue;
+      }
+
+      // 5b. A complete sequence the table does not know. Dropped whole,
+      //     so its letters are not typed.
+      const unknown = unknownSequenceLength(str, i);
+      if (unknown > 0) {
+        i += unknown;
+        continue;
+      }
+
+      // 5c. ESC and a character: an Alt chord.
+      const alt = altChord(str, i);
+      if (alt !== null) {
+        this.emitKey(alt.event);
+        i += alt.consumed;
         continue;
       }
 

@@ -27,8 +27,10 @@ and tested without a terminal.
 ## One table defines a field
 
 `FIELDS` in `form.ts` is the only place a field exists: its name, label,
-whether it is required, whether Enter opens `$EDITOR` on it, and the help
-shown while it is empty. The reducer moves the cursor through it, the view
+whether it is required, whether Ctrl+E opens `$EDITOR` on it, and the help
+shown while it is empty. The `id` field is labelled "folder name", because
+that is what it is to the person typing it; the name stays `id` in code
+and in the loader. The reducer moves the cursor through it, the view
 draws it, and `validateForm` reads `required` from it. A sixth field is one
 row there and one key in `testJsonFor`, which lists the fields that become
 `test.json` keys: `description`, `input` and `goal`. `files` is not a key,
@@ -36,17 +38,51 @@ because the loader finds `./files` by itself. An empty `input` is left out,
 because the loader refuses an empty string and reads a missing key as
 "takes no input".
 
+## Every field is live
+
+There is no edit mode. The field under the cursor is a text input, and a
+key the mode's key table does not name is typed into it at once, through
+the line editor's `append` and `backspace`. So `handleKey` consults the
+key table first and the line editor second, and no letter may ever be
+bound in the form's key table: `s` is a letter someone types into a goal.
+Save is Ctrl+S, quit is Ctrl+C, and the editor hand-off is Ctrl+E. Enter
+moves down, and on the last field it saves: two bindings on the same key,
+each guarded by `when`, so the hint follows the cursor. Escape is not
+bound in the form. The terminal reads an Option chord as an Alt chord now
+(see `docs/dev/cli/tui/dev/input-output.md`), but an older terminal can
+still send a bare Escape for a key it does not know, and quitting on one
+of those partway through a word would throw the form away.
+
+Both saving and quitting ask first, and both questions answer to `y`
+alone: never to the key that asked them, so a held Ctrl+C or Enter cannot
+ask and answer in one go, and `n` or Escape goes back to the form. The
+save question is there because Enter is the save key on `goal`, the field
+most likely to hold several sentences: an Enter meant as a line break, or
+a `\r` from a paste in a terminal without bracketed paste, must not write
+a half-finished test. `requestSave` validates and, when the form is
+complete, asks; `save` is the `y`. A write that fails after the question
+(the folder appeared meanwhile) returns to the form with the problem.
+
+There is no "wrote" screen. `saved` sets `done` and records the folder in
+`written`, and the command prints the folder and the next commands after
+`screen.destroy()`, where they stay in the scrollback. A screen that any
+key dismisses could not promise that.
+
+A keystroke clears the footer message. A failed save puts the cursor on
+the field with the problem, so the next thing typed fixes it in place.
+
 ## Modes and intents
 
-The form, the "discard?" question and the "wrote" screen are one state
-with a `mode`. Every transition is a reducer case, including the two that
-depend on the outside world. `editInEditor` and `save` are intents: the
+The form and its two questions are one state with a `mode`. Every
+transition is a reducer case, including the three that depend on the
+outside world. `editInEditor`, `requestSave` and `save` are intents: the
 reducer leaves the state alone, the command performs the effect, and the
-outcome comes back as `editorReturned`, `saved` or `saveFailed`. So
+outcome comes back as `editorReturned`, `askSave`, `saved` or
+`saveFailed`. So
 "a failed save shows the first problem and moves the cursor to its field"
 is a reducer test, and `handleKey` in `new.ts` is: pick the action (the
-line editor while a field is being typed into, else the mode's key table),
-reduce, and for an intent run the effect and reduce its outcome.
+mode's key table, else the line editor), reduce, and for an intent run the
+effect and reduce its outcome.
 
 The key tables are `KeyBinding<FormAction>` lists, so the footer hints come
 from the same table that handles the keys.
@@ -87,7 +123,7 @@ what it was given.
 
 ## Handing the terminal to `$EDITOR`
 
-`input` and `goal` open in `$EDITOR` when it is set. The hand-off has an
+`input` and `goal` open in `$EDITOR` on Ctrl+E when it is set. The hand-off has an
 order, and it lives in one function, `withTerminalReleased`: release the
 output, release the input, run the editor, reclaim the input, reclaim the
 output, with the last two in a `finally`. Both terminal classes have a
@@ -127,19 +163,30 @@ missing program) becomes the footer message; the form and everything
 typed stay.
 
 `$EDITOR` is split on spaces, so `code --wait` works. A quoted path with a
-space in it is not supported. When the variable is unset, the long fields
-edit in place on one line like the others.
+space in it is not supported. When the variable is unset, Ctrl+E does
+nothing and the long fields are typed on one line like the others.
 
 ## What is drawn
 
 Every string that came from outside the form goes through
 `sanitizeUntrusted` before it is drawn: field values, the suite path from
-the command line, the footer message (which quotes paths), and the test
-path and commands on the "wrote" screen. A path can carry an escape
-sequence or a `{red-fg}` style tag as easily as a value can. The one
-exception is the draft of the field being typed into, drawn as a
-`textInput`: that element reads no style tags, so the draft only has its
-control characters removed, or a typed `{` would show as `\{`.
+the command line, and the footer message (which quotes paths). A path can
+carry an escape sequence or a `{red-fg}` style tag as easily as a value
+can. The one exception is the cursor row, drawn as a `textInput`: that
+element reads no style tags, so its value only has its control characters
+removed, or a typed `{` would show as `\{`. The lines printed after the
+screen closes are not drawn by the style parser at all, so they too only
+have their control characters removed: a `{` in a suite path must print
+as `{`, or the command could not be copied.
+
+The cursor row wraps like the others, in `cursorRows`: the value is
+wrapped first and handed to the `textInput` with a newline per row, since
+a text input clips a long line rather than wrapping it. `wrapText` drops
+the spaces at the end of a row once a value wraps, which would make a
+space typed at the end of a long goal look like nothing happened, so the
+value is wrapped without its trailing spaces and they are put back on the
+last row. A row that fills the width gets an empty row after it, because
+a text input leaves the cursor out when its last row is full.
 
 ## Testing
 

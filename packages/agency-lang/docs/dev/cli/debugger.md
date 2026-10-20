@@ -44,7 +44,7 @@ Instrumentation is controlled by one compiler flag, `instrument`. When `agencyCo
 await runner.debugger(0, "some-label");
 ```
 
-`agency debug` compiles with the config as given; `instrument` (on by default) is the setting that controls `debugStep()` emission.
+`agency debug` compiles with `instrument` forced on, since the debugger stops at `debugStep()` calls. `--dist-dir` compiles nothing, so it warns when the imported module has an empty source map.
 
 ### The `maybeDebugHook()` hook (`lib/runtime/runner.ts`)
 

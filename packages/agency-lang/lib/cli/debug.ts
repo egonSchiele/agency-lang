@@ -58,9 +58,12 @@ export async function debug(
       fs.mkdirSync(bundleRoot, { recursive: true });
       tempDir = fs.mkdtempSync(path.join(bundleRoot, `${timestamp}-`));
       // On the exit event rather than in a finally: Ctrl-C and the error
-      // paths below call process.exit, which skips a finally.
+      // paths below call process.exit, which skips a finally. Before the
+      // debugger screen is up, Ctrl-C is a plain SIGINT, which would end
+      // the process without the exit event, so it is turned into an exit.
       const extracted = tempDir;
       process.on("exit", () => fs.rmSync(extracted, { recursive: true, force: true }));
+      process.on("SIGINT", () => process.exit(130));
       reader.writeSourcesToDisk(tempDir);
       console.log(`Bundle extracted to: ${tempDir} (removed on exit)`);
       const resolvedTempDir = path.resolve(tempDir);

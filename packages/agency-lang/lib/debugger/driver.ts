@@ -15,6 +15,7 @@ import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
 
 import type { InterruptResponse } from "../runtime/interrupts.js";
+import type { InvocationOptions } from "../runtime/invocationOptions.js";
 import { color } from "@/utils/termcolors.js";
 import { round } from "@/utils.js";
 
@@ -26,12 +27,13 @@ type ModuleFunctions = {
     opts?: {
       overrides?: Record<string, unknown>;
       metadata?: Record<string, any>;
+      invocation?: InvocationOptions;
     },
   ) => Promise<any>;
   rewindFrom: (
     checkpoint: Checkpoint,
     overrides: Record<string, unknown>,
-    opts?: { metadata?: Record<string, any> },
+    opts?: { metadata?: Record<string, any>; invocation?: InvocationOptions },
   ) => Promise<any>;
   __setDebugger: (dbg: DebuggerState) => void;
   __getCheckpoints: () => CheckpointStore;
@@ -44,6 +46,10 @@ type DriverOpts = {
   ui: DebuggerIO;
   checkpoints?: Checkpoint[];
   traceHeader?: TraceHeader;
+  /** The policy and budget the debugged run was started with. A resume
+   *  and a rewind install them again, so the driver passes them on every
+   *  one it makes. */
+  invocation?: InvocationOptions;
 };
 
 type DriverRunOpts = Partial<{
@@ -54,6 +60,7 @@ export class DebuggerDriver {
   private mod: ModuleFunctions;
   private sourceMap: SourceMap;
   private ui: DebuggerIO;
+  private invocation?: InvocationOptions;
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
   private originalConsoleError: typeof console.error;
@@ -63,6 +70,7 @@ export class DebuggerDriver {
     this.mod = opts.mod;
     this.sourceMap = opts.sourceMap;
     this.ui = opts.ui;
+    this.invocation = opts.invocation;
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
@@ -340,6 +348,7 @@ export class DebuggerDriver {
     return await this.resumeInterrupt(() =>
       this.mod.respondToInterrupts(batch, responses, {
         overrides,
+        invocation: this.invocation,
         metadata: {
           callbacks: this.getCallbacks(),
           debugger: this.debuggerState,
@@ -575,6 +584,7 @@ export class DebuggerDriver {
 
     return await this.resumeInterrupt(() =>
       this.mod.rewindFrom(checkpoint, overrides, {
+        invocation: this.invocation,
         metadata: {
           callbacks: this.getCallbacks(),
           debugger: this.debuggerState,

@@ -140,6 +140,8 @@ import { scheduleTest } from "@/cli/schedule/test.js";
 import { addRemote, listRemote, removeRemote, editRemote } from "@/cli/schedule/remote.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
+import { invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
+import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import { generateDoc } from "@/cli/doc.js";
 import { generateLiterate } from "@/cli/literate.js";
 import { watchAndCompile } from "@/cli/watch.js";
@@ -465,7 +467,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  function addRunOptions(cmd: Command) {
+  /** The flags that record a run: a trace, and the run directory. `debug`
+   *  does not take them, since its own `--trace` loads a recording. */
+  function addRecordingOptions(cmd: Command) {
     return (
       cmd
         // Two flags rather than `--trace [file]`: an optional-valued option
@@ -476,91 +480,99 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option("--trace", "Write an execution trace to <input>.trace")
         .option("--trace-file <path>", "Write an execution trace to this path")
         .option(
-          "--log-file <path>",
-          "Append statelog events (one JSON object per line) to this file for this run",
-        )
-        .option(
-          "--observability",
-          "Enable statelog observability for this run (use with a configured host, or --log-file)",
-        )
-        .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
-        .option("--refuse-splices", DESC_REFUSE_SPLICES)
-        .option(
-          "--max-tool-call-rounds <n>",
-          "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
-          parsePositiveInt,
-        )
-        .option(
-          "--max-tool-result-chars <n>",
-          "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
-          parseNonNegativeInt,
-        )
-        .option(
-          "--model <name>",
-          "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
-          // Adapter, not decoration: commander calls a parser with
-          // (value, previous), and `previous` would land in the resolver's
-          // catalogNames parameter when --model is repeated.
-          (value: string) => resolveModelFlag(value),
-        )
-        .option(
-          "--local <model>",
-          "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
-        )
-        .option(
-          "--draft <model>",
-          "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
-        )
-        .option(
-          "--policy <name|path>",
-          "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
-        )
-        .option(
-          "--approve <effects>",
-          "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
-          joinEffectFlags,
-        )
-        .option(
-          "--reject <effects>",
-          "Comma-separated interrupt effects or capability set names to auto-reject",
-          joinEffectFlags,
-        )
-        .option(
-          "-i, --interactive",
-          "Prompt on interrupts that surface unhandled (default: reject them)",
-        )
-        .option(
-          "--max-cost <dollars>",
-          "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
-        )
-        .option(
-          "--max-time <duration>",
-          "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
-        )
-        .option(
-          "--agency-only",
-          "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
-        )
-        .option(
           "--capture-workdir <dir>",
           "After the run, write its trace, code and a snapshot of the working directory as the run directory <dir>/<traceId>/ (see: agency runs list)",
         )
     );
   }
 
-  addRunOptions(
-    program
-      .command("run")
-      // The program boundary: agency's flags before the filename, the
-      // program's after. The fallback (`agency greet.agency`) dispatches this
-      // same command object, so both spellings share options, action, help.
-      .passThroughOptions()
-      .description("Compile and run .agency file(s)")
-      .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
-      .argument(
-        "[nodeArgs...]",
-        "Arguments after the filename go to the program; read them with std::args",
-      ),
+  /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
+   *  the policy, the budget, the model, and the compile settings. */
+  function addRunOptions(cmd: Command) {
+    return cmd
+      .option(
+        "--log-file <path>",
+        "Append statelog events (one JSON object per line) to this file for this run",
+      )
+      .option(
+        "--observability",
+        "Enable statelog observability for this run (use with a configured host, or --log-file)",
+      )
+      .option("--strict", "Fail the run on any fatal type error (typechecker.strict)")
+      .option("--refuse-splices", DESC_REFUSE_SPLICES)
+      .option(
+        "--max-tool-call-rounds <n>",
+        "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
+        parsePositiveInt,
+      )
+      .option(
+        "--max-tool-result-chars <n>",
+        "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
+        parseNonNegativeInt,
+      )
+      .option(
+        "--model <name>",
+        "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
+        // Adapter, not decoration: commander calls a parser with
+        // (value, previous), and `previous` would land in the resolver's
+        // catalogNames parameter when --model is repeated.
+        (value: string) => resolveModelFlag(value),
+      )
+      .option(
+        "--local <model>",
+        "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
+      )
+      .option(
+        "--draft <model>",
+        "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
+      )
+      .option(
+        "--policy <name|path>",
+        "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
+      )
+      .option(
+        "--approve <effects>",
+        "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
+        joinEffectFlags,
+      )
+      .option(
+        "--reject <effects>",
+        "Comma-separated interrupt effects or capability set names to auto-reject",
+        joinEffectFlags,
+      )
+      .option(
+        "-i, --interactive",
+        "Prompt on interrupts that surface unhandled (default: reject them)",
+      )
+      .option(
+        "--max-cost <dollars>",
+        "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
+      )
+      .option(
+        "--max-time <duration>",
+        "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
+      )
+      .option(
+        "--agency-only",
+        "Refuse anything in the import closure that is not Agency source (TypeScript/JavaScript, Node built-ins, pkg:: packages, splices, symlinks), so every effect the program can perform is an interrupt",
+      );
+  }
+
+  addRecordingOptions(
+    addRunOptions(
+      program
+        .command("run")
+        // The program boundary: agency's flags before the filename, the
+        // program's after. The fallback (`agency greet.agency`) dispatches this
+        // same command object, so both spellings share options, action, help.
+        .passThroughOptions()
+        .description("Compile and run .agency file(s)")
+        .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
+        .argument(
+          "[nodeArgs...]",
+          "Arguments after the filename go to the program; read them with std::args",
+        ),
+    ),
   ).action(async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
     const warning = warnMisplacedAgencyFlags(command, input);
     if (warning !== undefined) console.warn(warning);
@@ -583,37 +595,39 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
   });
 
-  addRunOptions(
-    program
-      .command("resume")
-      .description("Resume an Agency program from a checkpoint file")
-      .argument("<checkpoint-file>", "Path to checkpoint JSON")
-      .argument("<input>", "Path to the .agency program that created the checkpoint")
-      .option(
-        "--local-var <name=value>",
-        "Override a local variable in the checkpoint's current frame (repeatable)",
-        collectRepeats,
-        [] as string[],
-      )
-      .option(
-        "--global-var <name=value>",
-        "Override a global variable in the checkpoint's module (repeatable)",
-        collectRepeats,
-        [] as string[],
-      )
-      .option(
-        "--arg <name=value>",
-        "Override a resumed function or node argument (repeatable)",
-        collectRepeats,
-        [] as string[],
-      )
-      .option(
-        "--program-arg <value>",
-        "Pass one value to std::args in the resumed program (repeatable)",
-        collectRepeats,
-        [] as string[],
-      )
-      .option("-f, --force", "Resume even when a checkpoint signature cannot be verified"),
+  addRecordingOptions(
+    addRunOptions(
+      program
+        .command("resume")
+        .description("Resume an Agency program from a checkpoint file")
+        .argument("<checkpoint-file>", "Path to checkpoint JSON")
+        .argument("<input>", "Path to the .agency program that created the checkpoint")
+        .option(
+          "--local-var <name=value>",
+          "Override a local variable in the checkpoint's current frame (repeatable)",
+          collectRepeats,
+          [] as string[],
+        )
+        .option(
+          "--global-var <name=value>",
+          "Override a global variable in the checkpoint's module (repeatable)",
+          collectRepeats,
+          [] as string[],
+        )
+        .option(
+          "--arg <name=value>",
+          "Override a resumed function or node argument (repeatable)",
+          collectRepeats,
+          [] as string[],
+        )
+        .option(
+          "--program-arg <value>",
+          "Pass one value to std::args in the resumed program (repeatable)",
+          collectRepeats,
+          [] as string[],
+        )
+        .option("-f, --force", "Resume even when a checkpoint signature cannot be verified"),
+    ),
   ).action(async (checkpointFile: string, input: string, options: ResumeOptions) => {
     let resume: ResumeCarrier;
     try {
@@ -1880,39 +1894,60 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // non-zero path.
     });
 
-  program
-    .command("debug", { hidden: true })
-    .description("Debug an Agency file interactively")
-    .argument("<file>", "Agency file to debug")
-    .option("--node <name>", "Node to execute")
-    .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
-    .option("--trace <file>", "Load and inspect a trace file")
-    .option("--checkpoint <file>", "Load and inspect a checkpoint file")
-    .option(
-      "--dist-dir <dir>",
-      "Import pre-compiled JS from this directory instead of compiling on the fly",
-    )
-    .action(
-      async (
-        file: string,
-        options: {
-          node?: string;
-          rewindSize: string;
-          trace?: string;
-          checkpoint?: string;
-          distDir?: string;
-        },
-      ) => {
-        const config = getConfig();
-        await debug(config, file, {
-          node: options.node,
-          rewindSize: parseInt(options.rewindSize, 10),
-          trace: options.trace,
-          checkpoint: options.checkpoint,
-          distDir: options.distDir,
-        });
+  addRunOptions(
+    program
+      .command("debug", { hidden: true })
+      .description("Debug an Agency file interactively")
+      .argument("<file>", "Agency file to debug")
+      .option("--node <name>", "Node to execute")
+      .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
+      .option("--trace <file>", "Load and inspect a trace file")
+      .option("--checkpoint <file>", "Load and inspect a checkpoint file")
+      .option(
+        "--dist-dir <dir>",
+        "Import pre-compiled JS from this directory instead of compiling on the fly",
+      ),
+  ).action(
+    async (
+      file: string,
+      options: DebugRunFlags & {
+        node?: string;
+        rewindSize: string;
+        trace?: string;
+        checkpoint?: string;
+        distDir?: string;
       },
-    );
+    ) => {
+      const { node, rewindSize, trace, checkpoint, distDir, ...runFlags } = options;
+      // The local model is resolved here, as `run` does, so the download
+      // and its progress happen in the terminal before the debugger draws.
+      let flags: DebugRunFlags = runFlags;
+      if (flags.local !== undefined) {
+        try {
+          flags = { ...flags, model: await resolveLocalRunFlag(flags.local, flags.draft) };
+        } catch (e) {
+          console.error(`Error: ${(e as Error).message}`);
+          process.exit(1);
+        }
+      }
+      let invocation: InvocationOptions;
+      try {
+        invocation = invocationFromRunFlags(flags, process.cwd());
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(2);
+      }
+      await debug(applyCliFlags(getConfig(), flags, file), file, {
+        node,
+        rewindSize: parseInt(rewindSize, 10),
+        trace,
+        checkpoint,
+        distDir,
+        agencyOnly: flags.agencyOnly ?? false,
+        invocation,
+      });
+    },
+  );
 
   program
     .command("bundle")

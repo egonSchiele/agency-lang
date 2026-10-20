@@ -5,10 +5,12 @@ The interactive debugger lets users step through `.agency` source code line by l
 ## Usage
 
 ```bash
-agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>]
+agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>] [run flags]
 ```
 
 The command is hidden from `agency --help`, but it works. If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
+
+`agency debug` takes the run flags `agency run` takes (`addRunOptions` in `scripts/agency.ts`): `--policy`, `--approve`, `--reject`, `--max-cost`, `--max-time`, `--model`, `--local`, `--max-tool-call-rounds`, `--log-file`, `--observability`, `--strict`, `--agency-only`, and the rest. The compile settings are folded onto the config before compiling, as `run` does. The policy and the budget become an `InvocationOptions` (`invocationFromRunFlags` in `lib/cli/debugFlags.ts`), passed on the node call and, since a resume installs the root policy and budget again, on every `respondToInterrupts` and `rewindFrom` the driver makes; `rewindFrom` takes an `invocation` for this. `run` carries the same values to its child process as environment variables; the debugger runs the program in its own process, so they travel as options instead. Two flags mean less here: `--interactive` is implied, because the debugger prompts for every interrupt no handler answers, and `--agency-only` applies the sandboxed compile but not the Node process flag `run` adds to its child. The recording flags, `--trace`, `--trace-file`, and `--capture-workdir`, belong to `run` and `resume` only (`addRecordingOptions`), since the debugger's own `--trace` loads a recording.
 
 `--trace` and `--checkpoint` load a recorded run instead of executing one. If the file is a bundle, `agency debug` extracts its sources to a temp directory and debugs those. `--dist-dir` imports pre-compiled JS from a directory rather than compiling on the fly.
 

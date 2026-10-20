@@ -1,3 +1,4 @@
+import type { InvocationOptions } from "../runtime/invocationOptions.js";
 import {
   Screen,
   FrameRecorder,
@@ -82,6 +83,9 @@ type TestSessionOpts = {
   checkpoints?: Checkpoint[];
   width?: number;
   height?: number;
+  /** The policy and budget the run is started with, as `agency debug`'s
+   *  run flags give them; passed on every resume and rewind too. */
+  invocation?: InvocationOptions;
 };
 
 /**
@@ -136,6 +140,7 @@ export class DebuggerTestSession {
       rewindSize: Math.max(30, opts.checkpoints?.length ?? 0),
       ui,
       checkpoints: opts.checkpoints,
+      invocation: opts.invocation,
     });
 
     opts.mod.__setDebugger(driver.debuggerState);
@@ -231,7 +236,7 @@ async function getInitialResult(opts: TestSessionOpts, driver: DebuggerDriver): 
 
   const callbacks = driver.getCallbacks();
   const args = opts.args ?? [];
-  const result = await opts.mod.main(...args, { callbacks });
+  const result = await opts.mod.main(...args, { callbacks, invocation: opts.invocation });
 
   if (!result?.data || !hasInterrupts(result.data)) {
     throw new Error(

@@ -38,4 +38,5 @@ Here are some things you may want to do with the debugger:
 - `--rewind-size <n>` — size of the rolling checkpoint window. Defaults to 30. Larger values let you rewind further at the cost of memory.
 - `--trace <file>` — load and inspect an existing `.trace` file instead of running the program live.
 - `--checkpoint <file>` — load a saved checkpoint file and start the debugger from that point.
+- The run flags of `agency run`: `--policy`, `--approve`, `--reject`, `--max-cost`, `--max-time`, `--model`, `--local`, `--max-tool-call-rounds`, `--log-file`, and the others. For example, `agency debug agent.agency --policy recommended --max-cost 2` debugs the agent under the recommended policy with a two dollar cap. The policy answers the interrupts it has rules for; the debugger asks you about the rest.
 - `--dist-dir <dir>` — import pre-compiled JS from this directory instead of compiling the `.agency` file on the fly. Useful when you've already built your project and want to skip the compile step.

@@ -76,14 +76,20 @@ function fieldRows(field: FieldSpec, state: FormState, width: number): Element[]
     const height = rows.length;
     if (value === "") {
       // An empty input draws only the cursor, so it is one cell wide and the
-      // help follows it.
+      // help follows it, wrapped under the value column like a value is.
+      const help = wrapText(field.help, Math.max(1, valueWidth - 2));
       return [
         row(
-          { height },
-          line(label, { width: label.length, height, bg: CURSOR_BG }),
-          textInput({ bg: CURSOR_BG, width: 1, height }, ""),
-          line(` ${field.help}`, { dim: true, bg: CURSOR_BG }),
+          { height: 1 },
+          line(label, { width: label.length, bg: CURSOR_BG }),
+          textInput({ bg: CURSOR_BG, width: 1 }, ""),
+          line(` ${help[0] ?? ""}`, { dim: true, bg: CURSOR_BG }),
         ),
+        ...help
+          .slice(1)
+          .map((text) =>
+            line(`${" ".repeat(label.length + 2)}${text}`, { dim: true, bg: CURSOR_BG }),
+          ),
       ];
     }
     return [

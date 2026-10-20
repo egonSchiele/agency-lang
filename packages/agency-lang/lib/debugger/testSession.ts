@@ -236,7 +236,8 @@ async function getInitialResult(opts: TestSessionOpts, driver: DebuggerDriver): 
 
   const callbacks = driver.getCallbacks();
   const args = opts.args ?? [];
-  const result = await opts.mod.main(...args, { callbacks, invocation: opts.invocation });
+  // Spread, as `debug.ts` does: the node function takes its options flat.
+  const result = await opts.mod.main(...args, { callbacks, ...opts.invocation });
 
   if (!result?.data || !hasInterrupts(result.data)) {
     throw new Error(

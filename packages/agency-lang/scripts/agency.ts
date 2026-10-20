@@ -142,6 +142,7 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
+import type { ResolvedModelFlag } from "@/config/config.js";
 import { generateDoc } from "@/cli/doc.js";
 import { generateLiterate } from "@/cli/literate.js";
 import { watchAndCompile } from "@/cli/watch.js";
@@ -305,13 +306,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return { config: getConfig(), configPath: writeTarget(getConfigTarget()) };
   }
 
-  async function runWithOptions(
-    input: string,
-    options: RunOptions,
-    nodeArgs: string[] = [],
-    resume?: ResumeCarrier,
-    entryNode?: string,
-  ) {
+  /** Check `--local`, `--model`, and `--draft` against each other, and
+   *  resolve the local model so the flags carry it as `model`. Shared by
+   *  `run` and `debug`, so both refuse the same combinations. The resolve
+   *  and the download happen here, before compiling, so progress and the
+   *  SHA-256 verification show in the terminal; the result rides the
+   *  ordinary `--model` pathway (`applyCliFlags`) into the baked config. */
+  async function withLocalModel<
+    T extends { local?: string; model?: ResolvedModelFlag; draft?: string },
+  >(options: T): Promise<T> {
     if (options.local !== undefined && options.model !== undefined) {
       console.error("Error: Pass either --model (hosted) or --local (local), not both.");
       process.exit(2);
@@ -320,20 +323,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error("Error: --draft needs --local; the draft is for the local model the run uses.");
       process.exit(2);
     }
-    if (options.local !== undefined) {
-      // Resolve + download in the parent, before compiling, so progress and
-      // SHA-256 verification happen in the terminal; the result rides the
-      // ordinary --model pathway (applyCliFlags) into baked config.
-      try {
-        options = {
-          ...options,
-          model: await resolveLocalRunFlag(options.local, options.draft),
-        };
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(1);
-      }
+    if (options.local === undefined) {
+      return options;
     }
+    try {
+      return { ...options, model: await resolveLocalRunFlag(options.local, options.draft) };
+    } catch (e) {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exit(1);
+    }
+  }
+
+  async function runWithOptions(
+    input: string,
+    options: RunOptions,
+    nodeArgs: string[] = [],
+    resume?: ResumeCarrier,
+    entryNode?: string,
+  ) {
+    options = await withLocalModel(options);
     // applyCliFlags takes one field: a path, or `true` for the default path.
     // The CLI splits that across two flags so neither swallows the filename.
     const config = applyCliFlags(
@@ -467,10 +475,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  /** The flags that record a run: a trace, and the run directory. `debug`
-   *  does not take them, since its own `--trace` loads a recording. */
-  function addRecordingOptions(cmd: Command) {
-    return (
+  /** The flags of `run` and `resume`: the shared run flags plus the ones
+   *  that record a run (a trace, and the run directory) and `-i`. `debug`
+   *  takes neither: its own `--trace` loads a recording, and it prompts for
+   *  every interrupt no handler answers, so `-i` would mean nothing there.
+   *  The order is the one `run --help` has always shown. */
+  function addRunAndRecordingOptions(cmd: Command) {
+    return addRunOptions(
       cmd
         // Two flags rather than `--trace [file]`: an optional-valued option
         // swallows the next word, so `agency run --trace greet.agency` reads the
@@ -478,12 +489,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
         // broken before the position rule too; splitting it makes both spellings
         // work.
         .option("--trace", "Write an execution trace to <input>.trace")
-        .option("--trace-file <path>", "Write an execution trace to this path")
-        .option(
-          "--capture-workdir <dir>",
-          "After the run, write its trace, code and a snapshot of the working directory as the run directory <dir>/<traceId>/ (see: agency runs list)",
-        )
-    );
+        .option("--trace-file <path>", "Write an execution trace to this path"),
+    )
+      .option(
+        "-i, --interactive",
+        "Prompt on interrupts that surface unhandled (default: reject them)",
+      )
+      .option(
+        "--capture-workdir <dir>",
+        "After the run, write its trace, code and a snapshot of the working directory as the run directory <dir>/<traceId>/ (see: agency runs list)",
+      );
   }
 
   /** The flags that shape a run, shared by `run`, `resume`, and `debug`:
@@ -541,10 +556,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         joinEffectFlags,
       )
       .option(
-        "-i, --interactive",
-        "Prompt on interrupts that surface unhandled (default: reject them)",
-      )
-      .option(
         "--max-cost <dollars>",
         "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
       )
@@ -558,21 +569,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   }
 
-  addRecordingOptions(
-    addRunOptions(
-      program
-        .command("run")
-        // The program boundary: agency's flags before the filename, the
-        // program's after. The fallback (`agency greet.agency`) dispatches this
-        // same command object, so both spellings share options, action, help.
-        .passThroughOptions()
-        .description("Compile and run .agency file(s)")
-        .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
-        .argument(
-          "[nodeArgs...]",
-          "Arguments after the filename go to the program; read them with std::args",
-        ),
-    ),
+  addRunAndRecordingOptions(
+    program
+      .command("run")
+      // The program boundary: agency's flags before the filename, the
+      // program's after. The fallback (`agency greet.agency`) dispatches this
+      // same command object, so both spellings share options, action, help.
+      .passThroughOptions()
+      .description("Compile and run .agency file(s)")
+      .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
+      .argument(
+        "[nodeArgs...]",
+        "Arguments after the filename go to the program; read them with std::args",
+      ),
   ).action(async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
     const warning = warnMisplacedAgencyFlags(command, input);
     if (warning !== undefined) console.warn(warning);
@@ -595,39 +604,37 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
   });
 
-  addRecordingOptions(
-    addRunOptions(
-      program
-        .command("resume")
-        .description("Resume an Agency program from a checkpoint file")
-        .argument("<checkpoint-file>", "Path to checkpoint JSON")
-        .argument("<input>", "Path to the .agency program that created the checkpoint")
-        .option(
-          "--local-var <name=value>",
-          "Override a local variable in the checkpoint's current frame (repeatable)",
-          collectRepeats,
-          [] as string[],
-        )
-        .option(
-          "--global-var <name=value>",
-          "Override a global variable in the checkpoint's module (repeatable)",
-          collectRepeats,
-          [] as string[],
-        )
-        .option(
-          "--arg <name=value>",
-          "Override a resumed function or node argument (repeatable)",
-          collectRepeats,
-          [] as string[],
-        )
-        .option(
-          "--program-arg <value>",
-          "Pass one value to std::args in the resumed program (repeatable)",
-          collectRepeats,
-          [] as string[],
-        )
-        .option("-f, --force", "Resume even when a checkpoint signature cannot be verified"),
-    ),
+  addRunAndRecordingOptions(
+    program
+      .command("resume")
+      .description("Resume an Agency program from a checkpoint file")
+      .argument("<checkpoint-file>", "Path to checkpoint JSON")
+      .argument("<input>", "Path to the .agency program that created the checkpoint")
+      .option(
+        "--local-var <name=value>",
+        "Override a local variable in the checkpoint's current frame (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--global-var <name=value>",
+        "Override a global variable in the checkpoint's module (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--arg <name=value>",
+        "Override a resumed function or node argument (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--program-arg <value>",
+        "Pass one value to std::args in the resumed program (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option("-f, --force", "Resume even when a checkpoint signature cannot be verified"),
   ).action(async (checkpointFile: string, input: string, options: ResumeOptions) => {
     let resume: ResumeCarrier;
     try {
@@ -1919,17 +1926,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     ) => {
       const { node, rewindSize, trace, checkpoint, distDir, ...runFlags } = options;
-      // The local model is resolved here, as `run` does, so the download
-      // and its progress happen in the terminal before the debugger draws.
-      let flags: DebugRunFlags = runFlags;
-      if (flags.local !== undefined) {
-        try {
-          flags = { ...flags, model: await resolveLocalRunFlag(flags.local, flags.draft) };
-        } catch (e) {
-          console.error(`Error: ${(e as Error).message}`);
-          process.exit(1);
-        }
-      }
+      // Resolved before the debugger draws, so the download shows in the terminal.
+      const flags: DebugRunFlags = await withLocalModel(runFlags);
       let invocation: InvocationOptions;
       try {
         invocation = invocationFromRunFlags(flags, process.cwd());

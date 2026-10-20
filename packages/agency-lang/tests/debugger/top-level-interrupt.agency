@@ -1,0 +1,14 @@
+// The interrupt is raised by the file's top-level code, which runs before
+// the first debug stop. So whether the debugger asks about it depends on
+// the policy the run was started with, not the policy a resume installs.
+def check(): number {
+  interrupt("top level")
+  return 1
+}
+
+const answer = check()
+
+node main() {
+  x = answer
+  return x
+}

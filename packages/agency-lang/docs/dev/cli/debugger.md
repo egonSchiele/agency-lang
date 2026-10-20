@@ -144,6 +144,14 @@ Several branches can stop at once: in stepping mode every Agency tool in a round
 
 The call stack pane is read from the checkpoint's frames on every render (`UIState.getCallStack`): one entry per frame from the root stack down the branch path to the stack the program is stopped on, so inside a tool it reads `main`, `llm()` (the tool loop's own frame), `search`. The compiler-named frame of a fork or parallel arm, or of a block argument, reads `block`, and a frame with no scope name `(unknown)`. Nothing is pushed or reset on a resume or a rewind, since the checkpoint is the stack. Only Agency code and the TypeScript that claims a resumable scope (`withResumableScope`, as the MCP gate does) have frames; other TypeScript functions do not appear. A debug stop carries its branch path. A user interrupt raised inside a tool, a fork, or a parallel arm does not: it is stamped on the shared checkpoint at the join, whose location has no branch path, so `UIState.setCheckpoint` takes the interrupt's id and finds the branch whose state records it (`Checkpoint.branchPathOf`). An interrupt bubbles out through every enclosing branch, each of which records the same id, so the deepest match is taken. The pane then ends at the tool or the arm that asked, and the locals pane shows its frame; the source pane still highlights the `llm()` line the interrupt came out of, and the globals pane shows the caller's module, so for a tool from another module the locals are the tool's while the source and globals are the caller's. When several interrupts arrive in one batch, the panes are set again for each one as it is asked about. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
+### The threads pane
+
+The pane shows one thread, the active one until the person picks another with `t` (a picker listing every thread by label, with its parent, its message count, and a mark on the active one) or cycles with `[` and `]`. A picked thread stays shown on later checkpoints while it is still listed, so a person can follow it while stepping. The threads come from two places in the checkpoint (`Checkpoint.listThreads`).
+
+The node frame carries the thread store. The active thread is the top of the active stack: the store's own, or, inside a `fork` or `parallel` arm, the branch's, since an arm runs on a view of the store whose active stack is serialized with the branch (`BranchStateJSON.activeStack`).
+
+A tool loop's frame carries `messagesJSON`, the thread it is working on. Since #1215 it is refreshed on every checkpoint. When its `id` matches a store thread, the loop's copy is the one shown, whatever the lengths: a resume continues from it (`restoreThreadForResume`), so after memory compaction the shorter loop copy is the conversation the program goes on with. A loop inside a tool runs on a fresh store that is not serialized, so its copy is the only record of the subagent's thread. It is listed under the thread's own `id`, named after the function that called `llm()`, and marked active. Its `parentId` names a thread of the unserialized store, so it is dropped. In the list, a store thread is identified by its store key and a tool thread by its id; only the match between a loop copy and a store thread goes by `id`.
+
 ### User code interrupts
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
@@ -206,6 +214,7 @@ This avoids exporting `__globalCtx` directly.
 | `k` | pin the current checkpoint, with an optional label |
 | `p` | print variable |
 | `z` | zoom the focused pane |
+| `t` | pick which message thread the threads pane shows |
 | `[` / `]` | cycle which message thread the threads pane shows |
 | `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |
 | `Tab` | cycle pane focus (`Shift+Tab` goes backwards) |

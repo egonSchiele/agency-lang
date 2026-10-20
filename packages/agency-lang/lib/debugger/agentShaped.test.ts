@@ -300,6 +300,38 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("the threads pane lists the subagent's thread, and the picker and ] show it", async () => {
+    await withLLMMocks(agentMocks(), async () => {
+      const session = await agentSession();
+      await session.press("s"); // round 1
+      await session.press("s"); // before search
+      await session.press("s"); // const url
+      await session.press("n", { times: 4 }); // to summary = llm(...)
+      await session.press("s"); // the subagent's round 1, in the thread block
+      const threads = session.ui.state.listThreads();
+      expect(threads.map((thread) => [thread.label, thread.active])).toEqual([
+        [null, false],
+        ["search", true],
+      ]);
+      // The pane opens on the subagent's thread, the active one.
+      const pane = () => session.frame().findByKey("threads")?.toPlainText() ?? "";
+      expect(pane()).toContain("threads: search [2/2]");
+      expect(pane()).toContain("summarize the page at");
+      // The picker marks the active one; moving to the other shows it.
+      await session.press("t");
+      const picker = session.frame().toPlainText();
+      expect(picker).toContain("* search (1 message)");
+      expect(picker).toContain("  id: 0 (");
+      await session.press("up");
+      await session.press("enter");
+      expect(pane()).toContain("[1/2]");
+      expect(pane()).toContain("research");
+      expect(pane()).not.toContain("summarize the page at");
+      await session.press("]");
+      expect(pane()).toContain("[2/2]");
+    });
+  });
+
   it("print reads the tool's variables and set is refused", async () => {
     await withLLMMocks(agentMocks(), async () => {
       const session = await agentSession();

@@ -9,7 +9,7 @@ import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
-import type { StateJSON, StateStackJSON } from "./stateStack.js";
+import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
 
@@ -77,6 +77,10 @@ export type GuardSummary = {
   spent: number;
   disarmed: boolean;
   root: boolean;
+  /** True when the figures are a branch's own copy of a guard above it:
+   *  a time guard's clone carries the parent's remaining time as its
+   *  limit, and the branch's own working time as spent. */
+  inherited: boolean;
 };
 
 /** The tool loop the stopped code is in: its round, counted from 1, and
@@ -122,6 +126,31 @@ export type CheckpointJSON = {
   traceId?: string;
   signature?: string;
 };
+
+/** A branch's status. `interruptId` is never cleared once set, so a
+ *  branch that stopped on an interrupt and later returned has both
+ *  fields; the result decides. */
+function branchStatus(branch: BranchStateJSON): BranchSummary["status"] {
+  if (branch.result !== undefined) return "done";
+  if (branch.interruptId !== undefined) return "interrupted";
+  return "running";
+}
+
+/** The name of the tool a loop frame called under the branch key
+ *  `tool_<index>_<id>`, from the tool calls in the loop's copy of its
+ *  thread; undefined when the frame is not a loop's or has no such call. */
+function toolCallName(frame: StateJSON | undefined, key: string): string | undefined {
+  if (frame?.scopeName !== "runPrompt") return undefined;
+  const copy = frame.locals?.messagesJSON;
+  const messages: unknown[] = Array.isArray(copy) ? copy : (copy?.messages ?? []);
+  for (const message of messages) {
+    const calls = (message as { toolCalls?: { id?: string; name?: string }[] } | null)?.toolCalls;
+    if (!Array.isArray(calls)) continue;
+    const index = calls.findIndex((call, i) => `tool_${i}_${call.id ?? ""}` === key);
+    if (index >= 0) return calls[index].name;
+  }
+  return undefined;
+}
 
 export class Checkpoint implements SourceLocation {
   public id: number;
@@ -284,7 +313,7 @@ export class Checkpoint implements SourceLocation {
   }
 
   /** The frames from the root down the branch path, the deepest last. */
-  private framesAlong(branchPath: string[]): StateJSON[] {
+  framesAlong(branchPath: string[]): StateJSON[] {
     const frames: StateJSON[] = [];
     for (let depth = 0; depth <= branchPath.length; depth++) {
       frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
@@ -303,50 +332,66 @@ export class Checkpoint implements SourceLocation {
 
   /** Every branch in the checkpoint, from the root stack down through
    *  the stacks of the branches themselves, in the order the checkpoint
-   *  holds them. Stopped inside one tool, a person sees its siblings. */
+   *  holds them. Stopped inside one tool, a person sees its siblings.
+   *  Only the last frame of a stack holds branches, as `stackAt` reads.
+   *  A finished branch has no frames, since a function pops its frame
+   *  when it returns, so its name comes from the tool loop's record of
+   *  the call, when the loop is the owner. */
   listBranches(): BranchSummary[] {
     const branches: BranchSummary[] = [];
     const visit = (frames: StateJSON[] | undefined, path: string[]) => {
-      for (const frame of frames ?? []) {
-        for (const [key, branch] of Object.entries(frame.branches ?? {})) {
-          const branchPathHere = [...path, key];
-          branches.push({
-            path: branchPathHere,
-            key,
-            owner: frame.scopeName === "runPrompt" ? "llm()" : (frame.scopeName ?? ""),
-            label: branch.stack.stack?.[0]?.scopeName ?? key,
-            status:
-              branch.interruptId !== undefined
-                ? "interrupted"
-                : branch.result !== undefined
-                  ? "done"
-                  : "running",
-          });
-          visit(branch.stack.stack, branchPathHere);
-        }
+      const frame = frames?.at(-1);
+      for (const [key, branch] of Object.entries(frame?.branches ?? {})) {
+        const branchPathHere = [...path, key];
+        branches.push({
+          path: branchPathHere,
+          key,
+          owner: frame?.scopeName === "runPrompt" ? "llm()" : (frame?.scopeName ?? ""),
+          label: branch.stack.stack?.[0]?.scopeName ?? toolCallName(frame, key) ?? key,
+          status: branchStatus(branch),
+        });
+        visit(branch.stack.stack, branchPathHere);
       }
     };
     visit(this.stack.stack, []);
     return branches;
   }
 
-  /** The guards the stopped code runs under: those owned by each stack
-   *  along `branchPath`, outermost first. A branch stack serializes the
-   *  time guards it inherited as well, since their elapsed time is its
-   *  own; a cost guard it inherited is the parent's and is listed there. */
+  /** The guards the stopped code runs under, outermost first: those on
+   *  each stack along `branchPath`, a stack's inherited ones before its
+   *  own. A branch stack serializes the time guards it inherited, since
+   *  their elapsed time is its own: each is a clone with the parent's
+   *  guard id, the parent's remaining time as its limit, and the branch's
+   *  working time as spent. A guard is listed once, in the place of its
+   *  outermost copy, with the figures of the deepest, which are the ones
+   *  the stopped code is metered by. A cost guard is shared by reference,
+   *  so a branch never serializes an inherited one. */
   listGuards(branchPath: string[] = []): GuardSummary[] {
     const guards: GuardSummary[] = [];
+    const indexById: Record<string, number> = {};
     for (let depth = 0; depth <= branchPath.length; depth++) {
       const stack = this.stackJSONAt(branchPath.slice(0, depth));
-      for (const guard of [...(stack?.guards ?? []), ...(stack?.inheritedTimeGuards ?? [])]) {
-        guards.push({
+      const own = stack?.guards ?? [];
+      const inherited = stack?.inheritedTimeGuards ?? [];
+      for (const guard of [...inherited, ...own]) {
+        const summary: GuardSummary = {
           label: guard.label ?? null,
           dimension: guard.kind,
           limit: guard.kind === "cost" ? guard.costLimit : guard.timeLimit,
           spent: guard.kind === "cost" ? guard.spent : guard.elapsedMs,
           disarmed: guard.disarmed === true,
           root: guard.isRootBudget === true,
-        });
+          inherited: inherited.includes(guard),
+        };
+        const seen = guard.guardId === undefined ? undefined : indexById[guard.guardId];
+        if (seen !== undefined) {
+          guards[seen] = summary;
+          continue;
+        }
+        if (guard.guardId !== undefined) {
+          indexById[guard.guardId] = guards.length;
+        }
+        guards.push(summary);
       }
     }
     return guards;

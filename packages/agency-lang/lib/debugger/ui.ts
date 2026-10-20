@@ -328,11 +328,11 @@ export class DebuggerUI implements DebuggerIO {
         guard.dimension === "cost"
           ? `$${Number(guard.spent.toFixed(6))} of $${guard.limit}`
           : `${formatElapsed(guard.spent)} of ${formatElapsed(guard.limit)}`;
-      const note = guard.disarmed
-        ? " (disarmed)"
-        : guard.root && guard.label
-          ? " (root budget)"
-          : "";
+      const notes: string[] = [];
+      if (guard.disarmed) notes.push("disarmed");
+      if (guard.root && guard.label) notes.push("root budget");
+      if (guard.inherited) notes.push("this branch");
+      const note = notes.length > 0 ? ` (${notes.join(", ")})` : "";
       lines.push(`  ${escapeStyleTags(name)} · ${guard.dimension} ${amount}${note}`);
     }
     return lines.join("\n");
@@ -421,22 +421,37 @@ export class DebuggerUI implements DebuggerIO {
         this.renderPane(
           panes.find((p) => p.name === "locals")!,
           focusedName,
-          { width: "30%" },
+          { width: "40%" },
         ),
         this.renderPane(
           panes.find((p) => p.name === "globals")!,
           focusedName,
-          { width: "25%" },
+          { width: "40%" },
         ),
         this.renderPane(
           panes.find((p) => p.name === "callStack")!,
           focusedName,
           { flex: 1 },
         ),
-        ...["branches", "guards"]
-          .map((name) => panes.find((p) => p.name === name))
-          .filter((pane) => pane !== undefined)
-          .map((pane) => this.renderPane(pane, focusedName, { width: "20%" })),
+      ),
+    ];
+  }
+
+  /** Branches and guards get a row of their own when present, so the
+   *  second row keeps its widths and each gets room for a line like
+   *  `> search [interrupted] under llm()`. The activity and stdout row
+   *  gives up the height. Not part of `buildTopRows`, which the overlays
+   *  draw above themselves: a third row there would leave a form no
+   *  room on a short terminal. */
+  private buildExtrasRow(panes: PaneSlot[], focusedName: string | undefined): Element[] {
+    const extras = ["branches", "guards"]
+      .map((name) => panes.find((p) => p.name === name))
+      .filter((pane) => pane !== undefined);
+    if (extras.length === 0) return [];
+    return [
+      row(
+        { height: "15%" },
+        ...extras.map((pane) => this.renderPane(pane, focusedName, { flex: 1 })),
       ),
     ];
   }
@@ -459,6 +474,7 @@ export class DebuggerUI implements DebuggerIO {
 
     return column(
       ...this.buildTopRows(panes, focusedName),
+      ...this.buildExtrasRow(panes, focusedName),
       row(
         { flex: 1 },
         this.renderPane(

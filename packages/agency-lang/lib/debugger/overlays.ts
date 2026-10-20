@@ -211,14 +211,17 @@ export async function showBranchPicker(
   ctx: OverlayContext,
   branches: BranchSummary[],
 ): Promise<string[] | null> {
-  const entries: { path: string[]; line: string }[] = [
+  // A finished branch has no frames to look at, so its line cannot be
+  // chosen: the cursor moves over the others.
+  const entries: { path: string[] | null; line: string }[] = [
     { path: [], line: "the stopped frame" },
     ...branches.map((branch) => ({
-      path: branch.path,
+      path: branch.status === "done" ? null : branch.path,
       line: `${"  ".repeat(branch.path.length - 1)}${branch.label} [${branch.status}] under ${branch.owner}`,
     })),
   ];
-  let selected = 0;
+  const choosable = entries.map((entry, i) => i).filter((i) => entries[i].path !== null);
+  let at = 0;
   const render = () =>
     ctx.screen.render(
       column(
@@ -230,7 +233,11 @@ export async function showBranchPicker(
             borderColor: "yellow",
             label: " branches (Enter=view, Esc=cancel) ",
           },
-          text(entries.map((entry, i) => `${i === selected ? ">" : " "} ${entry.line}`).join("\n")),
+          text(
+            entries
+              .map((entry, i) => `${i === choosable[at] ? ">" : " "} ${entry.line}`)
+              .join("\n"),
+          ),
         ),
         ctx.buildStatsBar(),
         box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
@@ -243,11 +250,9 @@ export async function showBranchPicker(
       ctx.cleanup();
       return null;
     }
-    if ((keyEvent.key === "up" || keyEvent.key === "k") && selected > 0) selected--;
-    if ((keyEvent.key === "down" || keyEvent.key === "j") && selected < entries.length - 1) {
-      selected++;
-    }
-    if (keyEvent.key === "enter") return entries[selected].path;
+    if ((keyEvent.key === "up" || keyEvent.key === "k") && at > 0) at--;
+    if ((keyEvent.key === "down" || keyEvent.key === "j") && at < choosable.length - 1) at++;
+    if (keyEvent.key === "enter") return entries[choosable[at]].path;
     if (keyEvent.key === "escape" || keyEvent.key === "q") return null;
   }
 }

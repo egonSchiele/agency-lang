@@ -31,6 +31,19 @@ describe("a guard trip in the debugger", () => {
   it("offers the three answers, refuses a grant too small to clear the trip, then approves", async () => {
     await withLLMMocks(mocks, async () => {
       const session = await guardSession();
+      // Inside the guard block, before the trip, the guards pane lists
+      // the guard against its limit. (A form overlay draws only the
+      // source and locals rows above itself, so the pane is checked here.)
+      for (
+        let i = 0;
+        i < 5 && !(session.frame().findByKey("guards")?.toPlainText() ?? "").includes("research");
+        i++
+      ) {
+        await session.press("s");
+      }
+      expect(session.frame().findByKey("guards")!.toPlainText()).toContain(
+        "research · cost $0 of $0.000001",
+      );
       await session.press("c");
       expect(activity(session)).toContainEqual(
         'Guard "research" tripped on cost: $0.000002 spent of $0.000001',
@@ -47,9 +60,9 @@ describe("a guard trip in the debugger", () => {
           spent: 0.000002,
           disarmed: false,
           root: false,
+          inherited: false,
         },
       ]);
-      expect(session.frame().findByKey("guards")!.toPlainText()).toContain("research");
       // The source pane shows the llm() statement the trip happened under.
       expect(session.frame().findByKey("source")!.toPlainText()).toMatch(
         /│>\s+\d+\s+.*llm\("first"\)/,

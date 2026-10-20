@@ -12,6 +12,7 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
       threads: f.threads ?? null,
       step: f.step ?? 0,
       scopeName: f.scopeName ?? null,
+      ...(f.moduleId ? { moduleId: f.moduleId } : {}),
       ...(f.branches ? { branches: f.branches } : {}),
     })),
     mode: "serialize",
@@ -343,6 +344,57 @@ describe("UIState", () => {
       ui.pushCallStackEntry({ functionName: "main", moduleId: "mod", line: 1 });
       ui.resetCallStack();
       expect(ui.getCallStack()).toEqual([]);
+    });
+  });
+
+  describe("viewBranch", () => {
+    it("shows the branch's frame and its module's globals, and keeps the source pane on the stop", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          globals: makeGlobalsJSON({
+            "mod.agency": { count: 10 },
+            "tools.agency": { calls: 3 },
+          }),
+          stack: makeStackJSON([
+            { scopeName: "main", moduleId: "mod.agency", locals: { x: 1 } },
+            {
+              scopeName: "runPrompt",
+              moduleId: "mod.agency",
+              branches: {
+                tool_0_abc: {
+                  stack: makeStackJSON([
+                    { scopeName: "search", moduleId: "mod.agency", locals: { url: "u" } },
+                  ]),
+                },
+                tool_1_def: {
+                  stack: makeStackJSON([
+                    { scopeName: "writeUp", moduleId: "tools.agency", locals: { notes: "n" } },
+                  ]),
+                },
+              },
+            },
+          ]),
+        }),
+        {
+          moduleId: "mod.agency",
+          scopeName: "search",
+          stepPath: "1",
+          branchPath: ["tool_0_abc"],
+          depth: 1,
+          label: null,
+        },
+      );
+      ui.viewBranch(["tool_1_def"]);
+      expect(ui.getModuleId()).toBe("mod.agency");
+      expect(ui.getLocation()?.branchPath).toEqual(["tool_1_def"]);
+      expect(ui.getLocals().map((e) => e.key)).toEqual(["notes"]);
+      expect(ui.getGlobals().map((e) => [e.key, e.value])).toEqual([["calls", 3]]);
+      expect(ui.lookupVariable("notes")).toBe("n");
+      expect(ui.lookupVariable("calls")).toBe(3);
+      ui.viewBranch([]);
+      expect(ui.getLocals().map((e) => e.key)).toEqual(["url"]);
+      expect(ui.getGlobals().map((e) => e.key)).toEqual(["count"]);
     });
   });
 

@@ -439,7 +439,10 @@ describe("stopping inside a tool call", () => {
         session.ui.state.getActivityLog().some((line) => line.startsWith("Viewing branch tool_1_")),
       ).toBe(true);
       expect(localsText(session)).toContain('notes = "notes"');
-      expect(session.ui.state.getCallStack().at(-1)?.functionName).toBe("writeUp");
+      // print reads the viewed frame, as the locals pane does.
+      await session.press("p");
+      await session.type("notes");
+      expect(session.ui.state.getActivityLog()).toContainEqual('notes = "notes"');
       await session.press("b");
       await session.press("enter");
       expect(session.ui.state.getActivityLog()).toContainEqual("Viewing the stopped frame");

@@ -36,6 +36,11 @@ export class UIState {
   private location?: SourceLocationOpts;
   /** The stop's own location, kept while a branch is being viewed. */
   private stopLocation?: SourceLocationOpts;
+  /** The stop record the driver passed, when the stop is a debug stop. */
+  private stop?: DebugStopData;
+  /** The module whose globals the globals pane shows: the viewed
+   *  frame's. The source pane shows `location.moduleId`, the stop's. */
+  private globalsModuleId?: string;
   private sourceMap?: SourceMap;
   private currentLine?: number;
   private args: ValWithOverride[] = [];
@@ -105,19 +110,20 @@ export class UIState {
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
+    this.stop = stop;
     this.stopLocation = { ...location, stepPath: statementStepPath(location.stepPath) };
     this.location = this.stopLocation;
-    if (!this.showFrame(location)) return;
+    if (!this.showFrame(location, location.moduleId)) return;
     await this.setSourceMap();
   }
 
-  /** Fill the args, locals, and globals panes from the frame at
-   *  `location`. False when the checkpoint has no such frame. */
-  private showFrame(location: {
-    moduleId: string;
-    branchPath?: string[];
-    loopStop?: LoopStopKind;
-  }): boolean {
+  /** Fill the args and locals panes from the frame at `location`, and
+   *  the globals pane from `moduleId`'s globals as that frame's stack
+   *  sees them. False when the checkpoint has no such frame. */
+  private showFrame(
+    location: { branchPath?: string[]; loopStop?: LoopStopKind },
+    moduleId: string,
+  ): boolean {
     const cp = this.checkpoint!;
     const frame = cp.shownFrame(location);
     if (!frame) {
@@ -127,24 +133,24 @@ export class UIState {
     this.args = [];
     this.locals = [];
     this.globals = [];
+    this.globalsModuleId = moduleId;
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule =
-      cp.globalsAt(location.branchPath ?? []).store?.[location.moduleId] ?? null;
+    const globalsForModule = cp.globalsAt(location.branchPath ?? []).store?.[moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }
     return true;
   }
 
-  /** Look at a branch's stack: the locals, globals, and call stack panes
-   *  show its last frame, and the source pane keeps the stop's line. An
-   *  empty path returns to the stop. */
+  /** Look at a branch's stack: the locals and globals panes show its
+   *  last frame, and the source pane keeps the stop's line and module.
+   *  An empty path returns to the stop. */
   viewBranch(path: string[]): void {
     if (!this.checkpoint || !this.stopLocation) return;
     if (path.length === 0) {
       this.location = this.stopLocation;
-      this.showFrame(this.stopLocation);
+      this.showFrame(this.stopLocation, this.stopLocation.moduleId);
       return;
     }
     const frame = this.checkpoint.frameAt(path);
@@ -152,13 +158,15 @@ export class UIState {
       this.log(`No branch at ${path.join("/")}`);
       return;
     }
-    this.location = {
-      moduleId: frame.moduleId ?? this.stopLocation.moduleId,
-      scopeName: frame.scopeName ?? "",
-      stepPath: this.stopLocation.stepPath,
-      branchPath: path,
-    };
-    this.showFrame(this.location);
+    this.location = { ...this.stopLocation, branchPath: path, loopStop: undefined };
+    this.showFrame(this.location, frame.moduleId ?? this.stopLocation.moduleId);
+  }
+
+  /** The value of a variable as the panes show it: an argument or a
+   *  local of the viewed frame, else a global of the viewed module. */
+  lookupVariable(name: string): unknown {
+    const entry = [...this.args, ...this.locals, ...this.globals].find((e) => e.key === name);
+    return entry?.value;
   }
 
   /** Every branch in the checkpoint; see `Checkpoint.listBranches`. */
@@ -171,9 +179,18 @@ export class UIState {
     return this.checkpoint?.listGuards(this.location?.branchPath ?? []) ?? [];
   }
 
-  /** The tool loop the stopped code is in, or null. */
+  /** The tool loop the stopped code is in, or null. The loop counts a
+   *  round when its request returns, so at the loop's own stop before a
+   *  request the stop's label, `round N`, is the round the person sees. */
   loopState(): LoopState | null {
-    return this.checkpoint?.loopState(this.location?.branchPath ?? []) ?? null;
+    const branchPath = this.location?.branchPath ?? [];
+    const state = this.checkpoint?.loopState(branchPath) ?? null;
+    if (!state) return null;
+    const atStop = branchPath.join("/") === (this.stop?.branchPath ?? []).join("/");
+    const labelled =
+      this.stop?.loopStop === "round" ? this.stop.label?.match(/^round (\d+)$/) : null;
+    if (atStop && labelled) return { ...state, round: Number(labelled[1]) };
+    return state;
   }
 
   setWithOverrides(obj: Record<string, unknown>, array: ValWithOverride[]) {

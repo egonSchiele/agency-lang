@@ -258,11 +258,30 @@ describe("Checkpoint", () => {
 
   describe("branches, guards, and the loop", () => {
     function agentCheckpoint() {
+      // The shapes a run writes: a finished branch has no frames, since a
+      // function pops its frame when it returns, and keeps the interrupt
+      // id it stopped on earlier; the loop's copy of its thread records
+      // the calls, which is where a finished tool's name comes from.
       const stack = makeStackJSON([
         { scopeName: "main", locals: {} },
         {
           scopeName: "runPrompt",
-          locals: { toolCallRound: 1, removedTools: ["writeUp"] },
+          locals: {
+            toolCallRound: 1,
+            removedTools: ["writeUp"],
+            messagesJSON: {
+              messages: [
+                { role: "user", content: "task" },
+                {
+                  role: "assistant",
+                  toolCalls: [
+                    { id: "abc", name: "search" },
+                    { id: "def", name: "writeUp" },
+                  ],
+                },
+              ],
+            },
+          },
           branches: {
             tool_0_abc: {
               stack: makeStackJSON([
@@ -276,15 +295,24 @@ describe("Checkpoint", () => {
               interruptId: "i-1",
             },
             tool_1_def: {
-              stack: makeStackJSON([{ scopeName: "writeUp" }]),
+              stack: makeStackJSON([]),
+              interruptId: "i-0",
               result: { result: "done" },
             },
           },
         },
       ]);
-      stack.guards = [{ kind: "cost", label: "research", costLimit: 0.5, spent: 0.42 }];
+      // A root time budget lives on the root stack; a branch carries its
+      // own clone, with the same id, the parent's remaining time as its
+      // limit, and its own working time.
+      stack.guards = [
+        { kind: "cost", label: "research", costLimit: 0.5, spent: 0.42, guardId: "g-cost" },
+        { kind: "time", timeLimit: 60000, elapsedMs: 10000, isRootBudget: true, guardId: "g-time" },
+      ];
       const inner = stack.stack[1].branches!.tool_0_abc.stack;
-      inner.guards = [{ kind: "time", timeLimit: 60000, elapsedMs: 1500, isRootBudget: true }];
+      inner.inheritedTimeGuards = [
+        { kind: "time", timeLimit: 50000, elapsedMs: 1500, isRootBudget: true, guardId: "g-time" },
+      ];
       return new Checkpoint({ id: 0, stack, globals: makeGlobalsJSON(), nodeId: "n1" });
     }
 
@@ -315,7 +343,7 @@ describe("Checkpoint", () => {
       ]);
     });
 
-    it("lists the guards along the branch path, outermost first", () => {
+    it("lists each guard once, outermost first, with the figures of the branch's own copy", () => {
       const cp = agentCheckpoint();
       expect(cp.listGuards()).toEqual([
         {
@@ -325,11 +353,23 @@ describe("Checkpoint", () => {
           spent: 0.42,
           disarmed: false,
           root: false,
+          inherited: false,
+        },
+        {
+          label: null,
+          dimension: "time",
+          limit: 60000,
+          spent: 10000,
+          disarmed: false,
+          root: true,
+          inherited: false,
         },
       ]);
-      expect(cp.listGuards(["tool_0_abc"]).map((g) => [g.dimension, g.root])).toEqual([
-        ["cost", false],
-        ["time", true],
+      expect(
+        cp.listGuards(["tool_0_abc"]).map((g) => [g.dimension, g.limit, g.spent, g.inherited]),
+      ).toEqual([
+        ["cost", 0.5, 0.42, false],
+        ["time", 50000, 1500, true],
       ]);
     });
 

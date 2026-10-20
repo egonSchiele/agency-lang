@@ -207,10 +207,14 @@ export class DebuggerDriver {
           // position, so we re-render without a new checkpoint.
           const nonSteppingCommands = ["set", "print", "checkpoint"];
           const skipCheckpoint = lastCommand && nonSteppingCommands.includes(lastCommand.type);
+          // The stepping commands work from the depth of the stop that is
+          // shown. Several branches can stop in one round, so the runtime
+          // does not record a depth; the stop record carries it.
           const stop = stopOf(interrupt);
+          if (stop) this.debuggerState.stoppedAt(stop.depth);
           // A stop of the tool loop's own has no source line, so the
           // activity log says where the loop is.
-          if (!skipCheckpoint && stop && stop.kind !== "step") {
+          if (!skipCheckpoint && stop?.loopStop !== undefined) {
             this.ui.state.log(`Stopped before ${stop.label}`);
           }
           await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
@@ -326,11 +330,20 @@ export class DebuggerDriver {
       }
       case "set": {
         // A resume applies overrides to the root's last frame
-        // (applyLocalOverrides in resumeSetup.ts). Addressing the frame of
-        // a tool call is milestone four's work.
+        // (applyLocalOverrides in resumeSetup.ts), so a stop on a branch
+        // stack, inside a tool call, a fork, or a parallel block, cannot
+        // take one yet.
         const stop = stopOf(interrupt);
         if (stop && stop.branchPath.length > 0) {
-          this.ui.state.log("set inside a tool call is not supported yet");
+          this.ui.state.log(
+            "set inside a tool call, a fork, or a parallel block is not supported yet",
+          );
+          return { data: interrupt };
+        }
+        // The frame shown at one of the loop's own stops is the caller's,
+        // but the override would land on the loop's frame, the last one.
+        if (stop?.loopStop !== undefined) {
+          this.ui.state.log("set before a model request or a tool call is not supported yet");
           return { data: interrupt };
         }
         this.ui.state.setOverride(command.varName, command.value);
@@ -542,7 +555,7 @@ export class DebuggerDriver {
   }
 
   private lookupVariable(varName: string, interrupt: Interrupt): unknown {
-    const checkpoint = interrupt.checkpoint;
+    const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
     if (!checkpoint) return undefined;
 
     // Check locals and args in the frame the program is stopped in
@@ -552,9 +565,10 @@ export class DebuggerDriver {
       if (varName in frame.args) return frame.args[varName];
     }
 
-    // Check globals
-    const moduleId = stopOf(interrupt)?.moduleId ?? checkpoint.moduleId;
-    const moduleGlobals = checkpoint.globals.store[moduleId];
+    // Check the globals the stopped stack sees: a fork or parallel
+    // branch has its own copy.
+    const location = stopOf(interrupt) ?? checkpoint;
+    const moduleGlobals = checkpoint.globalsAt(location.branchPath).store[location.moduleId];
     if (moduleGlobals && varName in moduleGlobals) {
       return moduleGlobals[varName];
     }
@@ -578,11 +592,11 @@ function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
 }
 
-/** The frame the program is stopped in: the one the stop's branch path
- *  leads to, else the checkpoint's own. */
+/** The frame the program is stopped in: the one the stop's location
+ *  leads to, else the checkpoint's own. At one of the tool loop's own
+ *  stops that is the frame that called `llm()`. */
 function stoppedFrame(interrupt: Interrupt): StateJSON | undefined {
   const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
   if (!checkpoint) return undefined;
-  const stop = stopOf(interrupt);
-  return stop ? checkpoint.frameAt(stop.branchPath) : checkpoint.getCurrentFrame();
+  return checkpoint.shownFrame(stopOf(interrupt) ?? checkpoint);
 }

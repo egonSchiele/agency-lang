@@ -8,7 +8,7 @@ __setDebugger(dbg);
 
 const result = await main();
 const isDebuggerInterrupt = hasInterrupts(result.data) && result.data[0].debugger === true;
-const label = result.data[0].data;
+const label = result.data[0].data.label;
 const resumed = await respondToInterrupts(result.data, [approve()]);
 
 writeFileSync(

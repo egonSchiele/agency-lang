@@ -45,9 +45,10 @@ import {
   BranchRunner,
   PromptBailout,
   PromptRunner,
-  toolStopLabel,
-  type LoopStop,
+  llmCallKey,
+  type WhichLlmCall,
 } from "./promptRunner.js";
+import { withCallDepth } from "./callDepth.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
@@ -462,9 +463,8 @@ type RunPromptArgs = {
   checkpointInfo?: SourceLocationOpts;
 };
 
-// eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
 export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
-  const { prompt, responseFormat, maxToolCallRounds = 10, checkpointInfo } = args;
+  const { prompt } = args;
 
   // bail early on empty strings
   // they cause local models to spiral
@@ -488,6 +488,18 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   ) {
     return "";
   }
+
+  // The loop is one call deeper than the statement that called `llm()`,
+  // and a tool it calls is one deeper again. The debugger's stepping
+  // reads this depth: `next` at the statement runs the whole call, `next`
+  // at one of the loop's own stops runs over a tool's body to the loop's
+  // next stop, and `step out` from inside a tool lands on that stop.
+  return withCallDepth(run, "llm", (loopRun) => runToolLoop(loopRun, args));
+}
+
+// eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
+async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
+  const { prompt, responseFormat, maxToolCallRounds = 10, checkpointInfo } = args;
 
   // A model call needs the `llm` capability, and calls no host function
   // that would check it, so it is checked here. A host built without it
@@ -740,6 +752,18 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     snapshotMessages: snapshotThread,
   });
 
+  // Any checkpoint built while this call runs, from any stack, carries
+  // the thread as it is at that moment. The debugger's rolling checkpoint
+  // inside a tool is one: without this, a sibling tool that had already
+  // finished would be marked done in the checkpoint but its reply missing
+  // from the thread, and a rewind would send the model a call with no
+  // reply. Registered for the life of the call; the `finally` below
+  // removes it.
+  const refreshMessages = () => {
+    self.messagesJSON = snapshotThread();
+  };
+  ctx.beforeCheckpoint.push(refreshMessages);
+
   // One llmCall span covers the WHOLE `llm()` call — every tool-loop
   // round plus the tool executions they trigger. So all rounds'
   // promptCompletion events and all toolExecution spans nest under a
@@ -806,10 +830,10 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // lives in its own step; injected recall facts are removed in a
   // finally).
   const requestStepWithTripRetry = async (
-    key: string,
+    which: WhichLlmCall,
     body: () => Promise<void>,
-    stop: LoopStop,
   ): Promise<void> => {
+    const key = llmCallKey(which);
     let gateAttempt = 0;
     while (true) {
       if (stateStack.firstRaisableTrip() !== null) {
@@ -826,7 +850,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         continue; // re-probe: each budget is owed its own question
       }
       try {
-        await pr.step(key, body, stop);
+        await pr.llmCall(which, body);
         return;
       } catch (e) {
         if (!(e instanceof GuardTripRetry)) throw e;
@@ -848,67 +872,61 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       messages.push(smoltalk.userMessage(prompt), callLabel);
       self.messagesJSON = snapshotThread();
     });
-    // Initial LLM call wrapped in pr.step so it's idempotent on resume
-    // (re-entries after a later tool-batch bailout skip this step).
-    // The debugger's `round 1` stop comes before the request, so a person
-    // can change the thread before the model sees it.
-    await requestStepWithTripRetry(
-      "initialLlmCall",
-      async () => {
-        let injectedFactsContent: string | null = null;
-        const recallManager = ctx.getActiveMemoryManager(run.stack);
-        if (memoryOption && recallManager) {
-          try {
-            const facts = await recallManager.recallForInjection(run, promptText(prompt));
-            if (facts) {
-              injectedFactsContent = `Relevant context from memory:\n${facts}`;
-              messages.push(smoltalk.systemMessage(injectedFactsContent));
-            }
-          } catch (err) {
-            // Guard trips are signals, not best-effort failures — let
-            // them bubble to the surrounding `withCostGuard` scope.
-            if (isGuardExceededError(err)) throw err;
-            ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
-          }
-        }
-        // The llmCall span is already open (before the loop). On error,
-        // the outer `finally` closes it. The injected-facts removal is a
-        // finally so a GuardTripRetry unwind cannot leave the recall
-        // message in the thread and duplicate it on re-issue.
+    // The initial request is a step so it is idempotent on resume
+    // (re-entries after a later tool-batch bailout skip it).
+    await requestStepWithTripRetry({ first: true }, async () => {
+      let injectedFactsContent: string | null = null;
+      const recallManager = ctx.getActiveMemoryManager(run.stack);
+      if (memoryOption && recallManager) {
         try {
-          const result = await _runPrompt({
-            run,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = result.messages;
-          toolCalls = result.toolCalls;
-          lastStopReason = result.stopReason;
-          lastUsageKind = result.usageKind;
-        } finally {
-          if (injectedFactsContent !== null) {
-            const injectedIndex = messages
-              .getMessages()
-              .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
-            if (injectedIndex !== -1) {
-              // removeAt, not setMessages: this edits ONE message out of
-              // the thread, so it must not reset the labels of all the
-              // others.
-              messages.removeAt(injectedIndex);
-            }
+          const facts = await recallManager.recallForInjection(run, promptText(prompt));
+          if (facts) {
+            injectedFactsContent = `Relevant context from memory:\n${facts}`;
+            messages.push(smoltalk.systemMessage(injectedFactsContent));
+          }
+        } catch (err) {
+          // Guard trips are signals, not best-effort failures — let
+          // them bubble to the surrounding `withCostGuard` scope.
+          if (isGuardExceededError(err)) throw err;
+          ctxLogger(ctx).warn(`[memory] recall injection failed: ${(err as Error).message}`);
+        }
+      }
+      // The llmCall span is already open (before the loop). On error,
+      // the outer `finally` closes it. The injected-facts removal is a
+      // finally so a GuardTripRetry unwind cannot leave the recall
+      // message in the thread and duplicate it on re-issue.
+      try {
+        const result = await _runPrompt({
+          run,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+          retryPolicy,
+          callLabel,
+        });
+        messages = result.messages;
+        toolCalls = result.toolCalls;
+        lastStopReason = result.stopReason;
+        lastUsageKind = result.usageKind;
+      } finally {
+        if (injectedFactsContent !== null) {
+          const injectedIndex = messages
+            .getMessages()
+            .findLastIndex((m) => m.role === "system" && m.content === injectedFactsContent);
+          if (injectedIndex !== -1) {
+            // removeAt, not setMessages: this edits ONE message out of
+            // the thread, so it must not reset the labels of all the
+            // others.
+            messages.removeAt(injectedIndex);
           }
         }
-        self.messagesJSON = snapshotThread();
-        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-      },
-      { kind: "round", label: "round 1" },
-    );
+      }
+      self.messagesJSON = snapshotThread();
+      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+    });
 
     // Inner helper for the per-branch tool invocation. Extracted from
     // the pr.parallel branchFn so that arrow stays within the
@@ -1351,6 +1369,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // dangling tool_use, which real providers reject.)
         for (const { toolCall, callIndex, intrinsic } of intrinsicCalls) {
           const callSlug = `${callIndex}_${toolCall.id}`;
+          await pr.beforeToolCall(`round.${round}.tool.${callSlug}`, toolCall);
           await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, () =>
             runIntrinsicCall({
               run,
@@ -1415,6 +1434,16 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         const roundHandoffs: string[] = self.runnerState.runnableHandoffs[round];
         const dispatchItems = dispatchCalls.map((toolCall, index) => ({ toolCall, index }));
         type DispatchItem = (typeof dispatchItems)[number];
+        const gateCallFor = (item: DispatchItem) => {
+          const { handler, markupArg, callKey } = gateInputFor(item.toolCall);
+          return {
+            toolCall: item.toolCall,
+            handler,
+            markupArg,
+            callKey,
+            runnableHandoffs: roundHandoffs,
+          };
+        };
         // MUST match the branchKey the body uses below
         // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
         // operate on the same branch. Keyed by the tool call's POSITION in
@@ -1429,6 +1458,27 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           `tool_${item.index}_${item.toolCall.id}`;
         const invocationKeyFor = (item: DispatchItem): string =>
           `round.${round}.tool.${item.index}_${item.toolCall.id}`;
+
+        // The gate verdicts of the round, decided in order before any call
+        // starts, from the state as it is now. They decide from MUTABLE
+        // frame state (removedTools, rejectedCalls, repeatStreak), which
+        // sibling branches change as they complete, so they are made once
+        // inside a step, persisted in runnerState, and read back on every
+        // later pass. See docs/dev/agents/promptRunner.md. The debugger's
+        // stops before the calls read them too, so a refused call gets no
+        // stop. A branch that finds no verdict (a checkpoint from before
+        // this step) decides its own in `dispatchToolCall`.
+        self.runnerState.gateVerdicts ??= {};
+        await pr.step(`round.${round}.gateVerdicts`, async () => {
+          for (const item of dispatchItems) {
+            self.runnerState.gateVerdicts[invocationKeyFor(item)] ??= computeGateVerdict(
+              gateState(),
+              gateCallFor(item),
+            );
+          }
+        });
+        const proceeds = (item: DispatchItem): boolean =>
+          self.runnerState.gateVerdicts[invocationKeyFor(item)] === "proceed";
 
         const dispatchToolCall = async (
           branchRun: Run,
@@ -1468,16 +1518,10 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           // stale verdict.
           const invocationKey = invocationKeyFor({ toolCall, index });
 
-          const { handler, namedArgs, markupArg, callKey } = gateInputFor(toolCall);
-          const gateCall = {
-            toolCall,
-            handler,
-            markupArg,
-            callKey,
-            runnableHandoffs: roundHandoffs,
-          };
+          const { handler, namedArgs, callKey } = gateInputFor(toolCall);
+          const gateCall = gateCallFor({ toolCall, index });
           await b.step(`${invocationKey}.gate`, async () => {
-            self.runnerState.gateVerdicts[invocationKey] = computeGateVerdict(
+            self.runnerState.gateVerdicts[invocationKey] ??= computeGateVerdict(
               gateState(),
               gateCall,
             );
@@ -1705,16 +1749,16 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // of a handoff body paused in the second batch.
         self.runnerState.finishedFirstBatches ??= [];
         if (!self.runnerState.finishedFirstBatches.includes(round)) {
-          // The debugger's stop before each tool call, one per call in
-          // order, on this frame rather than inside the call's branch:
-          // a stop inside each branch would raise one debug interrupt per
-          // call in a single batch, which the driver shows one of.
-          for (const item of dispatchItems) {
-            const { namedArgs } = gateInputFor(item.toolCall);
-            await pr.step(`${invocationKeyFor(item)}.before`, async () => undefined, {
-              kind: "tool",
-              label: toolStopLabel(item.toolCall.name, namedArgs),
-            });
+          // The debugger's stop before each call that will run in this
+          // batch, one per call in order, on this frame rather than inside
+          // the call's branch: a stop inside each branch would raise one
+          // debug interrupt per call in a single batch, which the driver
+          // shows one of. A handoff's body runs in the second batch, so
+          // its stop comes before that one.
+          const runsInFirstBatch = (item: DispatchItem): boolean =>
+            proceeds(item) && !handlerFor(item.toolCall)?.markers?.handoff;
+          for (const item of dispatchItems.filter(runsInFirstBatch)) {
+            await pr.beforeToolCall(invocationKeyFor(item), item.toolCall);
           }
           const firstResult = await runDispatchBatch(
             `round.${round}.tools`,
@@ -1742,9 +1786,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // round before the body spends more, and the feedback reaches the
         // body. See docs/dev/language/handoff-functions.md.
         const handoffItem = dispatchItems.find(
-          (item) =>
-            handlerFor(item.toolCall)?.markers?.handoff &&
-            self.runnerState.gateVerdicts?.[invocationKeyFor(item)] === "proceed",
+          (item) => handlerFor(item.toolCall)?.markers?.handoff && proceeds(item),
         );
         if (handoffItem !== undefined) {
           await runHandoffGate(round, boundaryCtx(), (reason) =>
@@ -1753,6 +1795,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
               handoffItem.toolCall,
             ),
           );
+          await pr.beforeToolCall(invocationKeyFor(handoffItem), handoffItem.toolCall);
           const handoffResult = await runDispatchBatch(
             `round.${round}.handoff`,
             [handoffItem],
@@ -1810,32 +1853,28 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // span stays open across rounds (one span per llm() call), so we
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
-        await requestStepWithTripRetry(
-          `round.${round}.nextLlmCall`,
-          async () => {
-            const nextResult = await _runPrompt({
-              run,
-              messages,
-              tools: tools || [],
-              prompt,
-              responseFormat,
-              clientConfig,
-              stateStack,
-              retryPolicy,
-              callLabel,
-            });
-            messages = nextResult.messages;
-            toolCalls = nextResult.toolCalls;
-            lastStopReason = nextResult.stopReason;
-            lastUsageKind = nextResult.usageKind;
-            // Increment the round counter only after a successful LLM round,
-            // so resume after a tool-batch interrupt re-enters the SAME round.
-            self.toolCallRound = round + 1;
-            self.messagesJSON = snapshotThread();
-            self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-          },
-          { kind: "round", label: `round ${round + 2}` },
-        );
+        await requestStepWithTripRetry({ afterToolRound: round }, async () => {
+          const nextResult = await _runPrompt({
+            run,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+            retryPolicy,
+            callLabel,
+          });
+          messages = nextResult.messages;
+          toolCalls = nextResult.toolCalls;
+          lastStopReason = nextResult.stopReason;
+          lastUsageKind = nextResult.usageKind;
+          // Increment the round counter only after a successful LLM round,
+          // so resume after a tool-batch interrupt re-enters the SAME round.
+          self.toolCallRound = round + 1;
+          self.messagesJSON = snapshotThread();
+          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+        });
       }
       // Tool calls are drained. No schema means nothing to validate; the
       // plain-content return after the finally handles it — but first,
@@ -1918,33 +1957,29 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         `validation.${validationAttempt}.guardFeedback`,
         boundaryCtx(),
       );
-      await requestStepWithTripRetry(
-        `validation.${validationAttempt}.llmCall`,
-        async () => {
-          const nextResult = await _runPrompt({
-            run,
-            messages,
-            tools: tools || [],
-            prompt,
-            responseFormat,
-            clientConfig,
-            stateStack,
-            retryPolicy,
-            callLabel,
-          });
-          messages = nextResult.messages;
-          toolCalls = nextResult.toolCalls;
-          lastStopReason = nextResult.stopReason;
-          lastUsageKind = nextResult.usageKind;
-          // Advance ONLY here, like nextLlmCall advances toolCallRound: a
-          // bailout before this step completes leaves the counter unchanged,
-          // so resume re-enters the SAME attempt with the same step keys.
-          self.validationAttempt = validationAttempt + 1;
-          self.messagesJSON = snapshotThread();
-          self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
-        },
-        { kind: "round", label: `validation retry ${validationAttempt + 1}` },
-      );
+      await requestStepWithTripRetry({ validationRetry: validationAttempt }, async () => {
+        const nextResult = await _runPrompt({
+          run,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+          retryPolicy,
+          callLabel,
+        });
+        messages = nextResult.messages;
+        toolCalls = nextResult.toolCalls;
+        lastStopReason = nextResult.stopReason;
+        lastUsageKind = nextResult.usageKind;
+        // Advance ONLY here, like nextLlmCall advances toolCallRound: a
+        // bailout before this step completes leaves the counter unchanged,
+        // so resume re-enters the SAME attempt with the same step keys.
+        self.validationAttempt = validationAttempt + 1;
+        self.messagesJSON = snapshotThread();
+        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+      });
       // Loop: the retry response may itself contain tool calls; the inner
       // loop drains them before validation runs again.
     }
@@ -1969,6 +2004,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     // (the resumed run reopens the same span from its saved id).
     // endSpan is a no-op when no span is open.
     run.log.endSpan(llmSpanId);
+    ctx.beforeCheckpoint = ctx.beforeCheckpoint.filter((refresh) => refresh !== refreshMessages);
     if (shouldPop) stateStack.pop();
   }
 

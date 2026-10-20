@@ -242,8 +242,7 @@ function formatCheckpointListStyled(checkpoints: Checkpoint[], selectedIndex: nu
 /** A checkpoint taken at the tool loop's stop before a model request
  *  replays that request when rewound to, which costs a model call. */
 function rewindNote(cp: Checkpoint): string {
-  const beforeRequest = cp.scopeName === "runPrompt" && cp.stepPath.endsWith("LlmCall");
-  return beforeRequest ? " (replays a model request)" : "";
+  return cp.loopStop === "round" ? " (replays a model request)" : "";
 }
 
 function checkpointTag(cp: Checkpoint): string {

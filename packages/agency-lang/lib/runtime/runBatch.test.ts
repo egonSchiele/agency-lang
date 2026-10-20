@@ -51,6 +51,7 @@ function makeCtx(): StubCtx {
   const ctx: any = {
     // The frame's globals come from here; each branch clones them.
     globals: new GlobalStore(),
+    beforeCheckpoint: [],
     checkpoints: {
       create: (stack: any, _ctx: any, opts: any) => {
         const id = nextCpId++;

@@ -4,7 +4,7 @@ import { callHook, hasCallbackConsumer } from "./hooks.js";
 import { nativeTypeReplacer } from "./revivers/index.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
-import type { SourceLocation } from "./state/sourceLocation.js";
+import type { LoopStopKind, SourceLocation } from "./state/sourceLocation.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { Run } from "./asyncContext.js";
 
@@ -12,21 +12,22 @@ import type { Run } from "./asyncContext.js";
  *  The interrupt's checkpoint cannot say: once a stop inside a tool call
  *  joins its batch, that checkpoint is the shared one stamped from the
  *  `runPrompt` frame, whose location is the loop's. The driver reads the
- *  source line from this record and finds the stopped frame in the
- *  checkpoint by `branchPath` (`Checkpoint.frameAt`). */
-/** What kind of place a debug stop is at: a statement in Agency code, or
- *  one of the tool loop's own stops, before a model request (`round`) or
- *  before a tool call (`tool`). The loop's stops have no source line. */
-export type DebugStopKind = "step" | "round" | "tool";
-
+ *  source line from this record, finds the stopped frame in the
+ *  checkpoint by `branchPath` (`Checkpoint.frameAt`), and sets its
+ *  stepping depth from `depth` when it shows the stop. */
 export type DebugStopData = {
   moduleId: string;
   scopeName: string;
   stepPath: string;
   /** Branch keys from the root down to the stack the step ran on. */
   branchPath: string[];
+  /** How many Agency calls deep the step is: the node's statements are
+   *  at 0, a called function's or a tool's at one more than its caller. */
+  depth: number;
   label: string | null;
-  kind: DebugStopKind;
+  /** Set when the stop is one of the tool loop's own, before a model
+   *  request or a tool call, rather than at a statement. */
+  loopStop?: LoopStopKind;
 };
 
 export function isDebugStop(data: unknown): data is DebugStopData {
@@ -43,8 +44,8 @@ export async function debugStep(
     label: string | null;
     nodeContext: boolean;
     isUserAdded: boolean;
-    /** Defaults to `"step"`, a statement in Agency code. */
-    kind?: DebugStopKind;
+    /** Set for one of the tool loop's own stops. */
+    loopStop?: LoopStopKind;
   },
   stack: StateStack,
 ): Promise<Interrupt[] | undefined> {
@@ -56,12 +57,15 @@ export async function debugStep(
   }
 
   const onRootStack = stack === ctx.stateStack;
-  const location = {
+  const location: Omit<SourceLocation, "nodeId"> = {
     moduleId: info.moduleId,
     scopeName: info.scopeName,
     stepPath: info.stepPath,
-    branchPath: stack.branchPath,
+    branchPath: stack.branchPath(),
   };
+  if (info.loopStop !== undefined) {
+    location.loopStop = info.loopStop;
+  }
 
   // A rewind marks the checkpoint at its destination as already recorded.
   // Consume that marker here so later steps continue writing trace checkpoints.
@@ -93,13 +97,15 @@ export async function debugStep(
     return undefined;
   }
 
-  // The depth of this step, read from the stack: the node's statements are
-  // at 0, a called function's at 1, a tool's at 2 (under the runPrompt
-  // frame). When stepping, the debugger stops at or above the depth the
-  // last command targeted: `next` targets the depth it stopped at, `step
-  // out` one less, `step in` one more. When running, only a `debugger()`
-  // statement stops it.
-  const depth = stack.stepDepth();
+  // The depth of this step is how many Agency calls deep the run is
+  // (`withCallDepth` counts every call, a tool call included): the node's
+  // statements are at 0, a called function's at 1, a tool's at one more
+  // than the function that called `llm()`. A fork or parallel branch is
+  // at its block's depth, like a loop body. When stepping, the debugger
+  // stops at or above the depth the last command targeted: `next` targets
+  // the depth it stopped at, `step out` one less, `step in` one more.
+  // When running, only a `debugger()` statement stops it.
+  const depth = run.callDepth?.depth ?? 0;
   const shouldPause = dbg.isStepping() ? dbg.shouldStopAt(depth) : info.isUserAdded;
 
   // The rolling checkpoint is stamped from the root even inside a branch:
@@ -118,8 +124,14 @@ export async function debugStep(
   // tool loop stores it on the branch, and the shared checkpoint stamped
   // at the join carries the branch's frames in its slot. On resume the
   // `__dbg_` flag in the stopped frame makes the hook skip, so the stop
-  // is not taken twice.
-  const checkpointId = ctx.checkpoints.create(stack, ctx, location);
+  // is not taken twice. Its location carries no branch path: the stack it
+  // holds is the branch's own, so its frame is that stack's last one.
+  const checkpointId = ctx.checkpoints.create(stack, ctx, {
+    moduleId: info.moduleId,
+    scopeName: info.scopeName,
+    stepPath: info.stepPath,
+    loopStop: info.loopStop,
+  });
   const checkpoint = ctx.checkpoints.get(checkpointId);
 
   if (!checkpoint) {
@@ -130,8 +142,14 @@ export async function debugStep(
     throw new Error(`Failed to create debug checkpoint: ${JSON.stringify(debugData)}`);
   }
 
-  dbg.stoppedAt(depth);
-  const stop: DebugStopData = { ...location, label: info.label, kind: info.kind ?? "step" };
+  // The depth is not recorded on `dbg` here: several branches can stop in
+  // one round, and the driver sets the depth from the stop it shows.
+  const stop: DebugStopData = {
+    ...location,
+    branchPath: location.branchPath ?? [],
+    depth,
+    label: info.label,
+  };
   const debugInterrupt = createDebugInterrupt(stop, checkpointId, checkpoint, ctx.getRunId());
 
   return [debugInterrupt];

@@ -5,6 +5,7 @@ import {
   type ThreadMessages,
 } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
+import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -93,25 +94,15 @@ export class UIState {
     }
     this.checkpoint = cp;
     // One of the tool loop's own stops, before a model request or a tool
-    // call, has no source line: the `llm()` statement stays highlighted
-    // and the locals are those of the frame that called it, the one
-    // under the runPrompt frame. A rolling checkpoint taken at such a
-    // stop names the runPrompt scope.
-    const loopStop = stop ? stop.kind !== "step" : cp.scopeName === "runPrompt";
-    if (loopStop) {
-      const caller = cp.stack.stack?.at(-2);
-      if (!caller) {
-        this.log("No calling frame available in checkpoint");
-        return;
-      }
-      this.args = [];
-      this.locals = [];
-      this.setWithOverrides(caller.args, this.args);
-      this.setWithOverrides(caller.locals, this.locals);
-      return;
-    }
-    this.location = stop ?? cp.location;
-    const frame = cp.frameAt(this.location.branchPath ?? []);
+    // call, is located under the `llm()` statement, so the source pane
+    // shows that statement, and its frame is the one that called it.
+    const location = stop ?? cp.location;
+    this.location =
+      location.loopStop === undefined
+        ? location
+        : { ...location, stepPath: statementStepPath(location.stepPath) };
+    const branchPath = this.location.branchPath ?? [];
+    const frame = cp.shownFrame(location);
     if (!frame) {
       this.log("No current frame available in checkpoint");
       return;
@@ -121,7 +112,7 @@ export class UIState {
 
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globals.store?.[this.location.moduleId] ?? null;
+    const globalsForModule = cp.globalsAt(branchPath).store?.[this.location.moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }
@@ -212,6 +203,11 @@ export class UIState {
 
   getModuleId() {
     return this.location?.moduleId || "unknown module";
+  }
+
+  /** Where the program is stopped, as the panes show it. */
+  getLocation(): SourceLocationOpts | undefined {
+    return this.location;
   }
 
   getCurrentLine() {

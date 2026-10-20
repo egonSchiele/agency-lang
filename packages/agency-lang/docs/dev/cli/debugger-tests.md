@@ -314,7 +314,7 @@ const session = await DebuggerTestSession.create({ mod, checkpoints });
 
 ### Scripting the model
 
-A fixture with an `llm()` call needs replies. `withLLMMocks` in `testHelpers.ts` runs a test body with every model call answered from a list, in order, by the runtime's deterministic client (`lib/runtime/deterministicClient.ts`). The runtime builds that client once, when the module's context is created on import, and every execution context shares it, so the variable must be set before `freshImport` and the queue survives every resume and rewind the session makes.
+A fixture with an `llm()` call needs replies. `withLLMMocks` in `testHelpers.ts` runs a test body with every model call answered from a list, in order, by the deterministic client (`lib/runtime/deterministicClient.ts`). Import the module inside the body: the client is built when the module is imported, and one queue then serves the whole session, resumes and rewinds included.
 
 ```typescript
 const mocks: LLMMock[] = [

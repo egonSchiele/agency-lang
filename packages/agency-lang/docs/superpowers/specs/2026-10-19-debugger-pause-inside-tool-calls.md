@@ -242,14 +242,14 @@ snapshots the thread:
   sequential, and they give milestone four a natural place to edit a call
   before it runs.
 
-Each site calls `debugStep` with scope name `runPrompt`, module id `""`,
-and step path `<runPrompt's base>/<step key>`, and returns the interrupts
-it gets back so `PromptRunner.step` surfaces them. Like the runner's hook it
+Each site calls `debugStep` in the `llm()` statement's module and scope,
+at step path `<the statement's path>/<step key>`, and returns the interrupts
+it gets back so the runner surfaces them. Like the runner's hook it
 keeps a flag in the `runPrompt` frame's locals (`__dbg_<key>`) so a resume
-re-entering the same step does not stop twice. `DebugStopData` gains a
-`kind: "step" | "round" | "tool"` field at that point, and the UI checks
-the kind before asking the source map for a line, since an empty module id
-has no entry.
+re-entering the same step does not stop twice. Locations gain a
+`loopStop: "round" | "tool"` marker at that point, carried by the stop
+record and the checkpoint, and the UI reads it to show the statement's
+line and the caller's frame.
 
 These stops have no source line. The source pane keeps the `llm()`
 statement highlighted and the activity log says where the loop is.

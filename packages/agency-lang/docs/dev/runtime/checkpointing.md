@@ -48,6 +48,8 @@ The three source-location fields identify where in the program the checkpoint wa
 
 `branchPath` says which stack the step ran on. It is empty for a step on the root stack and is then left out of the JSON, so a checkpoint from before the field keeps its signature. For a step inside a tool call it holds the tool's branch key, `["tool_0_call_abc"]`, and for a fork inside that tool one more key. `getCurrentFrame()` follows it: the last frame of the root, then the last frame of the named branch's stack, and so on, which is the frame the step ran in. The debugger reads a stop's locals through it and strips the stop's `__dbg_` flags from that frame only.
 
+Before `CheckpointStore.create` copies the stack it runs `ctx.beforeCheckpoint`, a list of refreshers. An `llm()` call in progress registers one that copies its live thread into its frame, so a checkpoint built while its tools run carries the replies of the tools that have already finished.
+
 ### CheckpointStore
 
 `CheckpointStore` (`lib/runtime/state/checkpointStore.ts`) manages all checkpoints for an execution context.

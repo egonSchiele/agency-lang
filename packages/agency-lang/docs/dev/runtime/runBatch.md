@@ -161,9 +161,13 @@ or `shareGlobals: true` only when the user writes `shared: true`.
 
 Per-branch state survives interrupt resume via
 `BranchState.globalsJSON` and `BranchState.activeStack`. The
-capture only happens when the body settles as `Interrupt[]`
+capture happens when the body settles as `Interrupt[]`
 (`hasInterrupts(value)`); successful returns are discarded at join
-so capturing then would be wasted work. Restoration on re-entry
+so capturing then would be wasted work. An isolated branch also
+registers a refresher in `ctx.beforeCheckpoint` for its lifetime,
+so a checkpoint built while it runs (a rolling checkpoint of a step
+inside it, or a sibling's interrupt) carries its current globals
+rather than the values it started with. Restoration on re-entry
 uses `GlobalStore.fromJSON` and `ThreadStore.restoreBranchView`.
 
 Implementation lives in `runInBranchAlsFrame` (top of `runBatch.ts`):

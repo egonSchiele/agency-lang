@@ -8,7 +8,7 @@ import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
-import type { SourceLocation } from "./sourceLocation.js";
+import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
 import type { StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -34,6 +34,15 @@ export function sameLocation(a: SourceLocationOpts, b: SourceLocationOpts): bool
     aPath.every((key, index) => key === bPath[index])
   );
 }
+
+/** Whether `a`'s step ran on the same stack as `b`'s or on a stack above
+ *  it: `a`'s branch path is a prefix of `b`'s. */
+function onStackOrAbove(a: SourceLocationOpts, b: SourceLocationOpts): boolean {
+  const aPath = a.branchPath ?? [];
+  const bPath = b.branchPath ?? [];
+  return aPath.length <= bPath.length && aPath.every((key, index) => key === bPath[index]);
+}
+
 /** Reset the global checkpoint ID counter. For use in tests only. */
 export function resetGlobalCheckpointCounter(): void {
   globalCheckpointCounter = 0;
@@ -55,6 +64,7 @@ export type CheckpointArgs = {
   scopeName?: string;
   stepPath?: string;
   branchPath?: string[];
+  loopStop?: LoopStopKind;
   label?: string | null;
   pinned?: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -74,6 +84,9 @@ export type CheckpointJSON = {
   /** Present only for a checkpoint taken on a branch stack, so a
    *  checkpoint from before the field keeps its signature. */
   branchPath?: string[];
+  /** Present only for a checkpoint taken at one of the tool loop's own
+   *  stops. */
+  loopStop?: LoopStopKind;
   label: string | null;
   pinned: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -93,6 +106,9 @@ export class Checkpoint implements SourceLocation {
   /** The branch keys from the root stack down to the stack the step ran
    *  on, empty for the root. `getCurrentFrame` follows it. */
   public branchPath: string[];
+  /** Set for a checkpoint taken at one of the tool loop's own stops,
+   *  before a model request or a tool call. See `SourceLocation`. */
+  public loopStop?: LoopStopKind;
   public label: string | null;
   public pinned: boolean;
   /** The fingerprint (a hash of the generated code) of each module with a
@@ -120,6 +136,7 @@ export class Checkpoint implements SourceLocation {
     this.scopeName = args.scopeName ?? "";
     this.stepPath = args.stepPath ?? "";
     this.branchPath = args.branchPath ?? [];
+    this.loopStop = args.loopStop;
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
     this.moduleFingerprints = args.moduleFingerprints;
@@ -144,6 +161,9 @@ export class Checkpoint implements SourceLocation {
     if (this.branchPath.length > 0) {
       location.branchPath = this.branchPath;
     }
+    if (this.loopStop !== undefined) {
+      location.loopStop = this.loopStop;
+    }
     return location;
   }
 
@@ -157,12 +177,24 @@ export class Checkpoint implements SourceLocation {
 
   /** The last frame of the stack `branchPath` leads to, from the root. */
   frameAt(branchPath: string[]): StateJSON | undefined {
-    let frame = this.rootFrame();
+    return this.stackAt(branchPath)?.at(-1);
+  }
+
+  /** The frames of the stack `branchPath` leads to, from the root. */
+  stackAt(branchPath: string[]): StateJSON[] | undefined {
+    let frames: StateJSON[] | undefined = this.stack.stack;
     for (const key of branchPath) {
-      const branch = frame?.branches?.[key];
-      frame = branch?.stack.stack.at(-1);
+      frames = frames?.at(-1)?.branches?.[key]?.stack.stack;
     }
-    return frame;
+    return frames;
+  }
+
+  /** The frame a person inspects at a location: the frame the step ran
+   *  in, or, at one of the tool loop's own stops, the frame that called
+   *  `llm()`, the one under the loop's frame. */
+  shownFrame(location: { branchPath?: string[]; loopStop?: LoopStopKind }): StateJSON | undefined {
+    const frames = this.stackAt(location.branchPath ?? []);
+    return frames?.at(location.loopStop === undefined ? -1 : -2);
   }
 
   /** The last frame of the root stack. */
@@ -227,6 +259,23 @@ export class Checkpoint implements SourceLocation {
     return this.globals.store?.[this.moduleId] ?? null;
   }
 
+  /** The globals the stack `branchPath` leads to sees. A `fork` or
+   *  `parallel` branch runs on its own copy of the globals (`runBatch`
+   *  saves it as the branch's `globalsJSON` before every checkpoint), so
+   *  a module-level variable it changed has the branch's value here and
+   *  the root's in `globals`. A branch that shares the globals, a tool
+   *  call, has no copy and sees the nearest copy above it, or the root's. */
+  globalsAt(branchPath: string[]): GlobalStoreJSON {
+    let globals = this.globals;
+    let frame = this.rootFrame();
+    for (const key of branchPath) {
+      const branch = frame?.branches?.[key];
+      if (branch?.globalsJSON) globals = branch.globalsJSON;
+      frame = branch?.stack.stack.at(-1);
+    }
+    return globals;
+  }
+
   getFilename(): string {
     return this.moduleId.split("/").pop() || this.moduleId;
   }
@@ -253,6 +302,9 @@ export class Checkpoint implements SourceLocation {
     };
     if (this.branchPath.length > 0) {
       json.branchPath = this.branchPath;
+    }
+    if (this.loopStop !== undefined) {
+      json.loopStop = this.loopStop;
     }
     if (this.moduleFingerprints !== undefined) {
       json.moduleFingerprints = this.moduleFingerprints;
@@ -294,6 +346,12 @@ export class Checkpoint implements SourceLocation {
       throw new CheckpointError(
         "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
+    }
+    // Live state that is only written into the stack on demand: a tool
+    // loop's thread, a branch's own globals. Every checkpoint, from any
+    // stack and for any reason, is taken after these run.
+    for (const refresh of ctx.beforeCheckpoint) {
+      refresh();
     }
     const stackJson = stateStack.toJSON();
     // Optional only for contexts built by hand in tests; a real context always
@@ -401,16 +459,20 @@ export class CheckpointStore {
     return sorted[currentIdx - 1];
   }
 
-  /** The newest unpinned checkpoint older than `beforeId` that is not at
-   *  `location`, the step the program is stopped at. `step back` rewinds
-   *  to it. The stopped location is passed on its own because the
-   *  checkpoint on a stop inside a tool call is the shared one stamped at
-   *  the join, whose own location is the loop's. */
+  /** The newest unpinned checkpoint older than `beforeId` whose step ran
+   *  on the stack the program is stopped on, or on a stack above it, and
+   *  not at `location`, the step it is stopped at. `step back` rewinds to
+   *  it. A sibling branch's steps are passed over: stopped inside one tool
+   *  of a round, `step back` must not land in the other tool. The stopped
+   *  location is passed on its own because the checkpoint on a stop
+   *  inside a tool call is the shared one stamped at the join, whose own
+   *  location is the loop's. */
   findBefore(beforeId: number, location: SourceLocationOpts): Checkpoint | null {
     const sorted = this.getSorted(); // sorted by id ascending
     sorted.reverse();
     for (const cp of sorted) {
-      if (cp.id < beforeId && !sameLocation(cp, location) && !cp.pinned) {
+      if (cp.id >= beforeId || cp.pinned) continue;
+      if (onStackOrAbove(cp, location) && !sameLocation(cp, location)) {
         return cp;
       }
     }

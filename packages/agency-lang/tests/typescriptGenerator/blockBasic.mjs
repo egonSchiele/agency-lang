@@ -540,4 +540,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"blockBasic.agency:twice":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}},"blockBasic.agency:main":{"1":{"line":7,"col":2},"2":{"line":10,"col":2}},"blockBasic.agency:__block_0":{"1.0":{"line":8,"col":4}}};
+export const __sourceMap = {"blockBasic.agency:twice":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}},"blockBasic.agency:main":{"1":{"line":7,"col":2},"2":{"line":10,"col":2}},"blockBasic.agency:__block_0":{"0":{"line":8,"col":4}}};

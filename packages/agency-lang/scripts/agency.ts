@@ -479,7 +479,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
    *  that record a run (a trace, and the run directory) and `-i`. `debug`
    *  takes neither: its own `--trace` loads a recording, and it prompts for
    *  every interrupt no handler answers, so `-i` would mean nothing there.
-   *  The order is the one `run --help` has always shown. */
+   *  The trace flags come first, as before; `-i` and `--capture-workdir` last. */
   function addRunAndRecordingOptions(cmd: Command) {
     return addRunOptions(
       cmd

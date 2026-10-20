@@ -18,6 +18,28 @@ export type DebugRunFlags = CliFlags & {
   agencyOnly?: boolean;
 };
 
+/** How `agency debug` gets the program it runs. `--agency-only` is
+ *  decided first: a safety flag must not be dropped because `agency.json`
+ *  points at precompiled output. Naming `--dist-dir` as well contradicts
+ *  it, so that pair is refused. */
+export function compileChoice(flags: {
+  agencyOnly?: boolean;
+  distDir?: string;
+  configDistDir?: string;
+}):
+  | { mode: "agency-only" }
+  | { mode: "dist-dir"; distDir: string }
+  | { mode: "compile" }
+  | { refused: string } {
+  if (flags.agencyOnly && flags.distDir) {
+    return { refused: "--agency-only compiles the program itself; drop --dist-dir." };
+  }
+  if (flags.agencyOnly) return { mode: "agency-only" };
+  const distDir = flags.distDir ?? flags.configDistDir;
+  if (distDir) return { mode: "dist-dir", distDir };
+  return { mode: "compile" };
+}
+
 /** The invocation for a debugged run: the root policy the flags describe
  *  and the budget, in the config's own shape (dollars, and a duration
  *  string checked here so a bad one is refused before anything runs).

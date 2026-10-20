@@ -1,5 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { invocationFromRunFlags } from "./debugFlags.js";
+import { compileChoice, invocationFromRunFlags } from "./debugFlags.js";
+
+describe("compileChoice", () => {
+  it("compiles under --agency-only even when agency.json sets distDir", () => {
+    expect(compileChoice({ agencyOnly: true, configDistDir: "dist" })).toEqual({
+      mode: "agency-only",
+    });
+  });
+
+  it("refuses --agency-only with --dist-dir", () => {
+    expect(compileChoice({ agencyOnly: true, distDir: "dist" })).toEqual({
+      refused: "--agency-only compiles the program itself; drop --dist-dir.",
+    });
+  });
+
+  it("imports from the flag, else the config, else compiles", () => {
+    expect(compileChoice({ distDir: "a", configDistDir: "b" })).toEqual({
+      mode: "dist-dir",
+      distDir: "a",
+    });
+    expect(compileChoice({ configDistDir: "b" })).toEqual({ mode: "dist-dir", distDir: "b" });
+    expect(compileChoice({})).toEqual({ mode: "compile" });
+  });
+});
 
 describe("invocationFromRunFlags", () => {
   it("is empty when no run flag was given", () => {

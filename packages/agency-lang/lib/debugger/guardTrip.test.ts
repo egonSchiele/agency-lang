@@ -9,7 +9,7 @@ const agencyFile = path.join(fixtureDir, "guard-trip.agency");
 const compiledFile = path.join(fixtureDir, "guard-trip.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agencyFile, compiledFile, { ts: true });
+  compile({}, agencyFile, compiledFile, { ts: true });
 });
 
 const mocks: LLMMock[] = [{ return: "one" }, { return: "two" }];

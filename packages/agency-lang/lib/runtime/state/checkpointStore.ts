@@ -10,6 +10,7 @@ import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
 import { isIntrinsicToolName } from "../intrinsicTools.js";
+import { isBlockName } from "../blockNames.js";
 import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -163,6 +164,16 @@ function toolCallName(frame: StateJSON | undefined, key: string): string | undef
   return undefined;
 }
 
+/** The name a pane shows for a frame: the tool loop's own frame reads
+ *  `llm()`, the compiler-named frame of a fork or parallel arm or a block
+ *  argument reads `block`, and a frame with no scope name `(unknown)`. */
+export function frameName(scopeName: string | null | undefined): string {
+  if (scopeName === undefined || scopeName === null) return "(unknown)";
+  if (scopeName === "runPrompt") return "llm()";
+  if (isBlockName(scopeName)) return "block";
+  return scopeName;
+}
+
 export class Checkpoint implements SourceLocation {
   public id: number;
   public stack: StateStackJSON;
@@ -257,6 +268,43 @@ export class Checkpoint implements SourceLocation {
     return frames;
   }
 
+  /** The frames from the root down the branch path, the deepest last:
+   *  every frame of every stack the path passes through. */
+  framesAlong(branchPath: string[]): StateJSON[] {
+    const frames: StateJSON[] = [];
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
+    }
+    return frames;
+  }
+
+  /** The path to the branch paused on the interrupt `interruptId`, or
+   *  undefined when no branch is. A user interrupt raised inside a tool,
+   *  a fork, or a parallel arm has no stop record to say which branch it
+   *  came from, but the branch's own state records the interrupt's id.
+   *  An interrupt bubbles up unchanged, so every enclosing branch records
+   *  the same id (`setInterruptOnBranch` in `prompt.ts` and `runBatch.ts`);
+   *  the deepest match is the branch that raised it. Only the last frame
+   *  of a stack holds branches, as `stackAt` reads. */
+  branchPathOf(interruptId: string): string[] | undefined {
+    const search = (frames: StateJSON[], path: string[]): string[] | undefined => {
+      const branches = frames.at(-1)?.branches ?? {};
+      for (const key of Object.keys(branches)) {
+        const branch = branches[key];
+        const here = [...path, key];
+        const below = search(branch.stack.stack, here);
+        if (below) {
+          return below;
+        }
+        if (branch.interruptId === interruptId) {
+          return here;
+        }
+      }
+      return undefined;
+    };
+    return search(this.stack.stack, []);
+  }
+
   /** The frame a person inspects at a location: the frame the step ran
    *  in, or, at one of the tool loop's own stops, the frame that called
    *  `llm()`, the one under the loop's frame. */
@@ -323,15 +371,6 @@ export class Checkpoint implements SourceLocation {
     return JSON.stringify(message.content);
   }
 
-  /** The frames from the root down the branch path, the deepest last. */
-  framesAlong(branchPath: string[]): StateJSON[] {
-    const frames: StateJSON[] = [];
-    for (let depth = 0; depth <= branchPath.length; depth++) {
-      frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
-    }
-    return frames;
-  }
-
   /** The stack `branchPath` leads to, as serialized. */
   private stackJSONAt(branchPath: string[]): StateStackJSON | undefined {
     let stack: StateStackJSON | undefined = this.stack;
@@ -354,11 +393,12 @@ export class Checkpoint implements SourceLocation {
       const frame = frames?.at(-1);
       for (const [key, branch] of Object.entries(frame?.branches ?? {})) {
         const branchPathHere = [...path, key];
+        const first = branch.stack.stack?.[0]?.scopeName ?? undefined;
         branches.push({
           path: branchPathHere,
           key,
-          owner: frame?.scopeName === "runPrompt" ? "llm()" : (frame?.scopeName ?? ""),
-          label: branch.stack.stack?.[0]?.scopeName ?? toolCallName(frame, key) ?? key,
+          owner: frameName(frame?.scopeName),
+          label: first === undefined ? (toolCallName(frame, key) ?? key) : frameName(first),
           status: branchStatus(branch),
         });
         visit(branch.stack.stack, branchPathHere);

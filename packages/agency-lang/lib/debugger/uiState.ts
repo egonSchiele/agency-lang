@@ -1,6 +1,7 @@
 import { SourceMap } from "@/backends/sourceMap.js";
 import {
   Checkpoint,
+  frameName,
   type SourceLocationOpts,
   type ThreadMessages,
   type BranchSummary,
@@ -11,6 +12,7 @@ import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
+import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
@@ -25,7 +27,6 @@ export type ValWithOverride = {
 };
 
 export class UIState {
-  private callStack: { functionName: string; moduleId: string; line: number }[];
   private activityLog: string[];
   private pendingOverrides: Record<string, unknown>;
   private mode: "stepping" | "running";
@@ -50,7 +51,6 @@ export class UIState {
   private sourceMapCache: Record<string, SourceMap> = {};
 
   constructor() {
-    this.callStack = [];
     this.activityLog = [];
     this.pendingOverrides = {};
     this.mode = "stepping";
@@ -97,7 +97,17 @@ export class UIState {
     return this.resolveModulePath(agencyFile, [".js", ".ts"]);
   }
 
-  async setCheckpoint(checkpoint: Checkpoint | undefined, stop?: DebugStopData) {
+  /** Show `checkpoint`, at `stop` when the driver has a stop record, else
+   *  at the checkpoint's own location. `interruptId` is the user interrupt
+   *  the checkpoint was taken for, when there is one: an interrupt raised
+   *  inside a tool, a fork, or a parallel arm is stamped on the shared
+   *  checkpoint at the join, whose location has no branch path, so the
+   *  branch is found by the interrupt's id. */
+  async setCheckpoint(
+    checkpoint: Checkpoint | undefined,
+    stop?: DebugStopData,
+    interruptId?: string,
+  ) {
     const cp = Checkpoint.fromJSON(checkpoint);
     if (!cp) {
       this.log("Invalid checkpoint provided, cannot set checkpoint");
@@ -111,9 +121,16 @@ export class UIState {
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
     this.stop = stop;
-    this.stopLocation = { ...location, stepPath: statementStepPath(location.stepPath) };
+    // A user interrupt raised inside a tool, a fork, or a parallel arm is
+    // stamped on the shared checkpoint at the join, whose location has no
+    // branch path; the branch is found by the interrupt's id.
+    const branchPath =
+      location.branchPath ??
+      (interruptId === undefined ? undefined : cp.branchPathOf(interruptId)) ??
+      [];
+    this.stopLocation = { ...location, branchPath, stepPath: statementStepPath(location.stepPath) };
     this.location = this.stopLocation;
-    if (!this.showFrame(location, location.moduleId)) return;
+    if (!this.showFrame(this.stopLocation, location.moduleId)) return;
     await this.setSourceMap();
   }
 
@@ -309,28 +326,19 @@ export class UIState {
     return this.filterDupeVals(this.globals);
   }
 
-  pushCallStackEntry({
-    functionName,
-    moduleId,
-    line,
-  }: {
-    functionName: string;
-    moduleId: string;
-    line: number;
-  }) {
-    this.callStack.push({ functionName, moduleId, line });
-  }
-
-  removeWithFuncName(functionName: string) {
-    this.callStack = this.callStack.filter((entry) => entry.functionName !== functionName);
-  }
-
-  getCallStack() {
-    return this.callStack;
-  }
-
-  resetCallStack() {
-    this.callStack = [];
+  /** The call stack, read from the checkpoint's frames: one entry per
+   *  frame from the root stack down to the stack the program is stopped
+   *  on, the stopped frame last. The tool loop's own frame is shown as
+   *  `llm()`, and the compiler-named frame of a fork or parallel arm or
+   *  a block argument as `block`. Only Agency code and the TypeScript
+   *  that claims a resumable scope have frames; other TypeScript
+   *  functions do not appear. */
+  getCallStack(): { functionName: string; moduleId: string }[] {
+    if (!this.checkpoint) return [];
+    return this.checkpoint.framesAlong(this.location?.branchPath ?? []).map((frame) => ({
+      functionName: frameName(frame.scopeName),
+      moduleId: frame.moduleId ?? "",
+    }));
   }
 
   getOverrides() {
@@ -364,7 +372,6 @@ export class UIState {
 
   toJSON() {
     return {
-      callStack: this.callStack,
       activityLog: this.activityLog,
       pendingOverrides: this.pendingOverrides,
       mode: this.mode,
@@ -378,7 +385,6 @@ export class UIState {
 
   static fromJSON(json: any): UIState {
     const uiState = new UIState();
-    uiState.callStack = json.callStack;
     uiState.activityLog = json.activityLog;
     uiState.pendingOverrides = json.pendingOverrides;
     uiState.mode = json.mode;

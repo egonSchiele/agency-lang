@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { SourceMap } from "../backends/sourceMap.js";
 import { DebuggerState } from "./debuggerState.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import type { AgencyCallbacks } from "../runtime/hooks.js";
@@ -38,7 +37,6 @@ type ModuleFunctions = {
 
 type DriverOpts = {
   mod: ModuleFunctions;
-  sourceMap: SourceMap;
   rewindSize: number;
   ui: DebuggerIO;
   checkpoints?: Checkpoint[];
@@ -51,7 +49,6 @@ type DriverRunOpts = Partial<{
 
 export class DebuggerDriver {
   private mod: ModuleFunctions;
-  private sourceMap: SourceMap;
   private ui: DebuggerIO;
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
@@ -60,7 +57,6 @@ export class DebuggerDriver {
 
   constructor(opts: DriverOpts) {
     this.mod = opts.mod;
-    this.sourceMap = opts.sourceMap;
     this.ui = opts.ui;
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
@@ -107,22 +103,8 @@ export class DebuggerDriver {
 
   getCallbacks(): AgencyCallbacks {
     return {
-      onFunctionStart: (data) => {
-        const isAgency = data.moduleId?.endsWith(".agency");
-        this.ui.state.pushCallStackEntry({
-          functionName: data.functionName,
-          moduleId: isAgency ? data.moduleId : "(ts)",
-          line: 0,
-        });
-        if (!isAgency) {
-          this.ui.state.log(`[ts] ${data.functionName}()`);
-        }
-        this.ui.render();
-      },
-      onFunctionEnd: (data) => {
-        this.ui.state.removeWithFuncName(data.functionName);
-        this.ui.render();
-      },
+      // The call stack pane reads the checkpoint's frames, so no function
+      // hook is needed.
       onNodeStart: (data) => {
         // gets triggered on every statement, as debugger resumes node execution.
         // this.ui.state.log(`-> node: ${data.nodeName}`);
@@ -244,10 +226,9 @@ export class DebuggerDriver {
             return finalResult;
           }
         } else {
-          // User code interrupts: show the first, ask about each in turn,
-          // then answer the batch at once.
+          // User code interrupts: ask about each in turn (`askAbout`
+          // renders for each), then answer the batch at once.
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt.checkpoint);
           result = await this.handleInterrupts(batch, asked);
         }
       }
@@ -266,16 +247,22 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    this.ui.state.resetCallStack();
     return await this.respond(batch, answers);
   }
 
   /** One interrupt's answer, asked for until the input is one of
    *  approve, reject, or resolve with a value. A guard trip takes a
-   *  grant, a disarm, a message, or a reject instead. */
+   *  grant, a disarm, a message, or a reject instead; a raise that
+   *  expects a value, such as a `question`, takes the typed text. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    // The batch shares one checkpoint; the panes follow the interrupt
+    // being asked about, so they name the tool that raised it.
+    await this.ui.render(interrupt.checkpoint, undefined, interrupt.interruptId);
     if (isGuardTrip(interrupt.effect, interrupt.data)) {
       return await this.askAboutGuardTrip(interrupt, position);
+    }
+    if (interrupt.expectsValue) {
+      return await this.askForValue(interrupt, position);
     }
     const data =
       Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
@@ -296,17 +283,41 @@ export class DebuggerDriver {
         return { type: "reject" };
       }
       if (trimmed.startsWith("resolve ")) {
-        const valueStr = trimmed.slice("resolve ".length).trim();
-        let value: unknown;
-        try {
-          value = JSON.parse(valueStr);
-        } catch {
-          value = valueStr;
-        }
+        const value = jsonOrText(trimmed.slice("resolve ".length));
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
         return { type: "approve", value } as InterruptResponse;
       }
       this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
+    }
+  }
+
+  /** The answer to a raise used as a value (`const x = raise ...`, or
+   *  `question` from `std::agent`): the typed text, as a string, the way
+   *  the CLI's approval prompt takes it. `resolve <json>` gives a JSON
+   *  value when the rest parses as JSON, so a number or a list can be
+   *  given while an answer that happens to start with the word stays
+   *  whole; `reject` rejects, and a bare `approve` resolves the variable
+   *  to `true`. */
+  private async askForValue(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    this.ui.state.log(`Question${position}: ${interrupt.message}${dataBeyondMessage(interrupt)}`);
+    while (true) {
+      const input = await this.ui.promptForInput(`answer${position}:`);
+      const trimmed = input.trim();
+      if (trimmed === "") {
+        this.ui.state.log("Type the answer, or reject");
+        continue;
+      }
+      if (trimmed === "approve" || trimmed === "a") {
+        this.ui.state.log("Approved the question with no answer");
+        return { type: "approve" };
+      }
+      if (trimmed === "reject" || trimmed === "r") {
+        this.ui.state.log("Rejected the question");
+        return { type: "reject" };
+      }
+      const value = resolvedJson(trimmed) ?? trimmed;
+      this.ui.state.log(`Answered: ${JSON.stringify(value)}`);
+      return { type: "approve", value } as InterruptResponse;
     }
   }
 
@@ -476,12 +487,10 @@ export class DebuggerDriver {
       }
       case "reject": {
         this.ui.state.log("Rejected interrupt");
-        this.ui.state.resetCallStack();
         return await this.respond(batch, { [interrupt.interruptId]: { type: "reject" } });
       }
       case "resolve": {
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
-        this.ui.state.resetCallStack();
         return await this.respond(batch, {
           [interrupt.interruptId]: { type: "approve", value: command.value } as InterruptResponse,
         });
@@ -560,7 +569,6 @@ export class DebuggerDriver {
     // Reset state for replay
     this.programFinished = false;
     this.debuggerState.reset();
-    this.ui.state.resetCallStack();
     this.ui.state.log(`Rewinding to checkpoint #${checkpoint.id}`);
 
     const overrides = this.ui.state.getOverrides();
@@ -582,15 +590,40 @@ export class DebuggerDriver {
       }),
     );
   }
+}
 
-  private isInSourceMap(functionName: string): boolean {
-    for (const key of Object.keys(this.sourceMap)) {
-      // Source map keys are "moduleId:scopeName"
-      const scopeName = key.split(":").slice(1).join(":");
-      if (scopeName === functionName) return true;
-    }
-    return false;
+/** `resolve <value>` takes JSON, so a number or a list can be given,
+ *  and falls back to the text itself. */
+function jsonOrText(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
   }
+}
+
+/** The JSON value of an answer written `resolve <json>`, or undefined
+ *  when the answer is not that: no `resolve` prefix, or a rest that is
+ *  not JSON, such as "resolve the conflict by hand". */
+function resolvedJson(answer: string): unknown {
+  if (!answer.startsWith("resolve ")) return undefined;
+  try {
+    return JSON.parse(answer.slice("resolve ".length).trim());
+  } catch {
+    return undefined;
+  }
+}
+
+/** The interrupt's data, for the log, when it says more than the
+ *  message: a raise can carry what the person chooses from. A `question`
+ *  carries only its prompt, which the message already is. */
+function dataBeyondMessage(interrupt: Interrupt): string {
+  const data = interrupt.data ?? {};
+  const keys = Object.keys(data);
+  if (keys.length === 0) return "";
+  if (keys.length === 1 && keys[0] === "prompt" && data.prompt === interrupt.message) return "";
+  return ` ${JSON.stringify(data)}`;
 }
 
 /** The stop a debug interrupt carries, or nothing for a user interrupt

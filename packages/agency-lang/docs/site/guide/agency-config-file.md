@@ -161,7 +161,6 @@ Enable the memory layer so agents can store and recall facts across runs. Settin
 
 | Option | Description |
 | --- | --- |
-| `debugger` | Auto-inserts a breakpoint before every step. |
 | `instrument` | Emit per-step instrumentation (default `true`). Set `false` to shed the overhead when you don't need tracing. |
 | `trace` / `traceFile` / `traceDir` | Write execution checkpoints to a `.trace` file. |
 | `distDir` | Directory of pre-compiled JS the debugger imports instead of compiling on the fly. |

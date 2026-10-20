@@ -8,7 +8,7 @@ const agencyFile = path.join(fixtureDir, "parallel-interrupts.agency");
 const compiledFile = path.join(fixtureDir, "parallel-interrupts.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agencyFile, compiledFile, { ts: true });
+  compile({}, agencyFile, compiledFile, { ts: true });
 });
 
 /** A session on the fixture that records every resume the driver sends. */
@@ -23,13 +23,21 @@ function activity(session: DebuggerTestSession): string[] {
   return session.ui.state.getActivityLog();
 }
 
+function localsText(session: DebuggerTestSession): string {
+  return session.frame().findByKey("locals")!.toPlainText();
+}
+
 describe("a batch of interrupts", () => {
   it("asks about each interrupt in turn and answers the batch in one resume", async () => {
     const { session, resumes } = await batchSession();
     await session.press("c");
-    expect(activity(session)).toContainEqual("Interrupt (1 of 2): A?");
+    expect(activity(session)).toContainEqual("Question (1 of 2): A?");
+    // The panes follow the interrupt being asked about: each arm of the
+    // parallel block is found by the interrupt's id.
+    expect(localsText(session)).toContain('label = "A"');
     await session.type("resolve 1");
-    expect(activity(session)).toContainEqual("Interrupt (2 of 2): B?");
+    expect(localsText(session)).toContain('label = "B"');
+    expect(activity(session)).toContainEqual("Question (2 of 2): B?");
     await session.type("resolve 2");
     expect(await session.quit()).toEqual(["A:1", "B:2"]);
     const answered = resumes.filter((resume) => resume.interrupts === 2);
@@ -50,15 +58,12 @@ describe("a batch of interrupts", () => {
     expect(result[1]).toMatchObject({ success: false });
   });
 
-  it("asks again after an answer it does not understand", async () => {
+  // Each arm's raise is used as a value, so typed text is its answer.
+  it("typed text answers a raise used as a value", async () => {
     const { session } = await batchSession();
     await session.press("c");
     await session.type("maybe");
-    expect(activity(session)).toContainEqual(
-      'Unknown response: "maybe". Try: approve, reject, resolve <value>',
-    );
-    await session.type("resolve 1");
     await session.type("resolve 2");
-    expect(await session.quit()).toEqual(["A:1", "B:2"]);
+    expect(await session.quit()).toEqual(["A:maybe", "B:2"]);
   });
 });

@@ -8,7 +8,7 @@ const agencyFile = path.join(fixtureDir, "question.agency");
 const compiledFile = path.join(fixtureDir, "question.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agencyFile, compiledFile, { ts: true });
+  compile({}, agencyFile, compiledFile, { ts: true });
 });
 
 async function questionSession(node = "main") {

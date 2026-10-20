@@ -28,6 +28,8 @@ import { buildTreeIndex, nearestAncestor, walkNodes } from "./forest.js";
 import { overviewData, type OverviewCall } from "./overviewData.js";
 import { spanExtent } from "./timeline/spans.js";
 import type { TreeNode } from "./types.js";
+import type { Comment, CommentThread } from "../runDirectory/comments.js";
+import { AGENT_MARK, HUMAN_MARK } from "./marks.js";
 /** `faded` marks a line that is history, painted in one muted color.
  *  `oneRow` keeps a line to a single painted row, cut with an ellipsis. */
 export type PayloadLine = (
@@ -59,6 +61,8 @@ export type PayloadOptions = {
   /** The trace the row belongs to. A group row charts its calls with it
    *  and shows its summary alone without it. */
   trace?: TreeNode;
+  /** The comment threads on this row, listed after the payload. */
+  comments?: CommentThread[];
 };
 type PayloadMakers = {
   [Kind in StoryRow["kind"]]: (
@@ -94,7 +98,41 @@ export function payloadFor(row: StoryRow, options: PayloadOptions): PayloadLine[
     return rawPayload(row);
   }
   const make = PAYLOADS[row.kind] as (row: StoryRow, options: PayloadOptions) => PayloadLine[];
-  return [...(row.orphan ? ORPHAN_NOTE : []), ...make(row, options)];
+  return [
+    ...(row.orphan ? ORPHAN_NOTE : []),
+    ...make(row, options),
+    ...commentsPayload(options.comments ?? []),
+  ];
+}
+
+/** The `comments` section under a row's payload: each thread as
+ *  `✎ adit · 14:30: why…`, its replies indented under it. */
+export function commentsPayload(threads: readonly CommentThread[]): PayloadLine[] {
+  if (threads.length === 0) {
+    return [];
+  }
+  const line = (comment: Comment, indent: number): PayloadLine => ({
+    kind: "text",
+    text: `${comment.author.kind === "human" ? HUMAN_MARK : AGENT_MARK} ${comment.author.id} · ${fmtClock(comment.created)} · ${comment.id}: ${comment.text}`,
+    indent,
+    role: "plain",
+  });
+  return [
+    { kind: "blank" },
+    { kind: "rule", text: `COMMENTS · ${threads.length}`, tone: "accent" },
+    ...threads.flatMap((thread) => [
+      line(thread.comment, 0),
+      ...thread.replies.map((reply) => line(reply, 1)),
+    ]),
+  ];
+}
+
+function fmtClock(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 /** Why a span can name a parent the log never recorded. The viewer states
  *  the fact and lists the causes; matching the span to a tool by name

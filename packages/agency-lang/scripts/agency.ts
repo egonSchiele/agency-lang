@@ -66,6 +66,7 @@ import {
   addRunDirectoryCommands,
   runDirectoryCommandDependencies,
 } from "@/cli/runDirectory/commands.js";
+import { addLogsSessionCommands } from "@/cli/logsSession/register.js";
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
@@ -936,10 +937,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
   type LogsCliOptions = {
     follow?: boolean;
     csv?: boolean;
+    traceId?: string;
   };
   const logsViewOptsFrom = (options: LogsCliOptions): LogsViewOpts => ({
     follow: options.follow,
     csv: options.csv,
+    traceId: options.traceId,
     config: getConfig(),
   });
 
@@ -957,6 +960,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
+    // Declared once here, like --follow; `view` reads it from the parent.
+    .option(
+      "--trace-id <id>",
+      "Open the viewer on this trace (a full id or unique prefix); the other traces stay reachable with t",
+    )
     .action(async (files: string[], options: LogsCliOptions) => {
       if (files.length === 0) {
         logsCmd.help();
@@ -976,6 +984,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (file: string, _options: Record<string, never>, command: Command) => {
       await logsView(file, logsViewOptsFrom((command.parent?.opts() ?? {}) as LogsCliOptions));
     });
+
+  addLogsSessionCommands(logsCmd);
 
   const runDirectoryDeps = runDirectoryCommandDependencies();
   addLogsExtractCommand(logsCmd, runDirectoryDeps);

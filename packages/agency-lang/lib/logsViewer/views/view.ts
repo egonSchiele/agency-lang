@@ -5,6 +5,7 @@ import type { ScreenName } from "../screens/screen.js";
 // ViewerCommand side channel, widened to cover every cross-view effect).
 import type { Element } from "../../tui/elements.js";
 import type { KeyEvent } from "../../tui/input/types.js";
+import type { RowMarks } from "../marks.js";
 import type { TreeNode } from "../types.js";
 
 export type Viewport = { rows: number; cols: number };
@@ -41,6 +42,9 @@ export type View = {
   setFollowIndicator(on: boolean): void;
   escape?(): boolean;
   capturesText?(): boolean;
+  /** Comment marks, as data: which rows carry a comment and what it says.
+   *  Optional; a view that draws none ignores them. */
+  setMarks?(marks: RowMarks): void;
 };
 
 export type ViewStack = {

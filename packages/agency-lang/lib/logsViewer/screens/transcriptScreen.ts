@@ -277,6 +277,25 @@ export class TranscriptScreen implements Screen {
     const block = this.selected();
     return block?.kind === "tool" ? block.id : block?.roundId;
   }
+  /** The block as a row of the trace: a tool is its span, an assistant
+   *  reply is its round, a user message is the round's user turn. A system
+   *  or history block is no row. */
+  selectedRowId(): string | undefined {
+    const block = this.selected();
+    if (block === undefined) {
+      return undefined;
+    }
+    if (block.kind === "tool") {
+      return block.id;
+    }
+    if (block.kind === "assistant") {
+      return block.roundId;
+    }
+    if (block.kind === "user") {
+      return block.roundId === undefined ? undefined : `${block.roundId}:user`;
+    }
+    return undefined;
+  }
   setFocus(id: string): void {
     const exact = this.blocks.find((block) => block.id === id);
     if (exact) {

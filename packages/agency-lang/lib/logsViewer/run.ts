@@ -10,6 +10,13 @@ import { formatKey } from "../tui/input/format.js";
 import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
 import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
+import type { CommentsStore } from "../runDirectory/commentsStore.js";
+import { formatAddress } from "./address.js";
+import { findRow } from "./detailTarget.js";
+import type { Anchor } from "../runDirectory/comments.js";
+import { anchorFor, marksFrom } from "./marks.js";
+import type { Focus, NavigateResult, SessionPort } from "./session/port.js";
+import { isUnavailable, startSessionServer, type SessionServer } from "./session/server.js";
 import { detectClipboard } from "./clipboard.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
@@ -29,6 +36,7 @@ import { OccurrencesView } from "./views/occurrencesView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
+import { matchTraceId } from "../runDirectory/traces.js";
 
 export type RunViewerOpts = {
   // The statelog text. Optional when `followPath` is given — the shell
@@ -62,6 +70,13 @@ export type RunViewerOpts = {
   traceAnnotations?: Record<string, string>;
   // Start with the cursor on this trace (the explorer drilling into a test).
   focusTraceId?: string;
+  // Where this log's comments live, opened by the CLI with the author at
+  // the terminal. Undefined (stdin, remote) disables `c`.
+  comments?: CommentsStore;
+  // Register with the sessions directory so `agency logs session …` can
+  // find this viewer. Undefined (every unit test) opens no socket and
+  // writes nothing. Needs `followPath`: a session is about a local file.
+  session?: { dir: string };
   contextWindowOf?: (model: string) => number | undefined;
 };
 
@@ -202,22 +217,33 @@ async function runSession(
   const viewport: Viewport = opts.viewport;
   const tooNarrowNow = viewport.cols < MIN_COLS;
   const annotations = opts.traceAnnotations ?? {};
-  const bootTraceId = opts.focusTraceId ?? mostRecentTraceId(roots);
+  const bootTraceId =
+    opts.focusTraceId === undefined
+      ? mostRecentTraceId(roots)
+      : (resolveTracePrefix(roots, opts.focusTraceId) ?? opts.focusTraceId);
 
   const host = createHost(roots, opts, thresholds, bootTraceId);
   const notify = (message: string): void => host.target().notify(message);
 
   let followOn = false;
+  const prompt = makePromptGate(() => render());
   const innerViewport = (): Viewport => ({
     cols: viewport.cols,
     rows: Math.max(1, viewport.rows - 1 - (parseErrors.length > 0 ? 1 : 0)),
+  });
+  const commentsSource = makeCommentsSource({
+    store: opts.comments,
+    host,
+    currentTrace: () => roots.find((root) => root.traceId === host.currentTraceId()),
+    render: () => render(),
+    notify,
   });
   const onNewText = (text: string): void => {
     const reparsed = parseStatelogJsonl(text);
     roots = buildForest(reparsed.events);
     parseErrors = reparsed.errors;
     allEvents = reparsed.events;
-    host.setData(roots, mostRecentTraceId(roots));
+    host.setData(roots, fallbackTraceId(roots, host.currentTraceId(), opts.focusTraceId));
     render();
   };
   const toggleFollow = (): void => {
@@ -228,65 +254,44 @@ async function runSession(
     followOn = !followOn;
     host.setFollowIndicator(followOn);
     if (followOn) {
-      watcher.start(onNewText);
+      watcher.start(onNewText, commentsSource.refreshIfChanged);
     } else {
       watcher.stop();
     }
     notify(followOn ? "follow on" : "follow off");
   };
-  const openPicker = (): void => {
-    host.openOverlay(
-      new TracePicker(roots, {
-        currentTraceId: host.currentTraceId(),
-        annotations,
-        thresholds,
-      }),
-    );
-  };
+  const { openPicker, dispatch } = makeActions({
+    host,
+    screen,
+    thresholds,
+    annotations,
+    roots: () => roots,
+    allEvents: () => allEvents,
+    notify,
+    render: () => render(),
+    extract:
+      opts.extract === undefined
+        ? undefined
+        : {
+            sourcePath: opts.extract.sourcePath,
+            following: () => followOn,
+            watcher,
+            onNewText,
+          },
+    prompt,
+  });
   const shellBindings = (controls?: ShellControls): ShellBinding[] =>
-    viewerShellBindings(host, () => roots, toggleFollow, openPicker, controls);
+    viewerShellBindings(host, () => roots, toggleFollow, openPicker, controls, commentsSource);
 
-  const extractIfLocal = async (traceId: string): Promise<void> => {
-    if (opts.extract === undefined) {
-      return;
-    }
-    await handleTraceExtract({
-      screen,
-      sourcePath: opts.extract.sourcePath,
-      traceId,
-      following: followOn,
-      watcher,
-      onNewText,
-      render,
-      notify,
-    });
-  };
-  const onAction: ActionHandlers = {
-    none: () => {},
-    back: () => host.closeOverlay(),
-    openScreen: (action) => host.switchTo(action.screen, action.focusId),
-    selectTrace: (action) => host.selectTrace(action.traceId, action.query),
-    openDetail: (action) => host.openOverlay(new DetailScreen(roots, action.rowId, thresholds)),
-    openOccurrences: (action) =>
-      host.openOverlay(
-        new OccurrencesView(roots, host.currentTraceId(), action.groupKey, thresholds),
-      ),
-    promptLine: async (action) => action.onResult(await screen.nextLine(action.label)),
-    copy: (action) => copyToClipboard(action.text, notify),
-    copyTrace: (action) => copyTraceToClipboard(allEvents, action.traceId, notify),
-    extractTrace: (action) => extractIfLocal(action.traceId),
-  };
-
-  const dispatch = async (action: ViewAction): Promise<void> => {
-    const handler = onAction[action.kind] as (action: ViewAction) => Promise<void> | void;
-    await handler(action);
-  };
   const help = makeHelp(
     () => [...helpFrom(shellBindings()), ...host.target().helpLines()],
     viewport,
     () => host.closeHelp(),
   );
   const render = (): void => {
+    if (prompt.defer()) {
+      return;
+    }
     if (tooNarrowNow) {
       screen.render(tooNarrow(viewport.cols));
       return;
@@ -314,10 +319,16 @@ async function runSession(
   if (opts.initialFollow && opts.followPath !== undefined) {
     followOn = true;
     host.setFollowIndicator(true);
-    watcher.start(onNewText);
+    watcher.start(onNewText, commentsSource.refreshIfChanged);
   }
-  render();
+  let session: SessionServer | undefined;
   try {
+    commentsSource.refresh();
+    render();
+    session = await startSessionIfAsked(
+      opts,
+      sessionPortFor(host, () => roots, commentsSource, notify, render, openPicker),
+    );
     return await runKeyLoop({
       screen,
       host,
@@ -333,8 +344,243 @@ async function runSession(
     });
   } finally {
     watcher.stop();
+    await session?.stop();
   }
 }
+
+async function startSessionIfAsked(
+  opts: RunViewerOpts,
+  port: SessionPort,
+): Promise<SessionServer | undefined> {
+  if (opts.session === undefined || opts.followPath === undefined) {
+    return undefined;
+  }
+  const started = await startSessionServer(port, {
+    dir: opts.session.dir,
+    logPath: opts.followPath,
+    commentsPath: opts.comments?.path,
+  });
+  if (isUnavailable(started)) {
+    port.notify(`no session: ${started.unavailable}`);
+    return undefined;
+  }
+  return started;
+}
+
+/** The shell's answers to session requests. Every request redraws, since it
+ *  may have moved the cursor or changed the marks. */
+function sessionPortFor(
+  host: ScreenHost,
+  roots: () => TreeNode[],
+  comments: CommentsSource,
+  notify: (message: string) => void,
+  render: () => void,
+  openPicker: () => void,
+): SessionPort {
+  return {
+    focus: () => sessionFocus(host),
+    navigate: (traceId, rowId) => {
+      const result = navigateTo(host, roots(), traceId, rowId);
+      render();
+      return result;
+    },
+    reloadComments: comments.refresh,
+    pick: () => {
+      openPicker();
+      render();
+    },
+    notify: (message) => {
+      notify(message);
+      render();
+    },
+  };
+}
+
+/**
+ * The row the person is on: the row a detail overlay shows, else the active
+ * screen's selected row. `A`, `c`, and the session's `get` all use this, so
+ * they cannot name different rows. A screen's `focusId` is not it: that
+ * names the row focus travels to on another screen (a user turn's round, an
+ * interrupt's tool). On the picker there is no row.
+ */
+function focusedRow(host: ScreenHost): { traceId: string; rowId: string | undefined } {
+  const target = host.target();
+  if (target instanceof DetailScreen) {
+    return { traceId: host.currentTraceId(), rowId: target.rowId };
+  }
+  if (target instanceof TracePicker) {
+    return { traceId: target.selectedTraceId() ?? host.currentTraceId(), rowId: undefined };
+  }
+  if (host.overlayOpen()) {
+    return { traceId: host.currentTraceId(), rowId: undefined };
+  }
+  const screen = host.screen(host.activeScreen());
+  // A screen that answers `selectedRowId` has the last word, including
+  // "no row here" (undefined) on a turn header or a system block. Only a
+  // screen with no such method falls back to its focus id.
+  const rowId = screen.selectedRowId === undefined ? screen.focusId() : screen.selectedRowId();
+  return { traceId: host.currentTraceId(), rowId };
+}
+
+function sessionFocus(host: ScreenHost): Focus {
+  return { ...focusedRow(host), screen: host.activeScreen() };
+}
+
+/** The session's `navigate`: switch trace when needed, then put the trace
+ *  screen's cursor on the row. A row the screen's settings hide is reported,
+ *  not landed near. */
+function navigateTo(
+  host: ScreenHost,
+  roots: TreeNode[],
+  traceId: string,
+  rowId: string | undefined,
+): NavigateResult {
+  const trace = roots.find((root) => root.traceId === traceId);
+  if (trace === undefined) {
+    return "no such trace";
+  }
+  if (rowId !== undefined && findRow(trace, rowId) === undefined) {
+    return "no such row";
+  }
+  // Every refusal comes before the host changes: a refused navigate must
+  // leave the person's trace, overlays, and screen as they were.
+  const traceScreen = host.screen("trace");
+  if (
+    rowId !== undefined &&
+    traceScreen instanceof TraceScreen &&
+    !traceScreen.shows(rowId, trace)
+  ) {
+    return "row hidden by filter";
+  }
+  if (traceId !== host.currentTraceId()) {
+    host.selectTrace(traceId);
+  }
+  host.closeHelp();
+  // A trace alone means its first row, also when that trace is already
+  // open and the cursor sits further down.
+  const first = traceScreen instanceof TraceScreen ? traceScreen.firstRowId() : undefined;
+  host.switchTo("trace", rowId ?? first);
+  return "ok";
+}
+
+/**
+ * A line prompt owns the bottom row while it is open; a redraw asked for
+ * meanwhile (a follow poll, a comments refresh, a session request) would
+ * paint over what the person is typing. `defer` says whether a render must
+ * wait, and remembers that one was wanted; `close` draws it.
+ */
+function makePromptGate(render: () => void): {
+  open: () => void;
+  close: () => void;
+  defer: () => boolean;
+} {
+  let promptOpen = false;
+  let dirty = false;
+  return {
+    open: () => {
+      promptOpen = true;
+    },
+    close: () => {
+      promptOpen = false;
+      if (dirty) {
+        dirty = false;
+        render();
+      }
+    },
+    defer: () => {
+      if (promptOpen) {
+        dirty = true;
+        return true;
+      }
+      dirty = false;
+      return false;
+    },
+  };
+}
+
+type ActionDeps = {
+  host: ScreenHost;
+  screen: Screen;
+  thresholds: ViewerThresholds;
+  annotations: Record<string, string>;
+  roots: () => TreeNode[];
+  allEvents: () => readonly EventEnvelope[];
+  notify: (message: string) => void;
+  render: () => void;
+  /** Set when the source is a local file the trace `x` action can read. */
+  extract?: {
+    sourcePath: string;
+    following: () => boolean;
+    watcher: FollowWatcher;
+    onNewText: (text: string) => void;
+  };
+  /** Told when a line prompt opens and closes, so the shell can defer redraws. */
+  prompt: { open: () => void; close: () => void };
+};
+
+/** The shell's answers to the actions a view returns, and the picker opener
+ *  the `t` key and Esc share. */
+function makeActions(deps: ActionDeps): {
+  openPicker: () => void;
+  dispatch: (action: ViewAction) => Promise<void>;
+} {
+  const { host, screen, thresholds, notify } = deps;
+  const openPicker = (): void => {
+    host.openOverlay(
+      new TracePicker(deps.roots(), {
+        currentTraceId: host.currentTraceId(),
+        annotations: deps.annotations,
+        thresholds,
+      }),
+    );
+  };
+  const extractIfLocal = async (traceId: string): Promise<void> => {
+    if (deps.extract === undefined) {
+      return;
+    }
+    await handleTraceExtract({
+      screen,
+      sourcePath: deps.extract.sourcePath,
+      traceId,
+      following: deps.extract.following(),
+      watcher: deps.extract.watcher,
+      onNewText: deps.extract.onNewText,
+      render: deps.render,
+      notify,
+    });
+  };
+  const onAction: ActionHandlers = {
+    none: () => {},
+    back: () => host.closeOverlay(),
+    openScreen: (action) => host.switchTo(action.screen, action.focusId),
+    selectTrace: (action) => host.selectTrace(action.traceId, action.query),
+    openDetail: (action) =>
+      host.openOverlay(new DetailScreen(deps.roots(), action.rowId, thresholds)),
+    openOccurrences: (action) =>
+      host.openOverlay(
+        new OccurrencesView(deps.roots(), host.currentTraceId(), action.groupKey, thresholds),
+      ),
+    promptLine: async (action) => {
+      deps.prompt.open();
+      let text: string;
+      try {
+        text = await screen.nextLine(action.label);
+      } finally {
+        deps.prompt.close();
+      }
+      action.onResult(text);
+    },
+    copy: (action) => copyToClipboard(action.text, notify),
+    copyTrace: (action) => copyTraceToClipboard(deps.allEvents(), action.traceId, notify),
+    extractTrace: (action) => extractIfLocal(action.traceId),
+  };
+  const dispatch = async (action: ViewAction): Promise<void> => {
+    const handler = onAction[action.kind] as (action: ViewAction) => Promise<void> | void;
+    await handler(action);
+  };
+  return { openPicker, dispatch };
+}
+
 function createHost(
   roots: TreeNode[],
   opts: RunViewerOpts,
@@ -433,13 +679,48 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
       await dispatch(host.target().handleKey(event, innerViewport()));
     } else {
       if (binding !== undefined) {
-        binding.run();
+        // A shell binding may answer with an action, as a screen's does
+        // (`A` copies, `c` opens the comment prompt).
+        const action = binding.run();
+        if (action !== undefined) {
+          await dispatch(action);
+        }
       } else {
         await dispatch(host.target().handleKey(event, innerViewport()));
       }
     }
     render();
   }
+}
+
+/**
+ * Where the cursor goes when its trace is not in a fresh forest. A trace asked
+ * for by id under `--follow` may not have started yet: while the viewer is
+ * still on it, keep waiting for it rather than jumping to the newest trace on
+ * the first poll. Once the person moves to another trace, the usual rule
+ * applies.
+ */
+export function fallbackTraceId(
+  roots: TreeNode[],
+  currentTraceId: string,
+  focusTraceId: string | undefined,
+): string {
+  if (focusTraceId !== undefined && currentTraceId === focusTraceId) {
+    // The id may be a prefix: `--trace-id 7f3a` for a trace the viewer
+    // could not resolve before it started. Resolve it once it can.
+    return resolveTracePrefix(roots, focusTraceId) ?? focusTraceId;
+  }
+  return mostRecentTraceId(roots);
+}
+
+/** The one trace a full id or unique prefix names; undefined when none or
+ *  several match. The same rule the CLI applies (`matchTraceId`). */
+export function resolveTracePrefix(roots: TreeNode[], idOrPrefix: string): string | undefined {
+  const match = matchTraceId(
+    roots.map((root) => root.traceId),
+    idOrPrefix,
+  );
+  return match.kind === "one" ? match.id : undefined;
 }
 
 /** The trace that started last; the last root when none has a start time. */
@@ -504,6 +785,7 @@ export function viewerShellBindings(
   toggleFollow: () => void,
   openPicker: () => void,
   controls: ShellControls = HELP_CONTROLS,
+  comments: CommentsSource = NO_COMMENTS,
 ): ShellBinding[] {
   const onScreen = (): boolean => !host.overlayOpen();
   const canChooseScreen = (): boolean => onScreen() || host.target() instanceof TracePicker;
@@ -596,6 +878,66 @@ export function viewerShellBindings(
           roots().map((root) => root.traceId),
         ),
     },
+    ...rowBindings(host, controls, comments),
+  ];
+}
+
+/** The keys that act on one row: comment on it, show the agent's notes, copy
+ *  its address. A comment goes on a screen's focused row, or on the row a
+ *  detail overlay shows, which is the obvious place to leave one. */
+function rowBindings(
+  host: ScreenHost,
+  controls: ShellControls,
+  comments: CommentsSource,
+): ShellBinding[] {
+  const rowNow = (): string | undefined => focusedRow(host).rowId;
+  return [
+    {
+      keys: ["c"],
+      help: "comment on the focused row",
+      hint: comments.available ? "c comment" : undefined,
+      when: () => !controls.typing && rowNow() !== undefined,
+      run: () => {
+        if (!comments.available) {
+          host.target().notify("comments unavailable for this log");
+          return;
+        }
+        // Captured whole before the prompt opens: a session `navigate`
+        // can switch traces while the person types.
+        const target = comments.targetFor(focusedRow(host));
+        if (target === undefined) {
+          return;
+        }
+        return {
+          kind: "promptLine",
+          label: "comment: ",
+          onResult: (text) => {
+            if (text.trim().length > 0) {
+              comments.add(target, text.trim());
+            }
+          },
+        };
+      },
+    },
+    {
+      keys: ["C"],
+      help: "show or hide the agent's own notes (replies to your comments always show)",
+      when: () => !controls.typing && comments.available,
+      run: () => comments.toggleAgentNotes(),
+    },
+    {
+      keys: ["A"],
+      help: "copy the focused row's address (<trace id>/<row id>)",
+      when: () => !controls.typing,
+      run: () => {
+        const { traceId, rowId } = focusedRow(host);
+        if (rowId === undefined) {
+          host.target().notify("no address here");
+          return;
+        }
+        return { kind: "copy", text: formatAddress(traceId, rowId) };
+      },
+    },
   ];
 }
 
@@ -610,7 +952,9 @@ export function viewerShellBindings(
  */
 function makeFollowWatcher(opts: RunViewerOpts): {
   bootText: string;
-  start(onText: (accum: string) => void): void;
+  /** `onTick` runs on every poll, grown or not: the comments file can change
+   *  while the log is idle. */
+  start(onText: (accum: string) => void, onTick?: () => void): void;
   stop(): void;
 } {
   let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
@@ -621,8 +965,10 @@ function makeFollowWatcher(opts: RunViewerOpts): {
   // watcher cannot reach into the shell before the shell finishes wiring
   // itself up (a temporal-dead-zone hazard otherwise).
   let onText: (accum: string) => void = () => {};
+  let onTick: () => void = () => {};
   const poll = (): void => {
     if (reader === undefined || opts.followPath === undefined) return;
+    onTick();
     const size = currentFileSize(opts.followPath);
     const truncated = size < lastSize;
     if (truncated) {
@@ -643,8 +989,11 @@ function makeFollowWatcher(opts: RunViewerOpts): {
   };
   return {
     bootText: accum,
-    start: (callback) => {
+    start: (callback, tick) => {
       onText = callback;
+      // A restart that names no tick (the extract prompt's) keeps the one
+      // it had, so comments keep appearing while follow stays on.
+      onTick = tick ?? onTick;
       if (opts.followPath === undefined || pollTimer !== undefined) return;
       pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
     },
@@ -652,6 +1001,116 @@ function makeFollowWatcher(opts: RunViewerOpts): {
       if (pollTimer === undefined) return;
       clearInterval(pollTimer);
       pollTimer = undefined;
+    },
+  };
+}
+
+/**
+ * The one piece of the viewer that reads or writes comments. `refresh` folds
+ * the store into marks and hands them to every view; `add` writes and then
+ * refreshes. The `c` key, the follow tick, and the session's `reload` all
+ * come through here, so the sequence exists once.
+ */
+export type CommentsSource = {
+  available: boolean;
+  refresh(): void;
+  /** For a poller: re-read only when the file's size changed. */
+  refreshIfChanged(): void;
+  /** Everything a comment needs, taken while the row is still the one the
+   *  person is on. Undefined with no row. */
+  targetFor(focus: { traceId: string; rowId: string | undefined }): CommentTarget | undefined;
+  add(target: CommentTarget, text: string): void;
+  toggleAgentNotes(): void;
+};
+
+export type CommentTarget = { traceId: string; rowId: string; anchor: Anchor };
+
+const NO_COMMENTS: CommentsSource = {
+  available: false,
+  refresh: () => {},
+  refreshIfChanged: () => {},
+  targetFor: () => undefined,
+  add: () => {},
+  toggleAgentNotes: () => {},
+};
+
+function makeCommentsSource(args: {
+  store: CommentsStore | undefined;
+  host: ScreenHost;
+  currentTrace: () => TreeNode | undefined;
+  render: () => void;
+  notify: (message: string) => void;
+}): CommentsSource {
+  const { store } = args;
+  if (store === undefined) {
+    return NO_COMMENTS;
+  }
+  let showAgentNotes = false;
+  const refresh = (): void => {
+    // Runs from the follow tick and from a session request, where a throw
+    // would be uncaught and take the viewer down in raw mode.
+    try {
+      args.host.setMarks(marksFrom(store.read(), { showAgentNotes }));
+    } catch (error) {
+      args.notify(`comments not read: ${(error as Error).message}`);
+    }
+    args.render();
+  };
+  let lastStatError: string | undefined;
+  return {
+    available: true,
+    refresh,
+    refreshIfChanged: () => {
+      // Runs from the follow timer, where a throw would kill the viewer
+      // with the terminal in raw mode; a stat failure is a notice instead,
+      // posted once per distinct message rather than on every tick.
+      let changed = false;
+      try {
+        changed = store.changedSince();
+        lastStatError = undefined;
+      } catch (error) {
+        const message = `comments not read: ${(error as Error).message}`;
+        if (message !== lastStatError) {
+          lastStatError = message;
+          args.notify(message);
+          args.render();
+        }
+      }
+      if (changed) {
+        refresh();
+      }
+    },
+    targetFor: (focus) => {
+      if (focus.rowId === undefined) {
+        return undefined;
+      }
+      const trace = args.currentTrace();
+      const row = trace === undefined ? undefined : findRow(trace, focus.rowId);
+      if (row === undefined) {
+        // A row the story does not know (a timeline turn header) would
+        // take a comment nothing could find again.
+        args.notify("no row to comment on here");
+        return undefined;
+      }
+      return { traceId: focus.traceId, rowId: focus.rowId, anchor: anchorFor(row) };
+    },
+    add: (target, text) => {
+      // Another writer may hold the lock, or the directory may be read-only;
+      // the viewer says so and stays up.
+      try {
+        store.add({ ...target, text });
+      } catch (error) {
+        args.notify(`comment not saved: ${(error as Error).message}`);
+        return;
+      }
+      refresh();
+      args.notify("comment saved");
+    },
+    toggleAgentNotes: () => {
+      showAgentNotes = !showAgentNotes;
+      // Said before the refresh, so a read that fails has the last word.
+      args.notify(showAgentNotes ? "agent notes shown" : "agent notes hidden");
+      refresh();
     },
   };
 }

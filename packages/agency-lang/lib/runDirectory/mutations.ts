@@ -33,7 +33,9 @@ import {
   type WorkdirAttachmentRequest,
   type WorkdirAttachmentPlan,
 } from "./attachWorkdir.js";
-import { acquireRunDirLock } from "./lock.js";
+import { acquireOwnedFileLock, acquireRunDirLock } from "./lock.js";
+import { CommentSchema, readCommentsFile, type Comment, type CommentDraft } from "./comments.js";
+import { commentsLockFor, commentsPathFor, commentsSourceForStatelog } from "./commentsPath.js";
 import {
   applyStatelogMerge,
   describeStatelogMerge,
@@ -93,6 +95,9 @@ type RunDirectoryAssemblyPlan = {
   code: CodeAttachmentPlan[];
   workdir?: WorkdirAttachmentPlan;
   annotationDrafts: AnnotationDraft[];
+  /** Comment rows copied from a statelog's sidecar, written inside staging
+   *  so a child run is whole or absent. */
+  commentRows: Comment[];
 };
 
 type WrappedRunPlan = {
@@ -137,6 +142,11 @@ function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): 
   }
   const annotationDrafts = request.annotationFiles.flatMap((file) =>
     readAnnotations(file, reportWarning).map(draftOf),
+  );
+  // The same statelog named twice, or two copies sharing a sidecar, must
+  // not copy a comment twice: the first row for each id is kept.
+  const commentRows = uniqueById(
+    request.statelogFiles.flatMap((file) => readSidecarComments(file, reportWarning)),
   );
   const ids = traces.map((trace) => trace.traceId);
   const orphan = annotationDrafts.find((draft) => !ids.includes(draft.traceId));
@@ -188,10 +198,33 @@ function planWrappedRuns(request: WrapTracesRequest, options: MutationOptions): 
             .map((code) => code.entry),
           workdir: request.workdir,
           annotationDrafts: annotationDrafts.filter((draft) => draft.traceId === trace.traceId),
+          commentRows: commentRows.filter((row) => row.traceId === trace.traceId),
         }),
       };
     });
   return { stagingRoot, writes, skipped };
+}
+
+function uniqueById(rows: Comment[]): Comment[] {
+  const seen: Record<string, true> = Object.create(null);
+  return rows.filter((row) => {
+    if (seen[row.id]) {
+      return false;
+    }
+    seen[row.id] = true;
+    return true;
+  });
+}
+
+/** Wrapping COPIES a statelog's comments into the child run, from wherever
+ *  the viewer keeps them for that path (`commentsSourceForStatelog`, the
+ *  same rule); the file is read once and never rewritten, as the statelog
+ *  itself is left in place. */
+function readSidecarComments(
+  statelogFile: string,
+  reportWarning: (message: string) => void,
+): Comment[] {
+  return readCommentsFile(commentsPathFor(commentsSourceForStatelog(statelogFile)), reportWarning);
 }
 
 /** The traces the request is about, with the same id never carrying two
@@ -233,6 +266,7 @@ function planRunDirectoryAssembly(args: {
   codeEntries: string[];
   workdir?: WorkdirAttachmentRequest;
   annotationDrafts: AnnotationDraft[];
+  commentRows?: Comment[];
 }): RunDirectoryAssemblyPlan {
   const paths = runDirPaths(args.dir);
   const snapshot: RunDirectorySnapshot = {
@@ -242,6 +276,7 @@ function planRunDirectoryAssembly(args: {
     annotationRows: [],
     effectiveAnnotations: {},
     notes: null,
+    comments: { threads: [] },
   };
   return {
     dir: args.dir,
@@ -250,6 +285,7 @@ function planRunDirectoryAssembly(args: {
     workdir:
       args.workdir === undefined ? undefined : planWorkdirAttachment(snapshot, args.workdir, paths),
     annotationDrafts: args.annotationDrafts,
+    commentRows: args.commentRows ?? [],
   };
 }
 
@@ -284,6 +320,9 @@ function applyRunDirectoryAssembly(plan: RunDirectoryAssemblyPlan, options: Muta
       applyWorkdirAttachment(paths, plan.workdir, now(options));
     }
     appendRows(paths.annotations, plan.annotationDrafts, options, reportWarning);
+    for (const row of plan.commentRows) {
+      appendDurably(paths.comments, JSON.stringify(row) + "\n");
+    }
     return {};
   });
 }
@@ -651,6 +690,60 @@ function appendRows(
     rows.push(row);
   }
   return rows;
+}
+
+// --- appendCommentRow ------------------------------------------------------
+
+/** A comments file is written in place: the torn-tail repair may cut its
+ *  last line and the append adds one. Both must land in the file named,
+ *  never in whatever a symlink points at, so anything but a plain file is
+ *  refused; a missing file is fine, the append creates it. */
+function refuseUnlessRegularFile(commentsPath: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(commentsPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (stat.isSymbolicLink()) {
+    throw new Error(`${commentsPath} is a symlink; comments are only written to a plain file`);
+  }
+  if (!stat.isFile()) {
+    throw new Error(`${commentsPath} is not a plain file, so comments cannot be written to it`);
+  }
+}
+
+/**
+ * Append one comment as a durable line, under the lock the comments path
+ * decides (`commentsLockFor`): a run directory's `.lock`, or `<sidecar>.lock`
+ * for a loose statelog. No snapshot is taken, since a comment is about one row
+ * and validates nothing against the trace; `withWriter` would parse the
+ * statelog twice to append one line. Only `commentsStore.ts` calls this.
+ */
+export function appendCommentRow(
+  commentsPath: string,
+  draft: CommentDraft,
+  options: MutationOptions = {},
+): Comment {
+  const reportWarning = options.reportWarning ?? (() => {});
+  const lock = acquireOwnedFileLock({ lockFile: commentsLockFor(commentsPath), reportWarning });
+  try {
+    refuseUnlessRegularFile(commentsPath);
+    repairTornTail(commentsPath);
+    const row = CommentSchema.parse({
+      v: 1,
+      id: `c_${nanoid()}`,
+      created: now(options),
+      ...draft,
+    }) as Comment;
+    appendDurably(commentsPath, JSON.stringify(row) + "\n");
+    return row;
+  } finally {
+    lock.release();
+  }
 }
 
 function draftOf(row: Annotation): AnnotationDraft {

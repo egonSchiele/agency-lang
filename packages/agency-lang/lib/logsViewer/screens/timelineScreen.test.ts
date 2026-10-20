@@ -189,6 +189,13 @@ describe("TimelineScreen", () => {
       view.handleKey({ key: "up" }, viewport);
     }
     expect(view.focusId()).toBe("turn:1");
+    // A turn header is no row of the trace: nothing can be said about it.
+    expect(view.selectedRowId()).toBeUndefined();
+    view.handleKey({ key: "down" }, viewport);
+    expect(view.selectedRowId()).toBe("node");
+    for (let step = 0; step < 1; step += 1) {
+      view.handleKey({ key: "up" }, viewport);
+    }
     // Enter folds a turn.
     view.handleKey({ key: "enter" }, viewport);
     expect(frame(view)).toContain("▸ turn 2 · second question");

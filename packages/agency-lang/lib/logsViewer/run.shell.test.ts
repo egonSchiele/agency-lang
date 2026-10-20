@@ -8,11 +8,30 @@ import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { duplicateKeys } from "./keymap.js";
 // Shell-level behavior: the view stack, action dispatch, help overlay,
 // and the key routing that must NOT misfire (Ctrl+F pages; it is not `f`).
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScriptedInput } from "../tui/input/scripted.js";
 import { FrameRecorder } from "../tui/output/recorder.js";
 import { runViewer, viewerShellBindings } from "./run.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { foldComments, type Comment } from "../runDirectory/comments.js";
+import { parseStatelogJsonl } from "./parse.js";
+import { buildForest } from "./tree.js";
+function buildForestFrom(jsonl: string) {
+  return buildForest(parseStatelogJsonl(jsonl).events);
+}
+import { request } from "./session/client.js";
+import { listRecords } from "./session/registry.js";
+import type { CommentsStore } from "../runDirectory/commentsStore.js";
+
+// `A` copies through the clipboard the shell detects; swap in a fake that
+// records what was written, as copyTrace.test.ts does.
+const copied: string[] = [];
+vi.mock("./clipboard.js", () => ({
+  detectClipboard: () => ({ write: (text: string) => copied.push(text) }),
+}));
 
 const events = [
   { type: "agentStart", timestamp: "2026-05-16T00:00:00.000Z", entryNode: "main" },
@@ -546,4 +565,332 @@ it("embedded focused traces return to their host on the first Esc", async () => 
   });
   expect(resolution).toBe("back");
   expect(texts(output).join("\n")).not.toContain("The overview lands");
+});
+
+describe("the address key", () => {
+  it("A copies the focused row's address on every screen", async () => {
+    for (const screenKey of ["1", "2", "3", "4"]) {
+      copied.length = 0;
+      const out = await drive([screenKey, "A"]);
+      expect(copied, `screen ${screenKey}`).toEqual(["abc/round:s2:0"]);
+      expect(out.lastText()).toContain("copied");
+    }
+  });
+
+  it("A on the trace picker says there is no address", async () => {
+    copied.length = 0;
+    const out = await driveJsonl(twoTraceSample, ["A"]);
+    expect(copied).toEqual([]);
+    expect(out.lastText()).not.toContain("copied");
+  });
+
+  it("no shell key is also a screen key, so a shell binding never hides a screen's", () => {
+    const screens = {
+      overview: new OverviewScreen([], "T", () => undefined),
+      trace: new TraceScreen([], "T", DEFAULT_THRESHOLDS, { extractEnabled: true }),
+      transcript: new TranscriptScreen([], "T"),
+      timeline: new TimelineScreen([], "T", DEFAULT_THRESHOLDS),
+    };
+    const host = new ScreenHost(screens, "trace", "T");
+    const shellKeys = viewerShellBindings(
+      host,
+      () => [],
+      () => {},
+      () => {},
+    ).flatMap((binding) => binding.keys);
+    for (const [name, screen] of Object.entries(screens)) {
+      const screenKeys = screen
+        .helpLines()
+        .map((line) => line.slice(0, line.indexOf(" — ")))
+        .flatMap((keys) => keys.split(" / "));
+      const shared = shellKeys.filter((key) => screenKeys.includes(key));
+      expect(shared, name).toEqual([]);
+    }
+  });
+});
+
+/** An in-memory store: the viewer never learns where comments live. */
+function fakeStore(rows: Comment[] = []): CommentsStore & { rows: Comment[]; changed: boolean } {
+  const store = {
+    rows,
+    changed: false,
+    path: "fake",
+    read: () => {
+      store.changed = false;
+      return foldComments(store.rows);
+    },
+    add: (draft: Omit<Comment, "v" | "id" | "created" | "author">) => {
+      const row: Comment = {
+        v: 1,
+        id: `c${store.rows.length + 1}`,
+        created: "2026-10-19T14:30:02.000Z",
+        author: { kind: "human", id: "adit" },
+        ...draft,
+      };
+      store.rows.push(row);
+      return row;
+    },
+    changedSince: () => store.changed,
+  };
+  return store;
+}
+function agentNote(id: string, text: string, replyTo?: string): Comment {
+  return {
+    v: 1,
+    id,
+    traceId: "abc",
+    rowId: "round:s2:0",
+    anchor: {},
+    author: { kind: "agent", id: "claude" },
+    text,
+    created: "2026-10-19T14:31:00.000Z",
+    replyTo,
+  };
+}
+async function driveWithStore(
+  store: CommentsStore,
+  keys: (string | { key: string })[],
+  lines: string[] = [],
+  jsonl = sample,
+): Promise<FrameRecorder> {
+  const out = new FrameRecorder();
+  const input = new ScriptedInput([...keys, "q"]);
+  lines.forEach((line) => input.feedLine(line));
+  await runViewer({
+    jsonl,
+    input,
+    output: out,
+    viewport: { rows: 24, cols: 130 },
+    comments: store,
+  });
+  return out;
+}
+
+describe("comments in the viewer", () => {
+  it("c saves a comment on the focused row and the next frame marks it and shows the text", async () => {
+    const store = fakeStore();
+    const out = await driveWithStore(store, ["2", "c"], ["why does it do this?"]);
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]).toMatchObject({ traceId: "abc", rowId: "round:s2:0" });
+    expect(store.rows[0].anchor.at).toBe("2026-05-16T00:00:01.000Z");
+    expect(out.lastText()).toContain("✎");
+    expect(out.lastText()).toContain("why does it do this?");
+    expect(out.lastText()).toContain("COMMENTS · 1");
+  });
+
+  it("c on the detail overlay comments on the row it shows", async () => {
+    const store = fakeStore();
+    const out = await driveWithStore(store, ["2", "d", "c"], ["from detail"]);
+    expect(store.rows.map((row) => row.rowId)).toEqual(["round:s2:0"]);
+    expect(out.lastText()).toContain("from detail");
+  });
+
+  it("an empty line saves nothing", async () => {
+    const store = fakeStore();
+    await driveWithStore(store, ["2", "c"], ["   "]);
+    expect(store.rows).toEqual([]);
+  });
+
+  it("without a store, c says comments are unavailable", async () => {
+    const out = await drive(["2", "c"]);
+    expect(out.lastText()).toContain("comments unavailable");
+  });
+
+  it("C shows and hides the agent's own notes; a reply to a person always shows", async () => {
+    const store = fakeStore([agentNote("n1", "an aside")]);
+    const hidden = await driveWithStore(store, ["2"]);
+    expect(hidden.lastText()).not.toContain("an aside");
+    expect(hidden.lastText()).not.toContain("⚑");
+    const shown = await driveWithStore(store, ["2", "C"]);
+    expect(shown.lastText()).toContain("an aside");
+    expect(shown.lastText()).toContain("⚑");
+
+    const asked = fakeStore();
+    asked.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "why?" });
+    asked.rows.push(agentNote("n2", "because it retries", asked.rows[0].id));
+    const reply = await driveWithStore(asked, ["2"]);
+    expect(reply.lastText()).toContain("because it retries");
+  });
+
+  it("a comment the store cannot write is reported and the viewer stays up", async () => {
+    const store = fakeStore();
+    store.add = () => {
+      throw new Error("Another writer holds .lock");
+    };
+    const out = await driveWithStore(store, ["2", "c"], ["lost?"]);
+    expect(out.lastText()).toContain("comment not saved: Another writer holds .lock");
+    expect(out.lastText()).toContain("[2 trace]");
+  });
+
+  it("on the transcript, a user message names the round's user turn", async () => {
+    copied.length = 0;
+    await drive(["3", "g", "A"]);
+    expect(copied).toEqual(["abc/round:s2:0:user"]);
+  });
+
+  it("a store that cannot be read is reported and the viewer stays up", async () => {
+    const store = fakeStore();
+    let reads = 0;
+    store.read = () => {
+      reads += 1;
+      if (reads > 1) {
+        throw new Error("EISDIR: comments.jsonl");
+      }
+      return foldComments([]);
+    };
+    // The second read is the refresh C asks for.
+    const out = await driveWithStore(store, ["2", "C"]);
+    expect(out.lastText()).toContain("comments not read: EISDIR");
+    expect(out.lastText()).toContain("[2 trace]");
+  });
+
+  it("A on a detail overlay copies the row the overlay shows", async () => {
+    copied.length = 0;
+    await drive(["2", "d", "A"]);
+    expect(copied).toEqual(["abc/round:s2:0"]);
+  });
+
+  it("the trace picker counts a trace's comments", async () => {
+    const store = fakeStore();
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
+    store.add({ traceId: "abc", rowId: "s1", anchor: {}, text: "two" });
+    const out = await driveWithStore(store, [], [], twoTraceSample);
+    expect(out.lastText()).toContain("2 comments");
+  });
+
+  it("the timeline marks a commented row too", async () => {
+    const store = fakeStore();
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "one" });
+    const out = await driveWithStore(store, ["4"]);
+    expect(out.lastText()).toContain("✎");
+  });
+});
+
+describe("the session", () => {
+  let dir: string;
+  let logFile: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "lv-"));
+    logFile = path.join(dir, "run.jsonl");
+    fs.writeFileSync(logFile, sample);
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function sessionRecord(sessions: string) {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      const [record] = listRecords(sessions);
+      if (record !== undefined) return record;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("the viewer never registered");
+  }
+
+  it("a viewer opened without a session writes nothing", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      followPath: logFile,
+      input: new ScriptedInput(["q"]),
+      output: out,
+      viewport: { rows: 20, cols: 120 },
+    });
+    expect(fs.existsSync(path.join(dir, "sessions"))).toBe(false);
+  });
+
+  it("get reports the cursor, navigate moves it or says why not, reload re-reads comments", async () => {
+    const sessions = path.join(dir, "s");
+    const store = fakeStore();
+    const out = new FrameRecorder();
+    const input = new ScriptedInput([]);
+    const done = runViewer({
+      jsonl: sample,
+      followPath: logFile,
+      session: { dir: sessions },
+      comments: store,
+      input,
+      output: out,
+      viewport: { rows: 24, cols: 130 },
+    });
+    const record = await sessionRecord(sessions);
+    expect(record).toMatchObject({
+      logPath: path.resolve(logFile),
+      commentsPath: path.resolve("fake"),
+      pid: process.pid,
+    });
+    const sock = path.join(sessions, `${record.pid}.sock`);
+
+    input.feedKey({ key: "4" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(await request(sock, { op: "get" })).toMatchObject({
+      ok: true,
+      focus: {
+        traceId: "abc",
+        screen: "timeline",
+        rowId: "round:s2:0",
+        logPath: path.resolve(logFile),
+      },
+    });
+
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "round:s2:0" })).toEqual({
+      ok: true,
+    });
+    expect(out.lastText()).toContain("[2 trace]");
+    expect(await request(sock, { op: "navigate", traceId: "zzz", rowId: "round:s2:0" })).toEqual({
+      ok: false,
+      error: "no such trace",
+    });
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "nope" })).toEqual({
+      ok: false,
+      error: "no such row",
+    });
+
+    store.add({ traceId: "abc", rowId: "round:s2:0", anchor: {}, text: "from the cli" });
+    expect(out.lastText()).not.toContain("from the cli");
+    expect(await request(sock, { op: "reload" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("from the cli");
+
+    // A refused navigate changes nothing: the detail overlay stays open.
+    input.feedKey({ key: "d" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(out.lastText()).toContain("[DETAIL]");
+    expect(await request(sock, { op: "navigate", traceId: "abc", rowId: "nope" })).toEqual({
+      ok: false,
+      error: "no such row",
+    });
+    expect(out.lastText()).toContain("[DETAIL]");
+
+    // A trace alone lands on the trace screen's first row, also when that
+    // trace is already open with the cursor further down; pick opens the
+    // list.
+    expect(await request(sock, { op: "navigate", traceId: "abc" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("[2 trace]");
+    const top = await request(sock, { op: "get" });
+    expect(top).toMatchObject({ ok: true, focus: { screen: "trace" } });
+    const topRow = top.ok ? top.focus?.rowId : undefined;
+    expect(topRow).toBeDefined();
+    expect(topRow).not.toBe("round:s2:0");
+    expect(await request(sock, { op: "pick" })).toEqual({ ok: true });
+    expect(out.lastText()).toContain("TRACES");
+    input.feedKey({ key: "escape" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    input.feedKey({ key: "q" });
+    await done;
+    expect(listRecords(sessions)).toEqual([]);
+    expect(fs.existsSync(sock)).toBe(false);
+  });
+});
+
+describe("TraceScreen.shows", () => {
+  it("is false for a row a search filtered out, so navigate reports it instead of clearing the search", () => {
+    const screen = new TraceScreen(buildForestFrom(sample), "abc", DEFAULT_THRESHOLDS, {
+      extractEnabled: false,
+    });
+    expect(screen.shows("round:s2:0")).toBe(true);
+    screen.applySearch("no such text anywhere");
+    expect(screen.shows("round:s2:0")).toBe(false);
+  });
 });

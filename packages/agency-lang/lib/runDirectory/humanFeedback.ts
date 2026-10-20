@@ -3,11 +3,13 @@ import * as path from "path";
 import { readCurrentPointer, readRevision } from "@/eval/label/checklist.js";
 import type { ChecklistRevision } from "@/eval/label/types.js";
 
+import { commentWithAnchor, threadsForTrace } from "./comments.js";
 import type { RunDirectorySnapshot } from "./runDir.js";
 
 /**
  * What people said about a trace, in words a consumer can feed back to the
- * model: the run's `notes.md`, if any, each checklist sign-off's note, and
+ * model: the run's `notes.md`, if any, each of the person's comments on a row
+ * (worded by what the row was), each checklist sign-off's note, and
  * the text of every checklist question with how it was answered. Grader feedback is separate (it rides on the score rows);
  * this is the human side. The optimizer feeds the model the `unchecked`
  * questions (what reviewers found wrong); `checked` is here for anything
@@ -25,6 +27,16 @@ export function humanFeedbackFor(snapshot: RunDirectorySnapshot, traceId: string
   const notes: string[] = [];
   if (snapshot.notes !== null && snapshot.notes.trim().length > 0) {
     notes.push(snapshot.notes.trim());
+  }
+  // A person's comments on rows, before the early return below: a trace with
+  // comments and no annotations must keep them. Worded by anchor, since a row
+  // id means nothing to a model.
+  for (const thread of threadsForTrace(snapshot.comments, traceId)) {
+    for (const comment of [thread.comment, ...thread.replies]) {
+      if (comment.author.kind === "human") {
+        notes.push(commentWithAnchor(comment));
+      }
+    }
   }
   const effective = snapshot.effectiveAnnotations[traceId];
   if (effective === undefined) return { notes, checked: [], unchecked: [] };

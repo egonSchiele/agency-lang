@@ -11,6 +11,7 @@ import {
 import { writeRunGroup } from "@/eval/runDirectoryFixture.js";
 
 import { completeAnnotation } from "./annotations.js";
+import { openCommentsStore } from "./commentsStore.js";
 import { appendDurably } from "./durableWrite.js";
 import { humanFeedbackFor } from "./humanFeedback.js";
 import { readRunDirectory, runDirPaths } from "./runDir.js";
@@ -93,6 +94,31 @@ describe("humanFeedbackFor", () => {
     // The other run has its own notes file (none), so it sees nothing.
     const other = readRunDirectory(path.join(group, "b"), { reportWarning: () => {} });
     expect(humanFeedbackFor(other, "t2").notes).toEqual([]);
+  });
+
+  it("keeps a person's comments on rows, worded by what the row was, even with no annotations", () => {
+    const store = openCommentsStore(runDirPaths(dir).comments, { kind: "human", id: "adit" });
+    store.add({
+      traceId: "t1",
+      rowId: "round:s1:0",
+      anchor: { thread: "reviewer", name: "gpt-5" },
+      text: "why read the config twice?",
+    });
+    const agent = openCommentsStore(runDirPaths(dir).comments, { kind: "agent", id: "claude" });
+    const note = agent.add({ traceId: "t1", rowId: "round:s1:0", anchor: {}, text: "it retries" });
+    store.add({
+      traceId: "t1",
+      rowId: "round:s1:0",
+      anchor: {},
+      text: "still wrong",
+      replyTo: note.id,
+    });
+    fs.writeFileSync(runDirPaths(dir).notes, "too slow\n");
+    expect(humanFeedbackFor(snapshot(), "t1").notes).toEqual([
+      "too slow",
+      "reviewer · gpt-5: why read the config twice?",
+      "still wrong",
+    ]);
   });
 
   it("ignores a blank notes.md", () => {

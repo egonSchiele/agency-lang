@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { matchTrace, readTraces, traceDigest, tracesFromText } from "./traces.js";
+import { matchTrace, matchTraceId, readTraces, traceDigest, tracesFromText } from "./traces.js";
 
 function line(traceId: string, type: string, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -97,5 +97,16 @@ describe("matchTrace", () => {
     expect(matchTrace(traces, "abc")).toMatchObject({ kind: "one" });
     expect(matchTrace(traces, "ab")).toEqual({ kind: "ambiguous", ids: ["abc123", "abd456"] });
     expect(matchTrace(traces, "nope")).toEqual({ kind: "none" });
+  });
+});
+
+describe("matchTraceId", () => {
+  it("prefers an exact id, then a unique prefix, and reports the rest", () => {
+    const ids = ["k3Pq9abc", "k3Pzzzzz", "k3P"];
+    expect(matchTraceId(ids, "k3P")).toEqual({ kind: "one", id: "k3P" });
+    expect(matchTraceId(ids, "k3Pq")).toEqual({ kind: "one", id: "k3Pq9abc" });
+    expect(matchTraceId(ids, "k3Pz")).toEqual({ kind: "one", id: "k3Pzzzzz" });
+    expect(matchTraceId(ids, "k3")).toEqual({ kind: "ambiguous", ids });
+    expect(matchTraceId(ids, "zz")).toEqual({ kind: "none" });
   });
 });

@@ -11,10 +11,7 @@ export type ResolveContext = {
   parentURL?: string;
 };
 
-export type NextResolve = (
-  specifier: string,
-  context: ResolveContext,
-) => Promise<ResolveResult>;
+export type NextResolve = (specifier: string, context: ResolveContext) => Promise<ResolveResult>;
 
 export function resolve(
   specifier: string,

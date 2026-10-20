@@ -16,6 +16,7 @@ import {
 import { payloadFor } from "../payload.js";
 import { paintPayload } from "../screens/payloadPaint.js";
 import { keyFooter } from "../screens/chrome.js";
+import { marksForRow, type RowMarks, emptyMarks } from "../marks.js";
 import type { StoryRow } from "../story.js";
 import { THEME } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
@@ -34,9 +35,11 @@ export class DetailScreen implements View {
   private totalRows = 0;
   private message = "";
   private cache: PayloadCache | undefined;
+  private marks: RowMarks = emptyMarks();
   constructor(
     roots: TreeNode[],
-    private readonly rowId: string,
+    /** The row this overlay shows; the shell's `c` comments on it. */
+    readonly rowId: string,
     _thresholds: ViewerThresholds,
   ) {
     this.setData(roots);
@@ -131,6 +134,10 @@ export class DetailScreen implements View {
     this.message = message;
   }
   setFollowIndicator(): void {}
+  setMarks(marks: RowMarks): void {
+    this.marks = marks;
+    this.cache = undefined;
+  }
   allLines(width: number): Painted[] {
     if (!this.row) {
       return [];
@@ -139,7 +146,17 @@ export class DetailScreen implements View {
       this.cache = {
         width,
         raw: this.raw,
-        lines: paintPayload(payloadFor(this.row, { raw: this.raw, trace: this.trace }), width),
+        lines: paintPayload(
+          payloadFor(this.row, {
+            raw: this.raw,
+            trace: this.trace,
+            comments:
+              this.trace === undefined
+                ? []
+                : marksForRow(this.marks, this.trace.traceId, this.rowId).threads,
+          }),
+          width,
+        ),
       };
     }
     return this.cache.lines;

@@ -20,9 +20,7 @@ import * as path from "node:path";
 
 const thisFile = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(thisFile, "..", "..", "..", "..", "..");
-const fakeParentURL = pathToFileURL(
-  path.join(installRoot, "package.json"),
-).href;
+const fakeParentURL = pathToFileURL(path.join(installRoot, "package.json")).href;
 
 function isAgencyLangSpecifier(specifier) {
   return specifier === "agency-lang" || specifier.startsWith("agency-lang/");
@@ -45,12 +43,8 @@ export async function resolve(specifier, context, nextResolve) {
         // Normally we stay silent so the user only sees the original
         // ERR_MODULE_NOT_FOUND from Node.
         if (process.env.AGENCY_DEBUG_RESOLVER) {
-          const msg = innerErr && innerErr.message
-            ? innerErr.message
-            : String(innerErr);
-          process.stderr.write(
-            `[agency resolver] fallback failed for ${specifier}: ${msg}\n`,
-          );
+          const msg = innerErr && innerErr.message ? innerErr.message : String(innerErr);
+          process.stderr.write(`[agency resolver] fallback failed for ${specifier}: ${msg}\n`);
         }
       }
     }

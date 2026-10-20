@@ -32,6 +32,7 @@ import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
 import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
+import { markGlyphs, marksForRow, type RowMarks, emptyMarks } from "../marks.js";
 import type { Screen } from "./screen.js";
 const LAYOUT = {
   outlineShare: 0.5,
@@ -53,6 +54,9 @@ export class TraceScreen implements Screen {
   private admin = false;
   private raw = false;
   private lineNumbers = false;
+  private marks: RowMarks = emptyMarks();
+  /** Bumped on every setMarks, so the payload cache misses. */
+  private marksVersion = 0;
   private collapsed: string[] = [];
   private defaultCollapsed: string[] = [];
   private groupDefaultsApplied: string[] = [];
@@ -518,6 +522,35 @@ export class TraceScreen implements Screen {
     this.roots = roots;
     this.derive();
   }
+  setMarks(marks: RowMarks): void {
+    this.marks = marks;
+    this.marksVersion += 1;
+  }
+  /** The top of the outline as the person sees it: the first row a search
+   *  or quick filter left, else the first row at all. */
+  firstRowId(): string | undefined {
+    return (this.visible[0] ?? this.allRows[0])?.id;
+  }
+  /** Whether `setFocus(id)` would land on that row. An admin or machinery
+   *  row the settings hide, or one a `/` search or `F` filter removed, is
+   *  reported by a session's `navigate` instead of landed near or revealed
+   *  by clearing the person's filter. */
+  shows(rowId: string, trace?: TreeNode): boolean {
+    if (trace !== undefined && trace.traceId !== this.traceId) {
+      // Another trace: the screen's settings apply, and a search does not
+      // survive the switch.
+      const rows = outlineRows(trace, { machinery: this.machinery, admin: this.admin });
+      return rows.some((row) => row.id === rowId);
+    }
+    const rows = this.filter || this.quick ? this.visible : this.allRows;
+    return rows.some((row) => row.id === rowId);
+  }
+  /** The row under the cursor, as itself. `focusId` is for carrying focus to
+   *  another screen and names a round or tool a user turn or interrupt sits
+   *  under; a comment or an address wants the row that is selected. */
+  selectedRowId(): string | undefined {
+    return this.selected()?.id;
+  }
   setTrace(traceId: string): void {
     this.traceId = traceId;
     this.cursorId = "";
@@ -551,9 +584,19 @@ export class TraceScreen implements Screen {
     if (!selected) {
       return [];
     }
-    const key = JSON.stringify([this.cursorId, this.raw, width, this.lineNumbers]);
+    const key = JSON.stringify([
+      this.cursorId,
+      this.raw,
+      width,
+      this.lineNumbers,
+      this.marksVersion,
+    ]);
     if (this.cache?.key !== key) {
-      const payload = payloadFor(selected, { raw: this.raw, trace: this.trace() });
+      const payload = payloadFor(selected, {
+        raw: this.raw,
+        trace: this.trace(),
+        comments: marksForRow(this.marks, this.traceId, selected.id).threads,
+      });
       const render = (contentWidth: number) => [{ lines: paintPayload(payload, contentWidth) }];
       const blocks = this.lineNumbers ? numberedBlocks(width, render) : render(width);
       this.cache = { key, lines: blocks[0].lines };
@@ -642,7 +685,13 @@ export class TraceScreen implements Screen {
         key: "story",
         header: "",
         width: "flex",
-        cell: (row) => rowPieces(row, row.id === this.cursorId, this.isCollapsed(row)),
+        cell: (row) =>
+          rowPieces(
+            row,
+            row.id === this.cursorId,
+            this.isCollapsed(row),
+            markGlyphs(marksForRow(this.marks, this.traceId, row.id)),
+          ),
       },
       {
         key: "duration",
@@ -704,17 +753,23 @@ function durationOf(row: StoryRow): number | undefined {
   }
   return undefined;
 }
-function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[] {
-  const pieces = rowBodyPieces(row, selected, collapsed);
+function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean, marks = ""): Piece[] {
+  const pieces = rowBodyPieces(row, selected, collapsed, marks);
   return row.orphan
     ? [...pieces, { text: " · parent span not in this log", style: { fg: THEME.muted } }]
     : pieces;
 }
-function rowBodyPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[] {
+function rowBodyPieces(
+  row: StoryRow,
+  selected: boolean,
+  collapsed: boolean,
+  marks: string,
+): Piece[] {
   const prefix: Piece[] = [
     {
       text: `${selected ? "▶" : " "} ${" ".repeat(row.depth * LAYOUT.indent)}${collapsed ? "▸ " : ""}`,
     },
+    ...(marks.length === 0 ? [] : [{ text: `${marks} `, style: { fg: THEME.accent } }]),
   ];
   switch (row.kind) {
     case "round":

@@ -13,6 +13,7 @@ easy to get wrong.
   statelog.jsonl        # required; ONE trace (one trace = one run; subagents share the id)
   annotations.jsonl     # every structured opinion about the run: checklist, score, run
   notes.md              # a person's free-form notes, written with any editor
+  comments.jsonl        # comments on rows of the trace, from the logs viewer or the agent (below)
   code/                 # the agent's closure, as it ran, flat
   graders/              # the grading module it ran with, bundled, + judge files + harness pairs + graderFiles/ trees; content-hash names
   workdir/              # filesystem snapshot, flat
@@ -267,3 +268,56 @@ One file per command; none imports the lock or the append helpers.
   exported `commonAncestor` instead. Do not "simplify" it back.
 - Two `readTraces` passes inside one snapshot means the statelog is parsed
   twice; that is ~70 ms on a 12 MB log and buys coherence without a reader lock.
+
+## Comments on rows (`comments.ts`, `commentsStore.ts`)
+
+A comment is a note on one row of the trace: the LLM call where something
+went wrong, the tool call that should not have happened. A person leaves
+one with `c` in the logs viewer; an agent leaves one with
+`agency logs session comment add`. The row is named by the viewer's stable
+row ID (see "Row IDs are a contract" in `docs/dev/cli/logs-viewer.md`),
+and the comment also carries an **anchor**, the row's time, thread, and
+tool or model name, so it can still say what it was about if that ID ever
+stops resolving.
+
+Comments are not annotation rows. An annotation is an opinion about the
+trace as a whole, with a content-derived id and a fold that decides
+effective scores; a comment is about one row, has no score, and needs its
+own random id, since two identical comments on one row are two comments.
+Sharing the file would make every reader of annotations check a kind it
+does not understand.
+
+One append-only `comments.jsonl`, read like `notes.md`: best effort,
+outside the statelog coherence check, since it is appended under the lock
+but read without it. A row:
+
+```json
+{ "v": 1, "id": "c_8f2a…", "traceId": "k3Pq9abc", "rowId": "round:span-7f3a:2",
+  "anchor": { "at": "2026-10-19T14:02:11.408Z", "thread": "reviewer", "name": "gpt-5" },
+  "author": { "kind": "human", "id": "adit" },
+  "text": "why does it read the config a second time here?",
+  "created": "2026-10-19T14:30:02.000Z" }
+```
+
+An agent's answer carries `replyTo` with the id it answers. `foldComments`
+groups replies under their comment, in file order, and keeps a reply whose
+parent is missing as a comment of its own. There is no resolve row yet;
+nothing would write one.
+
+Everything reads and writes through a `CommentsStore`
+(`openCommentsStore(path, author)`): `read()` folds the file, `add(draft)`
+appends under the lock the path decides (`commentsLockFor`: a run
+directory's `.lock`, or `<sidecar>.lock` beside a loose statelog's
+`<file>.comments.jsonl`, so no `.lock` lands in whatever folder holds the
+statelog). The append is `repairTornTail` plus `appendDurably`, with no
+snapshot, since a comment validates nothing against the trace; a comments
+path that is a symlink or not a plain file is refused first, since both
+steps write the named file in place. The author
+is fixed when the store is opened, by whoever knows who is at the
+terminal; the viewer never computes one. Wrapping a loose statelog with
+`agency runs add` copies its trace's comment rows into the child run,
+inside staging, once per comment id when a statelog is named twice, and
+never rewrites the sidecar. `humanFeedbackFor` lists
+a person's comments after `notes.md`, worded by their anchor
+(`reviewer · gpt-5: why does it read the config a second time?`), since a
+row id means nothing to an optimizer's model.

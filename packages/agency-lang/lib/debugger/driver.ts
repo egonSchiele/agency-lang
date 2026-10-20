@@ -8,6 +8,7 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
+import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
@@ -264,9 +265,6 @@ export class DebuggerDriver {
     const answers: Record<string, InterruptResponse> = {};
     for (const [index, interrupt] of asked.entries()) {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
-      const data =
-        Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
-      this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
     this.ui.state.resetCallStack();
@@ -274,8 +272,15 @@ export class DebuggerDriver {
   }
 
   /** One interrupt's answer, asked for until the input is one of
-   *  approve, reject, or resolve with a value. */
+   *  approve, reject, or resolve with a value. A guard trip takes a
+   *  grant, a disarm, a message, or a reject instead. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    if (isGuardTrip(interrupt.effect, interrupt.data)) {
+      return await this.askAboutGuardTrip(interrupt, position);
+    }
+    const data =
+      Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
+    this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
     while (true) {
       // The label shares one row with the typed answer, so it stays
       // short; the message is in the activity log.
@@ -304,6 +309,23 @@ export class DebuggerDriver {
       }
       this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
     }
+  }
+
+  /** A guard trip's answer comes from the form (`showGuardTripForm`),
+   *  which only offers answers the runtime accepts. */
+  private async askAboutGuardTrip(
+    interrupt: Interrupt,
+    position: string,
+  ): Promise<InterruptResponse> {
+    this.ui.state.log(`${describeGuardTrip(interrupt.data)}${position}`);
+    this.ui.state.log(draftNote(interrupt.data));
+    const response = await this.ui.answerGuardTrip(interrupt.data);
+    this.ui.state.log(
+      response.type === "reject"
+        ? "Rejected the guard trip"
+        : `Approved the guard trip with ${JSON.stringify((response as { value?: unknown }).value)}`,
+    );
+    return response;
   }
 
   /** Resume the program with one response per interrupt of `batch`, in

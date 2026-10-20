@@ -7,6 +7,21 @@ import { formatValue } from "./util.js";
  * The minimal interface overlays need from the host UI.
  * Keeps overlays decoupled from DebuggerUI internals.
  */
+import type { InterruptResponse } from "../runtime/interrupts.js";
+import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
+import {
+  MESSAGE_PROMPT,
+  amountPrompt,
+  checkGrant,
+  describeGuardTrip,
+  draftNote,
+  guardChoices,
+  guardResponse,
+  parseAmount,
+  type GuardChoice,
+  type GuardTripData,
+} from "./guardAnswer.js";
+
 export type OverlayContext = {
   screen: Screen;
   state: UIState;
@@ -86,6 +101,102 @@ export async function showRewindSelector(
         return null;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Guard trip form
+// ---------------------------------------------------------------------------
+
+/** Ask how to answer a guard trip. First a choice: approve with more
+ *  budget, remove the tripped limit, or reject. A grant then asks for the
+ *  amount, refused on screen while it would leave the budget exceeded,
+ *  and both approvals ask for an optional message to the model. Escape in
+ *  a field goes back to the choice. */
+export async function showGuardTripForm(
+  ctx: OverlayContext,
+  data: GuardTripData,
+): Promise<InterruptResponse> {
+  const choices = guardChoices(data);
+  const heading = [describeGuardTrip(data), draftNote(data), ""];
+  let selected = 0;
+
+  const renderLines = (lines: string[]) => {
+    ctx.screen.render(
+      column(
+        ...ctx.buildTopRows(),
+        box(
+          { flex: 1, border: true, borderColor: "yellow", label: " guard tripped " },
+          text([...heading, ...lines].join("\n")),
+        ),
+        ctx.buildStatsBar(),
+        box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
+      ),
+    );
+  };
+
+  /** One line of text typed into the form; null when escape went back. */
+  const askField = async (prompt: string, above: string[]): Promise<string | null> => {
+    let draft = "";
+    let problem: string | null = null;
+    while (true) {
+      renderLines([...above, `${prompt} > ${draft}_`, ...(problem ? [problem] : [])]);
+      const action = lineEditAction(await ctx.screen.nextKey());
+      if (!action) continue;
+      if (action.kind === "cancel") return null;
+      if (action.kind === "submit") {
+        if (prompt !== MESSAGE_PROMPT) {
+          problem = amountProblem(data, draft);
+          if (problem) {
+            // Start the field over, with what was refused in the reason.
+            problem = `Not "${draft}": ${problem}`;
+            draft = "";
+            continue;
+          }
+        }
+        return draft;
+      }
+      draft = applyLineEdit(draft, action);
+    }
+  };
+
+  while (true) {
+    renderLines(choices.map((c, i) => `${i === selected ? ">" : " "} ${c.label}`));
+    const keyEvent = await ctx.screen.nextKey();
+    if (keyEvent.key === "c" && keyEvent.ctrl) {
+      ctx.cleanup();
+      return { type: "reject" };
+    }
+    if ((keyEvent.key === "up" || keyEvent.key === "k") && selected > 0) selected--;
+    if ((keyEvent.key === "down" || keyEvent.key === "j") && selected < choices.length - 1) {
+      selected++;
+    }
+    if (keyEvent.key !== "enter") continue;
+
+    const choice: GuardChoice = choices[selected].choice;
+    if (choice === "reject") return guardResponse(data, choice, null, "");
+    const chosen = [`> ${choices[selected].label}`];
+    let amount: number | null = null;
+    if (choice === "grant") {
+      const typed = await askField(amountPrompt(data), chosen);
+      if (typed === null) continue;
+      amount = parseAmount(data.dimension, typed);
+      chosen.push(`${amountPrompt(data)} > ${typed}`);
+    }
+    const message = await askField(MESSAGE_PROMPT, chosen);
+    if (message === null) continue;
+    return guardResponse(data, choice, amount, message);
+  }
+}
+
+/** Why the typed amount cannot be granted, or null when it can. */
+function amountProblem(data: GuardTripData, typed: string): string | null {
+  const amount = parseAmount(data.dimension, typed);
+  if (amount === null) {
+    return data.dimension === "cost"
+      ? "Type an amount in dollars, such as 0.5"
+      : "Type a duration, such as 30s, 2m, or 500 for milliseconds";
+  }
+  return checkGrant(data, amount);
 }
 
 // ---------------------------------------------------------------------------

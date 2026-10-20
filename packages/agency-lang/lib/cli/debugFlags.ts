@@ -34,9 +34,13 @@ export function compileChoice(flags: {
   if (flags.agencyOnly && flags.distDir) {
     return { refused: "--agency-only compiles the program itself; drop --dist-dir." };
   }
-  if (flags.agencyOnly) return { mode: "agency-only" };
+  if (flags.agencyOnly) {
+    return { mode: "agency-only" };
+  }
   const distDir = flags.distDir ?? flags.configDistDir;
-  if (distDir) return { mode: "dist-dir", distDir };
+  if (distDir) {
+    return { mode: "dist-dir", distDir };
+  }
   return { mode: "compile" };
 }
 

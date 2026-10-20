@@ -8,7 +8,7 @@ const agencyFile = path.join(fixtureDir, "parallel-interrupts.agency");
 const compiledFile = path.join(fixtureDir, "parallel-interrupts.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agencyFile, compiledFile, { ts: true });
+  compile({}, agencyFile, compiledFile, { ts: true });
 });
 
 /** A session on the fixture that records every resume the driver sends. */
@@ -23,12 +23,20 @@ function activity(session: DebuggerTestSession): string[] {
   return session.ui.state.getActivityLog();
 }
 
+function localsText(session: DebuggerTestSession): string {
+  return session.frame().findByKey("locals")!.toPlainText();
+}
+
 describe("a batch of interrupts", () => {
   it("asks about each interrupt in turn and answers the batch in one resume", async () => {
     const { session, resumes } = await batchSession();
     await session.press("c");
     expect(activity(session)).toContainEqual("Question (1 of 2): A?");
+    // The panes follow the interrupt being asked about: each arm of the
+    // parallel block is found by the interrupt's id.
+    expect(localsText(session)).toContain('label = "A"');
     await session.type("resolve 1");
+    expect(localsText(session)).toContain('label = "B"');
     expect(activity(session)).toContainEqual("Question (2 of 2): B?");
     await session.type("resolve 2");
     expect(await session.quit()).toEqual(["A:1", "B:2"]);

@@ -9,7 +9,7 @@ const stepTestAgency = path.join(fixtureDir, "step-test.agency");
 const stepTestCompiled = path.join(fixtureDir, "step-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
+  compile({}, stepTestAgency, stepTestCompiled, { ts: true });
 });
 
 describe("DebuggerTestSession", () => {

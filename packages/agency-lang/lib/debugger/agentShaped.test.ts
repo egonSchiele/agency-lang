@@ -18,8 +18,8 @@ const forkAgency = path.join(fixtureDir, "fork-test.agency");
 const forkCompiled = path.join(fixtureDir, "fork-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, agentAgency, agentCompiled, { ts: true });
-  compile({ debugger: true }, forkAgency, forkCompiled, { ts: true });
+  compile({}, agentAgency, agentCompiled, { ts: true });
+  compile({}, forkAgency, forkCompiled, { ts: true });
 });
 
 /** The replies in the order the program asks for them. The subagent's
@@ -54,6 +54,10 @@ async function agentSession(
 
 function sourceText(session: DebuggerTestSession): string {
   return session.frame().findByKey("source")!.toPlainText();
+}
+
+function callStackNames(session: DebuggerTestSession): string[] {
+  return session.ui.state.getCallStack().map((entry) => entry.functionName);
 }
 
 function localsText(session: DebuggerTestSession): string {
@@ -282,6 +286,20 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("the call stack pane lists the frames down to the tool, and the subagent's loop", async () => {
+    await withLLMMocks(agentMocks(), async () => {
+      const session = await agentSession();
+      await session.press("s"); // round 1
+      await session.press("s"); // before search
+      await session.press("s"); // const url
+      expect(callStackNames(session)).toEqual(["main", "llm()", "search"]);
+      expect(session.frame().findByKey("callStack")!.toPlainText()).toContain("> search");
+      await session.press("n", { times: 4 }); // to summary = llm(...)
+      await session.press("s"); // the subagent's round 1
+      expect(callStackNames(session)).toEqual(["main", "llm()", "search", "llm()"]);
+    });
+  });
+
   it("print reads the tool's variables and set is refused", async () => {
     await withLLMMocks(agentMocks(), async () => {
       const session = await agentSession();
@@ -403,6 +421,9 @@ describe("stopping inside a tool call", () => {
       await session.press("c");
       expect(activity(session)).toContainEqual("Interrupt: confirm send?");
       expect(activity(session).filter((line) => line.startsWith("Interrupt"))).toHaveLength(1);
+      // The interrupt has no stop record; the pane finds the tool by the
+      // interrupt's id in the branch state.
+      expect(callStackNames(session)).toEqual(["main", "llm()", "confirm"]);
       // An answer the driver does not understand is asked for again.
       await session.type("maybe");
       expect(activity(session)).toContainEqual(
@@ -498,6 +519,7 @@ describe("stopping inside a fork branch", () => {
     await session.press("c");
     expect(lineWithMarker(session)).toContain('debugger("in branch")');
     expect(localsText(session)).toContain("twice = 2");
+    expect(callStackNames(session)).toEqual(["withBreakpoint", "block"]);
     await session.press(":");
     await session.type("set twice = 5");
     expect(session.ui.state.getActivityLog()).toContainEqual(

@@ -87,5 +87,12 @@ export function lineChannel(socket: net.Socket, maxBytes: number = MAX_MESSAGE_B
       socket.destroy();
       closeOnce();
     },
+    keepAlive: (on) => {
+      if (on) {
+        socket.ref();
+      } else {
+        socket.unref();
+      }
+    },
   };
 }

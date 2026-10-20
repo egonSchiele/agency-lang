@@ -3,9 +3,14 @@ import { defaultHost } from "#default-host";
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
+import type { AttachedDebugger } from "@/runtime/attachedDebugger.js";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
+  /** Set when this debugger was installed on a program something else is
+   *  running. The runtime's public entry points hand it every batch of
+   *  debug stops (`settleStops`), so the caller never sees one. */
+  attached?: AttachedDebugger;
   public checkpoints: CheckpointStore;
   /** The depth of the step the debugger is stopped at: how many Agency
    *  calls deep it is, with the node's statements at 0. The driver sets it

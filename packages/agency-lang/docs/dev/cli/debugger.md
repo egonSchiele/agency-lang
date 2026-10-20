@@ -182,7 +182,25 @@ The builder records source locations in a `SourceMap` exported as `__sourceMap` 
 - `respondToInterruptsCore()` in `lib/runtime/interrupts.ts`
 - `rewindFrom()` in `lib/runtime/rewind.ts`
 
-`RuntimeContext.createExecutionContext()` also copies `this.debuggerState` to the new context, so `runNode()` execution contexts inherit the debugger state.
+The context keeps the state in a holder, `debugSlot`, that every execution context of a module shares by reference: `RuntimeContext.createExecutionContext()` copies the holder, not its contents, and `debuggerState` is a getter and setter over it. So a debugger installed with `__setDebugger` while a run is going, or between two legs of a resume, is seen by every live and future leg at its next step, and clearing it makes every leg cheap again. Before the holder, a leg copied the state once at its start and a mid-run install reached nothing.
+
+One rule in `maybeDebugHook` goes with the holder. On a resume the runner re-enters the statement that was in progress in every restored frame: the caller's call, whose callee's frame is restored too, and the callee's interrupt, whose answer is waiting. A frame that stopped at a debug step keeps its `__dbg_` flag, so the hook skips it; a frame restored from a checkpoint taken with no debugger has no flag. So a resume from an interrupt marks every restored frame (`StateStack.markReentry`, which records the counters the frame was restored with in `State.restoredCounters`: its `step` and every `__substep_`), and the hook skips the statement at a restored counter, consuming the entry so a loop that brings the same statement round again stops as usual. A rewind marks nothing: it replays the statement it lands on, and the stop there is the point. Without that rule a debugger attached between two legs stopped at the caller's statement while the callee's frame was still waiting to be claimed, and the resume from that stop desynced.
+
+### A debugger installed on a running program
+
+`agency debug` starts the program itself, so the driver is the caller: a debug stop makes the node function return a paused result and `DebuggerDriver.run` resumes it. A debugger can also be installed on a program something else is running, such as `agency run`, a TypeScript program that imported the compiled module, or a serve. That caller knows nothing about debug stops, so it must never see one.
+
+A driver built with `attached: true` and installed with `driver.attach()` sets `DebuggerState.attached`, an `AttachedDebugger` (`lib/runtime/attachedDebugger.ts`). The runtime's public entry points, `runNode`, `respondToInterrupts`, and their serve twins, pass each leg's outcome through `settleStops` after the leg has finished and cleaned up:
+
+- A batch of nothing but debug stops goes to `attached.run`, which shows the stop, takes the person's commands, and resumes; the leg it ends on becomes the outcome, with the usage of every leg summed (`sumRunUsage`).
+- A batch that mixes stops with the program's own interrupts is returned with the stops dropped. A resume never reads an answer for a debug stop (the stopped branch carries on from the `__dbg_` flag in its frame), so nothing is remembered, and the person's stepping mode is left as it is.
+- A final value is reported through `attached.finished`, unless the debugger ran the leg that produced it.
+
+The settle runs in the public wrappers rather than inside `runNodeCore`, so each leg's `onAgentEnd`, usage, and cleanup happen as they do today.
+
+In attached mode the driver resumes with the caller's options rather than its own. A resume does not remember the policy, host, budget, callbacks, or signals of the leg it resumes, so the runtime hands them to the driver with each stop (`LegOptions`) and the driver passes them back, with its own callbacks composed onto the caller's (`composeCallbacks`). No `inputOverride` is added: a question goes to the run's own terminal. Every resume and rewind the attached driver issues carries `metadata.attachedResume`, and the public wrappers return such a call as it is; the marker is on the call, not on the debugger, so two runs sharing one debugger in one process do not confuse it. The attached driver never intercepts the console, never destroys its UI when `run` returns, and treats `quit` as detach: the slot is cleared before the resume so the new leg raises no stop. Detaching while the driver waits at a stop answers it with `continue`.
+
+Two limits of the first version: one attached run at a time per driver, and `:save` and `:load` resolve their path in the program's process, which attached is the program's working directory.
 
 ### Module wrapper functions
 

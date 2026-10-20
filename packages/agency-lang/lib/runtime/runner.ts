@@ -436,6 +436,20 @@ export class Runner {
       return false;
     }
 
+    // The statement at the counter the frame was restored with is being
+    // re-entered on a resume from an interrupt, with its call in progress
+    // in the frame above or its interrupt's answer waiting; the resume
+    // starts it again rather than stopping before it. A frame that stopped
+    // at a debug step keeps its flag (below), but a frame restored from a
+    // checkpoint taken with no debugger has none; a debugger attached
+    // between two legs would otherwise stop here, and the resume from that
+    // stop would desync. A rewind marks nothing, so it lands on its
+    // statement as before.
+    const counterKey = this.path.length === 0 ? "" : this.key();
+    if (this.frame.takeRestoredCounter(counterKey) === id) {
+      return false;
+    }
+
     // On resume after a debug pause, skip the hook. The step clears the
     // flag once its body completes.
     if (this.frame.locals[this.debugFlagKey(id)]) {

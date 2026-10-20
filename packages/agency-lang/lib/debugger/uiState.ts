@@ -288,6 +288,11 @@ export class UIState {
     this.pendingOverrides[key] = value;
   }
 
+  /** Replace the queued overrides with the driver's copy. */
+  setOverrides(overrides: Record<string, unknown>) {
+    this.pendingOverrides = { ...overrides };
+  }
+
   /** The threads the stopped code sees, the active one marked. */
   listThreads(): ThreadSummary[] {
     if (!this.checkpoint) return [];

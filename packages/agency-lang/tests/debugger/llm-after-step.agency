@@ -1,0 +1,7 @@
+// A model call after a statement the debugger steps past, so a test can
+// check that the caller's usage figure covers the leg the debugger ran.
+node main() {
+  x = 1
+  const reply = llm("say hi")
+  return reply
+}

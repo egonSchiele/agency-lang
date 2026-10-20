@@ -40,6 +40,7 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "./types.js";
 import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
+import { isAttachedResume, settleStops } from "./attachedDebugger.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
@@ -807,6 +808,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
+    execCtx.stateStack.markReentry();
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
     outcome = { status: "returned", value };
   } catch (error) {
@@ -899,7 +901,10 @@ async function respondToInterruptsCore(
         });
       }
     },
-    afterRestore: (execCtx) => execCtx.setInterruptResponses(responseMap),
+    afterRestore: (execCtx) => {
+      execCtx.setInterruptResponses(responseMap);
+      execCtx.stateStack.markReentry();
+    },
   });
 }
 
@@ -1006,7 +1011,7 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
 /** Public entry point — returns the resume result with its usage snapshot
  *  attached, or throws the identical original error. */
 export async function respondToInterrupts(args: RespondToInterruptsArgs): Promise<any> {
-  return unwrapWithUsage(await respondToInterruptsCore(args));
+  return unwrapWithUsage(await settledResume(args));
 }
 
 /** Serve-only entry point: hands the resume outcome (result/error + usage
@@ -1014,5 +1019,22 @@ export async function respondToInterrupts(args: RespondToInterruptsArgs): Promis
 export async function respondToInterruptsForServe(
   args: RespondToInterruptsArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  return respondToInterruptsCore(args);
+  return settledResume(args);
+}
+
+/** The resume's outcome with its debug stops answered by an attached
+ *  debugger (`settleStops`), unless the resume is the debugger's own. */
+async function settledResume(
+  args: RespondToInterruptsArgs,
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  const outcome = await respondToInterruptsCore(args);
+  if (isAttachedResume(args.metadata)) {
+    return outcome;
+  }
+  return settleStops(args.ctx, outcome, {
+    invocation: args.invocation,
+    callbacks: args.metadata?.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+  });
 }

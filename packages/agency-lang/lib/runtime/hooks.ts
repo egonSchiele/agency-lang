@@ -111,6 +111,29 @@ export type AgencyCallbacks = {
   [K in keyof CallbackMap]?: (data: CallbackMap[K]) => void | Promise<void>;
 };
 
+/** One callbacks object that calls `first`'s hook and then `second`'s for
+ *  every event either has a hook for. An attached debugger uses it to add
+ *  its own hooks to a caller's on a resume, which takes one object and
+ *  would otherwise replace the caller's. */
+export function composeCallbacks(
+  first: AgencyCallbacks | undefined,
+  second: AgencyCallbacks | undefined,
+): AgencyCallbacks {
+  const composed: Record<string, (data: unknown) => Promise<void>> = {};
+  const names = [...Object.keys(first ?? {}), ...Object.keys(second ?? {})].filter(
+    (name, index, all) => all.indexOf(name) === index,
+  );
+  for (const name of names) {
+    const one = (first as Record<string, ((data: unknown) => unknown) | undefined>)?.[name];
+    const two = (second as Record<string, ((data: unknown) => unknown) | undefined>)?.[name];
+    composed[name] = async (data: unknown) => {
+      await one?.(data);
+      await two?.(data);
+    };
+  }
+  return composed as AgencyCallbacks;
+}
+
 // Recursion guard: prevents a callback that triggers helper functions
 // which re-fire the same hook from recursing into itself
 // (tests/agency/callback-recursion).

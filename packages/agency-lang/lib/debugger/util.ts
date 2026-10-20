@@ -1,5 +1,5 @@
 import type { FunctionParameter } from "../types.js";
-import type { DebuggerCommand } from "./types.js";
+import type { UiCommand } from "./types.js";
 
 export function formatValue(value: unknown): string {
   if (value === undefined) return "undefined";
@@ -41,7 +41,7 @@ export function coerceArg(raw: string, param: FunctionParameter): unknown {
   }
 }
 
-export function parseCommandInput(input: string): DebuggerCommand | null {
+export function parseCommandInput(input: string): UiCommand | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 

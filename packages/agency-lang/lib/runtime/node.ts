@@ -32,6 +32,7 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
+import { settleStops, type LegOptions } from "./attachedDebugger.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
   tokenStatsOf,
@@ -587,9 +588,11 @@ async function runNodeCore({
 }
 
 /** Public entry point — returns the RunNodeResult with its usage snapshot
- *  attached, or throws the identical original error. */
+ *  attached, or throws the identical original error. An attached debugger
+ *  answers the leg's debug stops here, after the leg has finished, so the
+ *  caller never sees one (`settleStops`). */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
-  return unwrapWithUsage(await runNodeCore(args));
+  return unwrapWithUsage(await settleStops(args.ctx, await runNodeCore(args), legOf(args)));
 }
 
 /** Serve-only entry point: hands the outcome (RunNodeResult/error + usage
@@ -597,5 +600,14 @@ export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
 export async function runNodeForServe(
   args: RunNodeArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  return runNodeCore(args);
+  return settleStops(args.ctx, await runNodeCore(args), legOf(args));
+}
+
+function legOf(args: RunNodeArgs): LegOptions {
+  return {
+    invocation: args.invocation,
+    callbacks: args.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+  };
 }

@@ -1,0 +1,21 @@
+// Two arms of a parallel block: one stops at a debugger() statement, which
+// stops even in running mode, and the other raises an interrupt. So the
+// program pauses with a batch that mixes a debug stop and a program
+// interrupt every time.
+def stopHere(): number {
+  debugger("arm")
+  return 1
+}
+
+def askHere(): number {
+  const v = interrupt("ask?")
+  return 2
+}
+
+node main() {
+  parallel {
+    let a = stopHere()
+    let b = askHere()
+  }
+  return a + b
+}

@@ -1,0 +1,19 @@
+// A program that raises its own effect a few statements in, so a test can
+// check that the policy its caller started it with still answers after an
+// attached debugger has stepped it.
+effect test::secret { name: string }
+
+def readSecret(name: string): string {
+  interrupt test::secret("read the secret?", { name: name })
+  return "the secret"
+}
+
+node main() {
+  x = 1
+  y = 2
+  const s = readSecret("key")
+  if (isFailure(s)) {
+    return "rejected"
+  }
+  return s
+}

@@ -1,0 +1,11 @@
+// A node that waits on a JavaScript helper until the test lets it go, so
+// a test can attach a debugger while the program is running and check that
+// the next statement stops.
+import { waitForTest } from "./waiter.js"
+
+node main() {
+  const started = waitForTest()
+  x = 1
+  y = x + 1
+  return y
+}

@@ -43,6 +43,9 @@ import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
 
+/** See `RuntimeContext.debugSlot`. */
+export type DebugSlot = { state: DebuggerState | null };
+
 /**
  * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
  * One collector per process — multiple RuntimeContext instances created within
@@ -151,7 +154,13 @@ export class RuntimeContext<T> {
   so that if we're inside a tool call, we don't halt execution and we don't
   emit a checkpoint.*/
   _toolCallDepth: number;
-  debuggerState: DebuggerState | null;
+  /** The debugger, held in an object every execution context of this
+   *  module shares by reference: `createExecutionContext` copies the
+   *  holder, not its contents, so a debugger installed while a run is
+   *  going, or between two legs of a resume, is seen by every live and
+   *  future leg at its next step. Read and written through
+   *  `debuggerState`. */
+  debugSlot: DebugSlot;
   /** When set, `input()` calls this instead of opening its own readline on
    *  stdin. Installed by hosts that own the terminal for this execution:
    *  the REPL routes questions through its readline, and the
@@ -382,7 +391,7 @@ export class RuntimeContext<T> {
     this._restoreCount = 0;
     this._toolCallDepth = 0;
     this.pendingPromises = new PendingPromiseStore();
-    this.debuggerState = null;
+    this.debugSlot = { state: null };
     this.traceWriter = null;
     this.traceConfig = args.traceConfig || {};
     this.runId = null;
@@ -536,7 +545,7 @@ export class RuntimeContext<T> {
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
     execCtx._interruptResponses = {};
-    execCtx.debuggerState = this.debuggerState;
+    execCtx.debugSlot = this.debugSlot;
     execCtx.traceWriter = await TraceWriter.create({
       runId,
       traceConfig: this.traceConfig,
@@ -918,8 +927,16 @@ export class RuntimeContext<T> {
     await this.traceWriter.writeStaticState(values);
   }
 
+  get debuggerState(): DebuggerState | null {
+    return this.debugSlot.state;
+  }
+
+  set debuggerState(state: DebuggerState | null) {
+    this.debugSlot.state = state;
+  }
+
   hasDebugger(): boolean {
-    return this.debuggerState !== null;
+    return this.debugSlot.state !== null;
   }
 
   hasTraceWriter(): boolean {

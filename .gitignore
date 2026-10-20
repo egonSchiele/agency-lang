@@ -87,3 +87,5 @@ packages/agency-lang/docs/site/stdlib/.agency-doc*
 packages/agency-lang/docs/site/packages/**/.agency-doc*
 __pycache__/
 packages/whisper-local/build/*
+# The JavaScript helper of a debugger fixture (waiter.js, imported by awaits-helper.agency)
+!**/tests/debugger/waiter.js

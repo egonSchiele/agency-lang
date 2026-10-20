@@ -1,8 +1,7 @@
 import { expect } from "vitest";
 import * as path from "path";
 import { DebuggerDriver } from "./driver.js";
-import { UIState } from "./uiState.js";
-import type { DebuggerCommand, DebuggerIO } from "./types.js";
+import type { DebuggerCommand, DebuggerIO, DebuggerMode } from "./types.js";
 import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
@@ -18,7 +17,10 @@ export const fixtureDir = path.join(getTestDir(), "debugger");
 // A programmatic DebuggerIO that feeds a scripted sequence of commands
 // and records all render calls for assertions.
 export class TestDebuggerIO implements DebuggerIO {
-  state: UIState = new UIState();
+  /** Every line the driver logged, in order. */
+  logLines: string[] = [];
+  mode: DebuggerMode = "stepping";
+  overrides: Record<string, unknown> = {};
   private commands: DebuggerCommand[];
   private commandIndex = 0;
   renderCalls: Checkpoint[] = [];
@@ -26,6 +28,18 @@ export class TestDebuggerIO implements DebuggerIO {
 
   constructor(commands: DebuggerCommand[]) {
     this.commands = commands;
+  }
+
+  log(line: string): void {
+    this.logLines.push(line);
+  }
+
+  setMode(mode: DebuggerMode): void {
+    this.mode = mode;
+  }
+
+  setOverrides(overrides: Record<string, unknown>): void {
+    this.overrides = { ...overrides };
   }
 
   async render(

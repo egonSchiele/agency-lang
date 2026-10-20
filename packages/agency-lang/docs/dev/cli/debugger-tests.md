@@ -354,6 +354,23 @@ it("my failing test", async () => {
 
 Run the test, then `open /tmp/debug-frames.html` in a browser. Use left/right arrow keys to step through frames. Each frame header shows which `press()` or `type()` call produced it.
 
+## Testing a driver attached to a running program
+
+A driver can be installed on a program a TypeScript caller is running (see "A debugger installed on a running program" in `debugger.md`). The test is then the caller: it calls the compiled node function and checks what comes back, while a `TestDebuggerIO` answers the stops.
+
+```typescript
+const mod = await freshImport(compiled);
+const io = new TestDebuggerIO([{ type: "step" }, { type: "continue" }]);
+const driver = new DebuggerDriver({ mod: moduleFunctions(mod), rewindSize: 30, ui: io, attached: true });
+driver.attach();
+
+const result = await mod.main();          // never a debug stop
+expect(result.data).toBe(3);
+expect(io.renderCalls.length).toBeGreaterThanOrEqual(2);
+```
+
+When the commands run out the IO answers `quit`, which attached means detach, so a short script never leaves the program waiting. To attach while the program is running, use `tests/debugger/awaits-helper.agency`, whose node waits on a JavaScript helper (`waiter.js`) until the test calls `releaseWaiter`. `lib/debugger/attached.test.ts` has one test per behaviour: attach before, during, and between legs; the caller's policy and callbacks surviving a step; a mixed batch; `set`; and detaching while stopped and while running.
+
 ## File reference
 
 | File | Purpose |
@@ -361,6 +378,7 @@ Run the test, then `open /tmp/debug-frames.html` in a browser. Use left/right ar
 | `lib/debugger/testSession.ts` | `DebuggerTestSession` class |
 | `lib/debugger/testHelpers.ts` | `freshImport`, `fixtureDir`, `withLLMMocks` |
 | `lib/debugger/driver.test.ts` | Main debugger test suite |
+| `lib/debugger/attached.test.ts` | A driver attached to a program a TypeScript caller runs |
 | `lib/debugger/testSession.test.ts` | Smoke tests for `DebuggerTestSession` itself |
 | `lib/debugger/exportFrames.test.ts` | Generates HTML frame exports for visual inspection |
 | `tests/debugger/*.agency` | Test fixture programs |

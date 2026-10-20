@@ -326,7 +326,7 @@ and are not added.
    logged line, and calls `unref()` on the server and on every accepted
    socket so an open session never keeps a finished program alive. On
    the first connection: build a `DebuggerDriver` in attached mode with
-   `moduleFunctionsFor(ctx)` and a `ChannelDebuggerIO`, send `hello`
+   the functions `registerAttach` was handed and a `ChannelDebuggerIO`, send `hello`
    (program, node, pid), and install it with `ctx.debuggerState =
    driver.debuggerState`. A second connection is answered with
    `{ refused: "already attached since <time>" }` and closed; Node cannot
@@ -352,7 +352,7 @@ and are not added.
    `node` the first node run, install the `SIGUSR2` listener, and
    remove the record and the socket in `host.system.onExit`. On the
    signal, `startAttachServer`. `platform.browser.ts` exports a
-   `registerAttach` that does nothing. `moduleFunctionsFor(ctx)` lives
+   `registerAttach` that does nothing. `attachFunctionsFor(ctx)` lives
    in `lib/runtime/attachedDebugger.ts`: the four functions the driver
    takes, bound to `ctx`, in the same runtime copy as the context.
 

@@ -43,6 +43,7 @@ declare module "#path" {
 declare module "#platform" {
   import type { CoverageCollector } from "@/runtime/coverageCollector.js";
   import type { ProviderLoadingContext } from "@/runtime/platform.js";
+  import type { RegisterAttachArgs } from "@/runtime/platform.js";
   /** The runtime hooks that differ by platform and are not the host's
    *  business. platform.node.ts loads provider modules from disk, makes a
    *  coverage collector, opens a log file, and resolves a local model;
@@ -51,6 +52,10 @@ declare module "#platform" {
   export function newCoverageCollector(): CoverageCollector | null;
   export function openLineSink(filePath: string): (line: string) => void;
   export function resolveLocalEmbeddingModel(provider: string, model: string): Promise<string>;
+  /** Make the program attachable by `agency debug --attach`: on Node a
+   *  record in the sessions directory and a signal listener; in a
+   *  browser nothing. */
+  export function registerAttach(args: RegisterAttachArgs): void;
 }
 
 declare module "#default-host" {

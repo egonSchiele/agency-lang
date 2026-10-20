@@ -25,7 +25,7 @@ export default defineConfig({
       "runs/**",
       "**/*.perf.test.ts",
     ],
-    setupFiles: ["./lib/parsers/vitest.setup.ts"],
+    setupFiles: ["./lib/parsers/vitest.setup.ts", "./lib/debugger/attach/vitest.setup.ts"],
     // Vitest's 5s default is too low for this suite. A family of tests
     // here compiles Agency programs or spawns the built CLI, and several
     // were measured at 4.3s on an IDLE machine — one unit of load away

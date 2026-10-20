@@ -8,11 +8,20 @@
 
 import { appendFileSync, mkdirSync } from "fs";
 import path from "path";
+import {
+  ensureSessionsDir,
+  removeRecord,
+  sessionsDir,
+  writeRecord,
+  type AttachRecord,
+} from "../debugger/attach/registry.js";
+import { startAttachServer, type AttachServer } from "../debugger/attach/server.js";
 import { CoverageCollector } from "./coverageCollector.js";
+import type { AttachFunctions } from "./attachedDebugger.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { loadProviderModules } from "./providerModules.js";
 import { _resolveLocalEmbeddingModel } from "../stdlib/localModels.js";
-import type { ProviderLoadingContext } from "./platform.js";
+import type { ProviderLoadingContext, RegisterAttachArgs } from "./platform.js";
 
 /** Registers the configured LLM providers before a run starts: the
  *  modules named in `agency.json` and AGENCY_PROVIDER_MODULES, and the
@@ -41,4 +50,97 @@ export function openLineSink(filePath: string): (line: string) => void {
  *  path for llama-cpp, the served name for mlx. */
 export function resolveLocalEmbeddingModel(provider: string, model: string): Promise<string> {
   return _resolveLocalEmbeddingModel(provider, model);
+}
+
+/** The signal that asks a running program to open its debug socket.
+ *  Node reserves SIGUSR1 for its own inspector, whose port any local
+ *  user can reach, so Agency does not touch it. */
+export const ATTACH_SIGNAL = "SIGUSR2";
+
+/** The record and the signal listener are per process, written once by
+ *  the first node run; the context a debugger attaches to is the one that
+ *  most recently started a node. A TypeScript program that imports two
+ *  Agency modules, or a test worker that runs many fixtures, has several
+ *  contexts in one process, and the one running now is the one a person
+ *  attaching now means. */
+let attachTarget: { functions: AttachFunctions; pid: number } | null = null;
+
+/** Where the process keeps its one attach listener. A process can hold
+ *  more than one copy of the runtime (a test worker re-evaluates modules
+ *  per file; a program can have the package twice in node_modules), and
+ *  each copy has its own `attachTarget`. The signal must reach one
+ *  listener, the last copy to register, or two servers would race for
+ *  one socket and the loser would answer with a context whose modules it
+ *  cannot see. */
+const ATTACH_LISTENER_SLOT = Symbol.for("agency.debug.attachListener");
+
+/** Make the program attachable: write its record in the sessions
+ *  directory, listen for `ATTACH_SIGNAL`, and open the debug socket when
+ *  it arrives (docs/dev/cli/debugger-attach.md). Called by `runNode` for
+ *  every node run, and returns at once when: this process already
+ *  registered; the host is not the Node host, so a memory host in a test
+ *  writes nothing; a debugger is already installed, so `agency debug`
+ *  does not register its own process and a second debugger cannot attach
+ *  over the first; or the process is an IPC child of a parent Agency
+ *  program (`AGENCY_IPC`, which the parent sets; any child process with
+ *  an IPC channel, such as a test worker, is not one), which the listing
+ *  leaves out. A sessions directory that
+ *  cannot be used is logged under DEBUG and the run goes on without
+ *  attach: a program must never fail because it cannot be debugged. */
+export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttachArgs): void {
+  const ipcChild = host.settings.read("AGENCY_IPC") === "1";
+  if (host.name !== "node" || ctx.hasDebugger() || ipcChild) {
+    return;
+  }
+  if (attachTarget !== null) {
+    attachTarget.functions = functions;
+    return;
+  }
+  const dir = sessionsDir(host);
+  const refusal = ensureSessionsDir(dir);
+  if (refusal !== null) {
+    debugLine(`not attachable: ${refusal.refused}`);
+    return;
+  }
+  const record: AttachRecord = {
+    pid: process.pid,
+    program: process.argv[1] ?? "",
+    node: nodeName,
+    startedAt: Date.now() - process.uptime() * 1000,
+  };
+  try {
+    writeRecord(dir, record);
+  } catch (error) {
+    debugLine(`not attachable: could not write the record: ${(error as Error).message}`);
+    return;
+  }
+  const target = { functions, pid: record.pid };
+  attachTarget = target;
+  let server: AttachServer | null = null;
+  const listener = (): void => {
+    if (server !== null) {
+      return;
+    }
+    void startAttachServer({ dir, record, functions: target.functions }).then((started) => {
+      if ("unavailable" in started) {
+        console.error(`[agency debug] ${started.unavailable}`);
+        return;
+      }
+      server = started;
+    });
+  };
+  const slot = process as unknown as Record<symbol, (() => void) | undefined>;
+  const previous = slot[ATTACH_LISTENER_SLOT];
+  if (previous !== undefined) {
+    process.removeListener(ATTACH_SIGNAL, previous);
+  }
+  slot[ATTACH_LISTENER_SLOT] = listener;
+  process.on(ATTACH_SIGNAL, listener);
+  host.system.onExit(() => removeRecord(dir, record.pid));
+}
+
+function debugLine(message: string): void {
+  if (process.env.DEBUG !== undefined && process.env.DEBUG !== "") {
+    console.error(`[agency debug] ${message}`);
+  }
 }

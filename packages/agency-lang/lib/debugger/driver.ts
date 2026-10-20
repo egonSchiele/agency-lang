@@ -13,6 +13,7 @@ import { composeCallbacks } from "../runtime/hooks.js";
 import { emptyRunUsage, sumRunUsage, type RunUsage } from "../runtime/invocationUsage.js";
 import {
   ATTACHED_RESUME,
+  type AttachFunctions,
   type AttachedRunResult,
   type LegOptions,
 } from "../runtime/attachedDebugger.js";
@@ -24,27 +25,10 @@ import type { InvocationOptions } from "../runtime/invocationOptions.js";
 import { color } from "@/utils/termcolors.js";
 import { round } from "@/utils.js";
 
-// Functions from the compiled module that are bound to __globalCtx
-type ModuleFunctions = {
-  respondToInterrupts: (
-    interrupts: Interrupt[],
-    responses: InterruptResponse[],
-    opts?: {
-      overrides?: Record<string, unknown>;
-      metadata?: Record<string, any>;
-      invocation?: InvocationOptions;
-      abortSignal?: AbortSignal;
-      pauseSignal?: AbortSignal;
-    },
-  ) => Promise<any>;
-  rewindFrom: (
-    checkpoint: Checkpoint,
-    overrides: Record<string, unknown>,
-    opts?: { metadata?: Record<string, any>; invocation?: InvocationOptions },
-  ) => Promise<any>;
-  __setDebugger: (dbg: DebuggerState | null) => void;
-  __getCheckpoints: () => CheckpointStore;
-};
+/** The four functions a driver drives a program through: a compiled
+ *  module exports them bound to its `__globalCtx`, and the runtime binds
+ *  them to a context for the attach server (`attachFunctionsFor`). */
+export type ModuleFunctions = AttachFunctions;
 
 type DriverOpts = {
   mod: ModuleFunctions;
@@ -161,7 +145,17 @@ export class DebuggerDriver {
   private async finishedAttached(result: any): Promise<void> {
     this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
     this.programFinished = true;
-    await this.ui.render();
+    await this.renderIfAttached();
+  }
+
+  /** A render the other side may no longer be there for. */
+  private async renderIfAttached(): Promise<void> {
+    try {
+      await this.ui.render();
+    } catch (error) {
+      if (!(error instanceof DebuggerDetached)) throw error;
+      this.detach();
+    }
   }
 
   /** The command the person gives, or `continue` when the driver is
@@ -306,7 +300,7 @@ export class DebuggerDriver {
           finalResult = result;
           // Attached, the value belongs to whoever is running the program.
           if (this.attached) {
-            await this.ui.render();
+            await this.renderIfAttached();
             return result;
           }
           // When the program finishes, keep the last batch so the user can
@@ -353,21 +347,25 @@ export class DebuggerDriver {
             const others = batch.slice(1).map((intr) => stopOf(intr)?.scopeName ?? "a branch");
             this.ui.log(`Also stopped in ${others.join(", ")}; the next command moves all`);
           }
-          let command: DebuggerCommand;
-          try {
-            await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
-            command = await this.nextCommand();
-          } catch (error) {
-            if (!(error instanceof DebuggerDetached)) throw error;
-            this.detach();
-            command = { type: "continue" };
-          }
-          lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches
           // (e.g. :save / :load handle file errors and log them via
           // ui.log). Anything that escapes is an internal bug that
           // should crash the driver, not silently continue with stale state.
-          result = await this.handleCommand(command, interrupt, batch);
+          // The one exception is the other side going away while attached,
+          // at any of the IO calls: the stop is answered with continue and
+          // the program runs on without a debugger.
+          try {
+            await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
+            const command = await this.nextCommand();
+            lastCommand = command;
+            result = await this.handleCommand(command, interrupt, batch);
+          } catch (error) {
+            if (!(error instanceof DebuggerDetached)) throw error;
+            this.detach();
+            this.debuggerState.running();
+            lastCommand = { type: "continue" };
+            result = await this.resume(batch);
+          }
           if (result && result.__debuggerQuit) {
             return finalResult;
           }

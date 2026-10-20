@@ -177,12 +177,18 @@ export class DebuggerDriver {
       // concurrent branches (parallel tool calls, a fork, a parallel
       // block) paused at once. A resume answers the whole batch.
       let batch: Interrupt[] = [];
+      let shown: Interrupt | undefined;
       let finalResult: any = undefined;
       // eslint-disable-next-line no-constant-condition
       while (true) {
         if (hasInterrupts(result?.data)) {
           batch = result.data;
-        } else if (!isInterrupt(result?.data)) {
+        } else if (isInterrupt(result?.data)) {
+          // A command that did not move the program (print, checkpoint, a
+          // cancelled rewind) hands back the interrupt it was given; the
+          // batch it belongs to stays.
+          if (result.data !== shown) batch = [result.data];
+        } else {
           if (batch.length === 0) {
             throw new Error(
               "Program finished without any interrupts. This shouldn't happen with the debugger enabled.",
@@ -195,8 +201,6 @@ export class DebuggerDriver {
           finalResult = result;
           // When the program finishes, keep the last batch so the user can
           // keep interacting (step back, rewind, print, etc.)
-        } else {
-          batch = [result.data];
         }
         // The interrupt shown: the first that asks the person something,
         // else the first debug stop.
@@ -204,6 +208,7 @@ export class DebuggerDriver {
           ? []
           : batch.filter((intr) => !isDebugger(intr));
         const interrupt: Interrupt = asked[0] ?? batch[0];
+        shown = interrupt;
         // After the program finishes, even a restored user interrupt is no
         // longer a live request for input — the response has already been
         // delivered. Fall through to the debug-command branch so the user
@@ -229,7 +234,7 @@ export class DebuggerDriver {
           }
           // Several branches stopped at once: one is shown, and the next
           // command moves all of them.
-          if (!skipCheckpoint && batch.length > 1) {
+          if (!skipCheckpoint && !this.programFinished && batch.length > 1) {
             const others = batch.slice(1).map((intr) => stopOf(intr)?.scopeName ?? "a branch");
             this.ui.state.log(`Also stopped in ${others.join(", ")}; the next command moves all`);
           }
@@ -282,8 +287,10 @@ export class DebuggerDriver {
       Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
     this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
     while (true) {
+      // The label shares one row with the typed answer, so it stays
+      // short; the message is in the activity log.
       const input = await this.ui.promptForInput(
-        `${interrupt.message}${position}: approve / reject / resolve <value>`,
+        `interrupt${position}: approve / reject / resolve <value>`,
       );
       const trimmed = input.trim();
       if (trimmed === "approve" || trimmed === "a" || trimmed === "") {

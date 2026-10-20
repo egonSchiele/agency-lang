@@ -11,6 +11,12 @@ export type Channel = {
   /** Run `listener` once, when the channel closes for any reason. */
   onClose(listener: () => void): () => void;
   close(): void;
+  /** Whether this channel keeps the process alive. The run side holds
+   *  the channel while a program is stopped waiting for the debugger's
+   *  answer, and nothing else may be keeping the process up; the rest of
+   *  the time an open session must not keep a finished program alive. A
+   *  channel with no process to keep alive ignores it. */
+  keepAlive(on: boolean): void;
 };
 
 type Listeners = {
@@ -58,6 +64,7 @@ export function memoryChannelPair(): [Channel, Channel] {
       };
     },
     close: closeBoth,
+    keepAlive: () => {},
   });
   return [make(left, right), make(right, left)];
 }

@@ -8,7 +8,7 @@ import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
-import type { SourceLocation } from "./sourceLocation.js";
+import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
 import type { StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -64,6 +64,7 @@ export type CheckpointArgs = {
   scopeName?: string;
   stepPath?: string;
   branchPath?: string[];
+  loopStop?: LoopStopKind;
   label?: string | null;
   pinned?: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -83,6 +84,9 @@ export type CheckpointJSON = {
   /** Present only for a checkpoint taken on a branch stack, so a
    *  checkpoint from before the field keeps its signature. */
   branchPath?: string[];
+  /** Present only for a checkpoint taken at one of the tool loop's own
+   *  stops. */
+  loopStop?: LoopStopKind;
   label: string | null;
   pinned: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
@@ -102,6 +106,9 @@ export class Checkpoint implements SourceLocation {
   /** The branch keys from the root stack down to the stack the step ran
    *  on, empty for the root. `getCurrentFrame` follows it. */
   public branchPath: string[];
+  /** Set for a checkpoint taken at one of the tool loop's own stops,
+   *  before a model request or a tool call. See `SourceLocation`. */
+  public loopStop?: LoopStopKind;
   public label: string | null;
   public pinned: boolean;
   /** The fingerprint (a hash of the generated code) of each module with a
@@ -129,6 +136,7 @@ export class Checkpoint implements SourceLocation {
     this.scopeName = args.scopeName ?? "";
     this.stepPath = args.stepPath ?? "";
     this.branchPath = args.branchPath ?? [];
+    this.loopStop = args.loopStop;
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
     this.moduleFingerprints = args.moduleFingerprints;
@@ -153,6 +161,9 @@ export class Checkpoint implements SourceLocation {
     if (this.branchPath.length > 0) {
       location.branchPath = this.branchPath;
     }
+    if (this.loopStop !== undefined) {
+      location.loopStop = this.loopStop;
+    }
     return location;
   }
 
@@ -166,12 +177,24 @@ export class Checkpoint implements SourceLocation {
 
   /** The last frame of the stack `branchPath` leads to, from the root. */
   frameAt(branchPath: string[]): StateJSON | undefined {
-    let frame = this.rootFrame();
+    return this.stackAt(branchPath)?.at(-1);
+  }
+
+  /** The frames of the stack `branchPath` leads to, from the root. */
+  stackAt(branchPath: string[]): StateJSON[] | undefined {
+    let frames: StateJSON[] | undefined = this.stack.stack;
     for (const key of branchPath) {
-      const branch = frame?.branches?.[key];
-      frame = branch?.stack.stack.at(-1);
+      frames = frames?.at(-1)?.branches?.[key]?.stack.stack;
     }
-    return frame;
+    return frames;
+  }
+
+  /** The frame a person inspects at a location: the frame the step ran
+   *  in, or, at one of the tool loop's own stops, the frame that called
+   *  `llm()`, the one under the loop's frame. */
+  shownFrame(location: { branchPath?: string[]; loopStop?: LoopStopKind }): StateJSON | undefined {
+    const frames = this.stackAt(location.branchPath ?? []);
+    return frames?.at(location.loopStop === undefined ? -1 : -2);
   }
 
   /** The last frame of the root stack. */
@@ -279,6 +302,9 @@ export class Checkpoint implements SourceLocation {
     };
     if (this.branchPath.length > 0) {
       json.branchPath = this.branchPath;
+    }
+    if (this.loopStop !== undefined) {
+      json.loopStop = this.loopStop;
     }
     if (this.moduleFingerprints !== undefined) {
       json.moduleFingerprints = this.moduleFingerprints;

@@ -4,7 +4,7 @@ import { callHook, hasCallbackConsumer } from "./hooks.js";
 import { nativeTypeReplacer } from "./revivers/index.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
-import type { SourceLocation } from "./state/sourceLocation.js";
+import type { LoopStopKind, SourceLocation } from "./state/sourceLocation.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { Run } from "./asyncContext.js";
 
@@ -25,6 +25,9 @@ export type DebugStopData = {
    *  at 0, a called function's or a tool's at one more than its caller. */
   depth: number;
   label: string | null;
+  /** Set when the stop is one of the tool loop's own, before a model
+   *  request or a tool call, rather than at a statement. */
+  loopStop?: LoopStopKind;
 };
 
 export function isDebugStop(data: unknown): data is DebugStopData {
@@ -41,6 +44,8 @@ export async function debugStep(
     label: string | null;
     nodeContext: boolean;
     isUserAdded: boolean;
+    /** Set for one of the tool loop's own stops. */
+    loopStop?: LoopStopKind;
   },
   stack: StateStack,
 ): Promise<Interrupt[] | undefined> {
@@ -52,12 +57,15 @@ export async function debugStep(
   }
 
   const onRootStack = stack === ctx.stateStack;
-  const location = {
+  const location: Omit<SourceLocation, "nodeId"> = {
     moduleId: info.moduleId,
     scopeName: info.scopeName,
     stepPath: info.stepPath,
     branchPath: stack.branchPath(),
   };
+  if (info.loopStop !== undefined) {
+    location.loopStop = info.loopStop;
+  }
 
   // A rewind marks the checkpoint at its destination as already recorded.
   // Consume that marker here so later steps continue writing trace checkpoints.
@@ -122,6 +130,7 @@ export async function debugStep(
     moduleId: info.moduleId,
     scopeName: info.scopeName,
     stepPath: info.stepPath,
+    loopStop: info.loopStop,
   });
   const checkpoint = ctx.checkpoints.get(checkpointId);
 
@@ -135,7 +144,12 @@ export async function debugStep(
 
   // The depth is not recorded on `dbg` here: several branches can stop in
   // one round, and the driver sets the depth from the stop it shows.
-  const stop: DebugStopData = { ...location, depth, label: info.label };
+  const stop: DebugStopData = {
+    ...location,
+    branchPath: location.branchPath ?? [],
+    depth,
+    label: info.label,
+  };
   const debugInterrupt = createDebugInterrupt(stop, checkpointId, checkpoint, ctx.getRunId());
 
   return [debugInterrupt];

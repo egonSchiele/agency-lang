@@ -213,7 +213,7 @@ function formatCheckpointList(checkpoints: Checkpoint[], selectedIndex: number):
   return checkpoints
     .map((cp, i) => {
       const tag = checkpointTag(cp);
-      const line = `${tag} #${cp.id} - ${cp.getFilename()}:${cp.scopeName} step ${cp.stepPath}`;
+      const line = `${tag} #${cp.id} - ${cp.getFilename()}:${cp.scopeName} step ${cp.stepPath}${rewindNote(cp)}`;
       return i === selectedIndex
         ? `{blue-bg}{white-fg} > ${escapeStyleTags(line)} {/white-fg}{/blue-bg}`
         : `   ${escapeStyleTags(line)}`;
@@ -231,12 +231,18 @@ function formatCheckpointListStyled(checkpoints: Checkpoint[], selectedIndex: nu
           : "{magenta-fg}[code]{/magenta-fg}";
       }
       const name = `${escapeStyleTags(cp.getFilename())}:${escapeStyleTags(cp.scopeName)}`;
-      const line = `${tag} {bold}#${cp.id}{/bold} ${name}`;
+      const line = `${tag} {bold}#${cp.id}{/bold} ${name}${escapeStyleTags(rewindNote(cp))}`;
       return i === selectedIndex
         ? `{blue-bg}{white-fg} > ${line} {/white-fg}{/blue-bg}`
         : `   ${line}`;
     })
     .join("\n");
+}
+
+/** A checkpoint taken at the tool loop's stop before a model request
+ *  replays that request when rewound to, which costs a model call. */
+function rewindNote(cp: Checkpoint): string {
+  return cp.loopStop === "round" ? " (replays a model request)" : "";
 }
 
 function checkpointTag(cp: Checkpoint): string {

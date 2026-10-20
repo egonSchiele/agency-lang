@@ -171,6 +171,36 @@ describe("Checkpoint", () => {
       expect(cp.frameAt(["tool_0_missing"])).toBeUndefined();
     });
 
+    it("shows the frame under the loop's at one of the loop's own stops", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          { scopeName: "main", locals: { task: "research" } },
+          {
+            scopeName: "runPrompt",
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  { scopeName: "search", locals: { url: "u" } },
+                  { scopeName: "runPrompt", locals: {} },
+                ]),
+              },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.shownFrame({ branchPath: [] })!.scopeName).toBe("runPrompt");
+      expect(cp.shownFrame({ branchPath: [], loopStop: "round" })!.locals).toEqual({
+        task: "research",
+      });
+      expect(cp.shownFrame({ branchPath: ["tool_0_abc"], loopStop: "tool" })!.locals).toEqual({
+        url: "u",
+      });
+      expect(cp.stackAt(["tool_0_missing"])).toBeUndefined();
+    });
+
     it("reads the globals of the nearest branch with its own copy", () => {
       const rootGlobals = makeGlobalsJSON({ m: { counter: 0 } });
       const forkGlobals = makeGlobalsJSON({ m: { counter: 1 } });

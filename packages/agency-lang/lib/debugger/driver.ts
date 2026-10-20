@@ -212,6 +212,11 @@ export class DebuggerDriver {
           // does not record a depth; the stop record carries it.
           const stop = stopOf(interrupt);
           if (stop) this.debuggerState.stoppedAt(stop.depth);
+          // A stop of the tool loop's own has no source line, so the
+          // activity log says where the loop is.
+          if (!skipCheckpoint && stop?.loopStop !== undefined) {
+            this.ui.state.log(`Stopped before ${stop.label}`);
+          }
           await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
@@ -333,6 +338,12 @@ export class DebuggerDriver {
           this.ui.state.log(
             "set inside a tool call, a fork, or a parallel block is not supported yet",
           );
+          return { data: interrupt };
+        }
+        // The frame shown at one of the loop's own stops is the caller's,
+        // but the override would land on the loop's frame, the last one.
+        if (stop?.loopStop !== undefined) {
+          this.ui.state.log("set before a model request or a tool call is not supported yet");
           return { data: interrupt };
         }
         this.ui.state.setOverride(command.varName, command.value);
@@ -581,11 +592,11 @@ function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
 }
 
-/** The frame the program is stopped in: the one the stop's branch path
- *  leads to, else the checkpoint's own. */
+/** The frame the program is stopped in: the one the stop's location
+ *  leads to, else the checkpoint's own. At one of the tool loop's own
+ *  stops that is the frame that called `llm()`. */
 function stoppedFrame(interrupt: Interrupt): StateJSON | undefined {
   const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
   if (!checkpoint) return undefined;
-  const stop = stopOf(interrupt);
-  return stop ? checkpoint.frameAt(stop.branchPath) : checkpoint.getCurrentFrame();
+  return checkpoint.shownFrame(stopOf(interrupt) ?? checkpoint);
 }

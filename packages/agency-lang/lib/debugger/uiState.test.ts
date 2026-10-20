@@ -158,10 +158,59 @@ describe("UIState", () => {
       ]);
     });
 
-    it("without a stop record, shows the checkpoint's own frame", async () => {
+    // A checkpoint marked `loopStop` was taken at one of the loop's own
+    // stops, before a request or a tool call. It is located under the
+    // llm() statement, and its frame is the caller's.
+    it("a loop checkpoint shows the caller's frame at the llm() statement", async () => {
       const ui = new UIState();
-      await ui.setCheckpoint(sharedCheckpoint());
-      expect(ui.getLocals()).toEqual([{ key: "messagesJSON", value: [], override: undefined }]);
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          moduleId: "mod.agency",
+          scopeName: "main",
+          stepPath: "1/initialLlmCall",
+          loopStop: "round",
+          stack: sharedCheckpoint().stack,
+        }),
+      );
+      expect(ui.getArgs()).toEqual([{ key: "task", value: "research", override: undefined }]);
+      expect(ui.getLocals()).toEqual([{ key: "answer", value: null, override: undefined }]);
+      expect(ui.getLocation()).toMatchObject({ scopeName: "main", stepPath: "1" });
+    });
+
+    it("a loop stop inside a tool shows that tool's frame, at its llm() statement", async () => {
+      // The subagent in `search` runs its own loop: the stop's branch path
+      // leads to the tool's stack, whose last frame is the loop's.
+      const cp = makeCheckpoint({
+        scopeName: "runPrompt",
+        stepPath: "1/round.0.tools",
+        stack: makeStackJSON([
+          { args: { task: "research" }, locals: { answer: null } },
+          {
+            scopeName: "runPrompt",
+            locals: { messagesJSON: [] },
+            branches: {
+              tool_0_abc: {
+                stack: makeStackJSON([
+                  { args: { query: "grant" }, locals: { url: "https://example.test/grant" } },
+                  { scopeName: "runPrompt", locals: { messagesJSON: [] } },
+                ]),
+              },
+            },
+          },
+        ]),
+      });
+      const ui = new UIState();
+      await ui.setCheckpoint(cp, {
+        moduleId: "mod.agency",
+        scopeName: "search",
+        stepPath: "3/initialLlmCall",
+        branchPath: ["tool_0_abc"],
+        depth: 2,
+        label: "round 1",
+        loopStop: "round",
+      });
+      expect(ui.getArgs()).toEqual([{ key: "query", value: "grant", override: undefined }]);
+      expect(ui.getLocation()).toMatchObject({ scopeName: "search", stepPath: "3" });
     });
   });
 

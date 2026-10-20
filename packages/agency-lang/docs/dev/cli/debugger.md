@@ -102,7 +102,28 @@ The driver uses four wrapper functions the compiled module exports (`respondToIn
 - **stepOut**: `mode = "stepping"`, `targetDepth = stopDepth - 1`. Runs until current function returns.
 - **continue**: `mode = "running"`. Runs until a user-placed `debugger()` statement.
 
-A step's depth is how many Agency calls deep the run is, read from `run.callDepth`, the counter `withCallDepth` keeps on every call (see `lib/runtime/callDepth.ts`). The node's statements are at 0, a called `def`'s at 1, and a tool's at one more than the function that called `llm()`, so `step in` from an `llm()` line lands on the tool's first statement. The counter follows the lineage of calls, not a global count, so two tools running at once each have their own depth, and a resume rebuilds it as the calls re-enter. If/else, loops, match blocks, `thread` blocks, and the branches of a `fork` or `parallel` block are at their enclosing block's depth and are stepped through normally: `next` at a `fork` statement stops at the first statement of a branch, as it does for a loop body.
+A step's depth is how many Agency calls deep the run is, read from `run.callDepth`, the counter `withCallDepth` keeps on every call (see `lib/runtime/callDepth.ts`). The node's statements are at 0, a called `def`'s at 1, and a tool's at one more than the function that called `llm()`, so `step in` from an `llm()` line lands on the tool's first statement. The counter follows the lineage of calls, not a global count, so two tools running at once each have their own depth, and a resume rebuilds it as the calls re-enter. If/else, loops, match blocks, `thread` blocks, and the branches of a `fork` or `parallel` block are at their enclosing block's depth and are stepped through normally: `next` at a `fork` statement stops at the first statement of a branch, as it does for a loop body. The tool loop that runs for `llm()` is one call deeper than the statement that called it (`runPrompt` runs under `withCallDepth`), and a tool it calls one deeper again.
+
+What the commands do around an `llm()` call, with that depth rule:
+
+| Command | At the `llm()` statement | At a `round` or `tool` stop | Inside a tool's body |
+|---|---|---|---|
+| `step` | stops at `round 1` | the next stop of any kind | the next step anywhere |
+| `next` | runs the whole `llm()` | the next `tool` or `round` stop, over the tool's body | the tool's next statement |
+| `step in` | stops at `round 1` | the tool's first statement | the first statement of a called `def` |
+| `step out` | runs to the caller | the statement after `llm()` | the loop's next stop |
+| `continue` | runs to a breakpoint | the same | the same |
+
+### Stops between tool calls
+
+The tool loop `runPrompt` runs for `llm()` has stops of its own, taken on the `runPrompt` frame by `PromptRunner` (`lib/runtime/promptRunner.ts`). The loop names what a step is, and the runner owns what the debugger does with it:
+
+- **`pr.llmCall(which, body)`** runs a model request as a step. `which` says which request it is, `{ first: true }`, `{ afterToolRound: n }`, or `{ validationRetry: n }`, and the runner derives the step key (`initialLlmCall`, `round.N.nextLlmCall`, `validation.N.llmCall`, unchanged so recorded checkpoints still resume) and the label, `round N` or `validation retry N`. The stop comes before the request rather than after, so a person can change the thread before the model sees it.
+- **`pr.beforeToolCall(invocationKey, toolCall)`** is the stop before a tool call, labelled `search(query: "grant")` with each argument cut to 40 characters. The loop calls it for each call whose gate verdict is `proceed`, in order, before the round's batch starts (a refused call gets no stop), for a handoff right before its own second batch, and for an intrinsic call such as `saveDraft`. The stops sit on the frame rather than inside each call's branch because a stop inside each branch would raise one debug interrupt per call in a single batch, which the driver shows one of (see below). Without a debugger it returns at once and records no step, so a run without one pays nothing per call. To make the verdicts known before the batch, the loop decides them in a step of their own, `round.N.gateVerdicts`, in call order; a branch that finds no verdict (a checkpoint from before that step) decides its own.
+
+`PromptRunner.debugStop` works like `maybeDebugHook`: it fires only when a debugger is attached, skips a handler body and a callback body, keeps a `__dbg_<key>` flag in the `runPrompt` frame's locals so a resume that re-enters the step skips the stop, and clears the flag when the step's body completes. The checkpoint `debugStep` stamps is the one the interrupt carries; the runner does not stamp a second. The stop is located under the `llm()` statement, in its module and scope, at the statement's step path plus a slash and the step key, and both the stop record and the checkpoint carry `loopStop: "round" | "tool"`. That marker is how the UI knows the location is not a statement: the source pane shows the `llm()` line (`statementStepPath` takes the part before the slash), the locals pane and `print` show the frame that called `llm()` (`Checkpoint.shownFrame`, the frame under the loop's, on the stack the branch path leads to, so a subagent's stop shows its tool's frame), the activity log says `Stopped before round 2` or `Stopped before search(query: "grant")`, and `set` is refused there. The rewind list marks a checkpoint with `loopStop: "round"` "(replays a model request)".
+
+A subagent, a tool that calls `llm()` itself, runs its own loop with its own stops, so `round 1` can appear once per loop.
 
 ### Stops inside a tool call
 
@@ -194,8 +215,8 @@ Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [val
 - **TypeScript functions**: cannot step into them. The driver detects them (not in source map) and shows "Executing TypeScript: functionName()" in the activity log.
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
-- **Between tool calls**: the loop's own steps, one per model request and one per tool call, do not call the hook yet, so there is no stop between "the model answered" and "the next tool runs". `step` from the `llm()` line lands on the first statement of the first Agency tool that runs.
 - **Several stops at once**: one is shown (see "Stops inside a tool call").
 - **`set` on a branch stack**: refused inside a tool call, a fork, or a parallel block.
+- **`set` at one of the loop's own stops**: refused before a model request or a tool call. The frame shown there is the caller's, but an override would land on the loop's frame, the last one on the stack.
 - **`debugger()` inside a handler body**: does not stop. A handler body has no step address a resume could re-enter, so the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.
 - **Trace replay inside a tool call**: a trace records root-stack steps only.

@@ -12,7 +12,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/doc-cache.md` — The incremental cache behind `agency doc`, and how it decides a page is stale.
 - `docs/dev/cli/effects-command.md` — `agency effects`, which lists the effect sets and built-in policies the approval flags accept, and where its data comes from.
 - `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
-- `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding.
+- `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding, including stops inside a tool call and between the tool loop's requests and calls.
 - `docs/dev/cli/debugger-tests.md` — Driving the debugger headlessly in tests.
 - `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
 - `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, follow mode, row IDs as a contract and addresses, comments as marks with the one comments source, and the session a CLI talks to over a socket.

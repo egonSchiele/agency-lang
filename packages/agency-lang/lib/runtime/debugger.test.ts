@@ -175,6 +175,22 @@ describe("debugStep()", () => {
     });
   });
 
+  it("a loop stop is marked on the stop record and on both checkpoints", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepping();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    const result = await debugStepIn(ctx, {
+      ...baseInfo,
+      stepPath: "1/initialLlmCall",
+      label: "round 1",
+      loopStop: "round",
+    });
+    expect(result![0].data).toMatchObject({ loopStop: "round", label: "round 1" });
+    expect(result![0].checkpoint!.loopStop).toBe("round");
+    expect(dbg.getCheckpoints()[0].loopStop).toBe("round");
+    expect(JSON.stringify(dbg.getCheckpoints()[0].toJSON())).toContain('"loopStop":"round"');
+  });
+
   it("the interrupt data carries a null label when there is none", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext();

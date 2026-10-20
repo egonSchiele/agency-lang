@@ -5,6 +5,7 @@ import {
   type ThreadMessages,
 } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
+import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -92,9 +93,16 @@ export class UIState {
       return;
     }
     this.checkpoint = cp;
-    this.location = stop ?? cp.location;
+    // One of the tool loop's own stops, before a model request or a tool
+    // call, is located under the `llm()` statement, so the source pane
+    // shows that statement, and its frame is the one that called it.
+    const location = stop ?? cp.location;
+    this.location =
+      location.loopStop === undefined
+        ? location
+        : { ...location, stepPath: statementStepPath(location.stepPath) };
     const branchPath = this.location.branchPath ?? [];
-    const frame = cp.frameAt(branchPath);
+    const frame = cp.shownFrame(location);
     if (!frame) {
       this.log("No current frame available in checkpoint");
       return;
@@ -195,6 +203,11 @@ export class UIState {
 
   getModuleId() {
     return this.location?.moduleId || "unknown module";
+  }
+
+  /** Where the program is stopped, as the panes show it. */
+  getLocation(): SourceLocationOpts | undefined {
+    return this.location;
   }
 
   getCurrentLine() {

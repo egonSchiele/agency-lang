@@ -3,6 +3,12 @@ import { PromptRunner, PromptBailout, type BranchRunner } from "./promptRunner.j
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
+import { DebuggerState } from "../debugger/debuggerState.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
+
+/** Only the debugger's stops read the run, and these tests attach no
+ *  debugger. */
+const noRun = {} as Run;
 
 /** Stub statelog client. Includes the minimum surface PromptRunner touches:
  *  checkpointCreated for `step()`, snapshotStack / runInBranchContext for
@@ -36,6 +42,7 @@ function makeRunner(overrides: Partial<any> = {}) {
   const opts = {
     self,
     ctx,
+    run: noRun,
     log: ctx.statelogClient,
     stateStack,
     parentFrame,
@@ -191,6 +198,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self,
       ctx,
+      run: noRun,
       log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
@@ -227,6 +235,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
+      run: noRun,
       log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: undefined,
@@ -254,6 +263,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
+      run: noRun,
       log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
@@ -407,6 +417,7 @@ describe("PromptRunner.parallel", () => {
     const runner = new PromptRunner({
       self,
       ctx,
+      run: noRun,
       log: ctx.statelogClient,
       stateStack,
       parentFrame,
@@ -469,5 +480,142 @@ describe("PromptRunner.parallel", () => {
     expect(aRan).toBe(1);
     expect(bRan).toBe(0);
     expect(self.runnerState.completedSteps.includes("a.s1")).toBe(true);
+  });
+});
+
+describe("PromptRunner.llmCall and beforeToolCall", () => {
+  const checkpointInfo = { moduleId: "m", scopeName: "s", stepPath: "p" };
+
+  it("stops before the body when a debugger is attached, and the resumed step runs it once", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepping();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    const self: any = {};
+    let bodyRuns = 0;
+    const body = async () => {
+      bodyRuns++;
+    };
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
+      const runner = new PromptRunner({
+        self,
+        ctx,
+        run,
+        log: stubStatelogClient() as any,
+        stateStack: ctx.stateStack,
+        checkpointInfo,
+        snapshotMessages: () => [],
+      });
+      let caught: PromptBailout | null = null;
+      try {
+        await runner.llmCall({ first: true }, body);
+      } catch (e) {
+        caught = e as PromptBailout;
+      }
+      expect(caught).toBeInstanceOf(PromptBailout);
+      expect(bodyRuns).toBe(0);
+      expect(caught!.interrupts[0].data).toMatchObject({
+        loopStop: "round",
+        label: "round 1",
+        moduleId: "m",
+        scopeName: "s",
+        stepPath: "p/initialLlmCall",
+      });
+      // One checkpoint, the one debugStep stamped, marked as the stop.
+      expect(caught!.interrupts[0].checkpoint!.loopStop).toBe("round");
+      expect(ctx.checkpoints.getCheckpoints()).toHaveLength(1);
+      // The flag is in the frame, so the checkpoint carries it and a
+      // resume that re-enters the step skips the stop.
+      expect(self.__dbg_initialLlmCall).toBe(true);
+      await runner.llmCall({ first: true }, body);
+      expect(bodyRuns).toBe(1);
+      expect(self.__dbg_initialLlmCall).toBeUndefined();
+      expect(self.runnerState.completedSteps).toContain("initialLlmCall");
+    });
+  });
+
+  it("does not stop when no debugger is attached", async () => {
+    const ctx = makeMockCtx();
+    const self: any = {};
+    let bodyRuns = 0;
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
+      const runner = new PromptRunner({
+        self,
+        ctx,
+        run,
+        log: stubStatelogClient() as any,
+        stateStack: ctx.stateStack,
+        checkpointInfo,
+        snapshotMessages: () => [],
+      });
+      await runner.llmCall({ first: true }, async () => {
+        bodyRuns++;
+      });
+      await runner.beforeToolCall("round.0.tool.0_abc", { name: "search", arguments: {} });
+    });
+    expect(bodyRuns).toBe(1);
+    expect(self.__dbg_initialLlmCall).toBeUndefined();
+    // Without a debugger the tool stop is not even a step.
+    expect(self.runnerState.completedSteps).toEqual(["initialLlmCall"]);
+  });
+
+  it("labels each request and each tool call, with long arguments cut", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepping();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    const labels: string[] = [];
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
+      const runner = new PromptRunner({
+        self: {},
+        ctx,
+        run,
+        log: stubStatelogClient() as any,
+        stateStack: ctx.stateStack,
+        checkpointInfo,
+        snapshotMessages: () => [],
+      });
+      const labelOf = async (fn: () => Promise<void>) => {
+        try {
+          await fn();
+        } catch (e) {
+          labels.push((e as PromptBailout).interrupts[0].data.label);
+        }
+      };
+      await labelOf(() => runner.llmCall({ afterToolRound: 0 }, async () => undefined));
+      await labelOf(() => runner.llmCall({ validationRetry: 1 }, async () => undefined));
+      await labelOf(() =>
+        runner.beforeToolCall("round.0.tool.0_abc", {
+          name: "search",
+          arguments: { query: "grant", notes: "x".repeat(60) },
+        }),
+      );
+    });
+    expect(labels).toEqual([
+      "round 2",
+      "validation retry 2",
+      `search(query: "grant", notes: "${"x".repeat(39)}…)`,
+    ]);
+  });
+
+  it("does not stop inside a handler body", async () => {
+    const dbg = new DebuggerState(10);
+    dbg.stepping();
+    const ctx = makeMockCtx({ debuggerState: dbg });
+    let bodyRuns = 0;
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async (run) => {
+      const runner = new PromptRunner({
+        self: {},
+        ctx,
+        run,
+        log: stubStatelogClient() as any,
+        stateStack: ctx.stateStack,
+        checkpointInfo,
+        snapshotMessages: () => [],
+      });
+      ctx.stateStack.executingHandlerEntries.push({ fn: async () => undefined, liveGuardIds: [] });
+      await runner.llmCall({ first: true }, async () => {
+        bodyRuns++;
+      });
+    });
+    expect(bodyRuns).toBe(1);
   });
 });

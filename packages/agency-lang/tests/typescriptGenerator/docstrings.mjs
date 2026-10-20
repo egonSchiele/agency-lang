@@ -94,7 +94,7 @@ type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 type __ResumeFromCheckpointOptions = { metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
 export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any>; invocation?: InvocationOptions }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, invocation: opts?.invocation });
 const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
 
 // Invoke an exported function in a node-grade execution frame. Used by

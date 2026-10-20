@@ -55,13 +55,23 @@ module's `__globalCtx`:
 export const rewindFrom = (
   checkpoint: Checkpoint,
   overrides: Record<string, unknown>,
-  opts?: { metadata?: Record<string, any> },
-) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+  opts?: { metadata?: Record<string, any>; invocation?: InvocationOptions },
+) =>
+  _rewindFrom({
+    ctx: __globalCtx,
+    checkpoint,
+    overrides,
+    metadata: opts?.metadata,
+    invocation: opts?.invocation,
+  });
 ```
 
 `opts.metadata.callbacks` is merged onto the rewound execution's callbacks, and
-`opts.metadata.debugger` becomes its `DebuggerState`. The debugger passes both
-(`lib/debugger/driver.ts`).
+`opts.metadata.debugger` becomes its `DebuggerState`. `opts.invocation` is
+resolved the way a resume resolves its invocation: the root policy and the
+budget are installed again on the replay, so a caller who started the run with
+a policy must pass it here too, or the replay runs without it. The debugger
+passes all three (`lib/debugger/driver.ts`).
 
 The implementation is `rewindFrom` in `lib/runtime/rewind.ts`. It:
 

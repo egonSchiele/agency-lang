@@ -5,10 +5,12 @@ The interactive debugger lets users step through `.agency` source code line by l
 ## Usage
 
 ```bash
-agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>]
+agency debug <file> [--node <name>] [--rewind-size 30] [--trace <file>] [--checkpoint <file>] [--dist-dir <dir>] [run flags]
 ```
 
 If the file has multiple nodes, the user picks one interactively. If the node has parameters, the debugger prompts for their values.
+
+`agency debug` takes the run flags `agency run` takes (`addRunOptions` in `scripts/agency.ts`): `--policy`, `--approve`, `--reject`, `--max-cost`, `--max-time`, `--model`, `--local`, `--max-tool-call-rounds`, `--log-file`, `--observability`, `--strict`, `--agency-only`, and the rest. The compile settings are folded onto the config before compiling, as `run` does. The policy and the budget become an `InvocationOptions` (`invocationFromRunFlags` in `lib/cli/debugFlags.ts`), passed on the node call and, since a resume installs the root policy and budget again, on every `respondToInterrupts` and `rewindFrom` the driver makes; `rewindFrom` takes an `invocation` for this. `run` carries the same values to its child process as environment variables; the debugger runs the program in its own process, so they travel as options instead. The invocation is spread onto the node call, because the generated node function takes its options flat; under an `invocation:` key it would be dropped without an error, and the leg before the first stop, which runs the file's top-level code, would run with no policy and no budget. `--agency-only` applies the sandboxed compile (`compileAgencyOnly`, which takes no config, so `--model`, `--strict`, and the other compile flags are dropped under it) but not the Node process flag `run` adds to its child, and it is checked before `distDir`, so a `distDir` in `agency.json` cannot turn the sandboxed compile off; naming `--dist-dir` as well is refused. Three flags belong to `run` and `resume` only (`addRunAndRecordingOptions`): `-i`, since the debugger prompts for every interrupt no handler answers, and the recording flags `--trace`, `--trace-file`, and `--capture-workdir`, since the debugger's own `--trace` loads a recording. The budget counts one timeline: a rewind restores the root guard's spending as recorded at the checkpoint, so money spent on an abandoned timeline is not counted against the cap.
 
 `--trace` and `--checkpoint` load a recorded run instead of executing one. If the file is a bundle, `agency debug` extracts its sources to a temp directory and debugs those. `--dist-dir` imports pre-compiled JS from a directory rather than compiling on the fly.
 
@@ -142,6 +144,14 @@ Several branches can stop at once: in stepping mode every Agency tool in a round
 
 The call stack pane is read from the checkpoint's frames on every render (`UIState.getCallStack`): one entry per frame from the root stack down the branch path to the stack the program is stopped on, so inside a tool it reads `main`, `llm()` (the tool loop's own frame), `search`. The compiler-named frame of a fork or parallel arm, or of a block argument, reads `block`, and a frame with no scope name `(unknown)`. Nothing is pushed or reset on a resume or a rewind, since the checkpoint is the stack. Only Agency code and the TypeScript that claims a resumable scope (`withResumableScope`, as the MCP gate does) have frames; other TypeScript functions do not appear. A debug stop carries its branch path. A user interrupt raised inside a tool, a fork, or a parallel arm does not: it is stamped on the shared checkpoint at the join, whose location has no branch path, so `UIState.setCheckpoint` takes the interrupt's id and finds the branch whose state records it (`Checkpoint.branchPathOf`). An interrupt bubbles out through every enclosing branch, each of which records the same id, so the deepest match is taken. The pane then ends at the tool or the arm that asked, and the locals pane shows its frame; the source pane still highlights the `llm()` line the interrupt came out of, and the globals pane shows the caller's module, so for a tool from another module the locals are the tool's while the source and globals are the caller's. When several interrupts arrive in one batch, the panes are set again for each one as it is asked about. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
+### The threads pane
+
+The pane shows one thread, the active one until the person picks another with `t` (a picker listing every thread by label, with its parent, its message count, and a mark on the active one) or cycles with `[` and `]`. A picked thread stays shown on later checkpoints while it is still listed, so a person can follow it while stepping. The threads come from two places in the checkpoint (`Checkpoint.listThreads`).
+
+The node frame carries the thread store. The active thread is the top of the active stack: the store's own, or, inside a `fork` or `parallel` arm, the branch's, since an arm runs on a view of the store whose active stack is serialized with the branch (`BranchStateJSON.activeStack`).
+
+A tool loop's frame carries `messagesJSON`, the thread it is working on. Since #1215 it is refreshed on every checkpoint. When its `id` matches a store thread, the loop's copy is the one shown, whatever the lengths: a resume continues from it (`restoreThreadForResume`), so after memory compaction the shorter loop copy is the conversation the program goes on with. A loop inside a tool runs on a fresh store that is not serialized, so its copy is the only record of the subagent's thread. It is listed under the thread's own `id`, named after the function that called `llm()`, and marked active. Its `parentId` names a thread of the unserialized store, so it is dropped. In the list, a store thread is identified by its store key and a tool thread by its id; only the match between a loop copy and a store thread goes by `id`.
+
 ### The branches and guards panes
 
 Two panes appear when the checkpoint has something for them (`UIState.listBranches`, `listGuards`, `loopState`, each read from the checkpoint on every render):
@@ -212,6 +222,7 @@ This avoids exporting `__globalCtx` directly.
 | `p` | print variable |
 | `z` | zoom the focused pane |
 | `b` | pick a branch (a tool call, a fork branch, a parallel item) to look at |
+| `t` | pick which message thread the threads pane shows |
 | `[` / `]` | cycle which message thread the threads pane shows |
 | `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |
 | `Tab` | cycle pane focus (`Shift+Tab` goes backwards) |

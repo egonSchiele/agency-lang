@@ -6,6 +6,7 @@ import type { DebuggerCommand } from "./types.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import { TestDebuggerIO, freshImport, makeDriver, fixtureDir } from "./testHelpers.js";
+import { DebuggerTestSession } from "./testSession.js";
 
 // Queue of canned responses for the mock runPrompt
 let mockResponses: string[] = [];
@@ -91,5 +92,29 @@ describe("Debugger threads panel", () => {
     expect(secondThread.messages[2].role).toBe("user");
     expect(secondThread.messages[2].content).toContain("population");
     expect(secondThread.messages[3].role).toBe("assistant");
+  });
+
+  it("a picked thread stays shown while it is still listed", async () => {
+    mockResponses = ["1", "2", "3"];
+    const mod = await freshImport(threadTestCompiled);
+    const session = await DebuggerTestSession.create({ mod: { ...mod, main: mod.withSubthread } });
+    const pane = () => session.frame().findByKey("threads")?.toPlainText() ?? "";
+    // To `third = llm("three")`: the subthread is active, and it holds
+    // the thread's exchange it started from plus its own.
+    for (let i = 0; i < 20 && !pane().includes("[user] two"); i++) {
+      await session.press("s");
+    }
+    expect(pane()).toContain("[3/3]");
+    await session.press("["); // the thread's own, with the first exchange only
+    expect(pane()).toContain("[2/3]");
+    expect(pane()).toContain("[user] one");
+    expect(pane()).not.toContain("[user] two");
+    await session.press("s"); // the third call ran on the subthread
+    expect(pane()).toContain("[2/3]");
+    expect(pane()).not.toContain("[user] three");
+    await session.press("]");
+    expect(pane()).toContain("[3/3]");
+    expect(pane()).toContain("[user] three");
+    await session.quit();
   });
 });

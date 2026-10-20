@@ -12,6 +12,9 @@ import { TraceReader } from "@/runtime/trace/traceReader.js";
 import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import { createDebugInterrupt } from "@/runtime/interrupts.js";
+import type { InvocationOptions } from "@/runtime/invocationOptions.js";
+import { compileChoice } from "./debugFlags.js";
+import { compileAgencyOnly } from "@/compiler/compileSandboxed.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -26,6 +29,15 @@ export async function debug(
     trace?: string;
     checkpoint?: string;
     distDir?: string;
+    /** `--agency-only`: refuse anything in the import closure that is not
+     *  Agency source. The compile refusal is the same as `run`'s; the Node
+     *  process flag `run` adds to its child cannot apply here, since the
+     *  debugger runs the program in its own process. */
+    agencyOnly?: boolean;
+    /** The policy and budget from the run flags, passed on the node call
+     *  and on every resume and rewind the driver makes, since a resume
+     *  installs the root policy and budget again. */
+    invocation?: InvocationOptions;
   } = {},
 ): Promise<void> {
   let inputFile = _inputFile;
@@ -106,13 +118,28 @@ export async function debug(
     }
     traceCheckpoints = [cp];
   }
-  // Resolve distDir from CLI flag or config
-  const distDir = options.distDir ?? config.distDir;
-
   let absOutput: string;
 
-  if (distDir) {
+  const choice = compileChoice({
+    agencyOnly: options.agencyOnly,
+    distDir: options.distDir,
+    configDistDir: config.distDir,
+  });
+  if ("refused" in choice) {
+    console.error(`Error: ${choice.refused}`);
+    process.exit(1);
+  }
+  if (choice.mode === "agency-only") {
+    const compiled = compileAgencyOnly(inputFile);
+    if (!compiled.ok) {
+      console.error("Error: agency-only compile refused:");
+      for (const error of compiled.errors) console.error(`  ${error}`);
+      process.exit(1);
+    }
+    absOutput = path.resolve(compiled.scriptPath);
+  } else if (choice.mode === "dist-dir") {
     // distDir mode: import pre-compiled JS from the dist directory
+    const distDir = choice.distDir;
     let compiledPath: string;
     try {
       compiledPath = resolveCompiledFile(distDir, inputFile);
@@ -157,7 +184,7 @@ export async function debug(
   // Get the source map from the module
   const sourceMap = mod.__sourceMap ?? {};
 
-  if (distDir && Object.keys(sourceMap).length === 0) {
+  if (choice.mode === "dist-dir" && Object.keys(sourceMap).length === 0) {
     console.warn(
       "Warning: The compiled module has an empty source map. Was it compiled with instrument: false?\n" +
         "The debugger may not be able to step through code.",
@@ -227,6 +254,7 @@ export async function debug(
     })(),
     checkpoints: traceCheckpoints,
     traceHeader,
+    invocation: options.invocation,
   });
 
   // Set the debugger state on the RuntimeContext via the module wrapper
@@ -261,7 +289,10 @@ export async function debug(
     await driver.run({ data: interrupt });
   } else {
     // Normal mode: run the node, it will pause at the first debugStep()
-    const initialResult = await nodeFunction(...args, { callbacks });
+    // The generated node function takes its options flat (`policy`,
+    // `config`, `host`, ...), so the invocation is spread; under an
+    // `invocation:` key it would be dropped without an error.
+    const initialResult = await nodeFunction(...args, { callbacks, ...options.invocation });
     await driver.run(initialResult);
   }
 }

@@ -12,6 +12,7 @@ import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
 import { isIntrinsicToolName } from "../intrinsicTools.js";
 import { isBlockName } from "../blockNames.js";
 import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
+import type { MessageThreadJSON } from "./messageThread.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
 
@@ -52,6 +53,7 @@ export function resetGlobalCheckpointCounter(): void {
 
 export type ThreadMessages = {
   threadId: string;
+  label: string | null;
   threadIndex: number;
   threadCount: number;
   messages: { role: string; content: string }[];
@@ -88,6 +90,17 @@ export type GuardSummary = {
 /** The tool loop the stopped code is in: its round, counted from 1, and
  *  the tools the loop has removed. */
 export type LoopState = { round: number; removedTools: string[] };
+
+/** One thread of the store, as the threads pane and its picker list it. */
+export type ThreadSummary = {
+  id: string;
+  label: string | null;
+  parentId: string | null;
+  messageCount: number;
+  /** The thread the program is in, the top of the active stack. */
+  active: boolean;
+  hidden: boolean;
+};
 
 export type CheckpointArgs = {
   id?: number;
@@ -162,6 +175,30 @@ function toolCallName(frame: StateJSON | undefined, key: string): string | undef
     if (index >= 0) return dispatched[index].name;
   }
   return undefined;
+}
+
+/** A thread as the panes see it: the store's key, its JSON, whether the
+ *  program is in it, and a newer copy of its messages when a tool loop
+ *  holds one. */
+type ThreadView = {
+  key: string;
+  thread: MessageThreadJSON;
+  active: boolean;
+  newer?: MessageJSON[];
+};
+
+/** The thread a tool loop's frame is working on, from `messagesJSON` in
+ *  its locals. Only the loop's own frame is read; a user's local of the same
+ *  name in a node or a function is a value, not a thread. An entry that
+ *  is not an object is dropped, so a bad value cannot break the pane. */
+function loopThreadCopy(frame: StateJSON): MessageThreadJSON | null {
+  if (frame.scopeName !== "runPrompt") return null;
+  const copy = frame.locals?.messagesJSON;
+  if (!copy || !Array.isArray(copy.messages)) return null;
+  const messages = copy.messages.filter(
+    (m: unknown): m is MessageJSON => typeof m === "object" && m !== null,
+  );
+  return { ...copy, messages };
 }
 
 /** The name a pane shows for a frame: the tool loop's own frame reads
@@ -318,40 +355,101 @@ export class Checkpoint implements SourceLocation {
     return this.stack.stack?.at(-1);
   }
 
-  getThreadMessages(displayIndex?: number): ThreadMessages | null {
-    const frame = this.rootFrame();
-    if (!frame?.threads) return null;
-
-    const { threads, activeStack } = frame.threads;
-    const threadIds = Object.keys(threads);
-    if (threadIds.length === 0) return null;
-
-    let selectedId: string;
-    let selectedIndex: number;
-
-    if (displayIndex !== undefined) {
-      // Explicit index requested (for thread cycling)
-      selectedIndex = ((displayIndex % threadIds.length) + threadIds.length) % threadIds.length;
-      selectedId = threadIds[selectedIndex];
-    } else {
-      // Default: prefer the active thread at the top of the stack
-      selectedId = activeStack.findLast((id) => threads[id] != null) ?? threadIds[0];
-      selectedIndex = threadIds.indexOf(selectedId);
+  /** The active stack of the deepest `fork` or `parallel` branch on the
+   *  path, when there is one. Such a branch runs on a view of the node's
+   *  store with its own active stack, serialized with the branch; a tool
+   *  call shares its caller's and has none. */
+  private branchActiveStack(branchPath: string[]): string[] | undefined {
+    let frame = this.rootFrame();
+    let activeStack: string[] | undefined;
+    for (const key of branchPath) {
+      // A tool call runs on a fresh store that is not serialized, so an
+      // arm below it names threads the checkpoint does not hold; an arm
+      // above the tool is still the one the tool's threads hang off.
+      if (key.startsWith("tool_")) break;
+      const branch = frame?.branches?.[key];
+      if (branch?.activeStack) activeStack = branch.activeStack;
+      frame = branch?.stack.stack.at(-1);
     }
+    return activeStack;
+  }
 
-    const selectedThread = threads[selectedId];
-    if (!selectedThread) return null;
+  /** The threads the stopped code can see, from two places in the
+   *  checkpoint. The node frame carries the thread store, with the thread
+   *  the program is in at the top of the active stack: the store's own,
+   *  or the branch's inside a `fork` or `parallel` arm. A tool loop's
+   *  frame carries `messagesJSON`, the thread it is working on, refreshed
+   *  on every checkpoint. When its `id` matches a store thread it is the
+   *  copy shown, since a resume continues from it, whatever the lengths.
+   *  A loop inside a tool runs on a fresh store
+   *  that is not serialized, so its copy is the only record of the
+   *  thread: it is listed under its own id, named after the function that
+   *  called `llm()`, with no parent, since its `parentId` names a thread
+   *  of the store that was not serialized. */
+  private threadsAlong(branchPath: string[]): ThreadView[] {
+    const frames = this.framesAlong(branchPath);
+    const store = frames.findLast((frame) => frame.threads)?.threads;
+    const views: ThreadView[] = [];
+    if (store) {
+      const activeStack = this.branchActiveStack(branchPath) ?? store.activeStack;
+      const activeId = activeStack.findLast((id) => store.threads[id] != null);
+      for (const [key, thread] of Object.entries(store.threads)) {
+        views.push({ key, thread, active: key === activeId });
+      }
+    }
+    frames.forEach((frame, index) => {
+      const copy = loopThreadCopy(frame);
+      if (!copy) return;
+      const stored = views.find((view) => copy.id !== undefined && view.thread.id === copy.id);
+      if (stored) {
+        stored.newer = copy.messages;
+        return;
+      }
+      if (copy.id === undefined) return;
+      for (const view of views) view.active = false;
+      views.push({
+        key: copy.id,
+        thread: {
+          ...copy,
+          label: copy.label ?? frames[index - 1]?.scopeName ?? null,
+          parentId: null,
+        },
+        active: true,
+      });
+    });
+    return views;
+  }
 
-    const messages = selectedThread.messages.map((m: MessageJSON) => ({
-      role: m.role ?? "unknown",
-      content: this.getContentFromMessage(m),
+  /** Every thread the stopped code can see, in the checkpoint's order,
+   *  with the one the program is in marked. Empty when the checkpoint
+   *  holds no threads. */
+  listThreads(branchPath: string[] = []): ThreadSummary[] {
+    return this.threadsAlong(branchPath).map((view) => ({
+      id: view.key,
+      label: view.thread.label ?? null,
+      parentId: view.thread.parentId ?? null,
+      messageCount: (view.newer ?? view.thread.messages).length,
+      active: view.active,
+      hidden: view.thread.hidden === true,
     }));
+  }
 
+  /** The messages of one thread, `threadId`, or of the thread the program
+   *  is in when none is named. */
+  getThreadMessages(threadId?: string, branchPath: string[] = []): ThreadMessages | null {
+    const views = this.threadsAlong(branchPath);
+    if (views.length === 0) return null;
+    const selected =
+      views.find((view) => view.key === threadId) ?? views.find((view) => view.active) ?? views[0];
     return {
-      threadId: selectedId,
-      threadIndex: selectedIndex,
-      threadCount: threadIds.length,
-      messages,
+      threadId: selected.key,
+      label: selected.thread.label ?? null,
+      threadIndex: views.indexOf(selected),
+      threadCount: views.length,
+      messages: (selected.newer ?? selected.thread.messages).map((m: MessageJSON) => ({
+        role: m.role ?? "unknown",
+        content: this.getContentFromMessage(m),
+      })),
     };
   }
 

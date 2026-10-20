@@ -7,6 +7,7 @@ import {
   type BranchSummary,
   type GuardSummary,
   type LoopState,
+  type ThreadSummary,
 } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
@@ -287,9 +288,17 @@ export class UIState {
     this.pendingOverrides[key] = value;
   }
 
-  getThreadMessages(displayIndex?: number): ThreadMessages | null {
+  /** The threads the stopped code sees, the active one marked. */
+  listThreads(): ThreadSummary[] {
+    if (!this.checkpoint) return [];
+    return this.checkpoint.listThreads(this.location?.branchPath ?? []);
+  }
+
+  /** The messages of `threadId`, or of the active thread when none is
+   *  named. */
+  getThreadMessages(threadId?: string): ThreadMessages | null {
     if (!this.checkpoint) return null;
-    return this.checkpoint.getThreadMessages(displayIndex);
+    return this.checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
   }
 
   getModuleId() {

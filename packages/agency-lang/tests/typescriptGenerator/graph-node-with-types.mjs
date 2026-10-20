@@ -292,7 +292,7 @@ await callHook(__run, {
     };
   });
 })
-export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function greet(name: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
@@ -305,7 +305,8 @@ export async function greet(name: string, { messages: __invocationMessages, call
       config: __invocationConfig,
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
-      host: __invocationHost
+      host: __invocationHost,
+      inputOverride: __invocationInputOverride
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

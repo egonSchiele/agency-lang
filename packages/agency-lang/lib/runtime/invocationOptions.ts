@@ -31,6 +31,11 @@ export type InvocationOptions = {
    *  app's. A resume does not remember the host of the run it resumes, so
    *  the caller passes it again. See docs/dev/runtime/host.md. */
   host?: Host;
+  /** What `input()` calls instead of reading the terminal, for a caller
+   *  that owns the terminal, such as the debugger, whose text field takes
+   *  the answer. Per execution: a resume does not remember it, so the
+   *  caller passes it again. */
+  inputOverride?: (prompt: string) => Promise<string>;
 };
 
 /**
@@ -92,6 +97,8 @@ export type ResolvedInvocation = {
   policy?: Policy;
   /** The host for this invocation, when the caller sent one. */
   host?: Host;
+  /** The `input()` override for this invocation, when the caller sent one. */
+  inputOverride?: (prompt: string) => Promise<string>;
 };
 
 /**
@@ -192,9 +199,10 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   const contextOverride = selectContextOverride(request.options?.config);
   const policy = validateInvocationPolicy(request.options?.policy);
   const host = request.options?.host;
+  const inputOverride = request.options?.inputOverride;
 
   if (request.kind === "resume") {
-    return { runId: request.runId, contextOverride, policy, host };
+    return { runId: request.runId, contextOverride, policy, host, inputOverride };
   }
 
   const runId =
@@ -206,7 +214,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
-  return { runId, contextOverride, policy, host };
+  return { runId, contextOverride, policy, host, inputOverride };
 }
 
 /**

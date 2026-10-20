@@ -123,7 +123,7 @@ export function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Check
 
 export async function getInitialResult(mod: any, driver: DebuggerDriver, ...args: any[]) {
   const callbacks = driver.getCallbacks();
-  const initialResult = await mod.main(...args, { callbacks });
+  const initialResult = await mod.main(...args, { callbacks, ...driver.invocation });
 
   expect(initialResult?.data).toBeDefined();
   expect(hasInterrupts(initialResult.data)).toBe(true);

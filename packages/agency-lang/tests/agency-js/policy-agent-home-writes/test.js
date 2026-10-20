@@ -23,18 +23,18 @@ process.env.AGENCY_AGENT_HOME = home;
 // do instead", which "" declines.
 let inputCalls = 0;
 const answers = ["r", "", "r", "", "r", "", "r", ""];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   inputCalls += 1;
   return answers.shift() ?? "r";
 };
 
 try {
-  const settings = (await doesNotSaveSettings({ policyFile, home })).data;
-  const policy = (await doesNotSavePolicy({ policyFile, home })).data;
-  const skill = (await doesNotWriteSkills({ policyFile, home })).data;
-  const memory = (await readsItsMemory({ policyFile, home })).data;
-  const settingsRead = (await readsItsSettings({ policyFile, home })).data;
-  const sessions = (await doesNotReadSessions({ policyFile, home })).data;
+  const settings = (await doesNotSaveSettings({ policyFile, home }, { inputOverride })).data;
+  const policy = (await doesNotSavePolicy({ policyFile, home }, { inputOverride })).data;
+  const skill = (await doesNotWriteSkills({ policyFile, home }, { inputOverride })).data;
+  const memory = (await readsItsMemory({ policyFile, home }, { inputOverride })).data;
+  const settingsRead = (await readsItsSettings({ policyFile, home }, { inputOverride })).data;
+  const sessions = (await doesNotReadSessions({ policyFile, home }, { inputOverride })).data;
   writeFileSync("__result.json", JSON.stringify({
     settings,
     policy,

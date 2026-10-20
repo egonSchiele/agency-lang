@@ -8,13 +8,13 @@ const policyFile = join(dir, "policy.json");
 
 // Any input() means a prompt fired — i.e. the policy did NOT auto-approve.
 let prompted = false;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   prompted = true;
   throw new Error("unexpected prompt: read was not auto-approved");
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({
     result: result.data,
     prompted,

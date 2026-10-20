@@ -172,7 +172,7 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
  *  Cancellation note: while `onSubmit` is awaited, the outer
  *  readline interface is idle, so nested `input()` calls (e.g. from
  *  `chooseOption`'s fallback path) can safely create their own
- *  readline interface on the same stdin. The `__agencyInputOverride`
+ *  readline interface on the same stdin. The `inputOverride` on the context
  *  hook routes them through *this* `rl` instead, which keeps history
  *  and line editing consistent across nested prompts.
  */
@@ -1353,7 +1353,7 @@ export async function _runLineRepl(
 
   // Tracks the spinner that's currently running for an in-flight
   // turn, if any. Lifted out of the loop so the
-  // `__agencyInputOverride` callback (fired by nested `input()` /
+  // `inputOverride` callback (fired by nested `input()` /
   // `chooseOption` fallback) can stop the spinner the moment the
   // agent needs the user — "Thinking" is wrong while we're waiting
   // on a human, and the spinner would otherwise overdraw the policy

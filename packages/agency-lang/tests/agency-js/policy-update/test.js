@@ -20,18 +20,18 @@ writeFileSync(policyFile, JSON.stringify(saved));
 // "r" rejects, so the removal that asks shows up as a failure rather than
 // a hang. A rejection asks twice: the menu, then the reason.
 let inputCalls = 0;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   inputCalls += 1;
   // Odd calls are the menu, even calls the reason.
   return inputCalls % 2 === 1 ? "r" : "";
 };
 
 try {
-  const report = (await updatesASavedPolicy({ policyFile, toolsDir })).data;
+  const report = (await updatesASavedPolicy({ policyFile, toolsDir }, { inputOverride })).data;
   const onDisk = JSON.parse(readFileSync(policyFile, "utf8"));
   const callsForUpdate = inputCalls;
   const unsaved = (
-    await unsavedRulesDoNotApply({ policyFile: join(home, "no-such-dir", "policy.json"), toolsDir })
+    await unsavedRulesDoNotApply({ policyFile: join(home, "no-such-dir", "policy.json"), toolsDir }, { inputOverride })
   ).data;
   writeFileSync("__result.json", JSON.stringify({
     report,

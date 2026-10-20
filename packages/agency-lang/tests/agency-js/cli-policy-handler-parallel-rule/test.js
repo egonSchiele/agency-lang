@@ -12,7 +12,7 @@ writeFileSync(
   }),
 );
 
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   throw new Error("Unexpected prompt: the policy decides every interrupt");
 };
 
@@ -21,7 +21,7 @@ const realLog = console.log;
 console.log = (...a) => { printed += a.join(" ") + "\n"; };
 
 try {
-  await main({ policyFile });
+  await main({ policyFile }, { inputOverride });
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

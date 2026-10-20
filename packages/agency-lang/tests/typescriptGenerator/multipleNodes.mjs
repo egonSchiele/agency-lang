@@ -486,7 +486,7 @@ await callHook(__run, {
 })
 graph.conditionalEdge("greet", ["processGreeting"])
 graph.conditionalEdge("main", ["greet"])
-export async function greet({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function greet({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "greet",
@@ -497,7 +497,8 @@ export async function greet({ messages: __invocationMessages, callbacks: __invoc
       config: __invocationConfig,
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
-      host: __invocationHost
+      host: __invocationHost,
+      inputOverride: __invocationInputOverride
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,
@@ -506,7 +507,7 @@ export async function greet({ messages: __invocationMessages, callbacks: __invoc
   });
 }
 export const __greetNodeParams = [];
-export async function processGreeting(msg: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function processGreeting(msg: any, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "processGreeting",
@@ -519,7 +520,8 @@ export async function processGreeting(msg: any, { messages: __invocationMessages
       config: __invocationConfig,
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
-      host: __invocationHost
+      host: __invocationHost,
+      inputOverride: __invocationInputOverride
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,
@@ -528,7 +530,7 @@ export async function processGreeting(msg: any, { messages: __invocationMessages
   });
 }
 export const __processGreetingNodeParams = ["msg"];
-export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -539,7 +541,8 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
       config: __invocationConfig,
       traceId: __invocationTraceId,
       policy: __invocationPolicy,
-      host: __invocationHost
+      host: __invocationHost,
+      inputOverride: __invocationInputOverride
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

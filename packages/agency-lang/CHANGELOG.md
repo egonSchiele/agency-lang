@@ -1,3 +1,9 @@
+## Unreleased
+
+### Runtime
+
+- **`input()` is answered through the invocation, not a process global.** A TypeScript caller that scripted answers by setting `globalThis.__agencyInputOverride` now passes `inputOverride` in the options object that follows the node's own arguments: `main(args, { inputOverride: async (prompt) => "yes" })`, or `main({ inputOverride })` for a node with no parameters. The old global is no longer read, so a caller still setting it falls back to the terminal.
+
 ## Oct 15 2026 — v0.31.0
 
 ### Logs viewer

@@ -1,0 +1,5 @@
+// input() in a debugged program is answered in the debugger's text field.
+node main(): string {
+  const name = input("Your name?")
+  return "Hello, " + name
+}

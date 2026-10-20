@@ -235,6 +235,19 @@ function isCheckedParam(param: FunctionParameter): boolean {
   return param.validated === true && param.typeHint !== undefined;
 }
 
+/** The `invocation` a node wrapper hands to `runNode`: the InvocationOptions
+ *  the caller passed, read from the wrapper's hidden aliases
+ *  (`nodeWrapperParams`). */
+function invocationFromWrapperOptions(): TsNode {
+  return ts.obj({
+    config: ts.id("__invocationConfig"),
+    traceId: ts.id("__invocationTraceId"),
+    policy: ts.id("__invocationPolicy"),
+    host: ts.id("__invocationHost"),
+    inputOverride: ts.id("__invocationInputOverride"),
+  });
+}
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -4602,12 +4615,7 @@ export class TypeScriptBuilder {
                   data: ts.obj(dataObj),
                   messages: ts.id("__invocationMessages"),
                   callbacks: ts.id("__invocationCallbacks"),
-                  invocation: ts.obj({
-                    config: ts.id("__invocationConfig"),
-                    traceId: ts.id("__invocationTraceId"),
-                    policy: ts.id("__invocationPolicy"),
-                    host: ts.id("__invocationHost"),
-                  }),
+                  invocation: invocationFromWrapperOptions(),
                   input: ts.id("__invocationInput"),
                   abortSignal: ts.id("__invocationAbortSignal"),
                   pauseSignal: ts.id("__invocationPauseSignal"),

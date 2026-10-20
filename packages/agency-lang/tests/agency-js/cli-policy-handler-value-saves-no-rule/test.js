@@ -10,7 +10,7 @@ const policyFile = join(dir, "policy.json");
 // which has to prompt because round one saved nothing.
 const answers = ["aa", "a"];
 let prompts = 0;
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   prompts += 1;
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
@@ -19,7 +19,7 @@ globalThis.__agencyInputOverride = async () => {
 
 let savedRules = "none";
 try {
-  await main({ policyFile });
+  await main({ policyFile }, { inputOverride });
   // The flush at the top of round two's handler entry would have written
   // any rule round one saved.
   savedRules = existsSync(policyFile) ? readFileSync(policyFile, "utf8").trim() : "none";

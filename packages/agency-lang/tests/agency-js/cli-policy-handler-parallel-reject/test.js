@@ -9,7 +9,7 @@ const policyFile = join(dir, "policy.json");
 // "rr" is reject always, and it is the only answer scripted. A sibling
 // that prompted again would ask for one that is not here.
 const answers = ["rr"];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
   return a;
@@ -21,7 +21,7 @@ console.log = (...args) => { printed += args.join(" ") + "\n"; };
 
 let approved;
 try {
-  const result = await main({ policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   approved = result.data;
 } finally {
   console.log = realLog;

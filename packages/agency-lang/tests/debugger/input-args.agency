@@ -1,0 +1,6 @@
+// input() in a node that takes an argument, so the options object is the
+// second parameter of the generated node function.
+node main(args: { greeting: string }): string {
+  const name = input("Your name?")
+  return args.greeting + ", " + name
+}

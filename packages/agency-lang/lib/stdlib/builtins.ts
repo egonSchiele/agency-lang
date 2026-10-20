@@ -64,13 +64,9 @@ function inputImpl(ctx: RuntimeContext<any>, stack: StateStack, prompt: string):
   stack.guards.forEach((g) => g.pause());
   const resumeGuards = () => stack.guards.forEach((g) => g.resume(stack));
 
-  // Per-execution override first (REPL readline routing, test seams —
-  // see RuntimeContext.inputOverride). The globalThis fallback exists
-  // only for the TUI debugger, which cannot reach the ctx yet.
-  const override =
-    ctx.inputOverride ??
-    ((globalThis as any).__agencyInputOverride as
-      ((prompt: string) => Promise<string>) | undefined);
+  // The per-execution override: the REPL's readline routing, the
+  // debugger's text field, the test seams (see RuntimeContext.inputOverride).
+  const override = ctx.inputOverride;
   if (override) {
     // Promise.resolve().then(...) so a synchronously-throwing override
     // still reaches the finally — otherwise the guards stay paused for

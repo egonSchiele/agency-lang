@@ -9,14 +9,14 @@ const policyFile = join(dir, "policy.json");
 // One answer for three tool calls made in one LLM round. A second prompt
 // would ask for an answer that is not here, and the override throws.
 const answers = ["aa"];
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   const a = answers.shift();
   if (a === undefined) throw new Error("Unexpected extra input() call");
   return a;
 };
 
 try {
-  const result = await main({ policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({
     // All three ran past their interrupt, so the rule the first answer
     // saved covered the two already waiting. Without it they would have

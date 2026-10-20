@@ -7,7 +7,7 @@ const dir = mkdtempSync(join(tmpdir(), "policy-reject-message-"));
 const policyFile = join(dir, "policy.json");
 
 // Any prompt is a bug: the reject rule must decide without asking.
-globalThis.__agencyInputOverride = async () => {
+const inputOverride = async () => {
   throw new Error("Unexpected input() call: the reject rule should decide without prompting");
 };
 
@@ -18,7 +18,7 @@ try {
       "myapp::exec": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
     }),
   );
-  const rejected = await main({ policyFile });
+  const rejected = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({ rejectMessage: rejected.data }, null, 2));
 } finally {
   rmSync(dir, { recursive: true, force: true });

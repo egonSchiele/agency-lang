@@ -43,9 +43,10 @@ type DriverOpts = {
   ui: DebuggerIO;
   checkpoints?: Checkpoint[];
   traceHeader?: TraceHeader;
-  /** The policy and budget the debugged run was started with. A resume
-   *  and a rewind install them again, so the driver passes them on every
-   *  one it makes. */
+  /** The policy and budget the debugged run is started with. The driver
+   *  adds the `input()` routing; `driver.invocation` is the result, which
+   *  the node call spreads (the generated node function takes its options
+   *  flat) and every resume and rewind takes whole. */
   invocation?: InvocationOptions;
 };
 
@@ -56,7 +57,10 @@ type DriverRunOpts = Partial<{
 export class DebuggerDriver {
   private mod: ModuleFunctions;
   private ui: DebuggerIO;
-  private invocation?: InvocationOptions;
+  /** The invocation the debugged run is called with, and every resume
+   *  and rewind: the policy and budget from the run flags, and `input()`
+   *  routed to the UI's text field. */
+  readonly invocation: InvocationOptions;
   debuggerState: DebuggerState;
   private originalConsoleLog: typeof console.log;
   private originalConsoleError: typeof console.error;
@@ -65,7 +69,10 @@ export class DebuggerDriver {
   constructor(opts: DriverOpts) {
     this.mod = opts.mod;
     this.ui = opts.ui;
-    this.invocation = opts.invocation;
+    this.invocation = {
+      ...opts.invocation,
+      inputOverride: (prompt: string) => this.ui.promptForInput(prompt),
+    };
     this.debuggerState = new DebuggerState(opts.rewindSize);
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
@@ -98,15 +105,11 @@ export class DebuggerDriver {
       const text = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
       this.ui.appendStdout(text);
     };
-    (globalThis as any).__agencyInputOverride = (prompt: string) => {
-      return this.ui.promptForInput(prompt);
-    };
   }
 
   private restoreConsole(): void {
     console.log = this.originalConsoleLog;
     console.error = this.originalConsoleError;
-    delete (globalThis as any).__agencyInputOverride;
   }
 
   getCallbacks(): AgencyCallbacks {

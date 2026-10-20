@@ -1,0 +1,7 @@
+// A node that returns what it was given, so a test can run it twice at
+// once and check that each caller gets its own answer back.
+node main(who: string) {
+  x = 1
+  y = 2
+  return who
+}

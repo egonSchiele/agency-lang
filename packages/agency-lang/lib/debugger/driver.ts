@@ -10,8 +10,9 @@ import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
 import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
 import { DebuggerDetached, type DebuggerCommand, type DebuggerIO } from "./types.js";
 import { composeCallbacks } from "../runtime/hooks.js";
-import type { RunUsage } from "../runtime/invocationUsage.js";
+import type { RunUsage, ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 import { isPaused } from "../runtime/pause.js";
+import { ATTACHED_AGENT_END } from "../runtime/agentEnd.js";
 import {
   ATTACHED_RESUME,
   type AttachFunctions,
@@ -30,6 +31,24 @@ import { round } from "@/utils.js";
  *  module exports them bound to its `__globalCtx`, and the runtime binds
  *  them to a context for the attach server (`attachFunctionsFor`). */
 export type ModuleFunctions = AttachFunctions;
+
+/** One attached run's visit to the driver: what its leg was started
+ *  with, which every resume and rewind passes back, and the usage of the
+ *  last leg the driver ran for it. Carried with the call rather than kept
+ *  on the driver, because runs interleave: the driver holds the UI only
+ *  while it waits for the person, and lets go while a leg runs. */
+type AttachedSession = {
+  leg: LegOptions;
+  usage?: RunUsage;
+};
+
+/** A leg the debugger resumed threw; `runAttached` hands the outcome
+ *  back to the caller instead of the value. */
+class AttachedLegThrew extends Error {
+  constructor(readonly outcome: ServedInvocationOutcome<any> & { status: "threw" }) {
+    super("a leg the debugger resumed threw");
+  }
+}
 
 type DriverOpts = {
   mod: ModuleFunctions;
@@ -68,18 +87,16 @@ export class DebuggerDriver {
    *  beside the current values; the driver owns it. */
   private pendingOverrides: Record<string, unknown> = {};
   private readonly attached: boolean;
-  /** Attached: what the leg that stopped was started with; every resume
-   *  and rewind passes it back. It belongs to the run being shown: two
-   *  runs that stop at once take turns (`takeTurn`), so the second never
-   *  resumes with the first one's policy or signals. */
-  private leg: LegOptions = {};
-  /** Attached: the usage of the last leg the driver ran, which is the
-   *  run's total so far. */
-  private legUsage: RunUsage | undefined;
-  /** Attached: the call in progress on the UI. The UI shows one stop at
-   *  a time, so a second run's stop waits until the first run's call
-   *  returns. */
-  private attachedTurn: Promise<unknown> = Promise.resolve();
+  /** Attached: the turn on the UI. The UI shows one stop at a time, so a
+   *  run's stop waits while another run's is being shown; the turn is
+   *  held only while the driver waits for the person, never while a leg
+   *  runs, or a run that calls a node of the same module from its own
+   *  JavaScript would wait for a turn it holds itself. */
+  private attachedTurn: Promise<void> = Promise.resolve();
+  /** The `waitForCommand` in progress, kept when a stop is answered some
+   *  other way (a detach, the caller's cancel), so the next stop takes
+   *  the key the person then presses rather than asking twice. */
+  private commandInFlight: Promise<DebuggerCommand> | null = null;
   private detachRequested = false;
   private detachWaiters: (() => void)[] = [];
 
@@ -150,39 +167,48 @@ export class DebuggerDriver {
     }
   }
 
-  private runAttached(result: any, leg: LegOptions): Promise<AttachedRunResult> {
-    return this.takeTurn(async () => {
-      this.leg = leg;
-      this.legUsage = undefined;
-      // A stop after the program finished belongs to a new run on the
-      // same module, such as a TypeScript program calling `main()` again:
-      // the forward commands work again, and the window holds no
-      // checkpoint of the run that ended.
-      if (this.programFinished) {
-        this.programFinished = false;
-        this.debuggerState.startRun();
+  private async runAttached(result: any, leg: LegOptions): Promise<AttachedRunResult> {
+    const session: AttachedSession = { leg };
+    try {
+      const final = await this.run(result, { interceptConsole: false }, session);
+      return { result: final, usage: session.usage };
+    } catch (error) {
+      if (error instanceof AttachedLegThrew) {
+        return { threw: error.outcome.error, usage: error.outcome.usage };
       }
-      const final = await this.run(result, { interceptConsole: false });
-      return { result: final, usage: this.legUsage };
-    });
+      throw error;
+    }
   }
 
-  private finishedAttached(result: any): Promise<void> {
-    return this.takeTurn(async () => {
-      this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
-      this.programFinished = true;
-      // Not awaited: at a stop, waiting on the debugger is what the person
-      // asked for; at the end of the program nobody asked, and a debugger
-      // that never answers must not keep the program from finishing.
-      this.renderInBackground();
-    });
+  /** The program finished in a leg the caller ran. Nothing to wait for:
+   *  a line in the log and a render that does not wait, so a finished
+   *  run never waits on a stop of some other run, or on the person. */
+  private async finishedAttached(result: any): Promise<void> {
+    this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
+    this.renderInBackground();
   }
 
-  /** Run `fn` once the attached call in progress, if any, has returned. */
-  private takeTurn<T>(fn: () => Promise<T>): Promise<T> {
-    const turn = this.attachedTurn.then(fn, fn);
-    this.attachedTurn = turn.catch(() => undefined);
-    return turn;
+  /** Hold the UI for `fn`, once whoever holds it has let go. A run whose
+   *  caller cancelled it while it waited does not take a turn: it has
+   *  nothing to show, and its stop is let go so the cancel lands. */
+  private async withTurn<T>(
+    fn: () => Promise<T>,
+    abortSignal?: AbortSignal,
+  ): Promise<T | undefined> {
+    const previous = this.attachedTurn;
+    let release = (): void => {};
+    this.attachedTurn = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await Promise.race([previous, aborted(abortSignal)]);
+      if (abortSignal?.aborted) {
+        return undefined;
+      }
+      return await fn();
+    } finally {
+      release();
+    }
   }
 
   /** A call on the UI. Attached, the UI reporting the other side gone is
@@ -212,40 +238,73 @@ export class DebuggerDriver {
     return this.attached && this.detachRequested;
   }
 
-  /** The command the person gives, or `continue` when the driver is
-   *  detached while waiting, or when the IO reports the other side gone. */
-  private async nextCommand(): Promise<DebuggerCommand> {
-    if (!this.attached) {
+  /** Show the stop and take the person's command. Attached, the UI is
+   *  held for just this, and the answer is `continue` when the driver is
+   *  detached meanwhile, when the IO reports the other side gone, or when
+   *  the caller cancels the run: the resume then lands the cancel the
+   *  usual way. */
+  private async attendStop(
+    render: () => Promise<void>,
+    session: AttachedSession | undefined,
+  ): Promise<DebuggerCommand> {
+    if (session === undefined) {
+      await render();
       return await this.ui.waitForCommand();
     }
+    const signal = session.leg.abortSignal;
+    const command = await this.withTurn(async () => {
+      if (this.detachRequested) {
+        return { type: "continue" as const };
+      }
+      await this.uiCall(render);
+      return await this.nextCommand(signal);
+    }, signal);
+    return command ?? { type: "continue" };
+  }
+
+  private async nextCommand(abortSignal: AbortSignal | undefined): Promise<DebuggerCommand> {
     if (this.detachRequested) {
       return { type: "continue" };
     }
     const detached = new Promise<DebuggerCommand>((resolve) => {
       this.detachWaiters.push(() => resolve({ type: "continue" }));
     });
-    const command = await this.uiCall(() => Promise.race([this.ui.waitForCommand(), detached]));
+    const cancelled = aborted(abortSignal).then((): DebuggerCommand => ({ type: "continue" }));
+    const command = await this.uiCall(() =>
+      Promise.race([this.takeCommand(), detached, cancelled]),
+    );
     return command ?? { type: "continue" };
+  }
+
+  private takeCommand(): Promise<DebuggerCommand> {
+    if (this.commandInFlight === null) {
+      this.commandInFlight = this.ui.waitForCommand().finally(() => {
+        this.commandInFlight = null;
+      });
+    }
+    return this.commandInFlight;
   }
 
   /** The options every resume and rewind carries. Attached, they are the
    *  caller's own, with the driver's hooks added to the caller's and the
    *  key that marks the call as the debugger's; the state itself reaches
    *  the new leg through the slot the module shares. */
-  private resumeOptions(): {
+  private resumeOptions(session: AttachedSession | undefined): {
     invocation?: InvocationOptions;
     metadata: Record<string, unknown>;
     abortSignal?: AbortSignal;
     pauseSignal?: AbortSignal;
   } {
-    if (this.attached) {
+    if (session !== undefined) {
+      const leg = session.leg;
       return {
-        invocation: this.leg.invocation,
-        abortSignal: this.leg.abortSignal,
-        pauseSignal: this.leg.pauseSignal,
+        invocation: leg.invocation,
+        abortSignal: leg.abortSignal,
+        pauseSignal: leg.pauseSignal,
         metadata: {
-          callbacks: composeCallbacks(this.leg.callbacks, this.getCallbacks()),
+          callbacks: composeCallbacks(leg.callbacks, this.getCallbacks()),
           [ATTACHED_RESUME]: true,
+          [ATTACHED_AGENT_END]: leg.agentEnd === true,
         },
       };
     }
@@ -324,7 +383,11 @@ export class DebuggerDriver {
     };
   }
 
-  async run(initialResult: any, _opts: DriverRunOpts = {}): Promise<any> {
+  async run(
+    initialResult: any,
+    _opts: DriverRunOpts = {},
+    session: AttachedSession | undefined = undefined,
+  ): Promise<any> {
     let result = initialResult;
     const defaultOpts = { interceptConsole: true };
     const opts = { ...defaultOpts, ..._opts };
@@ -363,14 +426,15 @@ export class DebuggerDriver {
           this.ui.log(
             `Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`,
           );
-          this.programFinished = true;
-          finalResult = result;
           // Attached, the value belongs to whoever is running the program,
-          // and the last render does not wait (see `finishedAttached`).
+          // and the end of one run is not the end of the program: another
+          // run of the same module may stop next.
           if (this.attached) {
             this.renderInBackground();
             return result;
           }
+          this.programFinished = true;
+          finalResult = result;
           // When the program finishes, keep the last batch so the user can
           // keep interacting (step back, rewind, print, etc.)
         }
@@ -421,16 +485,16 @@ export class DebuggerDriver {
             const others = batch.slice(1).map((intr) => stopOf(intr)?.scopeName ?? "a branch");
             this.ui.log(`Also stopped in ${others.join(", ")}; the next command moves all`);
           }
-          await this.uiCall(() =>
-            this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop),
+          const command = await this.attendStop(
+            () => this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop),
+            session,
           );
-          const command = await this.nextCommand();
           lastCommand = command;
           // No broad try/catch: per-command handlers narrow their own catches
           // (e.g. :save / :load handle file errors and log them via
           // ui.log). Anything that escapes is an internal bug that
           // should crash the driver, not silently continue with stale state.
-          result = await this.handleCommand(command, interrupt, batch);
+          result = await this.handleCommand(command, interrupt, batch, session);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }
@@ -438,7 +502,7 @@ export class DebuggerDriver {
           // User code interrupts: ask about each in turn (`askAbout`
           // renders for each), then answer the batch at once.
           this.ui.setMode(this.debuggerState.getMode());
-          result = await this.handleInterrupts(batch, asked);
+          result = await this.handleInterrupts(batch, asked, session);
         }
       }
     } finally {
@@ -454,13 +518,17 @@ export class DebuggerDriver {
   /** Ask the person about each interrupt in `asked`, in order, and resume
    *  with one answer per interrupt of `batch`. A debug stop in the same
    *  batch is answered with an approve, which the resume never reads. */
-  private async handleInterrupts(batch: Interrupt[], asked: Interrupt[]): Promise<any> {
+  private async handleInterrupts(
+    batch: Interrupt[],
+    asked: Interrupt[],
+    session: AttachedSession | undefined,
+  ): Promise<any> {
     const answers: Record<string, InterruptResponse> = {};
     for (const [index, interrupt] of asked.entries()) {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    return await this.respond(batch, answers);
+    return await this.respond(batch, answers, undefined, session);
   }
 
   /** One interrupt's answer, asked for until the input is one of
@@ -557,11 +625,24 @@ export class DebuggerDriver {
   private async respond(
     batch: Interrupt[],
     answers: Record<string, InterruptResponse>,
-    overrides?: Record<string, unknown>,
+    overrides: Record<string, unknown> | undefined,
+    session: AttachedSession | undefined,
   ): Promise<any> {
     const responses = batch.map((intr) => answers[intr.interruptId] ?? { type: "approve" });
-    return await this.resumeInterrupt(() =>
-      this.mod.respondToInterrupts(batch, responses, { overrides, ...this.resumeOptions() }),
+    const options = { overrides, ...this.resumeOptions(session) };
+    const serve = this.mod.respondToInterruptsForServe;
+    if (session !== undefined && serve !== undefined) {
+      return await this.resumeInterrupt(async () => {
+        const outcome = await serve(batch, responses, options);
+        if (outcome.status === "threw") {
+          throw new AttachedLegThrew(outcome);
+        }
+        return { ...outcome.value, usage: outcome.usage, traceId: outcome.traceId };
+      }, session);
+    }
+    return await this.resumeInterrupt(
+      () => this.mod.respondToInterrupts(batch, responses, options),
+      session,
     );
   }
 
@@ -570,33 +651,37 @@ export class DebuggerDriver {
     command: DebuggerCommand,
     interrupt: Interrupt,
     batch: Interrupt[],
+    session: AttachedSession | undefined,
   ): Promise<any> {
     const forwardCommands = ["step", "stepIn", "next", "stepOut", "continue"];
     if (this.programFinished && forwardCommands.includes(command.type)) {
       this.ui.log("Already at end of execution.");
       return { data: interrupt };
     }
+    // Attached, the window holds every run's checkpoints, and only this
+    // run's are this stop's to go back to.
+    const runId = session === undefined ? undefined : interrupt.checkpoint?.traceId;
 
     switch (command.type) {
       case "step": {
         this.debuggerState.stepping();
-        return await this.resume(batch);
+        return await this.resume(batch, session);
       }
       case "stepIn": {
         this.debuggerState.stepIn();
-        return await this.resume(batch);
+        return await this.resume(batch, session);
       }
       case "next": {
         this.debuggerState.stepNext();
-        return await this.resume(batch);
+        return await this.resume(batch, session);
       }
       case "stepOut": {
         this.debuggerState.stepOut();
-        return await this.resume(batch);
+        return await this.resume(batch, session);
       }
       case "continue": {
         this.debuggerState.running();
-        return await this.resume(batch);
+        return await this.resume(batch, session);
       }
       case "set": {
         // A resume applies overrides to the root's last frame
@@ -649,26 +734,24 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
 
-        const previous = this.debuggerState.findBefore(cp.id, stopOf(interrupt) ?? cp);
+        const previous = this.debuggerState.findBefore(cp.id, stopOf(interrupt) ?? cp, runId);
 
         if (!previous) {
           this.ui.log("Already at earliest checkpoint");
           return { data: interrupt };
         }
-        return await this.rewindTo(previous, {
-          preserveOverrides: command.preserveOverrides,
-        });
+        return await this.rewindTo(
+          previous,
+          { preserveOverrides: command.preserveOverrides },
+          session,
+        );
       }
       case "rewind": {
-        // Collect checkpoints from both debug store and user-code store
-        const debugCheckpoints = this.debuggerState.getCheckpoints();
-        const userStore = this.mod.__getCheckpoints();
-        const userCheckpoints = userStore.getCheckpoints();
-        const allCheckpoints = [...debugCheckpoints, ...userCheckpoints].sort(
-          (a, b) => a.id - b.id,
+        const allCheckpoints = this.checkpointsToShow(runId);
+        const selectedId = await this.attended(
+          () => this.uiCall(() => this.ui.showRewindSelector(allCheckpoints)),
+          session,
         );
-
-        const selectedId = await this.uiCall(() => this.ui.showRewindSelector(allCheckpoints));
         if (selectedId === null || selectedId === undefined) {
           // User cancelled, or detached — stay where we are
           return { data: interrupt };
@@ -679,26 +762,37 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
 
-        return await this.rewindTo(checkpoint);
+        return await this.rewindTo(checkpoint, {}, session);
       }
       case "reject": {
         this.ui.log("Rejected interrupt");
-        return await this.respond(batch, { [interrupt.interruptId]: { type: "reject" } });
+        return await this.respond(
+          batch,
+          { [interrupt.interruptId]: { type: "reject" } },
+          undefined,
+          session,
+        );
       }
       case "resolve": {
         this.ui.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
-        return await this.respond(batch, {
-          [interrupt.interruptId]: { type: "approve", value: command.value } as InterruptResponse,
-        });
+        return await this.respond(
+          batch,
+          {
+            [interrupt.interruptId]: {
+              type: "approve",
+              value: command.value,
+            } as InterruptResponse,
+          },
+          undefined,
+          session,
+        );
       }
       case "showCheckpoints": {
-        const debugCheckpoints = this.debuggerState.getCheckpoints();
-        const userStore = this.mod.__getCheckpoints();
-        const userCheckpoints = userStore.getCheckpoints();
-        const allCheckpoints = [...debugCheckpoints, ...userCheckpoints].sort(
-          (a, b) => a.id - b.id,
+        const allCheckpoints = this.checkpointsToShow(runId);
+        await this.attended(
+          () => this.uiCall(() => this.ui.showCheckpointsPanel(allCheckpoints)),
+          session,
         );
-        await this.uiCall(() => this.ui.showCheckpointsPanel(allCheckpoints));
         return { data: interrupt };
       }
       case "save": {
@@ -729,7 +823,7 @@ export class DebuggerDriver {
             this.ui.log(`Invalid checkpoint data in file: ${JSON.stringify(json)}`);
             return { data: interrupt };
           }
-          return await this.rewindTo(checkpoint);
+          return await this.rewindTo(checkpoint, {}, session);
         } catch (e: any) {
           this.ui.log(`Failed to load: ${e.message}`);
           return { data: interrupt };
@@ -742,11 +836,35 @@ export class DebuggerDriver {
         if (this.attached) {
           this.detach();
           this.debuggerState.running();
-          return await this.resume(batch);
+          return await this.resume(batch, session);
         }
         return { __debuggerQuit: true };
       }
     }
+  }
+
+  /** The checkpoints the rewind selector and the checkpoints panel show:
+   *  the rolling window and the program's own pinned ones, and attached,
+   *  only the run's whose stop is shown. */
+  private checkpointsToShow(runId: string | undefined): Checkpoint[] {
+    const debugCheckpoints = this.debuggerState.getCheckpoints(runId);
+    const userCheckpoints = this.mod
+      .__getCheckpoints()
+      .getCheckpoints()
+      .filter((cp) => runId === undefined || cp.traceId === runId);
+    return [...debugCheckpoints, ...userCheckpoints].sort((a, b) => a.id - b.id);
+  }
+
+  /** A panel that waits for the person: attached, it takes the turn on
+   *  the UI the way a stop does. */
+  private async attended<T>(
+    fn: () => Promise<T>,
+    session: AttachedSession | undefined,
+  ): Promise<T | undefined> {
+    if (session === undefined) {
+      return await fn();
+    }
+    return await this.withTurn(fn, session.leg.abortSignal);
   }
 
   /** The queued overrides, cleared: a resume applies them once. */
@@ -757,14 +875,22 @@ export class DebuggerDriver {
     return overrides;
   }
 
-  private async resumeInterrupt(fn: () => Promise<any>): Promise<any> {
+  private async resumeInterrupt(
+    fn: () => Promise<any>,
+    session: AttachedSession | undefined,
+  ): Promise<any> {
     this.ui.startSpinner();
     try {
       const result = await fn();
-      if (this.attached && result?.usage !== undefined) {
-        this.legUsage = result.usage;
+      if (session !== undefined && result?.usage !== undefined) {
+        session.usage = result.usage;
       }
       return result;
+    } catch (error) {
+      if (session !== undefined && error instanceof AttachedLegThrew) {
+        session.usage = error.outcome.usage;
+      }
+      throw error;
     } finally {
       this.ui.stopSpinner();
     }
@@ -772,14 +898,15 @@ export class DebuggerDriver {
 
   /** Move on from a debug stop: every stop in the batch is approved, an
    *  answer the resume never reads, and pending overrides are applied. */
-  private async resume(batch: Interrupt[]): Promise<any> {
+  private async resume(batch: Interrupt[], session: AttachedSession | undefined): Promise<any> {
     const overrides = this.takeOverrides();
-    return await this.respond(batch, {}, overrides);
+    return await this.respond(batch, {}, overrides, session);
   }
 
   private async rewindTo(
     checkpoint: Checkpoint,
-    opts: { preserveOverrides?: boolean } = {},
+    opts: { preserveOverrides?: boolean },
+    session: AttachedSession | undefined,
   ): Promise<any> {
     // Reset state for replay
     this.programFinished = false;
@@ -792,9 +919,26 @@ export class DebuggerDriver {
 
     this.debuggerState.deleteAfterCheckpoint(checkpoint.id);
 
-    const options = this.resumeOptions();
-    return await this.resumeInterrupt(() => this.mod.rewindFrom(checkpoint, overrides, options));
+    const options = this.resumeOptions(session);
+    return await this.resumeInterrupt(
+      () => this.mod.rewindFrom(checkpoint, overrides, options),
+      session,
+    );
   }
+}
+
+/** Settles when `signal` aborts, at once for one that already has, and
+ *  never without a signal. */
+function aborted(signal: AbortSignal | undefined): Promise<void> {
+  if (signal === undefined) {
+    return new Promise(() => {});
+  }
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) =>
+    signal.addEventListener("abort", () => resolve(), { once: true }),
+  );
 }
 
 /** Where a debug stop is, for the activity log: the scope, and the label

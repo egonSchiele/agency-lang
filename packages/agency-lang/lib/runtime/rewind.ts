@@ -11,6 +11,10 @@ import type { GraphState, RunNodeCoreResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
 import { isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
+import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
+import { hasInterrupts } from "./interrupts.js";
+import { ThreadStore } from "./state/threadStore.js";
 import { withExternalSignals } from "./externalSignals.js";
 import { unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { PauseSignal } from "./errors.js";
@@ -65,12 +69,20 @@ async function replayFrom(
   signals: { abortSignal?: AbortSignal; pauseSignal?: AbortSignal },
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, overrides, metadata = {} } = args;
+  // run-read-ok: a root run, read before the first await for onAgentEnd.
+  const lineage = lineageOf(currentRunOrNone());
   // A rewind is conceptually a new execution: it builds a fresh execCtx
   // and replays from the checkpoint. The module-level `__globalCtx` that
   // callers pass in never has runId set (only per-run execCtx do), so we
   // mint one for trace correlation. Replays therefore appear as distinct
   // runs in trace files, which matches the actual execution semantics.
-  const runId = (ctx as any).runId ?? nanoid();
+  // A rewind the attached debugger issues continues the caller's run,
+  // which its checkpoints are filed under (`traceId`): the debugger keeps
+  // one run's rewinds inside that run. Any other rewind is a new run.
+  const runId =
+    isAttachedResume(metadata) && args.checkpoint.traceId !== undefined
+      ? args.checkpoint.traceId
+      : ((ctx as any).runId ?? nanoid());
   const resolved = resolveInvocation({ kind: "resume", options: args.invocation, runId });
   const execCtx = await ctx.createExecutionContext(resolved);
   try {
@@ -82,7 +94,7 @@ async function replayFrom(
     });
     execCtx._skipNextCheckpoint = true;
     const value = await withExternalSignals(execCtx, signals, () =>
-      replayLoop(execCtx, checkpoint.nodeId),
+      replayLoop(execCtx, checkpoint.nodeId, firesAgentEnd(metadata) ? lineage : null),
     );
     return {
       status: "returned",
@@ -98,6 +110,8 @@ async function replayFrom(
 async function replayLoop(
   execCtx: RuntimeContext<GraphState>,
   startNodeName: string,
+  /** The lineage to fire `onAgentEnd` under, or null to fire nothing. */
+  agentEnd: Lineage | null,
 ): Promise<RunNodeCoreResult<any>> {
   let nodeName = startNodeName;
   {
@@ -128,7 +142,17 @@ async function replayLoop(
         );
         await execCtx.pendingPromises.awaitAll();
         await throwIfNodeResultAborted(result, execCtx, { endsRun: false });
-        return createReturnObject({ result, globals: execCtx.globals });
+        const returnObject = createReturnObject({ result, globals: execCtx.globals });
+        if (agentEnd !== null && !hasInterrupts(returnObject.data)) {
+          await fireAgentEnd(
+            execCtx,
+            nodeName,
+            returnObject,
+            result?.messages ?? ThreadStore.withDefaultActive(execCtx.rootLog),
+            agentEnd,
+          );
+        }
+        return returnObject;
       } catch (e) {
         if (e instanceof PauseSignal) {
           return await pausedReturnObject(execCtx, e);

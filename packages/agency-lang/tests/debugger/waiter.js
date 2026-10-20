@@ -28,3 +28,32 @@ export function releaseWaiter() {
   notifyWaiting = null;
   if (pending) pending();
 }
+
+// For nested-run.agency: the test sets the module whose `inner` node the
+// program's `outer` node runs through this helper.
+let innerModule = null;
+
+export function setInnerModule(mod) {
+  innerModule = mod;
+}
+
+export async function runInner() {
+  const result = await innerModule.inner();
+  return result.data;
+}
+
+// For agent-end-callback.agency: who fired onAgentEnd, in order.
+let agentEnds = [];
+
+export function noteAgentEnd(who) {
+  agentEnds.push(who);
+}
+
+export function agentEndNotes() {
+  return agentEnds;
+}
+
+export function clearAgentEndNotes() {
+  agentEnds = [];
+}
+

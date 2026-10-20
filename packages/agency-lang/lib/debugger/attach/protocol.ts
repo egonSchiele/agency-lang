@@ -48,7 +48,14 @@ export const HelloSchema = z
 
 export const AttachMessageSchema = z.discriminatedUnion("type", [
   HelloSchema,
-  z.object({ type: z.literal("finished"), value: z.unknown() }).strict(),
+  z
+    .object({
+      type: z.literal("finished"),
+      value: z.unknown(),
+      /** Set when the run ended by throwing; `value` is then nothing. */
+      error: z.string().optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("refused"), reason: z.string() }).strict(),
   z
     .object({

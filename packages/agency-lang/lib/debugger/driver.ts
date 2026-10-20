@@ -8,6 +8,12 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
+import {
+  GUARD_ANSWER_HELP,
+  describeGuardTrip,
+  isGuardTrip,
+  parseGuardAnswer,
+} from "./guardAnswer.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
@@ -259,9 +265,6 @@ export class DebuggerDriver {
     const answers: Record<string, InterruptResponse> = {};
     for (const [index, interrupt] of asked.entries()) {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
-      const data =
-        Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
-      this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
     this.ui.state.resetCallStack();
@@ -269,8 +272,15 @@ export class DebuggerDriver {
   }
 
   /** One interrupt's answer, asked for until the input is one of
-   *  approve, reject, or resolve with a value. */
+   *  approve, reject, or resolve with a value. A guard trip takes a
+   *  grant, a disarm, a message, or a reject instead. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    if (isGuardTrip(interrupt.effect, interrupt.data)) {
+      return await this.askAboutGuardTrip(interrupt, position);
+    }
+    const data =
+      Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
+    this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
     while (true) {
       const input = await this.ui.promptForInput(
         `${interrupt.message}${position}: approve / reject / resolve <value>`,
@@ -296,6 +306,32 @@ export class DebuggerDriver {
         return { type: "approve", value } as InterruptResponse;
       }
       this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
+    }
+  }
+
+  /** A guard trip's answer: the activity log says what tripped and what
+   *  a reject would return, and the answer is read by `parseGuardAnswer`
+   *  until it is one the runtime accepts. */
+  private async askAboutGuardTrip(
+    interrupt: Interrupt,
+    position: string,
+  ): Promise<InterruptResponse> {
+    for (const line of describeGuardTrip(interrupt.data)) {
+      this.ui.state.log(line);
+    }
+    while (true) {
+      const input = await this.ui.promptForInput(`Guard tripped${position}: ${GUARD_ANSWER_HELP}`);
+      const answer = parseGuardAnswer(input);
+      if ("error" in answer) {
+        this.ui.state.log(answer.error);
+        continue;
+      }
+      this.ui.state.log(
+        answer.response.type === "reject"
+          ? "Rejected the guard trip"
+          : `Approved the guard trip with ${JSON.stringify((answer.response as { value?: unknown }).value)}`,
+      );
+      return answer.response;
     }
   }
 

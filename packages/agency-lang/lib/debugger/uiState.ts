@@ -93,14 +93,13 @@ export class UIState {
       return;
     }
     this.checkpoint = cp;
-    // One of the tool loop's own stops, before a model request or a tool
-    // call, is located under the `llm()` statement, so the source pane
-    // shows that statement, and its frame is the one that called it.
+    // A checkpoint stamped by the tool loop, at one of its own stops or
+    // on an interrupt it carried out of a request or a tool, is located
+    // under the `llm()` statement: its step path is the statement's
+    // path, a slash, and the loop's key. The source pane shows the
+    // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
-    this.location =
-      location.loopStop === undefined
-        ? location
-        : { ...location, stepPath: statementStepPath(location.stepPath) };
+    this.location = { ...location, stepPath: statementStepPath(location.stepPath) };
     const branchPath = this.location.branchPath ?? [];
     const frame = cp.shownFrame(location);
     if (!frame) {

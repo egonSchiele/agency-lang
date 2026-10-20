@@ -230,7 +230,7 @@ await session.press("s"); // the interrupt fires
 await session.type("resolve 5");
 ```
 
-Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`.
+Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. When several branches paused at once the driver asks about each in turn, so `type()` one answer per interrupt. A guard trip takes `grant cost <dollars>`, `grant time <duration>`, `disarm cost|time`, `message <text>`, or `reject` (see `lib/debugger/guardTrip.test.ts`).
 
 ### Testing print
 

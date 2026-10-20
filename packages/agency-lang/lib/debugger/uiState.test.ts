@@ -177,6 +177,19 @@ describe("UIState", () => {
       expect(ui.getLocation()).toMatchObject({ scopeName: "main", stepPath: "1" });
     });
 
+    it("an interrupt the loop carried out is shown at the llm() statement too", async () => {
+      const ui = new UIState();
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          moduleId: "mod.agency",
+          scopeName: "main",
+          stepPath: "1/guardGate.final",
+          stack: sharedCheckpoint().stack,
+        }),
+      );
+      expect(ui.getLocation()).toMatchObject({ scopeName: "main", stepPath: "1" });
+    });
+
     it("a loop stop inside a tool shows that tool's frame, at its llm() statement", async () => {
       // The subagent in `search` runs its own loop: the stop's branch path
       // leads to the tool's stack, whose last frame is the loop's.

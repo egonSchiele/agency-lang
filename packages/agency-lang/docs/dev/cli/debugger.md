@@ -146,6 +146,8 @@ The call stack pane still shows the hook-fed entries (`onFunctionStart`), not th
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
 
+A guard trip (`std::guard`, see `docs/site/guide/guards.md`) is asked about differently, since a bare approve would be refused by the runtime: the activity log says which guard tripped, what it spent against its limit, and what a reject would return (the saved draft, or a failure), and the answer is `grant cost <dollars>`, `grant time <duration>` (`30s`, `2m`, or milliseconds), `disarm cost` or `disarm time`, any of those followed by `message <text>` for the model, or `reject`. `lib/debugger/guardAnswer.ts` reads the answer into `approve({ maxCost, maxTime, disarm, message })` and refuses, with the reason, the answers the runtime would throw on (a message alone, a grant with no amount).
+
 ### Source mapping
 
 The builder records source locations in a `SourceMap` exported as `__sourceMap` from the compiled module. Keys are `"moduleId:scopeName"`, values map step paths to `{line, col}`. The UI uses this to highlight the current line in the source pane. For cross-file debugging, the UI loads the new file when the `moduleId` changes.

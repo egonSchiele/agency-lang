@@ -447,6 +447,10 @@ export class Runner {
     // statement as before.
     const counterKey = this.path.length === 0 ? "" : this.key();
     if (this.frame.takeRestoredCounter(counterKey) === id) {
+      // Flagged as a stop would be, so a checkpoint taken while the
+      // statement's call runs carries the flag and a rewind to it passes
+      // through here as well.
+      this.frame.locals[this.debugFlagKey(id)] = true;
       return false;
     }
 

@@ -837,7 +837,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
       execCtx.cleanup();
     }
   });
-  return unwrapWithUsage(served);
+  return unwrapWithUsage(await settleStops(args.ctx, served, {}));
 }
 
 type RespondToInterruptsArgs = {
@@ -1004,8 +1004,18 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
     checkpoint: deepClone(args.paused.checkpoint),
     metadata: args.metadata,
     signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
+    afterRestore: (execCtx) => execCtx.stateStack.markReentry(),
   });
-  return unwrapWithUsage(served);
+  if (isAttachedResume(args.metadata)) {
+    return unwrapWithUsage(served);
+  }
+  const settled = await settleStops(args.ctx, served, {
+    invocation: args.invocation,
+    callbacks: args.metadata?.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+  });
+  return unwrapWithUsage(settled);
 }
 
 /** Public entry point — returns the resume result with its usage snapshot

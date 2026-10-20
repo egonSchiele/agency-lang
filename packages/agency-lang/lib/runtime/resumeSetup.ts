@@ -1,4 +1,3 @@
-import type { DebuggerState } from "../debugger/debuggerState.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { signCheckpoint } from "./checkpointChecksum.js";
 import type { HostSettings } from "../host/host.js";
@@ -25,7 +24,6 @@ export type ResumeOverrides = {
 
 export type ResumeMetadata = {
   callbacks?: AgencyCallbacks;
-  debugger?: DebuggerState;
 };
 
 export type AfterCheckpointRestored = () => void;
@@ -169,9 +167,6 @@ export async function restoreForResume(
 
   if (request.metadata?.callbacks) {
     Object.assign(execCtx.callbacks, request.metadata.callbacks);
-  }
-  if (request.metadata?.debugger) {
-    execCtx.debuggerState = request.metadata.debugger;
   }
   return checkpoint;
 }

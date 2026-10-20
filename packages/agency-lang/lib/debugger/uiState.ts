@@ -284,10 +284,6 @@ export class UIState {
     this.mode = mode;
   }
 
-  setOverride(key: string, value: unknown) {
-    this.pendingOverrides[key] = value;
-  }
-
   /** Replace the queued overrides with the driver's copy. */
   setOverrides(overrides: Record<string, unknown>) {
     this.pendingOverrides = { ...overrides };
@@ -353,14 +349,6 @@ export class UIState {
       functionName: frameName(frame.scopeName),
       moduleId: frame.moduleId ?? "",
     }));
-  }
-
-  getOverrides() {
-    return this.pendingOverrides;
-  }
-
-  resetOverrides() {
-    this.pendingOverrides = {};
   }
 
   getActivityLog() {

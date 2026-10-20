@@ -7,9 +7,14 @@ import { RestoreSignal } from "./errors.js";
 import { applyLocalOverrides, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
 import { RuntimeContext } from "./state/context.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
-import type { GraphState } from "./types.js";
+import type { GraphState, RunNodeCoreResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
+import { isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { withExternalSignals } from "./externalSignals.js";
+import { unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
+import { PauseSignal } from "./errors.js";
+import { pausedReturnObject } from "./pause.js";
 
 /** Write `overrides` into the checkpoint's last frame in place, re-signing
  *  it under `settings` when it was signed. A caller outside any run, such
@@ -24,6 +29,11 @@ export function applyOverrides(
   Object.assign(checkpoint, changed);
 }
 
+/** Replay from `checkpoint` with `overrides` written into its last frame.
+ *  Like a resume, the result carries the run's `usage` and `traceId`, the
+ *  caller's cancel and pause signals reach the replay, and an attached
+ *  debugger answers the replay's debug stops before it returns
+ *  (`settleStops`). */
 export async function rewindFrom(args: {
   ctx: RuntimeContext<GraphState>;
   checkpoint: Checkpoint;
@@ -33,7 +43,27 @@ export async function rewindFrom(args: {
    *  with the same contract as a resume: the caller that started the run
    *  with them passes them again, and the restore installs them. */
   invocation?: InvocationOptions;
+  abortSignal?: AbortSignal;
+  pauseSignal?: AbortSignal;
 }): Promise<any> {
+  const { ctx, overrides, metadata = {} } = args;
+  const signals = { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal };
+  const outcome = await replayFrom(args, signals);
+  if (isAttachedResume(metadata)) {
+    return unwrapWithUsage(outcome);
+  }
+  const settled = await settleStops(ctx, outcome, {
+    invocation: args.invocation,
+    callbacks: metadata.callbacks,
+    ...signals,
+  });
+  return unwrapWithUsage(settled);
+}
+
+async function replayFrom(
+  args: Parameters<typeof rewindFrom>[0],
+  signals: { abortSignal?: AbortSignal; pauseSignal?: AbortSignal },
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, overrides, metadata = {} } = args;
   // A rewind is conceptually a new execution: it builds a fresh execCtx
   // and replays from the checkpoint. The module-level `__globalCtx` that
@@ -51,8 +81,26 @@ export async function rewindFrom(args: {
       metadata,
     });
     execCtx._skipNextCheckpoint = true;
-    let nodeName = checkpoint.nodeId;
+    const value = await withExternalSignals(execCtx, signals, () =>
+      replayLoop(execCtx, checkpoint.nodeId),
+    );
+    return {
+      status: "returned",
+      value,
+      usage: execCtx.invocationUsage.snapshot(),
+      traceId: execCtx.getRunId(),
+    };
+  } finally {
+    execCtx.cleanup();
+  }
+}
 
+async function replayLoop(
+  execCtx: RuntimeContext<GraphState>,
+  startNodeName: string,
+): Promise<RunNodeCoreResult<any>> {
+  let nodeName = startNodeName;
+  {
     while (true) {
       try {
         // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib
@@ -82,6 +130,9 @@ export async function rewindFrom(args: {
         await throwIfNodeResultAborted(result, execCtx, { endsRun: false });
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
+        if (e instanceof PauseSignal) {
+          return await pausedReturnObject(execCtx, e);
+        }
         if (e instanceof RestoreSignal) {
           nodeName = applyRestoreSignal(execCtx, e);
           continue;
@@ -89,7 +140,5 @@ export async function rewindFrom(args: {
         throw e;
       }
     }
-  } finally {
-    execCtx.cleanup();
   }
 }

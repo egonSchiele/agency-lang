@@ -11,6 +11,7 @@ import { DebuggerDriver } from "./driver.js";
 import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "./testHelpers.js";
 import type { DebuggerCommand } from "./types.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
+import { isPaused } from "@/runtime/pause.js";
 import * as helper from "../../tests/debugger/waiter.js";
 
 const fixtures = {
@@ -20,6 +21,7 @@ const fixtures = {
   policyEffect: "policy-effect",
   mixedBatch: "mixed-batch",
   llmAfterStep: "llm-after-step",
+  agentShaped: "agent-shaped",
 };
 
 function compiledPath(name: string): string {
@@ -112,6 +114,42 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(result.data).toBe("rejected");
   });
 
+  it("two runs stopped at once each resume with their own policy", async () => {
+    const mod = await freshImport(compiledPath(fixtures.policyEffect));
+    attachTo(mod, [{ type: "continue" }, { type: "continue" }]);
+
+    const [rejecting, approving] = await Promise.all([
+      mod.main({ policy: { "test::secret": [{ action: "reject" }] } }),
+      mod.main({ policy: { "test::secret": [{ action: "approve" }] } }),
+    ]);
+
+    expectNoStop(rejecting);
+    expectNoStop(approving);
+    expect(rejecting.data).toBe("rejected");
+    expect(approving.data).toBe("the secret");
+  });
+
+  it("the caller's answer to a tool's interrupt survives attaching between legs", async () => {
+    // The tool call was in progress when the caller's leg paused, so the
+    // resume re-enters it with the answer. A stop before the call would
+    // start a leg without that answer, and the tool would ask again.
+    await withLLMMocks(
+      [{ toolCall: { name: "confirm", args: { note: "x" } } }, { return: "done" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.agentShaped));
+        const paused = await mod.main("task");
+        expect(hasInterrupts(paused.data)).toBe(true);
+        expect(paused.data[0].message).toBe("confirm x?");
+
+        attachTo(mod, [{ type: "continue" }]);
+        const final = await mod.respondToInterrupts(paused.data, [{ type: "approve" }]);
+
+        expectNoStop(final);
+        expect(final.data).toBe("done");
+      },
+    );
+  });
+
   it("without the policy the same program asks the caller", async () => {
     const mod = await freshImport(compiledPath(fixtures.policyEffect));
     attachTo(mod, [{ type: "step" }, { type: "step" }, { type: "continue" }]);
@@ -143,17 +181,101 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     });
   });
 
-  it("the caller's usage covers a model call made after a step", async () => {
+  it("the caller's usage is the same run's usage with no debugger, however many steps", async () => {
+    const plain = await withLLMMocks([{ return: "hi" }], async () => {
+      const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
+      return await mod.main();
+    });
+    expect(plain.usage.tokens.totalTokens).toBeGreaterThan(0);
+
     await withLLMMocks([{ return: "hi" }], async () => {
       const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
-      attachTo(mod, [{ type: "step" }, { type: "continue" }]);
+      // Two more stops after the model call: each leg reports the run's
+      // total so far, and the figure must not grow with the stepping.
+      attachTo(mod, [{ type: "step" }, { type: "step" }, { type: "step" }, { type: "continue" }]);
 
       const result = await mod.main();
 
       expectNoStop(result);
       expect(result.data).toBe("hi");
-      expect(result.usage.tokens.totalTokens).toBeGreaterThan(0);
+      expect(result.usage.tokens).toEqual(plain.usage.tokens);
+      expect(result.usage.cost).toEqual(plain.usage.cost);
     });
+  });
+
+  it("the caller's onAgentEnd fires once with the final value when the debugger ran the last leg", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    attachTo(mod, [{ type: "step" }, { type: "continue" }]);
+    const ended: unknown[] = [];
+
+    const result = await mod.main({
+      callbacks: { onAgentEnd: (data: any) => ended.push(data.result.data) },
+    });
+
+    expect(result.data).toBe(3);
+    expect(ended).toEqual([3]);
+  });
+
+  it("the caller's onAgentEnd fires once when the debugger ran no leg", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const { driver } = attachTo(mod, []);
+    driver.debuggerState.running();
+    const ended: unknown[] = [];
+
+    const result = await mod.main({
+      callbacks: { onAgentEnd: (data: any) => ended.push(data.result.data) },
+    });
+
+    expect(result.data).toBe(3);
+    expect(ended).toEqual([3]);
+  });
+
+  it("a second run on the same driver steps from its own first stop", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const { driver, io } = attachTo(mod, [
+      { type: "continue" },
+      { type: "step" },
+      { type: "continue" },
+    ]);
+
+    expect((await mod.main()).data).toBe(3);
+    const rendersInFirstRun = io.renderCalls.length;
+    driver.debuggerState.stepping();
+    expect((await mod.main()).data).toBe(3);
+
+    expect(io.logLines).not.toContain("Already at end of execution.");
+    // The second run's first stop and the one after `step`.
+    expect(io.renderCalls.length).toBe(rendersInFirstRun + 2);
+  });
+
+  it("a rewind from the attached driver keeps the run's usage", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    attachTo(mod, [{ type: "step" }, { type: "step" }, { type: "stepBack" }, { type: "continue" }]);
+
+    const result = await mod.main();
+
+    expectNoStop(result);
+    expect(result.data).toBe(3);
+    expect(result.usage).toBeDefined();
+    expect(result.usage.tokens.totalTokens).toBe(0);
+  });
+
+  it("a resume from a paused checkpoint settles its stops too", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    const pause = new AbortController();
+    const running = mod.main({ pauseSignal: pause.signal });
+    await helper.untilWaiting();
+    pause.abort();
+    helper.releaseWaiter();
+    const paused = await running;
+    expect(isPaused(paused.data)).toBe(true);
+
+    const { io } = attachTo(mod, [{ type: "step" }, { type: "continue" }]);
+    const final = await mod.resumeFromCheckpoint(paused.data);
+
+    expectNoStop(final);
+    expect(final.data).toBe(2);
+    expect(io.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("a batch that mixes a stop and a program interrupt reaches the caller without the stop", async () => {
@@ -191,6 +313,10 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
   it("detaching while stopped lets the program finish", async () => {
     const mod = await freshImport(compiledPath(fixtures.stepTest));
     // After one step the IO never answers; the test detaches instead.
+    let atSecondStop: () => void = () => {};
+    const secondStop = new Promise<void>((resolve) => {
+      atSecondStop = resolve;
+    });
     const io = new (class extends TestDebuggerIO {
       private answered = false;
       override async waitForCommand(): Promise<DebuggerCommand> {
@@ -198,14 +324,14 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
           this.answered = true;
           return { type: "step" };
         }
+        atSecondStop();
         return await new Promise(() => {});
       }
     })([]);
     const { driver } = attachTo(mod, [], io);
 
     const running = mod.main();
-    // Let the program reach its second stop and wait there.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await secondStop;
     const rendersBeforeDetach = io.renderCalls.length;
     driver.detach();
     const result = await running;
@@ -222,12 +348,18 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
 
     const running = mod.main();
     await helper.untilWaiting();
+    // Back to stepping, as a pause key will do, so the next statement
+    // would stop and record a checkpoint if the debugger were still there.
+    driver.debuggerState.stepping();
     driver.detach();
+    const rendersAtDetach = io.renderCalls.length;
+    const checkpointsAtDetach = driver.debuggerState.getCheckpoints().length;
     helper.releaseWaiter();
     const result = await running;
 
     expect(result.data).toBe(2);
-    expect(io.renderCalls).toHaveLength(1);
+    expect(io.renderCalls.length).toBe(rendersAtDetach);
+    expect(driver.debuggerState.getCheckpoints().length).toBe(checkpointsAtDetach);
     expect(driver.debuggerState.attached).toBeUndefined();
   });
 

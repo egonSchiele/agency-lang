@@ -369,7 +369,7 @@ expect(result.data).toBe(3);
 expect(io.renderCalls.length).toBeGreaterThanOrEqual(2);
 ```
 
-When the commands run out the IO answers `quit`, which attached means detach, so a short script never leaves the program waiting. To attach while the program is running, use `tests/debugger/awaits-helper.agency`, whose node waits on a JavaScript helper (`waiter.js`) until the test calls `releaseWaiter`. `lib/debugger/attached.test.ts` has one test per behaviour: attach before, during, and between legs; the caller's policy and callbacks surviving a step; a mixed batch; `set`; and detaching while stopped and while running.
+When the commands run out the IO answers `quit`, which attached means detach, so a short script never leaves the program waiting. To attach while the program is running, use `tests/debugger/awaits-helper.agency`, whose node waits on a JavaScript helper (`waiter.js`) until the test calls `releaseWaiter`. `lib/debugger/attached.test.ts` has one test per behaviour: attach before, during, and between legs, including between the legs of a tool's interrupt; two runs stopped at once with different policies; the caller's policy, callbacks, `onAgentEnd`, and usage figure being the same as without a debugger; a mixed batch; `set`; a rewind; a second run on the same driver; a resume from a paused checkpoint; and detaching while stopped and while running.
 
 ## File reference
 

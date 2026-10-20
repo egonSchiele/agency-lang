@@ -250,7 +250,12 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
 
   it("a rewind from the attached driver keeps the run's usage", async () => {
     const mod = await freshImport(compiledPath(fixtures.stepTest));
-    attachTo(mod, [{ type: "step" }, { type: "step" }, { type: "stepBack" }, { type: "continue" }]);
+    attachTo(mod, [
+      { type: "step" },
+      { type: "step" },
+      { type: "stepBack", preserveOverrides: false },
+      { type: "continue" },
+    ]);
 
     const result = await mod.main();
 

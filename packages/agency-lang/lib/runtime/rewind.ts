@@ -6,6 +6,7 @@ import { runInBootstrapFrame } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
 import { applyLocalOverrides, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
 import { RuntimeContext } from "./state/context.js";
+import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
@@ -28,6 +29,10 @@ export async function rewindFrom(args: {
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
+  /** The root policy and per-invocation config of the run being replayed,
+   *  with the same contract as a resume: the caller that started the run
+   *  with them passes them again, and the restore installs them. */
+  invocation?: InvocationOptions;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
   // A rewind is conceptually a new execution: it builds a fresh execCtx
@@ -36,10 +41,12 @@ export async function rewindFrom(args: {
   // mint one for trace correlation. Replays therefore appear as distinct
   // runs in trace files, which matches the actual execution semantics.
   const runId = (ctx as any).runId ?? nanoid();
-  const execCtx = await ctx.createExecutionContext({ runId });
+  const resolved = resolveInvocation({ kind: "resume", options: args.invocation, runId });
+  const execCtx = await ctx.createExecutionContext(resolved);
   try {
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
+      policy: resolved.policy,
       overrides: { locals: overrides },
       metadata,
     });

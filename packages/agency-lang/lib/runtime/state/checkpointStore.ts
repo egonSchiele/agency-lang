@@ -9,6 +9,7 @@ import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
+import { isBlockName } from "../blockNames.js";
 import type { StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -94,6 +95,16 @@ export type CheckpointJSON = {
   traceId?: string;
   signature?: string;
 };
+
+/** The name a pane shows for a frame: the tool loop's own frame reads
+ *  `llm()`, the compiler-named frame of a fork or parallel arm or a block
+ *  argument reads `block`, and a frame with no scope name `(unknown)`. */
+export function frameName(scopeName: string | null | undefined): string {
+  if (scopeName === undefined || scopeName === null) return "(unknown)";
+  if (scopeName === "runPrompt") return "llm()";
+  if (isBlockName(scopeName)) return "block";
+  return scopeName;
+}
 
 export class Checkpoint implements SourceLocation {
   public id: number;
@@ -185,6 +196,16 @@ export class Checkpoint implements SourceLocation {
     let frames: StateJSON[] | undefined = this.stack.stack;
     for (const key of branchPath) {
       frames = frames?.at(-1)?.branches?.[key]?.stack.stack;
+    }
+    return frames;
+  }
+
+  /** The frames from the root down the branch path, the deepest last:
+   *  every frame of every stack the path passes through. */
+  framesAlong(branchPath: string[]): StateJSON[] {
+    const frames: StateJSON[] = [];
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
     }
     return frames;
   }

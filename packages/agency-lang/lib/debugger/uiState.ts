@@ -1,6 +1,7 @@
 import { SourceMap } from "@/backends/sourceMap.js";
 import {
   Checkpoint,
+  frameName,
   type SourceLocationOpts,
   type ThreadMessages,
 } from "../runtime/state/checkpointStore.js";
@@ -8,21 +9,12 @@ import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
-import { isBlockName } from "../runtime/blockNames.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
 import { uniq } from "@/utils.js";
 import fs from "fs";
 import path from "path";
-
-/** The name the call stack pane shows for a frame. */
-function frameName(scopeName: string | null | undefined): string {
-  if (scopeName === undefined || scopeName === null) return "(unknown)";
-  if (scopeName === "runPrompt") return "llm()";
-  if (isBlockName(scopeName)) return "block";
-  return scopeName;
-}
 
 export type ValWithOverride = {
   key: string;
@@ -258,12 +250,7 @@ export class UIState {
    *  functions do not appear. */
   getCallStack(): { functionName: string; moduleId: string }[] {
     if (!this.checkpoint) return [];
-    const branchPath = this.location?.branchPath ?? [];
-    const frames: StateJSON[] = [];
-    for (let depth = 0; depth <= branchPath.length; depth++) {
-      frames.push(...(this.checkpoint.stackAt(branchPath.slice(0, depth)) ?? []));
-    }
-    return frames.map((frame) => ({
+    return this.checkpoint.framesAlong(this.location?.branchPath ?? []).map((frame) => ({
       functionName: frameName(frame.scopeName),
       moduleId: frame.moduleId ?? "",
     }));

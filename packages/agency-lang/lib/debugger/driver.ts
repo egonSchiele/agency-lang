@@ -231,11 +231,9 @@ export class DebuggerDriver {
             return finalResult;
           }
         } else {
-          // User code interrupts: show the first, ask about each in turn,
-          // then answer the batch at once. The interrupt's id tells the
-          // UI which branch raised it, when a tool or a fork did.
+          // User code interrupts: ask about each in turn (`askAbout`
+          // renders for each), then answer the batch at once.
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt.checkpoint, undefined, interrupt.interruptId);
           result = await this.handleInterrupts(batch, asked);
         }
       }

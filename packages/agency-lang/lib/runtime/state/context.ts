@@ -158,10 +158,9 @@ export class RuntimeContext<T> {
    *  `_installSlowInput` test seam simulates a slow human. Per-execution on
    *  purpose (never a process global): two runs in one process must not see
    *  each other's override. Never serialized — checkpoints capture the
-   *  StateStack and GlobalStore, not the context. The TUI debugger still
-   *  uses the legacy `globalThis.__agencyInputOverride` channel because it
-   *  only sees the compiled module's exports; `inputImpl` falls back to
-   *  that global until the debugger migrates. */
+   *  StateStack and GlobalStore, not the context. The TUI debugger sets
+   *  it through `InvocationOptions.inputOverride` on the node call and on
+   *  every resume and rewind it makes. */
   inputOverride?: (prompt: string) => Promise<string>;
   private traceWriter: TraceWriter | null;
 
@@ -519,6 +518,7 @@ export class RuntimeContext<T> {
     // (_advanceTime) would never see the FakeClock the constructor installed.
     // A host given for this one invocation wins over the global one.
     execCtx.host = invocation.host ?? this.host;
+    if (invocation.inputOverride) execCtx.inputOverride = invocation.inputOverride;
     // Resolved again for this run: the agent home may have been created, or
     // the variable that names it changed, since the global context was built.
     execCtx.policyDirs = resolvePolicyDirs(execCtx.host);

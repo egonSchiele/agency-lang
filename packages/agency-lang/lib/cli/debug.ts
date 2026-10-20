@@ -154,10 +154,6 @@ export async function debug(
       absOutput = path.resolve(outputFile);
     }
 
-    // Signal to stdlib UI components that they should fall back to console.log
-    // instead of drawing their own TUI, which would conflict with the debugger.
-    process.env.AGENCY_DEBUGGER = "1";
-
     // Dynamically import the compiled module
     // eslint-disable-next-line no-restricted-syntax -- compiled output path is only known at runtime
     const mod = await import(absOutput);
@@ -273,7 +269,7 @@ export async function debug(
       // Normal mode: run the node, it will pause at the first debugStep()
       const initialResult = await nodeFunction(...args, {
         callbacks,
-        invocation: options.invocation,
+        invocation: driver.invocation,
       });
       await driver.run(initialResult);
     }

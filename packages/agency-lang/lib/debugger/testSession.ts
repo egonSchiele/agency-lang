@@ -236,7 +236,7 @@ async function getInitialResult(opts: TestSessionOpts, driver: DebuggerDriver): 
 
   const callbacks = driver.getCallbacks();
   const args = opts.args ?? [];
-  const result = await opts.mod.main(...args, { callbacks, invocation: opts.invocation });
+  const result = await opts.mod.main(...args, { callbacks, invocation: driver.invocation });
 
   if (!result?.data || !hasInterrupts(result.data)) {
     throw new Error(

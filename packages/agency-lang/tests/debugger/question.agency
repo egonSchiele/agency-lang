@@ -11,3 +11,12 @@ node pick(): string {
   const chosen = interrupt("Pick a number")
   return chosen
 }
+
+effect myapp::branch {
+  options: string[]
+}
+
+node pickBranch(): string {
+  const chosen = interrupt myapp::branch("Which branch?", { options: ["main", "dev"] })
+  return chosen
+}

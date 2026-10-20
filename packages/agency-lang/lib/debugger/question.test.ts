@@ -39,11 +39,26 @@ describe("a question in the debugger", () => {
     expect(await session.quit()).toMatchObject({ success: false });
   });
 
+  it("an answer that starts with the word resolve stays whole, and the data is shown when it says more", async () => {
+    const session = await questionSession("pickBranch");
+    await session.press("c");
+    expect(activity(session)).toContainEqual('Question: Which branch? {"options":["main","dev"]}');
+    await session.type("resolve the conflict by hand");
+    expect(await session.quit()).toBe("resolve the conflict by hand");
+  });
+
+  it("a and r stand for approve and reject", async () => {
+    const session = await questionSession("pick");
+    await session.press("c");
+    await session.type("r");
+    expect(await session.quit()).toMatchObject({ success: false });
+  });
+
   it("a plain raise used as a value takes text, or JSON through resolve", async () => {
     const asText = await questionSession("pick");
     await asText.press("c");
     expect(activity(asText)).toContainEqual("Question: Pick a number");
-    await asText.type("seven");
+    await asText.type("  seven ");
     expect(await asText.quit()).toBe("seven");
 
     const asJson = await questionSession("pick");

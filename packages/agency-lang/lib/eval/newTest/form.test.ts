@@ -6,6 +6,7 @@ import {
   FIELDS,
   initialForm,
   isDirty,
+  isLastField,
   reduceForm,
   type FormAction,
   type FormState,
@@ -16,11 +17,7 @@ function run(actions: FormAction[], from: FormState = initialForm("suite")): For
 }
 
 function typed(text: string): FormAction[] {
-  return [
-    { kind: "beginEdit" },
-    ...[...text].map((c): FormAction => ({ kind: "appendText", text: c })),
-    { kind: "submitEdit" },
-  ];
+  return [...text].map((c): FormAction => ({ kind: "appendText", text: c }));
 }
 
 describe("reduceForm", () => {
@@ -34,26 +31,29 @@ describe("reduceForm", () => {
     expect(run(downs).cursor).toBe(names[names.length - 1]);
   });
 
-  it("edits a field: Enter, typing, Enter changes the value; Esc restores it", () => {
+  it("typing lands in the field under the cursor at once, and stays when the cursor moves", () => {
     const edited = run(typed("says-its-name"));
     expect(edited.values.id).toBe("says-its-name");
-    expect(edited.editor.kind).toBe("none");
-
-    const cancelled = run(
-      [{ kind: "beginEdit" }, { kind: "appendText", text: "x" }, { kind: "cancelEdit" }],
-      edited,
-    );
-    expect(cancelled.values.id).toBe("says-its-name");
+    const moved = run([{ kind: "moveDown" }, ...typed("x"), { kind: "moveUp" }], edited);
+    expect(moved.values.id).toBe("says-its-name");
+    expect(moved.values.description).toBe("x");
   });
 
-  it("backspace and paste work on the draft", () => {
+  it("backspace and paste work on the value", () => {
     const state = run([
-      { kind: "beginEdit" },
       { kind: "appendText", text: "ab" },
       { kind: "backspace" },
       { kind: "appendText", text: "pasted text" },
     ]);
-    expect(state.editor).toEqual({ kind: "field", field: "id", draft: "apasted text" });
+    expect(state.values.id).toBe("apasted text");
+  });
+
+  it("a keystroke clears the footer message", () => {
+    const failed = run([
+      { kind: "saveFailed", problems: [{ field: "id", text: "id is required" }] },
+    ]);
+    expect(failed.message).toBe("id is required");
+    expect(run(typed("t"), failed).message).toBe("");
   });
 
   it("is dirty after a change, not after movement", () => {
@@ -92,7 +92,7 @@ describe("reduceForm", () => {
     const kept = run([{ kind: "editorReturned", text: null }], replaced);
     expect(kept.values.input).toBe("Two\nparagraphs");
     expect(kept.message).toBe(EDITOR_EXITED_MESSAGE);
-    expect(run([{ kind: "beginEdit" }], kept).message).toBe("");
+    expect(run([{ kind: "editInEditor" }], kept).message).toBe("");
   });
 
   it("an editor that could not run leaves the value and says why", () => {
@@ -110,11 +110,19 @@ describe("reduceForm", () => {
 });
 
 describe("editActionFor", () => {
-  it("maps the line editor's keys onto form actions", () => {
+  it("maps the typing keys onto form actions and leaves the rest to the key table", () => {
     expect(editActionFor({ key: "a" })).toEqual({ kind: "appendText", text: "a" });
     expect(editActionFor({ key: "backspace" })).toEqual({ kind: "backspace" });
-    expect(editActionFor({ key: "escape" })).toEqual({ kind: "cancelEdit" });
-    expect(editActionFor({ key: "enter" })).toEqual({ kind: "submitEdit" });
+    expect(editActionFor({ key: "escape" })).toBeNull();
+    expect(editActionFor({ key: "enter" })).toBeNull();
     expect(editActionFor({ key: "up" })).toBeNull();
+    expect(editActionFor({ key: "s", ctrl: true })).toBeNull();
+  });
+});
+
+describe("isLastField", () => {
+  it("is true for the last row of the table only", () => {
+    expect(isLastField(FIELDS[FIELDS.length - 1].name)).toBe(true);
+    expect(isLastField(FIELDS[0].name)).toBe(false);
   });
 });

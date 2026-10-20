@@ -10,6 +10,7 @@ import {
   editActionFor,
   fieldSpec,
   initialForm,
+  isLastField,
   reduceForm,
   type FormAction,
   type FormState,
@@ -65,22 +66,31 @@ export function assertSuiteDirectory(suiteDir: string): void {
 
 const NO_ACTION: FormAction | null = null;
 
+/** The keys that are not typing. Letters are never bound here, because a
+ *  letter goes into the field under the cursor. */
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
   const longField = fieldSpec(state.cursor).long && openEditor !== null;
+  const last = isLastField(state.cursor);
   return [
-    { keys: ["Up", "k"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
-    { keys: ["Down", "j"], help: "next field", run: () => ({ kind: "moveDown" }) },
+    { keys: ["Up"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
+    { keys: ["Down"], help: "next field", run: () => ({ kind: "moveDown" }) },
     {
       keys: ["Enter"],
-      help: "edit the field",
-      hint: "Enter edit",
-      run: () => (longField ? { kind: "editInEditor" } : { kind: "beginEdit" }),
+      help: last ? "save the test" : "next field",
+      hint: last ? "Enter save" : "Enter next",
+      run: () => (last ? { kind: "save" } : { kind: "moveDown" }),
     },
-    { keys: ["s"], help: "save the test", hint: "s save", run: () => ({ kind: "save" }) },
     {
-      keys: ["q", "Escape", "Ctrl+C"],
+      keys: ["Ctrl+E"],
+      help: "open the field in $EDITOR",
+      hint: longField ? "Ctrl+E editor" : undefined,
+      run: () => (longField ? { kind: "editInEditor" } : undefined),
+    },
+    { keys: ["Ctrl+S"], help: "save the test", hint: "Ctrl+S save", run: () => ({ kind: "save" }) },
+    {
+      keys: ["Escape", "Ctrl+C"],
       help: "quit",
-      hint: "q quit",
+      hint: "Esc quit",
       run: () => ({ kind: "requestQuit" }),
     },
   ];
@@ -96,14 +106,13 @@ export function formHints(state: FormState, openEditor: OpenEditor): string {
   return hintsFrom(formBindings(state, openEditor));
 }
 
+/** The mode's key table first, then the line editor: a key the table does
+ *  not name is typed into the field under the cursor. */
 function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): FormAction | null {
-  if (state.editor.kind === "field") {
-    return editActionFor(event);
-  }
   const key = formatKey(event);
   switch (state.mode.kind) {
     case "form":
-      return runKey(formBindings(state, openEditor), key, NO_ACTION);
+      return runKey(formBindings(state, openEditor), key, NO_ACTION) ?? editActionFor(event);
     case "confirmQuit":
       return runKey(CONFIRM_BINDINGS, key, NO_ACTION);
     case "wrote":

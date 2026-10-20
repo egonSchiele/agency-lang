@@ -27,14 +27,30 @@ and tested without a terminal.
 ## One table defines a field
 
 `FIELDS` in `form.ts` is the only place a field exists: its name, label,
-whether it is required, whether Enter opens `$EDITOR` on it, and the help
-shown while it is empty. The reducer moves the cursor through it, the view
+whether it is required, whether Ctrl+E opens `$EDITOR` on it, and the help
+shown while it is empty. The `id` field is labelled "folder name", because
+that is what it is to the person typing it; the name stays `id` in code
+and in the loader. The reducer moves the cursor through it, the view
 draws it, and `validateForm` reads `required` from it. A sixth field is one
 row there and one key in `testJsonFor`, which lists the fields that become
 `test.json` keys: `description`, `input` and `goal`. `files` is not a key,
 because the loader finds `./files` by itself. An empty `input` is left out,
 because the loader refuses an empty string and reads a missing key as
 "takes no input".
+
+## Every field is live
+
+There is no edit mode. The field under the cursor is a text input, and a
+key the mode's key table does not name is typed into it at once, through
+the line editor's `append` and `backspace`. So `handleKey` consults the
+key table first and the line editor second, and no letter may ever be
+bound in the form's key table: `s` is a letter someone types into a goal.
+Save is Ctrl+S, quit is Escape or Ctrl+C, and the editor hand-off is
+Ctrl+E. Enter moves down, and on the last field it saves, so the hint for
+it changes with the cursor.
+
+A keystroke clears the footer message. A failed save puts the cursor on
+the field with the problem, so the next thing typed fixes it in place.
 
 ## Modes and intents
 
@@ -45,8 +61,8 @@ reducer leaves the state alone, the command performs the effect, and the
 outcome comes back as `editorReturned`, `saved` or `saveFailed`. So
 "a failed save shows the first problem and moves the cursor to its field"
 is a reducer test, and `handleKey` in `new.ts` is: pick the action (the
-line editor while a field is being typed into, else the mode's key table),
-reduce, and for an intent run the effect and reduce its outcome.
+mode's key table, else the line editor), reduce, and for an intent run the
+effect and reduce its outcome.
 
 The key tables are `KeyBinding<FormAction>` lists, so the footer hints come
 from the same table that handles the keys.
@@ -87,7 +103,7 @@ what it was given.
 
 ## Handing the terminal to `$EDITOR`
 
-`input` and `goal` open in `$EDITOR` when it is set. The hand-off has an
+`input` and `goal` open in `$EDITOR` on Ctrl+E when it is set. The hand-off has an
 order, and it lives in one function, `withTerminalReleased`: release the
 output, release the input, run the editor, reclaim the input, reclaim the
 output, with the last two in a `finally`. Both terminal classes have a
@@ -127,8 +143,8 @@ missing program) becomes the footer message; the form and everything
 typed stay.
 
 `$EDITOR` is split on spaces, so `code --wait` works. A quoted path with a
-space in it is not supported. When the variable is unset, the long fields
-edit in place on one line like the others.
+space in it is not supported. When the variable is unset, Ctrl+E does
+nothing and the long fields are typed on one line like the others.
 
 ## What is drawn
 
@@ -137,9 +153,11 @@ Every string that came from outside the form goes through
 the command line, the footer message (which quotes paths), and the test
 path and commands on the "wrote" screen. A path can carry an escape
 sequence or a `{red-fg}` style tag as easily as a value can. The one
-exception is the draft of the field being typed into, drawn as a
-`textInput`: that element reads no style tags, so the draft only has its
-control characters removed, or a typed `{` would show as `\{`.
+exception is the cursor row, drawn as a `textInput`: that element reads no
+style tags, so its value only has its control characters removed, or a
+typed `{` would show as `\{`. A value with newlines in it, which only the
+editor can produce, shows its last line there and all its lines once the
+cursor moves off.
 
 ## Testing
 

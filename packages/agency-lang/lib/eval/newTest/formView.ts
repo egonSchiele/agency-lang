@@ -1,5 +1,5 @@
 // Draws the `agency eval new` form from its state: one row per field, the
-// cursor row marked, the field being edited drawn as a text input, and a
+// cursor row drawn as a text input since that is where typing lands, and a
 // footer that is the key hints or the current message. The discard question
 // and the "wrote" screen are the same state in other modes. Every string
 // that came from outside, the suite path included, is sanitized before it
@@ -55,39 +55,33 @@ function footerText(args: FormViewArgs): string {
 }
 
 /** A field's label and value. A value that does not fit on one line
- *  continues on the lines below, under the value column. The field being
- *  edited shows its draft as a text input, so the cursor looks like every
- *  other input in the toolkit. A text input draws its value as is, with no
- *  style tags read, so the draft only has its control characters removed;
- *  escaping braces there would show the backslashes. */
+ *  continues on the lines below, under the value column. The cursor row is
+ *  a text input, so the cursor looks like every other input in the toolkit
+ *  and the help of an empty field is shown dim after it. A text input draws
+ *  its value as is, with no style tags read, so the value only has its
+ *  control characters removed; escaping braces there would show the
+ *  backslashes. */
 function fieldRows(field: FieldSpec, state: FormState, width: number): Element[] {
-  const selected = state.cursor === field.name;
   const label = `${" ".repeat(INDENT)}${field.label.padEnd(LABEL_WIDTH)}`;
   const valueWidth = Math.max(1, width - label.length);
-  if (state.editor.kind === "field" && state.editor.field === field.name) {
+  const value = state.values[field.name];
+  if (state.cursor === field.name) {
+    const typed = stripControlCharacters(value);
     return [
       row(
         { height: 1 },
         line(label, { width: label.length, bg: CURSOR_BG }),
-        textInput({ bg: CURSOR_BG }, stripControlCharacters(state.editor.draft)),
+        textInput({ bg: CURSOR_BG, width: typed.length + 1 }, typed),
+        line(value === "" ? ` ${field.help}` : "", { dim: true, bg: CURSOR_BG }),
       ),
     ];
   }
-  const value = state.values[field.name];
   const shown = value === "" ? field.help : sanitizeUntrusted(value);
   const wrapped = wrapText(shown, valueWidth);
-  const style = valueStyle(value === "", selected);
+  const style: Style = { dim: value === "" };
   const first = line(`${label}${wrapped[0] ?? ""}`, style);
   const rest = wrapped.slice(1).map((text) => line(`${" ".repeat(label.length)}${text}`, style));
   return [first, ...rest];
-}
-
-/** Help text is dim; the cursor row carries the cursor colour. */
-function valueStyle(empty: boolean, selected: boolean): Style {
-  if (selected) {
-    return { dim: empty, bg: CURSOR_BG };
-  }
-  return { dim: empty };
 }
 
 /** A command longer than the screen continues on the next row, indented,

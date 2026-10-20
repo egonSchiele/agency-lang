@@ -2,7 +2,9 @@
 // through. Pure: the command runs the two effects (the external editor and
 // the write) and reports their outcomes back as actions, so each screen the
 // form shows is a mode of this state and each transition is a reducer case.
-import { applyLineEdit, lineEditAction } from "@/tui/lineEditor.js";
+// Every field is live: a typed key goes straight into the field under the
+// cursor, so there is no draft to commit and nothing to lose by moving on.
+import { applyLineEdit, lineEditAction, type LineEditAction } from "@/tui/lineEditor.js";
 import type { KeyEvent } from "@/tui/input/types.js";
 
 export type FieldName = "id" | "description" | "input" | "files" | "goal";
@@ -11,7 +13,7 @@ export type FieldSpec = {
   name: FieldName;
   label: string;
   required: boolean;
-  /** Enter opens `$EDITOR` on this field when one is set. */
+  /** Ctrl+E opens `$EDITOR` on this field when one is set. */
   long: boolean;
   /** Shown in place of the value while the field is empty. */
   help: string;
@@ -22,42 +24,40 @@ export type FieldSpec = {
 export const FIELDS: FieldSpec[] = [
   {
     name: "id",
-    label: "id",
+    label: "folder name",
     required: true,
     long: false,
-    help: "folder name: letters, digits, - and _",
+    help: "letters, digits, - and _",
   },
   {
     name: "description",
     label: "description",
     required: false,
     long: false,
-    help: "one line on why the test exists",
+    help: "one-line description (optional)",
   },
   {
     name: "input",
     label: "input",
     required: false,
     long: true,
-    help: "what the agent is told; empty for an agent that takes no input",
+    help: "passed to the main node as its one parameter; empty for an agent that takes none (optional)",
   },
   {
     name: "files",
     label: "files",
     required: false,
     long: false,
-    help: "a directory to seed into the working directory, relative to the suite",
+    help: "a directory of files to seed into the working directory, relative to the suite (optional)",
   },
   {
     name: "goal",
     label: "goal",
     required: true,
     long: true,
-    help: "what a good answer looks like; the goal judge scores against it",
+    help: "instructions for the LLM judge",
   },
 ];
-
-export type FieldEditor = { kind: "none" } | { kind: "field"; field: FieldName; draft: string };
 
 export type Problem = { field: FieldName; text: string };
 
@@ -68,7 +68,6 @@ export type FormState = {
   suiteDir: string;
   values: Record<FieldName, string>;
   cursor: FieldName;
-  editor: FieldEditor;
   mode: FormMode;
   /** The footer message: the first problem, or what happened to the editor. */
   message: string;
@@ -78,11 +77,8 @@ export type FormState = {
 export type FormAction =
   | { kind: "moveUp" }
   | { kind: "moveDown" }
-  | { kind: "beginEdit" }
   | { kind: "appendText"; text: string }
   | { kind: "backspace" }
-  | { kind: "cancelEdit" }
-  | { kind: "submitEdit" }
   /** An intent: the command opens the editor and reports `editorReturned`. */
   | { kind: "editInEditor" }
   | { kind: "editorReturned"; text: string | null }
@@ -111,7 +107,6 @@ export function initialForm(suiteDir: string): FormState {
     suiteDir,
     values: { ...EMPTY_VALUES },
     cursor: FIELDS[0].name,
-    editor: { kind: "none" },
     mode: { kind: "form" },
     message: "",
     done: false,
@@ -121,6 +116,12 @@ export function initialForm(suiteDir: string): FormState {
 /** Whether anything has been typed into a field. */
 export function isDirty(state: FormState): boolean {
   return FIELDS.some((field) => state.values[field.name] !== EMPTY_VALUES[field.name]);
+}
+
+/** Whether the cursor is on the last field, where Enter saves instead of
+ *  moving on. */
+export function isLastField(name: FieldName): boolean {
+  return FIELDS[FIELDS.length - 1].name === name;
 }
 
 export function fieldSpec(name: FieldName): FieldSpec {
@@ -137,24 +138,10 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return { ...state, cursor: neighbour(state.cursor, -1) };
     case "moveDown":
       return { ...state, cursor: neighbour(state.cursor, 1) };
-    case "beginEdit":
-      return {
-        ...state,
-        message: "",
-        editor: { kind: "field", field: state.cursor, draft: state.values[state.cursor] },
-      };
     case "appendText":
-      return withDraft(state, (draft) =>
-        applyLineEdit(draft, { kind: "append", text: action.text }),
-      );
+      return withEdit(state, { kind: "append", text: action.text });
     case "backspace":
-      return withDraft(state, (draft) => applyLineEdit(draft, { kind: "backspace" }));
-    case "cancelEdit":
-      return { ...state, editor: { kind: "none" } };
-    case "submitEdit":
-      return state.editor.kind === "none"
-        ? state
-        : withValue(state, state.editor.field, state.editor.draft);
+      return withEdit(state, { kind: "backspace" });
     case "editInEditor":
       return { ...state, message: "" };
     case "editorReturned":
@@ -184,8 +171,9 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
   }
 }
 
-/** What a key means while a field is being edited; null for a key that does
- *  nothing there. */
+/** What a typed key does to the field under the cursor; null for a key that
+ *  types nothing. Enter and Escape type nothing either: the mode's key table
+ *  owns them, so the caller consults that table first. */
 export function editActionFor(event: KeyEvent): FormAction | null {
   const edit = lineEditAction(event);
   if (edit === null) return null;
@@ -195,9 +183,8 @@ export function editActionFor(event: KeyEvent): FormAction | null {
     case "backspace":
       return { kind: "backspace" };
     case "cancel":
-      return { kind: "cancelEdit" };
     case "submit":
-      return { kind: "submitEdit" };
+      return null;
   }
 }
 
@@ -207,13 +194,16 @@ function neighbour(cursor: FieldName, delta: number): FieldName {
   return FIELDS[next].name;
 }
 
-function withDraft(state: FormState, update: (draft: string) => string): FormState {
-  if (state.editor.kind === "none") {
-    return state;
-  }
-  return { ...state, editor: { ...state.editor, draft: update(state.editor.draft) } };
+/** A keystroke lands in the field under the cursor and clears the footer
+ *  message, since the user has moved on from whatever it reported. */
+function withEdit(state: FormState, edit: LineEditAction): FormState {
+  return withValue(
+    { ...state, message: "" },
+    state.cursor,
+    applyLineEdit(state.values[state.cursor], edit),
+  );
 }
 
 function withValue(state: FormState, field: FieldName, value: string): FormState {
-  return { ...state, values: { ...state.values, [field]: value }, editor: { kind: "none" } };
+  return { ...state, values: { ...state.values, [field]: value } };
 }

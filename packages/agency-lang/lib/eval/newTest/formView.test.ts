@@ -7,7 +7,7 @@ import { Screen } from "@/tui/screen.js";
 import { FIELDS, initialForm, reduceForm, type FormAction, type FormState } from "./form.js";
 import { renderForm } from "./formView.js";
 
-const HINTS = "↑↓ move   Enter edit   s save   q quit";
+const HINTS = "↑↓ move   Enter next   Ctrl+S save   Esc quit";
 /** Two of indent, the widest label, three of gap: where values start. */
 const VALUE_COLUMN = 2 + Math.max(...FIELDS.map((field) => field.label.length)) + 3;
 const NEXT = [
@@ -45,7 +45,7 @@ describe("renderForm", () => {
     const positions = labels.map((label) => text.indexOf(`  ${label}`));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    expect(text).toContain(`  ${"id".padEnd(VALUE_COLUMN - 2)}says-its-name`);
+    expect(text).toContain(`  ${"folder name".padEnd(VALUE_COLUMN - 2)}says-its-name█`);
     expect(text).toContain(`  ${"input".padEnd(VALUE_COLUMN - 2)}What's your name?`);
     expect(text).toContain("NEW TEST  bar-evals/");
   });
@@ -58,15 +58,17 @@ describe("renderForm", () => {
     expect(lines[goalRow] + lines[goalRow + 1]).toContain("must not give any other name");
   });
 
-  it("shows a field's help while it is empty", () => {
+  it("shows a field's help while it is empty, after the cursor on the cursor row", () => {
     const text = frame(initialForm("suite"));
-    expect(text).toContain("empty for an agent that takes no input");
+    expect(text).toContain("instructions for the LLM judge");
+    expect(text).toContain(`  ${"folder name".padEnd(VALUE_COLUMN - 2)}█ letters, digits, - and _`);
   });
 
-  it("draws the field being edited as a text input with a cursor", () => {
-    const state = reduceForm(filled(), { kind: "beginEdit" });
-    const text = frame(state);
-    expect(text).toContain("says-its-name█");
+  it("draws the cursor row as a text input with a cursor, and no other row", () => {
+    const text = frame(reduceForm(filled(), { kind: "moveDown" }));
+    expect(text).toContain("asked for it.█");
+    expect(text).not.toContain("says-its-name█");
+    expect(text.split("█").length).toBe(2);
   });
 
   it("uses the footer for the hints, then for a message, then for the discard question", () => {
@@ -108,8 +110,7 @@ describe("renderForm", () => {
   });
 
   it("shows a brace typed into a field as it is", () => {
-    const state = reduceForm(filled(), { kind: "beginEdit" });
-    const braced = { ...state, editor: { ...state.editor, draft: "a {b}" } } as FormState;
+    const braced = reduceForm(initialForm("suite"), { kind: "appendText", text: "a {b}" });
     expect(frame(braced)).toContain("a {b}█");
   });
 });

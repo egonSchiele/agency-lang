@@ -269,10 +269,14 @@ export class DebuggerDriver {
 
   /** One interrupt's answer, asked for until the input is one of
    *  approve, reject, or resolve with a value. A guard trip takes a
-   *  grant, a disarm, a message, or a reject instead. */
+   *  grant, a disarm, a message, or a reject instead; a raise that
+   *  expects a value, such as a `question`, takes the typed text. */
   private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
     if (isGuardTrip(interrupt.effect, interrupt.data)) {
       return await this.askAboutGuardTrip(interrupt, position);
+    }
+    if (interrupt.expectsValue) {
+      return await this.askForValue(interrupt, position);
     }
     const data =
       Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
@@ -293,17 +297,41 @@ export class DebuggerDriver {
         return { type: "reject" };
       }
       if (trimmed.startsWith("resolve ")) {
-        const valueStr = trimmed.slice("resolve ".length).trim();
-        let value: unknown;
-        try {
-          value = JSON.parse(valueStr);
-        } catch {
-          value = valueStr;
-        }
+        const value = jsonOrText(trimmed.slice("resolve ".length));
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
         return { type: "approve", value } as InterruptResponse;
       }
       this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
+    }
+  }
+
+  /** The answer to a raise used as a value (`const x = raise ...`, or
+   *  `question` from `std::agent`): the typed text, as a string, the way
+   *  the CLI's approval prompt takes it. `resolve <json>` gives a JSON
+   *  value when the rest parses as JSON, so a number or a list can be
+   *  given while an answer that happens to start with the word stays
+   *  whole; `reject` rejects, and a bare `approve` resolves the variable
+   *  to `true`. */
+  private async askForValue(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    this.ui.state.log(`Question${position}: ${interrupt.message}${dataBeyondMessage(interrupt)}`);
+    while (true) {
+      const input = await this.ui.promptForInput(`answer${position}:`);
+      const trimmed = input.trim();
+      if (trimmed === "") {
+        this.ui.state.log("Type the answer, or reject");
+        continue;
+      }
+      if (trimmed === "approve" || trimmed === "a") {
+        this.ui.state.log("Approved the question with no answer");
+        return { type: "approve" };
+      }
+      if (trimmed === "reject" || trimmed === "r") {
+        this.ui.state.log("Rejected the question");
+        return { type: "reject" };
+      }
+      const value = resolvedJson(trimmed) ?? trimmed;
+      this.ui.state.log(`Answered: ${JSON.stringify(value)}`);
+      return { type: "approve", value } as InterruptResponse;
     }
   }
 
@@ -600,6 +628,40 @@ export class DebuggerDriver {
 
     return undefined;
   }
+}
+
+/** `resolve <value>` takes JSON, so a number or a list can be given,
+ *  and falls back to the text itself. */
+function jsonOrText(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+/** The JSON value of an answer written `resolve <json>`, or undefined
+ *  when the answer is not that: no `resolve` prefix, or a rest that is
+ *  not JSON, such as "resolve the conflict by hand". */
+function resolvedJson(answer: string): unknown {
+  if (!answer.startsWith("resolve ")) return undefined;
+  try {
+    return JSON.parse(answer.slice("resolve ".length).trim());
+  } catch {
+    return undefined;
+  }
+}
+
+/** The interrupt's data, for the log, when it says more than the
+ *  message: a raise can carry what the person chooses from. A `question`
+ *  carries only its prompt, which the message already is. */
+function dataBeyondMessage(interrupt: Interrupt): string {
+  const data = interrupt.data ?? {};
+  const keys = Object.keys(data);
+  if (keys.length === 0) return "";
+  if (keys.length === 1 && keys[0] === "prompt" && data.prompt === interrupt.message) return "";
+  return ` ${JSON.stringify(data)}`;
 }
 
 /** The stop a debug interrupt carries, or nothing for a user interrupt

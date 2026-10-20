@@ -10,7 +10,8 @@ import { parseAttachMessage, type Hello } from "./protocol.js";
 
 export type ServeEvents = {
   hello?: (hello: Hello) => void;
-  finished?: (value: unknown) => void;
+  /** The program ended, with `value`, or by throwing `error`. */
+  finished?: (value: unknown, error?: string) => void;
   refused?: (reason: string) => void;
   /** A message that is not one of ours; the sender is a bug. */
   malformed?: (message: unknown) => void;
@@ -97,7 +98,7 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         events.hello?.(message);
         return;
       case "finished":
-        events.finished?.(message.value);
+        events.finished?.(message.value, message.error);
         return;
       case "refused":
         events.refused?.(message.reason);

@@ -17,12 +17,14 @@ import {
   hasInterrupts,
   isDebugger,
   respondToInterrupts,
+  respondToInterruptsForServe,
   type Interrupt,
   type InterruptResponse,
 } from "./interrupts.js";
 import { isPaused } from "./pause.js";
 import { rewindFrom } from "./rewind.js";
 import type { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
+import { ATTACHED_AGENT_END } from "./agentEnd.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState, RunNodeCoreResult } from "./types.js";
 
@@ -36,16 +38,17 @@ export type LegOptions = {
   callbacks?: AgencyCallbacks;
   abortSignal?: AbortSignal;
   pauseSignal?: AbortSignal;
+  /** The run began in `runNode`, so the leg that ends it fires
+   *  `onAgentEnd` (see `agentEnd.ts`). */
+  agentEnd?: boolean;
 };
 
-export type AttachedRunResult = {
-  result: RunNodeCoreResult<any>;
-  /** The usage of the last leg the debugger ran. A resume seeds its meter
-   *  from the checkpoint it restores, so each leg's figure is the run's
-   *  total so far, and the last one is the whole run's. Absent when the
-   *  debugger ran no leg. */
-  usage?: RunUsage;
-};
+/** What the debugger's legs came to: the leg the program paused or
+ *  finished on, or the error a leg threw. `usage` is the last leg's,
+ *  which is the run's total so far, since a resume seeds its meter from
+ *  the checkpoint it restores; absent when the debugger ran no leg. */
+export type AttachedRunResult =
+  { result: RunNodeCoreResult<any>; usage?: RunUsage } | { threw: unknown; usage: RunUsage };
 
 export type AttachedDebugger = {
   /** Answer a batch of debug stops with the user's commands, resuming with
@@ -97,6 +100,20 @@ export type AttachFunctions = {
       pauseSignal?: AbortSignal;
     },
   ) => Promise<any>;
+  /** The serve-style resume, which hands back a thrown leg as an outcome
+   *  with its usage instead of throwing; the attached driver uses it when
+   *  the module has it. */
+  respondToInterruptsForServe?: (
+    interrupts: Interrupt[],
+    responses: InterruptResponse[],
+    opts?: {
+      overrides?: Record<string, unknown>;
+      metadata?: Record<string, any>;
+      invocation?: InvocationOptions;
+      abortSignal?: AbortSignal;
+      pauseSignal?: AbortSignal;
+    },
+  ) => Promise<ServedInvocationOutcome<any>>;
   __setDebugger: (dbg: DebuggerState | null) => void;
   /** Absent from a module compiled before it existed. */
   __getDebugger?: () => DebuggerState | null;
@@ -133,6 +150,17 @@ export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunct
         abortSignal: opts?.abortSignal,
         pauseSignal: opts?.pauseSignal,
       }),
+    respondToInterruptsForServe: (interrupts, responses, opts) =>
+      respondToInterruptsForServe({
+        ctx,
+        interrupts,
+        responses,
+        overrides: opts?.overrides,
+        metadata: opts?.metadata,
+        invocation: opts?.invocation,
+        abortSignal: opts?.abortSignal,
+        pauseSignal: opts?.pauseSignal,
+      }),
     __setDebugger: (dbg) => {
       ctx.debuggerState = dbg;
     },
@@ -143,46 +171,40 @@ export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunct
 
 type Outcome = ServedInvocationOutcome<RunNodeCoreResult<any>>;
 
-export type SettleHooks = {
-  /** The debugger ran the leg that produced the final value. The leg's
-   *  core never had the caller's callbacks, so `runNode` fires the
-   *  caller's `onAgentEnd` from here. */
-  onFinished?: (outcome: Outcome & { status: "returned" }) => Promise<void>;
-};
-
 /** The outcome of one leg, with its debug stops answered. While the leg
  *  paused on nothing but debug stops and a debugger is attached, the stops
  *  go to the debugger and the leg it resumes becomes the outcome, carrying
- *  that leg's usage, which is the run's total so far. A batch that mixes
- *  stops with the program's own interrupts loses the stops: a resume never
+ *  that leg's usage, which is the run's total so far; a leg that threw is
+ *  a thrown outcome, as it is with no debugger. A batch that mixes stops
+ *  with the program's own interrupts loses the stops: a resume never
  *  reads an answer for a debug stop (the stopped branch carries on from
  *  the flag in its frame), so the caller answers the rest and nothing is
  *  remembered. A final value is reported to the debugger unless the
  *  debugger ran the leg that produced it. A paused checkpoint, from the
- *  caller's own pause signal, is a suspension and goes back as it is. */
+ *  caller's own pause signal, is a suspension and goes back as it is. A
+ *  batch of stops that reaches here after the debugger was detached, in
+ *  the moment between the stop and this settle, is let go with the leg's
+ *  own options, as the debugger's `quit` lets a stop go: the caller must
+ *  never be handed a stop. */
 export async function settleStops(
   ctx: RuntimeContext<GraphState>,
   outcome: Outcome,
   leg: LegOptions,
-  hooks: SettleHooks = {},
 ): Promise<Outcome> {
   let current = outcome;
   let debuggerRanALeg = false;
   while (current.status === "returned") {
-    const attached = attachedDebuggerOf(ctx);
-    if (attached === undefined) {
-      return current;
-    }
     const data: unknown = current.value.data;
+    const attached = attachedDebuggerOf(ctx);
     if (!hasInterrupts(data)) {
-      if (isPaused(data)) {
-        return current;
-      }
-      if (debuggerRanALeg) {
-        await hooks.onFinished?.(current);
-      } else {
+      if (attached !== undefined && !isPaused(data) && !debuggerRanALeg) {
         await attached.finished(current.value);
       }
+      return current;
+    }
+    // A debugger that is installed but not attached, `agency debug` in
+    // its own process, is the caller: its stops go back to it whole.
+    if (attached === undefined && ctx.hasDebugger()) {
       return current;
     }
     const stops = data.filter((interrupt: Interrupt) => isDebugger(interrupt));
@@ -193,8 +215,17 @@ export async function settleStops(
     if (others.length > 0) {
       return { ...current, value: { ...current.value, data: others } };
     }
+    if (attached === undefined) {
+      // No debugger at all: the one that was attached when the leg
+      // stopped has since been removed, and its stops are let go.
+      current = await letStopsGo(ctx, data, leg);
+      continue;
+    }
     const ran = await attached.run(current.value, leg);
     debuggerRanALeg = true;
+    if ("threw" in ran) {
+      return { status: "threw", error: ran.threw, usage: ran.usage, traceId: current.traceId };
+    }
     current = {
       status: "returned",
       value: ran.result,
@@ -203,6 +234,28 @@ export async function settleStops(
     };
   }
   return current;
+}
+
+/** Resume a batch of nothing but debug stops with `leg`'s options, the
+ *  way the debugger would on `continue`. */
+function letStopsGo(
+  ctx: RuntimeContext<GraphState>,
+  stops: Interrupt[],
+  leg: LegOptions,
+): Promise<Outcome> {
+  return respondToInterruptsForServe({
+    ctx,
+    interrupts: stops,
+    responses: stops.map(() => ({ type: "approve" as const })),
+    invocation: leg.invocation,
+    metadata: {
+      callbacks: leg.callbacks,
+      [ATTACHED_RESUME]: true,
+      [ATTACHED_AGENT_END]: leg.agentEnd === true,
+    },
+    abortSignal: leg.abortSignal,
+    pauseSignal: leg.pauseSignal,
+  });
 }
 
 /** `settleStops` for an exported function, whose value is the bare

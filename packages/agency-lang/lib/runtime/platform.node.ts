@@ -150,13 +150,21 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     }
     // The server reads the target when a debugger connects, so the
     // context running then is the one it attaches to.
-    void startAttachServer({ dir, record, functions: () => target.functions }).then((started) => {
-      if ("unavailable" in started) {
-        console.error(`[agency debug] ${started.unavailable}`);
-        return;
-      }
-      server = started;
-    });
+    // A rejection here would end the program (an unhandled rejection
+    // exits by default), so it is caught and printed like a refusal.
+    void startAttachServer({ dir, record, functions: () => target.functions }).then(
+      (started) => {
+        if ("unavailable" in started) {
+          console.error(`[agency debug] ${started.unavailable}`);
+          return;
+        }
+        server = started;
+      },
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[agency debug] could not open the debug socket: ${message}`);
+      },
+    );
   };
   attachListener = listener;
   claimAttachListener(listener);

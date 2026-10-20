@@ -25,18 +25,8 @@ export class DebuggerState {
     targetDepth: number;
   } | null = null;
 
-  private readonly rewindSize: number;
-
   constructor(rewindSize: number) {
-    this.rewindSize = rewindSize;
     this.checkpoints = new CheckpointStore(100, rewindSize);
-  }
-
-  /** A new run on the same debugger: stepping from its first stop, with
-   *  no checkpoint of the run that ended for `stepBack` to land in. */
-  startRun(): void {
-    this.checkpoints = new CheckpointStore(100, this.rewindSize);
-    this.reset();
   }
 
   stepping() {
@@ -135,16 +125,17 @@ export class DebuggerState {
     return this.checkpoints.get(id);
   }
 
-  getCheckpoints() {
-    return this.checkpoints.getSorted();
+  /** The rolling window, or with `runId`, that run's checkpoints in it. */
+  getCheckpoints(runId?: string) {
+    return this.checkpoints.getSorted(runId);
   }
 
   findCheckpoint(location: SourceLocationOpts) {
     return this.checkpoints.findCheckpoint(location);
   }
 
-  findBefore(beforeId: number, location: SourceLocationOpts) {
-    return this.checkpoints.findBefore(beforeId, location);
+  findBefore(beforeId: number, location: SourceLocationOpts, runId?: string) {
+    return this.checkpoints.findBefore(beforeId, location, runId);
   }
 
   prettyPrint(): string {

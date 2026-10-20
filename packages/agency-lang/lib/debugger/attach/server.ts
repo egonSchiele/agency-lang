@@ -69,13 +69,20 @@ export function attachOverChannel(channel: Channel, options: AttachOptions): Att
   const runByDriver = attached.run;
   attached.run = async (result, leg) => {
     const ran = await runByDriver(result, leg);
-    if (!hasInterrupts(ran.result?.data)) {
+    if ("threw" in ran) {
+      channel.send({ type: "finished", value: undefined, error: errorText(ran.threw) });
+      detach();
+    } else if (!hasInterrupts(ran.result?.data)) {
       channel.send({ type: "finished", value: ran.result?.data });
       detach();
     }
     return ran;
   };
   return { driver, since: new Date(), detach };
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export type AttachServer = {

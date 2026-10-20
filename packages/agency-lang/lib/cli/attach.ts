@@ -28,6 +28,14 @@ import type { Channel } from "@/debugger/attach/channel.js";
 /** `ps -o lstart=` has one-second resolution, and the record's time comes
  *  from `process.uptime`, so the two may differ by a little. */
 export const START_TIME_TOLERANCE_MS = 2_000;
+/** How long before its record a live process may have started and still
+ *  be the one that wrote it: a wrapper script that does some work and
+ *  then `exec`s node keeps the wrapper's start time. A process older than
+ *  this is some other process with the same pid, which happens when the
+ *  sessions directory is shared between machines or pid namespaces (a
+ *  home on NFS, a container that mounts it); the record is then another
+ *  machine's and is left alone. */
+export const EARLY_START_LIMIT_MS = 5 * 60_000;
 /** How long to keep trying to connect after the signal: the socket
  *  appears once the program's event loop handles the signal. */
 const CONNECT_RETRY_MS = 2_000;
@@ -114,14 +122,15 @@ export function parseStartTime(output: string): number | null {
  *  system may later give that pid to an unrelated process, which the
  *  attach signal would kill; so the live process is checked before
  *  anything is sent. A process that is gone has its record removed. One
- *  that is alive must not have started after the record was written: a
- *  pid is given out again only after its old process exits, so a live
- *  process that started before the record can only be the one that wrote
- *  it, while one that started later is a stranger and the record is
- *  removed. An earlier start is fine, and happens when a wrapper script
- *  did some work and then `exec`ed node, which keeps the wrapper's start
- *  time. When `ps` cannot say, the attach is refused and the record kept:
- *  the program may well be running. */
+ *  that is alive must have started around when the record was written:
+ *  later than that, and it is a stranger that got the pid after the
+ *  registered process exited, so the record is removed; more than
+ *  `EARLY_START_LIMIT_MS` earlier, and it is a stranger that had the pid
+ *  all along, which the record from another machine or pid namespace
+ *  names by accident, so the record is kept and nothing is sent. A little
+ *  earlier is the process itself, started by a wrapper that `exec`ed node.
+ *  When `ps` cannot say, the attach is refused and the record kept: the
+ *  program may well be running. */
 export function checkedRecord(
   dir: string,
   pid: number,
@@ -148,6 +157,14 @@ export function checkedRecord(
         `pid ${pid} is now a different process than the one that registered ` +
         `(started ${new Date(live.started).toLocaleString()}, the record was written ` +
         `${new Date(record.startedAt).toLocaleString()}); its record was removed`,
+    };
+  }
+  if (live.started < record.startedAt - EARLY_START_LIMIT_MS) {
+    return {
+      refused:
+        `pid ${pid} started ${new Date(live.started).toLocaleString()}, long before its record ` +
+        `was written (${new Date(record.startedAt).toLocaleString()}), so it is not the process ` +
+        `that registered; the record may be another machine's and was left alone`,
     };
   }
   return record;
@@ -252,12 +269,18 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
       }
       ended = true;
       ui.destroy();
-      print(line);
+      (code === 0 ? print : printError)(line);
       resolve(code);
     };
     serveDebuggerIO(channel, ui, {
       hello: (hello) => ui.attachedTo(hello),
-      finished: (value) => end(`Program finished. Return value: ${JSON.stringify(value)}`, 0),
+      finished: (value, error) =>
+        end(
+          error === undefined
+            ? `Program finished. Return value: ${JSON.stringify(value)}`
+            : `Program threw: ${error}`,
+          0,
+        ),
       refused: (reason) => end(`Error: ${reason}`, 1),
     });
     // A close the person did not ask for is the program's doing: it

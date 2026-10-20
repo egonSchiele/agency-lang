@@ -15,6 +15,7 @@ import { FrameRecorder, Screen } from "@/tui/index.js";
 import { RunStrategy } from "@/importStrategy.js";
 import { attachTarget } from "./debugFlags.js";
 import {
+  EARLY_START_LIMIT_MS,
   START_TIME_TOLERANCE_MS,
   attachCommand,
   checkedRecord,
@@ -176,6 +177,17 @@ describe("checking a record before signalling", () => {
     expect(checkedRecord(dir, process.pid, forkedEarlier)).toMatchObject({ pid: process.pid });
   });
 
+  it("refuses, and keeps, a record a long-running process with the same pid matches", () => {
+    // What a record written on another machine looks like here.
+    const record = { pid: process.pid, program: "a.agency", node: "main", startedAt: Date.now() };
+    writeRecord(dir, record);
+    const muchOlder = () => ({ started: record.startedAt - 2 * EARLY_START_LIMIT_MS });
+    expect(checkedRecord(dir, process.pid, muchOlder)).toMatchObject({
+      refused: expect.stringContaining("long before its record"),
+    });
+    expect(fs.existsSync(path.join(dir, `${process.pid}.json`))).toBe(true);
+  });
+
   it("keeps the record and refuses when ps cannot say", () => {
     const startedAt = Date.now() - process.uptime() * 1000;
     writeRecord(dir, { pid: process.pid, program: "a.agency", node: "main", startedAt });
@@ -269,11 +281,15 @@ describe("attaching to a program in another process", () => {
     // `y = 2`. (The source pane has no current-line marker here: the UI
     // looks for the compiled module beside the fixture, where this test
     // deliberately puts none; see debugger-future-work.md.)
-    const firstStop = frames.findIndex((text) => text.includes(`attached to ${started.pid}`));
-    const afterStep = frames.findIndex((text) => /\by = 2\b/.test(text));
+    // The hello frame comes first, with empty panes, so the first stop is
+    // the first frame whose locals pane shows x. A locals pane line
+    // starts at the box edge; the source pane's lines carry a line number
+    // first.
+    const firstStop = frames.findIndex((text) => /^│x = 1 /m.test(text));
+    const afterStep = frames.findIndex((text) => /^│y = 2 /m.test(text));
     expect(firstStop).toBeGreaterThanOrEqual(0);
     expect(afterStep).toBeGreaterThan(firstStop);
-    expect(frames[firstStop]).not.toMatch(/\by = 2\b/);
+    expect(frames[firstStop]).not.toMatch(/^│y = 2 /m);
     expect(printed).toEqual([`Detached from pid ${started.pid}.`]);
     const exit = await new Promise<number | null>((resolve) => started.on("exit", resolve));
     expect(exit, childOutput).toBe(0);

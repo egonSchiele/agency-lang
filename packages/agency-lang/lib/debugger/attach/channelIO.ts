@@ -41,6 +41,13 @@ export function checkpointToWire(checkpoint: Checkpoint | object): unknown {
   return JSON.parse(JSON.stringify(json, nativeTypeReplacer));
 }
 
+/** `value` as JSON, cut short: the line goes to the program's stderr,
+ *  often a log file, and a UI bug can answer with a whole checkpoint. */
+function shortJson(value: unknown, limit = 200): string {
+  const text = JSON.stringify(value) ?? String(value);
+  return text.length > limit ? `${text.slice(0, limit)}... (${text.length} characters)` : text;
+}
+
 export class ChannelDebuggerIO implements DebuggerIO {
   private nextId = 0;
   private pending: Record<number, Pending> = {};
@@ -76,7 +83,7 @@ export class ChannelDebuggerIO implements DebuggerIO {
     const checked = REPLY_SCHEMAS[waiting.method].safeParse(message.result);
     if (!checked.success) {
       this.failSession(
-        `the debugger answered ${waiting.method} with ${JSON.stringify(message.result)}, ` +
+        `the debugger answered ${waiting.method} with ${shortJson(message.result)}, ` +
           `which is not a ${waiting.method} answer`,
       );
       return;

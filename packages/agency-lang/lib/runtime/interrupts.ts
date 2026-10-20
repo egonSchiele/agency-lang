@@ -41,6 +41,9 @@ import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "./types.js";
 import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
+import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
+import { ThreadStore } from "./state/threadStore.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
@@ -721,6 +724,10 @@ async function runResumeLoop(
   execCtx: RuntimeContext<GraphState>,
   startNodeName: string,
   agentStartTime: number,
+  /** Fire `onAgentEnd` when this leg ends with a value: the run began
+   *  in `runNode`, and an attached debugger is running its last legs.
+   *  `lineage` is the resume's, read before its first await. */
+  agentEnd: { fire: boolean; lineage: Lineage } = { fire: false, lineage: lineageOf(undefined) },
 ): Promise<any> {
   let nodeName = startNodeName;
   while (true) {
@@ -761,6 +768,15 @@ async function runResumeLoop(
           timeTaken: performance.now() - agentStartTime,
           tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
         });
+        if (agentEnd.fire) {
+          await fireAgentEnd(
+            execCtx,
+            nodeName,
+            returnObject,
+            result?.messages ?? ThreadStore.withDefaultActive(execCtx.rootLog),
+            agentEnd.lineage,
+          );
+        }
         await execCtx.closeTraceWriter();
       }
       return returnObject;
@@ -930,6 +946,8 @@ async function runResumeInvocation(
   args: ResumeInvocationArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, resolved, checkpoint, metadata = {}, signals } = args;
+  // run-read-ok: a root run, read before the first await for onAgentEnd.
+  const lineage = lineageOf(currentRunOrNone());
   const execCtx = await ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
@@ -949,7 +967,10 @@ async function runResumeInvocation(
     args.afterRestore?.(execCtx);
 
     const value = await withExternalSignals(execCtx, signals, () =>
-      runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
+      runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime, {
+        fire: firesAgentEnd(metadata),
+        lineage,
+      }),
     );
     outcome = { status: "returned", value };
   } catch (error) {

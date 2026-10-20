@@ -13,6 +13,10 @@ than UI. Port them to `DebuggerTestSession` and the old helpers can go.
 
 After an attach the rolling checkpoint window holds only what the program has done since, so `stepBack` and `rewind` reach back to the attach and no further. The spec wanted the status line to say so while the window is shorter than the configured size. The window's size is known only on the run side (`DebuggerState`), and the UI learns nothing about it today; a notice with the count on each stop would do.
 
+### The record does not say which machine wrote it
+
+The sessions directory can be shared between machines or pid namespaces (a home on NFS, a container that mounts `~/.agency`). A record from another host then names a pid that is some other process here. `checkedRecord` refuses a live process that started long before its record, which keeps such a record from being signalled, but the listing still shows it and the stale sweep removes it when no process here has its pid. Recording `os.hostname()` in `registerAttach`, and treating a record from another host as not this machine's (never signalled, never removed, left out of the listing), would close that.
+
 ### The attached UI imports the program's compiled module for its source map
 
 `UIState.setSourceMap` imports the compiled module to read `__sourceMap`, as `agency debug` does in the program's own process. Attached, that import runs in the debugger's process: the program's JavaScript dependencies are initialised a second time, with whatever top-level side effects they have, and an import that fails is reported to the run as an ordinary error, which now ends the session. Module ids are also resolved against the debugger's working directory rather than the compilation directory, so attaching from elsewhere can lose the source pane or show a same-named file. The fix is to send source locations or the source text from the run, which has the map, instead of loading anything on the UI side.

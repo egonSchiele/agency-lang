@@ -12,6 +12,9 @@
 // and comes back through `Checkpoint.fromJSON` after the reviver.
 import { z } from "zod";
 
+import type { InterruptResponse } from "../../runtime/interruptResponse.js";
+import type { DebuggerCommand } from "../types.js";
+
 /** The `DebuggerIO` methods that expect an answer. */
 export const REQUEST_METHODS = [
   "render",
@@ -48,7 +51,14 @@ export const HelloSchema = z
 
 export const AttachMessageSchema = z.discriminatedUnion("type", [
   HelloSchema,
-  z.object({ type: z.literal("finished"), value: z.unknown() }).strict(),
+  z
+    .object({
+      type: z.literal("finished"),
+      value: z.unknown(),
+      /** Set when the run ended by throwing; `value` is then nothing. */
+      error: z.string().optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("refused"), reason: z.string() }).strict(),
   z
     .object({
@@ -102,10 +112,32 @@ const DebuggerCommandSchema = z.union([
   z.object({ type: z.literal("quit") }),
 ]);
 
-const InterruptResponseSchema = z.object({
-  type: z.enum(["approve", "reject"]),
-  value: z.unknown().optional(),
-});
+const InterruptResponseSchema = z.union([
+  z.object({ type: z.literal("approve"), value: z.any().optional() }),
+  z.object({ type: z.literal("reject"), value: z.string().optional() }),
+]);
+
+/** The two schemas above are written by hand, so this ties each to the
+ *  type it checks: a command added to `DebuggerCommand` without a line
+ *  here fails to compile, instead of ending every attached session the
+ *  first time someone uses it. Optional fields are made required on both
+ *  sides first, since zod makes an `unknown` field optional. */
+type Required<T> = T extends unknown ? { [K in keyof T]-?: T[K] } : never;
+type SameShape<A, B> = [Required<A>] extends [Required<B>]
+  ? [Required<B>] extends [Required<A>]
+    ? true
+    : never
+  : never;
+const commandSchemaMatchesType: SameShape<
+  z.infer<typeof DebuggerCommandSchema>,
+  DebuggerCommand
+> = true;
+const responseSchemaMatchesType: SameShape<
+  z.infer<typeof InterruptResponseSchema>,
+  InterruptResponse
+> = true;
+void commandSchemaMatchesType;
+void responseSchemaMatchesType;
 
 /** What each request's reply must carry. The run side checks a reply
  *  against this before handing it to the driver, so a UI that answers

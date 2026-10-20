@@ -108,14 +108,8 @@ export class DebuggerDriver {
 
   getCallbacks(): AgencyCallbacks {
     return {
-      // The call stack pane reads the checkpoint's frames; the hook only
-      // notes a TypeScript function, which has no frame.
-      onFunctionStart: (data) => {
-        if (!data.moduleId?.endsWith(".agency")) {
-          this.ui.state.log(`[ts] ${data.functionName}()`);
-          this.ui.render();
-        }
-      },
+      // The call stack pane reads the checkpoint's frames, so no function
+      // hook is needed.
       onNodeStart: (data) => {
         // gets triggered on every statement, as debugger resumes node execution.
         // this.ui.state.log(`-> node: ${data.nodeName}`);
@@ -238,9 +232,10 @@ export class DebuggerDriver {
           }
         } else {
           // User code interrupts: show the first, ask about each in turn,
-          // then answer the batch at once.
+          // then answer the batch at once. The interrupt's id tells the
+          // UI which branch raised it, when a tool or a fork did.
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render(interrupt.checkpoint);
+          await this.ui.render(interrupt.checkpoint, undefined, interrupt.interruptId);
           result = await this.handleInterrupts(batch, asked);
         }
       }

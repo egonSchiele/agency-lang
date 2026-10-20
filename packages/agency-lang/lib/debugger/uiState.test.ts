@@ -365,6 +365,48 @@ describe("UIState", () => {
       ]);
     });
 
+    it("finds the branch of a user interrupt by its id, and names block and nameless frames", async () => {
+      // A user interrupt from inside a tool is stamped on the shared
+      // checkpoint at the join: no stop record, no branch path on the
+      // location. The branch's own state records the interrupt's id.
+      const ui = new UIState();
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          scopeName: "runPrompt",
+          stepPath: "1/round.0.tools",
+          stack: makeStackJSON([
+            { scopeName: "main", moduleId: "mod.agency" },
+            {
+              scopeName: "runPrompt",
+              branches: {
+                tool_0_abc: {
+                  stack: makeStackJSON([{ scopeName: "search", moduleId: "mod.agency" }]),
+                },
+                tool_1_def: {
+                  interruptId: "intr-1",
+                  stack: makeStackJSON([
+                    { scopeName: "confirm", moduleId: "mod.agency" },
+                    { scopeName: "__block_0", moduleId: "mod.agency" },
+                    { moduleId: "mod.agency" },
+                  ]),
+                },
+              },
+            },
+          ]),
+        }),
+        undefined,
+        "intr-1",
+      );
+      expect(ui.getCallStack().map((entry) => entry.functionName)).toEqual([
+        "main",
+        "llm()",
+        "confirm",
+        "block",
+        "(unknown)",
+      ]);
+      expect(ui.getLocation()?.branchPath).toEqual(["tool_1_def"]);
+    });
+
     it("is empty without a checkpoint", () => {
       expect(new UIState().getCallStack()).toEqual([]);
     });

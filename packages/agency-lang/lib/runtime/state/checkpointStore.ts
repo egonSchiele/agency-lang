@@ -189,6 +189,29 @@ export class Checkpoint implements SourceLocation {
     return frames;
   }
 
+  /** The path to the branch paused on the interrupt `interruptId`, or
+   *  undefined when no branch is. A user interrupt raised inside a tool,
+   *  a fork, or a parallel arm has no stop record to say which branch it
+   *  came from, but the branch's own state records the interrupt's id.
+   *  Only the last frame of a stack holds branches, as `stackAt` reads. */
+  branchPathOf(interruptId: string): string[] | undefined {
+    const search = (frames: StateJSON[], path: string[]): string[] | undefined => {
+      const branches = frames.at(-1)?.branches ?? {};
+      for (const key of Object.keys(branches)) {
+        const branch = branches[key];
+        if (branch.interruptId === interruptId) {
+          return [...path, key];
+        }
+        const below = search(branch.stack.stack, [...path, key]);
+        if (below) {
+          return below;
+        }
+      }
+      return undefined;
+    };
+    return search(this.stack.stack, []);
+  }
+
   /** The frame a person inspects at a location: the frame the step ran
    *  in, or, at one of the tool loop's own stops, the frame that called
    *  `llm()`, the one under the loop's frame. */

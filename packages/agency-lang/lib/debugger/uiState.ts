@@ -8,12 +8,21 @@ import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
+import { isBlockName } from "../runtime/blockNames.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
 import { uniq } from "@/utils.js";
 import fs from "fs";
 import path from "path";
+
+/** The name the call stack pane shows for a frame. */
+function frameName(scopeName: string | null | undefined): string {
+  if (scopeName === undefined || scopeName === null) return "(unknown)";
+  if (scopeName === "runPrompt") return "llm()";
+  if (isBlockName(scopeName)) return "block";
+  return scopeName;
+}
 
 export type ValWithOverride = {
   key: string;
@@ -85,7 +94,17 @@ export class UIState {
     return this.resolveModulePath(agencyFile, [".js", ".ts"]);
   }
 
-  async setCheckpoint(checkpoint: Checkpoint | undefined, stop?: DebugStopData) {
+  /** Show `checkpoint`, at `stop` when the driver has a stop record, else
+   *  at the checkpoint's own location. `interruptId` is the user interrupt
+   *  the checkpoint was taken for, when there is one: an interrupt raised
+   *  inside a tool, a fork, or a parallel arm is stamped on the shared
+   *  checkpoint at the join, whose location has no branch path, so the
+   *  branch is found by the interrupt's id. */
+  async setCheckpoint(
+    checkpoint: Checkpoint | undefined,
+    stop?: DebugStopData,
+    interruptId?: string,
+  ) {
     const cp = Checkpoint.fromJSON(checkpoint);
     if (!cp) {
       this.log("Invalid checkpoint provided, cannot set checkpoint");
@@ -98,9 +117,12 @@ export class UIState {
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
-    this.location = { ...location, stepPath: statementStepPath(location.stepPath) };
-    const branchPath = this.location.branchPath ?? [];
-    const frame = cp.shownFrame(location);
+    const branchPath =
+      location.branchPath ??
+      (interruptId === undefined ? undefined : cp.branchPathOf(interruptId)) ??
+      [];
+    this.location = { ...location, branchPath, stepPath: statementStepPath(location.stepPath) };
+    const frame = cp.shownFrame(this.location);
     if (!frame) {
       this.log("No current frame available in checkpoint");
       return;
@@ -230,8 +252,10 @@ export class UIState {
   /** The call stack, read from the checkpoint's frames: one entry per
    *  frame from the root stack down to the stack the program is stopped
    *  on, the stopped frame last. The tool loop's own frame is shown as
-   *  `llm()`. A TypeScript function has no frame, so it does not appear;
-   *  the activity log notes it when it is called. */
+   *  `llm()`, and the compiler-named frame of a fork or parallel arm or
+   *  a block argument as `block`. Only Agency code and the TypeScript
+   *  that claims a resumable scope have frames; other TypeScript
+   *  functions do not appear. */
   getCallStack(): { functionName: string; moduleId: string }[] {
     if (!this.checkpoint) return [];
     const branchPath = this.location?.branchPath ?? [];
@@ -240,7 +264,7 @@ export class UIState {
       frames.push(...(this.checkpoint.stackAt(branchPath.slice(0, depth)) ?? []));
     }
     return frames.map((frame) => ({
-      functionName: frame.scopeName === "runPrompt" ? "llm()" : (frame.scopeName ?? ""),
+      functionName: frameName(frame.scopeName),
       moduleId: frame.moduleId ?? "",
     }));
   }

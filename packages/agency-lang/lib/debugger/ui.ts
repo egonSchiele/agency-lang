@@ -424,9 +424,9 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- DebuggerIO implementation ---
 
-  async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+  async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {
     if (checkpoint) {
-      await this.state.setCheckpoint(checkpoint, stop);
+      await this.state.setCheckpoint(checkpoint, stop, interruptId);
       this.threadDisplayIndex = undefined;
     }
     this.renderUI();

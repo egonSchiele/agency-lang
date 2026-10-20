@@ -17,7 +17,7 @@ describe("Trace integration with debugger", () => {
   let mod: any;
 
   beforeAll(async () => {
-    compile({ debugger: true }, traceTestAgency, traceTestCompiled, {
+    compile({}, traceTestAgency, traceTestCompiled, {
       ts: true,
     });
     mod = await freshImport(traceTestCompiled);
@@ -48,7 +48,6 @@ describe("Trace integration with debugger", () => {
         __setDebugger: mod.__setDebugger,
         __getCheckpoints: mod.__getCheckpoints,
       },
-      sourceMap: mod.__sourceMap ?? {},
       rewindSize: 30,
       ui: testUI,
     });

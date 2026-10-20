@@ -15,7 +15,7 @@ const myTestAgency = path.join(fixtureDir, "my-test.agency");
 const myTestCompiled = path.join(fixtureDir, "my-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, myTestAgency, myTestCompiled, { ts: true });
+  compile({}, myTestAgency, myTestCompiled, { ts: true });
 });
 
 describe("My debugger test", () => {
@@ -54,11 +54,11 @@ const myTestAgency = path.join(fixtureDir, "my-test.agency");
 const myTestCompiled = path.join(fixtureDir, "my-test.ts");
 
 beforeAll(() => {
-  compile({ debugger: true }, myTestAgency, myTestCompiled, { ts: true });
+  compile({}, myTestAgency, myTestCompiled, { ts: true });
 });
 ```
 
-The `{ debugger: true }` flag inserts debug pause points at every statement. The `{ ts: true }` flag outputs `.ts` instead of `.js` so vitest can import it directly.
+The empty config compiles with `instrument` on, its default, which emits the `debugStep()` call before every statement that the debugger stops at. The `{ ts: true }` flag outputs `.ts` instead of `.js` so vitest can import it directly.
 
 **Important**: `fixtureDir` is exported from `testHelpers.ts` and points to `tests/debugger/`.
 
@@ -230,7 +230,7 @@ await session.press("s"); // the interrupt fires
 await session.type("resolve 5");
 ```
 
-Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. When several branches paused at once the driver asks about each in turn, so `type()` one answer per interrupt. A guard trip opens a form instead: `press("enter")` on a choice (`down` to move), then `type()` the amount and the message (see `lib/debugger/guardTrip.test.ts`).
+Valid responses: `approve` (or `a` or empty), `reject` (or `r`), `resolve <value>`. When several branches paused at once the driver asks about each in turn, so `type()` one answer per interrupt. A guard trip opens a form instead: `press("enter")` on a choice (`down` to move), then `type()` the amount and the message (see `lib/debugger/guardTrip.test.ts`). For a raise used as a value, such as a `question`, the prompt is `answer:` and the typed text is the answer (see `lib/debugger/question.test.ts`).
 
 ### Testing print
 

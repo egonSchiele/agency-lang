@@ -334,9 +334,6 @@ export interface AgencyConfig {
     definiteReturns?: "silent" | "warn" | "error";
   };
 
-  /** Enable debugger mode — auto-inserts breakpoints before every step */
-  debugger?: boolean;
-
   /** Whether to emit debugStep() instrumentation in compiled output (default: true).
    *  Set to false to eliminate per-step overhead when tracing/debugging is not needed. */
   instrument?: boolean;
@@ -673,7 +670,6 @@ export const AgencyConfigSchema = z
         definiteReturns: z.enum(["silent", "warn", "error"]),
       })
       .partial(),
-    debugger: z.boolean(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),
     // A positive integer. The guard trips when depth > limit and the first

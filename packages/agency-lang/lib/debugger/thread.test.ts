@@ -45,7 +45,7 @@ const threadTestCompiled = path.join(fixtureDir, "thread-test.ts");
 
 describe("Debugger threads panel", () => {
   beforeAll(() => {
-    compile({ debugger: true }, threadTestAgency, threadTestCompiled, { ts: true });
+    compile({}, threadTestAgency, threadTestCompiled, { ts: true });
   });
 
   afterAll(() => {

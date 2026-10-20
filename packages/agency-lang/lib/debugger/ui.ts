@@ -277,7 +277,8 @@ export class DebuggerUI implements DebuggerIO {
       .map((entry, i) => {
         const prefix = i === callStack.length - 1 ? " > " : "   ";
         const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
-        return `${prefix}${escapeStyleTags(entry.functionName)} (${escapeStyleTags(fileName)}:${entry.line})`;
+        const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
+        return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
       })
       .join("\n");
   }
@@ -433,9 +434,9 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- DebuggerIO implementation ---
 
-  async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+  async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {
     if (checkpoint) {
-      await this.state.setCheckpoint(checkpoint, stop);
+      await this.state.setCheckpoint(checkpoint, stop, interruptId);
       // A picked thread stays shown while it is still listed, so a
       // person can follow one that is not the active one while stepping.
       const listed = this.state.listThreads().some((thread) => thread.id === this.threadDisplayId);

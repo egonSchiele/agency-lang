@@ -9,8 +9,9 @@ import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
+import { isIntrinsicToolName } from "../intrinsicTools.js";
 import { isBlockName } from "../blockNames.js";
-import type { StateJSON, StateStackJSON } from "./stateStack.js";
+import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
 import type { MessageThreadJSON } from "./messageThread.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -57,6 +58,38 @@ export type ThreadMessages = {
   threadCount: number;
   messages: { role: string; content: string }[];
 };
+
+/** One branch of a frame, as the branches pane lists it: a tool call, a
+ *  fork branch, or a parallel item, with its own stack. */
+export type BranchSummary = {
+  /** The branch keys from the root down to this branch. */
+  path: string[];
+  key: string;
+  /** The frame that owns the branch; the tool loop's is `llm()`. */
+  owner: string;
+  /** The scope the branch runs: the tool's name, or the block's. */
+  label: string;
+  status: "running" | "interrupted" | "done";
+};
+
+/** One guard on the stacks the stopped code runs under. */
+export type GuardSummary = {
+  label: string | null;
+  dimension: "cost" | "time";
+  /** Dollars, or milliseconds. */
+  limit: number;
+  spent: number;
+  disarmed: boolean;
+  root: boolean;
+  /** True when the figures are a branch's own copy of a guard above it:
+   *  a time guard's clone carries the parent's remaining time as its
+   *  limit, and the branch's own working time as spent. */
+  inherited: boolean;
+};
+
+/** The tool loop the stopped code is in: its round, counted from 1, and
+ *  the tools the loop has removed. */
+export type LoopState = { round: number; removedTools: string[] };
 
 /** One thread of the store, as the threads pane and its picker list it. */
 export type ThreadSummary = {
@@ -108,6 +141,41 @@ export type CheckpointJSON = {
   traceId?: string;
   signature?: string;
 };
+
+/** A branch's status. `interruptId` is never cleared once set, so a
+ *  branch that stopped on an interrupt and later returned has both
+ *  fields; the result decides. */
+function branchStatus(branch: BranchStateJSON): BranchSummary["status"] {
+  if (branch.result !== undefined) return "done";
+  if (branch.interruptId !== undefined) return "interrupted";
+  return "running";
+}
+
+/** The name of the tool a loop frame called under the branch key
+ *  `tool_<index>_<id>`, from the tool calls in the loop's copy of its
+ *  thread; undefined when the frame is not a loop's or has no such call.
+ *  A call with an id is matched by the id alone. Without one (Gemini
+ *  sends none) the index decides, counted over the calls the loop
+ *  dispatched, so an intrinsic call such as a draft save, which the loop
+ *  handles inline, is not counted. Branches are dropped at the end of
+ *  each round, so only the latest assistant message can own a live
+ *  branch; the search starts from the end so an empty id cannot match an
+ *  earlier round's call. */
+function toolCallName(frame: StateJSON | undefined, key: string): string | undefined {
+  if (frame?.scopeName !== "runPrompt") return undefined;
+  const copy = frame.locals?.messagesJSON;
+  const messages: unknown[] = Array.isArray(copy) ? copy : (copy?.messages ?? []);
+  for (const message of [...messages].reverse()) {
+    const calls = (message as { toolCalls?: { id?: string; name?: string }[] } | null)?.toolCalls;
+    if (!Array.isArray(calls)) continue;
+    const withId = calls.find((call) => call.id && key.endsWith(`_${call.id}`));
+    if (withId) return withId.name;
+    const dispatched = calls.filter((call) => !isIntrinsicToolName(call.name ?? ""));
+    const index = dispatched.findIndex((call, i) => `tool_${i}_${call.id ?? ""}` === key);
+    if (index >= 0) return dispatched[index].name;
+  }
+  return undefined;
+}
 
 /** A thread as the panes see it: the store's key, its JSON, whether the
  *  program is in it, and a newer copy of its messages when a tool loop
@@ -399,6 +467,97 @@ export class Checkpoint implements SourceLocation {
       return "(no content)";
     }
     return JSON.stringify(message.content);
+  }
+
+  /** The stack `branchPath` leads to, as serialized. */
+  private stackJSONAt(branchPath: string[]): StateStackJSON | undefined {
+    let stack: StateStackJSON | undefined = this.stack;
+    for (const key of branchPath) {
+      stack = stack?.stack?.at(-1)?.branches?.[key]?.stack;
+    }
+    return stack;
+  }
+
+  /** Every branch in the checkpoint, from the root stack down through
+   *  the stacks of the branches themselves, in the order the checkpoint
+   *  holds them. Stopped inside one tool, a person sees its siblings.
+   *  Only the last frame of a stack holds branches, as `stackAt` reads.
+   *  A finished branch has no frames, since a function pops its frame
+   *  when it returns, so its name comes from the tool loop's record of
+   *  the call, when the loop is the owner. */
+  listBranches(): BranchSummary[] {
+    const branches: BranchSummary[] = [];
+    const visit = (frames: StateJSON[] | undefined, path: string[]) => {
+      const frame = frames?.at(-1);
+      for (const [key, branch] of Object.entries(frame?.branches ?? {})) {
+        const branchPathHere = [...path, key];
+        const first = branch.stack.stack?.[0]?.scopeName ?? undefined;
+        branches.push({
+          path: branchPathHere,
+          key,
+          owner: frameName(frame?.scopeName),
+          label: first === undefined ? (toolCallName(frame, key) ?? key) : frameName(first),
+          status: branchStatus(branch),
+        });
+        visit(branch.stack.stack, branchPathHere);
+      }
+    };
+    visit(this.stack.stack, []);
+    return branches;
+  }
+
+  /** The guards the stopped code runs under, outermost first: those on
+   *  each stack along `branchPath`, a stack's inherited ones before its
+   *  own. A branch stack serializes the time guards it inherited, since
+   *  their elapsed time is its own: each is a clone with the parent's
+   *  guard id, the parent's remaining time as its limit, and the branch's
+   *  working time as spent. A guard is listed once, in the place of its
+   *  outermost copy, with the figures of the deepest, which are the ones
+   *  the stopped code is metered by. A cost guard is shared by reference,
+   *  so a branch never serializes an inherited one. */
+  listGuards(branchPath: string[] = []): GuardSummary[] {
+    const guards: GuardSummary[] = [];
+    const indexById: Record<string, number> = {};
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      const stack = this.stackJSONAt(branchPath.slice(0, depth));
+      const own = stack?.guards ?? [];
+      const inherited = stack?.inheritedTimeGuards ?? [];
+      for (const guard of [...inherited, ...own]) {
+        const summary: GuardSummary = {
+          label: guard.label ?? null,
+          dimension: guard.kind,
+          limit: guard.kind === "cost" ? guard.costLimit : guard.timeLimit,
+          spent: guard.kind === "cost" ? guard.spent : guard.elapsedMs,
+          disarmed: guard.disarmed === true,
+          root: guard.isRootBudget === true,
+          inherited: inherited.includes(guard),
+        };
+        const seen = guard.guardId === undefined ? undefined : indexById[guard.guardId];
+        if (seen !== undefined) {
+          guards[seen] = summary;
+          continue;
+        }
+        if (guard.guardId !== undefined) {
+          indexById[guard.guardId] = guards.length;
+        }
+        guards.push(summary);
+      }
+    }
+    return guards;
+  }
+
+  /** The tool loop the stopped code is in, from the deepest loop frame
+   *  along `branchPath`; null outside any `llm()` call. */
+  loopState(branchPath: string[] = []): LoopState | null {
+    const frame = this.framesAlong(branchPath).findLast(
+      (candidate) =>
+        candidate.scopeName === "runPrompt" && candidate.locals?.toolCallRound !== undefined,
+    );
+    if (!frame) return null;
+    return {
+      round: frame.locals.toolCallRound + 1,
+      removedTools: Array.isArray(frame.locals.removedTools) ? frame.locals.removedTools : [],
+    };
   }
 
   getGlobalsForModule(): Record<string, any> | null {

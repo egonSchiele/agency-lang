@@ -144,6 +144,9 @@ describe("the tool loop's own stops", () => {
       await session.press("s"); // before search
       await session.press("n");
       expect(activity(session)).toContainEqual("Stopped before round 2");
+      // The loop counts a round when the request returns, so the pane
+      // reads the round from the stop's label here.
+      expect(session.frame().findByKey("guards")!.toPlainText()).toContain("tool loop: round 2");
       expect(activity(session)).toContainEqual(`Tool call: ${SEARCH_STOP}`);
       await session.press("n");
       expect(activity(session)).toContainEqual('Stopped before writeUp(notes: "grant summary")');
@@ -466,6 +469,49 @@ describe("stopping inside a tool call", () => {
       const batch = resumes.find((resume) => resume.interrupts === 2)!;
       expect(batch.responses).toEqual([{ type: "approve" }, { type: "approve" }]);
       expect(activity(session).some((line) => line.startsWith("Tool done: confirm"))).toBe(true);
+    });
+  });
+
+  it("the branches pane lists both tools with their status, and b opens the other one", async () => {
+    await withLLMMocks(twoToolMocks, async () => {
+      const session = await agentSession();
+      await session.press("s"); // round 1
+      await session.press("s"); // before search
+      await session.press("s"); // before writeUp
+      await session.press("s"); // both bodies start; one stop is shown
+      // The panes are narrow, so the data is checked through the state
+      // and the panes for their first words.
+      expect(
+        session.ui.state
+          .listBranches()
+          .map((branch) => [branch.label, branch.status, branch.owner]),
+      ).toEqual([
+        ["search", "interrupted", "llm()"],
+        ["writeUp", "interrupted", "llm()"],
+      ]);
+      expect(session.frame().findByKey("branches")!.toPlainText()).toMatch(/> search/);
+      expect(session.ui.state.loopState()).toEqual({ round: 1, removedTools: [] });
+      expect(session.frame().findByKey("guards")!.toPlainText()).toContain("tool loop");
+      // The picker: the stopped frame, then the two branches.
+      expect(session.ui.state.getCallStack().at(-1)?.functionName).toBe("search");
+      await session.press("b");
+      await session.press("down", { times: 2 });
+      await session.press("enter");
+      expect(
+        session.ui.state.getActivityLog().some((line) => line.startsWith("Viewing branch tool_1_")),
+      ).toBe(true);
+      expect(localsText(session)).toContain('notes = "notes"');
+      // The call stack pane follows the viewed branch.
+      expect(session.ui.state.getCallStack().at(-1)?.functionName).toBe("writeUp");
+      // print reads the viewed frame, as the locals pane does.
+      await session.press("p");
+      await session.type("notes");
+      expect(session.ui.state.getActivityLog()).toContainEqual('notes = "notes"');
+      await session.press("b");
+      await session.press("enter");
+      expect(session.ui.state.getActivityLog()).toContainEqual("Viewing the stopped frame");
+      await session.press("c");
+      expect(await session.quit()).toBe(FINAL);
     });
   });
 

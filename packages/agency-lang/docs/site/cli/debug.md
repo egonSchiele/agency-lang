@@ -31,6 +31,7 @@ Here are some things you may want to do with the debugger:
 - Override the value of a variable: Enter `:set varName=newValue`. Then when you press `s`, the next statement will execute with the variable's value overwritten.
 - Cycle between all the different panels: `tab` and `shift+tab`. Once a panel has focus, you can press the up or down arrow keys to scroll, or press `z` to zoom, temporarily making that panel full screen. 
 - In the threads panel, you can press `[` or `]` to cycle between the different threads, or `t` to pick one from a list. A thread you picked stays shown while you step; pick the active one (marked `*`) to follow the program again.
+- When the program is inside an `llm()` call with tools, the branches panel lists each tool call with its status, and `b` opens one so the locals, globals, and call stack panels show it, and `p` prints from it. The guards panel shows the tool loop's round and each guard's spend against its limit.
 
 ## Options
 

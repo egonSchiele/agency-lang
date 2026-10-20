@@ -152,6 +152,13 @@ The node frame carries the thread store. The active thread is the top of the act
 
 A tool loop's frame carries `messagesJSON`, the thread it is working on. Since #1215 it is refreshed on every checkpoint. When its `id` matches a store thread, the loop's copy is the one shown, whatever the lengths: a resume continues from it (`restoreThreadForResume`), so after memory compaction the shorter loop copy is the conversation the program goes on with. A loop inside a tool runs on a fresh store that is not serialized, so its copy is the only record of the subagent's thread. It is listed under the thread's own `id`, named after the function that called `llm()`, and marked active. Its `parentId` names a thread of the unserialized store, so it is dropped. In the list, a store thread is identified by its store key and a tool thread by its id; only the match between a loop copy and a store thread goes by `id`.
 
+### The branches and guards panes
+
+Two panes appear when the checkpoint has something for them (`UIState.listBranches`, `listGuards`, `loopState`, each read from the checkpoint on every render):
+
+- **branches**: every branch in the checkpoint, from the root stack down through the branches' own stacks, so a person stopped inside one tool sees its siblings: a tool call, a fork branch, or a parallel item, each with the scope it runs, its status, and the frame that owns it. This is where a subagent appears. The status is `done` when the branch has a result, `interrupted` when it stopped on an interrupt and has none (a branch keeps the id of an interrupt it stopped on earlier, so the result is checked first), else `running`. A finished branch has no frames, since a function pops its frame when it returns; a finished tool is named from the tool loop's record of the call (`toolCallName`), and the picker's cursor skips it. `b` opens the picker; choosing a branch makes the locals and globals panes show its last frame, and `print` reads that frame, while the source pane keeps the stop's line and module. Choosing "the stopped frame" returns. `set` still applies to the stopped frame, not the viewed one. The call stack pane follows the chosen branch too, since it reads the location's branch path.
+- **guards**: the tool loop the stopped code is in (its round, counted from 1, and the tools the loop has removed), then one line per guard along the branch path, outermost first: `research · cost $0.42 of $0.5`, `root budget · time 4m10s of 30m`, marked `(disarmed)` when it is. The loop counts a round when its request returns, so at the loop's own stop before a request the round comes from the stop's label. A branch stack serializes the time guards it inherited, each a clone with the parent's guard id, the parent's remaining time as its limit, and the branch's own working time; a guard is listed once, in the place of its outermost copy, with the figures of the deepest copy and the note `(this branch)`. A cost guard is shared by reference and is listed once as the parent's. The run's tokens and cost stay in the stats bar.
+
 ### User code interrupts
 
 If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
@@ -214,6 +221,7 @@ This avoids exporting `__globalCtx` directly.
 | `k` | pin the current checkpoint, with an optional label |
 | `p` | print variable |
 | `z` | zoom the focused pane |
+| `b` | pick a branch (a tool call, a fork branch, a parallel item) to look at |
 | `t` | pick which message thread the threads pane shows |
 | `[` / `]` | cycle which message thread the threads pane shows |
 | `↑` / `↓` | scroll the focused pane; in the source pane, step back and step |

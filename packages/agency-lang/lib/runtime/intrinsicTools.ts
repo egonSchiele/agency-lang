@@ -48,6 +48,19 @@ export type IntrinsicTool = {
 
 const INTRINSIC_TOOLS: IntrinsicTool[] = [saveDraftIntrinsic];
 
+/** The names the intrinsic tools advertise by default. A `.rename()`d
+ *  copy advertises its new name and is not listed; a reader that has only
+ *  the model's call (the debugger naming a finished branch) then counts
+ *  it as dispatched and falls back to the raw branch key. */
+const INTRINSIC_TOOL_NAMES = ["saveDraft"];
+
+/** True for the default name of a tool the loop handles inline rather
+ *  than dispatching as a branch. Used where only the model's call is at
+ *  hand. */
+export function isIntrinsicToolName(name: string): boolean {
+  return INTRINSIC_TOOL_NAMES.includes(name);
+}
+
 export function findIntrinsic(fn: AgencyFunction): IntrinsicTool | undefined {
   return INTRINSIC_TOOLS.find((t) => t.matches(fn));
 }

@@ -4,11 +4,15 @@ import {
   frameName,
   type SourceLocationOpts,
   type ThreadMessages,
+  type BranchSummary,
+  type GuardSummary,
+  type LoopState,
   type ThreadSummary,
 } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
+import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -32,6 +36,13 @@ export class UIState {
    *  gave one, else the checkpoint's own. Names the frame whose locals
    *  are shown and the source line that is highlighted. */
   private location?: SourceLocationOpts;
+  /** The stop's own location, kept while a branch is being viewed. */
+  private stopLocation?: SourceLocationOpts;
+  /** The stop record the driver passed, when the stop is a debug stop. */
+  private stop?: DebugStopData;
+  /** The module whose globals the globals pane shows: the viewed
+   *  frame's. The source pane shows `location.moduleId`, the stop's. */
+  private globalsModuleId?: string;
   private sourceMap?: SourceMap;
   private currentLine?: number;
   private args: ValWithOverride[] = [];
@@ -110,26 +121,94 @@ export class UIState {
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
+    this.stop = stop;
+    // A user interrupt raised inside a tool, a fork, or a parallel arm is
+    // stamped on the shared checkpoint at the join, whose location has no
+    // branch path; the branch is found by the interrupt's id.
     const branchPath =
       location.branchPath ??
       (interruptId === undefined ? undefined : cp.branchPathOf(interruptId)) ??
       [];
-    this.location = { ...location, branchPath, stepPath: statementStepPath(location.stepPath) };
-    const frame = cp.shownFrame(this.location);
+    this.stopLocation = { ...location, branchPath, stepPath: statementStepPath(location.stepPath) };
+    this.location = this.stopLocation;
+    if (!this.showFrame(this.stopLocation, location.moduleId)) return;
+    await this.setSourceMap();
+  }
+
+  /** Fill the args and locals panes from the frame at `location`, and
+   *  the globals pane from `moduleId`'s globals as that frame's stack
+   *  sees them. False when the checkpoint has no such frame. */
+  private showFrame(
+    location: { branchPath?: string[]; loopStop?: LoopStopKind },
+    moduleId: string,
+  ): boolean {
+    const cp = this.checkpoint!;
+    const frame = cp.shownFrame(location);
     if (!frame) {
       this.log("No current frame available in checkpoint");
-      return;
+      return false;
     }
     this.args = [];
     this.locals = [];
-
+    this.globals = [];
+    this.globalsModuleId = moduleId;
     this.setWithOverrides(frame.args, this.args);
     this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globalsAt(branchPath).store?.[this.location.moduleId] ?? null;
+    const globalsForModule = cp.globalsAt(location.branchPath ?? []).store?.[moduleId] ?? null;
     if (globalsForModule) {
       this.setWithOverrides(globalsForModule, this.globals);
     }
-    await this.setSourceMap();
+    return true;
+  }
+
+  /** Look at a branch's stack: the locals and globals panes show its
+   *  last frame, and the source pane keeps the stop's line and module.
+   *  An empty path returns to the stop. */
+  viewBranch(path: string[]): void {
+    if (!this.checkpoint || !this.stopLocation) return;
+    if (path.length === 0) {
+      this.location = this.stopLocation;
+      this.showFrame(this.stopLocation, this.stopLocation.moduleId);
+      return;
+    }
+    const frame = this.checkpoint.frameAt(path);
+    if (!frame) {
+      this.log(`No branch at ${path.join("/")}`);
+      return;
+    }
+    this.location = { ...this.stopLocation, branchPath: path, loopStop: undefined };
+    this.showFrame(this.location, frame.moduleId ?? this.stopLocation.moduleId);
+  }
+
+  /** The value of a variable as the panes show it: an argument or a
+   *  local of the viewed frame, else a global of the viewed module. */
+  lookupVariable(name: string): unknown {
+    const entry = [...this.args, ...this.locals, ...this.globals].find((e) => e.key === name);
+    return entry?.value;
+  }
+
+  /** Every branch in the checkpoint; see `Checkpoint.listBranches`. */
+  listBranches(): BranchSummary[] {
+    return this.checkpoint?.listBranches() ?? [];
+  }
+
+  /** The guards the stopped code runs under, outermost first. */
+  listGuards(): GuardSummary[] {
+    return this.checkpoint?.listGuards(this.location?.branchPath ?? []) ?? [];
+  }
+
+  /** The tool loop the stopped code is in, or null. The loop counts a
+   *  round when its request returns, so at the loop's own stop before a
+   *  request the stop's label, `round N`, is the round the person sees. */
+  loopState(): LoopState | null {
+    const branchPath = this.location?.branchPath ?? [];
+    const state = this.checkpoint?.loopState(branchPath) ?? null;
+    if (!state) return null;
+    const atStop = branchPath.join("/") === (this.stop?.branchPath ?? []).join("/");
+    const labelled =
+      this.stop?.loopStop === "round" ? this.stop.label?.match(/^round (\d+)$/) : null;
+    if (atStop && labelled) return { ...state, round: Number(labelled[1]) };
+    return state;
   }
 
   setWithOverrides(obj: Record<string, unknown>, array: ValWithOverride[]) {
@@ -224,6 +303,12 @@ export class UIState {
 
   getModuleId() {
     return this.location?.moduleId || "unknown module";
+  }
+
+  /** The module the globals pane shows: the viewed frame's, which after
+   *  `b` can differ from the source pane's. */
+  getGlobalsModuleId() {
+    return this.globalsModuleId ?? this.getModuleId();
   }
 
   /** Where the program is stopped, as the panes show it. */

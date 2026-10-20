@@ -256,6 +256,173 @@ describe("Checkpoint", () => {
     });
   });
 
+  describe("branches, guards, and the loop", () => {
+    function agentCheckpoint() {
+      // The shapes a run writes: a finished branch has no frames, since a
+      // function pops its frame when it returns, and keeps the interrupt
+      // id it stopped on earlier; the loop's copy of its thread records
+      // the calls, which is where a finished tool's name comes from.
+      const stack = makeStackJSON([
+        { scopeName: "main", locals: {} },
+        {
+          scopeName: "runPrompt",
+          locals: {
+            toolCallRound: 1,
+            removedTools: ["writeUp"],
+            messagesJSON: {
+              messages: [
+                { role: "user", content: "task" },
+                {
+                  role: "assistant",
+                  toolCalls: [
+                    { id: "abc", name: "search" },
+                    { id: "def", name: "writeUp" },
+                  ],
+                },
+              ],
+            },
+          },
+          branches: {
+            tool_0_abc: {
+              stack: makeStackJSON([
+                { scopeName: "search", locals: { url: "u" } },
+                {
+                  scopeName: "runPrompt",
+                  locals: { toolCallRound: 0, removedTools: [] },
+                  branches: { fork_1: { stack: makeStackJSON([{ scopeName: "fork" }]) } },
+                },
+              ]),
+              interruptId: "i-1",
+            },
+            tool_1_def: {
+              stack: makeStackJSON([]),
+              interruptId: "i-0",
+              result: { result: "done" },
+            },
+          },
+        },
+      ]);
+      // A root time budget lives on the root stack; a branch carries its
+      // own clone, with the same id, the parent's remaining time as its
+      // limit, and its own working time.
+      stack.guards = [
+        { kind: "cost", label: "research", costLimit: 0.5, spent: 0.42, guardId: "g-cost" },
+        { kind: "time", timeLimit: 60000, elapsedMs: 10000, isRootBudget: true, guardId: "g-time" },
+      ];
+      const inner = stack.stack[1].branches!.tool_0_abc.stack;
+      inner.inheritedTimeGuards = [
+        { kind: "time", timeLimit: 50000, elapsedMs: 1500, isRootBudget: true, guardId: "g-time" },
+      ];
+      return new Checkpoint({ id: 0, stack, globals: makeGlobalsJSON(), nodeId: "n1" });
+    }
+
+    it("lists every branch with its status and owner, nested ones under their parent", () => {
+      const cp = agentCheckpoint();
+      expect(cp.listBranches()).toEqual([
+        {
+          path: ["tool_0_abc"],
+          key: "tool_0_abc",
+          owner: "llm()",
+          label: "search",
+          status: "interrupted",
+        },
+        {
+          path: ["tool_0_abc", "fork_1"],
+          key: "fork_1",
+          owner: "llm()",
+          label: "fork",
+          status: "running",
+        },
+        {
+          path: ["tool_1_def"],
+          key: "tool_1_def",
+          owner: "llm()",
+          label: "writeUp",
+          status: "done",
+        },
+      ]);
+    });
+
+    it("lists each guard once, outermost first, with the figures of the branch's own copy", () => {
+      const cp = agentCheckpoint();
+      expect(cp.listGuards()).toEqual([
+        {
+          label: "research",
+          dimension: "cost",
+          limit: 0.5,
+          spent: 0.42,
+          disarmed: false,
+          root: false,
+          inherited: false,
+        },
+        {
+          label: null,
+          dimension: "time",
+          limit: 60000,
+          spent: 10000,
+          disarmed: false,
+          root: true,
+          inherited: false,
+        },
+      ]);
+      expect(
+        cp.listGuards(["tool_0_abc"]).map((g) => [g.dimension, g.limit, g.spent, g.inherited]),
+      ).toEqual([
+        ["cost", 0.5, 0.42, false],
+        ["time", 50000, 1500, true],
+      ]);
+    });
+
+    it("names a finished branch by id, or by position among dispatched calls when ids are empty", () => {
+      // Two rounds whose calls have no id, as Gemini sends them, and a
+      // draft save the loop handled inline before the dispatched call.
+      const loop = {
+        scopeName: "runPrompt",
+        locals: {
+          messagesJSON: {
+            messages: [
+              { role: "assistant", toolCalls: [{ id: "", name: "search" }] },
+              { role: "tool", content: "r1" },
+              {
+                role: "assistant",
+                toolCalls: [
+                  { id: "", name: "saveDraft" },
+                  { id: "", name: "writeUp" },
+                  { id: "x9", name: "confirm" },
+                ],
+              },
+            ],
+          },
+        },
+        branches: {
+          tool_0_: { stack: makeStackJSON([]), result: { result: "done" } },
+          tool_1_x9: { stack: makeStackJSON([]), result: { result: "done" } },
+        },
+      };
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{ scopeName: "main" }, loop]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listBranches().map((b) => b.label)).toEqual(["writeUp", "confirm"]);
+    });
+
+    it("reads the deepest tool loop's round and removed tools", () => {
+      const cp = agentCheckpoint();
+      expect(cp.loopState()).toEqual({ round: 2, removedTools: ["writeUp"] });
+      expect(cp.loopState(["tool_0_abc"])).toEqual({ round: 1, removedTools: [] });
+      expect(
+        new Checkpoint({
+          id: 1,
+          stack: makeStackJSON([{ scopeName: "main" }]),
+          globals: makeGlobalsJSON(),
+          nodeId: "n1",
+        }).loopState(),
+      ).toBeNull();
+    });
+  });
+
   describe("listThreads", () => {
     it("lists every thread with its label, parent, count, and the active mark", () => {
       const cp = new Checkpoint({

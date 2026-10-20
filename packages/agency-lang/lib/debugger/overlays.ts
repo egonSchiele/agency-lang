@@ -8,7 +8,7 @@ import { formatValue } from "./util.js";
  * Keeps overlays decoupled from DebuggerUI internals.
  */
 import type { InterruptResponse } from "../runtime/interrupts.js";
-import type { ThreadSummary } from "../runtime/state/checkpointStore.js";
+import type { BranchSummary, ThreadSummary } from "../runtime/state/checkpointStore.js";
 import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
 import {
   MESSAGE_PROMPT,
@@ -201,31 +201,27 @@ function amountProblem(data: GuardTripData, typed: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Thread picker
+// Branch picker
 // ---------------------------------------------------------------------------
 
-/** Pick the thread the threads pane shows: every thread of the store, by
- *  label or id, with its parent, its message count, and a mark on the
- *  one the program is in. Returns the chosen id, or null on escape. */
-export async function showThreadPicker(
+/** Pick a branch to look at: the stopped frame's own stack first, then
+ *  every branch with its status and owner. Returns the branch path, an
+ *  empty path for the stopped frame, or null on escape. */
+export async function showBranchPicker(
   ctx: OverlayContext,
-  threads: ThreadSummary[],
-  shownId: string | undefined,
-): Promise<string | null> {
-  let selected = Math.max(
-    0,
-    threads.findIndex((thread) => thread.id === shownId),
-  );
-  const byId: Record<string, ThreadSummary> = {};
-  for (const thread of threads) byId[thread.id] = thread;
-  const nameOf = (thread: ThreadSummary) => thread.label ?? `id: ${thread.id}`;
-  const lines = () =>
-    threads.map((thread, i) => {
-      const parent = thread.parentId ? byId[thread.parentId] : undefined;
-      const under = parent ? ` under ${nameOf(parent)}` : "";
-      const count = `${thread.messageCount} message${thread.messageCount === 1 ? "" : "s"}`;
-      return `${i === selected ? ">" : " "} ${thread.active ? "*" : " "} ${nameOf(thread)} (${count}${under})${thread.hidden ? " hidden" : ""}`;
-    });
+  branches: BranchSummary[],
+): Promise<string[] | null> {
+  // A finished branch has no frames to look at, so its line cannot be
+  // chosen: the cursor moves over the others.
+  const entries: { path: string[] | null; line: string }[] = [
+    { path: [], line: "the stopped frame" },
+    ...branches.map((branch) => ({
+      path: branch.status === "done" ? null : branch.path,
+      line: `${"  ".repeat(branch.path.length - 1)}${branch.label} [${branch.status}] under ${branch.owner}`,
+    })),
+  ];
+  const choosable = entries.map((entry, i) => i).filter((i) => entries[i].path !== null);
+  let at = 0;
   const render = () =>
     ctx.screen.render(
       column(
@@ -235,15 +231,18 @@ export async function showThreadPicker(
             flex: 1,
             border: true,
             borderColor: "yellow",
-            label: " threads (* = active; Enter=show, Esc=cancel) ",
+            label: " branches (Enter=view, Esc=cancel) ",
           },
-          text(lines().join("\n")),
+          text(
+            entries
+              .map((entry, i) => `${i === choosable[at] ? ">" : " "} ${entry.line}`)
+              .join("\n"),
+          ),
         ),
         ctx.buildStatsBar(),
         box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
       ),
     );
-
   while (true) {
     render();
     const keyEvent = await ctx.screen.nextKey();
@@ -251,11 +250,9 @@ export async function showThreadPicker(
       ctx.cleanup();
       return null;
     }
-    if ((keyEvent.key === "up" || keyEvent.key === "k") && selected > 0) selected--;
-    if ((keyEvent.key === "down" || keyEvent.key === "j") && selected < threads.length - 1) {
-      selected++;
-    }
-    if (keyEvent.key === "enter") return threads[selected].id;
+    if ((keyEvent.key === "up" || keyEvent.key === "k") && at > 0) at--;
+    if ((keyEvent.key === "down" || keyEvent.key === "j") && at < choosable.length - 1) at++;
+    if (keyEvent.key === "enter") return entries[choosable[at]].path;
     if (keyEvent.key === "escape" || keyEvent.key === "q") return null;
   }
 }
@@ -481,4 +478,64 @@ function formatKeyValueSection(
     lines.push("  (none)");
   }
   return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Thread picker
+// ---------------------------------------------------------------------------
+
+/** Pick the thread the threads pane shows: every thread of the store, by
+ *  label or id, with its parent, its message count, and a mark on the
+ *  one the program is in. Returns the chosen id, or null on escape. */
+export async function showThreadPicker(
+  ctx: OverlayContext,
+  threads: ThreadSummary[],
+  shownId: string | undefined,
+): Promise<string | null> {
+  let selected = Math.max(
+    0,
+    threads.findIndex((thread) => thread.id === shownId),
+  );
+  const byId: Record<string, ThreadSummary> = {};
+  for (const thread of threads) byId[thread.id] = thread;
+  const nameOf = (thread: ThreadSummary) => thread.label ?? `id: ${thread.id}`;
+  const lines = () =>
+    threads.map((thread, i) => {
+      const parent = thread.parentId ? byId[thread.parentId] : undefined;
+      const under = parent ? ` under ${nameOf(parent)}` : "";
+      const count = `${thread.messageCount} message${thread.messageCount === 1 ? "" : "s"}`;
+      return `${i === selected ? ">" : " "} ${thread.active ? "*" : " "} ${nameOf(thread)} (${count}${under})${thread.hidden ? " hidden" : ""}`;
+    });
+  const render = () =>
+    ctx.screen.render(
+      column(
+        ...ctx.buildTopRows(),
+        box(
+          {
+            flex: 1,
+            border: true,
+            borderColor: "yellow",
+            label: " threads (* = active; Enter=show, Esc=cancel) ",
+          },
+          text(lines().join("\n")),
+        ),
+        ctx.buildStatsBar(),
+        box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
+      ),
+    );
+
+  while (true) {
+    render();
+    const keyEvent = await ctx.screen.nextKey();
+    if (keyEvent.key === "c" && keyEvent.ctrl) {
+      ctx.cleanup();
+      return null;
+    }
+    if ((keyEvent.key === "up" || keyEvent.key === "k") && selected > 0) selected--;
+    if ((keyEvent.key === "down" || keyEvent.key === "j") && selected < threads.length - 1) {
+      selected++;
+    }
+    if (keyEvent.key === "enter") return threads[selected].id;
+    if (keyEvent.key === "escape" || keyEvent.key === "q") return null;
+  }
 }

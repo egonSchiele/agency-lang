@@ -8,7 +8,6 @@ import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
 import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
-import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
@@ -443,7 +442,8 @@ export class DebuggerDriver {
         return { data: interrupt };
       }
       case "print": {
-        const value = this.lookupVariable(command.varName, interrupt);
+        // The viewed frame's, so print agrees with the locals pane after `b`.
+        const value = this.ui.state.lookupVariable(command.varName);
         if (value !== undefined) {
           this.ui.state.log(`${command.varName} = ${JSON.stringify(value)}`);
         } else {
@@ -600,28 +600,6 @@ export class DebuggerDriver {
       }),
     );
   }
-
-  private lookupVariable(varName: string, interrupt: Interrupt): unknown {
-    const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
-    if (!checkpoint) return undefined;
-
-    // Check locals and args in the frame the program is stopped in
-    const frame = stoppedFrame(interrupt);
-    if (frame) {
-      if (varName in frame.locals) return frame.locals[varName];
-      if (varName in frame.args) return frame.args[varName];
-    }
-
-    // Check the globals the stopped stack sees: a fork or parallel
-    // branch has its own copy.
-    const location = stopOf(interrupt) ?? checkpoint;
-    const moduleGlobals = checkpoint.globalsAt(location.branchPath).store[location.moduleId];
-    if (moduleGlobals && varName in moduleGlobals) {
-      return moduleGlobals[varName];
-    }
-
-    return undefined;
-  }
 }
 
 /** `resolve <value>` takes JSON, so a number or a list can be given,
@@ -662,13 +640,4 @@ function dataBeyondMessage(interrupt: Interrupt): string {
  *  and for the placeholder interrupt a trace replay starts from. */
 function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
-}
-
-/** The frame the program is stopped in: the one the stop's location
- *  leads to, else the checkpoint's own. At one of the tool loop's own
- *  stops that is the frame that called `llm()`. */
-function stoppedFrame(interrupt: Interrupt): StateJSON | undefined {
-  const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
-  if (!checkpoint) return undefined;
-  return checkpoint.shownFrame(stopOf(interrupt) ?? checkpoint);
 }

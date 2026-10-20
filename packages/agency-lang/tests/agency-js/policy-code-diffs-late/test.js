@@ -22,7 +22,7 @@ const realLog = console.log;
 console.log = (...args) => { printed += args.join(" ") + "\n"; };
 
 try {
-  await main({ inputOverride, policyFile });
+  await main({ policyFile }, { inputOverride });
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

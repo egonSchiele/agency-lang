@@ -27,11 +27,11 @@ const inputOverride = async () => {
 };
 
 try {
-  const report = (await updatesASavedPolicy({ inputOverride, policyFile, toolsDir })).data;
+  const report = (await updatesASavedPolicy({ policyFile, toolsDir }, { inputOverride })).data;
   const onDisk = JSON.parse(readFileSync(policyFile, "utf8"));
   const callsForUpdate = inputCalls;
   const unsaved = (
-    await unsavedRulesDoNotApply({ inputOverride, policyFile: join(home, "no-such-dir", "policy.json"), toolsDir })
+    await unsavedRulesDoNotApply({ policyFile: join(home, "no-such-dir", "policy.json"), toolsDir }, { inputOverride })
   ).data;
   writeFileSync("__result.json", JSON.stringify({
     report,

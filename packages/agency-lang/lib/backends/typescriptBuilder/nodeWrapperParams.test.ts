@@ -19,7 +19,7 @@ describe("node wrapper per-invocation options", () => {
 
   it("destructures the options into hidden aliases", () => {
     expect(ts).toContain(
-      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }",
+      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride }",
     );
   });
 
@@ -30,6 +30,10 @@ describe("node wrapper per-invocation options", () => {
   it("forwards the cancel and pause signals to runNode", () => {
     expect(ts).toContain("abortSignal: __invocationAbortSignal,");
     expect(ts).toContain("pauseSignal: __invocationPauseSignal,");
+  });
+
+  it("forwards the input override as part of the runNode invocation", () => {
+    expect(ts).toContain("inputOverride: __invocationInputOverride");
   });
 
   it("types the options object with InvocationOptions", () => {

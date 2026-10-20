@@ -18,7 +18,7 @@ try {
       "myapp::exec": [{ action: "reject", rejectMessage: "Use safeBash instead" }],
     }),
   );
-  const rejected = await main({ inputOverride, policyFile });
+  const rejected = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({ rejectMessage: rejected.data }, null, 2));
 } finally {
   rmSync(dir, { recursive: true, force: true });

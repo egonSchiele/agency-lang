@@ -12,7 +12,7 @@ const inputOverride = async () => {
 };
 
 try {
-  const result = await main({ inputOverride, policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   const text = String(result.data);
   writeFileSync("__result.json", JSON.stringify({
     rejected: text.startsWith("failure:"),

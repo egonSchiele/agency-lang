@@ -26,9 +26,9 @@ console.log = (...args) => {
 };
 
 try {
-  await main({ inputOverride, policyFile });
-  await autoApproved({ inputOverride, policyFile });
-  survivedNullPayload = (await nullPayload({ inputOverride, policyFile })).data;
+  await main({ policyFile }, { inputOverride });
+  await autoApproved({ policyFile }, { inputOverride });
+  survivedNullPayload = (await nullPayload({ policyFile }, { inputOverride })).data;
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });

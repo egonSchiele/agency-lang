@@ -21,7 +21,7 @@ console.log = (...args) => { printed += args.join(" ") + "\n"; };
 
 let approved;
 try {
-  const result = await main({ inputOverride, policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   approved = result.data;
 } finally {
   console.log = realLog;

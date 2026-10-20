@@ -29,12 +29,12 @@ const inputOverride = async () => {
 };
 
 try {
-  const settings = (await doesNotSaveSettings({ inputOverride, policyFile, home })).data;
-  const policy = (await doesNotSavePolicy({ inputOverride, policyFile, home })).data;
-  const skill = (await doesNotWriteSkills({ inputOverride, policyFile, home })).data;
-  const memory = (await readsItsMemory({ inputOverride, policyFile, home })).data;
-  const settingsRead = (await readsItsSettings({ inputOverride, policyFile, home })).data;
-  const sessions = (await doesNotReadSessions({ inputOverride, policyFile, home })).data;
+  const settings = (await doesNotSaveSettings({ policyFile, home }, { inputOverride })).data;
+  const policy = (await doesNotSavePolicy({ policyFile, home }, { inputOverride })).data;
+  const skill = (await doesNotWriteSkills({ policyFile, home }, { inputOverride })).data;
+  const memory = (await readsItsMemory({ policyFile, home }, { inputOverride })).data;
+  const settingsRead = (await readsItsSettings({ policyFile, home }, { inputOverride })).data;
+  const sessions = (await doesNotReadSessions({ policyFile, home }, { inputOverride })).data;
   writeFileSync("__result.json", JSON.stringify({
     settings,
     policy,

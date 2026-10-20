@@ -16,7 +16,7 @@ const inputOverride = async () => {
 };
 
 try {
-  const result = await main({ inputOverride, policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({
     // All three ran past their interrupt, so the rule the first answer
     // saved covered the two already waiting. Without it they would have

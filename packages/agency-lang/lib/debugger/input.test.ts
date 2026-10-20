@@ -6,9 +6,12 @@ import { DebuggerTestSession } from "./testSession.js";
 
 const agencyFile = path.join(fixtureDir, "input-test.agency");
 const compiledFile = path.join(fixtureDir, "input-test.ts");
+const argsAgencyFile = path.join(fixtureDir, "input-args.agency");
+const argsCompiledFile = path.join(fixtureDir, "input-args.ts");
 
 beforeAll(() => {
   compile({}, agencyFile, compiledFile, { ts: true });
+  compile({}, argsAgencyFile, argsCompiledFile, { ts: true });
 });
 
 describe("input() under the debugger", () => {
@@ -34,5 +37,14 @@ describe("input() under the debugger", () => {
     });
     expect(result.data).toBe("Hello, Adit");
     expect(prompts).toHaveLength(1);
+  });
+
+  // For a node with parameters the options come after them. A caller
+  // that puts the override among the arguments is not answered, and the
+  // run falls back to the terminal; this test pins the right order.
+  it("comes after the node arguments for a node with parameters", async () => {
+    const mod = await freshImport(argsCompiledFile);
+    const result = await mod.main({ greeting: "Hi" }, { inputOverride: async () => "Adit" });
+    expect(result.data).toBe("Hi, Adit");
   });
 });

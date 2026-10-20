@@ -22,7 +22,7 @@ const inputOverride = async () => {
 };
 
 try {
-  await main({ inputOverride, policyFile });
+  await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({
     prompts,
     remainingAnswers: answers.length,

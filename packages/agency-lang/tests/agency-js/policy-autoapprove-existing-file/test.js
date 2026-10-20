@@ -14,7 +14,7 @@ const inputOverride = async () => {
 };
 
 try {
-  const result = await main({ inputOverride, policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   writeFileSync("__result.json", JSON.stringify({
     result: result.data,
     prompted,

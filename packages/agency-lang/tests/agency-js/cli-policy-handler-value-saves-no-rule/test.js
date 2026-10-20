@@ -19,7 +19,7 @@ const inputOverride = async () => {
 
 let savedRules = "none";
 try {
-  await main({ inputOverride, policyFile });
+  await main({ policyFile }, { inputOverride });
   // The flush at the top of round two's handler entry would have written
   // any rule round one saved.
   savedRules = existsSync(policyFile) ? readFileSync(policyFile, "utf8").trim() : "none";

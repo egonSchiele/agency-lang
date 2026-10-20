@@ -15,7 +15,7 @@ const inputOverride = async () => {
 };
 
 try {
-  const result = await main({ inputOverride, policyFile });
+  const result = await main({ policyFile }, { inputOverride });
   const asText = JSON.stringify(result.data);
   writeFileSync("__result.json", JSON.stringify({
     // The bug surfaced as a render exception while drawing the prompt.

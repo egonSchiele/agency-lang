@@ -373,6 +373,41 @@ describe("Checkpoint", () => {
       ]);
     });
 
+    it("names a finished branch by id, or by position among dispatched calls when ids are empty", () => {
+      // Two rounds whose calls have no id, as Gemini sends them, and a
+      // draft save the loop handled inline before the dispatched call.
+      const loop = {
+        scopeName: "runPrompt",
+        locals: {
+          messagesJSON: {
+            messages: [
+              { role: "assistant", toolCalls: [{ id: "", name: "search" }] },
+              { role: "tool", content: "r1" },
+              {
+                role: "assistant",
+                toolCalls: [
+                  { id: "", name: "saveDraft" },
+                  { id: "", name: "writeUp" },
+                  { id: "x9", name: "confirm" },
+                ],
+              },
+            ],
+          },
+        },
+        branches: {
+          tool_0_: { stack: makeStackJSON([]), result: { result: "done" } },
+          tool_1_x9: { stack: makeStackJSON([]), result: { result: "done" } },
+        },
+      };
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([{ scopeName: "main" }, loop]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listBranches().map((b) => b.label)).toEqual(["writeUp", "confirm"]);
+    });
+
     it("reads the deepest tool loop's round and removed tools", () => {
       const cp = agentCheckpoint();
       expect(cp.loopState()).toEqual({ round: 2, removedTools: ["writeUp"] });

@@ -9,6 +9,7 @@ import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
+import { isIntrinsicToolName } from "../intrinsicTools.js";
 import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
@@ -138,19 +139,26 @@ function branchStatus(branch: BranchStateJSON): BranchSummary["status"] {
 
 /** The name of the tool a loop frame called under the branch key
  *  `tool_<index>_<id>`, from the tool calls in the loop's copy of its
- *  thread; undefined when the frame is not a loop's or has no such call. */
+ *  thread; undefined when the frame is not a loop's or has no such call.
+ *  A call with an id is matched by the id alone. Without one (Gemini
+ *  sends none) the index decides, counted over the calls the loop
+ *  dispatched, so an intrinsic call such as a draft save, which the loop
+ *  handles inline, is not counted. Branches are dropped at the end of
+ *  each round, so only the latest assistant message can own a live
+ *  branch; the search starts from the end so an empty id cannot match an
+ *  earlier round's call. */
 function toolCallName(frame: StateJSON | undefined, key: string): string | undefined {
   if (frame?.scopeName !== "runPrompt") return undefined;
   const copy = frame.locals?.messagesJSON;
   const messages: unknown[] = Array.isArray(copy) ? copy : (copy?.messages ?? []);
-  // Branches are dropped at the end of each round, so only the latest
-  // assistant message can own a live branch; searched from the end, so a
-  // missing id (Gemini sends none) cannot match an earlier round's call.
   for (const message of [...messages].reverse()) {
     const calls = (message as { toolCalls?: { id?: string; name?: string }[] } | null)?.toolCalls;
     if (!Array.isArray(calls)) continue;
-    const index = calls.findIndex((call, i) => `tool_${i}_${call.id ?? ""}` === key);
-    if (index >= 0) return calls[index].name;
+    const withId = calls.find((call) => call.id && key.endsWith(`_${call.id}`));
+    if (withId) return withId.name;
+    const dispatched = calls.filter((call) => !isIntrinsicToolName(call.name ?? ""));
+    const index = dispatched.findIndex((call, i) => `tool_${i}_${call.id ?? ""}` === key);
+    if (index >= 0) return dispatched[index].name;
   }
   return undefined;
 }

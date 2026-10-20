@@ -7,6 +7,7 @@ import {
 import type { DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
+import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
@@ -21,7 +22,6 @@ export type ValWithOverride = {
 };
 
 export class UIState {
-  private callStack: { functionName: string; moduleId: string; line: number }[];
   private activityLog: string[];
   private pendingOverrides: Record<string, unknown>;
   private mode: "stepping" | "running";
@@ -39,7 +39,6 @@ export class UIState {
   private sourceMapCache: Record<string, SourceMap> = {};
 
   constructor() {
-    this.callStack = [];
     this.activityLog = [];
     this.pendingOverrides = {};
     this.mode = "stepping";
@@ -228,28 +227,22 @@ export class UIState {
     return this.filterDupeVals(this.globals);
   }
 
-  pushCallStackEntry({
-    functionName,
-    moduleId,
-    line,
-  }: {
-    functionName: string;
-    moduleId: string;
-    line: number;
-  }) {
-    this.callStack.push({ functionName, moduleId, line });
-  }
-
-  removeWithFuncName(functionName: string) {
-    this.callStack = this.callStack.filter((entry) => entry.functionName !== functionName);
-  }
-
-  getCallStack() {
-    return this.callStack;
-  }
-
-  resetCallStack() {
-    this.callStack = [];
+  /** The call stack, read from the checkpoint's frames: one entry per
+   *  frame from the root stack down to the stack the program is stopped
+   *  on, the stopped frame last. The tool loop's own frame is shown as
+   *  `llm()`. A TypeScript function has no frame, so it does not appear;
+   *  the activity log notes it when it is called. */
+  getCallStack(): { functionName: string; moduleId: string }[] {
+    if (!this.checkpoint) return [];
+    const branchPath = this.location?.branchPath ?? [];
+    const frames: StateJSON[] = [];
+    for (let depth = 0; depth <= branchPath.length; depth++) {
+      frames.push(...(this.checkpoint.stackAt(branchPath.slice(0, depth)) ?? []));
+    }
+    return frames.map((frame) => ({
+      functionName: frame.scopeName === "runPrompt" ? "llm()" : (frame.scopeName ?? ""),
+      moduleId: frame.moduleId ?? "",
+    }));
   }
 
   getOverrides() {
@@ -283,7 +276,6 @@ export class UIState {
 
   toJSON() {
     return {
-      callStack: this.callStack,
       activityLog: this.activityLog,
       pendingOverrides: this.pendingOverrides,
       mode: this.mode,
@@ -297,7 +289,6 @@ export class UIState {
 
   static fromJSON(json: any): UIState {
     const uiState = new UIState();
-    uiState.callStack = json.callStack;
     uiState.activityLog = json.activityLog;
     uiState.pendingOverrides = json.pendingOverrides;
     uiState.mode = json.mode;

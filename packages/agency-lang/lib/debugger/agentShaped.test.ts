@@ -282,6 +282,20 @@ describe("stopping inside a tool call", () => {
     });
   });
 
+  it("the call stack pane lists the frames down to the tool, and the subagent's loop", async () => {
+    await withLLMMocks(agentMocks(), async () => {
+      const session = await agentSession();
+      await session.press("s"); // round 1
+      await session.press("s"); // before search
+      await session.press("s"); // const url
+      const callStack = () => session.frame().findByKey("callStack")!.toPlainText();
+      expect(callStack()).toMatch(/main.*\n.*llm\(\).*\n.*> search/s);
+      await session.press("n", { times: 4 }); // to summary = llm(...)
+      await session.press("s"); // the subagent's round 1
+      expect(callStack()).toMatch(/main.*llm\(\).*search.*> llm\(\)/s);
+    });
+  });
+
   it("print reads the tool's variables and set is refused", async () => {
     await withLLMMocks(agentMocks(), async () => {
       const session = await agentSession();

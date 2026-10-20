@@ -274,7 +274,8 @@ export class DebuggerUI implements DebuggerIO {
       .map((entry, i) => {
         const prefix = i === callStack.length - 1 ? " > " : "   ";
         const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
-        return `${prefix}${escapeStyleTags(entry.functionName)} (${escapeStyleTags(fileName)}:${entry.line})`;
+        const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
+        return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
       })
       .join("\n");
   }

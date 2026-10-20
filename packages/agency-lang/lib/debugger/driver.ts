@@ -108,21 +108,13 @@ export class DebuggerDriver {
 
   getCallbacks(): AgencyCallbacks {
     return {
+      // The call stack pane reads the checkpoint's frames; the hook only
+      // notes a TypeScript function, which has no frame.
       onFunctionStart: (data) => {
-        const isAgency = data.moduleId?.endsWith(".agency");
-        this.ui.state.pushCallStackEntry({
-          functionName: data.functionName,
-          moduleId: isAgency ? data.moduleId : "(ts)",
-          line: 0,
-        });
-        if (!isAgency) {
+        if (!data.moduleId?.endsWith(".agency")) {
           this.ui.state.log(`[ts] ${data.functionName}()`);
+          this.ui.render();
         }
-        this.ui.render();
-      },
-      onFunctionEnd: (data) => {
-        this.ui.state.removeWithFuncName(data.functionName);
-        this.ui.render();
       },
       onNodeStart: (data) => {
         // gets triggered on every statement, as debugger resumes node execution.
@@ -267,7 +259,6 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    this.ui.state.resetCallStack();
     return await this.respond(batch, answers);
   }
 
@@ -476,12 +467,10 @@ export class DebuggerDriver {
       }
       case "reject": {
         this.ui.state.log("Rejected interrupt");
-        this.ui.state.resetCallStack();
         return await this.respond(batch, { [interrupt.interruptId]: { type: "reject" } });
       }
       case "resolve": {
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
-        this.ui.state.resetCallStack();
         return await this.respond(batch, {
           [interrupt.interruptId]: { type: "approve", value: command.value } as InterruptResponse,
         });
@@ -560,7 +549,6 @@ export class DebuggerDriver {
     // Reset state for replay
     this.programFinished = false;
     this.debuggerState.reset();
-    this.ui.state.resetCallStack();
     this.ui.state.log(`Rewinding to checkpoint #${checkpoint.id}`);
 
     const overrides = this.ui.state.getOverrides();

@@ -140,7 +140,7 @@ A rolling checkpoint taken inside a tool must carry the replies of the tools tha
 
 Several branches can stop at once: in stepping mode every Agency tool in a round stops at its next step, so the batch holds one debug interrupt per tool. The driver shows the first, says in the activity log where the others stopped, and the next stepping command answers the whole batch (every debug stop gets an approve, which the resume never reads), so all the branches move.
 
-The call stack pane still shows the hook-fed entries (`onFunctionStart`), not the branch path. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
+The call stack pane is read from the checkpoint's frames on every render (`UIState.getCallStack`): one entry per frame from the root stack down the branch path to the stack the program is stopped on, so inside a tool it reads `main`, `llm()` (the tool loop's own frame), `search`. Nothing is pushed or reset on a resume or a rewind, since the checkpoint is the stack. A TypeScript function has no frame, so it does not appear; the `onFunctionStart` hook notes it in the activity log. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
 ### User code interrupts
 

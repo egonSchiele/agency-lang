@@ -12,6 +12,7 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
       threads: f.threads ?? null,
       step: f.step ?? 0,
       scopeName: f.scopeName ?? null,
+      ...(f.moduleId ? { moduleId: f.moduleId } : {}),
       ...(f.branches ? { branches: f.branches } : {}),
     })),
     mode: "serialize",
@@ -312,37 +313,60 @@ describe("UIState", () => {
   });
 
   describe("call stack", () => {
-    it("should push and retrieve call stack entries", () => {
+    it("is read from the checkpoint's frames, the stopped frame last", async () => {
       const ui = new UIState();
-      ui.pushCallStackEntry({ functionName: "main", moduleId: "mod", line: 1 });
-      ui.pushCallStackEntry({
-        functionName: "helper",
-        moduleId: "mod",
-        line: 10,
-      });
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          moduleId: "mod.agency",
+          scopeName: "helper",
+          stack: makeStackJSON([
+            { scopeName: "main", moduleId: "mod.agency" },
+            { scopeName: "helper", moduleId: "lib.agency" },
+          ]),
+        }),
+      );
       expect(ui.getCallStack()).toEqual([
-        { functionName: "main", moduleId: "mod", line: 1 },
-        { functionName: "helper", moduleId: "mod", line: 10 },
+        { functionName: "main", moduleId: "mod.agency" },
+        { functionName: "helper", moduleId: "lib.agency" },
       ]);
     });
 
-    it("should remove entries by function name", () => {
+    it("follows the branch path through the tool loop into a tool", async () => {
       const ui = new UIState();
-      ui.pushCallStackEntry({ functionName: "main", moduleId: "mod", line: 1 });
-      ui.pushCallStackEntry({
-        functionName: "helper",
-        moduleId: "mod",
-        line: 10,
-      });
-      ui.removeWithFuncName("main");
-      expect(ui.getCallStack()).toEqual([{ functionName: "helper", moduleId: "mod", line: 10 }]);
+      await ui.setCheckpoint(
+        makeCheckpoint({
+          scopeName: "runPrompt",
+          stepPath: "1/round.0.tools",
+          stack: makeStackJSON([
+            { scopeName: "main", moduleId: "mod.agency" },
+            {
+              scopeName: "runPrompt",
+              branches: {
+                tool_0_abc: {
+                  stack: makeStackJSON([{ scopeName: "search", moduleId: "mod.agency" }]),
+                },
+              },
+            },
+          ]),
+        }),
+        {
+          moduleId: "mod.agency",
+          scopeName: "search",
+          stepPath: "1",
+          branchPath: ["tool_0_abc"],
+          depth: 1,
+          label: null,
+        },
+      );
+      expect(ui.getCallStack().map((entry) => entry.functionName)).toEqual([
+        "main",
+        "llm()",
+        "search",
+      ]);
     });
 
-    it("should reset call stack", () => {
-      const ui = new UIState();
-      ui.pushCallStackEntry({ functionName: "main", moduleId: "mod", line: 1 });
-      ui.resetCallStack();
-      expect(ui.getCallStack()).toEqual([]);
+    it("is empty without a checkpoint", () => {
+      expect(new UIState().getCallStack()).toEqual([]);
     });
   });
 

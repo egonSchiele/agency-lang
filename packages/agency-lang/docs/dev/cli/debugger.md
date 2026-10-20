@@ -138,13 +138,13 @@ Rolling checkpoints inside a tool are keyed by location including the path, so t
 
 A rolling checkpoint taken inside a tool must carry the replies of the tools that have already finished, or a rewind would send the model a call with no reply. The tool loop keeps the thread in its frame as `messagesJSON`, refreshed when it checkpoints; for a checkpoint built from elsewhere, `runPrompt` registers a refresher in `ctx.beforeCheckpoint` for the life of the call, and `Checkpoint.fromStateStack` runs the list before it copies the stack. A `fork` or `parallel` branch registers one the same way for its own copy of the globals, written into the branch as `globalsJSON`, so a rewind into the branch after it changed a module-level variable replays with the changed value. `Checkpoint.globalsAt(branchPath)` returns that copy, and `print` and the globals pane read through it; a tool call shares the root's globals and has no copy.
 
-Several branches can stop at once: in stepping mode every Agency tool in a round stops at its next step, so the batch holds one debug interrupt per tool. Until the driver can answer a batch (ADI-18), it keeps the first and drops the rest. That is safe, since the resume never looks up a debug interrupt's answer and an unanswered real interrupt is asked again when its tool replays, but the person sees one stop out of several.
+Several branches can stop at once: in stepping mode every Agency tool in a round stops at its next step, so the batch holds one debug interrupt per tool. The driver shows the first, says in the activity log where the others stopped, and the next stepping command answers the whole batch (every debug stop gets an approve, which the resume never reads), so all the branches move. Showing each stop in turn is not done yet.
 
 The call stack pane still shows the hook-fed entries (`onFunctionStart`), not the branch path. `set` is refused at a stop on a branch stack (a tool call, a fork, or a parallel block), because a resume applies overrides to the root's last frame.
 
 ### User code interrupts
 
-If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`) and shows the interrupt data. The user can approve (step/continue), reject (`:reject`), resolve (`:resolve <value>`), or modify (`:modify key=value`).
+If the program hits a non-debug `interrupt()` while debugging, the driver detects it (`isInterrupt` but not `isDebugger`), shows the interrupt data, and asks for an answer: approve, reject, or resolve with a value. When several branches raised at once (parallel tool calls, a fork, a `parallel` block), the batch holds several interrupts and the runtime insists on one response per interrupt. The driver asks about each in turn, `Interrupt (1 of 2): A?` then `(2 of 2)`, and sends one `respondToInterrupts` call with the answers in the batch's order (`DebuggerDriver.respond`). A debug stop in the same batch is answered with an approve.
 
 ### Source mapping
 
@@ -215,7 +215,7 @@ Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [val
 - **TypeScript functions**: cannot step into them. The driver detects them (not in source map) and shows "Executing TypeScript: functionName()" in the activity log.
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
-- **Several stops at once**: one is shown (see "Stops inside a tool call").
+- **Several stops at once**: one is shown; the next command moves all of them (see "Stops inside a tool call").
 - **`set` on a branch stack**: refused inside a tool call, a fork, or a parallel block.
 - **`set` at one of the loop's own stops**: refused before a model request or a tool call. The frame shown there is the caller's, but an override would land on the loop's frame, the last one on the stack.
 - **`debugger()` inside a handler body**: does not stop. A handler body has no step address a resume could re-enter, so the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.

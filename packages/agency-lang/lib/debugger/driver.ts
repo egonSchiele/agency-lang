@@ -167,17 +167,17 @@ export class DebuggerDriver {
     try {
       // runNode returns { messages, data, tokens } — interrupts are in .data
       let lastCommand: DebuggerCommand | null = null;
-      let lastInterrupt: Interrupt | null = null;
+      // The batch the program paused with: one interrupt, or several when
+      // concurrent branches (parallel tool calls, a fork, a parallel
+      // block) paused at once. A resume answers the whole batch.
+      let batch: Interrupt[] = [];
       let finalResult: any = undefined;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        // Unwrap interrupt array (runNode always returns arrays now)
         if (hasInterrupts(result?.data)) {
-          result = { ...result, data: result.data[0] };
-        }
-
-        if (!isInterrupt(result?.data)) {
-          if (!lastInterrupt) {
+          batch = result.data;
+        } else if (!isInterrupt(result?.data)) {
+          if (batch.length === 0) {
             throw new Error(
               "Program finished without any interrupts. This shouldn't happen with the debugger enabled.",
             );
@@ -187,19 +187,23 @@ export class DebuggerDriver {
           );
           this.programFinished = true;
           finalResult = result;
-
-          // When the program finishes, restore the last interrupt so the user
-          // can keep interacting (step back, rewind, print, etc.)
-          result = { data: lastInterrupt };
+          // When the program finishes, keep the last batch so the user can
+          // keep interacting (step back, rewind, print, etc.)
+        } else {
+          batch = [result.data];
         }
-        const interrupt = result.data as Interrupt;
-        lastInterrupt = interrupt;
+        // The interrupt shown: the first that asks the person something,
+        // else the first debug stop.
+        const asked: Interrupt[] = this.programFinished
+          ? []
+          : batch.filter((intr) => !isDebugger(intr));
+        const interrupt: Interrupt = asked[0] ?? batch[0];
         // After the program finishes, even a restored user interrupt is no
         // longer a live request for input — the response has already been
         // delivered. Fall through to the debug-command branch so the user
         // can step back, quit, or inspect state instead of being re-prompted
         // in an infinite loop.
-        if (isDebugger(interrupt) || this.programFinished) {
+        if (asked.length === 0) {
           // Debug pause — show state and accept stepping commands
           this.ui.state.setMode(this.debuggerState.getMode());
           // Only pass checkpoint when execution has moved to a new position.
@@ -217,6 +221,12 @@ export class DebuggerDriver {
           if (!skipCheckpoint && stop?.loopStop !== undefined) {
             this.ui.state.log(`Stopped before ${stop.label}`);
           }
+          // Several branches stopped at once: one is shown, and the next
+          // command moves all of them.
+          if (!skipCheckpoint && batch.length > 1) {
+            const others = batch.slice(1).map((intr) => stopOf(intr)?.scopeName ?? "a branch");
+            this.ui.state.log(`Also stopped in ${others.join(", ")}; the next command moves all`);
+          }
           await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
@@ -224,19 +234,16 @@ export class DebuggerDriver {
           // (e.g. :save / :load handle file errors and log them via
           // ui.state.log). Anything that escapes is an internal bug that
           // should crash the driver, not silently continue with stale state.
-          result = await this.handleCommand(command, interrupt);
+          result = await this.handleCommand(command, interrupt, batch);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }
         } else {
-          // User code interrupt — show it and collect input from the user
-          this.ui.state.log(`Interrupt: ${JSON.stringify((interrupt as Interrupt).data)}`);
+          // User code interrupts: show the first, ask about each in turn,
+          // then answer the batch at once.
           this.ui.state.setMode(this.debuggerState.getMode());
-          await this.ui.render((interrupt as Interrupt).checkpoint);
-          result = await this.handleInterrupt(interrupt);
-          if (result && result.__debuggerQuit) {
-            return finalResult;
-          }
+          await this.ui.render(interrupt.checkpoint);
+          result = await this.handleInterrupts(batch, asked);
         }
       }
     } finally {
@@ -245,62 +252,79 @@ export class DebuggerDriver {
     }
   }
 
-  private async handleInterrupt(interrupt: Interrupt): Promise<any> {
-    const input = await this.ui.promptForInput("approve / reject / resolve <value>");
-    const trimmed = input.trim();
-
-    if (trimmed === "approve" || trimmed === "a" || trimmed === "") {
-      this.ui.state.log("Approved interrupt");
-      this.ui.state.resetCallStack();
-      return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
-          },
-        }),
-      );
+  /** Ask the person about each interrupt in `asked`, in order, and resume
+   *  with one answer per interrupt of `batch`. A debug stop in the same
+   *  batch is answered with an approve, which the resume never reads. */
+  private async handleInterrupts(batch: Interrupt[], asked: Interrupt[]): Promise<any> {
+    const answers: Record<string, InterruptResponse> = {};
+    for (const [index, interrupt] of asked.entries()) {
+      const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
+      const data =
+        Object.keys(interrupt.data ?? {}).length > 0 ? ` ${JSON.stringify(interrupt.data)}` : "";
+      this.ui.state.log(`Interrupt${position}: ${interrupt.message}${data}`);
+      answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
+    this.ui.state.resetCallStack();
+    return await this.respond(batch, answers);
+  }
 
-    if (trimmed === "reject" || trimmed === "r") {
-      this.ui.state.log("Rejected interrupt");
-      this.ui.state.resetCallStack();
-      return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
-          },
-        }),
+  /** One interrupt's answer, asked for until the input is one of
+   *  approve, reject, or resolve with a value. */
+  private async askAbout(interrupt: Interrupt, position: string): Promise<InterruptResponse> {
+    while (true) {
+      const input = await this.ui.promptForInput(
+        `${interrupt.message}${position}: approve / reject / resolve <value>`,
       );
-    }
-
-    if (trimmed.startsWith("resolve ")) {
-      const valueStr = trimmed.slice("resolve ".length).trim();
-      let value: unknown;
-      try {
-        value = JSON.parse(valueStr);
-      } catch {
-        value = valueStr;
+      const trimmed = input.trim();
+      if (trimmed === "approve" || trimmed === "a" || trimmed === "") {
+        this.ui.state.log("Approved interrupt");
+        return { type: "approve" };
       }
-      this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
-      this.ui.state.resetCallStack();
-      return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupts([interrupt], [{ type: "approve", value } as any], {
-          metadata: {
-            callbacks: this.getCallbacks(),
-            debugger: this.debuggerState,
-          },
-        }),
-      );
+      if (trimmed === "reject" || trimmed === "r") {
+        this.ui.state.log("Rejected interrupt");
+        return { type: "reject" };
+      }
+      if (trimmed.startsWith("resolve ")) {
+        const valueStr = trimmed.slice("resolve ".length).trim();
+        let value: unknown;
+        try {
+          value = JSON.parse(valueStr);
+        } catch {
+          value = valueStr;
+        }
+        this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(value)}`);
+        return { type: "approve", value } as InterruptResponse;
+      }
+      this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
     }
+  }
 
-    this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
-    return { data: interrupt };
+  /** Resume the program with one response per interrupt of `batch`, in
+   *  the batch's order: the answer given for it, else an approve. The
+   *  runtime insists on a response for every interrupt in the batch. */
+  private async respond(
+    batch: Interrupt[],
+    answers: Record<string, InterruptResponse>,
+    overrides?: Record<string, unknown>,
+  ): Promise<any> {
+    const responses = batch.map((intr) => answers[intr.interruptId] ?? { type: "approve" });
+    return await this.resumeInterrupt(() =>
+      this.mod.respondToInterrupts(batch, responses, {
+        overrides,
+        metadata: {
+          callbacks: this.getCallbacks(),
+          debugger: this.debuggerState,
+        },
+      }),
+    );
   }
 
   // eslint-disable-next-line max-lines-per-function -- large command dispatcher; refactor tracked separately
-  private async handleCommand(command: DebuggerCommand, interrupt: Interrupt): Promise<any> {
+  private async handleCommand(
+    command: DebuggerCommand,
+    interrupt: Interrupt,
+    batch: Interrupt[],
+  ): Promise<any> {
     const forwardCommands = ["step", "stepIn", "next", "stepOut", "continue"];
     if (this.programFinished && forwardCommands.includes(command.type)) {
       this.ui.state.log("Already at end of execution.");
@@ -310,23 +334,23 @@ export class DebuggerDriver {
     switch (command.type) {
       case "step": {
         this.debuggerState.stepping();
-        return await this.resume(interrupt);
+        return await this.resume(batch);
       }
       case "stepIn": {
         this.debuggerState.stepIn();
-        return await this.resume(interrupt);
+        return await this.resume(batch);
       }
       case "next": {
         this.debuggerState.stepNext();
-        return await this.resume(interrupt);
+        return await this.resume(batch);
       }
       case "stepOut": {
         this.debuggerState.stepOut();
-        return await this.resume(interrupt);
+        return await this.resume(batch);
       }
       case "continue": {
         this.debuggerState.running();
-        return await this.resume(interrupt);
+        return await this.resume(batch);
       }
       case "set": {
         // A resume applies overrides to the root's last frame
@@ -424,30 +448,14 @@ export class DebuggerDriver {
       case "reject": {
         this.ui.state.log("Rejected interrupt");
         this.ui.state.resetCallStack();
-        return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
-            },
-          }),
-        );
+        return await this.respond(batch, { [interrupt.interruptId]: { type: "reject" } });
       }
       case "resolve": {
         this.ui.state.log(`Resolved interrupt with: ${JSON.stringify(command.value)}`);
         this.ui.state.resetCallStack();
-        return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupts(
-            [interrupt],
-            [{ type: "approve", value: command.value } as any],
-            {
-              metadata: {
-                callbacks: this.getCallbacks(),
-                debugger: this.debuggerState,
-              },
-            },
-          ),
-        );
+        return await this.respond(batch, {
+          [interrupt.interruptId]: { type: "approve", value: command.value } as InterruptResponse,
+        });
       }
       case "showCheckpoints": {
         const debugCheckpoints = this.debuggerState.getCheckpoints();
@@ -508,20 +516,12 @@ export class DebuggerDriver {
     }
   }
 
-  private async resume(interrupt: Interrupt): Promise<any> {
+  /** Move on from a debug stop: every stop in the batch is approved, an
+   *  answer the resume never reads, and pending overrides are applied. */
+  private async resume(batch: Interrupt[]): Promise<any> {
     const overrides = this.ui.state.getOverrides();
-
     this.ui.state.resetOverrides();
-
-    return await this.resumeInterrupt(() =>
-      this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
-        overrides,
-        metadata: {
-          callbacks: this.getCallbacks(),
-          debugger: this.debuggerState,
-        },
-      }),
-    );
+    return await this.respond(batch, {}, overrides);
   }
 
   private async rewindTo(

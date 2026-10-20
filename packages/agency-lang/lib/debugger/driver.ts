@@ -8,12 +8,7 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
-import {
-  GUARD_ANSWER_HELP,
-  describeGuardTrip,
-  isGuardTrip,
-  parseGuardAnswer,
-} from "./guardAnswer.js";
+import { describeGuardTrip, draftNote, isGuardTrip } from "./guardAnswer.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
@@ -316,30 +311,21 @@ export class DebuggerDriver {
     }
   }
 
-  /** A guard trip's answer: the activity log says what tripped and what
-   *  a reject would return, and the answer is read by `parseGuardAnswer`
-   *  until it is one the runtime accepts. */
+  /** A guard trip's answer comes from the form (`showGuardTripForm`),
+   *  which only offers answers the runtime accepts. */
   private async askAboutGuardTrip(
     interrupt: Interrupt,
     position: string,
   ): Promise<InterruptResponse> {
-    for (const line of describeGuardTrip(interrupt.data)) {
-      this.ui.state.log(line);
-    }
-    while (true) {
-      const input = await this.ui.promptForInput(`guard${position}: ${GUARD_ANSWER_HELP}`);
-      const answer = parseGuardAnswer(input);
-      if ("error" in answer) {
-        this.ui.state.log(answer.error);
-        continue;
-      }
-      this.ui.state.log(
-        answer.response.type === "reject"
-          ? "Rejected the guard trip"
-          : `Approved the guard trip with ${JSON.stringify((answer.response as { value?: unknown }).value)}`,
-      );
-      return answer.response;
-    }
+    this.ui.state.log(`${describeGuardTrip(interrupt.data)}${position}`);
+    this.ui.state.log(draftNote(interrupt.data));
+    const response = await this.ui.answerGuardTrip(interrupt.data);
+    this.ui.state.log(
+      response.type === "reject"
+        ? "Rejected the guard trip"
+        : `Approved the guard trip with ${JSON.stringify((response as { value?: unknown }).value)}`,
+    );
+    return response;
   }
 
   /** Resume the program with one response per interrupt of `batch`, in

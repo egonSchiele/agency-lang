@@ -1,3 +1,5 @@
+import type { GuardTripData } from "./guardAnswer.js";
+import type { InterruptResponse } from "../runtime/interrupts.js";
 import type { DebugStopData } from "../runtime/debugger.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
@@ -31,6 +33,8 @@ export type DebuggerIO = {
   render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void>;
   waitForCommand(): Promise<DebuggerCommand>;
   showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null>;
+  /** Ask how to answer a guard trip; see `showGuardTripForm`. */
+  answerGuardTrip(data: GuardTripData): Promise<InterruptResponse>;
   showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void>;
   promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]>;
   promptForInput(prompt: string): Promise<string>;

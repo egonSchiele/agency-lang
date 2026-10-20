@@ -23,21 +23,47 @@ function activity(session: DebuggerTestSession): string[] {
   return session.ui.state.getActivityLog();
 }
 
+function screen(session: DebuggerTestSession): string {
+  return session.frame().toPlainText();
+}
+
 describe("a guard trip in the debugger", () => {
-  it("shows the trip and the draft, and a grant lets the work finish", async () => {
+  it("offers the three answers, refuses a grant too small to clear the trip, then approves", async () => {
     await withLLMMocks(mocks, async () => {
       const session = await guardSession();
       await session.press("c");
       expect(activity(session)).toContainEqual(
         'Guard "research" tripped on cost: $0.000002 spent of $0.000001',
       );
-      expect(activity(session)).toContainEqual('Draft a reject returns: "draft"');
+      expect(screen(session)).toContain('A reject may return the saved draft: "draft"');
+      expect(screen(session)).toContain("> Approve with more budget");
+      expect(screen(session)).toContain("Remove the cost limit");
       // The source pane shows the llm() statement the trip happened under.
       expect(session.frame().findByKey("source")!.toPlainText()).toMatch(
         /│>\s+\d+\s+.*llm\("first"\)/,
       );
-      await session.type("grant cost 1");
-      expect(activity(session)).toContainEqual('Approved the guard trip with {"maxCost":1}');
+      await session.press("enter");
+      expect(screen(session)).toContain("How much more cost? ($) >");
+      await session.type("0.0000001");
+      expect(screen(session)).toContain("must be more than $0.000001");
+      await session.type("1");
+      expect(screen(session)).toContain("Message to the model (optional) >");
+      await session.type("finish up");
+      expect(activity(session)).toContainEqual(
+        'Approved the guard trip with {"maxCost":1,"message":"finish up"}',
+      );
+      expect(JSON.stringify(await session.quit())).toContain("onetwo");
+    });
+  });
+
+  it("removing the limit lets the work finish", async () => {
+    await withLLMMocks(mocks, async () => {
+      const session = await guardSession();
+      await session.press("c");
+      await session.press("down");
+      await session.press("enter");
+      await session.type("");
+      expect(activity(session)).toContainEqual('Approved the guard trip with {"disarm":["cost"]}');
       expect(JSON.stringify(await session.quit())).toContain("onetwo");
     });
   });
@@ -46,23 +72,25 @@ describe("a guard trip in the debugger", () => {
     await withLLMMocks(mocks, async () => {
       const session = await guardSession();
       await session.press("c");
-      await session.type("reject");
+      await session.press("down", { times: 2 });
+      await session.press("enter");
+      expect(activity(session)).toContainEqual("Rejected the guard trip");
       const result = JSON.stringify(await session.quit());
       expect(result).toContain('"draft"');
       expect(result).not.toContain("onetwo");
     });
   });
 
-  it("asks again after an answer the runtime would refuse", async () => {
+  it("escape in a field goes back to the choices", async () => {
     await withLLMMocks(mocks, async () => {
       const session = await guardSession();
       await session.press("c");
-      await session.type("message keep it short");
-      expect(activity(session).some((line) => line.includes("needs a grant or a disarm"))).toBe(
-        true,
-      );
-      await session.type("disarm cost message keep it short");
-      expect(JSON.stringify(await session.quit())).toContain("onetwo");
+      await session.press("enter");
+      await session.press("escape");
+      expect(screen(session)).toContain("> Approve with more budget");
+      await session.press("down", { times: 2 });
+      await session.press("enter");
+      expect(activity(session)).toContainEqual("Rejected the guard trip");
     });
   });
 });

@@ -10,6 +10,8 @@ import { isInterrupt, hasInterrupts } from "@/runtime/interrupts.js";
 import { color } from "@/utils/termcolors.js";
 import type { LLMMock } from "../runtime/deterministicClient.js";
 import type { DebugStopData } from "../runtime/debugger.js";
+import type { GuardTripData } from "./guardAnswer.js";
+import type { InterruptResponse } from "../runtime/interrupts.js";
 
 export const fixtureDir = path.join(getTestDir(), "debugger");
 
@@ -74,6 +76,10 @@ export class TestDebuggerIO implements DebuggerIO {
       default:
         return "";
     }
+  }
+
+  async answerGuardTrip(_data: GuardTripData): Promise<InterruptResponse> {
+    return { type: "reject" };
   }
 
   async showCheckpointsPanel(_checkpoints: Checkpoint[]): Promise<void> {}

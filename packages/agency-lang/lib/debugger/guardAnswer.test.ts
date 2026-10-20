@@ -1,70 +1,74 @@
 import { describe, it, expect } from "vitest";
-import { describeGuardTrip, parseGuardAnswer } from "./guardAnswer.js";
+import {
+  checkGrant,
+  describeGuardTrip,
+  draftNote,
+  guardChoices,
+  guardResponse,
+  parseAmount,
+  type GuardTripData,
+} from "./guardAnswer.js";
 
-describe("parseGuardAnswer", () => {
-  it("reads a grant, a disarm, a message, and a reject", () => {
-    expect(parseGuardAnswer("grant cost 0.5")).toEqual({
-      response: { type: "approve", value: { maxCost: 0.5 } },
-    });
-    expect(parseGuardAnswer("grant time 2m")).toEqual({
-      response: { type: "approve", value: { maxTime: 120_000 } },
-    });
-    expect(parseGuardAnswer("grant time 1500")).toEqual({
-      response: { type: "approve", value: { maxTime: 1500 } },
-    });
-    expect(parseGuardAnswer("disarm cost")).toEqual({
-      response: { type: "approve", value: { disarm: ["cost"] } },
-    });
-    expect(parseGuardAnswer("grant cost $1 message finish up now")).toEqual({
-      response: { type: "approve", value: { maxCost: 1, message: "finish up now" } },
-    });
-    expect(parseGuardAnswer("reject")).toEqual({ response: { type: "reject" } });
+const costTrip: GuardTripData = {
+  dimension: "cost",
+  limit: 0.5,
+  spent: 0.75,
+  label: "research",
+  draftValue: "so far",
+};
+const timeTrip: GuardTripData = {
+  dimension: "time",
+  limit: 1000,
+  spent: 1234.5,
+  label: null,
+  draftValue: null,
+};
+
+describe("the guard trip form's pieces", () => {
+  it("describes the trip and the draft", () => {
+    expect(describeGuardTrip(costTrip)).toBe(
+      'Guard "research" tripped on cost: $0.75 spent of $0.5',
+    );
+    expect(describeGuardTrip(timeTrip)).toBe("A guard tripped on time: 1235ms spent of 1000ms");
+    expect(draftNote(costTrip)).toBe('A reject may return the saved draft: "so far"');
+    expect(draftNote(timeTrip)).toContain("No saved draft");
   });
 
-  it("refuses an answer the runtime would throw on, with the reason", () => {
-    expect(parseGuardAnswer("message keep going")).toMatchObject({
-      error: expect.stringContaining("needs a grant or a disarm"),
-    });
-    expect(parseGuardAnswer("grant cost")).toMatchObject({
-      error: expect.stringContaining("amount in dollars"),
-    });
-    expect(parseGuardAnswer("grant time 2x")).toMatchObject({
-      error: expect.stringContaining("such as 30s or 2m"),
-    });
-    expect(parseGuardAnswer("grant tokens 5")).toMatchObject({
-      error: expect.stringContaining("cost or time"),
-    });
-    expect(parseGuardAnswer("approve")).toMatchObject({
-      error: expect.stringContaining("Unknown answer"),
-    });
+  it("names the choices for the tripped dimension", () => {
+    expect(guardChoices(timeTrip).map((c) => c.label)).toEqual([
+      "Approve with more budget",
+      "Remove the time limit",
+      "Reject",
+    ]);
   });
-});
 
-describe("describeGuardTrip", () => {
-  it("names the guard, the spend against the limit, and the draft", () => {
-    expect(
-      describeGuardTrip({
-        dimension: "cost",
-        limit: 0.5,
-        spent: 0.75,
-        label: "research",
-        draftValue: "so far",
-      }),
-    ).toEqual([
-      'Guard "research" tripped on cost: $0.750000 spent of $0.5',
-      'Draft a reject returns: "so far"',
-    ]);
-    expect(
-      describeGuardTrip({
-        dimension: "time",
-        limit: 1000,
-        spent: 1234.5,
-        label: null,
-        draftValue: null,
-      }),
-    ).toEqual([
-      "A guard tripped on time: 1235ms elapsed of 1000ms",
-      "No saved draft: a reject returns a failure",
-    ]);
+  it("reads an amount in the dimension's unit", () => {
+    expect(parseAmount("cost", "$0.5")).toBe(0.5);
+    expect(parseAmount("cost", "abc")).toBeNull();
+    expect(parseAmount("time", "2m")).toBe(120_000);
+    expect(parseAmount("time", "1500")).toBe(1500);
+    expect(parseAmount("time", "2x")).toBeNull();
+  });
+
+  it("refuses a grant that leaves the budget exceeded, as the runtime would", () => {
+    expect(checkGrant(costTrip, 0.1)).toContain("must be more than $0.25");
+    expect(checkGrant(costTrip, 0.3)).toBeNull();
+    expect(checkGrant(timeTrip, 100)).toContain("must be more than 235ms");
+  });
+
+  it("builds the response the runtime understands", () => {
+    expect(guardResponse(costTrip, "grant", 1, " finish up ")).toEqual({
+      type: "approve",
+      value: { maxCost: 1, message: "finish up" },
+    });
+    expect(guardResponse(timeTrip, "grant", 5000, "")).toEqual({
+      type: "approve",
+      value: { maxTime: 5000 },
+    });
+    expect(guardResponse(costTrip, "removeLimit", null, "")).toEqual({
+      type: "approve",
+      value: { disarm: ["cost"] },
+    });
+    expect(guardResponse(costTrip, "reject", null, "")).toEqual({ type: "reject" });
   });
 });

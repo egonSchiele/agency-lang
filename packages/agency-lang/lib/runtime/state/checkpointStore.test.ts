@@ -301,7 +301,14 @@ describe("Checkpoint", () => {
             branches: {
               fork_0_abc: {
                 activeStack: ["0", "1"],
-                stack: makeStackJSON([{ scopeName: "__block_0" }]),
+                stack: makeStackJSON([
+                  {
+                    scopeName: "__block_0",
+                    // A tool called from the arm: its own store is not
+                    // serialized, so the arm's active stack still applies.
+                    branches: { tool_0_abc: { stack: makeStackJSON([{ scopeName: "search" }]) } },
+                  },
+                ]),
               },
             },
           },
@@ -314,6 +321,10 @@ describe("Checkpoint", () => {
         ["1", false],
       ]);
       expect(cp.listThreads(["fork_0_abc"]).map((t) => [t.id, t.active])).toEqual([
+        ["0", false],
+        ["1", true],
+      ]);
+      expect(cp.listThreads(["fork_0_abc", "tool_0_abc"]).map((t) => [t.id, t.active])).toEqual([
         ["0", false],
         ["1", true],
       ]);

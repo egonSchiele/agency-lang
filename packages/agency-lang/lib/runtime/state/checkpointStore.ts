@@ -119,8 +119,7 @@ type ThreadView = {
 };
 
 /** The thread a tool loop's frame is working on, from `messagesJSON` in
- *  its locals: a whole thread, or the bare messages an older checkpoint
- *  holds. Only the loop's own frame is read; a user's local of the same
+ *  its locals. Only the loop's own frame is read; a user's local of the same
  *  name in a node or a function is a value, not a thread. An entry that
  *  is not an object is dropped, so a bad value cannot break the pane. */
 function loopThreadCopy(frame: StateJSON): MessageThreadJSON | null {
@@ -258,8 +257,9 @@ export class Checkpoint implements SourceLocation {
     let activeStack: string[] | undefined;
     for (const key of branchPath) {
       // A tool call runs on a fresh store that is not serialized, so an
-      // arm below it names threads the checkpoint does not hold.
-      if (key.startsWith("tool_")) return undefined;
+      // arm below it names threads the checkpoint does not hold; an arm
+      // above the tool is still the one the tool's threads hang off.
+      if (key.startsWith("tool_")) break;
       const branch = frame?.branches?.[key];
       if (branch?.activeStack) activeStack = branch.activeStack;
       frame = branch?.stack.stack.at(-1);

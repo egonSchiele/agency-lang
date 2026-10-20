@@ -291,17 +291,26 @@ describe("stopping inside a tool call", () => {
       await session.press("n", { times: 4 }); // to summary = llm(...)
       await session.press("s"); // the subagent's round 1, in the thread block
       const threads = session.ui.state.listThreads();
-      expect(threads).toHaveLength(2);
-      expect(threads.filter((thread) => thread.active)).toHaveLength(1);
-      const label = () => session.frame().findByKey("threads")?.toPlainText() ?? "";
-      // The picker lists both; moving to the other one shows it.
+      expect(threads.map((thread) => [thread.label, thread.active])).toEqual([
+        [null, false],
+        ["search", true],
+      ]);
+      // The pane opens on the subagent's thread, the active one.
+      const pane = () => session.frame().findByKey("threads")?.toPlainText() ?? "";
+      expect(pane()).toContain("threads: search [2/2]");
+      expect(pane()).toContain("summarize the page at");
+      // The picker marks the active one; moving to the other shows it.
       await session.press("t");
-      expect(session.frame().toPlainText()).toContain("* = active");
+      const picker = session.frame().toPlainText();
+      expect(picker).toContain("* search (1 message)");
+      expect(picker).toContain("  id: 0 (");
       await session.press("up");
       await session.press("enter");
-      expect(label()).toContain("[1/2]");
+      expect(pane()).toContain("[1/2]");
+      expect(pane()).toContain("research");
+      expect(pane()).not.toContain("summarize the page at");
       await session.press("]");
-      expect(label()).toContain("[2/2]");
+      expect(pane()).toContain("[2/2]");
     });
   });
 

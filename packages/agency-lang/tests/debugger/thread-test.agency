@@ -12,3 +12,16 @@ node main() {
     done = true
   }
 }
+
+// A subthread inside a thread, so three threads are in the store at
+// once: the outer one, the thread's, and the subthread's.
+node withSubthread() {
+  thread {
+    first = llm("one")
+    subthread {
+      second = llm("two")
+      third = llm("three")
+      done = true
+    }
+  }
+}

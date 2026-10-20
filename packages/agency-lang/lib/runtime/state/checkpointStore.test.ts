@@ -281,30 +281,27 @@ describe("Checkpoint", () => {
       ]);
     });
 
-    it("reads the store the stopped branch sees, and a thread by id", () => {
+    it("inside a fork branch, the branch's own active stack marks the active thread", () => {
+      // A fork branch runs on a view of the node's store: its subthread
+      // is in the store, but the view's active stack is serialized with
+      // the branch, not the store.
       const cp = new Checkpoint({
         id: 0,
         stack: makeStackJSON([
           {
+            scopeName: "main",
             threads: {
-              threads: { "0": { messages: [{ role: "user", content: "outer" }] } },
-              counter: 1,
+              threads: {
+                "0": { messages: [{ role: "user", content: "outer" }] },
+                "1": { messages: [{ role: "user", content: "inner" }], parentId: "0" },
+              },
+              counter: 2,
               activeStack: ["0"],
             },
             branches: {
-              tool_0_abc: {
-                stack: makeStackJSON([
-                  {
-                    threads: {
-                      threads: {
-                        "0": { messages: [{ role: "user", content: "outer" }] },
-                        "1": { messages: [{ role: "user", content: "inner" }] },
-                      },
-                      counter: 2,
-                      activeStack: ["0", "1"],
-                    },
-                  },
-                ]),
+              fork_0_abc: {
+                activeStack: ["0", "1"],
+                stack: makeStackJSON([{ scopeName: "__block_0" }]),
               },
             },
           },
@@ -312,13 +309,16 @@ describe("Checkpoint", () => {
         globals: makeGlobalsJSON(),
         nodeId: "n1",
       });
-      expect(cp.listThreads().map((t) => t.id)).toEqual(["0"]);
-      expect(cp.listThreads(["tool_0_abc"]).map((t) => [t.id, t.active])).toEqual([
+      expect(cp.listThreads().map((t) => [t.id, t.active])).toEqual([
+        ["0", true],
+        ["1", false],
+      ]);
+      expect(cp.listThreads(["fork_0_abc"]).map((t) => [t.id, t.active])).toEqual([
         ["0", false],
         ["1", true],
       ]);
-      expect(cp.getThreadMessages("0", ["tool_0_abc"])!.messages[0].content).toBe("outer");
-      expect(cp.getThreadMessages(undefined, ["tool_0_abc"])!.threadId).toBe("1");
+      expect(cp.getThreadMessages("0", ["fork_0_abc"])!.messages[0].content).toBe("outer");
+      expect(cp.getThreadMessages(undefined, ["fork_0_abc"])!.threadId).toBe("1");
     });
 
     it("shows the tool loop's newer copy of the active thread", () => {
@@ -352,6 +352,92 @@ describe("Checkpoint", () => {
       expect(cp.listThreads()[0].messageCount).toBe(2);
     });
 
+    it("shows the loop's copy when the ids match, even when it is the shorter one", () => {
+      // A resume continues from the loop's copy, so after compaction
+      // the shorter list is the conversation the program will go on with.
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            threads: {
+              threads: {
+                "0": {
+                  id: "t-abc",
+                  messages: [
+                    { role: "user", content: "Hello" },
+                    { role: "assistant", content: "Hi" },
+                    { role: "user", content: "More" },
+                  ],
+                },
+              },
+              counter: 1,
+              activeStack: ["0"],
+            },
+          },
+          {
+            scopeName: "runPrompt",
+            locals: {
+              messagesJSON: { id: "t-abc", messages: [{ role: "user", content: "Summary" }] },
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Summary"]);
+    });
+
+    it("an older checkpoint's bare message list is shown when it is the longer one", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            threads: {
+              threads: { "0": { messages: [{ role: "user", content: "Hello" }] } },
+              counter: 1,
+              activeStack: ["0"],
+            },
+          },
+          {
+            scopeName: "runPrompt",
+            locals: {
+              messagesJSON: [
+                { role: "user", content: "Hello" },
+                { role: "assistant", content: "Hi" },
+              ],
+            },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Hello", "Hi"]);
+    });
+
+    it("a local named messagesJSON in user code is not a thread", () => {
+      const cp = new Checkpoint({
+        id: 0,
+        stack: makeStackJSON([
+          {
+            scopeName: "main",
+            threads: {
+              threads: { "0": { messages: [{ role: "user", content: "Hello" }] } },
+              counter: 1,
+              activeStack: ["0"],
+            },
+          },
+          {
+            scopeName: "helper",
+            locals: { messagesJSON: [null, 1, { id: "x", messages: [null] }] },
+          },
+        ]),
+        globals: makeGlobalsJSON(),
+        nodeId: "n1",
+      });
+      expect(cp.listThreads().map((t) => t.id)).toEqual(["0"]);
+      expect(cp.getThreadMessages()!.messages.map((m) => m.content)).toEqual(["Hello"]);
+    });
+
     it("lists a tool's own loop thread, which only its frame records", () => {
       const cp = new Checkpoint({
         id: 0,
@@ -376,9 +462,12 @@ describe("Checkpoint", () => {
                   {
                     scopeName: "runPrompt",
                     locals: {
+                      // parentId names a thread of the tool's own store,
+                      // which is not serialized, so it is not shown.
                       messagesJSON: {
                         id: "t-inner",
-                        messages: [{ role: "user", content: "summarize" }],
+                        parentId: "0",
+                        messages: [{ role: "user", content: "summarize" }, null],
                       },
                     },
                   },
@@ -391,10 +480,13 @@ describe("Checkpoint", () => {
         nodeId: "n1",
       });
       expect(cp.listThreads().map((t) => [t.id, t.active])).toEqual([["0", true]]);
-      expect(cp.listThreads(["tool_0_abc"]).map((t) => [t.id, t.label, t.active])).toEqual([
-        ["0", null, false],
-        ["t-inner", "search", true],
+      expect(
+        cp.listThreads(["tool_0_abc"]).map((t) => [t.id, t.label, t.parentId, t.active]),
+      ).toEqual([
+        ["0", null, null, false],
+        ["t-inner", "search", null, true],
       ]);
+      expect(cp.getThreadMessages(undefined, ["tool_0_abc"])!.messages).toHaveLength(1);
       expect(cp.getThreadMessages(undefined, ["tool_0_abc"])!.messages[0].content).toBe(
         "summarize",
       );

@@ -429,7 +429,10 @@ export class DebuggerUI implements DebuggerIO {
   async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
     if (checkpoint) {
       await this.state.setCheckpoint(checkpoint, stop);
-      this.threadDisplayId = undefined;
+      // A picked thread stays shown while it is still listed, so a
+      // person can follow one that is not the active one while stepping.
+      const listed = this.state.listThreads().some((thread) => thread.id === this.threadDisplayId);
+      if (!listed) this.threadDisplayId = undefined;
     }
     this.renderUI();
   }

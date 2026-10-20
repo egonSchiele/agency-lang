@@ -120,11 +120,16 @@ type ThreadView = {
 
 /** The thread a tool loop's frame is working on, from `messagesJSON` in
  *  its locals: a whole thread, or the bare messages an older checkpoint
- *  holds. */
+ *  holds. Only the loop's own frame is read; a user's local of the same
+ *  name in a node or a function is a value, not a thread. An entry that
+ *  is not an object is dropped, so a bad value cannot break the pane. */
 function loopThreadCopy(frame: StateJSON): MessageThreadJSON | null {
+  if (frame.scopeName !== "runPrompt") return null;
   const copy = frame.locals?.messagesJSON;
-  if (Array.isArray(copy)) return { messages: copy };
-  if (copy && Array.isArray(copy.messages)) return copy;
+  const messagesOf = (list: unknown[]) =>
+    list.filter((m): m is MessageJSON => typeof m === "object" && m !== null);
+  if (Array.isArray(copy)) return { messages: messagesOf(copy) };
+  if (copy && Array.isArray(copy.messages)) return { ...copy, messages: messagesOf(copy.messages) };
   return null;
 }
 
@@ -244,19 +249,41 @@ export class Checkpoint implements SourceLocation {
     return frames;
   }
 
+  /** The active stack of the deepest `fork` or `parallel` branch on the
+   *  path, when there is one. Such a branch runs on a view of the node's
+   *  store with its own active stack, serialized with the branch; a tool
+   *  call shares its caller's and has none. */
+  private branchActiveStack(branchPath: string[]): string[] | undefined {
+    let frame = this.rootFrame();
+    let activeStack: string[] | undefined;
+    for (const key of branchPath) {
+      const branch = frame?.branches?.[key];
+      if (branch?.activeStack) activeStack = branch.activeStack;
+      frame = branch?.stack.stack.at(-1);
+    }
+    return activeStack;
+  }
+
   /** The threads the stopped code can see, from two places in the
-   *  checkpoint. The node frame carries the thread store. A tool loop's
+   *  checkpoint. The node frame carries the thread store, with the thread
+   *  the program is in at the top of the active stack: the store's own,
+   *  or the branch's inside a `fork` or `parallel` arm. A tool loop's
    *  frame carries `messagesJSON`, the thread it is working on, refreshed
-   *  on every checkpoint: for the node's own loop that is a newer copy of
-   *  a store thread; for a loop inside a tool it is the only record,
-   *  since a tool runs on a fresh store that is not serialized. Both are
-   *  matched by the thread's own `id`, not the store's key. */
+   *  on every checkpoint. When its `id` matches a store thread it is the
+   *  copy shown, since a resume continues from it, whatever the lengths.
+   *  An older checkpoint holds a bare message list with no id, so there
+   *  the longer copy is shown. A loop inside a tool runs on a fresh store
+   *  that is not serialized, so its copy is the only record of the
+   *  thread: it is listed under its own id, named after the function that
+   *  called `llm()`, with no parent, since its `parentId` names a thread
+   *  of the store that was not serialized. */
   private threadsAlong(branchPath: string[]): ThreadView[] {
     const frames = this.framesAlong(branchPath);
     const store = frames.findLast((frame) => frame.threads)?.threads;
     const views: ThreadView[] = [];
     if (store) {
-      const activeId = store.activeStack.findLast((id) => store.threads[id] != null);
+      const activeStack = this.branchActiveStack(branchPath) ?? store.activeStack;
+      const activeId = activeStack.findLast((id) => store.threads[id] != null);
       for (const [key, thread] of Object.entries(store.threads)) {
         views.push({ key, thread, active: key === activeId });
       }
@@ -266,22 +293,24 @@ export class Checkpoint implements SourceLocation {
       if (!copy) return;
       const stored = views.find((view) => copy.id !== undefined && view.thread.id === copy.id);
       if (stored) {
-        if (copy.messages.length > stored.thread.messages.length) stored.newer = copy.messages;
+        stored.newer = copy.messages;
         return;
       }
       if (copy.id === undefined) {
-        // An older checkpoint's bare message list: the active thread's.
         const active = views.find((view) => view.active);
         if (active && copy.messages.length > active.thread.messages.length) {
           active.newer = copy.messages;
         }
         return;
       }
-      // A loop inside a tool: named after the function that called llm().
       for (const view of views) view.active = false;
       views.push({
         key: copy.id,
-        thread: { ...copy, label: copy.label ?? frames[index - 1]?.scopeName ?? null },
+        thread: {
+          ...copy,
+          label: copy.label ?? frames[index - 1]?.scopeName ?? null,
+          parentId: null,
+        },
         active: true,
       });
     });

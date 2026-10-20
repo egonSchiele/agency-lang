@@ -33,6 +33,39 @@ Here are some things you may want to do with the debugger:
 - In the threads panel, you can press `[` or `]` to cycle between the different threads, or `t` to pick one from a list. A thread you picked stays shown while you step; pick the active one (marked `*`) to follow the program again.
 - When the program is inside an `llm()` call with tools, the branches panel lists each tool call with its status, and `b` opens one so the locals, globals, and call stack panels show it, and `p` prints from it. The guards panel shows the tool loop's round and each guard's spend against its limit.
 
+## Attaching to a program that is already running
+
+A program started with `agency run`, or from TypeScript, can take the debugger while it runs. Nothing has to be planned in advance: no flag, no trace mode. In one terminal:
+
+```
+agency run agent.agency
+```
+
+In another:
+
+```
+agency debug --attach
+```
+
+lists the programs that can take a debugger, with their process ids:
+
+```
+  PID    PROGRAM        NODE  STARTED
+  48213  agent.agency   main  4m12s ago
+```
+
+and
+
+```
+agency debug --attach 48213
+```
+
+opens the debugger on that program. It stops at the program's next statement, wherever it is, inside a tool call included, and from there stepping, inspecting, `set`, and rewind work as they do when the debugger started the program. Rewind reaches back as far as the attach and no further. `c` lets the program run until its next `debugger()` statement, a question, or the end; while it runs the debugger waits and reads no keys. `q` detaches: the program runs on without a debugger, and if it was stopped it is let go first. When the program finishes while attached, the debugger says so and exits.
+
+A program's own interrupts keep going wherever the program sends them: a policy, the `--approve` and `--reject` flags, or the program's terminal under `--interactive`. The debugger shows them going by and does not answer them. A question asked with `input()` goes to the program's terminal as well.
+
+How it works: a running program listens for the `SIGUSR2` signal and opens a Unix socket under `~/.agency/debug-sessions` when it arrives; `--attach` sends the signal and connects. Only a process running as the same user can send it, the directory is readable by that user alone, and a program nobody signals opens nothing. Two things follow from the signal: a program run under `nodemon`, which restarts a child with `SIGUSR2`, opens its debug socket instead of restarting; and whoever can reach that directory can do what the program's owner can do, including changing a variable, so keep it yours.
+
 ## Options
 
 - `--node <name>` — node to execute (defaults to `main`).

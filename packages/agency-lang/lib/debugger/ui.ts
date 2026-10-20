@@ -15,6 +15,7 @@ import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import type { DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
+import type { Hello } from "./attach/protocol.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
@@ -128,6 +129,12 @@ export class DebuggerUI implements DebuggerIO {
   private commandBarOverride: string | null = null;
   private inputPrompt: string | null = null;
   private inputValue = "";
+
+  /** Set when this UI drives a program in another process
+   *  (`agency debug --attach`): what the run said about itself, for the
+   *  status line. */
+  private attached: Hello | null = null;
+  private quitListeners: (() => void)[] = [];
 
   lastFrame: Frame | null = null;
 
@@ -364,7 +371,11 @@ export class DebuggerUI implements DebuggerIO {
         : stats.totalCost < 0.0001
           ? "<$0.0001"
           : `$${stats.totalCost.toFixed(4)}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}{/gray-fg}`;
+    const where =
+      this.attached === null
+        ? ""
+        : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
   }
 
   // --- Element tree builders ---
@@ -513,6 +524,18 @@ export class DebuggerUI implements DebuggerIO {
     this.threadDisplayId = id === active ? undefined : id;
   }
 
+  /** This UI now drives the program the run described. While attached,
+   *  only `q` quits (`escape` would detach by accident), and quitting
+   *  tells `onQuit` listeners first. */
+  attachedTo(hello: Hello): void {
+    this.attached = hello;
+    this.renderUI();
+  }
+
+  onQuit(listener: () => void): void {
+    this.quitListeners.push(listener);
+  }
+
   // --- DebuggerIO implementation ---
 
   log(line: string): void {
@@ -598,6 +621,10 @@ export class DebuggerUI implements DebuggerIO {
       if (keyEvent.key === "c" && keyEvent.ctrl) this.cleanup();
 
       const simple = SIMPLE_KEYS[keyEvent.key];
+      if (simple !== undefined && this.attached !== null && keyEvent.key === "escape") continue;
+      if (simple?.type === "quit") {
+        for (const listener of this.quitListeners) listener();
+      }
       if (simple) return simple;
 
       const command = await this.handleInteractiveKey(keyEvent);

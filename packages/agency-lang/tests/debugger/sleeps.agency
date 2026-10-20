@@ -1,0 +1,9 @@
+// A program that takes a few seconds, so a test can start it in another
+// process and attach a debugger to it while it runs.
+node main() {
+  x = 1
+  sleep(1500)
+  y = x + 1
+  sleep(1500)
+  return y
+}

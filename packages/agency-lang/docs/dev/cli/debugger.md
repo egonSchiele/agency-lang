@@ -200,7 +200,7 @@ The settle runs in the public wrappers rather than inside `runNodeCore`, so each
 
 In attached mode the driver resumes with the caller's options rather than its own. A resume does not remember the policy, host, budget, callbacks, or signals of the leg it resumes, so the runtime hands them to the driver with each stop (`LegOptions`) and the driver passes them back, with its own callbacks composed onto the caller's (`composeCallbacks`). No `inputOverride` is added: a question goes to the run's own terminal. Every resume and rewind the attached driver issues carries `metadata.attachedResume`, and the public wrappers return such a call as it is; the marker is on the call, not on the debugger, so two runs sharing one debugger in one process do not confuse it. The attached driver never intercepts the console, never destroys its UI when `run` returns, and treats `quit` as detach: the slot is cleared before the resume so the new leg raises no stop. Detaching while the driver waits at a stop answers it with `continue`.
 
-Two limits of the first version: one attached run at a time per driver, and `:save` and `:load` resolve their path in the program's process, which attached is the program's working directory.
+Two limits of the first version: one attached run at a time per driver, and `:save` and `:load` resolve their path in the program's process, which attached is the program's working directory. The channel, the trigger, the socket, and the `agency debug --attach` command are in `debugger-attach.md`.
 
 ### Module wrapper functions
 

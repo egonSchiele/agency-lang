@@ -140,7 +140,8 @@ import { scheduleTest } from "@/cli/schedule/test.js";
 import { addRemote, listRemote, removeRemote, editRemote } from "@/cli/schedule/remote.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
-import { invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
+import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
+import { attachCommand } from "@/cli/attach.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import type { ResolvedModelFlag } from "@/config/config.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -1904,8 +1905,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
   addRunOptions(
     program
       .command("debug")
-      .description("Debug an Agency file interactively")
-      .argument("<file>", "Agency file to debug")
+      .description("Debug an Agency file interactively, or attach to a running program")
+      .argument("[file]", "Agency file to debug (not with --attach)")
+      .option(
+        "--attach [pid]",
+        "Attach to a running Agency program by pid; with no pid, list the programs that can take a debugger",
+      )
       .option("--node <name>", "Node to execute")
       .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
       .option("--trace <file>", "Load and inspect a trace file")
@@ -1916,8 +1921,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       ),
   ).action(
     async (
-      file: string,
+      file: string | undefined,
       options: DebugRunFlags & {
+        attach?: string | boolean;
         node?: string;
         rewindSize: string;
         trace?: string;
@@ -1925,7 +1931,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
         distDir?: string;
       },
     ) => {
-      const { node, rewindSize, trace, checkpoint, distDir, ...runFlags } = options;
+      const { attach, node, rewindSize, trace, checkpoint, distDir, ...runFlags } = options;
+      const target = attachTarget({ attach, file });
+      if ("refused" in target) {
+        console.error(`Error: ${target.refused}`);
+        process.exit(2);
+      }
+      if (target.mode === "attach") {
+        process.exit(await attachCommand({ pid: target.pid }));
+      }
+      if (file === undefined) {
+        console.error(
+          "Error: give an Agency file to debug, or --attach to attach to a running program.",
+        );
+        process.exit(2);
+      }
       // Resolved before the debugger draws, so the download shows in the terminal.
       const flags: DebugRunFlags = await withLocalModel(runFlags);
       let invocation: InvocationOptions;

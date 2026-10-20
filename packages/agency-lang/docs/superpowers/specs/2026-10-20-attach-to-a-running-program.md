@@ -274,7 +274,7 @@ the payload and the method's return value as the reply:
 | ------------------ | ------------------------------------- | ------------------ |
 | `render`           | checkpoint, stop, interruptId         | none               |
 | `waitForCommand`   | none                                  | `DebuggerCommand`  |
-| `showRewindSelector` | checkpoints (the window)            | index or null      |
+| `showRewindSelector` | checkpoints (the window)            | id or null         |
 | `answerGuardTrip`  | `GuardTripData`                       | `InterruptResponse`|
 | `showCheckpointsPanel` | checkpoints (the window)          | none               |
 | `promptForInput`   | prompt                                | string             |

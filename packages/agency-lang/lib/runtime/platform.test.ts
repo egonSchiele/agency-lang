@@ -35,7 +35,10 @@ describe("#platform", () => {
 
   /** What registerAttach reads from a context, with no functions bound:
    *  every case here returns before they would be used. */
-  function args(hasDebugger: boolean, host: ReturnType<typeof nodeHost>) {
+  function args(
+    hasDebugger: boolean,
+    host: ReturnType<typeof nodeHost> | ReturnType<typeof memoryHost>,
+  ) {
     return {
       ctx: { hasDebugger: () => hasDebugger } as never,
       nodeName: "main",
@@ -49,7 +52,9 @@ describe("#platform", () => {
     const previous = process.env.AGENCY_HOME;
     process.env.AGENCY_HOME = home;
     try {
-      nodePlatform.registerAttach(args(false, memoryHost()));
+      // The memory host reads AGENCY_HOME from its own variables, so a
+      // registration that wrongly went ahead would write under `home`.
+      nodePlatform.registerAttach(args(false, memoryHost({ variables: { AGENCY_HOME: home } })));
       nodePlatform.registerAttach(args(true, nodeHost()));
       const ipc = process.env.AGENCY_IPC;
       process.env.AGENCY_IPC = "1";

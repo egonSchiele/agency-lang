@@ -391,6 +391,9 @@ export async function executeNodeAsync({
   if (sandboxAgentHome || useDeterministic) {
     const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
     env.AGENCY_AGENT_HOME = agentHome;
+    // The child registers for attach, which writes under the Agency home;
+    // a test's record goes in the same throwaway directory.
+    env.AGENCY_HOME = agentHome;
     agentHomeCleanup = () => {
       fs.rmSync(agentHome, { recursive: true, force: true });
     };

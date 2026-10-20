@@ -46,18 +46,19 @@ describe("the in-memory channel pair", () => {
 type SocketPair = { server: Channel; client: Channel; stop: () => Promise<void> };
 
 /** A server and a client on a socket in a temporary directory, each
- *  wrapped as a channel. */
-async function socketPair(maxBytes?: number): Promise<SocketPair> {
+ *  wrapped as a channel. `serverMaxBytes` caps only the server's side, so
+ *  a test can send it a message its own cap would have refused. */
+async function socketPair(serverMaxBytes?: number): Promise<SocketPair> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-line-channel-"));
   const sockPath = path.join(dir, "s.sock");
   let listener: net.Server | undefined;
   const accepted = new Promise<Channel>((resolve) => {
-    listener = net.createServer((socket) => resolve(lineChannel(socket, maxBytes)));
+    listener = net.createServer((socket) => resolve(lineChannel(socket, serverMaxBytes)));
     listener.listen(sockPath);
   });
   const clientSocket = net.connect(sockPath);
   await new Promise<void>((resolve) => clientSocket.once("connect", resolve));
-  const client = lineChannel(clientSocket, maxBytes);
+  const client = lineChannel(clientSocket);
   const server = await accepted;
   return {
     server,
@@ -84,12 +85,39 @@ describe("the line channel over a socket", () => {
     await pair.stop();
   });
 
-  it("closes the connection on a message over the cap", async () => {
+  it("the receiving side closes the connection on a message over its cap", async () => {
     const pair = await socketPair(1024);
     const serverClosed = closed(pair.server);
     const clientClosed = closed(pair.client);
     pair.client.send({ text: "y".repeat(2048) });
     await Promise.all([serverClosed, clientClosed]);
+    await pair.stop();
+  });
+
+  it("two messages under the cap that arrive together both get through", async () => {
+    const pair = await socketPair(1024);
+    const seen: unknown[] = [];
+    const both = new Promise<void>((resolve) => {
+      pair.server.onMessage((message) => {
+        seen.push(message);
+        if (seen.length === 2) {
+          resolve();
+        }
+      });
+    });
+    pair.client.send({ text: "a".repeat(600) });
+    pair.client.send({ text: "b".repeat(600) });
+    await both;
+    expect(seen).toEqual([{ text: "a".repeat(600) }, { text: "b".repeat(600) }]);
+    await pair.stop();
+  });
+
+  it("the last message sent before close still arrives", async () => {
+    const pair = await socketPair();
+    const got = received(pair.server);
+    pair.client.send({ text: "z".repeat(1024 * 1024) });
+    pair.client.close();
+    expect(await got).toEqual({ text: "z".repeat(1024 * 1024) });
     await pair.stop();
   });
 

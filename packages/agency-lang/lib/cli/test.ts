@@ -1365,6 +1365,7 @@ async function runTsTestDir(
       // Same agent-home sandbox as executeNodeAsync (issue #469).
       const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
       mocksEnv.AGENCY_AGENT_HOME = agentHome;
+      mocksEnv.AGENCY_HOME = agentHome;
       agentHomeCleanup = () => {
         fs.rmSync(agentHome, { recursive: true, force: true });
       };

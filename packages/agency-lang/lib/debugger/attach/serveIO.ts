@@ -2,7 +2,7 @@
 // matching call on a real `DebuggerIO`, the terminal UI or a scripted one
 // in a test, and sends the reply. The three messages that are not
 // methods go to the `events` callbacks.
-import { nativeTypeReviver } from "../../runtime/revivers/index.js";
+import { functionRefReviver, nativeTypeReviver } from "../../runtime/revivers/index.js";
 import { Checkpoint } from "../../runtime/state/checkpointStore.js";
 import type { DebuggerIO } from "../types.js";
 import type { Channel } from "./channel.js";
@@ -16,11 +16,17 @@ export type ServeEvents = {
   malformed?: (message: unknown) => void;
 };
 
-/** A checkpoint as the run sent it, rebuilt. */
+/** A checkpoint as the run sent it, rebuilt. A frame holds a function
+ *  value whenever the program passed a block or kept a function in a
+ *  variable, and reviving one needs a registry, which only a compiled
+ *  module sets as it loads. The debugger's process loads no program, so
+ *  an empty registry is set here: every function then revives to the
+ *  stub a miss gives, which is all a UI that shows the state needs. */
 export function checkpointFromWire(wire: unknown): Checkpoint | undefined {
   if (wire === undefined || wire === null) {
     return undefined;
   }
+  functionRefReviver.registry ??= {};
   const revived = JSON.parse(JSON.stringify(wire), nativeTypeReviver);
   return Checkpoint.fromJSON(revived) ?? undefined;
 }

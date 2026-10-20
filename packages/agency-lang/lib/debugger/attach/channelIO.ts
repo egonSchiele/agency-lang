@@ -15,9 +15,18 @@ import {
   type DebuggerMode,
 } from "../types.js";
 import type { Channel } from "./channel.js";
-import { parseAttachMessage, type NoticeMethod, type RequestMethod } from "./protocol.js";
+import {
+  parseAttachMessage,
+  REPLY_SCHEMAS,
+  type NoticeMethod,
+  type RequestMethod,
+} from "./protocol.js";
 
-type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
+type Pending = {
+  method: RequestMethod;
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+};
 
 /** A checkpoint as it crosses the channel: plain JSON, native types
  *  (dates, sets) replaced the way the trace writer and `onCheckpoint`
@@ -37,11 +46,20 @@ export class ChannelDebuggerIO implements DebuggerIO {
   private pending: Record<number, Pending> = {};
   private closed = false;
 
-  constructor(private readonly channel: Channel) {
+  /** `warn` takes the one line printed when the debugger at the other
+   *  end fails; the program's stderr by default. */
+  constructor(
+    private readonly channel: Channel,
+    private readonly warn: (line: string) => void = (line) => console.error(line),
+  ) {
     channel.onMessage((raw) => this.receive(raw));
     channel.onClose(() => this.closeAll());
   }
 
+  /** A reply. One that carries the UI's error, or a result of the wrong
+   *  shape for its method, ends the session: the program must never fail
+   *  because its debugger did, so the failure becomes a detach, with one
+   *  line on stderr saying why. */
   private receive(raw: unknown): void {
     const message = parseAttachMessage(raw);
     if (message === null || message.type !== "reply") {
@@ -51,12 +69,29 @@ export class ChannelDebuggerIO implements DebuggerIO {
     if (waiting === undefined) {
       return;
     }
-    delete this.pending[message.id];
     if (message.error !== undefined) {
-      waiting.reject(new Error(message.error));
-    } else {
-      waiting.resolve(message.result);
+      this.failSession(`the debugger failed to answer ${waiting.method}: ${message.error}`);
+      return;
     }
+    const checked = REPLY_SCHEMAS[waiting.method].safeParse(message.result);
+    if (!checked.success) {
+      this.failSession(
+        `the debugger answered ${waiting.method} with ${JSON.stringify(message.result)}, ` +
+          `which is not a ${waiting.method} answer`,
+      );
+      return;
+    }
+    delete this.pending[message.id];
+    waiting.resolve(checked.data);
+  }
+
+  /** End the session from this side: every waiting call is rejected with
+   *  `DebuggerDetached` through the channel's close, and the program runs
+   *  on without a debugger. */
+  private failSession(reason: string): void {
+    this.warn(`[agency debug] ${reason}; detaching`);
+    this.channel.close();
+    this.closeAll();
   }
 
   /** Every call still waiting is told the other side is gone. */
@@ -78,7 +113,7 @@ export class ChannelDebuggerIO implements DebuggerIO {
     const id = this.nextId++;
     this.channel.keepAlive(true);
     return new Promise((resolve, reject) => {
-      this.pending[id] = { resolve, reject };
+      this.pending[id] = { method, resolve, reject };
       this.channel.send({ type: "request", id, method, args });
     }).finally(() => {
       if (Object.keys(this.pending).length === 0) {

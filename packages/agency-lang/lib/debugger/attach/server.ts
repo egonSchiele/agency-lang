@@ -13,7 +13,7 @@ import type { Channel } from "./channel.js";
 import { ChannelDebuggerIO } from "./channelIO.js";
 import { lineChannel } from "./lineChannel.js";
 import type { Hello } from "./protocol.js";
-import { recordPaths, type AttachRecord } from "./registry.js";
+import { ensureSessionsDir, recordPaths, type AttachRecord } from "./registry.js";
 
 /** macOS and the BSDs limit a Unix socket path to 104 bytes (108 on
  *  Linux). */
@@ -24,17 +24,12 @@ export type AttachOptions = {
   functions: ModuleFunctions;
   hello: Hello;
   rewindSize?: number;
-  /** Where a line about the session goes, such as a refused second
-   *  connection. The program's stderr by default. */
-  log?: (line: string) => void;
 };
 
 export type AttachedSession = {
   driver: DebuggerDriver;
   /** Since when, for the message a second connection gets. */
   since: Date;
-  /** Tell the person the program finished, then end the session. */
-  finished(value: unknown): void;
   detach(): void;
 };
 
@@ -80,15 +75,7 @@ export function attachOverChannel(channel: Channel, options: AttachOptions): Att
     }
     return ran;
   };
-  return {
-    driver,
-    since: new Date(),
-    finished: (value) => {
-      channel.send({ type: "finished", value });
-      detach();
-    },
-    detach,
-  };
+  return { driver, since: new Date(), detach };
 }
 
 export type AttachServer = {
@@ -103,7 +90,11 @@ export type ServerUnavailable = { unavailable: string };
 export type AttachServerOptions = {
   dir: string;
   record: AttachRecord;
-  functions: ModuleFunctions;
+  /** The functions of the context a debugger attaches to, read when a
+   *  debugger connects: the context running then is the one meant, and
+   *  a TypeScript program can have started another node since the
+   *  signal arrived. */
+  functions: () => ModuleFunctions;
   rewindSize?: number;
   log?: (line: string) => void;
 };
@@ -113,26 +104,38 @@ export type AttachServerOptions = {
  *  `unref`ed, so an open session never keeps a finished program alive. A
  *  second connection while one is attached is told so and closed; Node
  *  cannot read the peer's pid from a Unix socket, so the message says
- *  since when. The caller has already checked the directory
- *  (`ensureSessionsDir`). */
-export function startAttachServer(
+ *  since when. Every way this can fail comes back as `unavailable`:
+ *  the signal listener that calls it must never throw into the program.
+ *  The directory is checked here, right before `listen`, not only at
+ *  registration hours earlier: the check is what keeps the socket's
+ *  short window at the umask's mode private. */
+export async function startAttachServer(
   options: AttachServerOptions,
 ): Promise<AttachServer | ServerUnavailable> {
   const log = options.log ?? ((line: string) => console.error(line));
   if (process.platform === "win32") {
-    return Promise.resolve({ unavailable: "attach needs Unix sockets, which Windows lacks" });
+    return { unavailable: "attach needs Unix sockets, which Windows lacks" };
+  }
+  const refusal = ensureSessionsDir(options.dir);
+  if (refusal !== null) {
+    return { unavailable: refusal.refused };
   }
   const paths = recordPaths(options.dir, options.record.pid);
   if (Buffer.byteLength(paths.sock) > MAX_SOCKET_PATH_BYTES) {
-    return Promise.resolve({
+    return {
       unavailable:
         `the debug socket path is ${Buffer.byteLength(paths.sock)} bytes, over the ` +
         `${MAX_SOCKET_PATH_BYTES} the platform allows: set AGENCY_HOME to a shorter path`,
-    });
+    };
   }
   // A run that exited through a signal handler left its socket behind, and
-  // a reused pid would hit EADDRINUSE on it. It is ours by pid.
-  fs.rmSync(paths.sock, { force: true });
+  // a reused pid would hit EADDRINUSE on it. It is ours by pid. A
+  // directory at that path, or one we may not remove, is a refusal.
+  try {
+    fs.rmSync(paths.sock, { force: true });
+  } catch (error) {
+    return { unavailable: `could not remove ${paths.sock}: ${(error as Error).message}` };
+  }
 
   let session: AttachedSession | null = null;
   const hello: Hello = {
@@ -156,10 +159,9 @@ export function startAttachServer(
       return;
     }
     const attached = attachOverChannel(channel, {
-      functions: options.functions,
+      functions: options.functions(),
       hello,
       rewindSize: options.rewindSize,
-      log,
     });
     session = attached;
     channel.onClose(() => {

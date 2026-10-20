@@ -171,7 +171,10 @@ export class DebuggerDriver {
     return this.takeTurn(async () => {
       this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
       this.programFinished = true;
-      await this.uiCall(() => this.ui.render());
+      // Not awaited: at a stop, waiting on the debugger is what the person
+      // asked for; at the end of the program nobody asked, and a debugger
+      // that never answers must not keep the program from finishing.
+      this.renderInBackground();
     });
   }
 
@@ -362,9 +365,10 @@ export class DebuggerDriver {
           );
           this.programFinished = true;
           finalResult = result;
-          // Attached, the value belongs to whoever is running the program.
+          // Attached, the value belongs to whoever is running the program,
+          // and the last render does not wait (see `finishedAttached`).
           if (this.attached) {
-            await this.uiCall(() => this.ui.render());
+            this.renderInBackground();
             return result;
           }
           // When the program finishes, keep the last batch so the user can
@@ -426,21 +430,7 @@ export class DebuggerDriver {
           // (e.g. :save / :load handle file errors and log them via
           // ui.log). Anything that escapes is an internal bug that
           // should crash the driver, not silently continue with stale state.
-          // The one exception is the other side going away while attached,
-          // at any of the IO calls: the stop is answered with continue and
-          // the program runs on without a debugger.
-          try {
-            await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint, stop);
-            const command = await this.nextCommand();
-            lastCommand = command;
-            result = await this.handleCommand(command, interrupt, batch);
-          } catch (error) {
-            if (!(error instanceof DebuggerDetached)) throw error;
-            this.detach();
-            this.debuggerState.running();
-            lastCommand = { type: "continue" };
-            result = await this.resume(batch);
-          }
+          result = await this.handleCommand(command, interrupt, batch);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }

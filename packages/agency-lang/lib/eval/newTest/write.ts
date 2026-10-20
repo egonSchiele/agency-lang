@@ -8,7 +8,7 @@ import * as path from "path";
 import { walkTreeRefusingSymlinks, type TreeFile } from "@/eval/grading/graderFilesSnapshot.js";
 import { isStrictDescendant, safeDeleteDirectoryWithin } from "@/utils.js";
 
-import { FIELDS, type FieldName, type FormState, type Problem } from "./form.js";
+import { FIELDS, fieldSpec, type FieldName, type FormState, type Problem } from "./form.js";
 
 /** A folder name the loader takes as a test id. */
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -48,10 +48,11 @@ export function testDirFor(suiteDir: string, id: string): string {
 export function validateForm(state: FormState, checks: FileChecks = realFileChecks): Problem[] {
   const problems: Problem[] = [];
   const id = state.values.id;
+  const idLabel = fieldSpec("id").label;
   if (id === "") {
-    problems.push({ field: "id", text: "id is required" });
+    problems.push({ field: "id", text: `${idLabel} is required` });
   } else if (!ID_PATTERN.test(id)) {
-    problems.push({ field: "id", text: "id may hold only letters, digits, - and _" });
+    problems.push({ field: "id", text: `${idLabel} may hold only letters, digits, - and _` });
   } else if (checks.exists(testDirFor(state.suiteDir, id))) {
     problems.push({ field: "id", text: `${testDirFor(state.suiteDir, id)} already exists` });
   }

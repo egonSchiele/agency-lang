@@ -41,7 +41,7 @@ export const FIELDS: FieldSpec[] = [
     label: "input",
     required: false,
     long: true,
-    help: "passed to the main node as its one parameter; empty for an agent that takes none (optional)",
+    help: "passed to the entry node as its one parameter; empty for an agent that takes none (optional)",
   },
   {
     name: "files",
@@ -172,8 +172,10 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
 }
 
 /** What a typed key does to the field under the cursor; null for a key that
- *  types nothing. Enter and Escape type nothing either: the mode's key table
- *  owns them, so the caller consults that table first. */
+ *  types nothing. Enter and Escape type nothing either: Enter belongs to
+ *  the mode's key table, which the caller consults first, and a bare
+ *  Escape is what the terminal sends for an Option chord it does not know,
+ *  so it is dropped rather than quitting the form. */
 export function editActionFor(event: KeyEvent): FormAction | null {
   const edit = lineEditAction(event);
   if (edit === null) return null;

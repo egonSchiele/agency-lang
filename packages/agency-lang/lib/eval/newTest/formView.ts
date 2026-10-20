@@ -56,23 +56,41 @@ function footerText(args: FormViewArgs): string {
 
 /** A field's label and value. A value that does not fit on one line
  *  continues on the lines below, under the value column. The cursor row is
- *  a text input, so the cursor looks like every other input in the toolkit
- *  and the help of an empty field is shown dim after it. A text input draws
- *  its value as is, with no style tags read, so the value only has its
- *  control characters removed; escaping braces there would show the
- *  backslashes. */
+ *  a text input, so the cursor looks like every other input in the toolkit:
+ *  the value is wrapped first and handed over with a newline per row, since
+ *  a text input clips a long line rather than wrapping it, and the cursor
+ *  then sits at the end of the last row. An empty field shows its help dim
+ *  after the cursor. A text input draws its value as is, with no style tags
+ *  read, so the value only has its control characters removed; escaping
+ *  braces there would show the backslashes. */
 function fieldRows(field: FieldSpec, state: FormState, width: number): Element[] {
   const label = `${" ".repeat(INDENT)}${field.label.padEnd(LABEL_WIDTH)}`;
   const valueWidth = Math.max(1, width - label.length);
   const value = state.values[field.name];
   if (state.cursor === field.name) {
-    const typed = stripControlCharacters(value);
+    const wrapped = wrapText(stripControlCharacters(value), valueWidth);
+    // A text input leaves the cursor out when its last row is full, so a
+    // row that fills the width gets an empty one after it for the cursor.
+    const last = wrapped[wrapped.length - 1] ?? "";
+    const rows = last.length >= valueWidth ? [...wrapped, ""] : wrapped;
+    const height = rows.length;
+    if (value === "") {
+      // An empty input draws only the cursor, so it is one cell wide and the
+      // help follows it.
+      return [
+        row(
+          { height },
+          line(label, { width: label.length, height, bg: CURSOR_BG }),
+          textInput({ bg: CURSOR_BG, width: 1, height }, ""),
+          line(` ${field.help}`, { dim: true, bg: CURSOR_BG }),
+        ),
+      ];
+    }
     return [
       row(
-        { height: 1 },
-        line(label, { width: label.length, bg: CURSOR_BG }),
-        textInput({ bg: CURSOR_BG, width: typed.length + 1 }, typed),
-        line(value === "" ? ` ${field.help}` : "", { dim: true, bg: CURSOR_BG }),
+        { height },
+        line(label, { width: label.length, height, bg: CURSOR_BG }),
+        textInput({ bg: CURSOR_BG, width: valueWidth, height }, rows.join("\n")),
       ),
     ];
   }
@@ -82,6 +100,18 @@ function fieldRows(field: FieldSpec, state: FormState, width: number): Element[]
   const first = line(`${label}${wrapped[0] ?? ""}`, style);
   const rest = wrapped.slice(1).map((text) => line(`${" ".repeat(label.length)}${text}`, style));
   return [first, ...rest];
+}
+
+/** The lines the "wrote" screen shows, which the command prints again
+ *  once the screen is gone. Not wrapped: the terminal wraps a printed line
+ *  itself, and the screen wraps them with `wrapText`. */
+export function wroteSummary(testDir: string, nextCommands: string[]): string[] {
+  return [
+    `wrote ${sanitizeUntrusted(testDir)}`,
+    "",
+    "run it with:",
+    ...nextCommands.map((text) => `${" ".repeat(INDENT)}${sanitizeUntrusted(text)}`),
+  ];
 }
 
 /** A command longer than the screen continues on the next row, indented,

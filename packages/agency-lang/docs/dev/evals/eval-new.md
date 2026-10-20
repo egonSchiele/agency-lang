@@ -45,9 +45,21 @@ key the mode's key table does not name is typed into it at once, through
 the line editor's `append` and `backspace`. So `handleKey` consults the
 key table first and the line editor second, and no letter may ever be
 bound in the form's key table: `s` is a letter someone types into a goal.
-Save is Ctrl+S, quit is Escape or Ctrl+C, and the editor hand-off is
-Ctrl+E. Enter moves down, and on the last field it saves, so the hint for
-it changes with the cursor.
+Save is Ctrl+S, quit is Ctrl+C, and the editor hand-off is Ctrl+E. Enter
+moves down, and on the last field it saves: two bindings on the same key,
+each guarded by `when`, so the hint follows the cursor. Escape is not
+bound, because the terminal sends a bare Escape for an Alt or Option
+chord it does not know (Option+Backspace, Option+Left), and quitting on
+one of those partway through a word would throw the form away. The
+"wrote" screen is dismissed by any key, and a second Enter from key repeat
+can dismiss it before it is read, so the command prints the same lines
+again after `screen.destroy()`, where they stay in the scrollback.
+
+The cursor row wraps like the others: the value is wrapped first and
+handed to the `textInput` with a newline per row, since a text input clips
+a long line rather than wrapping it. A row that fills the width gets an
+empty row after it, because a text input leaves the cursor out when its
+last row is full.
 
 A keystroke clears the footer message. A failed save puts the cursor on
 the field with the problem, so the next thing typed fixes it in place.
@@ -155,9 +167,7 @@ path and commands on the "wrote" screen. A path can carry an escape
 sequence or a `{red-fg}` style tag as easily as a value can. The one
 exception is the cursor row, drawn as a `textInput`: that element reads no
 style tags, so its value only has its control characters removed, or a
-typed `{` would show as `\{`. A value with newlines in it, which only the
-editor can produce, shows its last line there and all its lines once the
-cursor moves off.
+typed `{` would show as `\{`.
 
 ## Testing
 

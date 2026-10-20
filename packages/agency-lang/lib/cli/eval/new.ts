@@ -15,7 +15,7 @@ import {
   type FormAction,
   type FormState,
 } from "@/eval/newTest/form.js";
-import { renderForm } from "@/eval/newTest/formView.js";
+import { renderForm, wroteSummary } from "@/eval/newTest/formView.js";
 import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
 import { formatKey } from "@/tui/input/format.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
@@ -43,6 +43,11 @@ export type EvalNewOptions = {
   /** Called once the suite directory has passed its check, so a wrong path
    *  is reported before the terminal is touched or refused. */
   openTerminal: () => FormTerminal;
+  /** Prints a line once the screen is gone. The "wrote" screen is dismissed
+   *  by any key, and a second Enter from key repeat can dismiss it before
+   *  it is read, so what it showed is printed again here and stays in the
+   *  terminal's scrollback. */
+  print: (text: string) => void;
 };
 
 /** Refuse anything the loader would not read as a directory of test folders:
@@ -67,7 +72,10 @@ export function assertSuiteDirectory(suiteDir: string): void {
 const NO_ACTION: FormAction | null = null;
 
 /** The keys that are not typing. Letters are never bound here, because a
- *  letter goes into the field under the cursor. */
+ *  letter goes into the field under the cursor. Escape is not bound
+ *  either: the terminal sends a bare Escape for any Alt or Option chord it
+ *  does not know, such as Option+Backspace, and quitting on one of those
+ *  partway through a word would throw the form away. */
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
   const longField = fieldSpec(state.cursor).long && openEditor !== null;
   const last = isLastField(state.cursor);
@@ -76,23 +84,27 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
     { keys: ["Down"], help: "next field", run: () => ({ kind: "moveDown" }) },
     {
       keys: ["Enter"],
-      help: last ? "save the test" : "next field",
-      hint: last ? "Enter save" : "Enter next",
-      run: () => (last ? { kind: "save" } : { kind: "moveDown" }),
+      help: "next field",
+      hint: "Enter next",
+      when: () => !last,
+      run: () => ({ kind: "moveDown" }),
+    },
+    {
+      keys: ["Enter"],
+      help: "save the test",
+      hint: "Enter save",
+      when: () => last,
+      run: () => ({ kind: "save" }),
     },
     {
       keys: ["Ctrl+E"],
       help: "open the field in $EDITOR",
-      hint: longField ? "Ctrl+E editor" : undefined,
-      run: () => (longField ? { kind: "editInEditor" } : undefined),
+      hint: "Ctrl+E editor",
+      when: () => longField,
+      run: () => ({ kind: "editInEditor" }),
     },
     { keys: ["Ctrl+S"], help: "save the test", hint: "Ctrl+S save", run: () => ({ kind: "save" }) },
-    {
-      keys: ["Escape", "Ctrl+C"],
-      help: "quit",
-      hint: "Esc quit",
-      run: () => ({ kind: "requestQuit" }),
-    },
+    { keys: ["Ctrl+C"], help: "quit", hint: "Ctrl+C quit", run: () => ({ kind: "requestQuit" }) },
   ];
 }
 
@@ -156,8 +168,9 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
   const terminal = options.openTerminal();
   const { openEditor, size } = terminal;
   const screen = new Screen({ input: terminal.input, output: terminal.output, ...size });
+  let final: FormState | null = null;
   try {
-    await screen.runLoop<FormState>({
+    final = await screen.runLoop<FormState>({
       initialState: initialForm(options.suiteDir),
       render: (state) =>
         renderForm({
@@ -178,6 +191,14 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
     });
   } finally {
     screen.destroy();
+  }
+  if (final !== null && final.mode.kind === "wrote") {
+    for (const text of wroteSummary(
+      final.mode.testDir,
+      nextCommands(options.suiteDir, final.values.id),
+    )) {
+      options.print(text);
+    }
   }
 }
 
@@ -207,5 +228,5 @@ function openRealTerminal(): FormTerminal {
 
 /** The command as the CLI runs it. */
 export async function runEvalNew(suiteDir: string): Promise<void> {
-  await evalNew({ suiteDir, openTerminal: openRealTerminal });
+  await evalNew({ suiteDir, openTerminal: openRealTerminal, print: (text) => console.log(text) });
 }

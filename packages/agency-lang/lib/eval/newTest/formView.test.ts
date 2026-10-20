@@ -5,9 +5,9 @@ import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
 import { FIELDS, initialForm, reduceForm, type FormAction, type FormState } from "./form.js";
-import { renderForm } from "./formView.js";
+import { renderForm, wroteSummary } from "./formView.js";
 
-const HINTS = "↑↓ move   Enter next   Ctrl+S save   Esc quit";
+const HINTS = "↑↓ move   Enter next   Ctrl+S save   Ctrl+C quit";
 /** Two of indent, the widest label, three of gap: where values start. */
 const VALUE_COLUMN = 2 + Math.max(...FIELDS.map((field) => field.label.length)) + 3;
 const NEXT = [
@@ -62,6 +62,35 @@ describe("renderForm", () => {
     const text = frame(initialForm("suite"));
     expect(text).toContain("instructions for the LLM judge");
     expect(text).toContain(`  ${"folder name".padEnd(VALUE_COLUMN - 2)}█ letters, digits, - and _`);
+  });
+
+  it("wraps a long value on the cursor row and puts the cursor at its end", () => {
+    const state = { ...filled(), cursor: "goal" as const };
+    const lines = rows(frame(state));
+    const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
+    expect(lines[goalRow + 1]).toMatch(new RegExp(`^ {${VALUE_COLUMN}}\\S`));
+    expect(lines[goalRow + 1]).toMatch(/other name\.█$/);
+    expect(lines[goalRow]).not.toContain("█");
+  });
+
+  it("a value that fills its last row puts the cursor on the row after it", () => {
+    const valueWidth = 80 - VALUE_COLUMN;
+    const state = { ...filled(), cursor: "goal" as const };
+    state.values = { ...state.values, goal: "x".repeat(valueWidth) };
+    const lines = rows(frame(state));
+    const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
+    expect(lines[goalRow]).toContain("x".repeat(valueWidth));
+    expect(lines[goalRow + 1]).toBe(`${" ".repeat(VALUE_COLUMN)}█`);
+  });
+
+  it("the wrote summary is the screen's lines, unwrapped", () => {
+    expect(wroteSummary("bar-evals/says-its-name", NEXT)).toEqual([
+      "wrote bar-evals/says-its-name",
+      "",
+      "run it with:",
+      `  ${NEXT[0]}`,
+      `  ${NEXT[1]}`,
+    ]);
   });
 
   it("draws the cursor row as a text input with a cursor, and no other row", () => {

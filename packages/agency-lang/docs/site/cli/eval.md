@@ -177,12 +177,12 @@ NEW TEST  bar-evals
   goal          The reply says its name is 'the amazing Agency language'. It
                 may add a greeting, but it must not give any other name.█
 
-↑↓ move   Enter save   Ctrl+S save   Esc quit
+↑↓ move   Enter save   Ctrl+S save   Ctrl+C quit
 ```
 
-The form opens with the cursor in the first field, so you can start typing at once. Whatever you type is kept as you type it. Enter moves to the next field, and on the last field it saves; the arrow keys move too. `input` and `goal` are often several sentences: when `$EDITOR` is set, Ctrl+E opens them in your editor and the text comes back when you close it (`code --wait` works, and a quoted path with a space in it does not). Without `$EDITOR` they are typed on one line like the others. The folder name and `goal` are required; the rest is optional, and an empty field says so in its help. An empty `input` means the agent takes none; a filled one is a plain string, passed to the main node as its one parameter.
+The form opens with the cursor in the first field, so you can start typing at once. Whatever you type is kept as you type it. Enter moves to the next field, and on the last field it saves; the arrow keys move too. `input` and `goal` are often several sentences: when `$EDITOR` is set, Ctrl+E opens them in your editor and the text comes back when you close it (`code --wait` works, and a quoted path with a space in it does not). Without `$EDITOR` they are typed on one line like the others. The folder name and `goal` are required; the rest is optional, and an empty field says so in its help. An empty `input` means the agent takes none; a filled one is a plain string, passed to the entry node as its one parameter.
 
-Enter on `goal`, or Ctrl+S from anywhere, writes `bar-evals/says-its-name/test.json`, copies the files directory to `files/` when you named one, and prints the run and grade commands to copy. Nothing else is written. A test with a `goal` and no `graders.ts` is scored by the bundled goal judge, so this is all a plain test needs. Add a `graders.ts` beside the file by hand when you want more.
+Enter on `goal`, or Ctrl+S from anywhere, writes `bar-evals/says-its-name/test.json`, copies the files directory to `files/` when you named one, and shows the run and grade commands to copy. They are printed again when the form closes, so they stay in your terminal. Ctrl+C quits; if you typed anything, it asks first. Nothing else is written. A test with a `goal` and no `graders.ts` is scored by the bundled goal judge, so this is all a plain test needs. Add a `graders.ts` beside the file by hand when you want more.
 
 The form creates tests. It does not open an existing one, and it does not take structured inputs, tags or timeouts; write those by hand.
 

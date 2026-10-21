@@ -29,15 +29,15 @@ function form(suiteDir: string, values: Partial<FormState["values"]>): FormState
 describe("validateForm", () => {
   it("requires an id and a goal, in field order", () => {
     expect(validateForm(form("suite", {}), NOTHING_ON_DISK)).toEqual([
-      { field: "id", text: "folder name is required" },
-      { field: "goal", text: "goal is required" },
+      { row: { kind: "field", name: "id" }, text: "folder name is required" },
+      { row: { kind: "field", name: "goal" }, text: "goal is required" },
     ]);
   });
 
   it("refuses an id with a slash or a space", () => {
     for (const id of ["a/b", "a b", "../x"]) {
       const problems = validateForm(form("suite", { id, goal: "g" }), NOTHING_ON_DISK);
-      expect(problems.map((problem) => problem.field)).toEqual(["id"]);
+      expect(problems.map((problem) => problem.row)).toEqual([{ kind: "field", name: "id" }]);
     }
   });
 
@@ -51,7 +51,10 @@ describe("validateForm", () => {
     const anyDirectory: FileChecks = { ...NOTHING_ON_DISK, isDirectory: () => true };
     for (const files of ["../elsewhere", ".", "/tmp", "a/../.."]) {
       expect(validateForm(form("suite", { id: "t", goal: "g", files }), anyDirectory)).toEqual([
-        { field: "files", text: "files must be a directory inside the suite" },
+        {
+          row: { kind: "field", name: "files" },
+          text: "files must be a directory inside the suite",
+        },
       ]);
     }
     // A name that merely starts with two dots is inside the suite.
@@ -73,7 +76,10 @@ describe("validateForm", () => {
     };
     const problems = validateForm(form("/suite", { id: "t", goal: "g", files: "link" }), linked);
     expect(problems).toEqual([
-      { field: "files", text: "files must not be reached through a symlink: /suite/link" },
+      {
+        row: { kind: "field", name: "files" },
+        text: "files must not be reached through a symlink: /suite/link",
+      },
     ]);
   });
 
@@ -171,7 +177,7 @@ describe("writeTest", () => {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(TestWriteError);
-    expect((thrown as TestWriteError).field).toBe("files");
+    expect((thrown as TestWriteError).row).toEqual({ kind: "field", name: "files" });
     expect((thrown as TestWriteError).message).toMatch(/files must not contain symlinks/);
     expect(fs.readdirSync(suite)).toEqual(["fixtures"]);
   });

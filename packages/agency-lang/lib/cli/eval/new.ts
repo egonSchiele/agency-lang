@@ -8,12 +8,14 @@ import * as path from "path";
 import { editorCommand, openInEditor } from "@/eval/newTest/editor.js";
 import {
   editActionFor,
-  fieldSpec,
   initialForm,
-  isLastField,
+  isLastRow,
+  isLong,
   reduceForm,
+  valueAt,
   type FormAction,
   type FormState,
+  type Row,
 } from "@/eval/newTest/form.js";
 import { renderForm, wroteSummary } from "@/eval/newTest/formView.js";
 import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
@@ -76,8 +78,8 @@ const NO_ACTION: FormAction | null = null;
  *  does not know, such as Option+Backspace, and quitting on one of those
  *  partway through a word would throw the form away. */
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
-  const longField = fieldSpec(state.cursor).long && openEditor !== null;
-  const last = isLastField(state.cursor);
+  const longField = isLong(state, state.cursor) && openEditor !== null;
+  const last = isLastRow(state, state.cursor);
   return [
     { keys: ["Up"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
     { keys: ["Down"], help: "next field", run: () => ({ kind: "moveDown" }) },
@@ -140,6 +142,8 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
       return runKey(CONFIRM_QUIT_BINDINGS, key, NO_ACTION);
     case "confirmSave":
       return runKey(CONFIRM_SAVE_BINDINGS, key, NO_ACTION);
+    case "confirmRemove":
+      return NO_ACTION;
   }
 }
 
@@ -152,7 +156,7 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
 function performIntent(state: FormState, action: FormAction, openEditor: OpenEditor): FormState {
   if (action.kind === "editInEditor" && openEditor !== null) {
     try {
-      const text = openEditor(state.values[state.cursor]);
+      const text = openEditor(valueAt(state, state.cursor));
       return reduceForm(state, { kind: "editorReturned", text });
     } catch (error) {
       return reduceForm(state, { kind: "editorFailed", text: messageOf(error) });
@@ -168,8 +172,8 @@ function performIntent(state: FormState, action: FormAction, openEditor: OpenEdi
     try {
       return reduceForm(state, { kind: "saved", testDir: writeTest(state) });
     } catch (error) {
-      const field = error instanceof TestWriteError ? error.field : "id";
-      const problems = [{ field, text: messageOf(error) }];
+      const row: Row = error instanceof TestWriteError ? error.row : { kind: "field", name: "id" };
+      const problems = [{ row, text: messageOf(error) }];
       return reduceForm(state, { kind: "saveFailed", problems });
     }
   }

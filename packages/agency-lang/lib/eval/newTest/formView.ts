@@ -62,7 +62,7 @@ function fieldRows(field: FieldSpec, state: FormState, width: number): Element[]
   const label = `${" ".repeat(INDENT)}${field.label.padEnd(LABEL_WIDTH)}`;
   const valueWidth = Math.max(1, width - label.length);
   const value = state.values[field.name];
-  if (state.cursor !== field.name) {
+  if (!(state.cursor.kind === "field" && state.cursor.name === field.name)) {
     const shown = value === "" ? field.help : sanitizeUntrusted(value);
     const wrapped = wrapText(shown, valueWidth);
     const style: Style = { dim: value === "" };

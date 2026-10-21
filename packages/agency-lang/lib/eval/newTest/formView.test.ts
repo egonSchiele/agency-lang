@@ -65,7 +65,7 @@ describe("renderForm", () => {
   });
 
   it("wraps a long value on the cursor row and puts the cursor at its end", () => {
-    const state = { ...filled(), cursor: "goal" as const };
+    const state = { ...filled(), cursor: { kind: "field", name: "goal" } as const };
     const lines = rows(frame(state));
     const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
     expect(lines[goalRow + 1]).toMatch(new RegExp(`^ {${VALUE_COLUMN}}\\S`));
@@ -75,7 +75,7 @@ describe("renderForm", () => {
 
   it("a value that fills its last row puts the cursor on the row after it", () => {
     const valueWidth = 80 - VALUE_COLUMN;
-    const state = { ...filled(), cursor: "goal" as const };
+    const state = { ...filled(), cursor: { kind: "field", name: "goal" } as const };
     state.values = { ...state.values, goal: "x".repeat(valueWidth) };
     const lines = rows(frame(state));
     const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
@@ -128,7 +128,7 @@ describe("renderForm", () => {
     expect(rows(frame(filled())).at(-1)).toBe(HINTS);
     const failed = reduceForm(filled(), {
       kind: "saveFailed",
-      problems: [{ field: "goal", text: "goal is required" }],
+      problems: [{ row: { kind: "field", name: "goal" }, text: "goal is required" }],
     });
     expect(rows(frame(failed)).at(-1)).toBe("goal is required");
     const asking: FormAction[] = [{ kind: "requestQuit" }];

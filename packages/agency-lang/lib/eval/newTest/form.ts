@@ -9,11 +9,14 @@
 import { applyLineEdit, lineEditAction, type LineEditAction } from "@/tui/lineEditor.js";
 import type { KeyEvent } from "@/tui/input/types.js";
 
+import * as path from "path";
+
 import {
   autoFill,
   choiceValue,
   KIND_NEEDED,
   questionsFor,
+  specObjectFor,
   type GraderDraft,
   type QuestionSpec,
 } from "./graders.js";
@@ -92,10 +95,29 @@ export type FormMode =
   | { kind: "confirmSave" }
   | { kind: "confirmRemove"; index: number };
 
+/** What `eval edit` loaded: the folder, the parsed `test.json` the fields
+ *  are written back over, and the values as loaded for the dirty check. */
+export type Editing = {
+  testDir: string;
+  base: Record<string, unknown>;
+  loaded: Loaded;
+  /** Graded by harness pairs under `files/`, so no goal is needed. */
+  harnessGraded: boolean;
+};
+
+/** The field values as loaded and the graders as they would be written. */
+export type Loaded = { values: Record<FieldName, string>; graders: string };
+
 export type FormState = {
   suiteDir: string;
   values: Record<FieldName, string>;
   graders: GraderDraft[];
+  /** Set while editing an existing test; null when creating one. */
+  editing: Editing | null;
+  /** A locked field and the text shown in its place. */
+  locks: Partial<Record<FieldName, string>>;
+  /** When set, the graders section shows this text and has no rows. */
+  gradersLock: string | null;
   cursor: Row;
   mode: FormMode;
   /** The footer message: the first problem, or what happened to the editor. */
@@ -153,6 +175,9 @@ export function initialForm(suiteDir: string): FormState {
     suiteDir,
     values: { ...EMPTY_VALUES },
     graders: [],
+    editing: null,
+    locks: {},
+    gradersLock: null,
     cursor: { kind: "field", name: FIELDS[0].name },
     mode: { kind: "form" },
     message: "",
@@ -162,16 +187,59 @@ export function initialForm(suiteDir: string): FormState {
   };
 }
 
-/** Whether anything has been typed into a field, or a grader added. */
+/** A form over an existing test: the folder's parent is the suite, the
+ *  cursor starts on the first unlocked row, and what was loaded is kept
+ *  so the form knows when it is clean. */
+export function editingForm(args: {
+  testDir: string;
+  base: Record<string, unknown>;
+  values: Record<FieldName, string>;
+  graders: GraderDraft[];
+  locks: FormState["locks"];
+  gradersLock: string | null;
+  harnessGraded: boolean;
+}): FormState {
+  const state: FormState = {
+    ...initialForm(path.dirname(args.testDir)),
+    values: args.values,
+    graders: args.graders,
+    locks: args.locks,
+    gradersLock: args.gradersLock,
+    editing: {
+      testDir: args.testDir,
+      base: args.base,
+      loaded: { values: args.values, graders: gradersKey(args.graders) },
+      harnessGraded: args.harnessGraded,
+    },
+  };
+  return { ...state, cursor: rowsOf(state)[0] };
+}
+
+/** The graders as the file would hold them. Built from the same objects
+ *  `graders.json` is written from, so a `false` in the file and a `no` in
+ *  the form compare equal. */
+function gradersKey(graders: GraderDraft[]): string {
+  return graders.length === 0 ? "" : JSON.stringify(graders.map(specObjectFor));
+}
+
+/** Whether anything differs from the start: from empty when creating a
+ *  test, from what was loaded when editing one. */
 export function isDirty(state: FormState): boolean {
+  const loaded: Loaded =
+    state.editing === null ? { values: EMPTY_VALUES, graders: "" } : state.editing.loaded;
   return (
-    state.graders.length > 0 ||
-    FIELDS.some((field) => state.values[field.name] !== EMPTY_VALUES[field.name])
+    gradersKey(state.graders) !== loaded.graders ||
+    FIELDS.some((field) => state.values[field.name] !== loaded.values[field.name])
   );
 }
 
-/** Every row the cursor can visit, in order: the fields, then each
- *  grader's questions. */
+/** A field in `locks`, or any grader row while the section is locked. */
+export function isLocked(state: FormState, row: Row): boolean {
+  return row.kind === "field" ? state.locks[row.name] !== undefined : state.gradersLock !== null;
+}
+
+/** Every row the cursor can visit, in order: the unlocked fields, then
+ *  each grader's questions. */
 export function rowsOf(state: FormState): Row[] {
   const fields = FIELDS.map((field): Row => ({ kind: "field", name: field.name }));
   const graders = state.graders.flatMap((draft, index) =>
@@ -181,7 +249,7 @@ export function rowsOf(state: FormState): Row[] {
       question: question.name,
     })),
   );
-  return [...fields, ...graders];
+  return [...fields, ...graders].filter((row) => !isLocked(state, row));
 }
 
 /** The question a grader row names; null for a field row. */
@@ -284,13 +352,20 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return { ...state, mode: { kind: "form" } };
     case "saveFailed": {
       const first = action.problems[0];
-      return first === undefined
-        ? state
-        : { ...state, mode: { kind: "form" }, message: first.text, cursor: first.row };
+      if (first === undefined) {
+        return state;
+      }
+      // A problem on a locked row (a write error pinned to the folder name
+      // while editing) lands the cursor on the first row it can reach.
+      const cursor = isLocked(state, first.row) ? rowsOf(state)[0] : first.row;
+      return { ...state, mode: { kind: "form" }, message: first.text, cursor };
     }
     case "saved":
       return { ...state, done: true, written: action.testDir };
     case "addGrader":
+      if (state.gradersLock !== null) {
+        return state;
+      }
       return {
         ...state,
         message: "",

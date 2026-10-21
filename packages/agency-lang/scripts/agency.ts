@@ -70,6 +70,7 @@ import { addLogsSessionCommands } from "@/cli/logsSession/register.js";
 import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
+import { runEvalEdit } from "@/cli/eval/edit.js";
 import { runEvalNew } from "@/cli/eval/new.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
@@ -1141,6 +1142,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (suiteDir: string) => {
       try {
         await runEvalNew(suiteDir);
+      } catch (error) {
+        failProjectCommand(error);
+      }
+    });
+
+  evalCmd
+    .command("edit")
+    .description("Open a test folder in the form and save it back")
+    .argument("<test-dir>", "A test folder holding test.json")
+    .action(async (testDir: string) => {
+      try {
+        await runEvalEdit(testDir);
       } catch (error) {
         failProjectCommand(error);
       }

@@ -1,9 +1,12 @@
 # `agency eval new`: a form that writes a test
 
 `agency eval new <suite-dir>` opens a five-field form with a graders
-section under it and, on save, writes one test folder into the suite:
-`test.json`, a `graders.json` when at least one grader was added, plus a
-copy of a files directory when one was named. It writes no grader module.
+section under it and, on save, writes one test folder into the suite.
+`agency eval edit <test-dir>` opens the same form over an existing test
+and saves it back in place. The form writes
+`test.json`, a `graders.json` when at least one grader was added, plus,
+when creating, a copy of a files directory when one was named. It writes
+no grader module.
 A test with a `goal` and no graders is scored by the bundled goal judge,
 which is the grader the form means when the section is empty. This page
 is the map of the code, with the rules in it that are easy to break.
@@ -11,8 +14,11 @@ is the map of the code, with the rules in it that are easy to break.
 ## The files
 
 ```text
-scripts/agency.ts              registers `eval new`
-lib/cli/eval/new.ts            the terminal, one key table per mode, handleKey, runLoop
+scripts/agency.ts              registers `eval new` and `eval edit`
+lib/cli/eval/new.ts            one key table per mode, handleKey, runForm (the loop both commands share)
+lib/cli/eval/edit.ts           `eval edit`: loadTestForm, then runForm
+lib/cli/eval/formTerminal.ts   the real terminal and `$EDITOR`, shared by both commands
+lib/eval/newTest/load.ts       a test folder -> FormState, and the refusals                (eval edit)
 lib/eval/newTest/form.ts       FormState, FormAction, reduceForm, FIELDS, Row, rowsOf (pure)
 lib/eval/newTest/graders.ts    the questions per grader kind as tables; answers <-> graders.json objects (pure)
 lib/eval/newTest/formView.ts   renderForm, bodyLines, scrolledToCursor              (pure)
@@ -99,8 +105,8 @@ is not in that list cannot be reached.
 
 The questions live in `graders.ts` as tables. `KIND_QUESTION` is the first
 row. `KIND_QUESTIONS` holds one list per kind, and `TAIL_QUESTIONS` is what
-every kind ends with: name, must pass, passing score (a must-pass goal
-only), weight. A sixth kind is one entry in `KIND_QUESTIONS` and one
+every kind ends with: name, must pass, passing score (a must-pass goal,
+or any goal once it holds one), weight. A sixth kind is one entry in `KIND_QUESTIONS` and one
 label in `KIND_LABELS`. The measure and count options are built from the
 schema's `MEASURES` and `COUNTS` through label tables typed on them, so a
 measure added to the schema without a label fails the typecheck here.
@@ -226,6 +232,95 @@ string. The directory is copied only when it passes these checks, made in
 An empty files directory is copied as an empty `files/`, so the test shows
 what it was given.
 
+## Editing a test
+
+`agency eval edit bar-evals/says-its-name` opens the form over an
+existing folder:
+
+```text
+EDIT TEST  bar-evals/says-its-name
+
+  folder name   says-its-name
+  description   The script is told its name and asked for it.█
+  input         What's your name?
+  files         files/ (2 files)
+  goal          The reply says its name.
+
+graders
+  no graders: the goal above is judged by the bundled goal judge
+```
+
+`loadTestForm` in `load.ts` builds the state. It asks the loader first
+(`loadInputs` on the folder, which reads a folder holding a `test.json` as
+one test), so every refusal the loader makes is inherited: not a
+directory, a `test.json` that is not an object, both grader files. The
+goal is not required at load, because a test missing one is what the
+form is for. Then it reads the raw `test.json` again, because the loader
+normalizes to a `Test` and drops the keys the form never shows. That raw
+object is `editing.base`, and `testJsonFor(values, base, locks)` writes
+`description`, `input` and `goal` over it on save, deleting a key whose
+field was emptied (the loader refuses an empty string). A hand-written
+test keeps its `tags`, `timeoutSec`, `expected`, `metadata`,
+`harnessMaxCost`, `harnessMustPass`, and an `id` it spelled out.
+
+Three rows can be locked. A lock is a text in `state.locks` shown dim in
+the value column; `rowsOf` leaves a locked row out, so the cursor never
+lands on it, and `validateForm` does not check it, which is what skips
+the folder-name checks. The folder name is always locked: renaming a test
+is moving a folder. The files row is always locked: replacing a test's
+seeded files would mean deleting the old copy. The loader is asked to
+leave `files` alone (`skipFiles`), so a git source is not cloned to draw
+the row. It reads `files/ (12 files)` when the sibling folder is what the
+file names or finds, counted by its own path with `lstat` so a link is
+refused, `none` when there is no files entry at all, or the path as
+written when it points somewhere else. Lock text that came from the file
+is sanitized where it is built, since it is drawn by the style parser. A
+structured `input`
+(an object) locks the input row with `structured input: edit the file`
+and is left in the base as it was. A `graders.ts`, or a `graders` path
+pointing anywhere but the sibling `graders.json`, sets `gradersLock` and
+the section shows that text and has no rows, because a `graders.json` the
+form wrote would be ignored while `graders` points elsewhere.
+
+Two refusals are the form's own: an `id` in `test.json` that differs from
+the folder name (`rename the folder or the id`), and a `rubric`, since
+the loader refuses a goal beside a rubric and the form would write one.
+
+`isDirty` compares with what was loaded, not with empty, so quitting an
+unchanged test asks nothing. The graders are compared as the objects
+`specObjectFor` builds, serialized, and never as the file's text: a
+`mustPass: false` in the file and a `no` in the form then compare equal.
+That comparison only sees rows the form shows, so every field the file
+may hold needs a row that is shown while it has a value. The passing
+score row is the one case: it is asked for a must-pass goal, and stays
+once it holds a value, so a `passingScore` on a goal that is not
+must-pass is neither hidden nor dropped on save.
+
+The write keeps one shape for both modes. `stagedFiles` is the "what":
+`test.json`, and `graders.json` when there is a grader, written into
+`<suite>/.staging-<id>/`. `COMMITS` is the "how", keyed by `create` or
+`replace`. `replace` first checks, with `lstat`, that each target
+(`<testDir>/test.json`, `<testDir>/graders.json`) is absent or a plain
+file, so a target that became a directory or a symlink fails before
+anything moves and the originals stay as they were. When the last grader
+was removed from an editable section, the old `graders.json` is moved
+into the staging folder next, and the `graders` key the file may have
+spelled out is left out of `test.json`, or the loader would look for the
+file this save removes. Then each staged file is renamed over its
+original, one step each; a rename that fails puts the old `graders.json`
+back and says which files were already written, so the folder holds the
+originals or the new files. A section locked by a `graders` path
+elsewhere never touches a sibling `graders.json`, since the form never
+read it. The old file leaves with the staging folder rather than through
+`safeDeleteFile`, which refuses a path outside the nearest
+`package.json`, which every suite in a temp directory is.
+
+The folder path is resolved once at the top of `loadTestForm`, so `.`
+names the folder and every comparison with what the loader returns (which
+is absolute) is absolute against absolute. A test graded by harness pairs
+under `files/` sets `editing.harnessGraded`, and a goal is then not
+required at save, as it is not while the section is locked.
+
 ## Handing the terminal to `$EDITOR`
 
 `input` and `goal` open in `$EDITOR` on Ctrl+E when it is set. The hand-off has an
@@ -298,10 +393,11 @@ a text input leaves the cursor out when its last row is full.
 `form.test.ts`, `graders.test.ts`, `write.test.ts` and `editor.test.ts`
 need no terminal.
 `formView.test.ts` renders through `Screen` into a `FrameRecorder` and
-pins the rows. `new.test.ts` drives the whole command with a
-`ScriptedInput`, feeding each key once the frame shows the state a person
-would react to, the way `lib/runsExplorer/run.test.ts` drives the explorer.
-`evalNew` takes the terminal as a factory, `openTerminal`, so the tests
-hand it a scripted one and the suite-directory check runs before any
-terminal is opened. The signal handling in the hand-off needs a real
+pins the rows. `new.test.ts` and `edit.test.ts` drive the whole command with a
+`ScriptedInput` through the poller in `formTestHarness.ts`, feeding each
+key once the frame shows the state a person would react to, the way
+`lib/runsExplorer/run.test.ts` drives the explorer. `load.test.ts` builds
+test folders under a temp directory. Both commands take the terminal as a
+factory, `openTerminal`, so the tests hand it a scripted one and the
+checks on the path run before any terminal is opened. The signal handling in the hand-off needs a real
 terminal and a real editor, and has no test.

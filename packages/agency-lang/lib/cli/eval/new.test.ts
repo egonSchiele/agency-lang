@@ -4,46 +4,21 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ScriptedInput } from "@/tui/input/scripted.js";
-import type { KeyEvent } from "@/tui/input/types.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 
+import { ctrl, drive as driveForm, shown, times, typing, type Step } from "./formTestHarness.js";
 import { assertSuiteDirectory, evalNew, type EvalNewOptions, type OpenEditor } from "./new.js";
 
-const SIZE = { width: 100, height: 24 };
-
-type Step = { when: (frame: string) => boolean; key: KeyEvent | string };
-
-function lastFrame(recorder: FrameRecorder): string {
-  return recorder.frames.length === 0 ? "" : recorder.lastText();
-}
-
-/** Run the form while a poller feeds each key once the screen shows the
- *  state a person would react to. */
-async function drive(
+function drive(
   options: EvalNewOptions,
   input: ScriptedInput,
   recorder: FrameRecorder,
   steps: Step[],
-) {
-  let at = 0;
-  const timer = setInterval(() => {
-    if (at < steps.length && steps[at].when(lastFrame(recorder))) {
-      const key = steps[at].key;
-      input.feedKey(typeof key === "string" ? { key } : key);
-      at += 1;
-    }
-  }, 1);
-  try {
-    await evalNew(options);
-  } finally {
-    clearInterval(timer);
-  }
-  expect(at).toBe(steps.length);
+): Promise<void> {
+  return driveForm(() => evalNew(options), input, recorder, steps);
 }
 
-function typing(text: string): Step[] {
-  return [...text].map((key) => ({ when: () => true, key }));
-}
+const SIZE = { width: 100, height: 24 };
 
 describe("evalNew", () => {
   let suite: string;
@@ -59,10 +34,6 @@ describe("evalNew", () => {
     };
   }
 
-  const shown = (text: string) => (frame: string) => frame.includes(text);
-  const ctrl = (key: string): KeyEvent => ({ key, ctrl: true });
-  const times = (key: string, count: number): Step[] =>
-    Array.from({ length: count }, () => ({ when: () => true, key }));
   const everFrame = (text: string) =>
     recorder.frames.some((_, index) => recorder.textAt(index).includes(text));
   const graders = (id: string) =>

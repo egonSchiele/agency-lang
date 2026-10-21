@@ -65,6 +65,20 @@ function fieldRow(name: FieldName): Row {
 }
 
 export function validateForm(state: FormState, checks: FileChecks = realFileChecks): Problem[] {
+  return [
+    ...fieldProblems(state, checks).filter((problem) => !isLockedProblem(state, problem)),
+    ...graderProblems(state.graders),
+  ];
+}
+
+/** A locked field is not validated: the row cannot be reached, and what
+ *  it shows is not a value. That is what skips the folder-name checks
+ *  while editing. */
+function isLockedProblem(state: FormState, problem: Problem): boolean {
+  return problem.row.kind === "field" && state.locks[problem.row.name] !== undefined;
+}
+
+function fieldProblems(state: FormState, checks: FileChecks): Problem[] {
   const problems: Problem[] = [];
   const id = state.values.id;
   const idLabel = fieldSpec("id").label;
@@ -86,17 +100,21 @@ export function validateForm(state: FormState, checks: FileChecks = realFileChec
     problems.push(files);
   }
   // A goal is judged only when the test has no graders of its own, so it
-  // is required only then.
+  // is required only then: no grader in the section, no locked graders
+  // file, and no harness pairs grading it.
+  const graded =
+    state.graders.length > 0 ||
+    state.gradersLock !== null ||
+    (state.editing?.harnessGraded ?? false);
   const required = FIELDS.filter(
-    (spec) =>
-      spec.required && spec.name !== "id" && (spec.name !== "goal" || state.graders.length === 0),
+    (spec) => spec.required && spec.name !== "id" && (spec.name !== "goal" || !graded),
   );
   for (const field of required) {
     if (state.values[field.name] === "") {
       problems.push({ row: fieldRow(field.name), text: `${field.label} is required` });
     }
   }
-  return [...problems, ...graderProblems(state.graders)];
+  return problems;
 }
 
 /** Every grader's first problem, in the parser's words, then the one check
@@ -168,33 +186,64 @@ function filesProblem(state: FormState, checks: FileChecks): Problem | null {
   return null;
 }
 
-/** The `test.json` object: every field with a value, under the key the
- *  loader reads. `files` is never a key, because the loader finds `./files`
- *  on its own; an empty `input` is left out, because the loader refuses an
- *  empty string and reads a missing key as "takes no input". */
-export function testJsonFor(values: Record<FieldName, string>): Record<string, string> {
+/** The `test.json` object: `base` (what the file held, when editing) with
+ *  every written field set from its value, or deleted when the value is
+ *  empty. `files` is never a key, because the loader finds `./files` on
+ *  its own; an empty `input` is left out, because the loader refuses an
+ *  empty string and reads a missing key as "takes no input". A locked
+ *  field (a structured input) is left as the base has it. */
+export function testJsonFor(
+  values: Record<FieldName, string>,
+  base: Record<string, unknown> = {},
+  locks: FormState["locks"] = {},
+): Record<string, unknown> {
   const written: FieldName[] = ["description", "input", "goal"];
-  return Object.fromEntries(
-    written.filter((field) => values[field] !== "").map((field) => [field, values[field]]),
-  );
+  const out = { ...base };
+  for (const field of written.filter((name) => locks[name] === undefined)) {
+    if (values[field] === "") {
+      delete out[field];
+    } else {
+      out[field] = values[field];
+    }
+  }
+  return out;
 }
 
-/** Write the test folder and return its path. Callers validate first; this
- *  re-checks only what a race could change. A problem the user can fix is
- *  thrown as a `TestWriteError` naming the field. */
-export function writeTest(state: FormState): string {
-  const suiteDir = path.resolve(state.suiteDir);
-  const id = state.values.id;
-  const target = testDirFor(suiteDir, id);
-  const staging = path.join(suiteDir, `.staging-${id}`);
-  removeStaging(suiteDir, staging);
-  fs.mkdirSync(staging);
-  try {
-    const json = `${JSON.stringify(testJsonFor(state.values), null, JSON_INDENT)}\n`;
-    fs.writeFileSync(path.join(staging, "test.json"), json);
-    if (state.graders.length > 0) {
-      fs.writeFileSync(path.join(staging, "graders.json"), gradersJsonText(state.graders));
-    }
+type StagedFile = { name: string; text: string };
+
+/** What a save writes: `test.json`, and `graders.json` when there is at
+ *  least one grader. When the last grader was removed from an editable
+ *  section, a `graders` key the file spelled out goes too, or the loader
+ *  would look for the file this save deletes. */
+function stagedFiles(state: FormState): StagedFile[] {
+  const base = state.editing === null ? {} : { ...state.editing.base };
+  if (removesGraders(state)) {
+    delete base.graders;
+  }
+  const testJson = `${JSON.stringify(testJsonFor(state.values, base, state.locks), null, JSON_INDENT)}\n`;
+  const files: StagedFile[] = [{ name: "test.json", text: testJson }];
+  if (state.graders.length > 0) {
+    files.push({ name: "graders.json", text: gradersJsonText(state.graders) });
+  }
+  return files;
+}
+
+/** Whether a save takes a test's `graders.json` away: the section is
+ *  editable and empty. A locked section leaves the file alone, since the
+ *  form never read it. */
+function removesGraders(state: FormState): boolean {
+  return state.editing !== null && state.gradersLock === null && state.graders.length === 0;
+}
+
+/** How the staged files reach their place. `create` renames the whole
+ *  staging folder into the suite as a new test. `replace` moves each file
+ *  over its original in an existing test folder, one rename each. */
+const COMMITS: Record<
+  "create" | "replace",
+  (staging: string, state: FormState, staged: string[]) => string
+> = {
+  create: (staging, state) => {
+    const target = testDirFor(path.resolve(state.suiteDir), state.values.id);
     const files = filesDirFor(state);
     if (files !== null) {
       copyFiles(state, files, path.join(staging, "files"));
@@ -205,11 +254,90 @@ export function writeTest(state: FormState): string {
       throw new TestWriteError(fieldRow("id"), `${target} already exists`);
     }
     fs.renameSync(staging, target);
-  } catch (error) {
-    removeStaging(suiteDir, staging);
-    throw error;
+    return target;
+  },
+  replace: (staging, state, staged) => {
+    if (state.editing === null) {
+      throw new Error("replace needs a test being edited");
+    }
+    const testDir = state.editing.testDir;
+    const names = ["test.json", "graders.json"];
+    // Every target is checked before anything moves, so a failure here
+    // leaves the originals as they were.
+    for (const name of names) {
+      assertReplaceable(path.join(testDir, name));
+    }
+    // The old graders.json is moved into the staging folder first and
+    // leaves with it; a rename that fails after it moves puts it back, so
+    // the folder is the originals or the new files, not a mix. It leaves
+    // this way rather than through a delete helper: `safeDeleteFile`
+    // refuses a path outside the nearest package, which every suite in a
+    // temp directory is.
+    const old = path.join(testDir, "graders.json");
+    const parked =
+      removesGraders(state) && fs.existsSync(old) ? path.join(staging, "graders.json.old") : null;
+    if (parked !== null) {
+      fs.renameSync(old, parked);
+    }
+    staged.forEach((name, i) => {
+      try {
+        fs.renameSync(path.join(staging, name), path.join(testDir, name));
+      } catch (error) {
+        const written = staged.slice(0, i).join(", ");
+        const detail = error instanceof Error ? error.message : String(error);
+        if (parked !== null) {
+          fs.renameSync(parked, old);
+        }
+        throw new Error(written === "" ? detail : `${detail} (${written} already written)`);
+      }
+    });
+    return testDir;
+  },
+};
+
+/** A path a staged file may be renamed over: absent, or a plain file. */
+function assertReplaceable(file: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(file);
+  } catch {
+    return;
   }
-  return target;
+  if (stat.isSymbolicLink()) {
+    throw new TestWriteError(
+      fieldRow("goal"),
+      `${file} is a symlink; the form will not replace it`,
+    );
+  }
+  if (!stat.isFile()) {
+    throw new TestWriteError(
+      fieldRow("goal"),
+      `${file} is not a file; the form will not replace it`,
+    );
+  }
+}
+
+/** Write the test and return its folder. Callers validate first; this
+ *  re-checks only what a race could change. Both modes build the files in
+ *  a staging folder under the suite; how they reach their place is the
+ *  mode's entry in `COMMITS`. A problem the user can fix is thrown as a
+ *  `TestWriteError` naming the row. */
+export function writeTest(state: FormState): string {
+  const suiteDir = path.resolve(state.suiteDir);
+  const id = state.editing === null ? state.values.id : path.basename(state.editing.testDir);
+  const staging = path.join(suiteDir, `.staging-${id}`);
+  removeStaging(suiteDir, staging);
+  fs.mkdirSync(staging);
+  try {
+    const staged = stagedFiles(state);
+    for (const file of staged) {
+      fs.writeFileSync(path.join(staging, file.name), file.text);
+    }
+    const names = staged.map((file) => file.name);
+    return COMMITS[state.editing === null ? "create" : "replace"](staging, state, names);
+  } finally {
+    removeStaging(suiteDir, staging);
+  }
 }
 
 /** Copy the files directory byte for byte. The symlink rule is checked

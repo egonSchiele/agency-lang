@@ -4,7 +4,14 @@ import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
-import { FIELDS, initialForm, reduceForm, type FormAction, type FormState } from "./form.js";
+import {
+  editingForm,
+  FIELDS,
+  initialForm,
+  reduceForm,
+  type FormAction,
+  type FormState,
+} from "./form.js";
 import type { Answers } from "./graders.js";
 import {
   bodyLines,
@@ -298,5 +305,39 @@ describe("renderForm", () => {
     const noteRow = lines.findIndex((row) => row.includes(note));
     expect(noteRow).toBeGreaterThan(goalRow);
     expect(lines[noteRow + 1]).toBe("");
+  });
+});
+
+describe("an editing form on screen", () => {
+  function editing(gradersLock: string | null = null): FormState {
+    return editingForm({
+      testDir: "bar-evals/says-its-name",
+      base: {},
+      values: { ...filled().values, id: "" },
+      graders: [],
+      locks: { id: "says-its-name", files: "files/ (2 files)" },
+      gradersLock,
+      harnessGraded: false,
+    });
+  }
+
+  it("is titled EDIT TEST with the folder", () => {
+    expect(frame(editing())).toContain("EDIT TEST  bar-evals/says-its-name");
+    expect(frame(editing())).not.toContain("NEW TEST");
+  });
+
+  it("a locked row shows its text dim and no cursor", () => {
+    const text = frame(editing());
+    expect(text).toMatch(/folder name\s+says-its-name\n/);
+    expect(text).toMatch(/files\s+files\/ \(2 files\)/);
+    expect(text).not.toContain("says-its-name█");
+    expect(text).not.toContain("letters, digits, - and _");
+    expect(text).toContain("asked for it.█");
+  });
+
+  it("a locked section shows graders.ts: edit the file", () => {
+    const text = frame(editing("graders.ts: edit the file"));
+    expect(text).toContain("graders.ts: edit the file");
+    expect(text).not.toContain("no graders:");
   });
 });

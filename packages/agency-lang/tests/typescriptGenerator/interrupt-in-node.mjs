@@ -684,4 +684,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-in-node.agency:foo2":{"2":{"line":8,"col":2},"3":{"line":9,"col":2},"4":{"line":10,"col":2}},"interrupt-in-node.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":8,"col":2},"3":{"line":9,"col":2},"4":{"line":10,"col":2}},"interrupt-in-node.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2}}};

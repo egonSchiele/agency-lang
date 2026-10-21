@@ -174,6 +174,8 @@ When something looks "off by 2" or "off by N":
 
 6. **Suppression directives misfire under LSP?** Verify `parseAgency` was the entrypoint (LSP path goes through it). Verify nothing reads `applyTemplate` to choose its own offset — there should be no such reads outside `parseAgency` itself.
 
+7. **A statement with no `loc` at all?** The source map (`SourceMapBuilder.record`) skips it, so the debugger has no line to highlight when the program stops there, and logs "No source map entry found". A node built by hand rather than through `withLoc` is the usual cause: a `binOpExpression` gets its span from its operands (`locSpanning` in `parsers.ts`), which is how `story += line` and `i++` statements have one. `lib/backends/sourceMapStatements.test.ts` compiles a program and checks every statement line is recorded.
+
 ## What's NOT normalized
 
 - **`loc.col`** — always raw column from tarsec; no offset adjustment is needed because the prelude only adds whole lines, not a column shift on existing user lines.

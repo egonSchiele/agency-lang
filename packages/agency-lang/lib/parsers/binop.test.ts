@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { binOpParser } from "./parsers.js";
+import { parseAgency } from "../parser.js";
+import type { SourceLocation } from "../types/base.js";
 
 describe("binOpParser", () => {
   // Arithmetic operators
@@ -923,6 +925,34 @@ describe("binOpParser", () => {
         const result = binOpParser(input);
         expect(result.success).toBe(false);
       });
+    });
+  });
+
+  // Locations come from a whole-file parse; the bare parser has no origin
+  // to count from.
+  describe("locations", () => {
+    function firstStatement(body: string) {
+      const program = parseAgency(`node main() {\n  ${body}\n}\n`);
+      expect(program.success).toBe(true);
+      if (!program.success) throw new Error(program.message);
+      const node = program.result.nodes.find((n) => n.type === "graphNode") as {
+        body: { loc?: SourceLocation }[];
+      };
+      return node.body[0];
+    }
+
+    it("a compound assignment spans its operands", () => {
+      const loc = firstStatement("story += line").loc;
+      expect(loc).toMatchObject({ line: 1, col: 2 });
+      expect(loc!.end - loc!.start).toBe("story += line".length);
+    });
+
+    it("a postfix increment has the location of its operand", () => {
+      expect(firstStatement("count++").loc).toMatchObject({ line: 1, col: 2 });
+    });
+
+    it("a unary operator has the location of its operand", () => {
+      expect(firstStatement("!done").loc).toMatchObject({ line: 1, col: 3 });
     });
   });
 });

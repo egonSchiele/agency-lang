@@ -11,10 +11,12 @@ function sourceMapOf(source: string): SourceMap {
   try {
     const file = path.join(dir, "prog.agency");
     fs.writeFileSync(file, source);
-    const outputFile = compile({}, file, path.join(dir, "prog.ts"), { quiet: true });
+    // Raw TypeScript keeps the map as the one JSON literal the generator
+    // wrote; the JavaScript output has been through esbuild.
+    const outputFile = compile({}, file, path.join(dir, "prog.ts"), { quiet: true, ts: true });
     expect(outputFile).not.toBeNull();
     const output = fs.readFileSync(outputFile ?? "", "utf-8");
-    const match = /const __sourceMap = (.*);/.exec(output);
+    const match = /export const __sourceMap = (.*);/.exec(output);
     expect(match).not.toBeNull();
     return JSON.parse(match![1]);
   } finally {

@@ -15,6 +15,7 @@ import type { GlobalStore } from "./state/globalStore.js";
 import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { deepClone } from "./utils.js";
+import { isAttachedResume, mintDebugRun } from "./debugRun.js";
 
 export type ResumeOverrides = {
   locals?: Record<string, unknown>;
@@ -159,6 +160,12 @@ export async function restoreForResume(
 
   await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
   execCtx.restoreState(checkpoint);
+  // A resume the attached debugger did not issue comes from outside, and
+  // is a run of its own to the debugger: two resumes of one checkpoint
+  // must not share a key (`debugRun.ts`).
+  if (!isAttachedResume(request.metadata as Record<string, unknown> | undefined)) {
+    mintDebugRun(execCtx);
+  }
   reinstallRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);
   applyRestoreOverrides(execCtx, checkpoint, {
     args: request.overrides?.args,

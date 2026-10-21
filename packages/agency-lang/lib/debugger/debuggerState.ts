@@ -16,15 +16,31 @@ export class DebuggerState {
    *  through. */
   ownedRun: string | null = null;
 
+  /** The key of the run debugged last, so a new owner is told from the
+   *  same run taking the debugger again after a stop. */
+  private lastOwner: string | null = null;
+
   /** Whether a step in the run `key` is this debugger's to stop at.
    *  Not attached, every run is; attached, the first run to ask claims
-   *  the debugger. A context with no key is treated as the run's own. */
+   *  the debugger. A context with no key is treated as the run's own. A
+   *  run other than the last one starts clean: the rolling window and
+   *  the step target were the last run's, and a step back from the new
+   *  run's first stop must not land in the old run's state. */
   owns(key: string | undefined): boolean {
     if (this.attached === undefined || key === undefined) {
       return true;
     }
     if (this.ownedRun === null) {
       this.ownedRun = key;
+      if (this.lastOwner !== key) {
+        this.lastOwner = key;
+        this.checkpoints = new CheckpointStore(100, this.rewindSize);
+        // The mode stays: a `continue` the person gave holds across a
+        // caller's resume, which is a new owner too.
+        this.stepTarget = null;
+        this.stopDepth = 0;
+        this.attached.ownerChanged?.();
+      }
       return true;
     }
     return this.ownedRun === key;
@@ -40,7 +56,10 @@ export class DebuggerState {
     targetDepth: number;
   } | null = null;
 
+  private readonly rewindSize: number;
+
   constructor(rewindSize: number) {
+    this.rewindSize = rewindSize;
     this.checkpoints = new CheckpointStore(100, rewindSize);
   }
 

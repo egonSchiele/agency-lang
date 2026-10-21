@@ -1,0 +1,9 @@
+// A node that asks its caller for a value, so a test can resume one
+// checkpoint twice with two answers and check that each caller gets its
+// own answer back.
+node main() {
+  const who = interrupt("who?")
+  x = 1
+  y = 2
+  return who
+}

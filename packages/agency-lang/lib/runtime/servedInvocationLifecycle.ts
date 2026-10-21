@@ -5,9 +5,7 @@
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
 import type { ServedInvocationOutcome } from "./invocationUsage.js";
-import { releaseDebugRun } from "./debugRun.js";
-import { hasInterrupts } from "./interrupts.js";
-import { isPaused } from "./pause.js";
+import { releaseDebugRunAfter } from "./debugRun.js";
 
 /** A bare value-or-error, before the usage snapshot is attached. */
 export type RawOutcome<T> = { status: "returned"; value: T } | { status: "threw"; error: unknown };
@@ -28,9 +26,10 @@ export async function finishServedInvocation<T>(
   cleanup: () => Promise<void>,
 ): Promise<ServedInvocationOutcome<T>> {
   let finalOutcome = outcome;
-  if (runEnded(outcome)) {
-    releaseDebugRun(execCtx);
-  }
+  // The leg goes back to its caller, so an attached debugger no longer
+  // owns the run, unless the leg paused on the debugger's own stops.
+  // Whether it owned it rides on the outcome, for `settleStops`.
+  const debugOwner = releaseDebugRunAfter(execCtx, outcome);
   try {
     await cleanup();
   } catch (cleanupError) {
@@ -45,21 +44,6 @@ export async function finishServedInvocation<T>(
     ...finalOutcome,
     usage: execCtx.invocationUsage.snapshot(),
     traceId: execCtx.getRunId(),
+    debugOwner,
   };
-}
-
-/** Whether `outcome` is the end of the run rather than a pause: a value
- *  or a throw, not the program's own interrupts and not a paused
- *  checkpoint. A node's value is `{ data }`; an exported function's is
- *  bare. */
-function runEnded<T>(outcome: RawOutcome<T>): boolean {
-  if (outcome.status === "threw") {
-    return true;
-  }
-  const value: unknown = outcome.value;
-  const data =
-    typeof value === "object" && value !== null && "data" in value
-      ? (value as { data: unknown }).data
-      : value;
-  return !hasInterrupts(data) && !isPaused(data);
 }

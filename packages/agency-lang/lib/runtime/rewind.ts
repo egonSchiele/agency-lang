@@ -12,6 +12,7 @@ import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
 import { isAttachedResume, settleStops } from "./attachedDebugger.js";
 import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
+import { releaseDebugRunAfter } from "./debugRun.js";
 import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
 import { hasInterrupts } from "./interrupts.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -87,14 +88,24 @@ async function replayFrom(
       metadata,
     });
     execCtx._skipNextCheckpoint = true;
-    const value = await withExternalSignals(execCtx, signals, () =>
-      replayLoop(execCtx, checkpoint.nodeId, firesAgentEnd(metadata) ? lineage : null),
-    );
+    let value: RunNodeCoreResult<any>;
+    try {
+      value = await withExternalSignals(execCtx, signals, () =>
+        replayLoop(execCtx, checkpoint.nodeId, firesAgentEnd(metadata) ? lineage : null),
+      );
+    } catch (error) {
+      // A replay does not go through `finishServedInvocation`, so the
+      // debugger is let go of here, as there.
+      releaseDebugRunAfter(execCtx, { status: "threw", error });
+      throw error;
+    }
+    const debugOwner = releaseDebugRunAfter(execCtx, { status: "returned", value });
     return {
       status: "returned",
       value,
       usage: execCtx.invocationUsage.snapshot(),
       traceId: execCtx.getRunId(),
+      debugOwner,
     };
   } finally {
     execCtx.cleanup();

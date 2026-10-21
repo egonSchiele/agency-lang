@@ -13,7 +13,7 @@
 import { z } from "zod";
 
 import type { InterruptResponse } from "../../runtime/interruptResponse.js";
-import type { DebuggerCommand } from "../types.js";
+import type { DebuggerCommand, DebuggerIO } from "../types.js";
 
 /** The `DebuggerIO` methods that expect an answer. */
 export const REQUEST_METHODS = [
@@ -54,7 +54,10 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("finished"),
-      value: z.unknown(),
+      /** Optional: a node that returns nothing, or a run that threw, has
+       *  no value, and JSON drops a key whose value is undefined. zod 4
+       *  treats a plain `unknown` key as required. */
+      value: z.unknown().optional(),
       /** Set when the run ended by throwing; `value` is then nothing. */
       error: z.string().optional(),
     })
@@ -118,16 +121,11 @@ const InterruptResponseSchema = z.union([
 ]);
 
 /** The two schemas above are written by hand, so this ties each to the
- *  type it checks: a command added to `DebuggerCommand` without a line
- *  here fails to compile, instead of ending every attached session the
- *  first time someone uses it. Optional fields are made required on both
- *  sides first, since zod makes an `unknown` field optional. */
-type Required<T> = T extends unknown ? { [K in keyof T]-?: T[K] } : never;
-type SameShape<A, B> = [Required<A>] extends [Required<B>]
-  ? [Required<B>] extends [Required<A>]
-    ? true
-    : never
-  : never;
+ *  type it checks, in both directions: a command added to
+ *  `DebuggerCommand` without a line here, or a field the type requires
+ *  that the schema makes optional, fails to compile instead of ending
+ *  every attached session the first time someone uses it. */
+type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const commandSchemaMatchesType: SameShape<
   z.infer<typeof DebuggerCommandSchema>,
   DebuggerCommand
@@ -143,7 +141,7 @@ void responseSchemaMatchesType;
  *  against this before handing it to the driver, so a UI that answers
  *  with the wrong shape ends the session instead of crashing the
  *  program. */
-export const REPLY_SCHEMAS: Record<RequestMethod, z.ZodType> = {
+export const REPLY_SCHEMAS = {
   render: z.undefined(),
   waitForCommand: DebuggerCommandSchema,
   showRewindSelector: z.number().nullable(),
@@ -151,4 +149,6 @@ export const REPLY_SCHEMAS: Record<RequestMethod, z.ZodType> = {
   showCheckpointsPanel: z.undefined(),
   promptForNodeArgs: z.array(z.unknown()),
   promptForInput: z.string(),
-};
+  // Each schema must produce what the matching `DebuggerIO` method
+  // returns, so a wrong schema for any method fails to compile.
+} satisfies { [M in RequestMethod]: z.ZodType<Awaited<ReturnType<DebuggerIO[M]>>> };

@@ -26,7 +26,9 @@ type Listeners = {
 
 /** Two channels wired to each other: what one sends, the other receives
  *  on a microtask, so a listener registered right after `send` still sees
- *  the message. Closing either closes both, and a message sent just
+ *  the message, and as JSON, the way a socket delivers it, so a message a
+ *  socket would mangle (a key whose value is undefined, a Date) is
+ *  mangled here too. Closing either closes both, and a message sent just
  *  before the close is still delivered after the close listeners ran,
  *  where a socket delivers it first. */
 export function memoryChannelPair(): [Channel, Channel] {
@@ -47,9 +49,10 @@ export function memoryChannelPair(): [Channel, Channel] {
       if (closed) {
         return;
       }
+      const asJson: unknown = JSON.parse(JSON.stringify(message) ?? "null");
       queueMicrotask(() => {
         for (const listener of [...theirs.message]) {
-          listener(message);
+          listener(asJson);
         }
       });
     },

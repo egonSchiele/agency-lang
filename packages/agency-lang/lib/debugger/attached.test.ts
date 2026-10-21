@@ -194,15 +194,14 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(approving.data).toBe("the secret");
   });
 
-  it("a step back in one run never lands in another run's state", async () => {
-    // Both runs pass the same statements, so the window holds a
-    // checkpoint of each at each; the step back must pick this run's.
+  it("one run at a time is debugged; another that starts meanwhile runs without stopping", async () => {
+    // Both runs pass the same statements. The first to stop owns the
+    // debugger; the second never stops, so a step back cannot reach it,
+    // and its caller gets its own value under its own options.
     const mod = await freshImport(compiledPath(fixtures.echo));
-    // The stepping mode is one for the debugger, so neither run says
-    // `continue` before the step back has happened.
     const io = new PerRunIO([
       [{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }],
-      [{ type: "step" }, { type: "step" }, { type: "step" }],
+      [{ type: "continue" }],
     ]);
     attachTo(mod, [], io);
 
@@ -211,6 +210,50 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(alice.data).toBe("alice");
     expect(bob.data).toBe("bob");
     expect(io.logLines.filter((line) => line.startsWith("Rewinding"))).toHaveLength(1);
+    // Every stop shown was alice's: a rewind starts a new trace, so the
+    // run is told by the node's argument, not the trace id.
+    const shown = io.renderCalls.map((cp) => cp.getCurrentFrame()?.args?.who);
+    expect(shown.length).toBeGreaterThanOrEqual(3);
+    expect(shown.every((who) => who === "alice")).toBe(true);
+    expect(io.logLines).toContainEqual(
+      "Another run started while this one is debugged; it runs without stopping",
+    );
+  });
+
+  it("two runs that share a trace id are still told apart", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const io = new PerRunIO([
+      [{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }],
+      [{ type: "continue" }],
+    ]);
+    attachTo(mod, [], io);
+
+    const [alice, bob] = await Promise.all([
+      mod.main("alice", { traceId: "shared" }),
+      mod.main("bob", { traceId: "shared" }),
+    ]);
+
+    expect(alice.data).toBe("alice");
+    expect(bob.data).toBe("bob");
+  });
+
+  it("when the debugged run ends, the next run to stop is debugged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const { io, driver } = attachTo(mod, [
+      { type: "step" },
+      { type: "continue" },
+      { type: "continue" },
+    ]);
+
+    expect((await mod.main("alice")).data).toBe("alice");
+    const shownForAlice = io.renderCalls.length;
+    // The mode is the debugger's, not a run's: alice's `continue` left it
+    // running, and stepping is what a pause key will restore.
+    driver.debuggerState.stepping();
+    expect((await mod.main("bob")).data).toBe("bob");
+
+    expect(shownForAlice).toBeGreaterThanOrEqual(2);
+    expect(io.renderCalls.length).toBeGreaterThan(shownForAlice);
   });
 
   it("a run that calls another node of the same module from its own code does not deadlock", async () => {
@@ -223,17 +266,17 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(result.data).toBe(5);
   });
 
-  it("a run that finishes does not wait on another run's unanswered stop", async () => {
+  it("a run that starts while another sits at an unanswered stop runs through", async () => {
     const mod = await freshImport(compiledPath(fixtures.stepTest));
     const io = new SilentIO([]);
     const { driver } = attachTo(mod, [], io);
     const stopped = mod.main();
     await untilRendered(io, 1);
-    driver.debuggerState.running();
 
     const finished = await withinMs<any>(mod.main(), 2000);
 
     expect(finished.data).toBe(3);
+    expect(io.renderCalls).toHaveLength(1);
     driver.detach();
     expect((await stopped).data).toBe(3);
   });
@@ -251,23 +294,6 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     // The cancelled leg throws; the driver hands the thrown outcome back
     // (`AttachedLegThrew`) and the public entry point throws it.
     await expect(withinMs(running, 2000)).rejects.toThrow(/cancel/i);
-  });
-
-  it("the caller can cancel a run that waits for its turn on the UI", async () => {
-    const mod = await freshImport(compiledPath(fixtures.echo));
-    const io = new SilentIO([]);
-    const { driver } = attachTo(mod, [], io);
-    const first = mod.main("alice");
-    await untilRendered(io, 1);
-    const cancel = new AbortController();
-    const second = mod.main("bob", { abortSignal: cancel.signal });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    cancel.abort();
-
-    await expect(withinMs(second, 2000)).rejects.toThrow(/cancel/i);
-    driver.detach();
-    expect((await first).data).toBe("alice");
   });
 
   it("the program's own onAgentEnd callback fires, and a throwing caller's callback is logged", async () => {

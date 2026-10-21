@@ -87,15 +87,17 @@ export type StartTime = { started: number } | { failed: string };
  *  `-o lstart` (BusyBox), or a date the parser cannot read. `ps` is run
  *  in the C locale, since `lstart` is otherwise printed in the user's
  *  language (`Di. 20 Okt. 15:47:40 2026` under German) and `Date.parse`
- *  reads only English; `TZ` is left alone so the time is in the zone
- *  `Date.parse` assumes. `ps` writes its own complaints to stderr, which
+ *  reads only English, and in UTC, since a local wall time has no zone:
+ *  on the night the clocks go back the hour from 1:00 to 2:00 happens
+ *  twice, and a program started in the second pass would read as an hour
+ *  older than its record. `ps` writes its own complaints to stderr, which
  *  is not shown. */
 export function liveStartTime(pid: number): StartTime {
   let output: string;
   try {
     output = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
       encoding: "utf8",
-      env: { ...process.env, LC_ALL: "C" },
+      env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
       stdio: ["ignore", "pipe", "ignore"],
     });
   } catch (error) {
@@ -108,12 +110,14 @@ export function liveStartTime(pid: number): StartTime {
   return { started };
 }
 
+/** `lstart` as `ps` prints it in the C locale and UTC, `Tue Oct 20
+ *  13:32:26 2026`, read as UTC. */
 export function parseStartTime(output: string): number | null {
   const text = output.trim();
   if (text === "") {
     return null;
   }
-  const time = Date.parse(text);
+  const time = Date.parse(`${text} GMT`);
   return Number.isNaN(time) ? null : time;
 }
 
@@ -163,8 +167,10 @@ export function checkedRecord(
     return {
       refused:
         `pid ${pid} started ${new Date(live.started).toLocaleString()}, long before its record ` +
-        `was written (${new Date(record.startedAt).toLocaleString()}), so it is not the process ` +
-        `that registered; the record may be another machine's and was left alone`,
+        `was written (${new Date(record.startedAt).toLocaleString()}), so it is probably not ` +
+        `the process that registered, and the record may be another machine's, so it was left ` +
+        `alone. If this is your program (a wrapper ran for minutes before it, or the machine ` +
+        `slept), it cannot be attached; remove ${recordPaths(dir, pid).json} to clear the record.`,
     };
   }
   return record;
@@ -274,13 +280,7 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
     };
     serveDebuggerIO(channel, ui, {
       hello: (hello) => ui.attachedTo(hello),
-      finished: (value, error) =>
-        end(
-          error === undefined
-            ? `Program finished. Return value: ${JSON.stringify(value)}`
-            : `Program threw: ${error}`,
-          0,
-        ),
+      finished: (value, error) => end(finishedLine(value, error), 0),
       refused: (reason) => end(`Error: ${reason}`, 1),
     });
     // A close the person did not ask for is the program's doing: it
@@ -298,6 +298,15 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
       channel.close();
     });
   });
+}
+
+/** The line printed when the run sent `finished`: its value, or the
+ *  error it ended with. */
+export function finishedLine(value: unknown, error: string | undefined): string {
+  if (error !== undefined) {
+    return `Program threw: ${error}`;
+  }
+  return `Program finished. Return value: ${JSON.stringify(value)}`;
 }
 
 function terminalUI(): DebuggerUI {

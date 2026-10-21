@@ -19,6 +19,7 @@ import {
   START_TIME_TOLERANCE_MS,
   attachCommand,
   checkedRecord,
+  finishedLine,
   formatListing,
   liveStartTime,
   parseStartTime,
@@ -90,10 +91,11 @@ describe("the listing", () => {
 });
 
 describe("the start time from ps", () => {
-  it("reads the C-locale lstart format and nothing else", () => {
-    expect(parseStartTime("Tue Oct 20 13:32:26 2026\n")).toBe(
-      new Date("Tue Oct 20 13:32:26 2026").getTime(),
-    );
+  it("reads the C-locale lstart format as UTC, and nothing else", () => {
+    expect(parseStartTime("Tue Oct 20 13:32:26 2026\n")).toBe(Date.UTC(2026, 9, 20, 13, 32, 26));
+    // The repeated hour on the night the clocks go back is no longer
+    // ambiguous: UTC has no such hour.
+    expect(parseStartTime("Sun Nov  1 07:30:00 2026")).toBe(Date.UTC(2026, 10, 1, 7, 30, 0));
     expect(parseStartTime("")).toBeNull();
     expect(parseStartTime("not a date")).toBeNull();
     // What ps prints under LANG=de_DE.UTF-8 on macOS.
@@ -120,6 +122,12 @@ describe("the start time from ps", () => {
         }
       }
     }
+  });
+
+  it("prints the value, or the error the run ended with", () => {
+    expect(finishedLine(3, undefined)).toBe("Program finished. Return value: 3");
+    expect(finishedLine(undefined, undefined)).toBe("Program finished. Return value: undefined");
+    expect(finishedLine(undefined, "x")).toBe("Program threw: x");
   });
 
   it("says why when ps cannot answer", () => {
@@ -183,7 +191,7 @@ describe("checking a record before signalling", () => {
     writeRecord(dir, record);
     const muchOlder = () => ({ started: record.startedAt - 2 * EARLY_START_LIMIT_MS });
     expect(checkedRecord(dir, process.pid, muchOlder)).toMatchObject({
-      refused: expect.stringContaining("long before its record"),
+      refused: expect.stringContaining(`remove ${path.join(dir, `${process.pid}.json`)}`),
     });
     expect(fs.existsSync(path.join(dir, `${process.pid}.json`))).toBe(true);
   });

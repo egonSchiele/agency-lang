@@ -133,7 +133,11 @@ export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttac
     pid: process.pid,
     program: process.argv[1] ?? "",
     node: nodeName,
-    startedAt: Date.now() - process.uptime() * 1000,
+    // The wall-clock time the process started. Not `Date.now() -
+    // process.uptime()`: uptime runs on a monotonic clock that stops
+    // while the machine sleeps, so a program whose first node ran after
+    // a suspend would look as if it started later than it did.
+    startedAt: Math.round(performance.timeOrigin),
   };
   try {
     writeRecord(dir, record);

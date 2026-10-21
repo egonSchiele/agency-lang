@@ -727,7 +727,7 @@ export class CheckpointStore {
     },
   ): number {
     if (opts.removeDuplicate) {
-      this.removeDuplicate(opts, ctx.runId ?? undefined);
+      this.removeDuplicate(opts);
     }
 
     const checkpoint = Checkpoint.fromStateStack(stateStack, ctx, opts);
@@ -772,12 +772,8 @@ export class CheckpointStore {
    *  location is passed on its own because the checkpoint on a stop
    *  inside a tool call is the shared one stamped at the join, whose own
    *  location is the loop's. */
-  /** The last unpinned checkpoint before `beforeId` that `location` is
-   *  on or under, and not at. With `runId`, only that run's: two runs of
-   *  one program in one process share the window, and a step back from
-   *  one must never land in the other's state. */
-  findBefore(beforeId: number, location: SourceLocationOpts, runId?: string): Checkpoint | null {
-    const sorted = this.getSorted(runId); // sorted by id ascending
+  findBefore(beforeId: number, location: SourceLocationOpts): Checkpoint | null {
+    const sorted = this.getSorted(); // sorted by id ascending
     sorted.reverse();
     for (const cp of sorted) {
       if (cp.id >= beforeId || cp.pinned) continue;
@@ -818,12 +814,9 @@ export class CheckpointStore {
     }
   }
 
-  /** Drop the unpinned checkpoint of the same run at the same location,
-   *  so a loop keeps one checkpoint per statement. Another run's
-   *  checkpoint at that location is that run's and stays. */
-  private removeDuplicate(location: SourceLocationOpts, runId: string | undefined): void {
+  private removeDuplicate(location: SourceLocationOpts): void {
     for (const [id, cp] of Object.entries(this.checkpoints)) {
-      if (!cp.pinned && cp.traceId === runId && sameLocation(cp, location)) {
+      if (!cp.pinned && sameLocation(cp, location)) {
         delete this.checkpoints[Number(id)];
         return;
       }
@@ -897,11 +890,8 @@ export class CheckpointStore {
     }
   }
 
-  /** Every checkpoint by id, or with `runId`, that run's only. */
-  getSorted(runId?: string): Checkpoint[] {
-    return Object.values(this.checkpoints)
-      .filter((cp) => runId === undefined || cp.traceId === runId)
-      .sort((a, b) => a.id - b.id);
+  getSorted(): Checkpoint[] {
+    return Object.values(this.checkpoints).sort((a, b) => a.id - b.id);
   }
 
   prettyPrint(): string {

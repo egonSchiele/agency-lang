@@ -76,13 +76,7 @@ async function replayFrom(
   // callers pass in never has runId set (only per-run execCtx do), so we
   // mint one for trace correlation. Replays therefore appear as distinct
   // runs in trace files, which matches the actual execution semantics.
-  // A rewind the attached debugger issues continues the caller's run,
-  // which its checkpoints are filed under (`traceId`): the debugger keeps
-  // one run's rewinds inside that run. Any other rewind is a new run.
-  const runId =
-    isAttachedResume(metadata) && args.checkpoint.traceId !== undefined
-      ? args.checkpoint.traceId
-      : ((ctx as any).runId ?? nanoid());
+  const runId = (ctx as any).runId ?? nanoid();
   const resolved = resolveInvocation({ kind: "resume", options: args.invocation, runId });
   const execCtx = await ctx.createExecutionContext(resolved);
   try {

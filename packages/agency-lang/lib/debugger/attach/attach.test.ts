@@ -27,6 +27,7 @@ const fixtures = {
   stepTest: "step-test",
   awaitsHelper: "awaits-helper",
   agentShaped: "agent-shaped",
+  noReturn: "no-return",
 };
 
 function compiledPath(name: string): string {
@@ -45,7 +46,7 @@ type Attached = {
   session: AttachedSession;
   io: TestDebuggerIO;
   uiSide: Channel;
-  events: { hellos: Hello[]; finished: unknown[]; refused: string[] };
+  events: { hellos: Hello[]; finished: { value: unknown; error?: string }[]; refused: string[] };
 };
 
 /** The run side attached through one end of a memory pair, a scripted IO
@@ -59,15 +60,17 @@ function attachWithMemoryChannel(
   const events: Attached["events"] = { hellos: [], finished: [], refused: [] };
   const handlers: ServeEvents = {
     hello: (message) => events.hellos.push(message),
-    finished: (value) => events.finished.push(value),
+    finished: (value, error) => events.finished.push({ value, error }),
     refused: (reason) => events.refused.push(reason),
   };
   serveDebuggerIO(uiSide, io, handlers);
   const session = attachOverChannel(runSide, {
     functions: {
       respondToInterrupts: mod.respondToInterrupts,
+      respondToInterruptsForServe: mod.__respondToInterruptsForServe,
       rewindFrom: mod.rewindFrom,
       __setDebugger: mod.__setDebugger,
+      __getDebugger: mod.__getDebugger,
       __getCheckpoints: mod.__getCheckpoints,
     },
     hello,
@@ -94,7 +97,37 @@ describe("a debugger attached over a channel", () => {
     expect(io.renderCalls.length).toBeGreaterThanOrEqual(2);
     expect(io.renderCalls[0]!.scopeName).toBe("main");
     expect(io.logLines).toContainEqual("Program finished. Return value: 3");
-    expect(events.finished).toEqual([3]);
+    expect(events.finished).toEqual([{ value: 3, error: undefined }]);
+  });
+
+  it("a node that returns nothing still reports the end", async () => {
+    const mod = await freshImport(compiledPath(fixtures.noReturn));
+    const { events } = attachWithMemoryChannel(mod, [{ type: "continue" }]);
+
+    await mod.main();
+
+    expect(events.finished).toEqual([{ value: undefined, error: undefined }]);
+  });
+
+  it("a run that ends by throwing reports the error", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        return await new Promise(() => {});
+      }
+    })([]);
+    const { events } = attachWithMemoryChannel(mod, [], io);
+    const cancel = new AbortController();
+    const running = mod.main({ abortSignal: cancel.signal });
+    for (let i = 0; i < 200 && io.renderCalls.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    cancel.abort();
+
+    await expect(running).rejects.toThrow(/cancel/i);
+    expect(events.finished).toHaveLength(1);
+    expect(events.finished[0]).toMatchObject({ error: expect.stringMatching(/cancel/i) });
   });
 
   it("set over the channel changes a local the program returns", async () => {
@@ -226,9 +259,9 @@ describe("a program registered for attach, over the socket", () => {
   // first node run on the Node host with no debugger (the runs above all
   // had one, but an earlier test file in this worker may have run one);
   // the context a debugger attaches to is the one that most recently
-  // started a node. AGENCY_HOME is a temporary directory for the whole
-  // worker (lib/debugger/attach/vitest.setup.ts), so the record is found
-  // wherever in the run it was written.
+  // started a node. AGENCY_HOME is one temporary directory for the whole
+  // run (lib/debugger/attach/vitest.globalSetup.ts), so the record is
+  // found wherever in the run it was written.
   const dir = sessionsDir(nodeHost());
 
   it("writes its record, opens the socket on the signal, and takes a debugger", async () => {

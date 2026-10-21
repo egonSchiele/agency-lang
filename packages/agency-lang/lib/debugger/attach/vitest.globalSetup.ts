@@ -14,7 +14,11 @@ import * as path from "path";
 export default function setup(): () => void {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "agency-home-test-"));
   process.env.AGENCY_HOME = home;
-  return () => {
+  const remove = (): void => {
     fs.rmSync(home, { recursive: true, force: true });
   };
+  // Ctrl-C skips the teardown vitest calls, but this main process does
+  // emit `exit`, so the directory goes either way.
+  process.once("exit", remove);
+  return remove;
 }

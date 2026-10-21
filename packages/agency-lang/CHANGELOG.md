@@ -4,6 +4,7 @@
 
 - **A debugger can be installed on a program something else is running.** The runtime answers debug stops before any of its entry points returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, cancel signal, and usage figure are the same with the debugger as without it.
 - **`agency debug --attach [pid]` attaches the debugger to a running program.** With no pid it lists the programs that can take one. The debugger opens stopped at the program's next statement; `q` detaches and the program runs on. Nothing has to be planned in advance: no flag, no trace mode.
+- **The debugger says what the program is waiting on.** While the program runs, the bottom bar names the model request or the tool call it is in and how long it has been there, `▶ running · in llm() at story.agency:11 · 4s · round 1, waiting on model`, and the source pane marks the `llm()` line. Attaching in the middle of a long call shows that call at once, with the time it has already run. The spinner's random phrases are gone, and so is the "Current line not available" line the activity log repeated on every redraw.
 - **A running program opens a debug socket on `SIGUSR2`.** Every program run on Node (not a serve or an IPC child) writes a record under `~/.agency/debug-sessions` and listens for the signal; the socket takes one debugger at a time. A failure on the debugger's side ends the session and the program runs on.
 
 ### Runtime

@@ -1,0 +1,47 @@
+type Point = {
+  @jsonSchema({ description: "a short name for the point, a few words" })
+  name: string,
+  @jsonSchema({ description: "true when the work meets the point, false when it does not, null when the work does not say enough to tell" })
+  pass: boolean | null,
+  @jsonSchema({ description: "the words from the work that decided the answer, quoted; empty when nothing in the work bears on the point" })
+  evidence: string
+}
+
+type Verdict = {
+  @jsonSchema({ description: "one answer per point, in the same order as the points were listed" })
+  points: Point[],
+  @jsonSchema({ description: "one or two sentences on the verdict as a whole, naming what the work missed" })
+  note: string
+}
+
+node main(points: string[], work: string, context: string = ""): Verdict {
+  let listed = ""
+  for (point, i in points) {
+    listed = listed + "${i + 1}. ${point}\n"
+  }
+
+  result: Verdict = llm("You are a careful reviewer checking a piece of work against a list of points. Answer every point.
+
+The points:
+<points>
+${listed}</points>
+
+Context the points may refer to (source material, notes, a reference version). This is background for your judgment. It is NOT an answer key: the work is not supposed to reproduce it, and resembling it earns nothing by itself.
+<context>
+${context}
+</context>
+
+The work being judged:
+<work>
+${work}
+</work>
+
+For each point, answer whether the work meets it: true when it does, false when it does not, and null when the work does not say enough to tell. Apply these rules:
+- Answer the points in the order they are listed, one answer per point, and no others.
+- Judge only against the point. Do not reward or penalize anything the point does not mention.
+- Quote the words from the work that decided your answer as the evidence, so a reader can check it. Leave the evidence empty when nothing in the work bears on the point.
+- Length, thoroughness, and extra content are neutral unless a point says otherwise.
+- The note sums up the verdict and names what the work missed.")
+
+  return result
+}

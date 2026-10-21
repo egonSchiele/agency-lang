@@ -225,18 +225,22 @@ export async function settleStops(
       current = await letStopsGo(ctx, data, leg);
       continue;
     }
+    // The run is let go of when the debugger leaves the stop with no
+    // outcome to judge: its UI throwing an ordinary error, or a leg it
+    // resumed throwing before the leg had a context of its own, as a
+    // rewind whose restore fails does. A failed `:load` is neither: the
+    // driver goes back to the stop, and the run keeps the debugger.
+    const thisRun = debugRunOfStack(stops[0]?.checkpoint?.stack);
     let ran: AttachedRunResult;
     try {
       ran = await attached.run(current.value, leg);
     } catch (error) {
-      // The debugger itself failed at the stop, its UI throwing an
-      // ordinary error for one. The run would hold the debugger with no
-      // one to answer its stops, so it lets go; the error is the caller's.
-      letGoOfDebugRun(ctx, debugRunOfStack(stops[0]?.checkpoint?.stack));
+      letGoOfDebugRun(ctx, thisRun);
       throw error;
     }
     debuggerRanALeg = true;
     if ("threw" in ran) {
+      letGoOfDebugRun(ctx, thisRun);
       return { status: "threw", error: ran.threw, usage: ran.usage, traceId: current.traceId };
     }
     current = {

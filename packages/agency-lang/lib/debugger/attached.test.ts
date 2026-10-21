@@ -418,6 +418,49 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(io.renderCalls.length).toBeGreaterThan(rendersBefore);
   });
 
+  it("a load that fails keeps the run, and another run meanwhile runs through", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const file = path.join(os.tmpdir(), `agency-attached-${process.pid}-${Date.now()}.json`);
+    let keyAtStop: string | null = null;
+    let otherRan = false;
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        const command = await super.waitForCommand();
+        if (command.type === "load") {
+          // A file whose checkpoint the restore refuses: its code changed.
+          const saved = driver.debuggerState.getCheckpoints()[0].toJSON() as {
+            moduleFingerprints?: unknown;
+          };
+          saved.moduleFingerprints = { changed: { hash: "0", source: "" } };
+          fs.writeFileSync(file, JSON.stringify(saved));
+          keyAtStop = driver.debuggerState.ownedRun;
+        }
+        if (command.type === "continue" && !otherRan) {
+          // The failed load went back to the stop, which still owns the
+          // debugger, so a run that starts now is not debugged.
+          otherRan = true;
+          expect(driver.debuggerState.ownedRun).toBe(keyAtStop);
+          const rendersBefore = this.renderCalls.length;
+          expect((await mod.main("carol")).data).toBe("carol");
+          expect(this.renderCalls.length).toBe(rendersBefore);
+          expect(driver.debuggerState.ownedRun).toBe(keyAtStop);
+        }
+        return command;
+      }
+    })([{ type: "step" }, { type: "load", path: file }, { type: "continue" }]);
+    const { driver } = attachTo(mod, [], io);
+
+    try {
+      expect((await mod.main("alice")).data).toBe("alice");
+      expect(keyAtStop).not.toBeNull();
+      expect(otherRan).toBe(true);
+      expect(io.logLines.some((line) => line.startsWith("Failed to load"))).toBe(true);
+      expect(driver.debuggerState.ownedRun).toBeNull();
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
   it("a debugger UI that throws at a stop lets the next run be debugged", async () => {
     const mod = await freshImport(compiledPath(fixtures.echo));
     const io = new (class extends TestDebuggerIO {

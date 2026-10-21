@@ -12,7 +12,7 @@ import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
 import { isAttachedResume, settleStops } from "./attachedDebugger.js";
 import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
-import { releaseDebugRunAfter } from "./debugRun.js";
+import { debugRunOfStack, letGoOfDebugRun, releaseDebugRunAfter } from "./debugRun.js";
 import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
 import { hasInterrupts } from "./interrupts.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -81,12 +81,23 @@ async function replayFrom(
   const resolved = resolveInvocation({ kind: "resume", options: args.invocation, runId });
   const execCtx = await ctx.createExecutionContext(resolved);
   try {
-    const checkpoint = await restoreForResume(execCtx, {
-      checkpoint: args.checkpoint,
-      policy: resolved.policy,
-      overrides: { locals: overrides },
-      metadata,
-    });
+    let checkpoint: Checkpoint;
+    try {
+      checkpoint = await restoreForResume(execCtx, {
+        checkpoint: args.checkpoint,
+        policy: resolved.policy,
+        overrides: { locals: overrides },
+        metadata,
+      });
+    } catch (error) {
+      // The restore can throw too, when the program's code changed since
+      // the checkpoint for one. The context has no key of the run yet,
+      // so the debugger's own rewind lets the run go by the checkpoint's.
+      if (isAttachedResume(metadata)) {
+        letGoOfDebugRun(execCtx, debugRunOfStack(args.checkpoint.stack));
+      }
+      throw error;
+    }
     execCtx._skipNextCheckpoint = true;
     let value: RunNodeCoreResult<any>;
     try {

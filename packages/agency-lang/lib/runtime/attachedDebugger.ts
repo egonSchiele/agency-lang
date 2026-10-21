@@ -25,7 +25,7 @@ import { isPaused } from "./pause.js";
 import { rewindFrom } from "./rewind.js";
 import type { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
 import { ATTACHED_AGENT_END } from "./agentEnd.js";
-import { ATTACHED_RESUME } from "./debugRun.js";
+import { ATTACHED_RESUME, debugRunOfStack, letGoOfDebugRun } from "./debugRun.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState, RunNodeCoreResult } from "./types.js";
 
@@ -225,7 +225,16 @@ export async function settleStops(
       current = await letStopsGo(ctx, data, leg);
       continue;
     }
-    const ran = await attached.run(current.value, leg);
+    let ran: AttachedRunResult;
+    try {
+      ran = await attached.run(current.value, leg);
+    } catch (error) {
+      // The debugger itself failed at the stop, its UI throwing an
+      // ordinary error for one. The run would hold the debugger with no
+      // one to answer its stops, so it lets go; the error is the caller's.
+      letGoOfDebugRun(ctx, debugRunOfStack(stops[0]?.checkpoint?.stack));
+      throw error;
+    }
     debuggerRanALeg = true;
     if ("threw" in ran) {
       return { status: "threw", error: ran.threw, usage: ran.usage, traceId: current.traceId };

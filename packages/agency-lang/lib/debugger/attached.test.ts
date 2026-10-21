@@ -344,7 +344,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect((await stopped).data).toBe("alice");
   });
 
-  it("a checkpoint another run saved is refused by load", async () => {
+  it("a checkpoint an earlier run saved is loaded, and the run goes on from it", async () => {
     const mod = await freshImport(compiledPath(fixtures.echo));
     const file = path.join(os.tmpdir(), `agency-attached-${process.pid}-${Date.now()}.json`);
     const { io, driver } = attachTo(mod, [
@@ -357,11 +357,88 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     try {
       expect((await mod.main("alice")).data).toBe("alice");
       driver.debuggerState.stepping();
-      expect((await mod.main("bob")).data).toBe("bob");
-      expect(io.logLines.some((line) => line.includes("belongs to another run"))).toBe(true);
+      // The second run is rewound to the first run's saved state, so it
+      // returns the first run's argument, and is let go of when it ends.
+      expect((await mod.main("bob")).data).toBe("alice");
+      expect(io.logLines.some((line) => line.startsWith("Rewinding"))).toBe(true);
+      expect(driver.debuggerState.ownedRun).toBeNull();
     } finally {
       fs.rmSync(file, { force: true });
     }
+  });
+
+  it("after the caller answers the program's interrupt, a step back reaches before it", async () => {
+    const mod = await freshImport(compiledPath(fixtures.pauses));
+    const { io, driver } = attachTo(mod, [
+      { type: "step" },
+      { type: "continue" },
+      { type: "stepBack", preserveOverrides: false },
+      { type: "continue" },
+      { type: "continue" },
+    ]);
+
+    const asked = await mod.main();
+    expect(hasInterrupts(asked.data)).toBe(true);
+    driver.debuggerState.stepping();
+    // The step back from the resumed run's first stop replays the
+    // interrupt statement, so the caller is asked again.
+    const askedAgain = await mod.respondToInterrupts(asked.data, [{ type: "approve" }]);
+
+    expect(hasInterrupts(askedAgain.data)).toBe(true);
+    expect(io.logLines.some((line) => line.startsWith("Rewinding"))).toBe(true);
+    expect(io.logLines).not.toContainEqual("Already at earliest checkpoint");
+    driver.debuggerState.stepping();
+    const final = await mod.respondToInterrupts(askedAgain.data, [{ type: "approve" }]);
+    expect(final.data).toBe(1);
+  });
+
+  it("a rewind whose restore throws lets the next run be debugged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        const command = await super.waitForCommand();
+        if (command.type === "stepBack") {
+          // As the restore sees a program whose code changed since the
+          // checkpoint was recorded.
+          for (const checkpoint of driver.debuggerState.getCheckpoints()) {
+            checkpoint.moduleFingerprints = { changed: { hash: "0", source: "" } as never };
+          }
+        }
+        return command;
+      }
+    })([{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }]);
+    const { driver } = attachTo(mod, [], io);
+
+    await expect(mod.main("alice")).rejects.toThrow(/changed/i);
+
+    expect(driver.debuggerState.ownedRun).toBeNull();
+    driver.debuggerState.stepping();
+    const rendersBefore = io.renderCalls.length;
+    expect((await mod.main("bob")).data).toBe("bob");
+    expect(io.renderCalls.length).toBeGreaterThan(rendersBefore);
+  });
+
+  it("a debugger UI that throws at a stop lets the next run be debugged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const io = new (class extends TestDebuggerIO {
+      private asked = 0;
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        this.asked += 1;
+        if (this.asked === 1) {
+          throw new Error("the prompt could not be drawn");
+        }
+        return await super.waitForCommand();
+      }
+    })([{ type: "continue" }]);
+    const { driver } = attachTo(mod, [], io);
+
+    await expect(mod.main("alice")).rejects.toThrow("the prompt could not be drawn");
+
+    expect(driver.debuggerState.ownedRun).toBeNull();
+    driver.debuggerState.stepping();
+    const rendersBefore = io.renderCalls.length;
+    expect((await mod.main("bob")).data).toBe("bob");
+    expect(io.renderCalls.length).toBeGreaterThan(rendersBefore);
   });
 
   it("when the debugged run ends, the next run to stop is debugged", async () => {

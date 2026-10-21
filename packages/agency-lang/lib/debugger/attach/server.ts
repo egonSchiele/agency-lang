@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as net from "net";
 
 import { hasInterrupts } from "../../runtime/interrupts.js";
+import { isPaused } from "../../runtime/pause.js";
 import type { AttachedRunResult } from "../../runtime/attachedDebugger.js";
 import { DebuggerDriver, type ModuleFunctions } from "../driver.js";
 import type { Channel } from "./channel.js";
@@ -84,7 +85,10 @@ export function attachOverChannel(channel: Channel, options: AttachOptions): Att
     if ("threw" in ran) {
       channel.send({ type: "finished", value: undefined, error: errorText(ran.threw) });
       detach();
-    } else if (!hasInterrupts(ran.result?.data)) {
+    } else if (!hasInterrupts(ran.result?.data) && !isPaused(ran.result?.data)) {
+      // A paused checkpoint, from the caller's own pause signal, is a
+      // suspension, not the end: the caller resumes it, and the session
+      // goes on.
       channel.send({ type: "finished", value: ran.result?.data });
       detach();
     }

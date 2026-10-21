@@ -9,6 +9,7 @@ import * as net from "net";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
+import { isPaused } from "@/runtime/pause.js";
 import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
 import { functionRefReviver, nativeTypeReplacer } from "@/runtime/revivers/index.js";
 import { AgencyFunction } from "@/runtime/agencyFunction.js";
@@ -192,6 +193,29 @@ describe("a debugger attached over a channel", () => {
     expect(rendersBeforeClose).toBe(2);
     expect(io.renderCalls.length).toBe(rendersBeforeClose);
     expect(session.driver.debuggerState.attached).toBeUndefined();
+  });
+
+  it("a pause during a step the debugger ran does not end the session", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    const { session, events, io } = attachWithMemoryChannel(mod, [
+      { type: "step" },
+      { type: "continue" },
+    ]);
+    const pause = new AbortController();
+    const running = mod.main({ pauseSignal: pause.signal });
+    await helper.untilWaiting();
+    pause.abort();
+    helper.releaseWaiter();
+    const paused = await running;
+
+    expect(isPaused(paused.data)).toBe(true);
+    expect(events.finished).toEqual([]);
+    expect(session.driver.debuggerState.attached).toBeDefined();
+
+    const final = await mod.resumeFromCheckpoint(paused.data);
+    expect(final.data).toBe(2);
+    expect(io.renderCalls.length).toBeGreaterThanOrEqual(2);
+    expect(events.finished).toEqual([{ value: 2, error: undefined }]);
   });
 
   it("a UI that throws ends the session and the program runs on", async () => {

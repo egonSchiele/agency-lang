@@ -19,7 +19,7 @@ import {
   type AttachedRunResult,
   type LegOptions,
 } from "../runtime/attachedDebugger.js";
-import { debugRunOfStack } from "../runtime/debugRun.js";
+import { debugRunOfStack, stampDebugRun } from "../runtime/debugRun.js";
 import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
 
@@ -866,19 +866,16 @@ export class DebuggerDriver {
     checkpoint: Checkpoint,
     opts: { preserveOverrides?: boolean },
     session: AttachedSession | undefined,
-    /** The stop being rewound from. Attached, the run is the stop's, and a
-     *  checkpoint of another run (a file saved in an earlier session, or
-     *  a stray entry) is refused rather than resumed as this run. */
+    /** The stop being rewound from. Attached, the run is the stop's, and
+     *  the checkpoint becomes this run's whichever run recorded it: a
+     *  file saved in an earlier session, or before the interrupt the
+     *  caller answered, which gave the run a new key. */
     from: Interrupt,
   ): Promise<any> {
     if (session !== undefined) {
       const thisRun = debugRunOfStack(from.checkpoint?.stack);
-      const thatRun = debugRunOfStack(checkpoint.stack);
-      if (thisRun !== undefined && thatRun !== thisRun) {
-        this.ui.log(
-          `Checkpoint #${checkpoint.id} belongs to another run; attached, only this run's checkpoints can be rewound to`,
-        );
-        return { data: from };
+      if (thisRun !== undefined) {
+        stampDebugRun(checkpoint.stack, thisRun);
       }
     }
     // Reset state for replay

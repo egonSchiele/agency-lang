@@ -375,6 +375,7 @@ Other process docs:
 - `docs/dev/evals/eval-grading.md` — Why running and grading are separate, joined only by the run directory.
 - `docs/dev/evals/eval-labeling.md` — Answering a checklist about a group of runs by hand, and how those answers are recorded.
 - `docs/dev/evals/eval-new.md` — `agency eval new`: the form that writes a test folder, the one table that defines its fields, the modes and intents in its state, the three rules for the files directory, and what the `$EDITOR` hand-off does with the terminal and its signals.
+- `docs/dev/evals/graders-json.md` — `graders.json`: a test's graders as data in five kinds, the two parse tables and the lookup that replaces a discriminated union, the what/how split in the builders, must-pass per kind, the checklist judge and why its context lives under `graderFiles/`, points on the score row, and the one table the two grader sources (module, JSON) sit behind.
 - `docs/dev/evals/eval-tracking.md` — Running a suite over several trials, then uploading the results to statelog for a trend.
 - `docs/dev/evals/optimize-text-targets.md` — How a prompt travels between the source file and the mutator model, and why every `${...}` in a reply is an interpolation.
 - `docs/dev/evals/run-directory.md` — The on-disk shape that observing, noting, labeling, grading, and optimizing all read and write.

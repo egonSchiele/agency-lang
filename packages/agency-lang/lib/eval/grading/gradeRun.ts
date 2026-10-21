@@ -412,7 +412,7 @@ async function gradeInput(
   for (const grader of gates) {
     const grade = await runGrader(grader, input, test);
     gateGrades.push({ grader, grade });
-    if (!grader.passes(grade)) {
+    if (!gatePasses(grader, grade, test)) {
       return { test, run, grades: gateGrades, gatesPassed: false };
     }
   }
@@ -427,10 +427,22 @@ async function gradeInput(
   return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
 }
 
+/** Ask the gate for its verdict. A gate that cannot decide (a scalar grade
+ *  with no threshold) throws from `passes()`; one grading pass covers many
+ *  tests, so the error names this one and ends the pass. */
+function gatePasses(grader: BaseGrader, grade: Grade, test: Test): boolean {
+  try {
+    return grader.passes(grade);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${test.id ?? "(no id)"}: ${message}`);
+  }
+}
+
 /** A grader that throws (a judge whose structured reply failed validation,
  *  a missing file) fails with the error as feedback, so one bad grade does
- *  not end the whole grading pass. A binary fail, not scalar 0: a gate with
- *  no threshold passes a scalar 0, and a crashed gate must short-circuit. */
+ *  not end the whole grading pass. The fail is binary so a crashed gate
+ *  short-circuits the test without needing a threshold. */
 async function runGrader(grader: BaseGrader, input: GraderInput, test: Test): Promise<Grade> {
   try {
     return await grader.run(input);

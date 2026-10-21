@@ -12,7 +12,7 @@ import {
 } from "../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
-import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";
+import type { Grade, GraderInput, GraderOptions, JSONPath, Test } from "../types.js";
 
 type LlmJudgeOptions = GraderOptions & {
   agencyFile?: string; // judge .agency file (default: the bundled goal judge)
@@ -51,6 +51,14 @@ export class LlmJudge extends BaseGrader {
   private customJudgeFile(): string | undefined {
     return this.judgeFile ?? this.options.agencyFile;
   }
+  /** A scalar judge always returns a score, so a must-pass one with no
+   *  threshold can be refused before the judge is paid for. */
+  override validateInput(_test: Test): void {
+    if (this.missingThreshold() && this.options.binary !== true) {
+      throw new Error(`${this.name()}: a must-pass judge needs a threshold`);
+    }
+  }
+
   override externalFiles(): string[] {
     return this.options.agencyFile === undefined ? [] : [this.options.agencyFile];
   }

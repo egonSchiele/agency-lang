@@ -258,6 +258,16 @@ Three rules that are easy to get wrong:
 - **The scratch dir goes under `.agency-tmp/`, not `os.tmpdir()`**: compiled
   Agency resolves `agency-lang` from the directory it runs in.
 
+## Gates
+
+A grader with `mustPass: true` is a gate: it runs before the other graders,
+and when it fails the test scores 0 and the rest never run. A must-pass
+grader that returns a score must set `threshold`. Without one, grading
+stops with an error naming the test and the grader, because a scalar gate
+with no threshold would pass a score of 0. An `LlmJudge` refuses up front,
+in `validateInput`; a function grader is caught when its grade comes back.
+A gate that returns pass or fail needs no threshold.
+
 ## Two bundled judges: goal and rubric
 
 A function grader has two LLM judges on its context, `ctx.judges`, and

@@ -71,4 +71,34 @@ describe("BaseGrader", () => {
     expect(g.passes({ score: { kind: "scalar", value: 0.8 } })).toBe(true);
     expect(g.passes({ score: { kind: "scalar", value: 0.6 } })).toBe(false);
   });
+
+  it("passes() throws for a must-pass scalar grader with no threshold", () => {
+    const g = new StubGrader(() => ({ score: { kind: "scalar", value: 1 } }), {
+      name: "judge",
+      mustPass: true,
+    });
+    expect(() => g.passes({ score: { kind: "scalar", value: 1 } })).toThrow(
+      "judge: must-pass grader returned a score but has no threshold; set threshold in its options",
+    );
+  });
+
+  it("passes() accepts a must-pass scalar grader whose threshold is 0", () => {
+    const g = new StubGrader(() => ({ score: { kind: "scalar", value: 0 } }), {
+      mustPass: true,
+      threshold: 0,
+    });
+    expect(g.passes({ score: { kind: "scalar", value: 0 } })).toBe(true);
+  });
+
+  it("passes() still reads a scalar against threshold 0 when the grader is not a gate", () => {
+    const g = new StubGrader(() => ({ score: { kind: "scalar", value: 0 } }), {});
+    expect(g.passes({ score: { kind: "scalar", value: 0 } })).toBe(true);
+  });
+
+  it("passes() reads a binary must-pass grader with no threshold", () => {
+    const g = new StubGrader(() => ({ score: { kind: "binary", pass: true } }), {
+      mustPass: true,
+    });
+    expect(g.passes({ score: { kind: "binary", pass: false } })).toBe(false);
+  });
 });

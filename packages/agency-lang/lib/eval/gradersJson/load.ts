@@ -10,8 +10,7 @@ import { parseGradersJson } from "./schema.js";
 
 /** Load the graders of a `graders.json` from disk. Each grader is named by
  *  the file and its hash, as a module's graders are, so a score row says
- *  which version of the file produced it. Async so a parse error arrives as
- *  a rejected promise, the way a bad module's does. */
+ *  which version of the file produced it. */
 export async function loadGradersJson(filePath: string): Promise<BaseGrader[]> {
   const text = fs.readFileSync(filePath, "utf8");
   return build(text, filePath, filePath);

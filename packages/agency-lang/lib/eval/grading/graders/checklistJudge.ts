@@ -27,14 +27,9 @@ type ChecklistJudgeOptions = GraderOptions & {
  * Grades a work against a list of points by asking the bundled checklist
  * judge for one answer per point. The score is the share of points that
  * passed; "cannot tell" counts as a fail. The answers travel on the grade
- * as `points`, so the score row shows which point failed.
- *
- * Two rules a reader of `passes()` needs. A must-pass checklist passes only
- * when every point passed, read from `grade.points`; when a grade has no
- * points, its score must be 1. The override never calls the base method,
- * because that throws for a must-pass scalar with no threshold and a
- * checklist has none by design. And a checklist cannot be sampled: the
- * aggregation keeps only `score` and `feedback`, so the points would be lost.
+ * as `points`, so the score row shows which point failed. A must-pass
+ * checklist passes only when every point passed. A checklist cannot be
+ * sampled: aggregation keeps only the score and feedback.
  */
 export class ChecklistJudge extends BaseGrader {
   protected readonly defaultName = "checklist";
@@ -57,6 +52,8 @@ export class ChecklistJudge extends BaseGrader {
     return `${this.name()}: checklist of ${this.options.points.length} points`;
   }
 
+  /** Does not call the base method: that one wants a threshold for a scalar
+   *  gate, and a checklist has none. */
   override passes(grade: Grade): boolean {
     if (grade.points !== undefined) {
       return grade.points.every((point) => point.pass);
@@ -90,17 +87,31 @@ export class ChecklistJudge extends BaseGrader {
     };
   }
 
+  /** The context file must sit inside `graderFiles/` with no symlink on
+   *  the way, as the snapshot that stored the folder refused symlinks. */
   private contextText(graderFiles: string | undefined): string {
     const context = this.options.context;
     if (context === undefined) {
       return "";
     }
-    const root = graderFiles === undefined ? undefined : path.resolve(graderFiles);
-    const file = root === undefined ? undefined : path.resolve(root, context);
-    const inside = root !== undefined && file !== undefined && isStrictDescendant(root, file);
-    if (file === undefined || !inside || !fs.existsSync(file)) {
+    const file = graderFiles === undefined ? undefined : contextFileWithin(graderFiles, context);
+    if (file === undefined) {
       throw new Error(`${this.name()}: context file ${context} is not in graderFiles/`);
     }
     return fs.readFileSync(file, "utf8");
   }
+}
+
+/** The resolved context path, or undefined when it leaves the root, is
+ *  missing, or any step from the root down is a symlink. */
+function contextFileWithin(graderFiles: string, context: string): string | undefined {
+  const root = path.resolve(graderFiles);
+  const file = path.resolve(root, context);
+  if (!isStrictDescendant(root, file) || !fs.existsSync(file)) {
+    return undefined;
+  }
+  const steps = path.relative(root, file).split(path.sep);
+  const visited = steps.map((_, index) => path.join(root, ...steps.slice(0, index + 1)));
+  const anySymlink = [root, ...visited].some((step) => fs.lstatSync(step).isSymbolicLink());
+  return anySymlink ? undefined : file;
 }

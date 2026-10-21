@@ -130,4 +130,11 @@ describe("FunctionGrader", () => {
   it("toGrader rejects a non-grader value with a clear error", () => {
     expect(() => toGrader(42 as any)).toThrow(/expected a grader function or grader instance/);
   });
+
+  it("passes a returned grade's points through", async () => {
+    const points = [{ point: "a", pass: true, evidence: "yes" }];
+    const g = grader(() => ({ score: { kind: "scalar" as const, value: 1 }, points }));
+    const grade = await g.run(runInput("o"));
+    expect(grade.points).toEqual(points);
+  });
 });

@@ -236,6 +236,18 @@ describe("command graders", () => {
     expect(grade.feedback).toBe("timed out after 1s");
   });
 
+  it("a command that ignores SIGTERM is still stopped at the timeout", async () => {
+    const started = Date.now();
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "trap '' TERM; sleep 5", timeoutSec: 1 },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.score).toEqual({ kind: "binary", pass: false });
+    expect(grade.feedback).toBe("timed out after 1s");
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
   it("no workdir fails with a message", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "true" },

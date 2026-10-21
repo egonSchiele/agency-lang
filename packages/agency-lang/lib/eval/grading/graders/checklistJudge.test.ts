@@ -114,6 +114,20 @@ describe("ChecklistJudge", () => {
     );
   });
 
+  it("refuses a context that is a symlink, or sits under one", async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "checklist-outside-"));
+    fs.writeFileSync(path.join(outside, "secret.md"), "secret");
+    const graderFiles = fs.mkdtempSync(path.join(os.tmpdir(), "checklist-judge-"));
+    fs.symlinkSync(path.join(outside, "secret.md"), path.join(graderFiles, "notes.md"));
+    fs.symlinkSync(outside, path.join(graderFiles, "sub"));
+    for (const context of ["notes.md", "sub/secret.md"]) {
+      const judge = new ChecklistJudge({ name: "c", points: ["a"], context });
+      await expect(judge.run(judgeInput(verdictOf([]), graderFiles))).rejects.toThrow(
+        `c: context file ${context} is not in graderFiles/`,
+      );
+    }
+  });
+
   it("refuses samples greater than 1", () => {
     expect(() => new ChecklistJudge({ name: "c", points: ["a"], samples: 2 })).toThrow(
       "c: a checklist judge cannot be sampled; its per-point answers do not survive aggregation",

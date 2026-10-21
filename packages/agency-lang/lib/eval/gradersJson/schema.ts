@@ -74,9 +74,8 @@ export type CommandSpec = z.infer<typeof CommandSchema>;
 export type GraderSpec = GoalSpec | ChecklistSpec | NumberSpec | CountSpec | CommandSpec;
 export type GradersJson = GraderSpec[];
 
-/** One schema per kind, looked up by the element's `kind`. A lookup, not a
- *  zod discriminated union, so an unknown kind is reported with its index
- *  and its name instead of "Invalid discriminator value". */
+/** One schema per kind, looked up by the element's `kind` so an unknown
+ *  kind is reported with its index and name. */
 const KIND_SCHEMAS: Record<GraderSpec["kind"], z.ZodTypeAny> = {
   goal: GoalSchema,
   checklist: ChecklistSchema,
@@ -98,12 +97,17 @@ const RULES: Rule[] = [
     problem: "a must-pass goal grader needs passingScore",
   },
   {
-    applies: (spec) => spec.kind === "number" && hasRange(spec) && spec.max !== undefined,
+    applies: (spec) =>
+      spec.kind === "number" && spec.max !== undefined && (spec.full ?? spec.zero) !== undefined,
     problem: "a number grader has either full and zero or max, not both",
   },
   {
     applies: (spec) => spec.kind === "number" && !hasRange(spec) && spec.max === undefined,
     problem: "a number grader needs full and zero or max",
+  },
+  {
+    applies: (spec) => spec.kind === "number" && spec.mustPass === true && spec.max === undefined,
+    problem: "a must-pass number grader needs max",
   },
   {
     applies: (spec) => spec.kind === "number" && hasRange(spec) && spec.full === spec.zero,

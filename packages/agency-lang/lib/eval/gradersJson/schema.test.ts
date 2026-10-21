@@ -100,6 +100,25 @@ describe("parseGradersJson", () => {
     );
   });
 
+  it("refuses max beside either endpoint of a range", () => {
+    expect(() =>
+      parse([{ kind: "number", name: "n", measure: "llmCalls", full: 0, max: 30 }]),
+    ).toThrow(
+      "t/graders.json: grader 0 (n): a number grader has either full and zero or max, not both",
+    );
+  });
+
+  it("requires max on a must-pass number grader", () => {
+    expect(() =>
+      parse([
+        { kind: "number", name: "n", measure: "llmCalls", full: 0, zero: 30, mustPass: true },
+      ]),
+    ).toThrow("t/graders.json: grader 0 (n): a must-pass number grader needs max");
+    expect(() =>
+      parse([{ kind: "number", name: "n", measure: "llmCalls", max: 30, mustPass: true }]),
+    ).not.toThrow();
+  });
+
   it("refuses a number grader whose full and zero are the same value", () => {
     expect(() =>
       parse([{ kind: "number", name: "n", measure: "llmCalls", full: 5, zero: 5 }]),

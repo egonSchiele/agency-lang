@@ -69,8 +69,7 @@ export abstract class BaseGrader {
       throw new Error(`${this.name()}: samples must be a positive integer, got ${samples}`);
     }
     const trials = await Promise.all(Array.from({ length: samples }, () => this._run(input)));
-    // One trial is the grade itself. Aggregation would rebuild it from its
-    // score and feedback alone and drop a checklist's per-point answers.
+    // Aggregating one trial would drop everything but its score and feedback.
     if (trials.length === SINGLE_TRIAL) {
       return trials[0];
     }

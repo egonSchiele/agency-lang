@@ -3,8 +3,7 @@
 A test folder may hold `graders.json` beside `test.json` instead of a
 `graders.ts`. The file is a list of graders in five kinds. Grading it gives
 the same scores as the equivalent module, through the same `BaseGrader`
-pipeline, so nothing downstream of loading learns a new type. This page is
-the map of the code, with the rules in it that are easy to break.
+pipeline, so nothing downstream of loading learns a new type.
 
 ## The files
 
@@ -21,8 +20,7 @@ lib/eval/gradersJson/fixtures/packaging-decision/   a converted test, used by en
 
 ## The five kinds
 
-Each kind answers one question about a run. The example first, then what it
-does.
+Each kind answers one question about a run.
 
 ```json
 [
@@ -36,7 +34,7 @@ does.
 
 - **goal**: the bundled goal judge scores the reply from 0 to 1 against the
   goal. It is `new LlmJudge({ goal })`, the same grader a test with a `goal`
-  in `test.json` and no graders gets today.
+  in `test.json` and no graders gets.
 - **checklist**: the checklist judge answers every point with yes, no, or
   cannot tell, quoting the words that decided it. The score is the share of
   points that passed; cannot tell counts as a fail. Points count equally. To
@@ -53,57 +51,42 @@ does.
 - **command**: a shell command run in the agent's working directory. Exit 0
   passes. What it printed is the feedback.
 
-Every kind has `name`, `weight` (default 1), and `mustPass` (default false).
-`buildGraders` passes the three through one helper, `optionsOf`, into the
-grader's options.
+Every kind has `name`, `weight` (default 1), and `mustPass` (default
+false). Names are unique within a file, because score rows are keyed by
+grader name.
 
 ## Must pass, per kind
 
 A must-pass grader has to be able to fail. `BaseGrader.passes()` throws for
 a must-pass grader that returns a score and has no threshold (see "Gates" in
-`eval-grading.md`), so each kind that returns a score says how it clears
+`eval-grading.md`), so the parser refuses a file whose gate could not clear
 that bar:
 
-- A must-pass **goal** grader requires `passingScore`. The parser refuses
-  the file without it, and the builder maps it to `threshold`.
+- A must-pass **goal** grader requires `passingScore`, which becomes the
+  grader's `threshold`.
 - A must-pass **checklist** passes only when every point passed.
-  `ChecklistJudge.passes()` reads `grade.points` and never calls the base
-  method, because the base method would throw and a checklist has no
-  threshold by design.
-- A must-pass **number** grader uses `max`, which is pass or fail. A
-  `full`/`zero` grader can be must-pass too, but it can only fail at a score
-  of 0, so use `max`.
+- A must-pass **number** grader requires `max`. A `full`/`zero` grader
+  returns a score with no threshold, so it cannot be a gate.
 - **count** and **command** are pass or fail already.
 
-## Parsing: two tables, one lookup
+## Rules the parser enforces
 
-`schema.ts` keeps the rules in two tables so a sixth kind or a new rule is
-one row:
+The per-kind field rules are the zod schemas in `schema.ts`, one per kind
+and strict, so an unknown field names itself. The rules that span fields
+are the `RULES` table in the same file:
 
-- `KIND_SCHEMAS` maps each `kind` to a strict zod object. `parseGradersJson`
-  reads `kind` off every element by hand and looks the schema up. It is not
-  a zod discriminated union, because that reports an unknown kind as
-  "Invalid discriminator value" with no index and no kind, and the message
-  here is `grader 0: unknown kind "rubric"`.
-- `RULES` holds the cross-field rules: a must-pass goal needs
-  `passingScore`; a number grader has `full` and `zero` or `max`, not both
-  and not neither; `tool` and `repeated` only with `count: "toolCalls"`;
-  `messageStartsWith` only with `count: "errors"`. The first rule that
-  applies is the error, with the index and the name in front.
+- A must-pass goal grader needs `passingScore`; a must-pass number grader
+  needs `max`.
+- A number grader has `full` and `zero`, or `max`, never a mix. `full` and
+  `zero` differ, since the line between them would divide by zero.
+- `tool` and `repeated` only apply to `count: "toolCalls"`;
+  `messageStartsWith` only to `count: "errors"`.
+- A checklist `context` is relative and never climbs out with `..`.
 
-Names are unique within a file, as they are within a module: score rows are
-keyed by grader name.
+Every error names the file, the grader's index, and where it has one, the
+grader's name.
 
-## Building: the "what" in a table, the "how" in one function
-
-`build.ts` keeps each kind's data apart from its scoring. `MEASURES` says
-what each number measure reads from the record and how to describe the
-value (`"14 LLM calls"`, `"$0.42"`, `"83s"`, `"12k tokens in"`), and
-`numberGrader` reads the table and scores. `COUNTS` says which record rows
-each count selects, and `countGrader` filters and counts them. There is no
-`switch` on a measure or a count anywhere.
-
-Four facts a reader needs that are easy to miss:
+## Facts that are easy to miss
 
 - `agentSeconds` is `record.durationMs / 1000`, the run's wall time. Once
   ADI-32 logs the time a person spends at an approval prompt, it will
@@ -111,19 +94,15 @@ Four facts a reader needs that are easy to miss:
   at a prompt.
 - `repeated` compares `tool` and `argsPreview`, the 200-character preview
   of the arguments. No row in the record carries the full arguments, so two
-  calls that differ only after the preview count as one. A test pins this.
+  calls that differ only after the preview count as one.
 - A command grader runs inside the run directory's stored workdir, the same
-  place the agent suite's pytest runner runs today. Whatever it writes
+  place the agent suite's pytest runner runs. Whatever it writes
   (`__pycache__`, `.pytest_cache`) lands there, so a command must not depend
   on a clean workdir. stdin is closed, so a command that reads it sees end
-  of file. A command that outlives `timeoutSec` (default 600) fails with
-  "timed out after Ns". Output is kept to 2000 characters of feedback.
-- A must-pass goal grader needs `passingScore` because a scalar gate with
-  no threshold cannot fail.
-- A `context` must stay inside `graderFiles/`: the parser refuses an
-  absolute path or one with `..`, and the judge checks again at grade time
-  with `isStrictDescendant` before reading. A `full` equal to `zero` is
-  refused too, since the line between them would divide by zero.
+  of file. A command that outlives `timeoutSec` (default 600) is killed with
+  SIGKILL and fails with "timed out after Ns"; a process the command started
+  that still holds its output pipe can keep the grader waiting past that.
+  Output is kept to 2000 characters of feedback.
 
 ## The checklist judge
 
@@ -134,32 +113,36 @@ file is versioned by a pinned hash in `checklistJudgeFile.ts`, like the goal
 and rubric judges; bump `CHECKLIST_JUDGE_VERSION` when you edit the prompt.
 
 `ChecklistJudge` sends the points as the test wrote them, the output as
-judge text, and the context. It refuses a verdict whose answer count differs
-from the point count, with a message, rather than scoring it. The points on
-the grade carry the input point's text by index, not the short `name` the
-judge invents.
+judge text, and the context. A verdict whose answer count differs from the
+point count fails the grader with a message. The points on the grade carry
+the input point's text by index, not the short `name` the judge invents.
 
 `context` is a path under the test's `graderFiles/` folder, read at grade
-time from the run's stored copy as `path.join(input.graderFiles, context)`.
-That is why no JSON grader has external files: the run directory already
-stores `graderFiles/` on every run (`graderFilesSnapshot.ts`), so a stored
-run finds its context after the test folder is gone, and the snapshot needs
-no `judgeFiles` entry and no rebind. A missing context file fails the
-grader with "context file notes.md is not in graderFiles/".
+time from the run's stored copy. The run directory stores `graderFiles/` on
+every run (`graderFilesSnapshot.ts`), so a stored run finds its context
+after the test folder is gone, and no JSON grader has external files to
+rebind. Before reading, the judge checks that the resolved path is inside
+the folder and that no step from the folder down is a symlink, the same
+refusal the snapshot applies when it stores the folder. Under
+`eval grade --suite` the live folder is handed over without a snapshot, so
+the check at read time is the one that holds there. A missing or refused
+file fails the grader with "context file notes.md is not in graderFiles/".
 
-A checklist cannot be sampled. `aggregateGrades` keeps only `score` and
-`feedback`, so the per-point answers would be lost; the constructor refuses
-`samples > 1`. For the same reason `BaseGrader.run` returns a single trial
-as it is instead of aggregating it.
+A checklist cannot be sampled: `aggregateGrades` keeps only `score` and
+`feedback`, so the constructor refuses `samples > 1`.
 
 ## Points on the score row
 
 `Grade` has an optional `points: Point[]`, and so do `ScoreDraft`, the
-`score` row's payload and schema, and `GradeRow`. The field is copied at
-each hop the way `feedback` is. It lives on `Grade`, not only on the row,
-because `passes()` reads it from the grade in the gate loop. `eval grade`
-prints the points under the grader's feedback, one line each with a check
-or a cross.
+`score` row's payload and schema, and `GradeRow`. A function grader that
+returns a full grade keeps its `points` too. `eval grade` prints the points
+under the grader's feedback, one line each with a check or a cross.
+
+A must-pass checklist's row stores its scalar share, as a must-pass goal
+grader's row stores its score. The gate verdict is not on the row; it lives
+in the grading pass, as it does for every scalar gate, and the run listing
+reports gates as unknown for a scalar gate for that reason
+(`lib/runDirectory/list.ts`, `gatesPassed`).
 
 ## Loading, storing, and loading back
 
@@ -170,22 +153,19 @@ test with either file needs no `goal`.
 
 Each source does three things: load live, store in a run directory, and
 load back from the store. `graderSources.ts` puts the two sources behind
-one table, `GRADER_SOURCES`, and the three call sites look the source up:
+one table, `GRADER_SOURCES`, and the three call sites look the source up
+by path or by the run row:
 
-- `makeGraderModuleCache` in `gradeRun.ts` calls
-  `graderSourceForPath(path).load(path)`.
-- `snapshotGraders` in `runSuite.ts` calls
-  `graderSourceForPath(path).snapshot(path)`.
-- `snapshotModuleGraders` in `gradeRun.ts` calls
-  `graderSourceForRecord(row).loadSnapshot(gradersDir, row)`.
+- `makeGraderModuleCache` in `gradeRun.ts` (live loading).
+- `snapshotGraders` in `runSuite.ts` (storing on `eval run`).
+- `snapshotModuleGraders` in `gradeRun.ts` (loading from the store).
 
-None of the three mentions an extension or a stored file's name. For the
-JSON source, the stored file is the `graders.json` itself under its content
-hash, and the run row's `graders` identity names it as `jsonFile`. A module
-row names `bundleFile`. Exactly one of the two is set; the row schema
-refuses both and neither, so an old row with only `bundleFile` loads
-unchanged. The revision on every JSON grader is `<source path>@<sha256 of
-the text>`, live and from the snapshot alike, so the two agree.
+For the JSON source, the stored file is the `graders.json` itself under its
+content hash, and the run row's `graders` identity names it as `jsonFile`.
+A module row names `bundleFile`. Exactly one of the two is set; the row
+schema refuses both and neither, so an old row with only `bundleFile`
+loads unchanged. The revision on every JSON grader is
+`<source path>@<sha256 of the text>`, live and from the snapshot alike.
 
 ## What is deliberately not in the file
 

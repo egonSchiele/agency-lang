@@ -19,9 +19,7 @@ import type {
   NumberSpec,
 } from "./schema.js";
 
-/** Turn the graders of a `graders.json` into `BaseGrader`s, in file order.
- *  Each kind has a builder; the "what" of a kind (which number to read,
- *  which rows to count) lives in a table the builder reads. */
+/** Turn the graders of a `graders.json` into `BaseGrader`s, in file order. */
 export function buildGraders(specs: GradersJson): BaseGrader[] {
   return specs.map((spec) => BUILDERS[spec.kind](spec as never));
 }
@@ -166,8 +164,9 @@ const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
 const FEEDBACK_MAX_CHARS = 2000;
 
 /** Run a shell command in the agent's working directory. Exit 0 passes.
- *  stdin is closed so a command that reads it sees end of file; a command
- *  that outlives its timeout fails and says so. */
+ *  stdin is closed so a command that reads it sees end of file. At the
+ *  timeout the shell is killed outright, since a command may ignore a
+ *  polite signal. */
 function commandGrader(spec: CommandSpec): BaseGrader {
   const timeoutSec = spec.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
   return grader(({ workdir }) => runCommand(spec.command, workdir, timeoutSec), optionsOf(spec));
@@ -182,6 +181,7 @@ function runCommand(command: string, workdir: string, timeoutSec: number): Grade
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: timeoutSec * MS_PER_SECOND,
+    killSignal: "SIGKILL",
     maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
   });
   if ((result.error as { code?: string } | undefined)?.code === "ETIMEDOUT") {

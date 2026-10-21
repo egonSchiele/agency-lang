@@ -48,6 +48,31 @@ export type BusyEntry = {
 /** A wait as the slot keeps it. */
 export type OpenWait = Omit<BusyEntry, "elapsedMs"> & { startedAt: number };
 
+/** Whether `value` is a `BusyEntry`, for the UI side of the attach
+ *  channel, which takes the list as sent: the fields the UI reads are
+ *  checked, so one bad entry is dropped instead of ending the debugger. */
+export function isBusyEntry(value: unknown): value is BusyEntry {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const location = record.location as Record<string, unknown> | null | undefined;
+  return (
+    typeof record.token === "number" &&
+    (record.kind === "model" || record.kind === "tool") &&
+    typeof record.label === "string" &&
+    typeof record.debugRun === "string" &&
+    typeof record.elapsedMs === "number" &&
+    typeof location === "object" &&
+    location !== null &&
+    typeof location.moduleId === "string" &&
+    typeof location.scopeName === "string" &&
+    typeof location.stepPath === "string" &&
+    Array.isArray(location.branchPath) &&
+    typeof location.depth === "number"
+  );
+}
+
 /** Tell the debugger installed on `slot`, if any, what is waiting: the
  *  slot's open waits that the debugger shows (`DebuggerState.showsRun`),
  *  the whole list each time, so the UI never has to apply an enter and

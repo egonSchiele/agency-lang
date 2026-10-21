@@ -1011,6 +1011,29 @@ describe("what the program is waiting on", () => {
     );
   });
 
+  it("a debugger that detaches during a tool call and attaches again is told of the wait", async () => {
+    await withLLMMocks(
+      [{ toolCall: { name: "holdOn", args: { note: "x" } } }, { return: "done" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.waitingTool));
+        const running = mod.main();
+        await helper.untilWaiting();
+        const { driver, io } = attachTo(mod, [{ type: "continue" }]);
+        expect(io.busyCalls).toHaveLength(1);
+
+        driver.detach();
+        driver.attach();
+
+        // The same wait, still open, is news to the new session.
+        expect(io.busyCalls).toHaveLength(2);
+        expect(io.busyCalls[1].map((entry) => entry.label)).toEqual(['holdOn(note: "x")']);
+        helper.releaseWaiter();
+        expect((await running).data).toBe("done");
+        expect(io.busyCalls.at(-1)).toEqual([]);
+      },
+    );
+  });
+
   it("another run's waits are not reported while a run is debugged", async () => {
     await withLLMMocks([{ return: "one" }, { return: "two" }], async () => {
       const mod = await freshImport(compiledPath(fixtures.llmAfterStep));

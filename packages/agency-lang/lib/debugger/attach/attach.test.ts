@@ -294,6 +294,17 @@ describe("a debugger attached over a channel", () => {
     });
   });
 
+  it("a setBusy notice with entries of the wrong shape reaches the UI as an empty list", async () => {
+    const [runSide, uiSide] = memoryChannelPair();
+    const io = new TestDebuggerIO([]);
+    serveDebuggerIO(uiSide, io);
+
+    runSide.send({ type: "notice", method: "setBusy", args: [[{ token: 1 }, "not an entry"]] });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(io.busyCalls).toEqual([[]]);
+  });
+
   it("the stop inside a tool call reaches the UI side with its branch", async () => {
     const mocks = [
       { toolCall: { name: "search", args: { query: "grant", breakHere: true } } },

@@ -760,6 +760,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(paused.data).toHaveLength(1);
     expect(isDebugger(paused.data[0])).toBe(false);
     expect(paused.data[0].message).toBe("ask?");
+    const spinningAfterPause = io.spinning;
 
     const final = await mod.respondToInterrupts(paused.data, [{ type: "approve" }]);
 
@@ -767,6 +768,29 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(final.data).toBe(3);
     // The first stop (before `parallel`) was shown; the dropped one was not.
     expect(io.renderCalls).toHaveLength(1);
+    // The program ran on under the caller, so the UI spun until it ended.
+    expect(spinningAfterPause).toBe(true);
+    expect(io.spinning).toBe(false);
+  });
+
+  it("the UI spins from the attach until the first stop", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    let spinningAtStop: boolean | undefined;
+    const io = new (class extends TestDebuggerIO {
+      override async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+        await super.render(checkpoint, stop);
+        spinningAtStop ??= this.spinning;
+      }
+    })([{ type: "continue" }]);
+
+    const running = mod.main();
+    await helper.untilWaiting();
+    attachTo(mod, [], io);
+    expect(io.spinning).toBe(true);
+    helper.releaseWaiter();
+
+    expect((await running).data).toBe(2);
+    expect(spinningAtStop).toBe(false);
   });
 
   it("set from the attached debugger changes a local the program returns", async () => {
@@ -897,6 +921,8 @@ describe("what the program is waiting on", () => {
       expect(kinds(io)).toEqual([["model"], [], ["tool"], [], ["model"], []]);
       const tool = io.busyCalls[2][0];
       expect(tool.label).toBe('writeUp(notes: "n")');
+      // The first request's calls are round 1, as the person counts.
+      expect(tool.round).toBe(1);
       expect(tool.location.stepPath).toMatch(/\/round\.0\.tool\..*\.invoke$/);
       expect(tool.location.branchPath).toHaveLength(1);
       // The same statement as the request before it.

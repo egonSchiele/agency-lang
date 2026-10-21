@@ -37,6 +37,9 @@ export type BusyEntry = {
   /** The loop's own words for the step: `round 2`, or the tool call with
    *  its arguments cut short, as the stop before it is labelled. */
   label: string;
+  /** For a tool wait, the round of the tool loop the call is in, counted
+   *  as the person counts: the first request's calls are round 1. */
+  round?: number;
   /** The run's key (`debugRun.ts`), so a UI never shows another run's
    *  wait. */
   debugRun: string;

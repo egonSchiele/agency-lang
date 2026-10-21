@@ -103,6 +103,26 @@ describe("the UI while the program is waiting", () => {
     }
   });
 
+  it("before any stop, shows the wait it attached to with the time it has already run", async () => {
+    const { entry } = await captured();
+    const { ui, recorder, clock } = screenful();
+    try {
+      // What the driver does at attach: the spinner first, then the
+      // waits the install reports.
+      ui.startSpinner();
+      ui.setBusy([{ ...entry, elapsedMs: 42_000 }]);
+
+      const first = await untilFrame(recorder, "· 42s ·");
+      expect(first).toContain("▶ running · in llm() at llm-after-step.agency:5 · 42s · round 1");
+      expect(first).toMatch(/▶\s+5\s+const reply = llm\("say hi"\)/);
+
+      clock.now += 4000;
+      await untilFrame(recorder, "· 46s ·");
+    } finally {
+      ui.destroy();
+    }
+  });
+
   it("says how many more waits are open", async () => {
     const { entry } = await captured();
     const { ui, recorder } = screenful();

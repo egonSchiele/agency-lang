@@ -274,20 +274,24 @@ the payload and the method's return value as the reply:
 | ------------------ | ------------------------------------- | ------------------ |
 | `render`           | checkpoint, stop, interruptId         | none               |
 | `waitForCommand`   | none                                  | `DebuggerCommand`  |
-| `showRewindSelector` | checkpoint summaries                | id or null         |
+| `showRewindSelector` | checkpoints (the window)            | id or null         |
 | `answerGuardTrip`  | `GuardTripData`                       | `InterruptResponse`|
-| `showCheckpointsPanel` | checkpoint summaries              | none               |
+| `showCheckpointsPanel` | checkpoints (the window)          | none               |
 | `promptForInput`   | prompt                                | string             |
 | `appendStdout`     | text                                  | none (unused here) |
 | `renderActivityOnly`, `startSpinner`, `stopSpinner` | none | none          |
 
 Plus three that are not `DebuggerIO` methods: `hello` from the run on
 connect, carrying the program path, node, and pid; `finished` from the
-run when the program ends; and `detach` from either side.
-`promptForNodeArgs` is not sent: an attached run already has its
-arguments. The rewind selector and the checkpoints panel are sent
-summaries (id, location, label, pinned), which is what they render, and
-the checkpoints stay in the run's process where the rewind happens.
+run when the program ends; and `refused` when a debugger is already
+attached. There is no detach message: closing the channel, from either
+side, is the detach. The rewind selector and the checkpoints panel are
+sent the whole window of checkpoints: the first draft said summaries,
+but both panels show the state at each checkpoint as the selection
+moves, so a summary would not do. They are sent only when the person
+opens a panel, and the per-message cap is sized for them. The
+checkpoints themselves stay in the run's process, where the rewind
+happens.
 
 A checkpoint crosses the channel in its serialized form, the one the
 checkpoint store already writes to a trace file, so the UI side rebuilds a

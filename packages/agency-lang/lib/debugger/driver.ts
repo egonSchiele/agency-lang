@@ -15,6 +15,7 @@ import { isPaused } from "../runtime/pause.js";
 import { ATTACHED_AGENT_END } from "../runtime/agentEnd.js";
 import {
   ATTACHED_RESUME,
+  type AttachFunctions,
   type AttachedRunResult,
   type LegOptions,
 } from "../runtime/attachedDebugger.js";
@@ -27,49 +28,10 @@ import type { InvocationOptions } from "../runtime/invocationOptions.js";
 import { color } from "@/utils/termcolors.js";
 import { round } from "@/utils.js";
 
-// Functions from the compiled module that are bound to __globalCtx
-type ModuleFunctions = {
-  respondToInterrupts: (
-    interrupts: Interrupt[],
-    responses: InterruptResponse[],
-    opts?: {
-      overrides?: Record<string, unknown>;
-      metadata?: Record<string, any>;
-      invocation?: InvocationOptions;
-      abortSignal?: AbortSignal;
-      pauseSignal?: AbortSignal;
-    },
-  ) => Promise<any>;
-  rewindFrom: (
-    checkpoint: Checkpoint,
-    overrides: Record<string, unknown>,
-    opts?: {
-      metadata?: Record<string, any>;
-      invocation?: InvocationOptions;
-      abortSignal?: AbortSignal;
-      pauseSignal?: AbortSignal;
-    },
-  ) => Promise<any>;
-  /** The serve-style resume, which hands back a thrown leg as an outcome
-   *  with its usage instead of throwing. The attached driver uses it when
-   *  the module has it, so a leg that throws reaches the serve entry
-   *  points as a thrown outcome, as it does with no debugger. */
-  respondToInterruptsForServe?: (
-    interrupts: Interrupt[],
-    responses: InterruptResponse[],
-    opts?: {
-      overrides?: Record<string, unknown>;
-      metadata?: Record<string, any>;
-      invocation?: InvocationOptions;
-      abortSignal?: AbortSignal;
-      pauseSignal?: AbortSignal;
-    },
-  ) => Promise<ServedInvocationOutcome<any>>;
-  __setDebugger: (dbg: DebuggerState | null) => void;
-  /** Absent from a module compiled before it existed. */
-  __getDebugger?: () => DebuggerState | null;
-  __getCheckpoints: () => CheckpointStore;
-};
+/** The four functions a driver drives a program through: a compiled
+ *  module exports them bound to its `__globalCtx`, and the runtime binds
+ *  them to a context for the attach server (`attachFunctionsFor`). */
+export type ModuleFunctions = AttachFunctions;
 
 /** One attached run's visit to the driver: what its leg was started
  *  with, which every resume and rewind passes back, and the usage of the

@@ -1,6 +1,9 @@
 import { defaultHost } from "#default-host";
 // lib/debugger/types.ts
-import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
+// From the runtime, not "@/index.js": the Node platform file imports the
+// driver, and the whole compiler must not load with every program.
+import { Checkpoint, CheckpointStore } from "@/runtime/state/checkpointStore.js";
+import type { RuntimeContext } from "@/runtime/state/context.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
 import type { AttachedDebugger } from "@/runtime/attachedDebugger.js";

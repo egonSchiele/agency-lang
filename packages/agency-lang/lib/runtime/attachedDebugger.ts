@@ -9,16 +9,21 @@
 // no debugger. The design is
 // docs/superpowers/specs/2026-10-20-attach-to-a-running-program.md.
 
+import type { DebuggerState } from "../debugger/debuggerState.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { InvocationOptions } from "./invocationOptions.js";
 import type { RunUsage, ServedInvocationOutcome } from "./invocationUsage.js";
 import {
   hasInterrupts,
   isDebugger,
+  respondToInterrupts,
   respondToInterruptsForServe,
   type Interrupt,
+  type InterruptResponse,
 } from "./interrupts.js";
 import { isPaused } from "./pause.js";
+import { rewindFrom } from "./rewind.js";
+import type { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
 import { ATTACHED_AGENT_END } from "./agentEnd.js";
 import { ATTACHED_RESUME } from "./debugRun.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -65,6 +70,100 @@ export { ATTACHED_RESUME, isAttachedResume } from "./debugRun.js";
 
 export function attachedDebuggerOf(ctx: RuntimeContext<GraphState>): AttachedDebugger | undefined {
   return ctx.debugSlot.state?.attached;
+}
+
+/** The four functions a driver drives a program through, the shape a
+ *  compiled module exports bound to its own context (`imports.mustache`).
+ *  The debugger's `ModuleFunctions` is this type. */
+export type AttachFunctions = {
+  respondToInterrupts: (
+    interrupts: Interrupt[],
+    responses: InterruptResponse[],
+    opts?: {
+      overrides?: Record<string, unknown>;
+      metadata?: Record<string, any>;
+      invocation?: InvocationOptions;
+      abortSignal?: AbortSignal;
+      pauseSignal?: AbortSignal;
+    },
+  ) => Promise<any>;
+  rewindFrom: (
+    checkpoint: Checkpoint,
+    overrides: Record<string, unknown>,
+    opts?: {
+      metadata?: Record<string, any>;
+      invocation?: InvocationOptions;
+      abortSignal?: AbortSignal;
+      pauseSignal?: AbortSignal;
+    },
+  ) => Promise<any>;
+  /** The serve-style resume, which hands back a thrown leg as an outcome
+   *  with its usage instead of throwing; the attached driver uses it when
+   *  the module has it. */
+  respondToInterruptsForServe?: (
+    interrupts: Interrupt[],
+    responses: InterruptResponse[],
+    opts?: {
+      overrides?: Record<string, unknown>;
+      metadata?: Record<string, any>;
+      invocation?: InvocationOptions;
+      abortSignal?: AbortSignal;
+      pauseSignal?: AbortSignal;
+    },
+  ) => Promise<ServedInvocationOutcome<any>>;
+  __setDebugger: (dbg: DebuggerState | null) => void;
+  /** Absent from a module compiled before it existed. */
+  __getDebugger?: () => DebuggerState | null;
+  __getCheckpoints: () => CheckpointStore;
+};
+
+/** The four functions bound to `ctx`, for an attach server that runs
+ *  inside the program and has no module to ask. Bound here, in the
+ *  runtime that owns the context, and handed to `registerAttach`: the
+ *  `#platform` file can be a different copy of the runtime than the one
+ *  the program imported (a test loads the program's copy through vite and
+ *  the platform file through Node), and a copy that did not load the
+ *  program's modules cannot resume them. */
+export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunctions {
+  return {
+    respondToInterrupts: (interrupts, responses, opts) =>
+      respondToInterrupts({
+        ctx,
+        interrupts,
+        responses,
+        overrides: opts?.overrides,
+        metadata: opts?.metadata,
+        invocation: opts?.invocation,
+        abortSignal: opts?.abortSignal,
+        pauseSignal: opts?.pauseSignal,
+      }),
+    rewindFrom: (checkpoint, overrides, opts) =>
+      rewindFrom({
+        ctx,
+        checkpoint,
+        overrides,
+        metadata: opts?.metadata,
+        invocation: opts?.invocation,
+        abortSignal: opts?.abortSignal,
+        pauseSignal: opts?.pauseSignal,
+      }),
+    respondToInterruptsForServe: (interrupts, responses, opts) =>
+      respondToInterruptsForServe({
+        ctx,
+        interrupts,
+        responses,
+        overrides: opts?.overrides,
+        metadata: opts?.metadata,
+        invocation: opts?.invocation,
+        abortSignal: opts?.abortSignal,
+        pauseSignal: opts?.pauseSignal,
+      }),
+    __setDebugger: (dbg) => {
+      ctx.debuggerState = dbg;
+    },
+    __getDebugger: () => ctx.debuggerState,
+    __getCheckpoints: () => ctx.checkpoints,
+  };
 }
 
 type Outcome = ServedInvocationOutcome<RunNodeCoreResult<any>>;

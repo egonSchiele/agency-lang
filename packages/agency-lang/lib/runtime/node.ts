@@ -19,7 +19,7 @@ import { applyRestoreSignal } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
-import { loadConfiguredProviders } from "#platform";
+import { loadConfiguredProviders, registerAttach } from "#platform";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { TRACE_ID_ENV } from "../config/config.js";
@@ -32,7 +32,12 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
-import { settleFunctionStops, settleStops, type LegOptions } from "./attachedDebugger.js";
+import {
+  attachFunctionsFor,
+  settleFunctionStops,
+  settleStops,
+  type LegOptions,
+} from "./attachedDebugger.js";
 import { fireAgentEnd } from "./agentEnd.js";
 import { mintDebugRun } from "./debugRun.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
@@ -577,6 +582,14 @@ async function runNodeCore({
  *  answers the leg's debug stops here, after the leg has finished, so the
  *  caller never sees one (`settleStops`). */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
+  // Here and not in runNodeCore, so a serve, which runs many invocations
+  // in one process, never registers.
+  registerAttach({
+    ctx: args.ctx,
+    nodeName: args.nodeName,
+    host: args.invocation?.host ?? args.ctx.host,
+    functions: attachFunctionsFor(args.ctx),
+  });
   return unwrapWithUsage(await settledNode(args));
 }
 

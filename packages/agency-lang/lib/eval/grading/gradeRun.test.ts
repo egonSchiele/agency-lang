@@ -47,6 +47,15 @@ describe("grading one trace (through gradeRun on a directory of one)", () => {
     expect(card.perInput[0].gatesPassed).toBe(true);
   });
 
+  it("stops with an error naming the test when a must-pass scalar grader has no threshold", async () => {
+    const runDir = makeRun({ output: "x", test: { ...capital, id: "t1" } });
+    const judge = grader(() => 1, { name: "judge", mustPass: true });
+
+    await expect(gradeRun(runDir, ctx([judge]))).rejects.toThrow(
+      "t1: judge: must-pass grader returned a score but has no threshold",
+    );
+  });
+
   it("a grader that throws scores 0 with the error as feedback, and the rest still run", async () => {
     const runDir = makeRun({ output: "x" });
     const broken = grader(

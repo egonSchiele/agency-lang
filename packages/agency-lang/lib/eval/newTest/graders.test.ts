@@ -93,6 +93,23 @@ describe("questionsFor", () => {
     expect(labels).toContain("point 2");
   });
 
+  it("keeps a row for every point that was ever asked, so an emptied one stays on screen", () => {
+    const points = (answers: Answers) =>
+      names({ kind: "checklist", ...answers }).filter((name) => name.startsWith("point"));
+    expect(points({ "point.0": "a", "point.1": "", "point.2": "c" })).toEqual([
+      "point.0",
+      "point.1",
+      "point.2",
+      "point.3",
+    ]);
+    expect(points({ "point.0": "a", "point.1": "", "point.2": "" })).toEqual([
+      "point.0",
+      "point.1",
+      "point.2",
+    ]);
+    expect(points({ "point.0": "", "point.1": "" })).toEqual(["point.0", "point.1"]);
+  });
+
   it("asks the passing score only for a must-pass goal", () => {
     expect(names({ kind: "goal" })).toEqual(["kind", "goal", "name", "mustPass", "weight"]);
     expect(names({ kind: "goal", mustPass: "yes" })).toEqual([

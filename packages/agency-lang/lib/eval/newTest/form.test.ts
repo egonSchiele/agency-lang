@@ -14,6 +14,7 @@ import {
   type FormState,
   type Row,
 } from "./form.js";
+import { specObjectFor } from "./graders.js";
 
 function run(actions: FormAction[], from: FormState = initialForm("suite")): FormState {
   return actions.reduce(reduceForm, from);
@@ -260,6 +261,26 @@ describe("graders in the form", () => {
     expect(removed.graders).toEqual([]);
     expect(removed.mode).toEqual({ kind: "form" });
     expect(removed.cursor).toEqual(field("goal"));
+  });
+
+  it("emptying a point keeps its row, and only visible points are written", () => {
+    const state = cursorOn(
+      withGrader({ kind: "checklist", "point.0": "a", "point.1": "b", "point.2": "c", name: "n" }),
+      grader(0, "point.1"),
+    );
+    const emptied = run(
+      [{ kind: "backspace" }, { kind: "moveDown" }, { kind: "backspace" }],
+      state,
+    );
+    expect(rowsOf(emptied)).toContainEqual(grader(0, "point.1"));
+    expect(rowsOf(emptied)).toContainEqual(grader(0, "point.2"));
+    expect(specObjectFor(emptied.graders[0]).points).toEqual(["a"]);
+    const stranded = cursorOn(
+      withGrader({ kind: "checklist", "point.0": "", "point.1": "b" }),
+      grader(0, "point.1"),
+    );
+    const cleared = run([{ kind: "backspace" }], stranded);
+    expect(rowsOf(cleared)).toContainEqual(cleared.cursor);
   });
 
   it("a failed save moves the cursor to the problem's row", () => {

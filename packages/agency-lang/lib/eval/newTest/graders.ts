@@ -298,9 +298,14 @@ export function questionsFor(draft: GraderDraft): QuestionSpec[] {
   );
 }
 
+/** One row per answer that was ever asked, in order, plus one more when
+ *  the last of them is filled. An emptied row stays, so the cursor keeps
+ *  its row and every point that is written is on screen. */
 function expandRepeat(question: QuestionSpec, answers: Answers): QuestionSpec[] {
-  const filled = repeatedAnswers(question.name, answers);
-  return Array.from({ length: filled.length + 1 }, (_, i) => ({
+  const asked = askedAnswers(question.name, answers);
+  const last = asked[asked.length - 1];
+  const count = asked.length === 0 || last !== "" ? asked.length + 1 : asked.length;
+  return Array.from({ length: count }, (_, i) => ({
     ...question,
     name: repeatName(question.name, i),
     label: `${question.label} ${i + 1}`,
@@ -311,14 +316,19 @@ function repeatName(name: string, index: number): string {
   return `${name}.${index}`;
 }
 
-/** The answers `name.0`, `name.1`, ... in order, stopping at the first that
- *  was never asked; an emptied row in the middle is skipped. */
-function repeatedAnswers(name: string, answers: Answers): string[] {
+/** The answers `name.0`, `name.1`, ... in order, empty ones included,
+ *  stopping at the first that was never asked. */
+function askedAnswers(name: string, answers: Answers): string[] {
   const found: string[] = [];
   for (let i = 0; Object.hasOwn(answers, repeatName(name, i)); i += 1) {
     found.push(answers[repeatName(name, i)]);
   }
-  return found.filter((answer) => answer !== "");
+  return found;
+}
+
+/** The filled answers of a repeating question, in order. */
+function repeatedAnswers(name: string, answers: Answers): string[] {
+  return askedAnswers(name, answers).filter((answer) => answer !== "");
 }
 
 type Written = [key: string, value: unknown] | null;

@@ -4,10 +4,14 @@ import { AgencyCancelledError } from "../runtime/errors.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
 import {
   __internal_fetch,
   __internal_fetchJSON,
   __internal_fetchMarkdown,
+  _fetch,
+  _fetchJSON,
+  _fetchMarkdown,
   checkAllowedDomains,
   readBodyBytesCapped,
   resolveUrl,
@@ -191,6 +195,139 @@ describe("HTTP fetch abort integration", () => {
     const p = __internal_fetchMarkdown(ctx, stack, threads, url, "", {}, []);
     await new Promise((r) => setTimeout(r, 20));
     ctx.cancel();
+    await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
+  it("__internal_fetch: a server that never answers fails with the URL and the limit, not a cancel", async () => {
+    await startServer(() => {
+      /* never write, never end */
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(p).rejects.toThrow(`Request to ${url} timed out after 0.05 seconds`);
+    await expect(p).rejects.not.toBeInstanceOf(AgencyCancelledError);
+    expect(ctx.getAbortSignal(new StateStack()).aborted).toBe(false);
+  });
+
+  it("__internal_fetch: a body that stalls after the headers times out the same way", async () => {
+    await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.write("first-chunk");
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(p).rejects.toThrow(/timed out after 0.05 seconds/);
+  });
+
+  it("__internal_fetchJSON and __internal_fetchMarkdown time out too", async () => {
+    await startServer(() => {
+      /* never answer */
+    });
+    const ctx = makeMockCtx();
+    const json = __internal_fetchJSON(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(json).rejects.toThrow(/timed out/);
+    const markdown = __internal_fetchMarkdown(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(markdown).rejects.toThrow(/timed out/);
+  });
+
+  it("__internal_fetch: a timeout of 0 waits for a slow server", async () => {
+    await startServer((_req, res) => {
+      setTimeout(() => res.end("late"), 80);
+    });
+    const ctx = makeMockCtx();
+    const text = await __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      0,
+    );
+    expect(text).toBe("late");
+  });
+
+  it("the exported helpers default the limit, so a module compiled with six arguments still fetches", async () => {
+    await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    const ctx = makeMockCtx();
+    const stack = new StateStack();
+    const threads = new ThreadStore();
+    const sixArgs = (fn: (...args: any[]) => Promise<unknown>) =>
+      runInTestContext(ctx, stack, threads, () => fn(url, "", {}, [], "GET", null));
+    await expect(sixArgs(_fetch)).resolves.toBe('{"ok":true}');
+    await expect(sixArgs(_fetchJSON)).resolves.toEqual({ ok: true });
+    await expect(sixArgs(_fetchMarkdown)).resolves.toBe('{"ok":true}');
+  });
+
+  it("__internal_fetch: a cancel during the wait is still a cancel, not a timeout", async () => {
+    await startServer(() => {
+      /* never answer */
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      5_000,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    ctx.cancel("test stop");
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 

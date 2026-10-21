@@ -1,10 +1,38 @@
-import { AgencyCancelledError, isAbortError, readCause } from "../runtime/errors.js";
+import {
+  AgencyCancelledError,
+  isAbortError,
+  isTimeoutError,
+  readCause,
+} from "../runtime/errors.js";
 import { currentRun } from "../runtime/asyncContext.js";
 import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
+
+/** How long a fetch may take, headers and body together, when the caller
+ *  names no limit. */
+export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+
+/** The signal a request runs under: the run's own signal, so a cancel or a
+ *  guard trip still tears the request down, joined with a timeout when one
+ *  is set. `0` means no limit. */
+function requestSignal(runSignal: AbortSignal, timeoutMs: number): AbortSignal {
+  if (timeoutMs <= 0) {
+    return runSignal;
+  }
+  return AbortSignal.any([runSignal, AbortSignal.timeout(timeoutMs)]);
+}
+
+/** An ordinary error, not a cancellation, so the `try` around the call
+ *  turns it into a Failure the model can read. */
+function timeoutError(url: string, timeoutMs: number): Error {
+  return new Error(
+    `Request to ${url} timed out after ${timeoutMs / 1000} seconds. Do not retry it as is: ` +
+      `pass a larger timeout if the source is slow, or use a different source.`,
+  );
+}
 
 // Cancellation is best-effort cleanup; a cancel error must never replace the
 // primary abort or size-cap error we are about to throw.
@@ -170,16 +198,21 @@ export function normalizeSnippet(body: string, max = 300): string {
  * without each one re-implementing it. Each caller still has to thread
  * the `AbortSignal` from `ctx.getAbortSignal(stack)` into its `fetch`
  * call — this helper only handles the catch side. `signal` is that same
- * signal, read here only to recover the abort cause.
+ * signal, read here only to recover the abort cause. `timeoutMs` is the
+ * limit the signal carries, named in the failure when it is what fired.
  */
 export async function runHttp<T>(
   fn: () => Promise<T>,
   url: string,
   signal: AbortSignal | undefined,
+  timeoutMs: number = 0,
 ): Promise<T> {
   try {
     return await fn();
   } catch (e) {
+    if (isTimeoutError(e)) {
+      throw timeoutError(url, timeoutMs);
+    }
     if (isAbortError(e)) {
       // Carry the structured cause so a guard trip that aborted this fetch
       // surfaces as an AgencyCancelledError whose guardTrip cause survives —
@@ -214,9 +247,10 @@ async function fetchImpl(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number,
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const signal = ctx.getAbortSignal(stack);
+  const signal = requestSignal(ctx.getAbortSignal(stack), timeoutMs);
   return await runHttp(
     async () => {
       const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
@@ -224,7 +258,7 @@ async function fetchImpl(
       try {
         responseBody = await readBodyCapped(result, url, signal);
       } catch (e) {
-        if (isAbortError(e)) throw e;
+        if (isAbortError(e) || isTimeoutError(e)) throw e;
         throw new Error(`Failed to get text from ${url}: ${e}`);
       }
       const statusFailure = httpStatusFailure(result, url, responseBody);
@@ -233,6 +267,7 @@ async function fetchImpl(
     },
     url,
     signal,
+    timeoutMs,
   );
 }
 
@@ -248,8 +283,9 @@ export async function __internal_fetch(
   allowedDomains: string[],
   method: string = "GET",
   body: any = null,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
 }
 
 /** ALS-reading replacement for `__internal_fetch`. */
@@ -260,9 +296,10 @@ export async function _fetch(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = currentRun();
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
 }
 
 async function fetchJSONImpl(
@@ -274,9 +311,10 @@ async function fetchJSONImpl(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number,
 ): Promise<any> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const signal = ctx.getAbortSignal(stack);
+  const signal = requestSignal(ctx.getAbortSignal(stack), timeoutMs);
   return await runHttp(
     async () => {
       const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
@@ -291,6 +329,7 @@ async function fetchJSONImpl(
     },
     url,
     signal,
+    timeoutMs,
   );
 }
 
@@ -305,8 +344,19 @@ export async function __internal_fetchJSON(
   allowedDomains: string[],
   method: string = "GET",
   body: any = null,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<any> {
-  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchJSONImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
 }
 
 /** ALS-reading replacement for `__internal_fetchJSON`. */
@@ -317,9 +367,20 @@ export async function _fetchJSON(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<any> {
   const { ctx, stack } = currentRun();
-  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchJSONImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
 }
 
 async function fetchMarkdownImpl(
@@ -331,9 +392,10 @@ async function fetchMarkdownImpl(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number,
 ): Promise<string | ResultFailure> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const signal = ctx.getAbortSignal(stack);
+  const signal = requestSignal(ctx.getAbortSignal(stack), timeoutMs);
   return await runHttp(
     async () => {
       const result = await ctx.host.network.fetch(url, buildInit(method, headers, body, signal));
@@ -348,6 +410,7 @@ async function fetchMarkdownImpl(
     },
     url,
     signal,
+    timeoutMs,
   );
 }
 
@@ -362,8 +425,19 @@ export async function __internal_fetchMarkdown(
   allowedDomains: string[],
   method: string = "GET",
   body: any = null,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchMarkdownImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
 }
 
 /** ALS-reading replacement for `__internal_fetchMarkdown`. */
@@ -374,9 +448,20 @@ export async function _fetchMarkdown(
   allowedDomains: string[],
   method: string,
   body: any,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = currentRun();
-  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
+  return fetchMarkdownImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
 }
 
 function htmlToMarkdown(html: string): string {

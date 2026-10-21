@@ -297,6 +297,17 @@ export class HandlerRecursionError extends Error {
   }
 }
 
+/** The error a signal from `AbortSignal.timeout` aborts with: a
+ *  `DOMException` named `TimeoutError`, which `isAbortError` does not
+ *  match, so a timed-out fetch is told apart from a cancelled one. */
+export function isTimeoutError(error: unknown): boolean {
+  return (
+    typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "TimeoutError"
+  );
+}
+
 export function isAbortError(error: unknown): boolean {
   if (error instanceof AgencyAbort) return true;
   if (

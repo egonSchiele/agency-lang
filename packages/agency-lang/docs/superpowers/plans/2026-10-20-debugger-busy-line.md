@@ -2,7 +2,8 @@
 
 Linear: one ticket per PR below, on the attach track (P-ADI-1), after
 ADI-11. Reviewed in `2026-10-20-debugger-busy-line-review.md`; this is
-the plan with the review's corrections in it.
+the plan with the review's corrections in it, and with what the build
+found: PR 1 is #1237, PR 2 is #1238, PR 3 is #1239.
 
 Three PRs, stacked: PR 2 builds on PR 1, PR 3 on PR 2. PR 1 makes the
 run tell its debugger when it enters and leaves a slow thing, a model
@@ -154,10 +155,13 @@ The wait uses the same door: `DebuggerState` gains
 `onWait: ((entries: BusyEntry[]) => void) | undefined`, which both
 drivers set when built, the in-process one and the attached one, since
 both show the spinner. `reportWaits(slot)` builds the list to show and
-calls it. Three things call `reportWaits`: `whileBusy` after it opens
-and after it closes a wait; `debugStep` when a run takes the debugger,
-so the list narrows to that run; and the `debuggerState` setter on the
-context, so a debugger installed mid-wait is told at once.
+calls it, and skips a list with the same waits as the last one sent
+(`reportedWaits`), so a debugger installed while nothing is open, or a
+run taking the debugger with nothing waiting, hears nothing. Three
+things call `reportWaits`: `whileBusy` after it opens and after it
+closes a wait; `debugStep` when a run takes the debugger, so the list
+narrows to that run; and the `debuggerState` setter on the context, so a
+debugger installed mid-wait is told at once.
 
 **Reporting never claims the debugger.** `DebuggerState.owns` is not a
 check: the first run to call it becomes the owner, the window is reset,
@@ -251,8 +255,9 @@ machinery decide how:
   `DebuggerTestSession` uses it to tell when a stop has been reached. A
   reader that is live while the program runs would make the input idle
   during a run and break that. So the session's signal moves to the UI:
-  `DebuggerUI.onCommandAwaited(listener)` fires when `waitForCommand`
-  starts waiting, and the session waits on that.
+  `DebuggerUI.waitForPerson()` resolves when the UI next reads a key for
+  the person, at a stop, in a text input, or in an overlay, and the
+  session waits on that.
 
 ## PR 1. The run reports what it is waiting on (ADI-xx a)
 
@@ -278,16 +283,18 @@ machinery decide how:
   `stepPathFor(key)`, with the stack's branch path and the run's depth;
   one method, `loopLocation(key, run)`, builds it for both, and is public
   with `toolStopLabel` so the tool site can use them.
-- `lib/runtime/prompt.ts`: the `.invoke` step's body, the
-  `runInvokeStep` call, goes through `whileBusy` with `kind: "tool"`.
-  Not beside the `onToolCallStart` and `onToolCallEnd` hooks: those are
-  the `.start` and `.end` steps, each skipped on its own on a resume,
-  while the tool itself runs in `.invoke`, the step that re-runs when the
-  tool's own interrupt is answered. So a resumed tool reports a second
-  wait, which is right, since the tool is running again, and every
-  outcome of the body, success, failure, crash, cancel, bail-out, closes
-  it. A tool that resumes from a checkpoint and skips its body reports
-  nothing, as it reports no duration.
+- `lib/runtime/prompt.ts`: the `.invoke` step runs through
+  `PromptRunner.invokeTool(branch, key, call, body)`, which is the step
+  plus its wait, as `llmCall` is the request's step plus its wait, with
+  `kind: "tool"`. Not beside the `onToolCallStart` and `onToolCallEnd`
+  hooks: those are the `.start` and `.end` steps, each skipped on its
+  own on a resume, while the tool itself runs in `.invoke`, the step
+  that re-runs when the tool's own interrupt is answered. So a resumed
+  tool reports a second wait, which is right, since the tool is running
+  again, and every outcome of the body, success, failure, crash, cancel,
+  bail-out, closes it. A step skipped on a resume opens nothing, as it
+  reports no duration. (`prompt.ts` is at its line limit, which is why
+  the step and the wait are one call.)
 
 ### Driver and IO
 
@@ -296,9 +303,9 @@ machinery decide how:
 - `lib/debugger/driver.ts`: the constructor sets
   `debuggerState.onWait = (entries) => this.ui.setBusy(entries)`, with
   the `detachedNow` guard the callbacks use. Nothing is kept on the
-  driver. Attached, the list narrows on `ownerChanged` through the
-  `debugStep` report, and `finishedAttached` sends an empty list, since
-  the run that ended has no waits.
+  driver. Attached, the list narrows when a run takes the debugger,
+  through the `debugStep` report; a run that ends has closed its waits
+  already, so the driver sends nothing of its own.
 - `lib/debugger/attach/protocol.ts`: `setBusy` joins `NOTICE_METHODS`.
   `channelIO.ts` sends it; `serveIO.ts` dispatches it. The entry crosses
   as `z.unknown()` like the other notice arguments; the UI side keeps
@@ -321,14 +328,12 @@ machinery decide how:
 - A stop inside a tool (`search` with `breakHere`): `busyCalls` at the
   stop's render is empty.
 - A second run on the module while the first is debugged: the second
-  run's waits are not reported after the first run's stop; before any
-  stop, both runs' waits are.
-- A debugger installed while a wait is open (`awaits-helper` is not a
-  model call, so a mocked tool that waits on the helper does it): the
-  first `setBusy` after `attach()` carries the open wait with an
-  `elapsedMs` above zero.
-- A cancelled leg, the caller's abort signal during a model call, ends
-  with an empty list.
+  run's waits are not reported after the first run's stop.
+- A debugger installed while a wait is open (`waiting-tool.agency`,
+  whose `holdOn` tool waits on the helper): the first `setBusy` after
+  `attach()` carries the open wait with its `elapsedMs`.
+- A tool whose body throws (`failing` in `waiting-tool.agency`) closes
+  its wait.
 - `lib/debugger/attach/attach.test.ts`: the notice crosses the channel
   and the UI-side `DebuggerIO` sees the same entries.
 
@@ -361,13 +366,15 @@ machinery decide how:
 
 ### Command bar
 
-- `lib/debugger/ui.ts` `buildCommandBar`: while running, the spinner text
+- `lib/debugger/ui.ts` `startSpinner`: while running, the spinner text
   becomes `▶ running · ` plus `busyText` of the last entry, with
   `· +N more` when others are open, in place of the random phrase. With
   nothing open it reads `▶ running`. The phrases list goes; the frame
   character stays as the sign that the screen is alive. At a stop with
   the list not empty, the `async` case, the stats bar shows the same text
-  after the usual figures.
+  after the usual figures. Before any stop, the source pane shows the
+  module the program is waiting in. `getCurrentLine` no longer logs on
+  every redraw; `setSourceMap` says once why a line is missing.
 
 ### Source pane
 
@@ -423,19 +430,22 @@ until then.
   `debuggerState.stepping()` and logs `Pausing at the next statement`
   when a leg is running, and is dropped at a stop or after the run
   ended (`legRunning`, set around `resumeInterrupt`).
-- `lib/debugger/ui.ts`: one reader, as under Decisions. `readKey()`
-  holds the single in-flight `nextKey()`; a dispatcher hands the key to
-  the waiting `waitForCommand` when there is one, else to the pause
-  listener when it is `s` or `n` and no command is awaited, else to the
-  held list. `waitForCommand` drains the held list first and keeps its
-  signature; `onCommandAwaited(listener)` fires when it starts waiting.
-  `DebuggerTestSession` waits on that instead of `TestInput.waitForIdle`.
+- `lib/debugger/ui.ts`: one reader, as under Decisions. `armReader`
+  holds the single in-flight `nextKey()`; `dispatch` hands the key to
+  the person waiting in `readKey` when there is one, else to the pause
+  listeners when the spinner runs and the key is `s` or `n`, else to the
+  held list. Every read for the person goes through `readKey`: the
+  command, the text input, and the overlays through
+  `OverlayContext.nextKey`; `readKey` drains the held list first.
+  `waitForCommand` keeps its signature; `waitForPerson()` resolves when
+  the UI next reads a key for the person, and `DebuggerTestSession`
+  waits on that instead of `TestInput.waitForIdle`.
 - Attached: `lib/debugger/attach/protocol.ts` gets `{ type: "pause" }`,
   the first message the UI side sends unprompted. `serveIO.ts` registers
   the UI's listener to send it; the run side's `ChannelDebuggerIO`
   receives it and calls the driver's listener.
 - The ADI-11 spec's command table gains `pause`, sending this message;
-  that edit goes to the spec's PR.
+  that edit is on the spec's branch (#1233).
 
 ### Tests
 

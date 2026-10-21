@@ -177,6 +177,34 @@ describe("foldAnnotations", () => {
     ).toBe(false);
   });
 
+  it("a run row names exactly one stored graders file: a bundle or a JSON file", () => {
+    const base = {
+      traceId: "t1",
+      annotator: { kind: "harness", id: "agency-eval@1" },
+      kind: "run",
+      test: { id: "fib" },
+      suite: null,
+      ended: "ok",
+      flags: {},
+      v: 1,
+      id: `ann_${"0".repeat(64)}`,
+      createdAt: "now",
+    };
+    const row = (graders: Record<string, unknown>) =>
+      AnnotationSchema.safeParse({
+        ...base,
+        graders: { source: "s", judgeFiles: {}, origin: "test", ...graders },
+      });
+    expect(row({ jsonFile: "a.json" }).success).toBe(true);
+    expect(row({ bundleFile: "a.mjs" }).success).toBe(true);
+    const both = row({ jsonFile: "a.json", bundleFile: "a.mjs" });
+    expect(both.success).toBe(false);
+    expect(JSON.stringify(both.error?.issues)).toContain(
+      "graders needs exactly one of bundleFile and jsonFile",
+    );
+    expect(row({}).success).toBe(false);
+  });
+
   it("annotatorLineage strips the revision and leaves ids without one alone", () => {
     expect(annotatorLineage("goal-judge@1")).toBe("goal-judge");
     expect(annotatorLineage("graders.ts@abc")).toBe("graders.ts");

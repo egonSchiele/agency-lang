@@ -59,12 +59,14 @@ export type ScorePoint = { point: string; pass: boolean; evidence: string };
 export type SuiteIdentity = { source: string; sha?: string };
 
 /** Where a run's graders came from and what the directory's `graders/` holds
- *  for them: the bundled module under `bundleFile`, and each judge file the
- *  graders read by path under its stored name. Grading prefers this
+ *  for them: the bundled `graders.ts` under `bundleFile` or the
+ *  `graders.json` under `jsonFile` (exactly one is set), and each judge file
+ *  the graders read by path under its stored name. Grading prefers this
  *  snapshot, so a copied run grades the same anywhere. */
 export type GradersIdentity = {
   source: string;
-  bundleFile: string;
+  bundleFile?: string;
+  jsonFile?: string;
   judgeFiles: Record<string, string>;
   /** "test": the test's own module. "config": the former `eval.graders`
    *  fallback, which runs written before it was removed may still carry;
@@ -202,11 +204,18 @@ const RunAnnotationSchema = z
     graders: z
       .object({
         source: z.string(),
-        bundleFile: z.string().min(1),
+        bundleFile: z.string().min(1).optional(),
+        jsonFile: z.string().min(1).optional(),
         judgeFiles: z.record(z.string(), z.string()),
         origin: z.enum(["test", "config"]),
       })
       .strict()
+      .refine(
+        (graders) => (graders.bundleFile === undefined) !== (graders.jsonFile === undefined),
+        {
+          message: "graders needs exactly one of bundleFile and jsonFile",
+        },
+      )
       .optional(),
     harness: z
       .array(

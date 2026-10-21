@@ -6,6 +6,7 @@ import { pathToFileURL } from "url";
 import { build, stop as stopEsbuild, type BuildOptions } from "esbuild";
 
 import type { AgencyConfig } from "@/config/config.js";
+import type { GradersIdentity } from "@/runDirectory/annotations.js";
 import { getPackageRoot } from "@/importPaths.js";
 import type { BaseGrader } from "./baseGrader.js";
 import { toGrader, type Grader } from "./functionGrader.js";
@@ -52,13 +53,16 @@ export async function bundleGradingModule(filePath: string): Promise<GradingBund
 
 /**
  * The files a run directory keeps so the run can be graded later, anywhere,
- * by the graders it was run with: the bundle, plus any file a grader reads
- * by path (a custom judge prompt). Names are content hashes. `judgeFiles`
- * maps each path as the grader declared it to its stored name.
+ * by the graders it was run with: the bundle of a `graders.ts` under
+ * `bundleFile`, or the `graders.json` itself under `jsonFile`, plus any
+ * file a grader reads by path (a custom judge prompt). Names are content
+ * hashes. `judgeFiles` maps each path as the grader declared it to its
+ * stored name. Exactly one of `bundleFile` and `jsonFile` is set.
  */
 export type GradersSnapshot = {
   source: string;
-  bundleFile: string;
+  bundleFile?: string;
+  jsonFile?: string;
   judgeFiles: Record<string, string>;
   files: { name: string; content: string }[];
 };
@@ -85,11 +89,28 @@ export async function snapshotGradingModule(filePath: string): Promise<GradersSn
   return { source: bundle.source, bundleFile, judgeFiles, files };
 }
 
-/** What a run row records about its graders' snapshot: where the module
- *  came from, and the stored names under the run directory's `graders/`. */
+/** The run row's record of a test's graders: the source, the one stored
+ *  file, the judge files, and the origin. */
+export function gradersIdentityOf(
+  snapshot: GradersSnapshot & { origin: GradersIdentity["origin"] },
+): GradersIdentity {
+  const identity: GradersIdentity = {
+    source: snapshot.source,
+    judgeFiles: snapshot.judgeFiles,
+    origin: snapshot.origin,
+  };
+  if (snapshot.bundleFile !== undefined) identity.bundleFile = snapshot.bundleFile;
+  if (snapshot.jsonFile !== undefined) identity.jsonFile = snapshot.jsonFile;
+  return identity;
+}
+
+/** What a run row records about its graders' snapshot: where the graders
+ *  came from, and the stored names under the run directory's `graders/`.
+ *  Exactly one of `bundleFile` and `jsonFile` is set. */
 export type RecordedGraders = {
   source: string;
-  bundleFile: string;
+  bundleFile?: string;
+  jsonFile?: string;
   judgeFiles: Record<string, string>;
 };
 
@@ -100,8 +121,8 @@ export async function loadGradingSnapshot(
   gradersDir: string,
   recorded: RecordedGraders,
 ): Promise<BaseGrader[]> {
-  const bundlePath = path.join(gradersDir, recorded.bundleFile);
-  if (!fs.existsSync(bundlePath)) {
+  const bundlePath = path.join(gradersDir, recorded.bundleFile ?? "");
+  if (recorded.bundleFile === undefined || !fs.existsSync(bundlePath)) {
     throw new Error(
       `Grading snapshot not found: ${bundlePath} (recorded for ${recorded.source}). ` +
         `Pass --graders <file> to grade with a module from disk.`,

@@ -143,6 +143,23 @@ export class DebuggerUI implements DebuggerIO {
    *  status line. */
   private attached: Hello | null = null;
   private quitListeners: (() => void)[] = [];
+  private pauseListeners: (() => void)[] = [];
+  /** Set from the pause key until the next stop, for the bar. */
+  private pausing = false;
+
+  // One reader of the key stream. `TerminalInput.nextKey()` queues its
+  // waiters, so two readers, one for the person at a stop and one for
+  // the pause key while the program runs, would hand a key to a stale
+  // waiter. So there is one in-flight `nextKey()` (`pendingKey`), and
+  // `dispatch` gives each key to whoever is current: the person waiting
+  // in `readKey`, else the pause listeners when the program runs and the
+  // key is a stepping key, else the held list, which the person's next
+  // read drains first, so `q` pressed while running still detaches at
+  // the next stop, in order.
+  private pendingKey: Promise<void> | null = null;
+  private personWaiter: ((key: KeyEvent) => void) | null = null;
+  private heldKeys: KeyEvent[] = [];
+  private waitingListeners: (() => void)[] = [];
 
   lastFrame: Frame | null = null;
   /** The clock the elapsed figures count on; a test injects its own. */
@@ -596,6 +613,65 @@ export class DebuggerUI implements DebuggerIO {
     this.quitListeners.push(listener);
   }
 
+  onPause(listener: () => void): void {
+    this.pauseListeners.push(listener);
+  }
+
+  /** Resolves the next time this UI waits on the person for a key: a
+   *  command at a stop, a text input, or an overlay. A test feeds a key
+   *  and waits on this to know the UI has taken it and come back for
+   *  the next; the reader that runs while the program runs does not
+   *  count, since the person is not asked for anything then. */
+  waitForPerson(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.waitingListeners.push(resolve);
+    });
+  }
+
+  /** The next key for the person: a held one first, else the next the
+   *  screen gives. The one place the UI reads a key for someone. */
+  private readKey(): Promise<KeyEvent> {
+    const held = this.heldKeys.shift();
+    if (held !== undefined) {
+      return Promise.resolve(held);
+    }
+    return new Promise<KeyEvent>((resolve) => {
+      this.personWaiter = resolve;
+      const waiting = this.waitingListeners;
+      this.waitingListeners = [];
+      for (const listener of waiting) listener();
+      this.armReader();
+    });
+  }
+
+  /** Make sure one `nextKey()` is in flight whenever someone wants a
+   *  key: the person, or the pause key while the program runs. */
+  private armReader(): void {
+    if (this.pendingKey !== null) return;
+    this.pendingKey = this.screen.nextKey().then((key) => {
+      this.pendingKey = null;
+      this.dispatch(key);
+    });
+  }
+
+  private dispatch(key: KeyEvent): void {
+    if (key.key === "c" && key.ctrl) this.cleanup();
+    const waiter = this.personWaiter;
+    if (waiter !== null) {
+      this.personWaiter = null;
+      waiter(key);
+    } else if (this.spinnerInterval !== null && (key.key === "s" || key.key === "n")) {
+      this.pausing = true;
+      for (const listener of this.pauseListeners) listener();
+      this.renderUI();
+    } else {
+      this.heldKeys.push(key);
+    }
+    if (this.spinnerInterval !== null || this.personWaiter !== null) {
+      this.armReader();
+    }
+  }
+
   // --- DebuggerIO implementation ---
 
   log(line: string): void {
@@ -647,13 +723,16 @@ export class DebuggerUI implements DebuggerIO {
     const update = () => {
       const frame = DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
       const waiting = this.busyBarText();
-      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ running${waiting === "" ? "" : ` · ${waiting}`}`;
+      const state = this.pausing ? "pausing at the next statement" : "running";
+      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ ${state}${waiting === "" ? "" : ` · ${waiting}`}`;
       this.renderUI();
       frameIdx++;
     };
 
     update();
     this.spinnerInterval = setInterval(update, 80);
+    // The pause key is read while the program runs.
+    this.armReader();
   }
 
   stopSpinner(): void {
@@ -674,9 +753,9 @@ export class DebuggerUI implements DebuggerIO {
   // --- Key handling ---
 
   async waitForCommand(): Promise<DebuggerCommand> {
+    this.pausing = false;
     while (true) {
-      const keyEvent = await this.screen.nextKey();
-      if (keyEvent.key === "c" && keyEvent.ctrl) this.cleanup();
+      const keyEvent = await this.readKey();
 
       // Attached, escape does nothing: it would detach by accident.
       if (this.attached !== null && keyEvent.key === "escape") {
@@ -825,7 +904,7 @@ export class DebuggerUI implements DebuggerIO {
     this.renderUI();
 
     while (true) {
-      const keyEvent = await this.screen.nextKey();
+      const keyEvent = await this.readKey();
 
       if (keyEvent.key === "enter") {
         const value = this.inputValue;
@@ -838,10 +917,6 @@ export class DebuggerUI implements DebuggerIO {
         this.inputPrompt = null;
         this.inputValue = "";
         this.renderUI();
-        return null;
-      }
-      if (keyEvent.key === "c" && keyEvent.ctrl) {
-        this.cleanup();
         return null;
       }
       if (keyEvent.key === "backspace") {
@@ -893,6 +968,7 @@ export class DebuggerUI implements DebuggerIO {
   private overlayContext(): OverlayContext {
     return {
       screen: this.screen,
+      nextKey: () => this.readKey(),
       state: this.state,
       buildTopRows: () => {
         const panes = this.getPanes();

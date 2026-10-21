@@ -42,6 +42,9 @@ function checkpointsFromWire(wire: unknown): Checkpoint[] {
 /** Answer the run's requests with `io` until the channel closes. Returns
  *  the function that stops listening. */
 export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeEvents = {}) {
+  // The one message the UI sends unprompted: the person asked the
+  // running program to stop at its next statement.
+  io.onPause(() => channel.send({ type: "pause" }));
   const answer = async (id: number, method: string, args: unknown[]): Promise<unknown> => {
     switch (method) {
       case "render":
@@ -121,6 +124,7 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         );
         return;
       case "reply":
+      case "pause":
         return;
     }
   });

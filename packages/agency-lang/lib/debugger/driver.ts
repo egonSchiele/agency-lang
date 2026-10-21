@@ -117,6 +117,7 @@ export class DebuggerDriver {
         this.ui.setBusy(entries);
       }
     };
+    this.ui.onPause(() => this.pauseRequested());
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
 
@@ -841,11 +842,28 @@ export class DebuggerDriver {
     return overrides;
   }
 
+  /** Whether a leg the driver resumed is running, so a pause can land
+   *  on it; at a stop, or after the run ended, a pause changes nothing. */
+  private legRunning = false;
+
+  /** The person asked the running program to stop at its next
+   *  statement: stepping mode, which the next step honours, with the
+   *  step target cleared so `next` over a call stops inside it too. A
+   *  call in flight is not interrupted; the stop comes when it returns. */
+  private pauseRequested(): void {
+    if (!this.legRunning || this.detachedNow()) {
+      return;
+    }
+    this.debuggerState.stepping();
+    this.ui.log("Pausing at the next statement");
+  }
+
   private async resumeInterrupt(
     fn: () => Promise<any>,
     session: AttachedSession | undefined,
   ): Promise<any> {
     this.ui.startSpinner();
+    this.legRunning = true;
     try {
       const result = await fn();
       if (session !== undefined && result?.usage !== undefined) {
@@ -858,6 +876,7 @@ export class DebuggerDriver {
       }
       throw error;
     } finally {
+      this.legRunning = false;
       this.ui.stopSpinner();
     }
   }

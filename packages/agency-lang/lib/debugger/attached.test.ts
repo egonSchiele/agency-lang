@@ -1044,3 +1044,40 @@ describe("what the program is waiting on", () => {
     });
   });
 });
+
+describe("the pause key", () => {
+  it("stops a running program at its next statement", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    const { io } = attachTo(mod, [{ type: "continue" }, { type: "continue" }]);
+
+    const running = mod.main();
+    // The first stop is before the call that waits on the helper, and
+    // `continue` runs it; the program is then inside the helper.
+    await helper.untilWaiting();
+    io.pause();
+    helper.releaseWaiter();
+    const result = await running;
+
+    expectNoStop(result);
+    expect(result.data).toBe(2);
+    expect(io.logLines).toContain("Pausing at the next statement");
+    // The stop before the call, and the one the pause made after it.
+    expect(io.renderCalls).toHaveLength(2);
+  });
+
+  it("changes nothing at a stop", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        this.pause();
+        return await super.waitForCommand();
+      }
+    })([{ type: "step" }, { type: "continue" }]);
+    attachTo(mod, [], io);
+
+    expect((await mod.main()).data).toBe(3);
+
+    expect(io.logLines).not.toContain("Pausing at the next statement");
+    expect(io.renderCalls).toHaveLength(2);
+  });
+});

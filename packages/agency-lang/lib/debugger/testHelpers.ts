@@ -23,6 +23,7 @@ export class TestDebuggerIO implements DebuggerIO {
   overrides: Record<string, unknown> = {};
   /** Every list `setBusy` received, in order. */
   busyCalls: BusyEntry[][] = [];
+  private pauseListeners: (() => void)[] = [];
   private commands: DebuggerCommand[];
   private commandIndex = 0;
   renderCalls: Checkpoint[] = [];
@@ -46,6 +47,17 @@ export class TestDebuggerIO implements DebuggerIO {
 
   setBusy(entries: BusyEntry[]): void {
     this.busyCalls.push(entries);
+  }
+
+  onPause(listener: () => void): void {
+    this.pauseListeners.push(listener);
+  }
+
+  /** The person pressed the pause key. */
+  pause(): void {
+    for (const listener of this.pauseListeners) {
+      listener();
+    }
   }
 
   async render(

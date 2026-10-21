@@ -56,14 +56,20 @@ async function captured(): Promise<{
   });
 }
 
-type Screenful = { ui: DebuggerUI; recorder: FrameRecorder; clock: { now: number } };
+type Screenful = {
+  ui: DebuggerUI;
+  recorder: FrameRecorder;
+  input: TestInput;
+  clock: { now: number };
+};
 
 function screenful(): Screenful {
   const clock = { now: 1_000_000 };
   const recorder = new FrameRecorder();
-  const screen = new Screen({ input: new TestInput(), output: recorder, width: 120, height: 40 });
+  const input = new TestInput();
+  const screen = new Screen({ input, output: recorder, width: 120, height: 40 });
   const ui = new DebuggerUI(screen, { now: () => clock.now });
-  return { ui, recorder, clock };
+  return { ui, recorder, input, clock };
 }
 
 function lastFrame(recorder: FrameRecorder): string {
@@ -149,6 +155,58 @@ describe("the UI while the program is waiting", () => {
       expect(frame).toMatch(/>\s+5\s+const reply = llm\("say hi"\)/);
       expect(frame).not.toMatch(/▶\s+5\s+const reply/);
       expect(frame).toContain("waiting: in llm() at llm-after-step.agency:5");
+    } finally {
+      ui.destroy();
+    }
+  });
+});
+
+describe("the pause key", () => {
+  it("s while the program runs reaches the listener, and the bar says so", async () => {
+    const { ui, recorder, input } = screenful();
+    let paused = 0;
+    ui.onPause(() => paused++);
+    try {
+      ui.startSpinner();
+      await untilFrame(recorder, "▶ running");
+      input.feedKey({ key: "s" });
+
+      const frame = await untilFrame(recorder, "pausing at the next statement");
+      expect(frame).toContain("▶ pausing at the next statement");
+      expect(paused).toBe(1);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("q while the program runs is kept for the stop", async () => {
+    const { ui, recorder, input } = screenful();
+    let paused = 0;
+    ui.onPause(() => paused++);
+    try {
+      ui.startSpinner();
+      await untilFrame(recorder, "▶ running");
+      input.feedKey({ key: "q" });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      ui.stopSpinner();
+
+      expect(await ui.waitForCommand()).toEqual({ type: "quit" });
+      expect(paused).toBe(0);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("s at a stop is a step, not a pause", async () => {
+    const { ui, input } = screenful();
+    let paused = 0;
+    ui.onPause(() => paused++);
+    try {
+      const pending = ui.waitForCommand();
+      input.feedKey({ key: "s" });
+
+      expect(await pending).toEqual({ type: "step" });
+      expect(paused).toBe(0);
     } finally {
       ui.destroy();
     }

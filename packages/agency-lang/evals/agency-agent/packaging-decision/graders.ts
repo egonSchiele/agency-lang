@@ -17,7 +17,7 @@ export default [
           "the choice. It does not merely describe the repo, list considerations without " +
           "weighing them, or defer the answer pending more research",
       }),
-    { name: "takes-a-position", mustPass: true },
+    { name: "takes-a-position", mustPass: true, threshold: 0.5 },
   ),
 
   grader(

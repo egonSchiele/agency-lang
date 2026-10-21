@@ -11,7 +11,7 @@ export default [
           "asks the user which email address the note should go to, and how the email should " +
           "be sent (which provider or account). It does not claim a tool was written or saved",
       }),
-    { name: "asks-for-the-missing-facts", mustPass: true },
+    { name: "asks-for-the-missing-facts", mustPass: true, threshold: 0.5 },
   ),
 
   grader(

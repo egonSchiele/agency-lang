@@ -16,6 +16,7 @@ import { RunStrategy } from "@/importStrategy.js";
 import { attachTarget } from "./debugFlags.js";
 import {
   EARLY_START_LIMIT_MS,
+  LATER_START_KEEP_MS,
   START_TIME_TOLERANCE_MS,
   attachCommand,
   checkedRecord,
@@ -110,9 +111,7 @@ describe("the start time from ps", () => {
       const live = liveStartTime(process.pid);
       expect(live).toHaveProperty("started");
       const started = (live as { started: number }).started;
-      expect(Math.abs(started - (Date.now() - process.uptime() * 1000))).toBeLessThan(
-        START_TIME_TOLERANCE_MS,
-      );
+      expect(Math.abs(started - performance.timeOrigin)).toBeLessThan(START_TIME_TOLERANCE_MS);
     } finally {
       for (const [name, value] of Object.entries(previous)) {
         if (value === undefined) {
@@ -128,6 +127,9 @@ describe("the start time from ps", () => {
     expect(finishedLine(3, undefined)).toBe("Program finished. Return value: 3");
     expect(finishedLine(undefined, undefined)).toBe("Program finished. Return value: undefined");
     expect(finishedLine(undefined, "x")).toBe("Program threw: x");
+    expect(
+      finishedLine({ __type: "resultType", success: false, error: "kaboom", data: {} }, undefined),
+    ).toBe("Program failed: kaboom");
   });
 
   it("says why when ps cannot answer", () => {
@@ -163,8 +165,8 @@ describe("checking a record before signalling", () => {
     expect(fs.existsSync(path.join(dir, `${gone}.json`))).toBe(false);
   });
 
-  it("refuses and removes a record written before the live process started", () => {
-    const stale = Date.now() - process.uptime() * 1000 - 10 * START_TIME_TOLERANCE_MS;
+  it("refuses and removes a record written long before the live process started", () => {
+    const stale = performance.timeOrigin - 2 * LATER_START_KEEP_MS;
     writeRecord(dir, { pid: process.pid, program: "a.agency", node: "main", startedAt: stale });
     expect(checkedRecord(dir, process.pid)).toMatchObject({
       refused: expect.stringContaining("different process"),
@@ -172,8 +174,18 @@ describe("checking a record before signalling", () => {
     expect(fs.existsSync(path.join(dir, `${process.pid}.json`))).toBe(false);
   });
 
+  it("refuses but keeps a record written a little before the live process started", () => {
+    const record = { pid: process.pid, program: "a.agency", node: "main", startedAt: Date.now() };
+    writeRecord(dir, record);
+    const steppedClock = () => ({ started: record.startedAt + 5 * START_TIME_TOLERANCE_MS });
+    expect(checkedRecord(dir, process.pid, steppedClock)).toMatchObject({
+      refused: expect.stringContaining("the record was kept"),
+    });
+    expect(fs.existsSync(path.join(dir, `${process.pid}.json`))).toBe(true);
+  });
+
   it("accepts a record that matches the live process", () => {
-    const startedAt = Date.now() - process.uptime() * 1000;
+    const startedAt = Math.round(performance.timeOrigin);
     writeRecord(dir, { pid: process.pid, program: "a.agency", node: "main", startedAt });
     expect(checkedRecord(dir, process.pid)).toMatchObject({ pid: process.pid });
   });
@@ -197,7 +209,7 @@ describe("checking a record before signalling", () => {
   });
 
   it("keeps the record and refuses when ps cannot say", () => {
-    const startedAt = Date.now() - process.uptime() * 1000;
+    const startedAt = Math.round(performance.timeOrigin);
     writeRecord(dir, { pid: process.pid, program: "a.agency", node: "main", startedAt });
     const noPs = () => ({ failed: "could not run ps: spawn ps ENOENT" });
     expect(checkedRecord(dir, process.pid, noPs)).toMatchObject({

@@ -7,6 +7,7 @@ import * as net from "net";
 import * as path from "path";
 
 import { nodeHost } from "@/host/node/nodeHost.js";
+import { isFailure } from "@/runtime/result.js";
 import { processState } from "@/runDirectory/lock.js";
 import { ATTACH_SIGNAL } from "@/runtime/platform.node.js";
 import { DebuggerUI } from "@/debugger/ui.js";
@@ -25,9 +26,18 @@ import {
 import { serveDebuggerIO } from "@/debugger/attach/serveIO.js";
 import type { Channel } from "@/debugger/attach/channel.js";
 
-/** `ps -o lstart=` has one-second resolution, and the record's time comes
- *  from `process.uptime`, so the two may differ by a little. */
+/** `ps -o lstart=` has one-second resolution, and the record's time is
+ *  `performance.timeOrigin`, read a little after the fork, so the two may
+ *  differ by a little. */
 export const START_TIME_TOLERANCE_MS = 2_000;
+/** A live process that started later than its record by more than the
+ *  tolerance but less than this is refused without removing the record.
+ *  On Linux `lstart` is boot time plus ticks, and the kernel moves boot
+ *  time when the wall clock is stepped, so an NTP step after the program
+ *  started makes every `lstart` later by that much; the record of a
+ *  program that is still running must survive that. A gap this small can
+ *  also be a reused pid, which the refusal still guards against. */
+export const LATER_START_KEEP_MS = 60_000;
 /** How long before its record a live process may have started and still
  *  be the one that wrote it: a wrapper script that does some work and
  *  then `exec`s node keeps the wrapper's start time. A process older than
@@ -154,7 +164,7 @@ export function checkedRecord(
   if ("failed" in live) {
     return { refused: `could not check the start time of pid ${pid}: ${live.failed}` };
   }
-  if (live.started > record.startedAt + START_TIME_TOLERANCE_MS) {
+  if (live.started > record.startedAt + LATER_START_KEEP_MS) {
     removeRecord(dir, pid);
     return {
       refused:
@@ -163,14 +173,23 @@ export function checkedRecord(
         `${new Date(record.startedAt).toLocaleString()}); its record was removed`,
     };
   }
+  if (live.started > record.startedAt + START_TIME_TOLERANCE_MS) {
+    return {
+      refused:
+        `pid ${pid} started ${new Date(live.started).toLocaleString()}, after its record was ` +
+        `written (${new Date(record.startedAt).toLocaleString()}), so it may be a different ` +
+        `process; the record was kept, since a clock step can move a running program's start ` +
+        `time too. If the program is gone, remove ${recordPaths(dir, pid).json}.`,
+    };
+  }
   if (live.started < record.startedAt - EARLY_START_LIMIT_MS) {
     return {
       refused:
         `pid ${pid} started ${new Date(live.started).toLocaleString()}, long before its record ` +
         `was written (${new Date(record.startedAt).toLocaleString()}), so it is probably not ` +
         `the process that registered, and the record may be another machine's, so it was left ` +
-        `alone. If this is your program (a wrapper ran for minutes before it, or the machine ` +
-        `slept), it cannot be attached; remove ${recordPaths(dir, pid).json} to clear the record.`,
+        `alone. If this is your program (a wrapper ran for minutes before it), it cannot be ` +
+        `attached; remove ${recordPaths(dir, pid).json} to clear the record.`,
     };
   }
   return record;
@@ -300,11 +319,15 @@ export async function attachCommand(options: AttachCommandOptions): Promise<numb
   });
 }
 
-/** The line printed when the run sent `finished`: its value, or the
- *  error it ended with. */
+/** The line printed when the run sent `finished`: its value, the failure
+ *  it returned (a node whose body threw returns a failure `Result`), or
+ *  the error it ended with (a cancelled run). */
 export function finishedLine(value: unknown, error: string | undefined): string {
   if (error !== undefined) {
     return `Program threw: ${error}`;
+  }
+  if (isFailure(value)) {
+    return `Program failed: ${value.error}`;
   }
   return `Program finished. Return value: ${JSON.stringify(value)}`;
 }

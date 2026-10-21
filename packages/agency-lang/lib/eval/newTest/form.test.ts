@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   EDITOR_EXITED_MESSAGE,
   editActionFor,
+  editingForm,
   FIELDS,
   initialForm,
   isDirty,
   isLastRow,
+  isLocked,
   reduceForm,
   rowsOf,
   type FieldName,
@@ -299,5 +301,65 @@ describe("graders in the form", () => {
     const state = cursorOn(withGrader({ kind: "command" }), field("goal"));
     expect(run([{ kind: "moveDown" }], state).cursor).toEqual(grader(0, "kind"));
     expect(run(repeat({ kind: "moveDown" }, 20), state).cursor).toEqual(grader(0, "weight"));
+  });
+});
+
+describe("an editing form", () => {
+  const LOCKS = { id: "says-its-name", files: "none" };
+
+  function editing(graders: Record<string, string>[] = [], gradersLock: string | null = null) {
+    return editingForm({
+      testDir: "suite/says-its-name",
+      base: { description: "d", goal: "g", tags: ["a"] },
+      values: { id: "", description: "d", input: "", files: "", goal: "g" },
+      graders: graders.map((answers) => ({ answers })),
+      locks: LOCKS,
+      gradersLock,
+    });
+  }
+
+  it("starts on the first unlocked row and is clean", () => {
+    const state = editing();
+    expect(state.suiteDir).toBe("suite");
+    expect(state.cursor).toEqual(field("description"));
+    expect(isDirty(state)).toBe(false);
+    expect(isLocked(state, field("id"))).toBe(true);
+    expect(isLocked(state, field("description"))).toBe(false);
+  });
+
+  it("typing makes it dirty, and typing it back makes it clean", () => {
+    const typedOn = run(typed("x"), editing());
+    expect(isDirty(typedOn)).toBe(true);
+    expect(isDirty(run([{ kind: "backspace" }], typedOn))).toBe(false);
+  });
+
+  it("adding then removing a grader leaves it clean", () => {
+    const added = run([{ kind: "addGrader" }], editing());
+    expect(isDirty(added)).toBe(true);
+    const removed = run([{ kind: "requestRemove" }, { kind: "confirmRemove" }], added);
+    expect(isDirty(removed)).toBe(false);
+  });
+
+  it("a loaded grader compares by what it writes, so a false in the file is clean", () => {
+    const state = editing([
+      { kind: "count", count: "toolCalls", max: "0", name: "n", repeated: "no" },
+    ]);
+    expect(isDirty(state)).toBe(false);
+    expect(isDirty(run([{ kind: "pickNext" }], cursorOn(state, grader(0, "repeated"))))).toBe(true);
+  });
+
+  it("locked rows are skipped by movement", () => {
+    const state = editing();
+    expect(rowsOf(state)).not.toContainEqual(field("id"));
+    expect(rowsOf(state)).not.toContainEqual(field("files"));
+    expect(run([{ kind: "moveUp" }], state).cursor).toEqual(field("description"));
+    const atInput = run([{ kind: "moveDown" }], state);
+    expect(run([{ kind: "moveDown" }], atInput).cursor).toEqual(field("goal"));
+  });
+
+  it("addGrader and remove do nothing while the section is locked", () => {
+    const state = editing([], "graders.ts: edit the file");
+    expect(run([{ kind: "addGrader" }], state).graders).toEqual([]);
+    expect(isLocked(state, grader(0, "kind"))).toBe(true);
   });
 });

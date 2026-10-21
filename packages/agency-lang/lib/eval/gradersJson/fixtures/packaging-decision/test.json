@@ -1,0 +1,4 @@
+{
+  "description": "The agent suite's packaging-decision test with its graders written as data. A sibling of evals/agency-agent/packaging-decision, not a twin: readability is a checklist here where the TypeScript used a rubric. Lives beside the end-to-end test so no suite run picks it up.",
+  "input": "Help me think through a change. This repo contains waypoint, which is a language for building automations. Waypoint ships with its own agent. Right now the agent and the language are in the same package, so every agent update means publishing the language too. Would a separate agent package make more sense? Help me decide what direction to go in here."
+}

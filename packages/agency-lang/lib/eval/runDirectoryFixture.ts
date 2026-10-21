@@ -9,6 +9,7 @@ import { finishedTraceLines, tempDir } from "@/runDirectory/testFixtures.js";
 import type { Test } from "./runTypes.js";
 import type { HarnessSnapshot } from "./grading/harnessSnapshot.js";
 import type { GraderFilesSnapshot } from "./grading/graderFilesSnapshot.js";
+import { gradersIdentityOf, type GradersSnapshot } from "./grading/gradingModule.js";
 
 /** One fake test run to write into a run directory. */
 export type FakeRun = {
@@ -31,6 +32,9 @@ export type FakeRun = {
   /** The test's grader-only files to store under graders/, as `eval run`
    *  does for a test directory with graderFiles/. */
   graderFiles?: GraderFilesSnapshot;
+  /** The test's own graders to store under graders/ and record on the run
+   *  row, as `eval run` does for a test with a graders.ts or graders.json. */
+  graders?: GradersSnapshot & { origin: "test" | "config" };
   /** Recorded on the run row, as `eval run` does for a suite invocation. */
   batch?: string;
   trial?: number;
@@ -80,7 +84,11 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
     dir,
     stagedStatelogFile: statelogFile,
     workdir,
-    gradersFiles: [...(run.harness?.files ?? []), ...(run.graderFiles?.files ?? [])],
+    gradersFiles: [
+      ...(run.graders?.files ?? []),
+      ...(run.harness?.files ?? []),
+      ...(run.graderFiles?.files ?? []),
+    ],
     run: {
       traceId,
       annotator: { kind: "harness", id: "agency-eval@test" },
@@ -92,6 +100,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
         flags: run.agentLabel === undefined ? {} : { agent: run.agentLabel },
         batch: run.batch,
         trial: run.trial,
+        ...(run.graders === undefined ? {} : { graders: gradersIdentityOf(run.graders) }),
         ...(run.harness === undefined ? {} : { harness: run.harness.records }),
         ...(run.graderFiles === undefined ? {} : { graderFiles: run.graderFiles.dirName }),
         ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),

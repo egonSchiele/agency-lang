@@ -1,10 +1,11 @@
 import { ttyColor } from "@/utils/termcolors.js";
 
 import type { GraderGrade, Scorecard } from "./scorecard.js";
+import type { Point } from "./types.js";
 
 export type GradeRow =
-  | { grader: string; kind: "scalar"; value: number; feedback?: string }
-  | { grader: string; kind: "binary"; pass: boolean; feedback?: string };
+  | { grader: string; kind: "scalar"; value: number; feedback?: string; points?: Point[] }
+  | { grader: string; kind: "binary"; pass: boolean; feedback?: string; points?: Point[] };
 
 export type InputBreakdown = {
   inputId: string;
@@ -21,10 +22,17 @@ export type InputBreakdown = {
 /** One grade row. Shared fields computed once; the only branch is the
  *  tagged-union tail (scalar value vs binary pass). */
 function gradeRow({ grader, grade }: GraderGrade): GradeRow {
-  const base = { grader: grader.name(), ...(grade.feedback ? { feedback: grade.feedback } : {}) };
-  return grade.score.kind === "scalar"
-    ? { ...base, kind: "scalar", value: grade.score.value }
-    : { ...base, kind: "binary", pass: grade.score.pass };
+  const row: GradeRow =
+    grade.score.kind === "scalar"
+      ? { grader: grader.name(), kind: "scalar", value: grade.score.value }
+      : { grader: grader.name(), kind: "binary", pass: grade.score.pass };
+  if (grade.feedback) {
+    row.feedback = grade.feedback;
+  }
+  if (grade.points !== undefined) {
+    row.points = grade.points;
+  }
+  return row;
 }
 
 /** A serializable, human-renderable view of a Scorecard: per input, the output
@@ -104,6 +112,14 @@ export function formatGrading(objective: number, perInput: InputBreakdown[]): st
         `  ${ttyColor.green(entry.inputId)}  ${ttyColor.red(`not graded — ${entry.reason}`)}`,
     ),
   ];
+}
+
+/** Sub-cent but nonzero shows as "<$0.01" so a printed cost never reads $0.00. */
+export function formatUsd(usd: number): string {
+  if (usd > 0 && usd < 0.005) {
+    return "<$0.01";
+  }
+  return `$${usd.toFixed(2)}`;
 }
 
 /** Perfect scores are green, zeroes red, and intermediate scores plain. */

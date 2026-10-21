@@ -258,6 +258,15 @@ Three rules that are easy to get wrong:
 - **The scratch dir goes under `.agency-tmp/`, not `os.tmpdir()`**: compiled
   Agency resolves `agency-lang` from the directory it runs in.
 
+## Graders as data: `graders.json`
+
+A test may write its graders as data in `graders.json` instead of a
+`graders.ts`: a goal, a checklist, a number from the record, a count of
+trace rows, or a command. The loader discovers either file, the run
+directory stores the JSON by hash as it stores a bundle, and grading sees
+the same `BaseGrader[]` either way. `docs/dev/evals/graders-json.md` has
+the kinds, the rules, and the checklist judge.
+
 ## Gates
 
 A grader with `mustPass: true` is a gate: it runs before the other graders,

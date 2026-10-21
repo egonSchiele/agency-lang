@@ -177,6 +177,34 @@ describe("foldAnnotations", () => {
     ).toBe(false);
   });
 
+  it("a run row names exactly one stored graders file: a bundle or a JSON file", () => {
+    const base = {
+      traceId: "t1",
+      annotator: { kind: "harness", id: "agency-eval@1" },
+      kind: "run",
+      test: { id: "fib" },
+      suite: null,
+      ended: "ok",
+      flags: {},
+      v: 1,
+      id: `ann_${"0".repeat(64)}`,
+      createdAt: "now",
+    };
+    const row = (graders: Record<string, unknown>) =>
+      AnnotationSchema.safeParse({
+        ...base,
+        graders: { source: "s", judgeFiles: {}, origin: "test", ...graders },
+      });
+    expect(row({ jsonFile: "a.json" }).success).toBe(true);
+    expect(row({ bundleFile: "a.mjs" }).success).toBe(true);
+    const both = row({ jsonFile: "a.json", bundleFile: "a.mjs" });
+    expect(both.success).toBe(false);
+    expect(JSON.stringify(both.error?.issues)).toContain(
+      "graders needs exactly one of bundleFile and jsonFile",
+    );
+    expect(row({}).success).toBe(false);
+  });
+
   it("annotatorLineage strips the revision and leaves ids without one alone", () => {
     expect(annotatorLineage("goal-judge@1")).toBe("goal-judge");
     expect(annotatorLineage("graders.ts@abc")).toBe("graders.ts");
@@ -242,6 +270,26 @@ describe("readAnnotations", () => {
     const folded = foldAnnotations(rows);
     expect(folded.t1.scores["judge:goal-judge:goal"].id).toBe(legacy.id);
     expect(folded.t1.gradingPasses).toBe(1);
+  });
+
+  it("a score row may carry per-point answers, each strictly shaped", () => {
+    const withPoints = {
+      ...row(score("p1", "grounded", 0.5)),
+      points: [
+        { point: "one package", pass: true, evidence: "one bin" },
+        { point: "harness split", pass: false, evidence: "" },
+      ],
+    };
+    const warnings: string[] = [];
+    const rows = readAnnotations(file(JSON.stringify(withPoints) + "\n"), (m) => warnings.push(m));
+    expect(warnings).toEqual([]);
+    expect(rows).toHaveLength(1);
+
+    const missingEvidence = { ...withPoints, points: [{ point: "one package", pass: true }] };
+    expect(
+      readAnnotations(file(JSON.stringify(missingEvidence) + "\n"), (m) => warnings.push(m)),
+    ).toEqual([]);
+    expect(warnings).toHaveLength(1);
   });
 
   it("rejects a row that fails the schema", () => {

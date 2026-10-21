@@ -115,7 +115,7 @@ describe("eval run input loading", () => {
           inputs: [{ id: "g", input: "t", graders: "./missing.ts" }],
         }),
       ),
-    ).toThrow(/graders must name a TypeScript file/);
+    ).toThrow(/graders must name a graders.ts or graders.json file/);
   });
 
   it("an input with its own graders does not need a goal", () => {
@@ -143,6 +143,55 @@ describe("eval run input loading", () => {
     expect(fromTestDir).toHaveLength(1);
     expect(fromTestDir[0].id).toBe("my-test");
     expect(fromTestDir[0].graders).toBe(path.join(testDir, "graders.ts"));
+  });
+
+  it("test-directory form discovers graders.json beside test.json and drops the goal requirement", () => {
+    const testDir = path.join(tmpDir, "suite-json", "my-test");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t" }));
+    fs.writeFileSync(path.join(testDir, "graders.json"), "[]");
+    const [test] = loadInputs(testDir);
+    expect(test.graders).toBe(path.join(testDir, "graders.json"));
+    expect(test.goal).toBeUndefined();
+  });
+
+  it("refuses a folder with both graders.ts and graders.json", () => {
+    const testDir = path.join(tmpDir, "suite-both", "my-test");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "graders.ts"), "export default [];");
+    fs.writeFileSync(path.join(testDir, "graders.json"), "[]");
+    expect(() => loadInputs(testDir)).toThrow(
+      `${testDir}: has both graders.ts and graders.json; keep one`,
+    );
+  });
+
+  it("refuses both grader files even when test.json names one of them", () => {
+    const testDir = path.join(tmpDir, "suite-both-explicit", "my-test");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, "test.json"),
+      JSON.stringify({ input: "t", goal: "g", graders: "./graders.ts" }),
+    );
+    fs.writeFileSync(path.join(testDir, "graders.ts"), "export default [];");
+    fs.writeFileSync(path.join(testDir, "graders.json"), "[]");
+    expect(() => loadInputs(testDir)).toThrow("has both graders.ts and graders.json; keep one");
+  });
+
+  it("resolves an explicit .json graders path and refuses a missing one", () => {
+    const jsonPath = path.join(tmpDir, "shared", "graders.json");
+    fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
+    fs.writeFileSync(jsonPath, "[]");
+    const inputsFile = writeJson("suite-explicit/inputs.json", {
+      inputs: [{ id: "a", input: "t", graders: "../shared/graders.json" }],
+    });
+    expect(loadInputs(inputsFile)[0].graders).toBe(jsonPath);
+    const missing = writeJson("suite-missing/inputs.json", {
+      inputs: [{ id: "a", input: "t", graders: "./nope.json" }],
+    });
+    expect(() => loadInputs(missing)).toThrow(
+      /graders must name a graders.ts or graders.json file/,
+    );
   });
 
   it("test-directory form auto-discovers graderFiles/, and an explicit path must be a directory", () => {

@@ -47,20 +47,26 @@ export type ScorePayload = {
   weight: number;
   mustPass: boolean;
   feedback?: string;
+  /** A checklist grader's answer per point, in the order the test lists them. */
+  points?: ScorePoint[];
   gradersModule?: string;
   /** The goal an LLM judge scored against (a test's own, or `eval grade --goal`). */
   goal?: string;
 };
 
+export type ScorePoint = { point: string; pass: boolean; evidence: string };
+
 export type SuiteIdentity = { source: string; sha?: string };
 
 /** Where a run's graders came from and what the directory's `graders/` holds
- *  for them: the bundled module under `bundleFile`, and each judge file the
- *  graders read by path under its stored name. Grading prefers this
+ *  for them: the bundled `graders.ts` under `bundleFile` or the
+ *  `graders.json` under `jsonFile` (exactly one is set), and each judge file
+ *  the graders read by path under its stored name. Grading prefers this
  *  snapshot, so a copied run grades the same anywhere. */
 export type GradersIdentity = {
   source: string;
-  bundleFile: string;
+  bundleFile?: string;
+  jsonFile?: string;
   judgeFiles: Record<string, string>;
   /** "test": the test's own module. "config": the former `eval.graders`
    *  fallback, which runs written before it was removed may still carry;
@@ -143,6 +149,10 @@ const ScoreSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("scalar"), value: z.number().finite() }).strict(),
 ]);
 
+const ScorePointSchema = z
+  .object({ point: z.string().min(1), pass: z.boolean(), evidence: z.string() })
+  .strict();
+
 const common = {
   v: z.literal(1),
   id: z.string().regex(/^ann_[0-9a-f]{64}$/),
@@ -179,6 +189,7 @@ const ScoreAnnotationSchema = z
     weight: z.number().finite().nonnegative(),
     mustPass: z.boolean(),
     feedback: z.string().optional(),
+    points: z.array(ScorePointSchema).optional(),
     gradersModule: z.string().optional(),
     goal: z.string().optional(),
   })
@@ -193,11 +204,18 @@ const RunAnnotationSchema = z
     graders: z
       .object({
         source: z.string(),
-        bundleFile: z.string().min(1),
+        bundleFile: z.string().min(1).optional(),
+        jsonFile: z.string().min(1).optional(),
         judgeFiles: z.record(z.string(), z.string()),
         origin: z.enum(["test", "config"]),
       })
       .strict()
+      .refine(
+        (graders) => (graders.bundleFile === undefined) !== (graders.jsonFile === undefined),
+        {
+          message: "graders needs exactly one of bundleFile and jsonFile",
+        },
+      )
       .optional(),
     harness: z
       .array(

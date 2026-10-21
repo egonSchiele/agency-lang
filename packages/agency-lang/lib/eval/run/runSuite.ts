@@ -22,7 +22,8 @@ import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
 import { isRunDirectory } from "@/runDirectory/findRuns.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
-import { snapshotGradingModule, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
+import { graderSourceForPath } from "@/eval/grading/graderSources.js";
+import { gradersIdentityOf, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
 import { snapshotHarness, type HarnessSnapshot } from "@/eval/grading/harnessSnapshot.js";
 import {
   snapshotGraderFiles,
@@ -357,7 +358,7 @@ async function snapshotGraders(tests: Test[]): Promise<Record<string, TestSnapsh
     const snapshots: TestSnapshots = {};
     const modulePath = test.graders;
     if (modulePath !== undefined) {
-      byModule[modulePath] ??= snapshotGradingModule(modulePath);
+      byModule[modulePath] ??= graderSourceForPath(modulePath).snapshot(modulePath);
       snapshots.module = { ...(await byModule[modulePath]), origin: "test" };
     }
     if (test.agencyTests !== undefined && test.agencyTests.length > 0) {
@@ -430,16 +431,7 @@ function foldIntoRunDirectory(args: {
         // which is not a JSON value; on disk they are simply absent.
         test: JSON.parse(JSON.stringify(args.test)),
         suite: args.suite ?? null,
-        ...(graders === undefined
-          ? {}
-          : {
-              graders: {
-                source: graders.source,
-                bundleFile: graders.bundleFile,
-                judgeFiles: graders.judgeFiles,
-                origin: graders.origin,
-              },
-            }),
+        ...(graders === undefined ? {} : { graders: gradersIdentityOf(graders) }),
         ...(harness === undefined ? {} : { harness: harness.records }),
         ...(graderFiles === undefined ? {} : { graderFiles: graderFiles.dirName }),
         ended: endedFrom(run),

@@ -125,7 +125,7 @@ describe("grading snapshots", () => {
     // `externalFiles` still names the declared path; the read below proves the
     // grader now reads the stored copy (the original is gone).
     expect(loaded.externalFiles()).toEqual([path.join(dir, "judge.agency")]);
-    expect(loaded.revision).toBe(`${modulePath}@${snapshot.bundleFile.replace(/\.mjs$/, "")}`);
+    expect(loaded.revision).toBe(`${modulePath}@${snapshot.bundleFile?.replace(/\.mjs$/, "")}`);
     const grade = await loaded.run({
       test: { id: "t" },
       run: { output: null, traceId: "t", workdir: "", record: {} as never },

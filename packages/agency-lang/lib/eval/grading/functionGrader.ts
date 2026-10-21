@@ -127,6 +127,9 @@ const GradeSchema = z.object({
     z.object({ kind: z.literal("binary"), pass: z.boolean() }),
   ]),
   feedback: z.string().optional(),
+  points: z
+    .array(z.object({ point: z.string().min(1), pass: z.boolean(), evidence: z.string() }).strict())
+    .optional(),
 });
 
 function coerce(result: number | boolean | Grade): Grade {

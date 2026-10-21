@@ -19,7 +19,7 @@ import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
 import { LlmJudge } from "./graders/llmJudge.js";
 import { AgencyTestGrader } from "./agencyTestGrader.js";
-import { loadGradingModule, loadGradingSnapshot } from "./gradingModule.js";
+import { graderSourceForPath, graderSourceForRecord } from "./graderSources.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
 import { binary } from "./grade.js";
 import type { Grade, GraderInput, LoadedRun, JSON as Json } from "./types.js";
@@ -206,7 +206,7 @@ async function snapshotModuleGraders(
 ): Promise<BaseGrader[]> {
   const snapshot = entry.graders;
   if (snapshot !== undefined && snapshot.origin === "test") {
-    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
+    return loadSnapshot(runDir, snapshot);
   }
   if (entry.test.graders !== undefined) {
     return cache(entry.test.graders);
@@ -215,9 +215,13 @@ async function snapshotModuleGraders(
     return [];
   }
   if (snapshot !== undefined && ctx.defaultGoal === undefined) {
-    return loadGradingSnapshot(runDirPaths(runDir).gradersDir, snapshot);
+    return loadSnapshot(runDir, snapshot);
   }
   return goalJudge();
+}
+
+function loadSnapshot(runDir: string, snapshot: GradersIdentity): Promise<BaseGrader[]> {
+  return graderSourceForRecord(snapshot).loadSnapshot(runDirPaths(runDir).gradersDir, snapshot);
 }
 
 /** The suite test this run belongs to, by test id. */
@@ -280,17 +284,17 @@ function snapshotHarnessGraders(entry: Entry, runDir: string): BaseGrader[] {
   });
 }
 
-/** One esbuild+import per module path per call, however many tests share a
- *  grading module. Exported so the run CLI's pre-run validation loads
- *  through the same path grading does. */
+/** One load per graders path per call, however many tests share a
+ *  `graders.ts` or `graders.json`. Exported so the optimizer's pre-run
+ *  validation loads through the same path grading does. */
 export function makeGraderModuleCache(
-  config: AgencyConfig,
+  _config: AgencyConfig,
 ): (modulePath: string) => Promise<BaseGrader[]> {
   // Null prototype: modulePath comes from suite content (test.graders), and
   // a key like "__proto__" on a normal object would corrupt the cache.
   const loads: Record<string, Promise<BaseGrader[]>> = Object.create(null);
   return (modulePath) => {
-    loads[modulePath] ??= loadGradingModule(modulePath, config);
+    loads[modulePath] ??= graderSourceForPath(modulePath).load(modulePath);
     return loads[modulePath];
   };
 }

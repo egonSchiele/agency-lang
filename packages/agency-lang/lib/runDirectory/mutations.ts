@@ -18,6 +18,7 @@ import {
   type ChecklistAnnotation,
   type RunPayload,
   type Score,
+  type ScorePoint,
 } from "./annotations.js";
 import {
   applyCodeAttachment,
@@ -481,6 +482,7 @@ export type ScoreDraft = {
   weight: number;
   mustPass: boolean;
   feedback?: string;
+  points?: ScorePoint[];
   gradersModule?: string;
   goal?: string;
 };
@@ -524,6 +526,7 @@ export function recordGradingPass(
         mustPass: score.mustPass,
       };
       if (score.feedback !== undefined) draft.feedback = score.feedback;
+      if (score.points !== undefined) draft.points = score.points;
       if (score.gradersModule !== undefined) draft.gradersModule = score.gradersModule;
       if (score.goal !== undefined) draft.goal = score.goal;
       return draft;

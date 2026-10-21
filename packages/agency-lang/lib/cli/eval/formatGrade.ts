@@ -1,5 +1,5 @@
 import type { BatchStatistics, TestStatistics } from "@/eval/batchStatistics.js";
-import { formatScore } from "@/eval/grading/gradeBreakdown.js";
+import { formatScore, formatUsd } from "@/eval/grading/gradeBreakdown.js";
 import { ttyColor } from "@/utils/termcolors.js";
 
 import type { EvalGradeResult } from "./grade.js";
@@ -73,10 +73,12 @@ function formatInput(input: GradedInput): string[] {
 
 function formatGrade(grade: Grade): string[] {
   const line = `  ${grade.grader.padEnd(GRADER_COLUMN_WIDTH)} ${formatGradeValue(grade)}`;
-  if (grade.feedback === undefined || grade.feedback === "") {
-    return [line];
-  }
-  return [line, `      ${grade.feedback}`];
+  const feedback =
+    grade.feedback === undefined || grade.feedback === "" ? [] : [`      ${grade.feedback}`];
+  const points = (grade.points ?? []).map(
+    (point) => `      ${point.pass ? ttyColor.green("✓") : ttyColor.red("✗")} ${point.point}`,
+  );
+  return [line, ...feedback, ...points];
 }
 
 function formatGradeValue(grade: Grade): string {
@@ -91,14 +93,6 @@ function formatUngradedReason(reason: string | undefined): string[] {
     return [];
   }
   return [`  ${ttyColor.red(`not graded — ${reason}`)}`];
-}
-
-/** Sub-cent but nonzero shows as "<$0.01" so a printed cost never reads $0.00. */
-export function formatUsd(usd: number): string {
-  if (usd > 0 && usd < 0.005) {
-    return "<$0.01";
-  }
-  return `$${usd.toFixed(2)}`;
 }
 
 function formatGroupSummary(result: EvalGradeResult): string[] {

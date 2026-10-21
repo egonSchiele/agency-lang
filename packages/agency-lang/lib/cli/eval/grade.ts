@@ -16,7 +16,9 @@ import type { GraderSource } from "@/eval/grading/gradeRun.js";
 
 import { mapInParallel } from "@/utils/parallelMap.js";
 
-import { formatGradeResult, formatUsd } from "./formatGrade.js";
+import { formatUsd } from "@/eval/grading/gradeBreakdown.js";
+
+import { formatGradeResult } from "./formatGrade.js";
 import { loadSuite } from "./run.js";
 
 export type EvalGradeOptions = {

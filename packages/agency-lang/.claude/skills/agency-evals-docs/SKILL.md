@@ -9,6 +9,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 
 - `docs/dev/evals/run-directory.md` — The on-disk shape that observing, noting, labeling, grading, and optimizing all read and write.
 - `docs/dev/evals/eval-grading.md` — Why running and grading are separate, joined only by the run directory.
+- `docs/dev/evals/graders-json.md` — `graders.json`: a test's graders as data in five kinds, must-pass per kind, the checklist judge and its `graderFiles/` context, points on the score row, and how a JSON file is stored in a run directory beside a bundled module.
 - `docs/dev/evals/eval-tracking.md` — Running a suite over several trials, then uploading the results to statelog for a trend.
 - `docs/dev/evals/eval-labeling.md` — Answering a checklist about a group of runs by hand, and how those answers are recorded.
 - `docs/dev/evals/eval-new.md` — `agency eval new`: the form that writes a test folder, the one table that defines its fields, the modes and intents in its state, the three rules for the files directory, and what the `$EDITOR` hand-off does with the terminal and its signals.

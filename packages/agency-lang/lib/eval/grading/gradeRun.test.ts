@@ -12,6 +12,7 @@ import { grader } from "./functionGrader.js";
 import { gradeRun, type GradingContext } from "./gradeRun.js";
 import { snapshotHarness } from "./harnessSnapshot.js";
 import { snapshotGraderFiles } from "./graderFilesSnapshot.js";
+import { snapshotGradersJson } from "../gradersJson/load.js";
 
 const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
 
@@ -308,6 +309,39 @@ describe("grader files from the run row", () => {
     await expect(gradeRun(runDir, ctx([]))).rejects.toThrow(
       /Grader files snapshot not found.*recorded for test a/,
     );
+  });
+});
+
+describe("graders.json from the run row and from the suite", () => {
+  const JSON_GRADERS = JSON.stringify([
+    { kind: "number", name: "cheap", measure: "costUsd", max: 0.05 },
+  ]);
+
+  it("grades a run whose row names a stored graders.json", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graders-json-"));
+    const jsonPath = path.join(dir, "graders.json");
+    fs.writeFileSync(jsonPath, JSON_GRADERS);
+    const snapshot = { ...(await snapshotGradersJson(jsonPath)), origin: "test" as const };
+    const runDir = makeRun({ output: "x", costUsd: 0.01, graders: snapshot });
+    fs.rmSync(jsonPath);
+    const card = await gradeRun(runDir, { ...ctx([]), graders: { kind: "snapshot" } });
+    expect(card.perInput[0].grades.map((g) => [g.grader.name(), g.grade.score])).toEqual([
+      ["cheap", { kind: "binary", pass: true }],
+    ]);
+  });
+
+  it("grades a suite test whose graders path is a .json through the cache", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graders-json-"));
+    const jsonPath = path.join(dir, "graders.json");
+    fs.writeFileSync(jsonPath, JSON_GRADERS);
+    const runDir = makeRun({ output: "x", costUsd: 0.5 });
+    const card = await gradeRun(runDir, {
+      ...ctx([]),
+      graders: { kind: "suite", tests: [{ ...capital, graders: jsonPath }] },
+    });
+    expect(card.perInput[0].grades.map((g) => [g.grader.name(), g.grade.score])).toEqual([
+      ["cheap", { kind: "binary", pass: false }],
+    ]);
   });
 });
 

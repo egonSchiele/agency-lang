@@ -71,6 +71,7 @@ export function scoreDrafts(scorecard: Scorecard): ScoreDraft[] {
         mustPass: grader.mustPass(),
       };
       if (grade.feedback !== undefined) draft.feedback = grade.feedback;
+      if (grade.points !== undefined) draft.points = grade.points;
       if (grader.revision !== undefined) draft.gradersModule = grader.revision.split("@")[0];
       if (draft.annotator.kind === "judge" && typeof entry.test.goal === "string") {
         draft.goal = entry.test.goal;

@@ -13,6 +13,7 @@ import { gradeRun } from "@/eval/grading/gradeRun.js";
 
 import { runSuite } from "./runSuite.js";
 import { loadInputs } from "@/eval/loadInputs.js";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 import type { HarnessRecord } from "@/runDirectory/annotations.js";
 import type { EvalRunnerJob } from "./subprocess.js";
 
@@ -604,6 +605,58 @@ describe("runSuite", () => {
       runAgency: new AgencyRunner({}),
       config: {},
     });
+    expect(scorecard.objective()).toBe(1);
+  });
+
+  it("stores a graders.json by hash, and a checklist loaded from the run reads its context from the stored graderFiles copy", async () => {
+    const testDir = path.join(proj, "tests", "a");
+    fs.mkdirSync(path.join(testDir, "graderFiles"), { recursive: true });
+    const jsonPath = path.join(testDir, "graders.json");
+    fs.writeFileSync(
+      jsonPath,
+      JSON.stringify([
+        { kind: "checklist", name: "grounded", points: ["says done"], context: "notes.md" },
+      ]),
+    );
+    fs.writeFileSync(path.join(testDir, "graderFiles", "notes.md"), "the notes");
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          {
+            id: "a",
+            input: "t",
+            graders: jsonPath,
+            graderFiles: path.join(testDir, "graderFiles"),
+          },
+        ],
+        out: path.join(proj, "runs", "r-graders-json"),
+        config: {},
+        perRun: { pipeOutput: false },
+      },
+      { runner: traceWritingRunner("done") },
+    );
+    const { runDir, traceId } = result.tests[0];
+    const run = readRunDirectory(runDir, quiet).effectiveAnnotations[traceId].run;
+    const recorded = (
+      run as unknown as { graders: { source: string; jsonFile: string; bundleFile?: string } }
+    ).graders;
+    expect(recorded.source).toBe(jsonPath);
+    expect(recorded.bundleFile).toBeUndefined();
+    expect(fs.existsSync(path.join(runDirPaths(runDir).gradersDir, recorded.jsonFile))).toBe(true);
+
+    // The test folder is gone; the run still grades, and the judge reads the stored notes.
+    expect(safeDeleteDirectoryWithin(proj, testDir).success).toBe(true);
+    let seenArgs = "";
+    const scorecard = await gradeRun(runDir, {
+      graders: { kind: "snapshot" },
+      runAgency: new AgencyRunner({}, async (a) => {
+        seenArgs = a.argsString;
+        return { data: { points: [{ name: "done", pass: true, evidence: "done" }], note: "" } };
+      }),
+      config: {},
+    });
+    expect(seenArgs).toBe('["says done"], "done", "the notes"');
     expect(scorecard.objective()).toBe(1);
   });
 

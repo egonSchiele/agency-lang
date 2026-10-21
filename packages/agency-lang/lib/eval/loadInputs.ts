@@ -131,6 +131,10 @@ function loadInputsFromDirectory(
   );
 }
 
+/** The grader files a test folder may hold beside `test.json`: TypeScript
+ *  graders, or the same as data. A folder holds one or the other. */
+const GRADER_FILES = ["graders.ts", "graders.json"];
+
 /** The heavy form: test.json beside an optional files/ directory and an
  *  optional graders.ts. Desugars to the same Test the light form produces —
  *  id defaults to the directory name, files to the sibling files/, graders
@@ -147,8 +151,12 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   if (spec.files === undefined && fs.existsSync(path.join(testDir, "files"))) {
     spec.files = "./files";
   }
-  if (spec.graders === undefined && fs.existsSync(path.join(testDir, "graders.ts"))) {
-    spec.graders = "./graders.ts";
+  const found = GRADER_FILES.filter((name) => fs.existsSync(path.join(testDir, name)));
+  if (found.length > 1) {
+    throw new Error(`${testDir}: has both ${found.join(" and ")}; keep one`);
+  }
+  if (spec.graders === undefined && found.length === 1) {
+    spec.graders = `./${found[0]}`;
   }
   if (spec.graderFiles === undefined && fs.existsSync(path.join(testDir, "graderFiles"))) {
     spec.graderFiles = "./graderFiles";
@@ -351,14 +359,15 @@ function resolveFilesDir(
   return fs.realpathSync(parsed.path);
 }
 
-/** Resolve an input's grading module to an absolute file path. Graders are
- *  code the harness executes — a suite that ships one is trusted by virtue
- *  of being run, remote git sources included. */
+/** Resolve an input's graders, a `graders.ts` module or a `graders.json`
+ *  file, to an absolute path. A module is code the harness executes — a
+ *  suite that ships one is trusted by virtue of being run, remote git
+ *  sources included. */
 function resolveGradersFile(raw: string, baseDir: string, inputId: string): string {
   const abs = path.resolve(baseDir, raw);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
     throw new Error(
-      `Test ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`,
+      `Test ${inputId}: graders must name a graders.ts or graders.json file (got ${raw}, resolved to ${abs})`,
     );
   }
   return abs;

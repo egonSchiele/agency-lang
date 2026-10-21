@@ -5,6 +5,8 @@
 // answers the stops in between. See
 // docs/superpowers/specs/2026-10-20-attach-to-a-running-program.md.
 import { describe, it, expect, beforeAll } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
 import { DebuggerDriver } from "./driver.js";
@@ -27,6 +29,8 @@ const fixtures = {
   echo: "echo",
   nestedRun: "nested-run",
   agentEndCallback: "agent-end-callback",
+  pauses: "pauses",
+  ask: "ask",
 };
 
 /** An IO that never answers: the program stays at its stop until the
@@ -237,6 +241,129 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(bob.data).toBe("bob");
   });
 
+  it("the next run starts with an empty rewind window", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const { io, driver } = attachTo(mod, [
+      { type: "step" },
+      { type: "step" },
+      { type: "continue" },
+      { type: "stepBack", preserveOverrides: false },
+      { type: "continue" },
+    ]);
+
+    expect((await mod.main("alice")).data).toBe("alice");
+    driver.debuggerState.stepping();
+    expect((await mod.main("bob")).data).toBe("bob");
+
+    expect(io.logLines).toContainEqual("Already at earliest checkpoint");
+    expect(io.logLines.some((line) => line.startsWith("Rewinding"))).toBe(false);
+  });
+
+  it("a run that hands its own interrupt to its caller lets the next run be debugged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.pauses));
+    const { io, driver } = attachTo(mod, [
+      { type: "continue" },
+      { type: "step" },
+      { type: "continue" },
+    ]);
+
+    const paused = await mod.main();
+    expect(hasInterrupts(paused.data)).toBe(true);
+    driver.debuggerState.stepping();
+    const rendersBefore = io.renderCalls.length;
+    const other = await mod.other();
+
+    expect(other.data).toBe(1);
+    expect(io.renderCalls.length).toBeGreaterThan(rendersBefore);
+    // The caller's answer resumes the first run as a run of its own again.
+    const final = await mod.respondToInterrupts(paused.data, [{ type: "approve" }]);
+    expect(final.data).toBe(1);
+  });
+
+  it("a run paused by its caller's signal lets the next run be debugged", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    const { io, driver } = attachTo(mod, [
+      { type: "continue" },
+      { type: "step" },
+      { type: "continue" },
+    ]);
+    const pause = new AbortController();
+    const first = mod.main({ pauseSignal: pause.signal });
+    await helper.untilWaiting();
+    pause.abort();
+    helper.releaseWaiter();
+    expect(isPaused((await first).data)).toBe(true);
+
+    driver.debuggerState.stepping();
+    const rendersBefore = io.renderCalls.length;
+    const second = mod.main();
+    await helper.untilWaiting();
+    helper.releaseWaiter();
+
+    expect((await second).data).toBe(2);
+    expect(io.renderCalls.length).toBeGreaterThan(rendersBefore);
+  });
+
+  it("two resumes of one checkpoint are two runs, and each caller gets its own answer", async () => {
+    const mod = await freshImport(compiledPath(fixtures.ask));
+    const io = new PerRunIO([[{ type: "step" }, { type: "continue" }], [{ type: "continue" }]]);
+    attachTo(mod, [], io);
+    const asked = await mod.main();
+    expect(hasInterrupts(asked.data)).toBe(true);
+    const clone = () => JSON.parse(JSON.stringify(asked.data));
+
+    const [alice, bob] = await Promise.all([
+      mod.respondToInterrupts(clone(), [{ type: "approve", value: "alice" }]),
+      mod.respondToInterrupts(clone(), [{ type: "approve", value: "bob" }]),
+    ]);
+
+    expect(alice.data).toBe("alice");
+    expect(bob.data).toBe("bob");
+    // The first resume to stop was debugged and the other ran through.
+    expect(io.renderCalls.length).toBeGreaterThanOrEqual(1);
+    expect(io.logLines).toContainEqual(
+      "Another run started while this one is debugged; it runs without stopping",
+    );
+    const shown = io.renderCalls
+      .map((cp) => cp.getCurrentFrame()?.locals?.who)
+      .filter((who) => who !== undefined);
+    expect(shown.every((who) => who === shown[0])).toBe(true);
+  });
+
+  it("the end of a run the debugger ignored is not reported", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const io = new SilentIO([]);
+    const { driver } = attachTo(mod, [], io);
+    const stopped = mod.main("alice");
+    await untilRendered(io, 1);
+
+    expect((await mod.main("bob")).data).toBe("bob");
+
+    expect(io.logLines.some((line) => line.includes('"bob"'))).toBe(false);
+    driver.detach();
+    expect((await stopped).data).toBe("alice");
+  });
+
+  it("a checkpoint another run saved is refused by load", async () => {
+    const mod = await freshImport(compiledPath(fixtures.echo));
+    const file = path.join(os.tmpdir(), `agency-attached-${process.pid}-${Date.now()}.json`);
+    const { io, driver } = attachTo(mod, [
+      { type: "step" },
+      { type: "save", path: file },
+      { type: "continue" },
+      { type: "load", path: file },
+      { type: "continue" },
+    ]);
+    try {
+      expect((await mod.main("alice")).data).toBe("alice");
+      driver.debuggerState.stepping();
+      expect((await mod.main("bob")).data).toBe("bob");
+      expect(io.logLines.some((line) => line.includes("belongs to another run"))).toBe(true);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
   it("when the debugged run ends, the next run to stop is debugged", async () => {
     const mod = await freshImport(compiledPath(fixtures.echo));
     const { io, driver } = attachTo(mod, [
@@ -294,6 +421,11 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     // The cancelled leg throws; the driver hands the thrown outcome back
     // (`AttachedLegThrew`) and the public entry point throws it.
     await expect(withinMs(running, 2000)).rejects.toThrow(/cancel/i);
+
+    // The thrown run let go of the debugger: the next run stops.
+    const { io: next } = attachTo(mod, [{ type: "continue" }]);
+    expect((await mod.main()).data).toBe(3);
+    expect(next.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("the program's own onAgentEnd callback fires, and a throwing caller's callback is logged", async () => {
@@ -448,6 +580,11 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(result.data).toBe(3);
     expect(result.usage).toBeDefined();
     expect(result.usage.tokens.totalTokens).toBe(0);
+
+    // The run ended in a rewound leg, which let go of the debugger too.
+    const { io: next } = attachTo(mod, [{ type: "continue" }]);
+    expect((await mod.main()).data).toBe(3);
+    expect(next.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("a resume from a paused checkpoint settles its stops too", async () => {

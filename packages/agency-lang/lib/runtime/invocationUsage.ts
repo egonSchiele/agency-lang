@@ -92,8 +92,8 @@ export type NormalizedDelta = {
 // stamped with). It rides the outcome so the serve adapter can echo it on the
 // RouteResult without re-deriving identity.
 export type ServedInvocationOutcome<T> =
-  | { status: "returned"; value: T; traceId: string; usage: RunUsage }
-  | { status: "threw"; error: unknown; traceId: string; usage: RunUsage };
+  | { status: "returned"; value: T; traceId: string; usage: RunUsage; debugOwner?: boolean }
+  | { status: "threw"; error: unknown; traceId: string; usage: RunUsage; debugOwner?: boolean };
 
 export type InvocationAccountingTarget = {
   ctx: RuntimeContext<GraphState>;

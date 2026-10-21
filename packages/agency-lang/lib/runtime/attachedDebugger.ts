@@ -25,6 +25,7 @@ import { isPaused } from "./pause.js";
 import { rewindFrom } from "./rewind.js";
 import type { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
 import { ATTACHED_AGENT_END } from "./agentEnd.js";
+import { ATTACHED_RESUME } from "./debugRun.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState, RunNodeCoreResult } from "./types.js";
 
@@ -60,19 +61,12 @@ export type AttachedDebugger = {
   /** A step in the run `runKey` was let through because another run is
    *  being debugged (`debugRun.ts`); once per such run is enough. */
   ignoring?(runKey: string): void;
+  /** A new run took the debugger: what the driver keeps for one run, the
+   *  pending overrides, is the old run's and is dropped. */
+  ownerChanged?(): void;
 };
 
-/** The metadata key an attached debugger sets on the resumes and rewinds
- *  it issues itself, so the public entry points return those as they are
- *  instead of handing their stops back to the debugger that is already
- *  handling them. A key on the call, not a flag on the debugger: two runs
- *  in one process can share a debugger, and only the call knows whose
- *  resume it is. */
-export const ATTACHED_RESUME = "attachedResume";
-
-export function isAttachedResume(metadata: Record<string, unknown> | undefined): boolean {
-  return metadata?.[ATTACHED_RESUME] === true;
-}
+export { ATTACHED_RESUME, isAttachedResume } from "./debugRun.js";
 
 export function attachedDebuggerOf(ctx: RuntimeContext<GraphState>): AttachedDebugger | undefined {
   return ctx.debugSlot.state?.attached;
@@ -200,7 +194,14 @@ export async function settleStops(
     const data: unknown = current.value.data;
     const attached = attachedDebuggerOf(ctx);
     if (!hasInterrupts(data)) {
-      if (attached !== undefined && !isPaused(data) && !debuggerRanALeg) {
+      // The end of a run the debugger owned, in a leg the caller ran, is
+      // news for the person; the end of a run it ignored is not.
+      if (
+        attached !== undefined &&
+        !isPaused(data) &&
+        !debuggerRanALeg &&
+        current.debugOwner === true
+      ) {
         await attached.finished(current.value);
       }
       return current;

@@ -41,9 +41,14 @@ function input(rec: EvalRecord, workdir: string = ""): GraderInput {
   };
 }
 
-async function gradeWith(spec: GraderSpec, rec: EvalRecord, workdir?: string): Promise<Grade> {
+async function gradeWith(
+  spec: GraderSpec,
+  rec: EvalRecord,
+  workdir?: string,
+  graderFiles?: string,
+): Promise<Grade> {
   const [grader] = buildGraders([spec]);
-  return grader.run(input(rec, workdir));
+  return grader.run({ ...input(rec, workdir), graderFiles });
 }
 
 describe("number graders", () => {
@@ -205,6 +210,24 @@ describe("command graders", () => {
       workdir,
     );
     expect(grade.feedback).toBe("here");
+  });
+
+  it("names the stored graderFiles copy in AGENCY_GRADER_FILES, empty when the test has none", async () => {
+    const graderFiles = fs.mkdtempSync(path.join(os.tmpdir(), "graders-json-gf-"));
+    fs.writeFileSync(path.join(graderFiles, "answer.txt"), "42");
+    const withFiles = await gradeWith(
+      { kind: "command", name: "c", command: 'cat "$AGENCY_GRADER_FILES/answer.txt"' },
+      EMPTY_RECORD,
+      workdir,
+      graderFiles,
+    );
+    expect(withFiles.feedback).toBe("42");
+    const without = await gradeWith(
+      { kind: "command", name: "c", command: 'echo "[$AGENCY_GRADER_FILES]"' },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(without.feedback).toBe("[]\n");
   });
 
   it("non-zero exit fails", async () => {

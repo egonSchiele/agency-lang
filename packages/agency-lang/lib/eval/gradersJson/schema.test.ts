@@ -59,6 +59,9 @@ describe("parseGradersJson", () => {
     expect(() => parse(["nope"])).toThrow(
       "t/graders.json: grader 0: must be an object with a kind",
     );
+    expect(() => parse([{ kind: "constructor", name: "c" }])).toThrow(
+      't/graders.json: grader 0: unknown kind "constructor"',
+    );
   });
 
   it("names the index and the field for a field problem", () => {

@@ -163,21 +163,34 @@ const DEFAULT_COMMAND_TIMEOUT_SEC = 600;
 const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
 const FEEDBACK_MAX_CHARS = 2000;
 
+/** The environment variable a command reads the test's grader-only files
+ *  through. Those files are stored apart from the agent's workdir. */
+const GRADER_FILES_ENV = "AGENCY_GRADER_FILES";
+
 /** Run a shell command in the agent's working directory. Exit 0 passes.
  *  stdin is closed so a command that reads it sees end of file. At the
  *  timeout the shell is killed outright, since a command may ignore a
  *  polite signal. */
 function commandGrader(spec: CommandSpec): BaseGrader {
   const timeoutSec = spec.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
-  return grader(({ workdir }) => runCommand(spec.command, workdir, timeoutSec), optionsOf(spec));
+  return grader(
+    ({ workdir, graderFiles }) => runCommand(spec.command, workdir, graderFiles, timeoutSec),
+    optionsOf(spec),
+  );
 }
 
-function runCommand(command: string, workdir: string, timeoutSec: number): Grade {
+function runCommand(
+  command: string,
+  workdir: string,
+  graderFiles: string,
+  timeoutSec: number,
+): Grade {
   if (workdir === "") {
     return binary(false, "no working directory was captured");
   }
   const result = spawnSync("sh", ["-c", command], {
     cwd: workdir,
+    env: { ...process.env, [GRADER_FILES_ENV]: graderFiles },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: timeoutSec * MS_PER_SECOND,

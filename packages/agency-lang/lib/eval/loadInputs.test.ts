@@ -166,6 +166,18 @@ describe("eval run input loading", () => {
     );
   });
 
+  it("refuses both grader files even when test.json names one of them", () => {
+    const testDir = path.join(tmpDir, "suite-both-explicit", "my-test");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, "test.json"),
+      JSON.stringify({ input: "t", goal: "g", graders: "./graders.ts" }),
+    );
+    fs.writeFileSync(path.join(testDir, "graders.ts"), "export default [];");
+    fs.writeFileSync(path.join(testDir, "graders.json"), "[]");
+    expect(() => loadInputs(testDir)).toThrow("has both graders.ts and graders.json; keep one");
+  });
+
   it("resolves an explicit .json graders path and refuses a missing one", () => {
     const jsonPath = path.join(tmpDir, "shared", "graders.json");
     fs.mkdirSync(path.dirname(jsonPath), { recursive: true });

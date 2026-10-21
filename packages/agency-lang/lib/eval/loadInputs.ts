@@ -151,14 +151,12 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
   if (spec.files === undefined && fs.existsSync(path.join(testDir, "files"))) {
     spec.files = "./files";
   }
-  if (spec.graders === undefined) {
-    const found = GRADER_FILES.filter((name) => fs.existsSync(path.join(testDir, name)));
-    if (found.length > 1) {
-      throw new Error(`${testDir}: has both ${found.join(" and ")}; keep one`);
-    }
-    if (found.length === 1) {
-      spec.graders = `./${found[0]}`;
-    }
+  const found = GRADER_FILES.filter((name) => fs.existsSync(path.join(testDir, name)));
+  if (found.length > 1) {
+    throw new Error(`${testDir}: has both ${found.join(" and ")}; keep one`);
+  }
+  if (spec.graders === undefined && found.length === 1) {
+    spec.graders = `./${found[0]}`;
   }
   if (spec.graderFiles === undefined && fs.existsSync(path.join(testDir, "graderFiles"))) {
     spec.graderFiles = "./graderFiles";

@@ -180,7 +180,7 @@ function parseSpec(element: unknown, index: number, filePath: string): GraderSpe
     throw new Error(`${where}: must be an object with a kind`);
   }
   const kind = (element as { kind?: unknown }).kind;
-  if (typeof kind !== "string" || !(kind in KIND_SCHEMAS)) {
+  if (typeof kind !== "string" || !Object.hasOwn(KIND_SCHEMAS, kind)) {
     throw new Error(`${where}: unknown kind ${JSON.stringify(kind)}`);
   }
   const result = KIND_SCHEMAS[kind as GraderSpec["kind"]].safeParse(element);

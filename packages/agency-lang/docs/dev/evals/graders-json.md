@@ -28,7 +28,7 @@ Each kind answers one question about a run.
   { "kind": "checklist", "name": "grounded", "points": ["names the one bin", "builds on the brains seam"], "context": "notes.md" },
   { "kind": "number", "name": "llm-calls", "measure": "llmCalls", "full": 0, "zero": 30, "weight": 0.1 },
   { "kind": "count", "name": "no-repeated-fetches", "count": "toolCalls", "tool": "fetchMarkdown", "repeated": true, "max": 0 },
-  { "kind": "command", "name": "roundtrip", "command": "python3 -m pytest graderFiles/test_outputs.py", "mustPass": true }
+  { "kind": "command", "name": "roundtrip", "command": "python3 -m pytest \"$AGENCY_GRADER_FILES/test_outputs.py\"", "mustPass": true }
 ]
 ```
 
@@ -49,7 +49,9 @@ Each kind answers one question about a run.
   calls; `messageStartsWith` narrows errors. Passes when the count is at most
   `max`.
 - **command**: a shell command run in the agent's working directory. Exit 0
-  passes. What it printed is the feedback.
+  passes. What it printed is the feedback. The test's grader-only files are
+  stored apart from the workdir, so the command reaches them through
+  `$AGENCY_GRADER_FILES`, empty when the test has none.
 
 Every kind has `name`, `weight` (default 1), and `mustPass` (default
 false). Names are unique within a file, because score rows are keyed by

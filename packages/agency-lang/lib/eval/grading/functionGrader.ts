@@ -128,7 +128,7 @@ const GradeSchema = z.object({
   ]),
   feedback: z.string().optional(),
   points: z
-    .array(z.object({ point: z.string(), pass: z.boolean(), evidence: z.string() }).strict())
+    .array(z.object({ point: z.string().min(1), pass: z.boolean(), evidence: z.string() }).strict())
     .optional(),
 });
 

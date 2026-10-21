@@ -193,7 +193,7 @@ function runCommand(
     env: { ...process.env, [GRADER_FILES_ENV]: graderFiles },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: timeoutSec * MS_PER_SECOND,
+    timeout: Math.ceil(timeoutSec * MS_PER_SECOND),
     killSignal: "SIGKILL",
     maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
   });

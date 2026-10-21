@@ -230,6 +230,15 @@ describe("command graders", () => {
     expect(without.feedback).toBe("[]\n");
   });
 
+  it("a fractional timeout still runs the command", async () => {
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "echo hi", timeoutSec: 1.001 },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.score).toEqual({ kind: "binary", pass: true });
+  });
+
   it("non-zero exit fails", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "echo bad >&2; exit 3" },

@@ -131,6 +131,12 @@ describe("FunctionGrader", () => {
     expect(() => toGrader(42 as any)).toThrow(/expected a grader function or grader instance/);
   });
 
+  it("refuses a returned point with no text, as the score row would", async () => {
+    const points = [{ point: "", pass: true, evidence: "" }];
+    const g = grader(() => ({ score: { kind: "scalar" as const, value: 1 }, points }));
+    await expect(g.run(runInput("o"))).rejects.toThrow(/grader function must return/);
+  });
+
   it("passes a returned grade's points through", async () => {
     const points = [{ point: "a", pass: true, evidence: "yes" }];
     const g = grader(() => ({ score: { kind: "scalar" as const, value: 1 }, points }));

@@ -251,6 +251,20 @@ describe("graders in the form", () => {
     expect(toggled.graders[0].answers.passingScore).toBe("0.9");
   });
 
+  it("kindNeeded puts the pick hint in the footer and changes nothing else", () => {
+    const state = run([{ kind: "addGrader" }]);
+    const told = run([{ kind: "kindNeeded" }], state);
+    expect(told.message).toBe("pick what to check with ← →");
+    expect({ ...told, message: "" }).toEqual(state);
+  });
+
+  it("removing the second grader puts the cursor on the first grader's last row", () => {
+    const two = run([{ kind: "addGrader" }], withGrader({ kind: "command", command: "ls" }));
+    const removed = run([{ kind: "requestRemove" }, { kind: "confirmRemove" }], two);
+    expect(removed.graders.length).toBe(1);
+    expect(removed.cursor).toEqual(grader(0, "weight"));
+  });
+
   it("remove asks only on a kind row, and y removes the grader", () => {
     const state = withGrader({ kind: "goal" });
     expect(run([{ kind: "requestRemove" }], cursorOn(state, grader(0, "name"))).mode).toEqual({

@@ -301,7 +301,7 @@ describe("evalNew", () => {
       { when: shown("message starts with"), key: "U" },
       ...typing("nknown named argument"),
       { when: shown("argument█"), key: "enter" },
-      { when: shown("at most"), key: "0" },
+      // The limit was filled with 0 when count was picked.
       { when: shown("0█"), key: "enter" },
       ...typing("no-bad-arguments"),
       { when: shown("no-bad-arguments█"), key: "enter" },
@@ -319,6 +319,17 @@ describe("evalNew", () => {
         max: 0,
       },
     ]);
+  });
+
+  it("Enter on a new grader's kind row says to pick, and does not ask to write", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("1. what to check"), key: "enter" },
+      { when: shown("pick what to check with ← →"), key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    expect(everFrame("write this test?")).toBe(false);
+    expect(everFrame("unknown kind")).toBe(false);
   });
 
   it("letters on a choice row type nothing and the hints offer ←→ pick", async () => {

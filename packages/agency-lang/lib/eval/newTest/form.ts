@@ -14,6 +14,7 @@ import * as path from "path";
 import {
   autoFill,
   choiceValue,
+  KIND_NEEDED,
   questionsFor,
   specObjectFor,
   type GraderDraft,
@@ -155,7 +156,9 @@ export type FormAction =
   | { kind: "confirmRemove" }
   | { kind: "cancelRemove" }
   | { kind: "pickNext" }
-  | { kind: "pickPrevious" };
+  | { kind: "pickPrevious" }
+  /** Enter on the last row while its grader has no kind picked yet. */
+  | { kind: "kindNeeded" };
 
 const EMPTY_VALUES: Record<FieldName, string> = {
   id: "",
@@ -289,6 +292,12 @@ export function isKindRow(row: Row): boolean {
   return row.kind === "grader" && row.question === "kind";
 }
 
+/** A kind row whose grader has no kind picked yet: Enter there must not
+ *  save, since the user has not said what the grader checks. */
+export function isUnpickedKindRow(state: FormState, row: Row): boolean {
+  return isKindRow(row) && valueAt(state, row) === "";
+}
+
 /** A long field, or a long text question: Ctrl+E opens `$EDITOR` on it. */
 export function isLong(state: FormState, row: Row): boolean {
   if (row.kind === "field") {
@@ -375,6 +384,8 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return withPick(state, 1);
     case "pickPrevious":
       return withPick(state, -1);
+    case "kindNeeded":
+      return { ...state, message: KIND_NEEDED };
   }
 }
 
@@ -459,15 +470,12 @@ function withPick(state: FormState, delta: number): FormState {
   );
 }
 
-/** Remove a grader and put the cursor on the row just before its first. */
+/** Remove a grader and put the cursor on the row just before its first.
+ *  That row is a field or an earlier grader's, so its index still holds. */
 function withoutGrader(state: FormState, index: number): FormState {
   const rows = rowsOf(state);
   const first = rows.findIndex((row) => row.kind === "grader" && row.index === index);
-  const before = rows[Math.max(0, first - 1)];
-  const cursor: Row =
-    before.kind === "grader" && before.index > index
-      ? { ...before, index: before.index - 1 }
-      : before;
+  const cursor = rows[Math.max(0, first - 1)];
   return {
     ...state,
     mode: { kind: "form" },

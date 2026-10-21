@@ -5,6 +5,7 @@ import type { GraderSpec } from "@/eval/gradersJson/schema.js";
 import {
   autoFill,
   draftFromSpec,
+  questionForField,
   questionsFor,
   specObjectFor,
   type Answers,
@@ -229,5 +230,29 @@ describe("autoFill", () => {
       "0.8",
     );
     expect(autoFill({ kind: "count", mustPass: "yes" }).passingScore).toBeUndefined();
+  });
+
+  it("fills 0 for a count grader's limit, which the parser requires, and leaves a typed one", () => {
+    expect(autoFill({ kind: "count" }).max).toBe("0");
+    expect(autoFill({ kind: "count", max: "3" }).max).toBe("3");
+    expect(autoFill({ kind: "number" }).max).toBeUndefined();
+  });
+});
+
+describe("number answers", () => {
+  it("treats a row of spaces as empty, so it is not written as 0", () => {
+    const spec = specObjectFor(draft({ kind: "count", count: "errors", max: "1", weight: "  " }));
+    expect(spec).not.toHaveProperty("weight");
+    expect(specObjectFor(draft({ kind: "count", max: " 2 " })).max).toBe(2);
+  });
+});
+
+describe("questionForField", () => {
+  it("finds a shown question by name, a list key by its first row, and nothing for a hidden one", () => {
+    const checklist = draft({ kind: "checklist", "point.0": "a" });
+    expect(questionForField(checklist, "points")?.name).toBe("point.0");
+    expect(questionForField(checklist, "name")?.name).toBe("name");
+    expect(questionForField(draft({ kind: "count", count: "errors" }), "tool")).toBeNull();
+    expect(questionForField(draft({}), "name")).toBeNull();
   });
 });

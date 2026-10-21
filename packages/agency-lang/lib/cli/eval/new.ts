@@ -11,6 +11,7 @@ import {
   isChoiceRow,
   isKindRow,
   isLastRow,
+  isUnpickedKindRow,
   isLong,
   reduceForm,
   valueAt,
@@ -71,6 +72,7 @@ const NO_ACTION: FormAction | null = null;
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
   const longField = isLong(state, state.cursor) && openEditor !== null;
   const last = isLastRow(state, state.cursor);
+  const unpicked = isUnpickedKindRow(state, state.cursor);
   const choice = isChoiceRow(state, state.cursor);
   const kindRow = isKindRow(state.cursor);
   return [
@@ -87,8 +89,14 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
       keys: ["Enter"],
       help: "save the test",
       hint: "Enter save",
-      when: () => last,
+      when: () => last && !unpicked,
       run: () => ({ kind: "requestSave" }),
+    },
+    {
+      keys: ["Enter"],
+      help: "pick what the grader checks first",
+      when: () => last && unpicked,
+      run: () => ({ kind: "kindNeeded" }),
     },
     {
       keys: ["Ctrl+E"],

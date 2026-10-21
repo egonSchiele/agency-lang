@@ -127,6 +127,8 @@ const KIND_LABELS: Record<GraderSpec["kind"], string> = {
 };
 
 export const PICK_HELP = "pick with ← →";
+/** The footer for a grader whose kind is not picked yet. */
+export const KIND_NEEDED = `pick what to check with ← →`;
 
 export const KIND_QUESTION: QuestionSpec = choice({
   name: "kind",
@@ -221,7 +223,7 @@ export const KIND_QUESTIONS: Record<GraderSpec["kind"], QuestionSpec[]> = {
       help: "any message (optional)",
       when: isCount("errors"),
     }),
-    text({ name: "max", label: "at most", help: "0", output: "number" }),
+    text({ name: "max", label: "at most", help: "", output: "number" }),
   ],
   command: [
     text({
@@ -351,7 +353,8 @@ const OUTPUTS: Record<
   },
   number: {
     write: (question, answers) => {
-      const value = answers[question.name] ?? "";
+      // A row holding only spaces is empty: `Number(" ")` would be `0`.
+      const value = (answers[question.name] ?? "").trim();
       if (value === "") {
         return null;
       }
@@ -366,9 +369,9 @@ const OUTPUTS: Record<
     read: (question, spec) => ({ [question.name]: spec[question.name] === true ? "yes" : "no" }),
   },
   list: {
-    write: (question, answers) => [`${question.name}s`, repeatedAnswers(question.name, answers)],
+    write: (question, answers) => [listKey(question), repeatedAnswers(question.name, answers)],
     read: (question, spec) => {
-      const items = spec[`${question.name}s`];
+      const items = spec[listKey(question)];
       const list = Array.isArray(items) ? items.map(String) : [];
       return Object.fromEntries(list.map((item, i) => [repeatName(question.name, i), item]));
     },
@@ -379,6 +382,29 @@ const OUTPUTS: Record<
       question.derive === undefined ? {} : { [question.name]: question.derive(spec) },
   },
 };
+
+/** The key a repeating question's answers are written under: `point`
+ *  becomes `points`. */
+function listKey(question: QuestionSpec): string {
+  return `${question.name}s`;
+}
+
+/** The row a parser problem about `field` is shown on: the question of
+ *  that name, or for a repeating question's list key (`points`) its first
+ *  row (`point.0`); null when no shown row holds the field. */
+export function questionForField(draft: GraderDraft, field: string): QuestionSpec | null {
+  const questions = questionsFor(draft);
+  const named = questions.find((question) => question.name === field);
+  if (named !== undefined) {
+    return named;
+  }
+  const list = applicableQuestions(draft).find(
+    (question) => question.output === "list" && listKey(question) === field,
+  );
+  return list === undefined
+    ? null
+    : (questions.find((question) => question.name === repeatName(list.name, 0)) ?? null);
+}
 
 function readString(name: string, spec: Record<string, unknown>): Answers {
   const value = spec[name];
@@ -411,13 +437,19 @@ export function draftFromSpec(spec: GraderSpec): GraderDraft {
 
 type AutoFillRule = { when: (answers: Answers) => boolean; name: string; value: string };
 
-/** Defaults filled after a pick. One row today; a second default is one more. */
+/** Defaults filled after a pick, so a required number is never left empty
+ *  by a row that looked optional. */
 const AUTO_FILL: AutoFillRule[] = [
   {
     when: (answers) =>
       answers.kind === "goal" && answers.mustPass === "yes" && (answers.passingScore ?? "") === "",
     name: "passingScore",
     value: "0.5",
+  },
+  {
+    when: (answers) => answers.kind === "count" && (answers.max ?? "") === "",
+    name: "max",
+    value: "0",
   },
 ];
 

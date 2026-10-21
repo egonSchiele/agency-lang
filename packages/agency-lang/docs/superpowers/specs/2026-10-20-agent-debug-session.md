@@ -60,6 +60,17 @@ where the last one left off. Nothing moves across processes that does
 not already cross the socket today, and `agency debug --attach` for a
 person is unchanged: its connection still is its session.
 
+The second decision follows from the first: **a person and an agent can
+be on one run at the same time, and either one drives.** Since the run
+holds the session, a terminal debugger and a CLI session are two parties
+on the same state, not two sessions. Both see every stop; whichever
+answers first moves the program; the other is told who answered and
+with what. The log viewer's session works this way already (a request
+from the CLI and a key from the person are applied in the order they
+arrive, and the screen shows the result), and the one thing a debugger
+adds, that a stop takes exactly one answer, is handled by the request
+ids the channel already has. The rules are in "Two parties, one answer".
+
 ## The user's view
 
 ### Finding and attaching
@@ -71,8 +82,9 @@ $ agency debug session list
   51002  research.agency  main   38s ago    held, last visit 12s ago
 ```
 
-`list` is the `--attach` listing with one more column: whether a session
-is open on the run, held by the CLI or by a terminal debugger. It reads
+`list` is the `--attach` listing with one more column: who is on the
+run: `none`, `terminal`, `held, last visit 12s ago`, or `terminal +
+held`. It reads
 the records in the sessions directory, drops the stale ones, and for a
 run whose socket exists sends a `probe` visit, which the run answers with
 its session state and nothing else.
@@ -88,10 +100,11 @@ directory, reads the record, checks the live process's start time
 says it is a CLI visit, and the run opens a held session: it installs the
 driver in stepping mode, and the program stops at its next step. The
 visit waits for that stop and prints the summary above. `attach` on a run
-that already holds a CLI session is a plain visit and prints the summary;
-on a run a terminal debugger is attached to it is refused, `already
-attached since <time>, by a terminal debugger`, since one debugger per
-run is the rule and a person at the keyboard outranks an agent.
+that already holds a CLI session is a plain visit and prints the summary.
+`attach` on a run a terminal debugger is attached to joins it: the
+program is already stopped, or running under the person's `continue`,
+and the summary says `a terminal debugger is attached too`; the person's
+screen says the same. The skill's ask-first rule covers this case.
 
 Every other command needs a pid. `--pid <pid>` names it; with one held
 session and no flag, that one is meant, the way `agency logs session`
@@ -176,10 +189,45 @@ and the session is over. If the leg hands the program's own interrupt to
 its caller, the command prints that and that the program is waiting on
 its caller; `wait` then returns at the next stop after the caller answers.
 
+Every moving command, and `set`, `checkpoint`, `save`, `load`, `back`,
+and `rewind`, is an answer to the stop the visit was shown: the reply
+carries the request id the visit received on connecting. If a terminal
+debugger answered that stop first, the command is refused with what
+happened and where the program is now: `the stop you saw was answered by
+the terminal (continue); now at research.agency:52, running`. The agent
+runs `where` or `wait` and decides again. Readers answer nothing and are
+never refused this way.
+
 Every command's text is what a person would want to read; `--json` gives
 the same facts as fields. The exit codes: 0 for an answer, 1 for a
 refusal (with the way forward in the message), 2 when the program ended,
 3 when `wait` ran out.
+
+### A person and an agent together
+
+A person at `agency debug --attach` and an agent at `agency debug
+session` can be on one run at once. Both are shown every stop. Either
+answers it, and the other is told: the terminal's activity pane reads
+`cli: step`, and the agent's next `where` lists `terminal: continue`
+among the lines since its last visit. The terminal's status line says
+`with agency debug session` while a CLI session is held, and the CLI's
+`where` says `a terminal debugger is attached too`.
+
+What the person sees when the agent moves the program: the panes redraw
+at the new stop, as after their own step, and the activity line says who
+did it. A picker or form the person had open when the agent answered
+closes, with the same line. What the agent sees when the person moves
+the program: its moving command is refused as above, and its readers
+read the new stop.
+
+Either party can pause a running program (space in the terminal, `pause`
+from the CLI), since a pause only asks the run to stop at its next
+statement, and either sees the stop. Either party can `detach`; the
+other stays, and the session ends when the last party leaves.
+
+The program's own interrupts are not a conflict, because an attached
+debugger answers none of them: they go to the program's caller, as the
+attach spec says, and both parties see them go by.
 
 ### What the debugger does not touch
 
@@ -192,41 +240,91 @@ and the skill says when an agent may use them.
 
 ## The runtime's view
 
-### A held session
+### A session with parties
 
 `attachOverChannel` today ties the session to the channel: `onClose`
-detaches. The change is one state on the run side, in `server.ts`:
+detaches. The change is one state on the run side, in `server.ts`: one
+session per run, with up to two parties on it.
 
 ```
-type Session =
-  | { kind: "terminal"; channel }           // closing the channel detaches
-  | { kind: "held"; visit: Channel | null; pending: Request | null;
-      lastVisit: number; lease: Timer }
+type Session = {
+  terminal: Channel | null;           // a person's debugger, at most one
+  cli: {                              // held by the CLI, or null
+    visit: Channel | null;            // the visit connected now, if any
+    lastVisit: number;
+    lease: Timer;
+  } | null;
+  pending: Request | null;            // the request waiting for an answer
+  lastRender: RenderArgs | null;      // what a joining party is shown
+  recent: string[];                   // the last twenty activity lines
+};
 ```
 
 A connection's first message is `client`, new in `protocol.ts`:
 `{ type: "client", kind: "terminal" | "cli" | "probe" }`. The terminal UI
-sends `terminal` (one line added to `serveDebuggerIO`), and the run
-behaves as today. `cli` opens a held session on the first visit, and on a
-later visit joins it. `probe` is answered with `{ type: "status", ... }`
-and the connection closed, with no driver installed and nothing else
-sent, so `list` costs a run nothing.
+sends `terminal` (one line added to `serveDebuggerIO`). `cli` opens the
+CLI's hold on the first visit, and on a later visit joins it. `probe` is
+answered with `{ type: "status", ... }` and the connection closed, with
+no driver installed and nothing else sent, so `list` costs a run nothing.
+The session is created when the first party joins, and the driver is
+installed then; it ends, and the driver is removed, when the last party
+leaves (below).
 
-In a held session the driver's `ChannelDebuggerIO` sends its requests to
-the current visit when there is one, and otherwise keeps the request as
-`pending`. A visit that connects while a request is pending is sent the
-run's `hello`, then the last `render` (the stop's checkpoint, which a
-reader needs), then the pending request. A visit that closes without
-answering leaves the request pending, which is the normal end of a
-reader. A reply from a visit answers the pending request as the terminal
-UI's reply would, and the driver goes on. `DebuggerDetached`, which the
-IO throws today when the channel closes with a request pending, is thrown
-in a held session only on `detach` and when the lease runs out.
+Every party joining is sent the same three things: the run's `hello`,
+the last `render` (the stop's checkpoint, which a reader needs and a
+terminal draws), and the pending request if there is one. For a visit
+that is the whole handshake; for a terminal joining a held session it is
+what makes its screen show the stop the agent is at.
 
-Notices (`log`, `setMode`, `setOverrides`, the spinner) go to the current
-visit when there is one and are otherwise kept, the last twenty activity
-lines, so `where` can print what happened since the last visit: "the
-program raised std::env; passed to its caller".
+The driver's `ChannelDebuggerIO` sends each request to every connected
+party, and keeps it as `pending` while no party has answered. A party
+that closes without answering leaves the request pending, which is the
+normal end of a reader visit, and the normal end of a terminal while a
+CLI hold is live. `DebuggerDetached`, which the IO throws today when the
+channel closes with a request pending, is thrown only when the session
+ends.
+
+Notices (`log`, `setMode`, `setOverrides`, `setBusy`, the spinner) go to
+every connected party, and the activity lines are also kept, the last
+twenty, so `where` can print what happened since the last visit: "the
+program raised std::env; passed to its caller", "terminal: continue".
+
+### Two parties, one answer
+
+A request has an id, and a reply carries it; that is the channel today.
+The one rule added: **the first reply to a pending request is the
+answer, and a later reply to the same id is refused.** The IO answers the
+driver with the first reply, logs one activity line naming the party
+and the command (`cli: step`, `terminal: continue`), and sends every
+other party `{ type: "answered", id, by, command }`. A reply that
+arrives for an id that is no longer pending is answered with the same
+`answered` message and nothing else happens.
+
+Each side does one thing with `answered`. The CLI prints the refusal in
+"Moving the program" and exits 1. The terminal UI drops the read it was
+blocked on for that request: a `waitForCommand` stops waiting for a
+key, and a picker or form open for a selector closes, with the activity
+line saying who answered. That is a rejected `readKey`, the path
+`TerminalInput.nextKey` already takes when the line reader takes the
+terminal, so the UI has the mechanism; the driver's next `render` then
+arrives at a UI that is waiting for nothing.
+
+Two requests that want different handling:
+
+- `render` is sent to every party and waits for all of them to
+  acknowledge, since each must have drawn or stored the stop before it
+  is asked for a command; a party that closes mid-render is dropped
+  from the wait.
+- Every other request resolves on the first reply.
+
+`pause` is not a request and needs no rule: either party may send it,
+and it sets stepping mode on the run.
+
+There is no merging anywhere in this. The run applies one command at a
+time to one state and tells both parties the result; a party that acted
+on an old picture is refused, not reconciled. The invariant that keeps
+it so: a command is one visit and one reply, and the run owns everything
+between. No command may keep state on the client across round trips.
 
 ### The lease
 
@@ -234,26 +332,36 @@ A program must never wait on a debugger that is not there. With a person,
 closing the terminal is the detach. With an agent, the agent may crash,
 be killed, or forget. So a held session has a lease: ten minutes from the
 last visit's close. When it runs out the run logs one line on its stderr,
-`debug session: no visit for 10 minutes, detaching`, and detaches the way
-a closed channel does: the stop is answered with `continue`. A `wait` is
-a visit for as long as it is connected, so an agent waiting on a long
-`continue` keeps its lease. The lease is on the run side and needs no
-process on the CLI side to be alive, which is the point.
+`debug session: no visit for 10 minutes, releasing the CLI's hold`, and
+drops the CLI as a party. A `wait` is a visit for as long as it is
+connected, so an agent waiting on a long `continue` keeps its lease. The
+lease is on the run side and needs no process on the CLI side to be
+alive, which is the point.
+
+The session ends when no party is left: the terminal has closed, and
+the CLI's hold is gone, by `detach` or by the lease. Then the run
+detaches the way a closed channel does today: the stop is answered with
+`continue`, the driver is removed, and the program runs on at no cost.
+A terminal closing while the CLI's hold is live ends nothing, and a
+lease running out while a terminal is attached ends nothing; a person
+at the keyboard is a party that needs no lease.
 
 ### Who is attached
 
-A terminal debugger connecting while a CLI session is held is refused
-with `already attached since <time>, by agency debug session`, and the
-other way round says `by a terminal debugger`. Two CLI visits at the same
-time, two agents or one agent running commands in parallel, would race
-for one pending request: the second visit is refused with `another visit
-is in progress`. The skill tells an agent to run its debugger commands
-one at a time.
+One terminal and one CLI hold per run. A second terminal is refused as
+today, `already attached since <time>, by a terminal debugger`. Two CLI
+visits at the same time, two agents or one agent running commands in
+parallel, are refused with `another visit is in progress`: a hold has
+one visit, so that an agent's own commands cannot race each other. The
+skill tells an agent to run its debugger commands one at a time. Both
+parties are told when the other joins or leaves (`parties`, a notice
+with who is on the run), which is what the status line and `where`
+print.
 
 ### Program end
 
-When the program ends while held, the run sends `finished` to the current
-visit if there is one, keeps the fact for the next visit if there is none
+When the program ends, the run sends `finished` to every connected
+party, keeps the fact for the next visit if the CLI's hold has none
 (`where` then prints `Program finished` and exits 2), closes the socket,
 and removes the driver as today. The record is removed at exit as today,
 so a visit after the process is gone is refused by `checkedRecord`.
@@ -274,8 +382,10 @@ so a visit after the process is gone is refused by `checkedRecord`.
   a socket in it, through `lineChannel`.
 
 A `Visit` is one connection: `open(socketPath)` sends `client cli`, reads
-`hello`, the `render`, and the pending request, and returns them; `answer(reply)`
-sends the reply and waits for the next request or `finished`; `close()`.
+`hello`, the `render`, the `parties` notice, and the pending request, and
+returns them; `answer(reply)` sends the reply with the pending request's
+id and waits for the next request, an `answered` (the refusal), or
+`finished`; `close()`.
 It is the CLI's `DebuggerIO` turned inside out, and it is the only new
 protocol logic on the CLI side. The `where` text is built by one function
 of (`hello`, checkpoint, stop, activity lines), tested on fixtures.
@@ -286,7 +396,8 @@ the agent did not attach → "no session on N; `agency debug session attach
 N` opens one"; a program not stopped → "N is running; `wait` stops here at
 its next stop"; a reader with no file on disk → the location alone and
 "the source is not at <path> from here; run from the program's directory
-to see it".
+to see it"; a stale answer → "the stop you saw was answered by the
+terminal (continue); now at <location>", exit 1.
 
 ## The skill
 
@@ -312,11 +423,17 @@ says, in this order:
    that is a safety net, not a plan.
 5. **One command at a time.** The session has one pending question;
    parallel commands are refused.
-6. **Do not change the run without asking.** `set`, `rewind`, `back`, and
+6. **A person may be driving too.** `where` says when a terminal
+   debugger is attached. Then the person's moves show up as `terminal:
+   ...` lines, a moving command can be refused because the person got
+   there first, and the answer is to look again, not retry. Do not
+   `continue` or `detach` a run a person is stepping through without
+   saying so.
+7. **Do not change the run without asking.** `set`, `rewind`, `back`, and
    `load` change what the program will do. Report what you would change
    and why, and do it only when the person says so. The program's own
    interrupts are the person's to answer, in the program's terminal.
-7. **Report.** Where it was, what it was doing, what it had spent, and
+8. **Report.** Where it was, what it was doing, what it had spent, and
    what the agent changed, if anything, with the exact commands.
 
 ## Access
@@ -327,7 +444,8 @@ reaches the run the way `agency debug --attach` does. What is new is
 that a program can now be stopped and read by software the person did
 not watch type each key, and that a held session outlives the process
 that opened it. The lease bounds the second; the skill's ask-first rule
-and the one-debugger-per-run refusal bound the first. An agent runs as
+bounds the first, and a person who is attached sees every command the
+agent sends, as it is sent. An agent runs as
 the user and had the user's powers already; the socket still adds no new
 class of attacker.
 
@@ -337,9 +455,16 @@ class of attacker.
 from inside. The attach spec set it aside and nothing here changes that;
 the CLI is for an agent such as Claude Code outside any Agency program.
 
-**Two sessions on one run**, a person and an agent together. The driver
-has one pending request; sharing it needs an arbiter. A person who wants
-to see what the agent sees can read the commands the agent reports.
+**A view-only party.** A terminal that watches and cannot drive would be
+a party whose replies are always refused; nothing here needs it, and it
+can be a flag on `--attach` later.
+
+**A timing guard on `continue`.** The one unintended outcome left is a
+`c` typed in the instant between the other party's step and the redraw,
+which lands on the new stop. Every single-user debugger has the same
+race between a redraw and a key. If it bites, the terminal UI can refuse
+a `c` typed within a fraction of a second of a new stop and ask again;
+not in these PRs.
 
 **Interrupt takeover**, **watch mode**, **output mirroring**, and
 **hosted runs**, as in the attach spec.
@@ -356,10 +481,19 @@ the test's temporary directory as the attach tests arrange).
    a CLI visit opens a session and closes; the program stays stopped; a
    second visit is sent the render and the pending request; its answer
    steps the program; a visit that reads and closes leaves it stopped; a
-   terminal client is refused while held and the other way round; a
    second visit during one is refused; the lease, with a fake clock,
    detaches and the program finishes; `finished` reaches the next visit
    when no visit was connected.
+   **Two parties** (`lib/debugger/attach/parties.test.ts`): a terminal
+   client and a CLI visit on one run are both sent the stop; the CLI
+   answers first and the terminal gets `answered` with the command, and
+   its late reply is refused; the terminal answers first and the visit
+   is refused; a terminal joining a held session is sent the last render
+   and the pending request; either party's pause stops the program;
+   the terminal closing leaves the hold live and the program stopped;
+   the lease running out with a terminal attached ends nothing; the
+   last party leaving detaches; both are sent `finished`; the activity
+   lines name the party.
 2. **The verbs and readers, on fixtures** (`lib/cli/debugSession/commands.test.ts`):
    the `where` text for the agent-shaped fixture stopped inside `search`,
    with its stack, threads, branches, and guards lines; each reader on a
@@ -372,18 +506,23 @@ the test's temporary directory as the attach tests arrange).
 
 ## The PRs
 
-1. **The held session**: the `client` message, the held state in
+1. **The held session**: the `client` message, the session state in
    `server.ts`, the pending request and kept notices in
    `ChannelDebuggerIO`, the lease, the probe, and the terminal UI
    declaring itself. Tests in layer 1. No CLI yet; `--attach` behaves as
-   before.
-2. **The commands**: `lib/cli/debugSession/`, the readers moved out of
+   before, and a terminal is still refused while a hold is live.
+2. **Two parties**: requests and notices to every party, first answer
+   wins, `answered` and `parties`, the activity line per answer, the
+   terminal UI dropping a withdrawn read and showing the other party,
+   the session-end rule. Tests in the two-parties file.
+3. **The commands**: `lib/cli/debugSession/`, the readers moved out of
    `UIState` into a shared module, `where`, the verbs, `list` with its
    session column, docs (`docs/site/cli/debug.md`, a dev doc
    `docs/dev/cli/debugger-session.md`, and the index line). Tests in
    layers 2 and 3.
-3. **The skill**: `.claude/commands/debug-run.md`, and a paragraph in the
-   debugger's user doc that says an agent can drive it.
+4. **The skill**: `.claude/commands/debug-run.md`, and a paragraph in the
+   debugger's user doc that says an agent can drive it, beside a person
+   or alone.
 
 Each PR is based on main, and the spec is reviewed before the issues
 under the milestone are written.

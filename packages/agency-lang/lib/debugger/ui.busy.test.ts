@@ -222,6 +222,33 @@ describe("the pause key", () => {
     }
   });
 
+  it("at 80 columns, attached, the wait has a row of its own and is not clipped", async () => {
+    const { entry } = await captured();
+    const clock = { now: 1_000_000 };
+    const recorder = new FrameRecorder();
+    const screen = new Screen({ input: new TestInput(), output: recorder, width: 80, height: 40 });
+    const ui = new DebuggerUI(screen, { now: () => clock.now });
+    ui.attachedTo({ type: "hello", pid: 12345, program: "research-agent.js", node: "main" });
+    try {
+      ui.startSpinner();
+      ui.setBusy([entry]);
+
+      const frame = await untilFrame(recorder, "llm-after-step.agency:5 · 0ms");
+      const lines = frame.split("\n");
+      const figures = lines.find((line) => line.includes("tokens:"))!;
+      expect(figures).toContain("attached to 12345 research-agent.js");
+      expect(figures).not.toContain("waiting:");
+      expect(lines).toContain(
+        "  waiting: in llm() at llm-after-step.agency:5 · 0ms · round 1, waiting on model".padEnd(
+          80,
+        ),
+      );
+      expect(frame).toContain("▶ running · (space)pause (q)detach");
+    } finally {
+      ui.destroy();
+    }
+  });
+
   it("attached, the bar says q detaches, and the pausing bar keeps it", async () => {
     const { ui, recorder, input } = screenful();
     ui.attachedTo({ type: "hello", pid: 1234, program: "agent.js", node: "main" });

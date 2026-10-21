@@ -448,12 +448,18 @@ export class DebuggerUI implements DebuggerIO {
       this.attached === null
         ? ""
         : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
-    // What the program is waiting on, while it runs and at a stop with a
-    // wait still open (an `async` call in a model request, for one). The
-    // command bar keeps the keys, so the person can see how to pause.
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
+  }
+
+  /** What the program is waiting on, while it runs and at a stop with a
+   *  wait still open (an `async` call in a model request, for one), as
+   *  a row of its own under the figures: beside them it was clipped at
+   *  80 columns, and the renderer clips a row rather than wrapping it.
+   *  The command bar keeps the keys, so the person can see how to
+   *  pause. Empty when nothing is open. */
+  private buildWaitingContent(): string {
     const busy = this.busyBarText();
-    const waiting = busy === "" ? "" : ` | waiting: ${busy}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${waiting}{/gray-fg}`;
+    return busy === "" ? "" : `{gray-fg}  waiting: ${busy}{/gray-fg}`;
   }
 
   // --- Element tree builders ---
@@ -494,7 +500,11 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildStatsBar(): Element {
-    return box({ height: 1, key: "stats" }, text(this.buildStatsContent()));
+    const waiting = this.buildWaitingContent();
+    return box(
+      { height: waiting === "" ? 1 : 2, key: "stats" },
+      text(waiting === "" ? this.buildStatsContent() : `${this.buildStatsContent()}\n${waiting}`),
+    );
   }
 
   /**

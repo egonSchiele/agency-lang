@@ -1114,6 +1114,40 @@ describe("the pause key", () => {
     expect(io.renderCalls).toHaveLength(2);
   });
 
+  it("pressed after the program's interrupt went to the caller, stops the next leg", async () => {
+    const mod = await freshImport(compiledPath(fixtures.mixedBatch));
+    const { io } = attachTo(mod, [{ type: "continue" }, { type: "continue" }]);
+
+    const paused = await mod.main();
+    expect(isDebugger(paused.data[0])).toBe(false);
+    // The program is the caller's now, and no leg of the driver's runs.
+    expect(io.spinning).toBe(true);
+    io.pause();
+    const final = await mod.respondToInterrupts(paused.data, [{ type: "approve" }]);
+
+    expectNoStop(final);
+    expect(final.data).toBe(3);
+    expect(io.logLines).toContain("Pausing at the next statement");
+    // The first stop, and the one the pause made in the leg the caller
+    // started.
+    expect(io.renderCalls).toHaveLength(2);
+  });
+
+  it("changes nothing after the debugged run ended", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const { io } = attachTo(mod, [{ type: "continue" }, { type: "continue" }]);
+
+    expect((await mod.main()).data).toBe(3);
+    io.pause();
+    expect((await mod.main()).data).toBe(3);
+
+    expect(io.logLines).not.toContain("Pausing at the next statement");
+    // The first run's attach stop only: `continue` holds across runs, so
+    // the second ran through, which a pause that landed would have
+    // stopped at its first statement.
+    expect(io.renderCalls).toHaveLength(1);
+  });
+
   it("changes nothing at a stop", async () => {
     const mod = await freshImport(compiledPath(fixtures.stepTest));
     const io = new (class extends TestDebuggerIO {

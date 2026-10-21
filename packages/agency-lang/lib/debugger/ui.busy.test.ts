@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as path from "path";
 import { compile } from "@/compiler/defaultSession.js";
-import { FrameRecorder, Screen } from "@/tui/index.js";
+import { FrameRecorder, Screen, type KeyEvent } from "@/tui/index.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { DebugStopData } from "../runtime/debugger.js";
 import { DebuggerDriver } from "./driver.js";
@@ -212,6 +212,37 @@ describe("the pause key", () => {
 
       expect(await ui.waitForCommand()).toEqual({ type: "quit" });
       expect(paused).toBe(0);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("a read the input cancels is armed again on the next tick", async () => {
+    // What `TerminalInput.nextKey` does when `nextLine` takes the
+    // terminal: the pending read rejects.
+    const input = new (class extends TestInput {
+      private cancelled = false;
+      override nextKey(): Promise<KeyEvent> {
+        if (!this.cancelled) {
+          this.cancelled = true;
+          return Promise.reject(new Error("nextKey() cancelled by nextLine()"));
+        }
+        return super.nextKey();
+      }
+    })();
+    const recorder = new FrameRecorder();
+    const screen = new Screen({ input, output: recorder, width: 120, height: 40 });
+    const ui = new DebuggerUI(screen);
+    let paused = 0;
+    ui.onPause(() => paused++);
+    try {
+      ui.startSpinner();
+      await untilFrame(recorder, "▶ running");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      input.feedKey({ key: "s" });
+
+      await untilFrame(recorder, "pausing at the next statement");
+      expect(paused).toBe(1);
     } finally {
       ui.destroy();
     }

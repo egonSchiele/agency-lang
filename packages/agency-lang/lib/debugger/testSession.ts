@@ -13,16 +13,14 @@ import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { hasInterrupts, createDebugInterrupt } from "../runtime/interrupts.js";
 
 /**
- * An InputSource a test feeds keys to. `waitForIdle` resolves when the
- * next `nextKey()` finds the queue empty; the debugger's session waits on
- * `DebuggerUI.waitForPerson` instead, since the UI also reads a key while
- * the program runs, for the pause key, and that read is not the person
- * being asked for anything.
+ * An InputSource a test feeds keys to. It gives no idle signal: the UI
+ * reads a key while the program runs too, for the pause key, so a read
+ * does not mean the person is being asked for anything. The session waits
+ * on `DebuggerUI.waitForPerson` instead.
  */
 export class TestInput implements InputSource {
   private keyQueue: KeyEvent[] = [];
   private keyWaiters: ((key: KeyEvent) => void)[] = [];
-  private idleResolvers: (() => void)[] = [];
 
   feedKey(key: KeyEvent): void {
     const waiter = this.keyWaiters.shift();
@@ -36,20 +34,8 @@ export class TestInput implements InputSource {
   nextKey(): Promise<KeyEvent> {
     const queued = this.keyQueue.shift();
     if (queued) return Promise.resolve(queued);
-    // Signal idle — the driver is blocked waiting for input
-    const resolvers = this.idleResolvers;
-    this.idleResolvers = [];
-    for (const resolve of resolvers) {
-      resolve();
-    }
     return new Promise<KeyEvent>((resolve) => {
       this.keyWaiters.push(resolve);
-    });
-  }
-
-  waitForIdle(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.idleResolvers.push(resolve);
     });
   }
 
@@ -60,7 +46,6 @@ export class TestInput implements InputSource {
   destroy(): void {
     this.keyQueue = [];
     this.keyWaiters = [];
-    this.idleResolvers = [];
   }
 }
 

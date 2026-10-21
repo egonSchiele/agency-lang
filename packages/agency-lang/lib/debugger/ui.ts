@@ -646,10 +646,18 @@ export class DebuggerUI implements DebuggerIO {
    *  key: the person, or the pause key while the program runs. */
   private armReader(): void {
     if (this.pendingKey !== null) return;
-    this.pendingKey = this.screen.nextKey().then((key) => {
-      this.pendingKey = null;
-      this.dispatch(key);
-    });
+    this.pendingKey = this.screen.nextKey().then(
+      (key) => {
+        this.pendingKey = null;
+        this.dispatch(key);
+      },
+      () => {
+        // `TerminalInput.nextKey` rejects its waiters when `nextLine` takes
+        // the terminal. The read is simply gone: the spinner arms another
+        // on its next tick, and the person's next read arms its own.
+        this.pendingKey = null;
+      },
+    );
   }
 
   private dispatch(key: KeyEvent): void {
@@ -725,6 +733,9 @@ export class DebuggerUI implements DebuggerIO {
       this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ ${state}${waiting === "" ? "" : ` · ${waiting}`}`;
       this.renderUI();
       frameIdx++;
+      // The pause key is read while the program runs; a read the input
+      // cancelled is armed again here.
+      this.armReader();
     };
 
     update();

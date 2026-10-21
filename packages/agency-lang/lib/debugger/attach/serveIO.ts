@@ -4,7 +4,8 @@
 // methods go to the `events` callbacks.
 import { functionRefReviver, nativeTypeReviver } from "../../runtime/revivers/index.js";
 import { Checkpoint } from "../../runtime/state/checkpointStore.js";
-import type { DebuggerIO } from "../types.js";
+import { isBusyEntry } from "../../runtime/waits.js";
+import type { BusyEntry, DebuggerIO } from "../types.js";
 import type { Channel } from "./channel.js";
 import { parseAttachMessage, type Hello } from "./protocol.js";
 
@@ -42,6 +43,9 @@ function checkpointsFromWire(wire: unknown): Checkpoint[] {
 /** Answer the run's requests with `io` until the channel closes. Returns
  *  the function that stops listening. */
 export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeEvents = {}) {
+  // The one message the UI sends unprompted: the person asked the
+  // running program to stop at its next statement.
+  io.onPause(() => channel.send({ type: "pause" }));
   const answer = async (id: number, method: string, args: unknown[]): Promise<unknown> => {
     switch (method) {
       case "render":
@@ -73,6 +77,13 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
       case "setOverrides":
         io.setOverrides(args[0] as Record<string, unknown>);
         return;
+      case "setBusy": {
+        // The sender is the other half of this package, so a bad entry
+        // is a bug; it is dropped here rather than thrown on in the UI.
+        const entries: BusyEntry[] = Array.isArray(args[0]) ? args[0].filter(isBusyEntry) : [];
+        io.setBusy(entries);
+        return;
+      }
       case "appendStdout":
         io.appendStdout(args[0] as string);
         return;
@@ -118,6 +129,7 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         );
         return;
       case "reply":
+      case "pause":
         return;
     }
   });

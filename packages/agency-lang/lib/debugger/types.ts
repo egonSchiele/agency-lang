@@ -1,6 +1,8 @@
 import type { GuardTripData } from "./guardAnswer.js";
 import type { InterruptResponse } from "../runtime/interrupts.js";
-import type { DebugStopData } from "../runtime/debugger.js";
+import type { BusyEntry, DebugStopData } from "../runtime/debugger.js";
+
+export type { BusyEntry } from "../runtime/debugger.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 
@@ -49,6 +51,14 @@ export type DebuggerIO = {
   /** The overrides a `set` has queued for the next resume, for the
    *  locals pane to show beside the current values. */
   setOverrides(overrides: Record<string, unknown>): void;
+  /** What the program is waiting on, a model request or a tool call,
+   *  the whole list each time it changes; empty when nothing is open.
+   *  Shown while the program runs (`waits.ts`). */
+  setBusy(entries: BusyEntry[]): void;
+  /** `listener` is called when the person asks the running program to
+   *  stop at its next statement (`s` or `n` while it runs). Registered
+   *  once by the driver; nothing is sent back. */
+  onPause(listener: () => void): void;
   /** Show `checkpoint`, at `stop` when the stop happened somewhere other
    *  than the checkpoint's own location (a stop inside a tool call, whose
    *  checkpoint is the shared one stamped at the join). */

@@ -1,6 +1,6 @@
 import type { Run } from "./asyncContext.js";
 import type { StatelogClient } from "../statelogClient.js";
-import { debugStep } from "./debugger.js";
+import { debugStep, whileBusy, type StopLocation } from "./debugger.js";
 import { isInsideCallback } from "./hooks.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
@@ -70,8 +70,9 @@ function llmCallLabel(which: WhichLlmCall): string {
   return `validation retry ${which.validationRetry + 1}`;
 }
 
-/** The debugger's label for a stop before a tool call: the call as the
- *  activity log prints it, with each argument cut to a readable length. */
+/** The debugger's label for a stop before a tool call, and for the wait
+ *  while it runs: the call as the activity log prints it, with each
+ *  argument cut to a readable length. */
 function toolStopLabel(name: string, args: Record<string, unknown>): string {
   const shown = Object.entries(args).map(([key, value]) => {
     const text = JSON.stringify(value) ?? "undefined";
@@ -182,11 +183,60 @@ export class PromptRunner {
    * it. See `docs/dev/cli/debugger.md`, "Stops between tool calls".
    */
   async llmCall(which: WhichLlmCall, body: () => Promise<Interrupt[] | void>): Promise<void> {
-    await this.stepWithStop(
-      llmCallKey(which),
-      { loopStop: "round", label: llmCallLabel(which) },
-      body,
+    const key = llmCallKey(which);
+    const label = llmCallLabel(which);
+    // The stop comes before the body and the wait covers the body alone,
+    // so a person stopped before a request is not shown waiting on it.
+    await this.stepWithStop(key, { loopStop: "round", label }, () =>
+      whileBusy(
+        this.opts.run,
+        this.opts.stateStack,
+        { kind: "model", label, location: this.loopLocation(key, this.opts.run) },
+        body,
+      ),
     );
+  }
+
+  /** Run `body` as the invoke step `key` of the tool call `call` on its
+   *  branch runner, shown to the debugger as a wait while it runs
+   *  (`whileBusy`), as `llmCall` runs a request. The invoke step is the
+   *  one that re-runs when the tool's own interrupt is answered, so a
+   *  resumed tool is reported again; a step skipped on a resume opens
+   *  nothing. */
+  async invokeTool(
+    branch: BranchRunner,
+    key: string,
+    call: {
+      /** The run and the stack of the tool's branch. */
+      run: Run;
+      branchStack: StateStack;
+      handler: { name: string };
+      namedArgs: Record<string, unknown>;
+      /** The tool round, counted from 0 after the first request. */
+      round: number;
+    },
+    body: () => Promise<Interrupt[] | void>,
+  ): Promise<void> {
+    const { run, branchStack, handler, namedArgs } = call;
+    const label = toolStopLabel(handler.name, namedArgs);
+    const location = this.loopLocation(key, run);
+    // The person counts rounds from the first request, so the calls of
+    // tool round 0 are in round 1, as `llmCallLabel` counts them.
+    const wait = { kind: "tool" as const, label, location, round: call.round + 1 };
+    await branch.step(key, () => whileBusy(run, branchStack, wait, body));
+  }
+
+  /** Where one of the loop's steps is, for a stop before it and for the
+   *  wait while it runs: under the `llm()` statement, at the statement's
+   *  path plus the step's key, on `run`'s branch and at its depth. */
+  loopLocation(key: string, run: Run): StopLocation {
+    return {
+      moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+      scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+      stepPath: this.stepPathFor(key),
+      branchPath: run.stack.branchPath(),
+      depth: run.callDepth?.depth ?? 0,
+    };
   }
 
   /**

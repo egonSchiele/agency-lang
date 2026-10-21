@@ -42,9 +42,11 @@ import { readConfigOverrides, TRACE_ID_ENV } from "../../config/config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
+import { reportWaits, type OpenWait } from "../waits.js";
 
-/** See `RuntimeContext.debugSlot`. */
-export type DebugSlot = { state: DebuggerState | null };
+/** See `RuntimeContext.debugSlot`. `waits` is what the module's runs are
+ *  waiting on right now, kept with or without a debugger (`waits.ts`). */
+export type DebugSlot = { state: DebuggerState | null; waits: OpenWait[] };
 
 /**
  * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
@@ -391,7 +393,7 @@ export class RuntimeContext<T> {
     this._restoreCount = 0;
     this._toolCallDepth = 0;
     this.pendingPromises = new PendingPromiseStore();
-    this.debugSlot = { state: null };
+    this.debugSlot = { state: null, waits: [] };
     this.traceWriter = null;
     this.traceConfig = args.traceConfig || {};
     this.runId = null;
@@ -933,6 +935,9 @@ export class RuntimeContext<T> {
 
   set debuggerState(state: DebuggerState | null) {
     this.debugSlot.state = state;
+    // A debugger installed in the middle of a long model call is told
+    // about it at once, not at the next call.
+    reportWaits(this.debugSlot);
   }
 
   hasDebugger(): boolean {

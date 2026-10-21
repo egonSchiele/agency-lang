@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import * as path from "path";
 import { DebuggerDriver } from "./driver.js";
-import type { DebuggerCommand, DebuggerIO, DebuggerMode } from "./types.js";
+import type { BusyEntry, DebuggerCommand, DebuggerIO, DebuggerMode } from "./types.js";
 import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
@@ -21,6 +21,9 @@ export class TestDebuggerIO implements DebuggerIO {
   logLines: string[] = [];
   mode: DebuggerMode = "stepping";
   overrides: Record<string, unknown> = {};
+  /** Every list `setBusy` received, in order. */
+  busyCalls: BusyEntry[][] = [];
+  private pauseListeners: (() => void)[] = [];
   private commands: DebuggerCommand[];
   private commandIndex = 0;
   renderCalls: Checkpoint[] = [];
@@ -40,6 +43,21 @@ export class TestDebuggerIO implements DebuggerIO {
 
   setOverrides(overrides: Record<string, unknown>): void {
     this.overrides = { ...overrides };
+  }
+
+  setBusy(entries: BusyEntry[]): void {
+    this.busyCalls.push(entries);
+  }
+
+  onPause(listener: () => void): void {
+    this.pauseListeners.push(listener);
+  }
+
+  /** The person pressed the pause key. */
+  pause(): void {
+    for (const listener of this.pauseListeners) {
+      listener();
+    }
   }
 
   async render(
@@ -103,8 +121,14 @@ export class TestDebuggerIO implements DebuggerIO {
   async showCheckpointsPanel(_checkpoints: Checkpoint[]): Promise<void> {}
   appendStdout(_text: string): void {}
   renderActivityOnly(): void {}
-  startSpinner(): void {}
-  stopSpinner(): void {}
+  /** Whether the driver has the UI spinning: the program is running. */
+  spinning = false;
+  startSpinner(): void {
+    this.spinning = true;
+  }
+  stopSpinner(): void {
+    this.spinning = false;
+  }
   destroy(): void {}
 }
 

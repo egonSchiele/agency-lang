@@ -279,21 +279,34 @@ describe("attaching to a program in another process", () => {
     const input = new TestInput();
     const recorder = new FrameRecorder();
     const ui = new DebuggerUI(new Screen({ input, output: recorder, width: 120, height: 40 }));
-    // Queued ahead: at the first stop escape does nothing and the step
-    // moves on; the second stop takes the quit.
+    // Queued ahead: at the first stop escape does nothing. The step and
+    // the quit are pressed at a stop, once its frame is on screen: `s`
+    // pressed while the program runs, the attach phase included, asks it
+    // to stop at its next statement, which the attach does anyway.
     input.feedKey({ key: "escape" });
-    input.feedKey({ key: "s" });
-    input.feedKey({ key: "q" });
     const printed: string[] = [];
-    const code = await attachCommand({
+    const session = attachCommand({
       pid: started.pid,
       ui,
       print: (line) => printed.push(line),
       printError: (line) => printed.push(line),
     });
+    const plain = () => recorder.frames.map((recorded) => recorded.frame.toPlainText());
+    const untilFrame = async (wanted: RegExp): Promise<void> => {
+      for (let i = 0; i < 500; i++) {
+        if (plain().some((text) => wanted.test(text))) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`no frame matching ${wanted}; last:\n${plain().at(-1)}`);
+    };
+    await untilFrame(/^│x = 1 /m);
+    input.feedKey({ key: "s" });
+    await untilFrame(/^│y = 2 /m);
+    input.feedKey({ key: "q" });
+    const code = await session;
 
     expect(code, printed.join("\n") + childOutput).toBe(0);
-    const frames = recorder.frames.map((recorded) => recorded.frame.toPlainText());
+    const frames = plain();
     expect(frames.some((text) => text.includes(`attached to ${started.pid}`))).toBe(true);
     expect(frames.some((text) => text.includes("(q)detach"))).toBe(true);
     // The first stop is before `y = x + 1`, so its locals pane has no y;

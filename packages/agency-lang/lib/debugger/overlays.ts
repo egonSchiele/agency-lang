@@ -1,4 +1,13 @@
-import { box, row, column, text, escapeStyleTags, type Screen, type Element } from "@/tui/index.js";
+import {
+  box,
+  row,
+  column,
+  text,
+  escapeStyleTags,
+  type Screen,
+  type Element,
+  type KeyEvent,
+} from "@/tui/index.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { UIState } from "./uiState.js";
 import { formatValue } from "./util.js";
@@ -25,6 +34,8 @@ import {
 
 export type OverlayContext = {
   screen: Screen;
+  /** The next key for the person, through the UI's one reader. */
+  nextKey(): Promise<KeyEvent>;
   state: UIState;
   /** Build the top portion of the standard layout (source/threads + locals/globals/callStack). */
   buildTopRows(): Element[];
@@ -72,7 +83,7 @@ export async function showRewindSelector(
   render();
 
   while (true) {
-    const keyEvent = await ctx.screen.nextKey();
+    const keyEvent = await ctx.nextKey();
     if (keyEvent.key === "c" && keyEvent.ctrl) {
       ctx.cleanup();
       return null;
@@ -141,7 +152,7 @@ export async function showGuardTripForm(
     let problem: string | null = null;
     while (true) {
       renderLines([...above, `${prompt} > ${draft}_`, ...(problem ? [problem] : [])]);
-      const action = lineEditAction(await ctx.screen.nextKey());
+      const action = lineEditAction(await ctx.nextKey());
       if (!action) continue;
       if (action.kind === "cancel") return null;
       if (action.kind === "submit") {
@@ -162,7 +173,7 @@ export async function showGuardTripForm(
 
   while (true) {
     renderLines(choices.map((c, i) => `${i === selected ? ">" : " "} ${c.label}`));
-    const keyEvent = await ctx.screen.nextKey();
+    const keyEvent = await ctx.nextKey();
     if (keyEvent.key === "c" && keyEvent.ctrl) {
       ctx.cleanup();
       return { type: "reject" };
@@ -245,7 +256,7 @@ export async function showBranchPicker(
     );
   while (true) {
     render();
-    const keyEvent = await ctx.screen.nextKey();
+    const keyEvent = await ctx.nextKey();
     if (keyEvent.key === "c" && keyEvent.ctrl) {
       ctx.cleanup();
       return null;
@@ -325,7 +336,7 @@ export async function showCheckpointsPanel(
   render();
 
   while (true) {
-    const keyEvent = await ctx.screen.nextKey();
+    const keyEvent = await ctx.nextKey();
     if (keyEvent.key === "c" && keyEvent.ctrl) {
       ctx.cleanup();
       return null;
@@ -526,7 +537,7 @@ export async function showThreadPicker(
 
   while (true) {
     render();
-    const keyEvent = await ctx.screen.nextKey();
+    const keyEvent = await ctx.nextKey();
     if (keyEvent.key === "c" && keyEvent.ctrl) {
       ctx.cleanup();
       return null;

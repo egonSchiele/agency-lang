@@ -92,8 +92,9 @@ In `lib/debugger/attach/protocol.ts`:
 
 - `client`: `{ type: "client", kind: "terminal" | "cli" | "probe" }`, the
   first message a connection sends. A connection whose first message is
-  anything else is treated as `terminal`, so a debugger built before
-  this PR still works against a newer run and the other way round.
+  anything else is refused: the run cannot tell what it is, and both
+  ends ship in one package, so there is no older debugger to keep
+  working.
 - `status`: `{ type: "status", terminal: boolean, cli: { lastVisit: string } | null, stopped: boolean }`,
   the answer to a `probe`.
 - `finished` is unchanged. `hello` is unchanged.
@@ -210,7 +211,9 @@ memory channel pair and the agent-shaped fixture, scripted the way
   sent `finished` and closed.
 - `probe` is answered with `status` and nothing else, and no driver is
   installed (the program runs through).
-- An old client that sends no `client` message is treated as a terminal.
+- A connection whose first message is not `client` is refused.
+- A visit that replies and closes in the same tick: the memory pair
+  delivers the close first, unlike a socket, so the test waits a turn.
 
 Keep the existing `attach.test.ts` and `server.test.ts` passing as they
 are: the terminal path's behaviour is unchanged.

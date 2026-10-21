@@ -1,0 +1,23 @@
+// Tools for the debugger's view of what the program is waiting on.
+// `holdOn` waits on the JavaScript helper until the test lets it go, so a
+// test can install a debugger while the tool runs and check that the wait
+// it was in is reported at once; `failing` throws from JavaScript, so a
+// test can check that a wait is closed when its body throws.
+import { waitForTest, failForTest } from "./waiter.js"
+
+def holdOn(note: string): string {
+  """Waits until the test releases it."""
+  const started = waitForTest()
+  return "held " + note
+}
+
+def failing(): string {
+  """Throws."""
+  const value = failForTest()
+  return value
+}
+
+node main(): string {
+  const answer = llm("hold", { tools: [holdOn, failing] })
+  return answer
+}

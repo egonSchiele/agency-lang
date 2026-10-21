@@ -29,6 +29,7 @@ const fixtures = {
   awaitsHelper: "awaits-helper",
   agentShaped: "agent-shaped",
   noReturn: "no-return",
+  llmAfterStep: "llm-after-step",
 };
 
 function compiledPath(name: string): string {
@@ -276,6 +277,32 @@ describe("a debugger attached over a channel", () => {
     } finally {
       functionRefReviver.registry = registry;
     }
+  });
+
+  it("what the program is waiting on reaches the UI side", async () => {
+    await withLLMMocks([{ return: "hi" }], async () => {
+      const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
+      const { io } = attachWithMemoryChannel(mod, [{ type: "continue" }]);
+
+      expect((await mod.main()).data).toBe("hi");
+
+      expect(io.busyCalls.map((entries) => entries.map((entry) => entry.kind))).toEqual([
+        ["model"],
+        [],
+      ]);
+      expect(io.busyCalls[0][0].label).toBe("round 1");
+    });
+  });
+
+  it("a setBusy notice with entries of the wrong shape reaches the UI as an empty list", async () => {
+    const [runSide, uiSide] = memoryChannelPair();
+    const io = new TestDebuggerIO([]);
+    serveDebuggerIO(uiSide, io);
+
+    runSide.send({ type: "notice", method: "setBusy", args: [[{ token: 1 }, "not an entry"]] });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(io.busyCalls).toEqual([[]]);
   });
 
   it("the stop inside a tool call reaches the UI side with its branch", async () => {

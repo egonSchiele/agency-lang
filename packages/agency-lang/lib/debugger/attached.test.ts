@@ -13,11 +13,13 @@ import { DebuggerDriver } from "./driver.js";
 import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "./testHelpers.js";
 import type { DebuggerCommand } from "./types.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
+import { statementStepPath } from "@/runtime/promptRunner.js";
 import { isPaused } from "@/runtime/pause.js";
 import { debugRunOfStack } from "@/runtime/debugRun.js";
 import type { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import type { DebugStopData } from "@/runtime/debugger.js";
 import * as helper from "../../tests/debugger/waiter.js";
+import type { BusyEntry } from "./types.js";
 
 const fixtures = {
   stepTest: "step-test",
@@ -32,6 +34,7 @@ const fixtures = {
   agentEndCallback: "agent-end-callback",
   pauses: "pauses",
   ask: "ask",
+  waitingTool: "waiting-tool",
 };
 
 /** An IO that never answers: the program stays at its stop until the
@@ -841,5 +844,226 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     expect(result.data).toBe(3);
     expect(io.renderCalls).toHaveLength(2);
     expect(driver.debuggerState.attached).toBeUndefined();
+  });
+});
+
+describe("what the program is waiting on", () => {
+  /** The kinds in each list the IO was handed, in order. */
+  function kinds(io: TestDebuggerIO): string[][] {
+    return io.busyCalls.map((entries) => entries.map((entry) => entry.kind));
+  }
+
+  it("a model request is reported while it runs, under continue", async () => {
+    await withLLMMocks([{ return: "hi" }], async () => {
+      const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
+      const { io } = attachTo(mod, [{ type: "continue" }]);
+
+      expect((await mod.main()).data).toBe("hi");
+
+      expect(kinds(io)).toEqual([["model"], []]);
+      const entry: BusyEntry = io.busyCalls[0][0];
+      expect(entry.label).toBe("round 1");
+      expect(entry.location.moduleId).toContain("llm-after-step");
+      expect(entry.location.scopeName).toBe("main");
+      expect(entry.location.stepPath).toMatch(/^\d+\/initialLlmCall$/);
+      expect(entry.location.branchPath).toEqual([]);
+      expect(entry.debugRun).not.toBe("");
+      expect(entry.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(typeof entry.token).toBe("number");
+    });
+  });
+
+  it("a model request is reported while next runs over its statement", async () => {
+    await withLLMMocks([{ return: "hi" }], async () => {
+      const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
+      const { io } = attachTo(mod, [{ type: "step" }, { type: "next" }, { type: "continue" }]);
+
+      expect((await mod.main()).data).toBe("hi");
+
+      expect(kinds(io)).toContainEqual(["model"]);
+    });
+  });
+
+  it("a tool call is reported in its own wait, under the llm() statement", async () => {
+    const mocks = [{ toolCall: { name: "writeUp", args: { notes: "n" } } }, { return: "final" }];
+    await withLLMMocks(mocks, async () => {
+      const mod = await freshImport(compiledPath(fixtures.agentShaped));
+      const { io } = attachTo(mod, [{ type: "continue" }]);
+
+      expect((await mod.main("task")).data).toBe("final");
+
+      // The request closes before the tool round opens, and the next
+      // request opens after it.
+      expect(kinds(io)).toEqual([["model"], [], ["tool"], [], ["model"], []]);
+      const tool = io.busyCalls[2][0];
+      expect(tool.label).toBe('writeUp(notes: "n")');
+      expect(tool.location.stepPath).toMatch(/\/round\.0\.tool\..*\.invoke$/);
+      expect(tool.location.branchPath).toHaveLength(1);
+      // The same statement as the request before it.
+      expect(statementStepPath(tool.location.stepPath)).toBe(
+        statementStepPath(io.busyCalls[0][0].location.stepPath),
+      );
+    });
+  });
+
+  it("a model request inside a tool is reported with the tool, on its branch", async () => {
+    const mocks = [
+      { toolCall: { name: "search", args: { query: "cats", breakHere: false } } },
+      { return: "a summary" },
+      { return: "final" },
+    ];
+    await withLLMMocks(mocks, async () => {
+      const mod = await freshImport(compiledPath(fixtures.agentShaped));
+      const { io } = attachTo(mod, [{ type: "continue" }]);
+
+      expect((await mod.main("task")).data).toBe("final");
+
+      const nested = io.busyCalls.find((entries) => entries.length === 2);
+      expect(nested).toBeDefined();
+      expect(nested!.map((entry) => entry.kind)).toEqual(["tool", "model"]);
+      expect(nested![1].location.branchPath).toEqual(nested![0].location.branchPath);
+      expect(nested![1].location.depth).toBeGreaterThan(nested![0].location.depth);
+    });
+  });
+
+  it("a tool resumed after the caller answers its interrupt is reported again", async () => {
+    await withLLMMocks(
+      [{ toolCall: { name: "confirm", args: { note: "x" } } }, { return: "done" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.agentShaped));
+        const { io } = attachTo(mod, [{ type: "continue" }, { type: "continue" }]);
+
+        const paused = await mod.main("task");
+        expect(hasInterrupts(paused.data)).toBe(true);
+        // The wait closed when the tool bailed out with its interrupt.
+        expect(io.busyCalls.at(-1)).toEqual([]);
+        const toolListsBefore = kinds(io).filter((list) => list[0] === "tool").length;
+        expect(toolListsBefore).toBe(1);
+
+        const final = await mod.respondToInterrupts(paused.data, [{ type: "approve" }]);
+
+        expect(final.data).toBe("done");
+        expect(kinds(io).filter((list) => list[0] === "tool").length).toBe(2);
+      },
+    );
+  });
+
+  it("a tool whose body throws closes its wait", async () => {
+    await withLLMMocks(
+      [{ toolCall: { name: "failing", args: {} } }, { return: "after" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.waitingTool));
+        const { io } = attachTo(mod, [{ type: "continue" }]);
+
+        expect((await mod.main()).data).toBe("after");
+
+        expect(kinds(io)).toContainEqual(["tool"]);
+        expect(io.busyCalls.at(-1)).toEqual([]);
+      },
+    );
+  });
+
+  it("at a stop inside a tool call, nothing is waiting", async () => {
+    const mocks = [
+      { toolCall: { name: "search", args: { query: "cats", breakHere: true } } },
+      { return: "a summary" },
+      { return: "final" },
+    ];
+    await withLLMMocks(mocks, async () => {
+      const mod = await freshImport(compiledPath(fixtures.agentShaped));
+      let atToolStop: BusyEntry[] | undefined;
+      const io = new (class extends TestDebuggerIO {
+        override async render(checkpoint?: Checkpoint, stop?: DebugStopData): Promise<void> {
+          await super.render(checkpoint, stop);
+          if (stop !== undefined && stop.branchPath.length > 0) {
+            atToolStop = this.busyCalls.at(-1) ?? [];
+          }
+        }
+      })([{ type: "continue" }, { type: "continue" }]);
+      attachTo(mod, [], io);
+
+      expect((await mod.main("task")).data).toBe("final");
+
+      expect(atToolStop).toEqual([]);
+    });
+  });
+
+  it("a debugger installed while a tool runs is told of the wait at once", async () => {
+    await withLLMMocks(
+      [{ toolCall: { name: "holdOn", args: { note: "x" } } }, { return: "done" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.waitingTool));
+        const running = mod.main();
+        await helper.untilWaiting();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const { io } = attachTo(mod, [{ type: "continue" }]);
+
+        expect(io.busyCalls).toHaveLength(1);
+        const [entry] = io.busyCalls[0];
+        expect(entry.kind).toBe("tool");
+        expect(entry.label).toBe('holdOn(note: "x")');
+        expect(entry.elapsedMs).toBeGreaterThanOrEqual(20);
+        helper.releaseWaiter();
+        expect((await running).data).toBe("done");
+        expect(io.busyCalls.at(-1)).toEqual([]);
+      },
+    );
+  });
+
+  it("a debugger that detaches during a tool call and attaches again is told of the wait", async () => {
+    await withLLMMocks(
+      [{ toolCall: { name: "holdOn", args: { note: "x" } } }, { return: "done" }],
+      async () => {
+        const mod = await freshImport(compiledPath(fixtures.waitingTool));
+        const running = mod.main();
+        await helper.untilWaiting();
+        const { driver, io } = attachTo(mod, [{ type: "continue" }]);
+        expect(io.busyCalls).toHaveLength(1);
+
+        driver.detach();
+        driver.attach();
+
+        // The same wait, still open, is news to the new session.
+        expect(io.busyCalls).toHaveLength(2);
+        expect(io.busyCalls[1].map((entry) => entry.label)).toEqual(['holdOn(note: "x")']);
+        helper.releaseWaiter();
+        expect((await running).data).toBe("done");
+        expect(io.busyCalls.at(-1)).toEqual([]);
+      },
+    );
+  });
+
+  it("another run's waits are not reported while a run is debugged", async () => {
+    await withLLMMocks([{ return: "one" }, { return: "two" }], async () => {
+      const mod = await freshImport(compiledPath(fixtures.llmAfterStep));
+      let release: (() => void) | undefined;
+      const io = new (class extends TestDebuggerIO {
+        private asked = 0;
+        override async waitForCommand(): Promise<DebuggerCommand> {
+          this.asked += 1;
+          if (this.asked === 1) {
+            // Held at the first stop while the other run goes through.
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+          }
+          return await super.waitForCommand();
+        }
+      })([{ type: "continue" }]);
+      attachTo(mod, [], io);
+
+      const debugged = mod.main();
+      await untilRendered(io, 1);
+      const callsAtStop = io.busyCalls.length;
+      expect((await mod.main()).data).toBe("one");
+      // The other run's model call was reported as nothing to show.
+      for (const list of io.busyCalls.slice(callsAtStop)) {
+        expect(list).toEqual([]);
+      }
+      release!();
+      expect((await debugged).data).toBe("two");
+      expect(kinds(io).slice(callsAtStop)).toContainEqual(["model"]);
+    });
   });
 });

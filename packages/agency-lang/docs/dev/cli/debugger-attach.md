@@ -16,7 +16,7 @@ The design is `docs/superpowers/specs/2026-10-20-attach-to-a-running-program.md`
 
 ## What crosses the channel
 
-A checkpoint crosses as `checkpoint.toJSON()` run through `nativeTypeReplacer`, the way `debugStep` prepares the `onCheckpoint` payload, and comes back through `nativeTypeReviver` and `Checkpoint.fromJSON`. The rewind selector and the checkpoints panel are sent the whole window of checkpoints, not summaries: both show the state at each checkpoint as the selection moves, so a summary would not do. They are sent only when the person opens the panel, and the per-message cap is sized for them. `DebugStopData`, `GuardTripData`, `DebuggerCommand`, and `InterruptResponse` are plain data already.
+A checkpoint crosses as `checkpoint.toJSON()` run through `nativeTypeReplacer`, the way `debugStep` prepares the `onCheckpoint` payload, and comes back through `nativeTypeReviver` and `Checkpoint.fromJSON`. The rewind selector and the checkpoints panel are sent the whole window of checkpoints, not summaries: both show the state at each checkpoint as the selection moves, so a summary would not do. They are sent only when the person opens the panel, and the per-message cap is sized for them. `DebugStopData`, `GuardTripData`, `DebuggerCommand`, and `InterruptResponse` are plain data already, and so is the list of `BusyEntry` the `setBusy` notice carries, what the program is waiting on (see "What the program is waiting on" in `debugger.md`); the UI side takes the list as sent.
 
 ## Registration
 

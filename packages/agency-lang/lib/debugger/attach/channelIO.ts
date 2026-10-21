@@ -10,6 +10,7 @@ import type { FunctionParameter } from "../../types.js";
 import type { GuardTripData } from "../guardAnswer.js";
 import {
   DebuggerDetached,
+  type BusyEntry,
   type DebuggerCommand,
   type DebuggerIO,
   type DebuggerMode,
@@ -146,6 +147,10 @@ export class ChannelDebuggerIO implements DebuggerIO {
 
   setOverrides(overrides: Record<string, unknown>): void {
     this.notice("setOverrides", [overrides]);
+  }
+
+  setBusy(entries: BusyEntry[]): void {
+    this.notice("setBusy", [entries]);
   }
 
   async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {

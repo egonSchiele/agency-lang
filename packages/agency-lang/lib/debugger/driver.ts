@@ -110,6 +110,13 @@ export class DebuggerDriver {
           inputOverride: (prompt: string) => this.ui.promptForInput(prompt),
         };
     this.debuggerState = new DebuggerState(opts.rewindSize);
+    // What the program is waiting on goes straight to the UI; the
+    // runtime sends the whole list each time, so nothing is kept here.
+    this.debuggerState.onWait = (entries) => {
+      if (!this.detachedNow()) {
+        this.ui.setBusy(entries);
+      }
+    };
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
 
@@ -140,6 +147,10 @@ export class DebuggerDriver {
     }
     this.detachRequested = false;
     this.debuggerState.ownedRun = null;
+    // A driver that attaches again is a new session: a wait still open
+    // from before the detach is news to it, so the last report is
+    // forgotten and the install below reports the open waits afresh.
+    this.debuggerState.reportedWaits = [];
     this.debuggerState.attached = {
       run: (result, leg) => this.runAttached(result, leg),
       finished: (result) => this.finishedAttached(result),

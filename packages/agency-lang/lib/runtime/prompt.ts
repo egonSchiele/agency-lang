@@ -1643,18 +1643,19 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             // state in place via runInvokeStep; the step completes
             // (returns void unless interrupted) and is marked done so
             // resume skips this whole block.
-            await b.step(`round.${round}.tool.${callSlug}.invoke`, async () => {
-              const outcome = await runInvokeStep({
-                run: branchRun,
-                handler,
-                toolCall,
-                namedArgs,
-                callKey,
-                branchKey,
-                branchStack,
-                round,
-                invocationIndex: index,
-              });
+            const call = {
+              run: branchRun,
+              handler,
+              toolCall,
+              namedArgs,
+              callKey,
+              branchKey,
+              branchStack,
+              round,
+              invocationIndex: index,
+            };
+            await pr.invokeTool(b, `round.${round}.tool.${callSlug}.invoke`, call, async () => {
+              const outcome = await runInvokeStep(call);
               toolResult = outcome.toolResult;
               invokeOutcome = outcome.invokeOutcome;
               if (outcome.invokeOutcome === "success") {

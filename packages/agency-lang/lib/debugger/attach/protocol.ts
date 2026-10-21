@@ -31,6 +31,7 @@ export const NOTICE_METHODS = [
   "log",
   "setMode",
   "setOverrides",
+  "setBusy",
   "appendStdout",
   "renderActivityOnly",
   "startSpinner",

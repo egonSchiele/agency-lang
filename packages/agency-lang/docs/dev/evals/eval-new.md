@@ -1,20 +1,23 @@
 # `agency eval new`: a form that writes a test
 
-`agency eval new <suite-dir>` opens a five-field form and, on save, writes
-one test folder into the suite: `test.json`, plus a copy of a files
-directory when one was named. It writes no grader module. A test with a
-`goal` and no `graders.ts` is scored by the bundled goal judge, which is
-the grader the form means. This page is the map of the code, with the rules
-in it that are easy to break.
+`agency eval new <suite-dir>` opens a five-field form with a graders
+section under it and, on save, writes one test folder into the suite:
+`test.json`, a `graders.json` when at least one grader was added, plus a
+copy of a files directory when one was named. It writes no grader module.
+A test with a `goal` and no graders is scored by the bundled goal judge,
+which is the grader the form means when the section is empty. This page
+is the map of the code, with the rules in it that are easy to break.
 
 ## The files
 
 ```text
 scripts/agency.ts              registers `eval new`
 lib/cli/eval/new.ts            the terminal, one key table per mode, handleKey, runLoop
-lib/eval/newTest/form.ts       FormState, FormAction, reduceForm, FIELDS          (pure)
-lib/eval/newTest/formView.ts   renderForm(state): Element                          (pure)
-lib/eval/newTest/write.ts      validateForm, testJsonFor, writeTest, TestWriteError, nextCommands
+lib/eval/newTest/form.ts       FormState, FormAction, reduceForm, FIELDS, Row, rowsOf (pure)
+lib/eval/newTest/graders.ts    the questions per grader kind as tables; answers <-> graders.json objects (pure)
+lib/eval/newTest/formView.ts   renderForm, bodyLines, scrolledToCursor              (pure)
+lib/eval/newTest/write.ts      validateForm, testJsonFor, gradersJsonText, writeTest, TestWriteError, nextCommands
+lib/eval/gradersJson/schema.ts checkSpec and graderProblem, which the form validates a grader through
 lib/eval/newTest/editor.ts     editorCommand, withTerminalReleased, openInEditor
 lib/tui/lineEditor.ts          one-line editing keys, shared with the label screen
 lib/tui/untrusted.ts           sanitizeUntrusted and pastedText, shared the same way
@@ -71,6 +74,103 @@ key dismisses could not promise that.
 A keystroke clears the footer message. A failed save puts the cursor on
 the field with the problem, so the next thing typed fixes it in place.
 
+## The graders section
+
+Under the five fields is a section headed `graders`. Ctrl+N adds one. Its
+first row asks what to check, and the rows below it appear as the answers
+come:
+
+```text
+graders
+  1. what to check    count things in the trace
+     count            tool calls
+     which tool       fetchMarkdown
+     only repeats     yes
+     at most          0
+     name             no-repeated-fetches
+     must pass        yes
+     weight           1 (optional)
+```
+
+The cursor is a `Row`: a field, or one question of one grader
+(`{ kind: "grader", index, question }`). `rowsOf(state)` lists every row in
+order, and movement, "last row", and the view all read it, so a row that
+is not in that list cannot be reached.
+
+The questions live in `graders.ts` as tables. `KIND_QUESTION` is the first
+row. `KIND_QUESTIONS` holds one list per kind, and `TAIL_QUESTIONS` is what
+every kind ends with: name, must pass, passing score (a must-pass goal
+only), weight. A sixth kind is one entry in `KIND_QUESTIONS` and one
+label in `KIND_LABELS`. The measure and count options are built from the
+schema's `MEASURES` and `COUNTS` through label tables typed on them, so a
+measure added to the schema without a label fails the typecheck here.
+
+Each question has an `output` that says how its answer is written:
+`text`, `number`, `yesNo`, `list`, or `none`. One table, `OUTPUTS`, holds
+the conversion in both directions, and nothing else in the module turns an
+answer into a field. `scoring` on a number grader is the one `none`
+question: it only decides whether `max` or `full` and `zero` are asked.
+
+Answers are never pruned. A question with a `when` is hidden while its
+`when` is false, and `questionsFor` filters the rows, so changing a count
+from tool calls to errors hides the tool rows and changing it back shows
+them with their old values. `specObjectFor` writes only the rows that are
+shown, so the hidden tool name does not reach the file. A question with
+`repeat: true` (a checklist's points) is expanded to one row per filled
+answer plus one empty row, named `point.0`, `point.1`, and so on.
+
+A choice row is picked with Left and Right. Letters type nothing there:
+the reducer's `withEdit` returns the state unchanged for a choice row, so
+`s` on "must pass" cannot change it. The form's key table still binds no
+letter. `AUTO_FILL` is a table of defaults applied after a pick; its one
+row fills `passingScore` with `0.5` when a goal grader becomes must-pass,
+so a second default is one more row.
+
+Ctrl+X on a grader's first row asks `remove this grader?  y / n`, a third
+question mode beside save and quit. It is Ctrl+X and not Ctrl+D because
+`cursorBindings` in `lib/tui/keymap.ts` pages down on Ctrl+D in every
+other Agency TUI.
+
+### Validation goes through the parser
+
+The form holds no rule of its own about what a grader needs. `validateForm`
+hands `specObjectFor(draft)` to `graderProblem` in
+`lib/eval/gradersJson/schema.ts`, which is `parseSpec`'s check with the
+problem returned as data instead of thrown: the field it is about, or
+`null` for a rule that spans fields, and the parser's words. `rowForField`
+turns that into a row: a field that names a shown question is that row, a
+repeating question's list key (`points`) is its first row (`point.0`), and
+`kind` or a cross-field rule is the kind row. An unpicked kind reaches the
+parser as `kind: ""` and comes back as `unknown kind ""`. The one check the
+parser makes only at file level, two graders with one name, is repeated
+per row so the cursor lands on the second one's name.
+
+A goal is required only while there are no graders, because the bundled
+goal judge scores only a test with none (`goalJudge` in
+`lib/eval/grading/gradeRun.ts`). For the same reason the goal row shows
+`not judged while the test has graders; add a goal grader to judge it`
+once a grader exists. Without that line a person who filled the goal and
+added a count grader would believe both run.
+
+### Scrolling
+
+A test with several graders is taller than a terminal. The body is a flat
+list of one-line elements, `bodyLines(state, width)`, each tagged with the
+row it belongs to, and `renderForm` draws the slice from `state.scrollTop`.
+The toolkit's `scrollable` style could not do this: it shifts an element's
+own text lines, and a column's children stay where the layout put them
+(`lib/tui/render/renderer.ts`, `renderTextContent`). So the typed cursor
+row, which was one `textInput` of height `n`, is now `n` one-line
+elements with the text input last; the block cursor is drawn as a cell at
+the end of the input's last line, so the screen is the same.
+
+`scrolledToCursor` runs after every key in `handleKey`. It finds the last
+line of the cursor row in `bodyLines` and moves `scrollTop` with
+`followCursor` and `clampScroll` from `lib/tui/scroll.ts`, so a row that
+vanished (a grader removed, a count changed) is absorbed too. One function
+computes the wrapping, and drawing and scrolling both read it. A second
+copy of the wrapping would drift.
+
 ## Modes and intents
 
 The form and its two questions are one state with a `mode`. Every
@@ -100,8 +200,10 @@ being built on. The target is checked again right before the rename,
 because a rename onto an existing empty directory can succeed silently.
 
 A problem the user can fix is thrown as a `TestWriteError` that names the
-field, so the footer message lands the cursor on `files` for a bad files
-directory and on `id` for the rest.
+row, so the footer message lands the cursor on `files` for a bad files
+directory and on `id` for the rest. `graders.json` is written into the
+staging folder beside `test.json` when there is at least one grader, from
+`gradersJsonText`, and never when there is none.
 
 The files directory is copied byte for byte with `copyFileSync`, walking
 the tree with `walkTreeRefusingSymlinks` from the grader-files snapshot. A
@@ -190,7 +292,8 @@ a text input leaves the cursor out when its last row is full.
 
 ## Testing
 
-`form.test.ts`, `write.test.ts` and `editor.test.ts` need no terminal.
+`form.test.ts`, `graders.test.ts`, `write.test.ts` and `editor.test.ts`
+need no terminal.
 `formView.test.ts` renders through `Screen` into a `FrameRecorder` and
 pins the rows. `new.test.ts` drives the whole command with a
 `ScriptedInput`, feeding each key once the frame shows the state a person

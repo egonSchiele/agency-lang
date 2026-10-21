@@ -493,3 +493,22 @@ describe("UIState", () => {
     });
   });
 });
+
+describe("loadSourceMap", () => {
+  it("survives a compiled module that fails to load, with a line in the log", async () => {
+    const state = new UIState();
+
+    const loaded = await state.loadSourceMap("tests/debugger/broken-module.agency");
+
+    expect(loaded).toBe(false);
+    expect(state.hasSourceMap("tests/debugger/broken-module.agency")).toBe(false);
+    expect(state.getActivityLog().join("\n")).toMatch(/Could not load module .*broken on purpose/);
+  });
+
+  it("says when there is no compiled module to load", async () => {
+    const state = new UIState();
+
+    expect(await state.loadSourceMap("tests/debugger/no-such-module.agency")).toBe(false);
+    expect(state.getActivityLog().join("\n")).toContain("Could not find compiled JS file");
+  });
+});

@@ -109,8 +109,14 @@ export class TestDebuggerIO implements DebuggerIO {
   async showCheckpointsPanel(_checkpoints: Checkpoint[]): Promise<void> {}
   appendStdout(_text: string): void {}
   renderActivityOnly(): void {}
-  startSpinner(): void {}
-  stopSpinner(): void {}
+  /** Whether the driver has the UI spinning: the program is running. */
+  spinning = false;
+  startSpinner(): void {
+    this.spinning = true;
+  }
+  stopSpinner(): void {
+    this.spinning = false;
+  }
   destroy(): void {}
 }
 

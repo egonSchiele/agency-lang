@@ -9,7 +9,8 @@ import {
   type LoopState,
   type ThreadSummary,
 } from "../runtime/state/checkpointStore.js";
-import type { BusyEntry, DebugStopData } from "../runtime/debugger.js";
+import type { BusyEntry, DebugStopData, StopLocation } from "../runtime/debugger.js";
+import { withSince, type BusyShown } from "./busy.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
@@ -50,8 +51,9 @@ export class UIState {
   private globals: ValWithOverride[] = [];
   private stdoutContent: string[] = [];
   private sourceMapCache: Record<string, SourceMap> = {};
-  /** What the program is waiting on, as the run last reported it. */
-  private busy: BusyEntry[] = [];
+  /** What the program is waiting on, as the run last reported it, each
+   *  with the time this UI first saw it. */
+  private busy: BusyShown[] = [];
 
   constructor() {
     this.activityLog = [];
@@ -238,33 +240,10 @@ export class UIState {
     const location = this.location;
     const moduleId = location.moduleId;
 
-    if (this.sourceMapCache[moduleId]) {
-      this.sourceMap = this.sourceMapCache[moduleId];
-    } else {
-      const jsFile = this.agencyToJsFile(moduleId);
-      if (!jsFile) {
-        this.log(`Could not find compiled JS file for module ${moduleId}`);
-        return;
-      }
-      // Dynamically import the compiled module
-      const absOutput = path.resolve(jsFile);
-      // eslint-disable-next-line no-restricted-syntax -- compiled module path is only known at runtime
-      const mod = await import(absOutput);
-      if (!mod) {
-        this.log(`Could not import module ${absOutput} for checkpoint`);
-        return;
-      }
-      if (!mod.__sourceMap) {
-        this.log(`No source map found in module ${absOutput}`);
-        return;
-      }
-      this.sourceMap = mod.__sourceMap ?? {};
-      if (!this.sourceMap) {
-        this.log(`Source map is undefined in module ${absOutput}`);
-        return;
-      }
-      this.sourceMapCache[moduleId] = this.sourceMap;
+    if (!(await this.loadSourceMap(moduleId))) {
+      return;
     }
+    this.sourceMap = this.sourceMapCache[moduleId];
     // Look up source location from the source map
     const scopeKey = `${location.moduleId}:${location.scopeName}`;
     const scopeMap = this.sourceMap?.[scopeKey];
@@ -291,14 +270,67 @@ export class UIState {
     this.pendingOverrides = { ...overrides };
   }
 
-  /** Replace the list of open waits with the run's latest. */
-  setBusy(entries: BusyEntry[]) {
-    this.busy = [...entries];
+  /** Replace the list of open waits with the run's latest, keeping the
+   *  time each one was first seen (`withSince`). */
+  setBusy(entries: BusyEntry[], now: number = Date.now()) {
+    this.busy = withSince(this.busy, entries, now);
   }
 
   /** The open waits, the one that began last at the end. */
-  getBusy(): BusyEntry[] {
+  getBusy(): BusyShown[] {
     return this.busy;
+  }
+
+  /** The source line of a stop's or a wait's location, from the source
+   *  map of its module when that map has been loaded (`loadSourceMap`);
+   *  undefined when it has not, or has no entry for the step. */
+  lineFor(location: StopLocation): number | undefined {
+    const scopeMap =
+      this.sourceMapCache[location.moduleId]?.[`${location.moduleId}:${location.scopeName}`];
+    const entry = scopeMap?.[statementStepPath(location.stepPath)];
+    // The line the map records is the one before the statement runs.
+    return entry === undefined ? undefined : entry.line + 1;
+  }
+
+  /** Whether the module's source map is loaded. */
+  hasSourceMap(moduleId: string): boolean {
+    return this.sourceMapCache[moduleId] !== undefined;
+  }
+
+  /** Load `moduleId`'s source map into the cache from its compiled
+   *  module; false, with a line in the log, when it cannot be. */
+  async loadSourceMap(moduleId: string): Promise<boolean> {
+    if (this.sourceMapCache[moduleId]) {
+      return true;
+    }
+    const jsFile = this.agencyToJsFile(moduleId);
+    if (!jsFile) {
+      this.log(`Could not find compiled JS file for module ${moduleId}`);
+      return false;
+    }
+    // Dynamically import the compiled module. Attached, this runs in the
+    // debugger's process, where the program's dependencies may not load;
+    // a failure costs the source pane its line, not the debugger.
+    const absOutput = path.resolve(jsFile);
+    let mod: { __sourceMap?: SourceMap } | undefined;
+    try {
+      // eslint-disable-next-line no-restricted-syntax -- compiled module path is only known at runtime
+      mod = await import(absOutput);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`Could not load module ${absOutput} for its source map: ${message}`);
+      return false;
+    }
+    if (!mod) {
+      this.log(`Could not import module ${absOutput} for checkpoint`);
+      return false;
+    }
+    if (!mod.__sourceMap) {
+      this.log(`No source map found in module ${absOutput}`);
+      return false;
+    }
+    this.sourceMapCache[moduleId] = mod.__sourceMap;
+    return true;
   }
 
   /** The threads the stopped code sees, the active one marked. */
@@ -314,8 +346,10 @@ export class UIState {
     return this.checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
   }
 
+  /** The module the source pane shows: the stop's, or, before any stop
+   *  while the program runs, the one it is waiting in. */
   getModuleId() {
-    return this.location?.moduleId || "unknown module";
+    return this.location?.moduleId || this.busy.at(-1)?.entry.location.moduleId || "unknown module";
   }
 
   /** The module the globals pane shows: the viewed frame's, which after
@@ -329,10 +363,9 @@ export class UIState {
     return this.location;
   }
 
+  /** The stop's line, or -1 before a stop or when the map has no entry
+   *  for it; `setSourceMap` logs the reason once, so a redraw does not. */
   getCurrentLine() {
-    if (!this.currentLine) {
-      this.log(`Current line not available, module id: ${this.getModuleId()}`);
-    }
     return this.currentLine || -1;
   }
 
@@ -415,7 +448,12 @@ export class UIState {
   }
 
   clone(): UIState {
-    return UIState.fromJSON(this.toJSON());
+    const copy = UIState.fromJSON(this.toJSON());
+    // What the program is waiting on is the run's, not the checkpoint's,
+    // and an overlay drawn from a copy shows it too.
+    copy.busy = this.busy;
+    copy.sourceMapCache = this.sourceMapCache;
+    return copy;
   }
 
   private isInternalVar(key: string): boolean {

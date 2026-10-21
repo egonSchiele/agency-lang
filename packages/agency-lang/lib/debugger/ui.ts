@@ -17,7 +17,9 @@ import type { FunctionParameter } from "../types.js";
 import type { BusyEntry, DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
 import type { Hello } from "./attach/protocol.js";
 import { UIState } from "./uiState.js";
+import { busyText, formatElapsed, type BusyShown } from "./busy.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
+import { uniq } from "@/utils.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
 import {
   showRewindSelector,
@@ -143,10 +145,13 @@ export class DebuggerUI implements DebuggerIO {
   private quitListeners: (() => void)[] = [];
 
   lastFrame: Frame | null = null;
+  /** The clock the elapsed figures count on; a test injects its own. */
+  private readonly now: () => number;
 
-  constructor(screen: Screen) {
+  constructor(screen: Screen, opts: { now?: () => number } = {}) {
     this.screen = screen;
     this.state = new UIState();
+    this.now = opts.now ?? (() => Date.now());
   }
 
   // --- Formatting helpers ---
@@ -246,9 +251,14 @@ export class DebuggerUI implements DebuggerIO {
     const currentLine = this.state.getCurrentLine();
     const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
     const lines = readHighlightedSourceLines(filePath);
+    // The lines the program is waiting on in this module, and the one
+    // the bar names, which carries the elapsed figure.
+    const waits = this.busyLines(moduleId);
+    const named = waits.at(-1);
 
     const windowSize = 20;
-    const center = currentLine ? currentLine - 1 : 0;
+    const focus = currentLine > 0 ? currentLine : (named?.line ?? 1);
+    const center = focus - 1;
     const start = Math.max(0, center - Math.floor(windowSize / 2));
     const end = Math.min(lines.length, start + windowSize);
 
@@ -262,11 +272,45 @@ export class DebuggerUI implements DebuggerIO {
         // sequences (which contain `[` and `m`, not braces) pass through
         // unchanged and are picked up by the renderer's ANSI parser.
         const lineText = escapeStyleTags(line);
-        return currentLine !== null && lineNum === currentLine
-          ? `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`
-          : `  ${numStr}  ${lineText}`;
+        // The stop's line first: the next statement to run is here, and
+        // the person can act on it. A wait's line is where execution is
+        // somewhere inside the statement.
+        if (currentLine !== null && lineNum === currentLine) {
+          return `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`;
+        }
+        if (waits.some((wait) => wait.line === lineNum)) {
+          const figure =
+            named?.line === lineNum
+              ? `  {bold}${formatElapsed(this.now() - named.shown.since)}{/bold}`
+              : "";
+          return `{blue-bg}▶ ${numStr}  ${lineText}${figure}{/blue-bg}`;
+        }
+        return `  ${numStr}  ${lineText}`;
       })
       .join("\n");
+  }
+
+  /** The open waits in `moduleId` whose line the UI knows, the one that
+   *  began last at the end. */
+  private busyLines(moduleId: string): { shown: BusyShown; line: number }[] {
+    const lines: { shown: BusyShown; line: number }[] = [];
+    for (const shown of this.state.getBusy()) {
+      if (shown.entry.location.moduleId !== moduleId) continue;
+      const line = this.state.lineFor(shown.entry.location);
+      if (line !== undefined) lines.push({ shown, line });
+    }
+    return lines;
+  }
+
+  /** What the program is waiting on, as one line: the wait that began
+   *  last, and how many others are open. Empty when nothing is. */
+  private busyBarText(): string {
+    const busy = this.state.getBusy();
+    const last = busy.at(-1);
+    if (last === undefined) return "";
+    const line = this.state.lineFor(last.entry.location);
+    const more = busy.length > 1 ? ` · +${busy.length - 1} more` : "";
+    return `${escapeStyleTags(busyText(last, line, this.now()))}${more}`;
   }
 
   private buildThreadsContent(): string {
@@ -381,7 +425,12 @@ export class DebuggerUI implements DebuggerIO {
       this.attached === null
         ? ""
         : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
+    // At a stop with a wait still open, an `async` call in a model
+    // request for one, the wait is named here, with its time as of the
+    // stop; the command bar names it while the program runs.
+    const busy = this.spinnerInterval === null ? this.busyBarText() : "";
+    const waiting = busy === "" ? "" : ` | waiting: ${busy}`;
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${waiting}{/gray-fg}`;
   }
 
   // --- Element tree builders ---
@@ -560,7 +609,15 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   setBusy(entries: BusyEntry[]): void {
-    this.state.setBusy(entries);
+    this.state.setBusy(entries, this.now());
+    // A wait in a module whose source map is not loaded yet has no line
+    // until it is; the load redraws.
+    for (const moduleId of uniq(entries.map((entry) => entry.location.moduleId))) {
+      if (!this.state.hasSourceMap(moduleId)) {
+        void this.state.loadSourceMap(moduleId).then(() => this.renderUI());
+      }
+    }
+    this.renderUI();
   }
 
   async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {
@@ -577,34 +634,20 @@ export class DebuggerUI implements DebuggerIO {
   // --- Spinner ---
 
   private static SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-  private static SPINNER_PHRASES = [
-    "thinking",
-    "pondering",
-    "reasoning",
-    "working",
-    "executing",
-    "processing",
-    "contemplating",
-    "computing",
-  ];
 
+  /** While the program runs, the bar says what it is waiting on and for
+   *  how long, redrawn every 80ms so the figure ticks; the frame
+   *  character is the sign that the screen is alive. */
   startSpinner(): void {
     if (this.spinnerInterval) return;
     let frameIdx = 0;
-    let phraseIdx = Math.floor(Math.random() * DebuggerUI.SPINNER_PHRASES.length);
-    let ticksSincePhrase = 0;
 
     const update = () => {
       const frame = DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
-      const phrase = DebuggerUI.SPINNER_PHRASES[phraseIdx % DebuggerUI.SPINNER_PHRASES.length];
-      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ${phrase}...`;
+      const waiting = this.busyBarText();
+      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ running${waiting === "" ? "" : ` · ${waiting}`}`;
       this.renderUI();
       frameIdx++;
-      ticksSincePhrase++;
-      if (ticksSincePhrase >= 30) {
-        phraseIdx++;
-        ticksSincePhrase = 0;
-      }
     };
 
     update();
@@ -888,16 +931,4 @@ export class DebuggerUI implements DebuggerIO {
     this.stopSpinner();
     this.screen.destroy();
   }
-}
-
-/** A duration for the guards pane: `4m10s`, `30s`, `250ms`. */
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  if (hours === 0) return `${minutes}m${seconds > 0 ? `${seconds}s` : ""}`;
-  return `${hours}h${minutes % 60 > 0 ? `${minutes % 60}m` : ""}`;
 }

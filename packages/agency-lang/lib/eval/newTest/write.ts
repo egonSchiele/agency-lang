@@ -5,10 +5,25 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { graderProblem } from "@/eval/gradersJson/schema.js";
 import { walkTreeRefusingSymlinks, type TreeFile } from "@/eval/grading/graderFilesSnapshot.js";
 import { isStrictDescendant, safeDeleteDirectoryWithin } from "@/utils.js";
 
-import { FIELDS, fieldSpec, type FieldName, type FormState, type Problem } from "./form.js";
+import {
+  FIELDS,
+  fieldSpec,
+  type FieldName,
+  type FormState,
+  type Problem,
+  type Row,
+} from "./form.js";
+import {
+  KIND_NEEDED,
+  kindOf,
+  questionForField,
+  specObjectFor,
+  type GraderDraft,
+} from "./graders.js";
 
 /** A folder name the loader takes as a test id. */
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -29,10 +44,10 @@ export const realFileChecks: FileChecks = {
   realPath: (file) => fs.realpathSync(file),
 };
 
-/** A write that stopped for a reason the user can fix, naming the field. */
+/** A write that stopped for a reason the user can fix, naming the row. */
 export class TestWriteError extends Error {
   constructor(
-    public readonly field: FieldName,
+    public readonly row: Row,
     message: string,
   ) {
     super(message);
@@ -45,27 +60,82 @@ export function testDirFor(suiteDir: string, id: string): string {
 }
 
 /** Everything that would stop the write, in field order. */
+function fieldRow(name: FieldName): Row {
+  return { kind: "field", name };
+}
+
 export function validateForm(state: FormState, checks: FileChecks = realFileChecks): Problem[] {
   const problems: Problem[] = [];
   const id = state.values.id;
   const idLabel = fieldSpec("id").label;
   if (id === "") {
-    problems.push({ field: "id", text: `${idLabel} is required` });
+    problems.push({ row: fieldRow("id"), text: `${idLabel} is required` });
   } else if (!ID_PATTERN.test(id)) {
-    problems.push({ field: "id", text: `${idLabel} may hold only letters, digits, - and _` });
+    problems.push({
+      row: fieldRow("id"),
+      text: `${idLabel} may hold only letters, digits, - and _`,
+    });
   } else if (checks.exists(testDirFor(state.suiteDir, id))) {
-    problems.push({ field: "id", text: `${testDirFor(state.suiteDir, id)} already exists` });
+    problems.push({
+      row: fieldRow("id"),
+      text: `${testDirFor(state.suiteDir, id)} already exists`,
+    });
   }
   const files = filesProblem(state, checks);
   if (files !== null) {
     problems.push(files);
   }
-  for (const field of FIELDS.filter((spec) => spec.required && spec.name !== "id")) {
+  // A goal is judged only when the test has no graders of its own, so it
+  // is required only then.
+  const required = FIELDS.filter(
+    (spec) =>
+      spec.required && spec.name !== "id" && (spec.name !== "goal" || state.graders.length === 0),
+  );
+  for (const field of required) {
     if (state.values[field.name] === "") {
-      problems.push({ field: field.name, text: `${field.label} is required` });
+      problems.push({ row: fieldRow(field.name), text: `${field.label} is required` });
     }
   }
-  return problems;
+  return [...problems, ...graderProblems(state.graders)];
+}
+
+/** Every grader's first problem, in the parser's words, then the one check
+ *  the parser makes only at file level: two graders with one name. The
+ *  form holds no rule of its own about what a grader needs; the one
+ *  message it words itself is for a kind not picked yet, where the
+ *  parser's `unknown kind ""` would not say what to do. */
+function graderProblems(graders: GraderDraft[]): Problem[] {
+  const own = graders.flatMap((draft, index): Problem[] => {
+    if (kindOf(draft) === null) {
+      return [{ row: { kind: "grader", index, question: "kind" }, text: KIND_NEEDED }];
+    }
+    const problem = graderProblem(specObjectFor(draft));
+    return problem === null
+      ? []
+      : [{ row: rowForField(draft, index, problem.field), text: problem.text }];
+  });
+  return [...own, ...duplicateNames(graders)];
+}
+
+/** The row a parser problem is about: the row `graders.ts` finds for the
+ *  field, or the kind row for `kind` and for a cross-field rule (`null`). */
+function rowForField(draft: GraderDraft, index: number, field: string | null): Row {
+  const question = field === null ? null : questionForField(draft, field);
+  return { kind: "grader", index, question: question === null ? "kind" : question.name };
+}
+
+function duplicateNames(graders: GraderDraft[]): Problem[] {
+  const names = graders.map((draft) => draft.answers.name ?? "");
+  return names.flatMap((name, index): Problem[] =>
+    name !== "" && names.indexOf(name) !== index
+      ? [{ row: { kind: "grader", index, question: "name" }, text: `two graders named "${name}"` }]
+      : [],
+  );
+}
+
+/** The text of `graders.json` for the drafts. */
+export function gradersJsonText(graders: GraderDraft[]): string {
+  return `${JSON.stringify(graders.map(specObjectFor), null, JSON_INDENT)}\n`;
 }
 
 /** The files directory as typed, resolved against the suite; null when
@@ -86,14 +156,14 @@ function filesProblem(state: FormState, checks: FileChecks): Problem | null {
   }
   const suite = path.resolve(state.suiteDir);
   if (!isStrictDescendant(suite, dir)) {
-    return { field: "files", text: "files must be a directory inside the suite" };
+    return { row: fieldRow("files"), text: "files must be a directory inside the suite" };
   }
   if (!checks.isDirectory(dir)) {
-    return { field: "files", text: `${dir} is not a directory` };
+    return { row: fieldRow("files"), text: `${dir} is not a directory` };
   }
   const expected = path.join(checks.realPath(suite), path.relative(suite, dir));
   if (checks.realPath(dir) !== expected) {
-    return { field: "files", text: `files must not be reached through a symlink: ${dir}` };
+    return { row: fieldRow("files"), text: `files must not be reached through a symlink: ${dir}` };
   }
   return null;
 }
@@ -122,6 +192,9 @@ export function writeTest(state: FormState): string {
   try {
     const json = `${JSON.stringify(testJsonFor(state.values), null, JSON_INDENT)}\n`;
     fs.writeFileSync(path.join(staging, "test.json"), json);
+    if (state.graders.length > 0) {
+      fs.writeFileSync(path.join(staging, "graders.json"), gradersJsonText(state.graders));
+    }
     const files = filesDirFor(state);
     if (files !== null) {
       copyFiles(state, files, path.join(staging, "files"));
@@ -129,7 +202,7 @@ export function writeTest(state: FormState): string {
     // A rename onto an existing empty directory can succeed silently, so the
     // check validation made is repeated right before the move.
     if (fs.existsSync(target)) {
-      throw new TestWriteError("id", `${target} already exists`);
+      throw new TestWriteError(fieldRow("id"), `${target} already exists`);
     }
     fs.renameSync(staging, target);
   } catch (error) {
@@ -144,7 +217,7 @@ export function writeTest(state: FormState): string {
 function copyFiles(state: FormState, from: string, to: string): void {
   const problem = filesProblem(state, realFileChecks);
   if (problem !== null) {
-    throw new TestWriteError(problem.field, problem.text);
+    throw new TestWriteError(problem.row, problem.text);
   }
   // The folder is made first, so an empty files directory still gives the
   // test an empty `files/` rather than disappearing.
@@ -160,7 +233,10 @@ function filesToCopy(from: string): TreeFile[] {
   try {
     return walkTreeRefusingSymlinks(from, "files");
   } catch (error) {
-    throw new TestWriteError("files", error instanceof Error ? error.message : String(error));
+    throw new TestWriteError(
+      fieldRow("files"),
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
@@ -173,7 +249,7 @@ function removeStaging(suiteDir: string, staging: string): void {
   }
   const result = safeDeleteDirectoryWithin(suiteDir, staging);
   if (!result.success) {
-    throw new TestWriteError("id", result.message ?? `could not remove ${staging}`);
+    throw new TestWriteError(fieldRow("id"), result.message ?? `could not remove ${staging}`);
   }
 }
 

@@ -8,14 +8,19 @@ import * as path from "path";
 import { editorCommand, openInEditor } from "@/eval/newTest/editor.js";
 import {
   editActionFor,
-  fieldSpec,
   initialForm,
-  isLastField,
+  isChoiceRow,
+  isKindRow,
+  isLastRow,
+  isUnpickedKindRow,
+  isLong,
   reduceForm,
+  valueAt,
   type FormAction,
   type FormState,
+  type Row,
 } from "@/eval/newTest/form.js";
-import { renderForm, wroteSummary } from "@/eval/newTest/formView.js";
+import { renderForm, scrolledToCursor, wroteSummary } from "@/eval/newTest/formView.js";
 import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
 import { formatKey } from "@/tui/input/format.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
@@ -71,13 +76,18 @@ export function assertSuiteDirectory(suiteDir: string): void {
 const NO_ACTION: FormAction | null = null;
 
 /** The keys that are not typing. Letters are never bound here, because a
- *  letter goes into the field under the cursor. Escape is not bound
- *  either: the terminal sends a bare Escape for any Alt or Option chord it
- *  does not know, such as Option+Backspace, and quitting on one of those
- *  partway through a word would throw the form away. */
+ *  letter goes into the row under the cursor. Escape is not bound either:
+ *  the terminal sends a bare Escape for any Alt or Option chord it does
+ *  not know, such as Option+Backspace, and quitting on one of those
+ *  partway through a word would throw the form away. Remove is Ctrl+X and
+ *  not Ctrl+D: `cursorBindings` in `lib/tui/keymap.ts` pages down on
+ *  Ctrl+D in every other Agency TUI. */
 function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<FormAction>[] {
-  const longField = fieldSpec(state.cursor).long && openEditor !== null;
-  const last = isLastField(state.cursor);
+  const longField = isLong(state, state.cursor) && openEditor !== null;
+  const last = isLastRow(state, state.cursor);
+  const unpicked = isUnpickedKindRow(state, state.cursor);
+  const choice = isChoiceRow(state, state.cursor);
+  const kindRow = isKindRow(state.cursor);
   return [
     { keys: ["Up"], help: "previous field", hint: "↑↓ move", run: () => ({ kind: "moveUp" }) },
     { keys: ["Down"], help: "next field", run: () => ({ kind: "moveDown" }) },
@@ -92,8 +102,14 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
       keys: ["Enter"],
       help: "save the test",
       hint: "Enter save",
-      when: () => last,
+      when: () => last && !unpicked,
       run: () => ({ kind: "requestSave" }),
+    },
+    {
+      keys: ["Enter"],
+      help: "pick what the grader checks first",
+      when: () => last && unpicked,
+      run: () => ({ kind: "kindNeeded" }),
     },
     {
       keys: ["Ctrl+E"],
@@ -107,6 +123,32 @@ function formBindings(state: FormState, openEditor: OpenEditor): KeyBinding<Form
       help: "save the test",
       hint: "Ctrl+S save",
       run: () => ({ kind: "requestSave" }),
+    },
+    {
+      keys: ["Left"],
+      help: "previous option",
+      when: () => choice,
+      run: () => ({ kind: "pickPrevious" }),
+    },
+    {
+      keys: ["Right"],
+      help: "next option",
+      hint: "←→ pick",
+      when: () => choice,
+      run: () => ({ kind: "pickNext" }),
+    },
+    {
+      keys: ["Ctrl+N"],
+      help: "add a grader",
+      hint: "Ctrl+N grader",
+      run: () => ({ kind: "addGrader" }),
+    },
+    {
+      keys: ["Ctrl+X"],
+      help: "remove this grader",
+      hint: "Ctrl+X remove",
+      when: () => kindRow,
+      run: () => ({ kind: "requestRemove" }),
     },
     { keys: ["Ctrl+C"], help: "quit", hint: "Ctrl+C quit", run: () => ({ kind: "requestQuit" }) },
   ];
@@ -122,6 +164,11 @@ const CONFIRM_QUIT_BINDINGS: KeyBinding<FormAction>[] = [
 const CONFIRM_SAVE_BINDINGS: KeyBinding<FormAction>[] = [
   { keys: ["y"], help: "write the test", run: () => ({ kind: "save" }) },
   { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelSave" }) },
+];
+
+const CONFIRM_REMOVE_BINDINGS: KeyBinding<FormAction>[] = [
+  { keys: ["y"], help: "remove the grader", run: () => ({ kind: "confirmRemove" }) },
+  { keys: ["n", "Escape"], help: "back to the form", run: () => ({ kind: "cancelRemove" }) },
 ];
 
 /** The hints the form footer shows, from the same table that handles the keys. */
@@ -140,6 +187,8 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
       return runKey(CONFIRM_QUIT_BINDINGS, key, NO_ACTION);
     case "confirmSave":
       return runKey(CONFIRM_SAVE_BINDINGS, key, NO_ACTION);
+    case "confirmRemove":
+      return runKey(CONFIRM_REMOVE_BINDINGS, key, NO_ACTION);
   }
 }
 
@@ -152,7 +201,7 @@ function actionFor(state: FormState, event: KeyEvent, openEditor: OpenEditor): F
 function performIntent(state: FormState, action: FormAction, openEditor: OpenEditor): FormState {
   if (action.kind === "editInEditor" && openEditor !== null) {
     try {
-      const text = openEditor(state.values[state.cursor]);
+      const text = openEditor(valueAt(state, state.cursor));
       return reduceForm(state, { kind: "editorReturned", text });
     } catch (error) {
       return reduceForm(state, { kind: "editorFailed", text: messageOf(error) });
@@ -168,8 +217,8 @@ function performIntent(state: FormState, action: FormAction, openEditor: OpenEdi
     try {
       return reduceForm(state, { kind: "saved", testDir: writeTest(state) });
     } catch (error) {
-      const field = error instanceof TestWriteError ? error.field : "id";
-      const problems = [{ field, text: messageOf(error) }];
+      const row: Row = error instanceof TestWriteError ? error.row : { kind: "field", name: "id" };
+      const problems = [{ row, text: messageOf(error) }];
       return reduceForm(state, { kind: "saveFailed", problems });
     }
   }
@@ -201,7 +250,8 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
         if (action === null) {
           return state;
         }
-        return performIntent(reduceForm(state, action), action, openEditor);
+        const next = performIntent(reduceForm(state, action), action, openEditor);
+        return scrolledToCursor(next, size.width, size.height);
       },
       isDone: (state) => state.done,
     });

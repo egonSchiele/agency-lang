@@ -51,13 +51,22 @@ describe("evalNew", () => {
   let recorder: FrameRecorder;
   let printed: string[];
 
-  function options(openEditor: OpenEditor = null): EvalNewOptions {
+  function options(openEditor: OpenEditor = null, size = SIZE): EvalNewOptions {
     return {
       suiteDir: suite,
-      openTerminal: () => ({ input, output: recorder, size: SIZE, openEditor }),
+      openTerminal: () => ({ input, output: recorder, size, openEditor }),
       print: (text) => printed.push(text),
     };
   }
+
+  const shown = (text: string) => (frame: string) => frame.includes(text);
+  const ctrl = (key: string): KeyEvent => ({ key, ctrl: true });
+  const times = (key: string, count: number): Step[] =>
+    Array.from({ length: count }, () => ({ when: () => true, key }));
+  const everFrame = (text: string) =>
+    recorder.frames.some((_, index) => recorder.textAt(index).includes(text));
+  const graders = (id: string) =>
+    JSON.parse(fs.readFileSync(path.join(suite, id, "graders.json"), "utf8"));
 
   beforeEach(() => {
     suite = fs.mkdtempSync(path.join(os.tmpdir(), "eval-new-cmd-"));
@@ -305,6 +314,158 @@ describe("evalNew", () => {
         },
       ],
     );
+  });
+
+  it("Ctrl+N adds a grader, Right picks a kind, the questions appear, and y writes graders.json", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: "t" },
+      ...times("enter", 4),
+      { when: shown("Enter save"), key: "g" },
+      { when: shown("g█"), key: ctrl("n") },
+      { when: shown("1. what to check"), key: "right" },
+      ...times("right", 3),
+      { when: shown("count things in the trace"), key: "enter" },
+      { when: shown("←→ pick"), key: "right" },
+      { when: shown("errors"), key: "enter" },
+      { when: shown("message starts with"), key: "U" },
+      ...typing("nknown named argument"),
+      { when: shown("argument█"), key: "enter" },
+      // The limit was filled with 0 when count was picked.
+      { when: shown("0█"), key: "enter" },
+      ...typing("no-bad-arguments"),
+      { when: shown("no-bad-arguments█"), key: "enter" },
+      { when: shown("Enter next"), key: "enter" },
+      { when: shown("Enter save"), key: "enter" },
+      { when: shown("write this test?"), key: "y" },
+    ]);
+    expect(everFrame("pick with ← →")).toBe(true);
+    expect(graders("t")).toEqual([
+      {
+        kind: "count",
+        name: "no-bad-arguments",
+        count: "errors",
+        messageStartsWith: "Unknown named argument",
+        max: 0,
+      },
+    ]);
+  });
+
+  it("Enter on a new grader's kind row says to pick, and does not ask to write", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("1. what to check"), key: "enter" },
+      { when: shown("pick what to check with ← →"), key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    expect(everFrame("write this test?")).toBe(false);
+    expect(everFrame("unknown kind")).toBe(false);
+  });
+
+  it("letters on a choice row type nothing and the hints offer ←→ pick", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("←→ pick"), key: "s" },
+      { when: shown("←→ pick"), key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    expect(everFrame("s█")).toBe(false);
+    expect(everFrame("pick with ← →")).toBe(true);
+  });
+
+  it("Ctrl+X on a kind row asks, y removes, and the no-graders line is back", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("Ctrl+X remove"), key: ctrl("x") },
+      { when: shown("remove this grader?"), key: "y" },
+      { when: shown("no graders:"), key: ctrl("c") },
+    ]);
+    expect(printed).toEqual([]);
+  });
+
+  it("Ctrl+X elsewhere does nothing", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("Ctrl+X remove"), key: "right" },
+      { when: shown("judge the reply against a goal"), key: "enter" },
+      { when: shown("what a good reply does"), key: ctrl("x") },
+      { when: () => true, key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    expect(everFrame("remove this grader?")).toBe(false);
+  });
+
+  it("a save with a missing name lands the cursor on the name row", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: "t" },
+      { when: shown("t█"), key: ctrl("n") },
+      { when: shown("Ctrl+X remove"), key: "right" },
+      { when: shown("judge the reply against a goal"), key: "enter" },
+      { when: shown("what a good reply does"), key: "g" },
+      { when: shown("g█"), key: ctrl("s") },
+      { when: (frame) => /name: /.test(frame), key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+    const failed = recorder.frames
+      .map((_, index) => recorder.textAt(index))
+      .find((text) => /name: /.test(text));
+    expect(failed).toMatch(/name\s+█ letters, digits, - and _/);
+  });
+
+  it("a tall form scrolls to keep the cursor row on screen, and Up brings the fields back", async () => {
+    await drive(options(null, { width: 100, height: 12 }), input, recorder, [
+      { when: shown("NEW TEST"), key: ctrl("n") },
+      { when: shown("Ctrl+X remove"), key: "right" },
+      { when: shown("judge the reply against a goal"), key: "enter" },
+      ...times("enter", 3),
+      { when: (frame) => frame.includes("weight") && !frame.includes("folder name"), key: "up" },
+      ...times("up", 20),
+      { when: shown("folder name"), key: ctrl("c") },
+      { when: shown("discard this test?"), key: "y" },
+    ]);
+  });
+
+  it("a test with a grader and no goal saves", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: "t" },
+      { when: shown("t█"), key: ctrl("n") },
+      { when: shown("Ctrl+X remove"), key: "right" },
+      ...times("right", 4),
+      { when: shown("run a command over the agent"), key: "enter" },
+      { when: shown("runs in the agent"), key: "l" },
+      ...typing("s"),
+      { when: shown("ls█"), key: "enter" },
+      { when: shown("600 (optional)"), key: "enter" },
+      { when: shown("letters, digits, - and _"), key: "r" },
+      ...typing("uns"),
+      { when: shown("runs█"), key: ctrl("s") },
+      { when: shown("write this test?"), key: "y" },
+    ]);
+    const json = JSON.parse(fs.readFileSync(path.join(suite, "t", "test.json"), "utf8"));
+    expect(json.goal).toBeUndefined();
+    expect(graders("t")).toEqual([{ kind: "command", name: "runs", command: "ls" }]);
+  });
+
+  it("a test with a grader and a goal saves, and the goal row said it is not judged", async () => {
+    await drive(options(), input, recorder, [
+      { when: shown("NEW TEST"), key: "t" },
+      ...times("enter", 4),
+      { when: shown("Enter save"), key: "g" },
+      { when: shown("g█"), key: ctrl("n") },
+      { when: shown("not judged while the test has graders"), key: "right" },
+      ...times("right", 4),
+      { when: shown("run a command over the agent"), key: "enter" },
+      { when: shown("runs in the agent"), key: "l" },
+      ...typing("s"),
+      { when: shown("ls█"), key: "enter" },
+      { when: shown("600 (optional)"), key: "enter" },
+      { when: shown("letters, digits, - and _"), key: "r" },
+      ...typing("uns"),
+      { when: shown("runs█"), key: ctrl("s") },
+      { when: shown("write this test?"), key: "y" },
+    ]);
+    const json = JSON.parse(fs.readFileSync(path.join(suite, "t", "test.json"), "utf8"));
+    expect(json.goal).toBe("g");
+    expect(graders("t")).toHaveLength(1);
   });
 });
 

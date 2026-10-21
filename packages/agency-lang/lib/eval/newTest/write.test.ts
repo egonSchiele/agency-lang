@@ -3,10 +3,13 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { loadGradersJson } from "@/eval/gradersJson/load.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 
-import { initialForm, type FormState } from "./form.js";
+import { initialForm, type FormState, type Row } from "./form.js";
+import type { Answers } from "./graders.js";
 import {
+  gradersJsonText,
   nextCommands,
   testJsonFor,
   TestWriteError,
@@ -21,23 +24,37 @@ const NOTHING_ON_DISK: FileChecks = {
   realPath: (file) => file,
 };
 
-function form(suiteDir: string, values: Partial<FormState["values"]>): FormState {
+function form(
+  suiteDir: string,
+  values: Partial<FormState["values"]>,
+  graders: Answers[] = [],
+): FormState {
   const base = initialForm(suiteDir);
-  return { ...base, values: { ...base.values, ...values } };
+  return {
+    ...base,
+    values: { ...base.values, ...values },
+    graders: graders.map((answers) => ({ answers })),
+  };
 }
+
+function graderRow(index: number, question: string): Row {
+  return { kind: "grader", index, question };
+}
+
+const COMMAND_GRADER: Answers = { kind: "command", command: "true", name: "runs" };
 
 describe("validateForm", () => {
   it("requires an id and a goal, in field order", () => {
     expect(validateForm(form("suite", {}), NOTHING_ON_DISK)).toEqual([
-      { field: "id", text: "folder name is required" },
-      { field: "goal", text: "goal is required" },
+      { row: { kind: "field", name: "id" }, text: "folder name is required" },
+      { row: { kind: "field", name: "goal" }, text: "goal is required" },
     ]);
   });
 
   it("refuses an id with a slash or a space", () => {
     for (const id of ["a/b", "a b", "../x"]) {
       const problems = validateForm(form("suite", { id, goal: "g" }), NOTHING_ON_DISK);
-      expect(problems.map((problem) => problem.field)).toEqual(["id"]);
+      expect(problems.map((problem) => problem.row)).toEqual([{ kind: "field", name: "id" }]);
     }
   });
 
@@ -51,7 +68,10 @@ describe("validateForm", () => {
     const anyDirectory: FileChecks = { ...NOTHING_ON_DISK, isDirectory: () => true };
     for (const files of ["../elsewhere", ".", "/tmp", "a/../.."]) {
       expect(validateForm(form("suite", { id: "t", goal: "g", files }), anyDirectory)).toEqual([
-        { field: "files", text: "files must be a directory inside the suite" },
+        {
+          row: { kind: "field", name: "files" },
+          text: "files must be a directory inside the suite",
+        },
       ]);
     }
     // A name that merely starts with two dots is inside the suite.
@@ -73,12 +93,74 @@ describe("validateForm", () => {
     };
     const problems = validateForm(form("/suite", { id: "t", goal: "g", files: "link" }), linked);
     expect(problems).toEqual([
-      { field: "files", text: "files must not be reached through a symlink: /suite/link" },
+      {
+        row: { kind: "field", name: "files" },
+        text: "files must not be reached through a symlink: /suite/link",
+      },
     ]);
   });
 
   it("passes a complete form", () => {
     expect(validateForm(form("suite", { id: "t", goal: "g" }), NOTHING_ON_DISK)).toEqual([]);
+  });
+
+  it("a goal is not required once the test has a grader", () => {
+    expect(validateForm(form("suite", { id: "t" }, [COMMAND_GRADER]), NOTHING_ON_DISK)).toEqual([]);
+  });
+
+  it("an unpicked kind is one problem on the kind row, saying how to pick", () => {
+    expect(validateForm(form("suite", { id: "t" }, [{}]), NOTHING_ON_DISK)).toEqual([
+      { row: graderRow(0, "kind"), text: "pick what to check with ← →" },
+    ]);
+  });
+
+  it("a non-number and a missing name are named by row, with the parser's words", () => {
+    const badMax = form("suite", { id: "t" }, [{ kind: "count", max: "ten", name: "n" }]);
+    const [problem] = validateForm(badMax, NOTHING_ON_DISK);
+    expect(problem.row).toEqual(graderRow(0, "max"));
+    expect(problem.text).toContain("max");
+    const noName = form("suite", { id: "t" }, [{ kind: "count", max: "1" }]);
+    expect(validateForm(noName, NOTHING_ON_DISK)[0].row).toEqual(graderRow(0, "name"));
+  });
+
+  it("an empty checklist lands on its first point row", () => {
+    const state = form("suite", { id: "t" }, [{ kind: "checklist", name: "c" }]);
+    const [problem] = validateForm(state, NOTHING_ON_DISK);
+    expect(problem.row).toEqual(graderRow(0, "point.0"));
+    expect(problem.text).toContain("points");
+  });
+
+  it("a cross-field rule from the parser lands on the kind row with the parser's words", () => {
+    const state = form("suite", { id: "t" }, [
+      {
+        kind: "number",
+        measure: "llmCalls",
+        scoring: "between",
+        full: "0",
+        zero: "9",
+        mustPass: "yes",
+        name: "n",
+      },
+    ]);
+    expect(validateForm(state, NOTHING_ON_DISK)).toEqual([
+      { row: graderRow(0, "kind"), text: "a must-pass number grader needs max" },
+    ]);
+  });
+
+  it("a parser field problem lands on its row", () => {
+    const state = form("suite", { id: "t" }, [
+      { kind: "goal", goal: "g", name: "n", mustPass: "yes", passingScore: "2" },
+    ]);
+    const [problem] = validateForm(state, NOTHING_ON_DISK);
+    expect(problem.row).toEqual(graderRow(0, "passingScore"));
+    expect(problem.text).toContain("passingScore");
+  });
+
+  it("two graders with one name are reported on the second", () => {
+    const state = form("suite", { id: "t" }, [COMMAND_GRADER, { ...COMMAND_GRADER }]);
+    expect(validateForm(state, NOTHING_ON_DISK)).toEqual([
+      { row: graderRow(1, "name"), text: 'two graders named "runs"' },
+    ]);
   });
 });
 
@@ -123,6 +205,27 @@ describe("writeTest", () => {
     expect(test.goal).toBe("The reply says the name.");
     expect(test.input).toBe("What's your name?");
     expect(fs.existsSync(path.join(suite, ".staging-says-its-name"))).toBe(false);
+  });
+
+  it("writes graders.json beside test.json, and the loader builds the graders", async () => {
+    const state = form(suite, { id: "graded" }, [
+      COMMAND_GRADER,
+      { kind: "count", count: "errors", max: "0", name: "no-errors", mustPass: "yes" },
+    ]);
+    const dir = writeTest(state);
+    const [test] = loadInputs(suite);
+    expect(test.graders).toBe(path.join(dir, "graders.json"));
+    expect(test.goal).toBeUndefined();
+    const graders = await loadGradersJson(path.join(dir, "graders.json"));
+    expect(graders.map((grader) => grader.name())).toEqual(["runs", "no-errors"]);
+    expect(fs.readFileSync(path.join(dir, "graders.json"), "utf8")).toBe(
+      gradersJsonText(state.graders),
+    );
+  });
+
+  it("writes no graders.json when there are no graders", () => {
+    const dir = writeTest(form(suite, { id: "plain", goal: "g" }));
+    expect(fs.existsSync(path.join(dir, "graders.json"))).toBe(false);
   });
 
   it("leaves an empty input out, so the loader reads a test that takes none", () => {
@@ -171,7 +274,7 @@ describe("writeTest", () => {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(TestWriteError);
-    expect((thrown as TestWriteError).field).toBe("files");
+    expect((thrown as TestWriteError).row).toEqual({ kind: "field", name: "files" });
     expect((thrown as TestWriteError).message).toMatch(/files must not contain symlinks/);
     expect(fs.readdirSync(suite)).toEqual(["fixtures"]);
   });

@@ -5,11 +5,19 @@ import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
 import { FIELDS, initialForm, reduceForm, type FormAction, type FormState } from "./form.js";
-import { cursorRows, renderForm, wroteSummary } from "./formView.js";
+import type { Answers } from "./graders.js";
+import {
+  bodyLines,
+  cursorRows,
+  LABEL_WIDTH,
+  renderForm,
+  scrolledToCursor,
+  wroteSummary,
+} from "./formView.js";
 
 const HINTS = "↑↓ move   Enter next   Ctrl+S save   Ctrl+C quit";
-/** Two of indent, the widest label, three of gap: where values start. */
-const VALUE_COLUMN = 2 + Math.max(...FIELDS.map((field) => field.label.length)) + 3;
+/** Two of indent, then the label column: where values start. */
+const VALUE_COLUMN = 2 + LABEL_WIDTH;
 const NEXT = [
   "agency eval run <agent> --suite bar-evals --test says-its-name",
   "agency eval grade runs/<name>",
@@ -24,6 +32,29 @@ function frame(state: FormState, width = 80, height = 24): string {
 
 function rows(text: string): string[] {
   return text.split("\n").map((row) => row.trimEnd());
+}
+
+/** The lines after `at` that continue its value under the value column. */
+function continuation(lines: string[], at: number): string[] {
+  const found: string[] = [];
+  for (let i = at + 1; i < lines.length && lines[i].startsWith(" ".repeat(VALUE_COLUMN)); i += 1) {
+    found.push(lines[i]);
+  }
+  return found;
+}
+
+const COUNT_EXAMPLE: Answers = {
+  kind: "count",
+  count: "toolCalls",
+  tool: "fetchMarkdown",
+  repeated: "yes",
+  max: "0",
+  name: "no-repeated-fetches",
+  mustPass: "yes",
+};
+
+function withGraders(state: FormState, graders: Answers[]): FormState {
+  return { ...state, graders: graders.map((answers) => ({ answers })) };
 }
 
 function filled(): FormState {
@@ -55,7 +86,11 @@ describe("renderForm", () => {
     const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
     expect(goalRow).toBeGreaterThan(0);
     expect(lines[goalRow + 1]).toMatch(new RegExp(`^ {${VALUE_COLUMN}}\\S`));
-    expect(lines[goalRow] + lines[goalRow + 1]).toContain("must not give any other name");
+    expect(
+      continuation(lines, goalRow)
+        .map((row) => row.trim())
+        .join(" "),
+    ).toContain("must not give any other name");
   });
 
   it("shows a field's help while it is empty, after the cursor on the cursor row", () => {
@@ -65,17 +100,17 @@ describe("renderForm", () => {
   });
 
   it("wraps a long value on the cursor row and puts the cursor at its end", () => {
-    const state = { ...filled(), cursor: "goal" as const };
+    const state = { ...filled(), cursor: { kind: "field", name: "goal" } as const };
     const lines = rows(frame(state));
     const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
     expect(lines[goalRow + 1]).toMatch(new RegExp(`^ {${VALUE_COLUMN}}\\S`));
-    expect(lines[goalRow + 1]).toMatch(/other name\.█$/);
+    expect(continuation(lines, goalRow).at(-1)).toMatch(/other name\.█$/);
     expect(lines[goalRow]).not.toContain("█");
   });
 
   it("a value that fills its last row puts the cursor on the row after it", () => {
     const valueWidth = 80 - VALUE_COLUMN;
-    const state = { ...filled(), cursor: "goal" as const };
+    const state = { ...filled(), cursor: { kind: "field", name: "goal" } as const };
     state.values = { ...state.values, goal: "x".repeat(valueWidth) };
     const lines = rows(frame(state));
     const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
@@ -128,7 +163,7 @@ describe("renderForm", () => {
     expect(rows(frame(filled())).at(-1)).toBe(HINTS);
     const failed = reduceForm(filled(), {
       kind: "saveFailed",
-      problems: [{ field: "goal", text: "goal is required" }],
+      problems: [{ row: { kind: "field", name: "goal" }, text: "goal is required" }],
     });
     expect(rows(frame(failed)).at(-1)).toBe("goal is required");
     const asking: FormAction[] = [{ kind: "requestQuit" }];
@@ -151,5 +186,117 @@ describe("renderForm", () => {
   it("shows a brace typed into a field as it is", () => {
     const braced = reduceForm(initialForm("suite"), { kind: "appendText", text: "a {b}" });
     expect(frame(braced)).toContain("a {b}█");
+  });
+
+  it("shows the no-graders line under the heading when there are none", () => {
+    const lines = rows(frame(filled()));
+    const heading = lines.findIndex((row) => row === "  graders");
+    expect(heading).toBeGreaterThan(0);
+    expect(lines[heading + 1]).toContain(
+      "no graders: the goal above is judged by the bundled goal judge",
+    );
+  });
+
+  it("draws the count example from the spec", () => {
+    const text = frame(withGraders(filled(), [COUNT_EXAMPLE]));
+    const expected = [
+      /1\. what to check\s+count things in the trace/,
+      /\n\s{4}count\s+tool calls/,
+      /which tool\s+fetchMarkdown/,
+      /only repeats\s+yes/,
+      /at most\s+0/,
+      /name\s+no-repeated-fetches/,
+      /must pass\s+yes/,
+    ];
+    const positions = expected.map((pattern) => text.search(pattern));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(text).not.toContain("no graders:");
+  });
+
+  it("the cursor on a choice row shows the pick help while unanswered", () => {
+    const state = reduceForm(filled(), { kind: "addGrader" });
+    const text = frame(state);
+    expect(text).toMatch(/1\. what to check\s+pick with ← →/);
+    expect(text).not.toContain("█");
+  });
+
+  it("bodyLines gives a wrapped row more than one line, all tagged with the row", () => {
+    const goalLines = bodyLines(filled(), 80).filter(
+      (line) => line.row?.kind === "field" && line.row.name === "goal",
+    );
+    expect(goalLines.length).toBeGreaterThan(1);
+  });
+
+  it("the typed cursor row is one-line elements with the text input last", () => {
+    const state = { ...filled(), cursor: { kind: "field", name: "goal" } as const };
+    const goalLines = bodyLines(state, 80).filter(
+      (line) => line.row?.kind === "field" && line.row.name === "goal",
+    );
+    expect(goalLines.length).toBeGreaterThan(1);
+    expect(goalLines.every((line) => line.element.style?.height === 1)).toBe(true);
+    expect(frame(state)).toMatch(/other name\.█/);
+  });
+
+  it("scrolledToCursor keeps the cursor row's last line inside a short terminal and goes back up for a field", () => {
+    const state = withGraders(filled(), [COUNT_EXAMPLE, COUNT_EXAMPLE]);
+    const onLast = { ...state, cursor: { kind: "grader", index: 1, question: "weight" } as const };
+    const scrolled = scrolledToCursor(onLast, 80, 10);
+    expect(scrolled.scrollTop).toBeGreaterThan(0);
+    const lines = bodyLines(scrolled, 80);
+    const last = lines
+      .map(
+        (line) =>
+          line.row?.kind === "grader" && line.row.question === "weight" && line.row.index === 1,
+      )
+      .lastIndexOf(true);
+    expect(last).toBeGreaterThanOrEqual(scrolled.scrollTop);
+    expect(last).toBeLessThan(scrolled.scrollTop + 10 - 3);
+    const back = scrolledToCursor({ ...scrolled, cursor: { kind: "field", name: "id" } }, 80, 10);
+    expect(back.scrollTop).toBe(0);
+  });
+
+  it("scrolledToCursor shows a wrapped row from its first line when the cursor comes up onto it", () => {
+    const state = withGraders(filled(), [COUNT_EXAMPLE, COUNT_EXAMPLE]);
+    const onLast = { ...state, cursor: { kind: "grader", index: 1, question: "weight" } as const };
+    const down = scrolledToCursor(onLast, 80, 10);
+    const up = scrolledToCursor({ ...down, cursor: { kind: "field", name: "goal" } }, 80, 10);
+    const firstGoalLine = bodyLines(up, 80).findIndex(
+      (line) => line.row?.kind === "field" && line.row.name === "goal",
+    );
+    expect(up.scrollTop).toBe(firstGoalLine);
+    expect(frame(up, 80, 10)).toContain("  goal");
+  });
+
+  it("the graders heading is bold and not dim", () => {
+    const heading = bodyLines(filled(), 80).find((line) => line.element.content === "  graders");
+    expect(heading?.element.style?.bold).toBe(true);
+    expect(heading?.element.style?.dim).toBe(false);
+  });
+
+  it("a style tag on a wrapped cursor row's first line shows as typed", () => {
+    const tagged = `{bold}literal{/bold} ${"word ".repeat(20)}`;
+    const state = reduceForm(initialForm("suite"), { kind: "appendText", text: tagged });
+    const text = frame(state, 60, 24);
+    expect(text).toContain("{bold}literal{/bold}");
+    expect(text).toContain("word █");
+  });
+
+  it("the frame shows only the lines from scrollTop", () => {
+    const state = { ...withGraders(filled(), [COUNT_EXAMPLE]), scrollTop: 8 };
+    const text = frame(state, 80, 12);
+    expect(text).not.toContain("folder name");
+    expect(text).toContain("NEW TEST");
+    expect(rows(text).at(-1)).toBe(HINTS);
+  });
+
+  it("the goal row says it is not judged while the test has graders", () => {
+    const note = "not judged while the test has graders; add a goal grader to judge it";
+    expect(frame(filled())).not.toContain(note);
+    const lines = rows(frame(withGraders(filled(), [COUNT_EXAMPLE])));
+    const goalRow = lines.findIndex((row) => row.startsWith("  goal"));
+    const noteRow = lines.findIndex((row) => row.includes(note));
+    expect(noteRow).toBeGreaterThan(goalRow);
+    expect(lines[noteRow + 1]).toBe("");
   });
 });

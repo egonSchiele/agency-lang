@@ -6,14 +6,40 @@ import {
   FIELDS,
   initialForm,
   isDirty,
-  isLastField,
+  isLastRow,
   reduceForm,
+  rowsOf,
+  type FieldName,
   type FormAction,
   type FormState,
+  type Row,
 } from "./form.js";
+import { specObjectFor } from "./graders.js";
 
 function run(actions: FormAction[], from: FormState = initialForm("suite")): FormState {
   return actions.reduce(reduceForm, from);
+}
+
+function field(name: FieldName): Row {
+  return { kind: "field", name };
+}
+
+function grader(index: number, question: string): Row {
+  return { kind: "grader", index, question };
+}
+
+function repeat(action: FormAction, times: number): FormAction[] {
+  return Array.from({ length: times }, () => action);
+}
+
+/** A form with one grader whose answers are typed in, cursor on its kind row. */
+function withGrader(answers: Record<string, string>): FormState {
+  const added = run([{ kind: "addGrader" }]);
+  return { ...added, graders: [{ answers }] };
+}
+
+function cursorOn(state: FormState, row: Row): FormState {
+  return { ...state, cursor: row };
 }
 
 function typed(text: string): FormAction[] {
@@ -23,12 +49,12 @@ function typed(text: string): FormAction[] {
 describe("reduceForm", () => {
   it("moves the cursor through the fields and stops at the ends", () => {
     const names = FIELDS.map((field) => field.name);
-    expect(run([{ kind: "moveUp" }]).cursor).toBe(names[0]);
-    expect(run([{ kind: "moveDown" }]).cursor).toBe(names[1]);
+    expect(run([{ kind: "moveUp" }]).cursor).toEqual(field(names[0]));
+    expect(run([{ kind: "moveDown" }]).cursor).toEqual(field(names[1]));
     const downs: FormAction[] = Array.from({ length: names.length + 3 }, () => ({
       kind: "moveDown",
     }));
-    expect(run(downs).cursor).toBe(names[names.length - 1]);
+    expect(run(downs).cursor).toEqual(field(names[names.length - 1]));
   });
 
   it("typing lands in the field under the cursor at once, and stays when the cursor moves", () => {
@@ -50,7 +76,7 @@ describe("reduceForm", () => {
 
   it("a keystroke clears the footer message", () => {
     const failed = run([
-      { kind: "saveFailed", problems: [{ field: "id", text: "id is required" }] },
+      { kind: "saveFailed", problems: [{ row: field("id"), text: "id is required" }] },
     ]);
     expect(failed.message).toBe("id is required");
     expect(run(typed("t"), failed).message).toBe("");
@@ -75,18 +101,18 @@ describe("reduceForm", () => {
       {
         kind: "saveFailed",
         problems: [
-          { field: "goal", text: "goal is required" },
-          { field: "id", text: "id is required" },
+          { row: field("goal"), text: "goal is required" },
+          { row: field("id"), text: "id is required" },
         ],
       },
     ]);
     expect(state.message).toBe("goal is required");
-    expect(state.cursor).toBe("goal");
+    expect(state.cursor).toEqual(field("goal"));
   });
 
   it("the external editor replaces the value, or leaves it with a message", () => {
     const at = run([{ kind: "moveDown" }, { kind: "moveDown" }]);
-    expect(at.cursor).toBe("input");
+    expect(at.cursor).toEqual(field("input"));
     const replaced = run([{ kind: "editorReturned", text: "Two\nparagraphs" }], at);
     expect(replaced.values.input).toBe("Two\nparagraphs");
     const kept = run([{ kind: "editorReturned", text: null }], replaced);
@@ -117,7 +143,7 @@ describe("reduceForm", () => {
   it("a save that fails after the question returns to the form with the problem", () => {
     const failed = run([
       { kind: "askSave" },
-      { kind: "saveFailed", problems: [{ field: "id", text: "suite/t already exists" }] },
+      { kind: "saveFailed", problems: [{ row: field("id"), text: "suite/t already exists" }] },
     ]);
     expect(failed.mode).toEqual({ kind: "form" });
     expect(failed.message).toBe("suite/t already exists");
@@ -138,9 +164,154 @@ describe("editActionFor", () => {
   });
 });
 
-describe("isLastField", () => {
-  it("is true for the last row of the table only", () => {
-    expect(isLastField(FIELDS[FIELDS.length - 1].name)).toBe(true);
-    expect(isLastField(FIELDS[0].name)).toBe(false);
+describe("isLastRow", () => {
+  it("is true for the last field when there are no graders", () => {
+    const state = initialForm("suite");
+    expect(isLastRow(state, field(FIELDS[FIELDS.length - 1].name))).toBe(true);
+    expect(isLastRow(state, field(FIELDS[0].name))).toBe(false);
+  });
+
+  it("the last row is the last grader's last question when there is one", () => {
+    const state = withGrader({ kind: "command" });
+    expect(isLastRow(state, field("goal"))).toBe(false);
+    expect(isLastRow(state, grader(0, "weight"))).toBe(true);
+  });
+});
+
+describe("graders in the form", () => {
+  it("addGrader appends a grader and puts the cursor on its kind row", () => {
+    const state = run([{ kind: "addGrader" }]);
+    expect(state.graders).toEqual([{ answers: {} }]);
+    expect(state.cursor).toEqual(grader(0, "kind"));
+  });
+
+  it("the rows run fields first, then each grader's questions", () => {
+    const state = run([{ kind: "addGrader" }, { kind: "pickNext" }]);
+    expect(rowsOf(state)).toEqual([
+      ...FIELDS.map((spec) => field(spec.name)),
+      grader(0, "kind"),
+      grader(0, "goal"),
+      grader(0, "name"),
+      grader(0, "mustPass"),
+      grader(0, "weight"),
+    ]);
+  });
+
+  it("letters typed on a choice row change nothing", () => {
+    const state = cursorOn(withGrader({ kind: "count" }), grader(0, "mustPass"));
+    const typedOn = run(
+      [...typed("s"), { kind: "backspace" }, { kind: "editorReturned", text: "x" }],
+      state,
+    );
+    expect(typedOn.graders).toEqual(state.graders);
+    expect(typedOn.values).toEqual(state.values);
+  });
+
+  it("typing on a text question row edits its answer", () => {
+    const state = cursorOn(withGrader({ kind: "count" }), grader(0, "name"));
+    expect(run(typed("n1"), state).graders[0].answers.name).toBe("n1");
+    expect(
+      run([{ kind: "editorReturned", text: "from editor" }], state).graders[0].answers.name,
+    ).toBe("from editor");
+  });
+
+  it("Left and Right pick the previous and next option and stop at the ends", () => {
+    const added = run([{ kind: "addGrader" }]);
+    expect(run([{ kind: "pickNext" }], added).graders[0].answers.kind).toBe("goal");
+    expect(run(repeat({ kind: "pickNext" }, 6), added).graders[0].answers.kind).toBe("command");
+    expect(
+      run([{ kind: "pickNext" }, { kind: "pickPrevious" }], added).graders[0].answers.kind,
+    ).toBe("goal");
+    const onText = cursorOn(withGrader({ kind: "count" }), grader(0, "name"));
+    expect(run([{ kind: "pickNext" }], onText).graders).toEqual(onText.graders);
+  });
+
+  it("changing count to errors hides the tool rows and keeps the typed tool name", () => {
+    const state = cursorOn(
+      withGrader({ kind: "count", tool: "fetchMarkdown" }),
+      grader(0, "count"),
+    );
+    const errors = run([{ kind: "pickNext" }], state);
+    expect(errors.graders[0].answers).toMatchObject({ count: "errors", tool: "fetchMarkdown" });
+    expect(rowsOf(errors)).not.toContainEqual(grader(0, "tool"));
+    expect(rowsOf(run([{ kind: "pickPrevious" }], errors))).toContainEqual(grader(0, "tool"));
+  });
+
+  it("must pass on a goal fills the passing score once", () => {
+    const state = cursorOn(withGrader({ kind: "goal" }), grader(0, "mustPass"));
+    const yes = run([{ kind: "pickNext" }], state);
+    expect(yes.graders[0].answers.passingScore).toBe("0.5");
+    const typedScore = {
+      ...yes,
+      graders: [{ answers: { ...yes.graders[0].answers, passingScore: "0.9" } }],
+    };
+    const toggled = run([{ kind: "pickPrevious" }, { kind: "pickNext" }], typedScore);
+    expect(toggled.graders[0].answers.passingScore).toBe("0.9");
+  });
+
+  it("kindNeeded puts the pick hint in the footer and changes nothing else", () => {
+    const state = run([{ kind: "addGrader" }]);
+    const told = run([{ kind: "kindNeeded" }], state);
+    expect(told.message).toBe("pick what to check with ← →");
+    expect({ ...told, message: "" }).toEqual(state);
+  });
+
+  it("removing the second grader puts the cursor on the first grader's last row", () => {
+    const two = run([{ kind: "addGrader" }], withGrader({ kind: "command", command: "ls" }));
+    const removed = run([{ kind: "requestRemove" }, { kind: "confirmRemove" }], two);
+    expect(removed.graders.length).toBe(1);
+    expect(removed.cursor).toEqual(grader(0, "weight"));
+  });
+
+  it("remove asks only on a kind row, and y removes the grader", () => {
+    const state = withGrader({ kind: "goal" });
+    expect(run([{ kind: "requestRemove" }], cursorOn(state, grader(0, "name"))).mode).toEqual({
+      kind: "form",
+    });
+    const asked = run([{ kind: "requestRemove" }], state);
+    expect(asked.mode).toEqual({ kind: "confirmRemove", index: 0 });
+    expect(run([{ kind: "cancelRemove" }], asked).mode).toEqual({ kind: "form" });
+    const removed = run([{ kind: "confirmRemove" }], asked);
+    expect(removed.graders).toEqual([]);
+    expect(removed.mode).toEqual({ kind: "form" });
+    expect(removed.cursor).toEqual(field("goal"));
+  });
+
+  it("emptying a point keeps its row, and only visible points are written", () => {
+    const state = cursorOn(
+      withGrader({ kind: "checklist", "point.0": "a", "point.1": "b", "point.2": "c", name: "n" }),
+      grader(0, "point.1"),
+    );
+    const emptied = run(
+      [{ kind: "backspace" }, { kind: "moveDown" }, { kind: "backspace" }],
+      state,
+    );
+    expect(rowsOf(emptied)).toContainEqual(grader(0, "point.1"));
+    expect(rowsOf(emptied)).toContainEqual(grader(0, "point.2"));
+    expect(specObjectFor(emptied.graders[0]).points).toEqual(["a"]);
+    const stranded = cursorOn(
+      withGrader({ kind: "checklist", "point.0": "", "point.1": "b" }),
+      grader(0, "point.1"),
+    );
+    const cleared = run([{ kind: "backspace" }], stranded);
+    expect(rowsOf(cleared)).toContainEqual(cleared.cursor);
+  });
+
+  it("a failed save moves the cursor to the problem's row", () => {
+    const state = run(
+      [{ kind: "saveFailed", problems: [{ row: grader(0, "max"), text: "max: bad" }] }],
+      withGrader({ kind: "count" }),
+    );
+    expect(state.cursor).toEqual(grader(0, "max"));
+  });
+
+  it("is dirty with a grader and nothing typed", () => {
+    expect(isDirty(run([{ kind: "addGrader" }]))).toBe(true);
+  });
+
+  it("movement walks into the grader rows and stops at the last one", () => {
+    const state = cursorOn(withGrader({ kind: "command" }), field("goal"));
+    expect(run([{ kind: "moveDown" }], state).cursor).toEqual(grader(0, "kind"));
+    expect(run(repeat({ kind: "moveDown" }, 20), state).cursor).toEqual(grader(0, "weight"));
   });
 });

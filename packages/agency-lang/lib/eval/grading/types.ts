@@ -25,8 +25,13 @@ export type LoadedRun = {
 /** A grader's score: pass/fail or a continuous value. */
 export type Score = { kind: "binary"; pass: boolean } | { kind: "scalar"; value: number };
 
-/** A grader's output: a score plus optional natural-language feedback. */
-export type Grade = { score: Score; feedback?: string };
+/** One answer from a checklist judge: the point as the test wrote it,
+ *  whether the work met it, and the words from the work that decided it. */
+export type Point = { point: string; pass: boolean; evidence: string };
+
+/** A grader's output: a score plus optional natural-language feedback, and
+ *  for a checklist grader the answer per point. */
+export type Grade = { score: Score; feedback?: string; points?: Point[] };
 
 /** Options common to every grader; subclasses extend this with their own fields. */
 export type GraderOptions = {

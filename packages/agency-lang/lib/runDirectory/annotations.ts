@@ -47,10 +47,14 @@ export type ScorePayload = {
   weight: number;
   mustPass: boolean;
   feedback?: string;
+  /** A checklist grader's answer per point, in the order the test lists them. */
+  points?: ScorePoint[];
   gradersModule?: string;
   /** The goal an LLM judge scored against (a test's own, or `eval grade --goal`). */
   goal?: string;
 };
+
+export type ScorePoint = { point: string; pass: boolean; evidence: string };
 
 export type SuiteIdentity = { source: string; sha?: string };
 
@@ -143,6 +147,10 @@ const ScoreSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("scalar"), value: z.number().finite() }).strict(),
 ]);
 
+const ScorePointSchema = z
+  .object({ point: z.string().min(1), pass: z.boolean(), evidence: z.string() })
+  .strict();
+
 const common = {
   v: z.literal(1),
   id: z.string().regex(/^ann_[0-9a-f]{64}$/),
@@ -179,6 +187,7 @@ const ScoreAnnotationSchema = z
     weight: z.number().finite().nonnegative(),
     mustPass: z.boolean(),
     feedback: z.string().optional(),
+    points: z.array(ScorePointSchema).optional(),
     gradersModule: z.string().optional(),
     goal: z.string().optional(),
   })

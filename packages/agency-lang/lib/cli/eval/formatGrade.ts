@@ -73,10 +73,12 @@ function formatInput(input: GradedInput): string[] {
 
 function formatGrade(grade: Grade): string[] {
   const line = `  ${grade.grader.padEnd(GRADER_COLUMN_WIDTH)} ${formatGradeValue(grade)}`;
-  if (grade.feedback === undefined || grade.feedback === "") {
-    return [line];
-  }
-  return [line, `      ${grade.feedback}`];
+  const feedback =
+    grade.feedback === undefined || grade.feedback === "" ? [] : [`      ${grade.feedback}`];
+  const points = (grade.points ?? []).map(
+    (point) => `      ${point.pass ? ttyColor.green("✓") : ttyColor.red("✗")} ${point.point}`,
+  );
+  return [line, ...feedback, ...points];
 }
 
 function formatGradeValue(grade: Grade): string {

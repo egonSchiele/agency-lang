@@ -34,6 +34,22 @@ describe("scoreDrafts", () => {
     expect(drafts.find((d) => d.name === "len")).not.toHaveProperty("goal");
   });
 
+  it("copies a grade's points onto the draft, and leaves the field absent otherwise", () => {
+    const checklist = grader(() => 1, { name: "checklist" });
+    const plain = grader(() => 1, { name: "plain" });
+    const points = [{ point: "one package", pass: true, evidence: "one bin" }];
+    const drafts = scoreDrafts(
+      new Scorecard([
+        entry(undefined, [
+          { grader: checklist, grade: { ...pass, points } },
+          { grader: plain, grade: pass },
+        ]),
+      ]),
+    );
+    expect(drafts.find((d) => d.name === "checklist")?.points).toEqual(points);
+    expect(drafts.find((d) => d.name === "plain")).not.toHaveProperty("points");
+  });
+
   it("records no goal when the test carries none", () => {
     const judge = new LlmJudge({ name: "goal" });
     const drafts = scoreDrafts(new Scorecard([entry(undefined, [{ grader: judge, grade: pass }])]));

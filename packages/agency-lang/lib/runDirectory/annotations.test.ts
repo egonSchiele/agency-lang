@@ -244,6 +244,26 @@ describe("readAnnotations", () => {
     expect(folded.t1.gradingPasses).toBe(1);
   });
 
+  it("a score row may carry per-point answers, each strictly shaped", () => {
+    const withPoints = {
+      ...row(score("p1", "grounded", 0.5)),
+      points: [
+        { point: "one package", pass: true, evidence: "one bin" },
+        { point: "harness split", pass: false, evidence: "" },
+      ],
+    };
+    const warnings: string[] = [];
+    const rows = readAnnotations(file(JSON.stringify(withPoints) + "\n"), (m) => warnings.push(m));
+    expect(warnings).toEqual([]);
+    expect(rows).toHaveLength(1);
+
+    const missingEvidence = { ...withPoints, points: [{ point: "one package", pass: true }] };
+    expect(
+      readAnnotations(file(JSON.stringify(missingEvidence) + "\n"), (m) => warnings.push(m)),
+    ).toEqual([]);
+    expect(warnings).toHaveLength(1);
+  });
+
   it("rejects a row that fails the schema", () => {
     const bad = { ...row(signOff("t1", "x")), extra: true };
     const warnings: string[] = [];

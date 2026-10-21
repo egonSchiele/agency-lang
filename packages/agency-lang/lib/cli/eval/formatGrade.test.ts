@@ -81,6 +81,43 @@ describe("formatGradeResult", () => {
     ]);
   });
 
+  it("prints a checklist grader's points under its feedback, one line each", () => {
+    const result: EvalGradeResult = {
+      runs: [
+        {
+          dir: "/runs/x/a",
+          grading: grading("a", 0.667, [
+            {
+              grader: "grounded",
+              kind: "scalar",
+              value: 0.667,
+              feedback: "Two of three.",
+              points: [
+                { point: "one package", pass: true, evidence: "one bin" },
+                { point: "harness split", pass: true, evidence: "AgentBrain" },
+                { point: "what drives releases", pass: false, evidence: "" },
+              ],
+            },
+          ]),
+        },
+      ],
+      judgeCostUsd: 0,
+      mean: 0.667,
+      gatesPassed: true,
+      batches: [],
+      incompleteBatches: [],
+    };
+    const lines = formatGradeResult(result).map(stripAnsi);
+    expect(lines).toEqual([
+      "a  score 0.667",
+      "  grounded     0.667",
+      "      Two of three.",
+      "      ✓ one package",
+      "      ✓ harness split",
+      "      ✗ what drives releases",
+    ]);
+  });
+
   it("a test's description prints dim under its score line", () => {
     const withDescription = grading("a", 1, [{ grader: "gate", kind: "binary", pass: true }]);
     withDescription.perInput[0].description = "checks the agent reads between the lines";

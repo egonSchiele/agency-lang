@@ -88,6 +88,12 @@ const COMMAND_BAR_CONTENT = commandBarContent("quit");
 /** Attached, `q` leaves the program running, and the bar says so. */
 const ATTACHED_COMMAND_BAR_CONTENT = commandBarContent("detach");
 
+/** The keys that pause a running program at its next statement. Space
+ *  is `continue` at a stop, so it is the one key that toggles: space to
+ *  let the program run, space to stop it. `s` and `n` pause too, so a
+ *  step typed a moment before the program stops means the same thing. */
+const PAUSE_KEYS = [" ", "s", "n"];
+
 /** Keys that map directly to a command with no additional logic. */
 const SIMPLE_KEYS: Record<string, DebuggerCommand> = {
   s: { type: "step" },
@@ -152,10 +158,10 @@ export class DebuggerUI implements DebuggerIO {
   // the pause key while the program runs, would hand a key to a stale
   // waiter. So there is one in-flight `nextKey()` (`pendingKey`), and
   // `dispatch` gives each key to whoever is current: the person waiting
-  // in `readKey`, else the pause listeners when the program runs and the
-  // key is a stepping key, else the held list, which the person's next
-  // read drains first, so `q` pressed while running still detaches at
-  // the next stop, in order.
+  // in `readKey`, else, while the program runs, the pause listeners for
+  // a stepping key and the quit listeners for `q`, else the held list,
+  // which the person's next read drains first, so `c` pressed while
+  // running is acted on at the next stop, in order.
   private pendingKey: Promise<void> | null = null;
   private personWaiter: ((key: KeyEvent) => void) | null = null;
   private heldKeys: KeyEvent[] = [];
@@ -442,12 +448,18 @@ export class DebuggerUI implements DebuggerIO {
       this.attached === null
         ? ""
         : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
-    // At a stop with a wait still open, an `async` call in a model
-    // request for one, the wait is named here, with its time as of the
-    // stop; the command bar names it while the program runs.
-    const busy = this.spinnerInterval === null ? this.busyBarText() : "";
-    const waiting = busy === "" ? "" : ` | waiting: ${busy}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${waiting}{/gray-fg}`;
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
+  }
+
+  /** What the program is waiting on, while it runs and at a stop with a
+   *  wait still open (an `async` call in a model request, for one), as
+   *  a row of its own under the figures: beside them it was clipped at
+   *  80 columns, and the renderer clips a row rather than wrapping it.
+   *  The command bar keeps the keys, so the person can see how to
+   *  pause. Empty when nothing is open. */
+  private buildWaitingContent(): string {
+    const busy = this.busyBarText();
+    return busy === "" ? "" : `{gray-fg}  waiting: ${busy}{/gray-fg}`;
   }
 
   // --- Element tree builders ---
@@ -488,7 +500,11 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildStatsBar(): Element {
-    return box({ height: 1, key: "stats" }, text(this.buildStatsContent()));
+    const waiting = this.buildWaitingContent();
+    return box(
+      { height: waiting === "" ? 1 : 2, key: "stats" },
+      text(waiting === "" ? this.buildStatsContent() : `${this.buildStatsContent()}\n${waiting}`),
+    );
   }
 
   /**
@@ -666,10 +682,20 @@ export class DebuggerUI implements DebuggerIO {
     if (waiter !== null) {
       this.personWaiter = null;
       waiter(key);
-    } else if (this.spinnerInterval !== null && (key.key === "s" || key.key === "n")) {
+    } else if (this.spinnerInterval !== null && PAUSE_KEYS.includes(key.key)) {
       this.pausing = true;
       for (const listener of this.pauseListeners) listener();
       this.renderUI();
+    } else if (this.spinnerInterval !== null && key.key === "q") {
+      // A program in a long model call may not stop for minutes, so `q`
+      // acts now rather than at the next stop. Attached, the listener
+      // closes the channel, which is the detach, and the program runs
+      // on; with no listener this process is the program's, and leaving
+      // ends it, as Ctrl-C does.
+      if (this.quitListeners.length === 0) {
+        this.cleanup();
+      }
+      for (const listener of this.quitListeners) listener();
     } else {
       this.heldKeys.push(key);
     }
@@ -719,8 +745,9 @@ export class DebuggerUI implements DebuggerIO {
 
   private static SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-  /** While the program runs, the bar says what it is waiting on and for
-   *  how long, redrawn every 80ms so the figure ticks; the frame
+  /** While the program runs, the bar says so and names the keys that
+   *  work then: space to pause, `q` to quit or detach. It is redrawn every
+   *  80ms, which also ticks the wait's time in the stats bar; the frame
    *  character is the sign that the screen is alive. */
   startSpinner(): void {
     if (this.spinnerInterval) return;
@@ -728,9 +755,12 @@ export class DebuggerUI implements DebuggerIO {
 
     const update = () => {
       const frame = DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
-      const waiting = this.busyBarText();
+      const quit = this.attached === null ? "quit" : "detach";
+      const keys = this.pausing
+        ? `{bold}(q){/bold}${quit}`
+        : `{bold}(space){/bold}pause {bold}(q){/bold}${quit}`;
       const state = this.pausing ? "pausing at the next statement" : "running";
-      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ ${state}${waiting === "" ? "" : ` · ${waiting}`}`;
+      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ▶ ${state} · ${keys}`;
       this.renderUI();
       frameIdx++;
       // The pause key is read while the program runs; a read the input

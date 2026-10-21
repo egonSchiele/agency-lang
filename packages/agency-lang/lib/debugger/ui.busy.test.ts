@@ -1,5 +1,6 @@
-// The debugger UI while the program runs: the command bar names what the
-// program is waiting on and the source pane marks the line. Frame tests
+// The debugger UI while the program runs: the stats bar names what the
+// program is waiting on, the command bar names the keys that work, and
+// the source pane marks the line. Frame tests
 // around a real `DebuggerUI`, fed a wait the runtime really reported.
 import { describe, it, expect, beforeAll } from "vitest";
 import * as path from "path";
@@ -95,10 +96,12 @@ describe("the UI while the program is waiting", () => {
       ui.startSpinner();
       ui.setBusy([entry]);
 
-      const first = await untilFrame(recorder, "waiting on model");
+      // The line arrives when the module's source map has loaded.
+      const first = await untilFrame(recorder, "llm-after-step.agency:5 · 0ms");
       expect(first).toContain(
-        "▶ running · in llm() at llm-after-step.agency:5 · 0ms · round 1, waiting on model",
+        "waiting: in llm() at llm-after-step.agency:5 · 0ms · round 1, waiting on model",
       );
+      expect(first).toContain("▶ running · (space)pause (q)quit");
       expect(first).toMatch(/▶\s+5\s+const reply = llm\("say hi"\)/);
 
       clock.now += 4200;
@@ -118,8 +121,8 @@ describe("the UI while the program is waiting", () => {
       ui.startSpinner();
       ui.setBusy([{ ...entry, elapsedMs: 42_000 }]);
 
-      const first = await untilFrame(recorder, "· 42s ·");
-      expect(first).toContain("▶ running · in llm() at llm-after-step.agency:5 · 42s · round 1");
+      const first = await untilFrame(recorder, "llm-after-step.agency:5 · 42s");
+      expect(first).toContain("waiting: in llm() at llm-after-step.agency:5 · 42s · round 1");
       expect(first).toMatch(/▶\s+5\s+const reply = llm\("say hi"\)/);
 
       clock.now += 4000;
@@ -182,14 +185,14 @@ describe("the UI while the program is waiting", () => {
 });
 
 describe("the pause key", () => {
-  it("s while the program runs reaches the listener, and the bar says so", async () => {
+  it("space while the program runs reaches the listener, and the bar says so", async () => {
     const { ui, recorder, input } = screenful();
     let paused = 0;
     ui.onPause(() => paused++);
     try {
       ui.startSpinner();
       await untilFrame(recorder, "▶ running");
-      input.feedKey({ key: "s" });
+      input.feedKey({ key: " " });
 
       const frame = await untilFrame(recorder, "pausing at the next statement");
       expect(frame).toContain("▶ pausing at the next statement");
@@ -199,19 +202,79 @@ describe("the pause key", () => {
     }
   });
 
-  it("q while the program runs is kept for the stop", async () => {
+  it("q while the program runs quits at once, and the bar says so", async () => {
     const { ui, recorder, input } = screenful();
     let paused = 0;
+    let quit = 0;
     ui.onPause(() => paused++);
+    ui.onQuit(() => quit++);
+    try {
+      ui.startSpinner();
+      const frame = await untilFrame(recorder, "▶ running");
+      expect(frame).toContain("▶ running · (space)pause (q)quit");
+      input.feedKey({ key: "q" });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(quit).toBe(1);
+      expect(paused).toBe(0);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("at 80 columns, attached, the wait has a row of its own and is not clipped", async () => {
+    const { entry } = await captured();
+    const clock = { now: 1_000_000 };
+    const recorder = new FrameRecorder();
+    const screen = new Screen({ input: new TestInput(), output: recorder, width: 80, height: 40 });
+    const ui = new DebuggerUI(screen, { now: () => clock.now });
+    ui.attachedTo({ type: "hello", pid: 12345, program: "research-agent.js", node: "main" });
+    try {
+      ui.startSpinner();
+      ui.setBusy([entry]);
+
+      const frame = await untilFrame(recorder, "llm-after-step.agency:5 · 0ms");
+      const lines = frame.split("\n");
+      const figures = lines.find((line) => line.includes("tokens:"))!;
+      expect(figures).toContain("attached to 12345 research-agent.js");
+      expect(figures).not.toContain("waiting:");
+      expect(lines).toContain(
+        "  waiting: in llm() at llm-after-step.agency:5 · 0ms · round 1, waiting on model".padEnd(
+          80,
+        ),
+      );
+      expect(frame).toContain("▶ running · (space)pause (q)detach");
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("attached, the bar says q detaches, and the pausing bar keeps it", async () => {
+    const { ui, recorder, input } = screenful();
+    ui.attachedTo({ type: "hello", pid: 1234, program: "agent.js", node: "main" });
+    try {
+      ui.startSpinner();
+      const running = await untilFrame(recorder, "▶ running");
+      expect(running).toContain("▶ running · (space)pause (q)detach");
+      input.feedKey({ key: "s" });
+      const pausing = await untilFrame(recorder, "pausing at the next statement");
+      expect(pausing).toContain("▶ pausing at the next statement · (q)detach");
+      expect(pausing).not.toContain("(space)pause");
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("c while the program runs is kept for the stop", async () => {
+    const { ui, recorder, input } = screenful();
     try {
       ui.startSpinner();
       await untilFrame(recorder, "▶ running");
-      input.feedKey({ key: "q" });
+      input.feedKey({ key: "c" });
       await new Promise((resolve) => setTimeout(resolve, 50));
       ui.stopSpinner();
 
-      expect(await ui.waitForCommand()).toEqual({ type: "quit" });
-      expect(paused).toBe(0);
+      expect(await ui.waitForCommand()).toEqual({ type: "continue" });
     } finally {
       ui.destroy();
     }
@@ -241,6 +304,21 @@ describe("the pause key", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       input.feedKey({ key: "s" });
 
+      await untilFrame(recorder, "pausing at the next statement");
+      expect(paused).toBe(1);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("s while the program runs is a pause too", async () => {
+    const { ui, recorder, input } = screenful();
+    let paused = 0;
+    ui.onPause(() => paused++);
+    try {
+      ui.startSpinner();
+      await untilFrame(recorder, "▶ running");
+      input.feedKey({ key: "s" });
       await untilFrame(recorder, "pausing at the next statement");
       expect(paused).toBe(1);
     } finally {

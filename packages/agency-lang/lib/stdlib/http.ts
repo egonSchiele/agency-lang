@@ -12,8 +12,7 @@ import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
 /** How long a fetch may take, headers and body together, when the caller
- *  names no limit. A page that has not finished in half a minute is not
- *  going to; the model should move on to another source. */
+ *  names no limit. */
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 /** The signal a request runs under: the run's own signal, so a cancel or a
@@ -26,9 +25,8 @@ function requestSignal(runSignal: AbortSignal, timeoutMs: number): AbortSignal {
   return AbortSignal.any([runSignal, AbortSignal.timeout(timeoutMs)]);
 }
 
-/** The failure a timed-out fetch becomes. It is an ordinary error, not a
- *  cancellation, so the `try` around the call turns it into a Failure the
- *  model can read; the message says what to do instead of retrying. */
+/** An ordinary error, not a cancellation, so the `try` around the call
+ *  turns it into a Failure the model can read. */
 function timeoutError(url: string, timeoutMs: number): Error {
   return new Error(
     `Request to ${url} timed out after ${timeoutMs / 1000} seconds. Do not retry it as is: ` +
@@ -298,7 +296,7 @@ export async function _fetch(
   allowedDomains: string[],
   method: string,
   body: any,
-  timeoutMs: number,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = currentRun();
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
@@ -369,7 +367,7 @@ export async function _fetchJSON(
   allowedDomains: string[],
   method: string,
   body: any,
-  timeoutMs: number,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<any> {
   const { ctx, stack } = currentRun();
   return fetchJSONImpl(
@@ -450,7 +448,7 @@ export async function _fetchMarkdown(
   allowedDomains: string[],
   method: string,
   body: any,
-  timeoutMs: number,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
   const { ctx, stack } = currentRun();
   return fetchMarkdownImpl(

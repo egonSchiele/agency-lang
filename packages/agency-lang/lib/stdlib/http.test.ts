@@ -4,10 +4,14 @@ import { AgencyCancelledError } from "../runtime/errors.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
 import {
   __internal_fetch,
   __internal_fetchJSON,
   __internal_fetchMarkdown,
+  _fetch,
+  _fetchJSON,
+  _fetchMarkdown,
   checkAllowedDomains,
   readBodyBytesCapped,
   resolveUrl,
@@ -288,6 +292,21 @@ describe("HTTP fetch abort integration", () => {
       0,
     );
     expect(text).toBe("late");
+  });
+
+  it("the exported helpers default the limit, so a module compiled with six arguments still fetches", async () => {
+    await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    const ctx = makeMockCtx();
+    const stack = new StateStack();
+    const threads = new ThreadStore();
+    const sixArgs = (fn: (...args: any[]) => Promise<unknown>) =>
+      runInTestContext(ctx, stack, threads, () => fn(url, "", {}, [], "GET", null));
+    await expect(sixArgs(_fetch)).resolves.toBe('{"ok":true}');
+    await expect(sixArgs(_fetchJSON)).resolves.toEqual({ ok: true });
+    await expect(sixArgs(_fetchMarkdown)).resolves.toBe('{"ok":true}');
   });
 
   it("__internal_fetch: a cancel during the wait is still a cancel, not a timeout", async () => {

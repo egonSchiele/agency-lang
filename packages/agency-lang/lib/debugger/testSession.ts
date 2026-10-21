@@ -16,7 +16,7 @@ import { hasInterrupts, createDebugInterrupt } from "../runtime/interrupts.js";
  * An InputSource that notifies when the consumer (driver) is idle —
  * i.e. blocked waiting for the next key.
  */
-class TestInput implements InputSource {
+export class TestInput implements InputSource {
   private keyQueue: KeyEvent[] = [];
   private keyWaiters: ((key: KeyEvent) => void)[] = [];
   private idleResolvers: (() => void)[] = [];

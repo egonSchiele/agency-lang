@@ -15,6 +15,7 @@ import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import type { DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
+import type { Hello } from "./attach/protocol.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
@@ -63,21 +64,27 @@ function readHighlightedSourceLines(filePath: string): string[] {
   return highlighted;
 }
 
-const COMMAND_BAR_CONTENT = Object.entries({
-  s: "step",
-  n: "next",
-  i: "in",
-  o: "out",
-  c: "continue",
-  r: "rewind",
-  d: "checkpoints",
-  k: "checkpoint",
-  p: "print",
-  q: "quit",
-  ["(:)"]: "cmd",
-})
-  .map(([key, action]) => `{bold}(${key}){/bold}${action}`)
-  .join(" ");
+function commandBarContent(quit: "quit" | "detach"): string {
+  return Object.entries({
+    s: "step",
+    n: "next",
+    i: "in",
+    o: "out",
+    c: "continue",
+    r: "rewind",
+    d: "checkpoints",
+    k: "checkpoint",
+    p: "print",
+    q: quit,
+    ["(:)"]: "cmd",
+  })
+    .map(([key, action]) => `{bold}(${key}){/bold}${action}`)
+    .join(" ");
+}
+
+const COMMAND_BAR_CONTENT = commandBarContent("quit");
+/** Attached, `q` leaves the program running, and the bar says so. */
+const ATTACHED_COMMAND_BAR_CONTENT = commandBarContent("detach");
 
 /** Keys that map directly to a command with no additional logic. */
 const SIMPLE_KEYS: Record<string, DebuggerCommand> = {
@@ -128,6 +135,12 @@ export class DebuggerUI implements DebuggerIO {
   private commandBarOverride: string | null = null;
   private inputPrompt: string | null = null;
   private inputValue = "";
+
+  /** Set when this UI drives a program in another process
+   *  (`agency debug --attach`): what the run said about itself, for the
+   *  status line. */
+  private attached: Hello | null = null;
+  private quitListeners: (() => void)[] = [];
 
   lastFrame: Frame | null = null;
 
@@ -364,7 +377,11 @@ export class DebuggerUI implements DebuggerIO {
         : stats.totalCost < 0.0001
           ? "<$0.0001"
           : `$${stats.totalCost.toFixed(4)}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}{/gray-fg}`;
+    const where =
+      this.attached === null
+        ? ""
+        : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
   }
 
   // --- Element tree builders ---
@@ -396,7 +413,10 @@ export class DebuggerUI implements DebuggerIO {
     if (this.inputPrompt !== null) {
       content = `${this.inputPrompt} ${escapeStyleTags(this.inputValue)}\u2588`;
     } else {
-      content = this.commandBarOverride || this.spinnerText || COMMAND_BAR_CONTENT;
+      content =
+        this.commandBarOverride ||
+        this.spinnerText ||
+        (this.attached === null ? COMMAND_BAR_CONTENT : ATTACHED_COMMAND_BAR_CONTENT);
     }
     return box({ height: 3, border: true, borderColor: "white", key: "commandBar" }, text(content));
   }
@@ -513,6 +533,18 @@ export class DebuggerUI implements DebuggerIO {
     this.threadDisplayId = id === active ? undefined : id;
   }
 
+  /** This UI now drives the program the run described. While attached,
+   *  only `q` quits (`escape` would detach by accident), and quitting
+   *  tells `onQuit` listeners first. */
+  attachedTo(hello: Hello): void {
+    this.attached = hello;
+    this.renderUI();
+  }
+
+  onQuit(listener: () => void): void {
+    this.quitListeners.push(listener);
+  }
+
   // --- DebuggerIO implementation ---
 
   log(line: string): void {
@@ -597,7 +629,14 @@ export class DebuggerUI implements DebuggerIO {
       const keyEvent = await this.screen.nextKey();
       if (keyEvent.key === "c" && keyEvent.ctrl) this.cleanup();
 
+      // Attached, escape does nothing: it would detach by accident.
+      if (this.attached !== null && keyEvent.key === "escape") {
+        continue;
+      }
       const simple = SIMPLE_KEYS[keyEvent.key];
+      if (simple?.type === "quit") {
+        for (const listener of this.quitListeners) listener();
+      }
       if (simple) return simple;
 
       const command = await this.handleInteractiveKey(keyEvent);

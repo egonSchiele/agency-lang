@@ -44,6 +44,41 @@ export function compileChoice(flags: {
   return { mode: "compile" };
 }
 
+/** What `--attach` asks for. Commander gives `true` for a bare
+ *  `--attach`, the text for `--attach 123`, and nothing when the flag is
+ *  absent. A file and `--attach` together contradict each other: the
+ *  attached program is already running. */
+export function attachTarget(flags: {
+  attach?: string | boolean;
+  file?: string;
+  /** The other flags the person typed, as `--policy`: none of them
+   *  applies to a program that is already running, and a flag that is
+   *  parsed and dropped would look as if it worked. */
+  others?: string[];
+}): { mode: "debug" } | { mode: "attach"; pid?: number } | { refused: string } {
+  if (flags.attach === undefined || flags.attach === false) {
+    return { mode: "debug" };
+  }
+  if (flags.file !== undefined) {
+    return { refused: "--attach takes a pid, not a file; the program is already running." };
+  }
+  const others = flags.others ?? [];
+  if (others.length > 0) {
+    return {
+      refused:
+        `${others.join(", ")} ${others.length === 1 ? "does" : "do"} not apply with --attach; ` +
+        `the program keeps the options it was started with.`,
+    };
+  }
+  if (flags.attach === true) {
+    return { mode: "attach" };
+  }
+  if (!/^\d+$/.test(flags.attach) || Number(flags.attach) === 0) {
+    return { refused: `--attach needs a process id, not "${flags.attach}".` };
+  }
+  return { mode: "attach", pid: Number(flags.attach) };
+}
+
 /** The invocation for a debugged run: the root policy the flags describe
  *  and the budget, in the config's own shape (dollars, and a duration
  *  string checked here so a bad one is refused before anything runs).

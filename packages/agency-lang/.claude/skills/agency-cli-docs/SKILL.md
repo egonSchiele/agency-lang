@@ -14,7 +14,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
 - `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding, including stops inside a tool call and between the tool loop's requests and calls.
 - `docs/dev/cli/debugger-tests.md` — Driving the debugger headlessly in tests.
-- `docs/dev/cli/debugger-attach.md` — Attaching the debugger to a running program: the channel and its messages, `registerAttach` and the `SIGUSR2` trigger, the sessions directory and the check that is the safety argument, and the socket.
+- `docs/dev/cli/debugger-attach.md` — Attaching the debugger to a running program: the channel and its messages, `registerAttach` and the `SIGUSR2` trigger, the sessions directory and the check that is the safety argument, the socket, and the `agency debug --attach` command: the listing, the start-time check, the UI while attached, and the exit codes.
 - `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
 - `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, follow mode, row IDs as a contract and addresses, comments as marks with the one comments source, and the session a CLI talks to over a socket.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.

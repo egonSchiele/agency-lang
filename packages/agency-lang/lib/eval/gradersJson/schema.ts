@@ -174,27 +174,58 @@ function parseList(text: string, filePath: string): unknown[] {
   return parsed;
 }
 
-function parseSpec(element: unknown, index: number, filePath: string): GraderSpec {
-  const where = `${filePath}: grader ${index}`;
+/** One grader's first problem, as data: the field it is about (the first
+ *  segment of a zod path, `kind` for a missing or unknown kind or a
+ *  non-object element) or `null` for a rule that spans fields, and the
+ *  message without the file and index prefix. The `eval new` form reads
+ *  this to put its cursor on the right row. */
+export type GraderProblem = { field: string | null; text: string };
+
+export type CheckedSpec = { spec: GraderSpec } | { problem: GraderProblem };
+
+/** Parse one element of a `graders.json` list, answering with either the
+ *  spec or its first problem. The element is parsed once. */
+export function checkSpec(element: unknown): CheckedSpec {
   if (typeof element !== "object" || element === null || Array.isArray(element)) {
-    throw new Error(`${where}: must be an object with a kind`);
+    return { problem: { field: "kind", text: "must be an object with a kind" } };
   }
   const kind = (element as { kind?: unknown }).kind;
   if (typeof kind !== "string" || !Object.hasOwn(KIND_SCHEMAS, kind)) {
-    throw new Error(`${where}: unknown kind ${JSON.stringify(kind)}`);
+    return { problem: { field: "kind", text: `unknown kind ${JSON.stringify(kind)}` } };
   }
   const result = KIND_SCHEMAS[kind as GraderSpec["kind"]].safeParse(element);
   if (!result.success) {
     const issue = result.error.issues[0];
-    throw new Error(`${where}: ${issue.path.join(".")}: ${issue.message}`);
+    // An unrecognized key has an empty path; it is about the object, so it
+    // lands with the kind.
+    const field = issue.path.length === 0 ? "kind" : String(issue.path[0]);
+    return { problem: { field, text: `${issue.path.join(".")}: ${issue.message}` } };
   }
   const spec = result.data as GraderSpec;
   const broken = RULES.find((rule) => rule.applies(spec));
   if (broken !== undefined) {
-    const problem = typeof broken.problem === "string" ? broken.problem : broken.problem(spec);
-    throw new Error(`${where} (${spec.name}): ${problem}`);
+    const text = typeof broken.problem === "string" ? broken.problem : broken.problem(spec);
+    return { problem: { field: null, text } };
   }
-  return spec;
+  return { spec };
+}
+
+export function graderProblem(element: unknown): GraderProblem | null {
+  const checked = checkSpec(element);
+  return "problem" in checked ? checked.problem : null;
+}
+
+function parseSpec(element: unknown, index: number, filePath: string): GraderSpec {
+  const checked = checkSpec(element);
+  if ("spec" in checked) {
+    return checked.spec;
+  }
+  const where = `${filePath}: grader ${index}`;
+  if (checked.problem.field !== null) {
+    throw new Error(`${where}: ${checked.problem.text}`);
+  }
+  const name = (element as { name: string }).name;
+  throw new Error(`${where} (${name}): ${checked.problem.text}`);
 }
 
 function firstDuplicateName(specs: GraderSpec[]): string | undefined {

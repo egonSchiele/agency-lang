@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseGradersJson } from "./schema.js";
+import { graderProblem, parseGradersJson } from "./schema.js";
 
 const FILE = "t/graders.json";
 
@@ -163,5 +163,39 @@ describe("parseGradersJson", () => {
     expect(() => parse([{ kind: "checklist", name: "c", points: ["ok", ""] }])).toThrow(
       /t\/graders\.json: grader 0: .*points/,
     );
+  });
+});
+
+describe("graderProblem", () => {
+  it("names the field for a missing or bad field", () => {
+    expect(graderProblem({ kind: "goal", name: "g" })).toEqual({
+      field: "goal",
+      text: expect.stringContaining("goal"),
+    });
+    expect(graderProblem({ kind: "count", name: "c", count: "errors", max: -1 })?.field).toBe(
+      "max",
+    );
+  });
+
+  it("names kind for an unknown kind or a non-object", () => {
+    expect(graderProblem({ kind: "rubric", name: "r" })).toEqual({
+      field: "kind",
+      text: 'unknown kind "rubric"',
+    });
+    expect(graderProblem("nope")).toEqual({
+      field: "kind",
+      text: "must be an object with a kind",
+    });
+  });
+
+  it("has no field for a cross-field rule", () => {
+    expect(graderProblem({ kind: "goal", name: "g", goal: "x", mustPass: true })).toEqual({
+      field: null,
+      text: "a must-pass goal grader needs passingScore",
+    });
+  });
+
+  it("is null for a good grader", () => {
+    expect(graderProblem({ kind: "command", name: "c", command: "true" })).toBeNull();
   });
 });

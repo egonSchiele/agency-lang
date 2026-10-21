@@ -11,6 +11,24 @@ export class DebuggerState {
    *  running. The runtime's public entry points hand it every batch of
    *  debug stops (`settleStops`), so the caller never sees one. */
   attached?: AttachedDebugger;
+  /** Attached: the key of the run being debugged (`debugRun.ts`), or
+   *  null when none has stopped yet. A step in any other run is let
+   *  through. */
+  ownedRun: string | null = null;
+
+  /** Whether a step in the run `key` is this debugger's to stop at.
+   *  Not attached, every run is; attached, the first run to ask claims
+   *  the debugger. A context with no key is treated as the run's own. */
+  owns(key: string | undefined): boolean {
+    if (this.attached === undefined || key === undefined) {
+      return true;
+    }
+    if (this.ownedRun === null) {
+      this.ownedRun = key;
+      return true;
+    }
+    return this.ownedRun === key;
+  }
   public checkpoints: CheckpointStore;
   /** The depth of the step the debugger is stopped at: how many Agency
    *  calls deep it is, with the node's statements at 0. The driver sets it
@@ -122,17 +140,16 @@ export class DebuggerState {
     return this.checkpoints.get(id);
   }
 
-  /** The rolling window, or with `runId`, that run's checkpoints in it. */
-  getCheckpoints(runId?: string) {
-    return this.checkpoints.getSorted(runId);
+  getCheckpoints() {
+    return this.checkpoints.getSorted();
   }
 
   findCheckpoint(location: SourceLocationOpts) {
     return this.checkpoints.findCheckpoint(location);
   }
 
-  findBefore(beforeId: number, location: SourceLocationOpts, runId?: string) {
-    return this.checkpoints.findBefore(beforeId, location, runId);
+  findBefore(beforeId: number, location: SourceLocationOpts) {
+    return this.checkpoints.findBefore(beforeId, location);
   }
 
   prettyPrint(): string {

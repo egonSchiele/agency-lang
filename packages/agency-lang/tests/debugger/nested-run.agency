@@ -1,0 +1,15 @@
+// A node whose body calls a JavaScript helper that runs another node of
+// this same module, so a test can check that a debugger attached to the
+// outer run does not deadlock the inner one.
+import { runInner } from "./waiter.js"
+
+node inner() {
+  a = 2
+  return a + 3
+}
+
+node outer() {
+  x = 1
+  const got = runInner()
+  return got
+}

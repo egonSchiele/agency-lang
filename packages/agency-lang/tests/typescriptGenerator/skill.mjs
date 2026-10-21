@@ -93,7 +93,8 @@ type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 type __ResumeFromCheckpointOptions = { metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
 export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any>; invocation?: InvocationOptions }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, invocation: opts?.invocation });
+type __RewindOptions = { metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: __RewindOptions) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
 
 // Invoke an exported function in a node-grade execution frame. Used by
@@ -107,10 +108,11 @@ export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) =>
 // requires all three; a bundle without them must be recompiled.
 export const __invokeFunctionForServe = (fn: any, namedArgs: Record<string, unknown>, invocation?: InvocationOptions) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, invocation, initializeGlobals: __initializeGlobals });
 export const __invokeNodeForServe = (nodeName: string, data: Record<string, any>, invocation?: InvocationOptions) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, invocation, initializeGlobals: __initializeGlobals });
-type ServeResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; invocation?: InvocationOptions };
-export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: ServeResumeOptions) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, invocation: opts?.invocation });
+type ServeResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: ServeResumeOptions) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
+export const __getDebugger = () => __globalCtx.debuggerState;
 // Reconfigure the trace file path at runtime. Mutates the module-level
 // traceConfig; the next call to runNode (mod.main / mod.someNode) will
 // truncate the file and per-execCtx writers will append to it for the

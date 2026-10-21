@@ -68,12 +68,23 @@ export type BranchStateJSON = {
   activeStack?: string[];
 };
 
+const SUBSTEP_PREFIX = "__substep_";
+
 // the state for each frame (a node, or a function call)
 export class State {
   args: Record<string, any>;
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
+  /** Live-only: the step counters this frame was restored with, by
+   *  substep key (`""` for the frame's own `step`), set by `markReentry`
+   *  on a resume from an interrupt. The statement at a restored counter
+   *  is the one that was in progress at the pause, which the resume
+   *  re-enters rather than starts, so the debug hook must not stop at it
+   *  (`Runner.maybeDebugHook`). Each entry is consumed by the statement
+   *  it names, since a loop can bring the same key and id round again as
+   *  a fresh statement. A rewind sets none: it replays the statement. */
+  restoredCounters?: Record<string, number>;
   private branches?: Record<string, BranchState>;
   private deletedBranches?: Set<string>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
@@ -217,6 +228,38 @@ export class State {
         branch.stack.deserializeMode();
       }
     }
+  }
+
+  /** Record that the statements at this frame's counters are being
+   *  re-entered; see `restoredCounters`. Reaches every branch stack. */
+  markReentry(): void {
+    this.restoredCounters = { "": this.step };
+    for (const [key, value] of Object.entries(this.locals)) {
+      if (key.startsWith(SUBSTEP_PREFIX) && typeof value === "number") {
+        this.restoredCounters[key.slice(SUBSTEP_PREFIX.length)] = value;
+      }
+    }
+    if (this.branches) {
+      for (const branch of Object.values(this.branches)) {
+        branch.stack.markReentry();
+      }
+    }
+  }
+
+  /** Whether this frame was restored by a resume from an interrupt (see
+   *  `markReentry`), for a step that has no counter of its own. */
+  wasReentered(): boolean {
+    return this.restoredCounters !== undefined;
+  }
+
+  /** The counter this frame was restored with for `key`, consumed: the
+   *  first statement to ask is the one being re-entered. */
+  takeRestoredCounter(key: string): number | undefined {
+    const counter = this.restoredCounters?.[key];
+    if (counter !== undefined) {
+      delete this.restoredCounters![key];
+    }
+    return counter;
   }
 
   /** Visit every branch stack hanging off this frame. Branches are
@@ -1116,6 +1159,12 @@ export class StateStack {
     this.mode = "deserialize";
     this.deserializeStackLength = this.stack.length;
     this.stack.forEach((frame) => frame.deserializeMode());
+  }
+
+  /** A resume from an interrupt re-enters the statement in progress in
+   *  every frame; see `State.restoredCounters`. */
+  markReentry(): void {
+    this.stack.forEach((frame) => frame.markReentry());
   }
 
   /**

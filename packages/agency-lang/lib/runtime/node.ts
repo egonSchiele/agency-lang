@@ -32,6 +32,9 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
+import { settleFunctionStops, settleStops, type LegOptions } from "./attachedDebugger.js";
+import { fireAgentEnd } from "./agentEnd.js";
+import { mintDebugRun } from "./debugRun.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
   tokenStatsOf,
@@ -144,6 +147,7 @@ async function initFreshExecCtx(
 ): Promise<void> {
   const { initializeGlobals } = opts;
 
+  mintDebugRun(execCtx);
   // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
   installRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);
@@ -333,9 +337,10 @@ async function runExportedFunctionCore({
 }
 
 /** Public entry point — unchanged contract: returns the raw function value or
- *  throws the identical original error. */
+ *  throws the identical original error. An attached debugger answers the
+ *  function's debug stops before it returns (`settleFunctionStops`). */
 export async function runExportedFunction(args: RunExportedFunctionArgs): Promise<unknown> {
-  return unwrapServedInvocationOutcome(await runExportedFunctionCore(args));
+  return unwrapServedInvocationOutcome(await settledFunction(args));
 }
 
 /** Serve-only entry point: the same execution, but the outcome (value/error +
@@ -343,7 +348,14 @@ export async function runExportedFunction(args: RunExportedFunctionArgs): Promis
 export async function runExportedFunctionForServe(
   args: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  return runExportedFunctionCore(args);
+  return settledFunction(args);
+}
+
+async function settledFunction(
+  args: RunExportedFunctionArgs,
+): Promise<ServedInvocationOutcome<unknown>> {
+  const outcome = await runExportedFunctionCore(args);
+  return settleFunctionStops(args.ctx, outcome, { invocation: args.invocation });
 }
 
 type RunNodeArgs = {
@@ -517,33 +529,7 @@ async function runNodeCore({
               timeTaken: performance.now() - agentStartTime,
               tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
             });
-            // onAgentEnd fires AFTER the run finished, so seed ALS with
-            // the real per-run ThreadStore: user callbacks that inspect
-            // the final conversation through stdlib helpers see the
-            // actual messages, not a sentinel.
-            await withRun(
-              {
-                ctx: execCtx,
-                stack: execCtx.stateStack,
-                threads: threadStore,
-                globals: execCtx.globals,
-                log: logOf(execCtx, execCtx.globals),
-                state: freshState(),
-                ...lineage,
-              },
-              (run) =>
-                callHook(run, {
-                  name: "onAgentEnd",
-                  data: {
-                    nodeName,
-                    result: {
-                      ...returnObject,
-                      usage: execCtx.invocationUsage.snapshot(),
-                      traceId: execCtx.getRunId(),
-                    },
-                  },
-                }),
-            );
+            await fireAgentEnd(execCtx, nodeName, returnObject, threadStore, lineage);
             await execCtx.closeTraceWriter();
           }
           return { status: "returned" as const, value: returnObject };
@@ -587,9 +573,11 @@ async function runNodeCore({
 }
 
 /** Public entry point — returns the RunNodeResult with its usage snapshot
- *  attached, or throws the identical original error. */
+ *  attached, or throws the identical original error. An attached debugger
+ *  answers the leg's debug stops here, after the leg has finished, so the
+ *  caller never sees one (`settleStops`). */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
-  return unwrapWithUsage(await runNodeCore(args));
+  return unwrapWithUsage(await settledNode(args));
 }
 
 /** Serve-only entry point: hands the outcome (RunNodeResult/error + usage
@@ -597,5 +585,26 @@ export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
 export async function runNodeForServe(
   args: RunNodeArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  return runNodeCore(args);
+  return settledNode(args);
+}
+
+/** The node's outcome with its debug stops settled. `runNodeCore` fires
+ *  `onAgentEnd` when its own leg ends with a value; when the debugger ran
+ *  the leg that ended, that leg fires it (`agentEnd` in the leg options,
+ *  see `fireAgentEnd`), so attaching a debugger does not change what the
+ *  caller sees. */
+async function settledNode(
+  args: RunNodeArgs,
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  return settleStops(args.ctx, await runNodeCore(args), legOf(args));
+}
+
+function legOf(args: RunNodeArgs): LegOptions {
+  return {
+    invocation: args.invocation,
+    callbacks: args.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+    agentEnd: true,
+  };
 }

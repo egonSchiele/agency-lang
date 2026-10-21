@@ -7,6 +7,12 @@ still exported because `thread.test.ts` and `trace.test.ts` import them. Those
 two files test runtime behavior (LLM thread tracking, trace file I/O) rather
 than UI. Port them to `DebuggerTestSession` and the old helpers can go.
 
+## Attach
+
+### Debugging two runs at once
+
+While attached, the first run to stop owns the debugger and every other run goes on without stopping (`lib/runtime/debugRun.ts`). A served agent with two requests at the same breakpoint is a real case for debugging both. That needs every per-stop field, the pending overrides, the stepping depth and mode, the checkpoint shown, and the rolling window, on one session object per run, keyed by the run key the runtime mints, and a UI that shows which run a prompt belongs to.
+
 ## UI improvements
 
 ### Text input improvements

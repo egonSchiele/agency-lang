@@ -14,7 +14,7 @@ import { readFileSync } from "fs";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
-import type { DebuggerCommand, DebuggerIO } from "./types.js";
+import type { DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
@@ -515,6 +515,18 @@ export class DebuggerUI implements DebuggerIO {
 
   // --- DebuggerIO implementation ---
 
+  log(line: string): void {
+    this.state.log(line);
+  }
+
+  setMode(mode: DebuggerMode): void {
+    this.state.setMode(mode);
+  }
+
+  setOverrides(overrides: Record<string, unknown>): void {
+    this.state.setOverrides(overrides);
+  }
+
   async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {
     if (checkpoint) {
       await this.state.setCheckpoint(checkpoint, stop, interruptId);
@@ -589,11 +601,29 @@ export class DebuggerUI implements DebuggerIO {
       if (simple) return simple;
 
       const command = await this.handleInteractiveKey(keyEvent);
-      if (command) return command;
+      if (!command) continue;
+      if (command.type === "print") {
+        this.printVariable(command.varName);
+        continue;
+      }
+      return command;
     }
   }
 
-  private async handleInteractiveKey(keyEvent: KeyEvent): Promise<DebuggerCommand | null> {
+  /** The viewed frame's value, so print agrees with the locals pane
+   *  after `b`. Answered here, not by the driver: the frame being shown
+   *  is the UI's, and a driver in another process could not see it. */
+  private printVariable(varName: string): void {
+    const value = this.state.lookupVariable(varName);
+    if (value !== undefined) {
+      this.state.log(`${varName} = ${JSON.stringify(value)}`);
+    } else {
+      this.state.log(`${varName} = (not found)`);
+    }
+    this.renderUI();
+  }
+
+  private async handleInteractiveKey(keyEvent: KeyEvent): Promise<UiCommand | null> {
     const panes = this.getPanes();
     const focusedName = panes[this.focusIndex]?.name;
 

@@ -40,6 +40,10 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "./types.js";
 import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
+import { isAttachedResume, settleStops } from "./attachedDebugger.js";
+import { fireAgentEnd, firesAgentEnd } from "./agentEnd.js";
+import { currentRunOrNone, lineageOf, type Lineage } from "./asyncContext.js";
+import { ThreadStore } from "./state/threadStore.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
@@ -720,6 +724,10 @@ async function runResumeLoop(
   execCtx: RuntimeContext<GraphState>,
   startNodeName: string,
   agentStartTime: number,
+  /** Fire `onAgentEnd` when this leg ends with a value: the run began
+   *  in `runNode`, and an attached debugger is running its last legs.
+   *  `lineage` is the resume's, read before its first await. */
+  agentEnd: { fire: boolean; lineage: Lineage } = { fire: false, lineage: lineageOf(undefined) },
 ): Promise<any> {
   let nodeName = startNodeName;
   while (true) {
@@ -760,6 +768,15 @@ async function runResumeLoop(
           timeTaken: performance.now() - agentStartTime,
           tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
         });
+        if (agentEnd.fire) {
+          await fireAgentEnd(
+            execCtx,
+            nodeName,
+            returnObject,
+            result?.messages ?? ThreadStore.withDefaultActive(execCtx.rootLog),
+            agentEnd.lineage,
+          );
+        }
         await execCtx.closeTraceWriter();
       }
       return returnObject;
@@ -807,6 +824,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
+    execCtx.stateStack.markReentry();
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
     outcome = { status: "returned", value };
   } catch (error) {
@@ -835,7 +853,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
       execCtx.cleanup();
     }
   });
-  return unwrapWithUsage(served);
+  return unwrapWithUsage(await settleStops(args.ctx, served, {}));
 }
 
 type RespondToInterruptsArgs = {
@@ -899,7 +917,10 @@ async function respondToInterruptsCore(
         });
       }
     },
-    afterRestore: (execCtx) => execCtx.setInterruptResponses(responseMap),
+    afterRestore: (execCtx) => {
+      execCtx.setInterruptResponses(responseMap);
+      execCtx.stateStack.markReentry();
+    },
   });
 }
 
@@ -925,6 +946,8 @@ async function runResumeInvocation(
   args: ResumeInvocationArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, resolved, checkpoint, metadata = {}, signals } = args;
+  // run-read-ok: a root run, read before the first await for onAgentEnd.
+  const lineage = lineageOf(currentRunOrNone());
   const execCtx = await ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.rootLogWithSpans.startSpan> | undefined;
@@ -944,7 +967,10 @@ async function runResumeInvocation(
     args.afterRestore?.(execCtx);
 
     const value = await withExternalSignals(execCtx, signals, () =>
-      runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
+      runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime, {
+        fire: firesAgentEnd(metadata),
+        lineage,
+      }),
     );
     outcome = { status: "returned", value };
   } catch (error) {
@@ -999,14 +1025,24 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
     checkpoint: deepClone(args.paused.checkpoint),
     metadata: args.metadata,
     signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
+    afterRestore: (execCtx) => execCtx.stateStack.markReentry(),
   });
-  return unwrapWithUsage(served);
+  if (isAttachedResume(args.metadata)) {
+    return unwrapWithUsage(served);
+  }
+  const settled = await settleStops(args.ctx, served, {
+    invocation: args.invocation,
+    callbacks: args.metadata?.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+  });
+  return unwrapWithUsage(settled);
 }
 
 /** Public entry point — returns the resume result with its usage snapshot
  *  attached, or throws the identical original error. */
 export async function respondToInterrupts(args: RespondToInterruptsArgs): Promise<any> {
-  return unwrapWithUsage(await respondToInterruptsCore(args));
+  return unwrapWithUsage(await settledResume(args));
 }
 
 /** Serve-only entry point: hands the resume outcome (result/error + usage
@@ -1014,5 +1050,22 @@ export async function respondToInterrupts(args: RespondToInterruptsArgs): Promis
 export async function respondToInterruptsForServe(
   args: RespondToInterruptsArgs,
 ): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
-  return respondToInterruptsCore(args);
+  return settledResume(args);
+}
+
+/** The resume's outcome with its debug stops answered by an attached
+ *  debugger (`settleStops`), unless the resume is the debugger's own. */
+async function settledResume(
+  args: RespondToInterruptsArgs,
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
+  const outcome = await respondToInterruptsCore(args);
+  if (isAttachedResume(args.metadata)) {
+    return outcome;
+  }
+  return settleStops(args.ctx, outcome, {
+    invocation: args.invocation,
+    callbacks: args.metadata?.callbacks,
+    abortSignal: args.abortSignal,
+    pauseSignal: args.pauseSignal,
+  });
 }

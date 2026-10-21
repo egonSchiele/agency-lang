@@ -1758,7 +1758,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           const runsInFirstBatch = (item: DispatchItem): boolean =>
             proceeds(item) && !handlerFor(item.toolCall)?.markers?.handoff;
           for (const item of dispatchItems.filter(runsInFirstBatch)) {
-            await pr.beforeToolCall(invocationKeyFor(item), item.toolCall);
+            await pr.beforeToolCall(invocationKeyFor(item), item.toolCall, branchKeyFor(item));
           }
           const firstResult = await runDispatchBatch(
             `round.${round}.tools`,
@@ -1795,7 +1795,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
               handoffItem.toolCall,
             ),
           );
-          await pr.beforeToolCall(invocationKeyFor(handoffItem), handoffItem.toolCall);
+          await pr.beforeToolCall(
+            invocationKeyFor(handoffItem),
+            handoffItem.toolCall,
+            branchKeyFor(handoffItem),
+          );
           const handoffResult = await runDispatchBatch(
             `round.${round}.handoff`,
             [handoffItem],

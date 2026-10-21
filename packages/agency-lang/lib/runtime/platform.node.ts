@@ -8,6 +8,7 @@
 
 import { appendFileSync, mkdirSync } from "fs";
 import path from "path";
+import { isMainThread } from "worker_threads";
 import {
   ensureSessionsDir,
   removeRecord,
@@ -109,7 +110,10 @@ function claimAttachListener(listener: () => void): void {
  *  cannot be used is logged under DEBUG and the run goes on without
  *  attach: a program must never fail because it cannot be debugged. */
 export function registerAttach({ ctx, nodeName, host, functions }: RegisterAttachArgs): void {
-  if (host.name !== "node" || ctx.hasDebugger() || isIpcMode(host)) {
+  // A worker thread's `process.on` never sees a signal: the main thread
+  // does, and with no listener there the signal would end the process.
+  // Such a program is not listed, so nobody sends it one.
+  if (host.name !== "node" || ctx.hasDebugger() || isIpcMode(host) || !isMainThread) {
     return;
   }
   if (attachTarget !== null) {

@@ -17,8 +17,13 @@ export default function setup(): () => void {
   const remove = (): void => {
     fs.rmSync(home, { recursive: true, force: true });
   };
-  // Ctrl-C skips the teardown vitest calls, but this main process does
-  // emit `exit`, so the directory goes either way.
+  // Ctrl-C skips the teardown vitest calls. This main process emits
+  // `exit` for vitest's own exit, but under pnpm or npx a second SIGINT
+  // is forwarded a moment later, when vitest's once-only handler is gone,
+  // and Node then ends the process with no `exit` event; so the signals
+  // are handled here as well.
   process.once("exit", remove);
+  process.on("SIGINT", remove);
+  process.on("SIGTERM", remove);
   return remove;
 }

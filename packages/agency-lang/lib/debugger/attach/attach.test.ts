@@ -130,6 +130,29 @@ describe("a debugger attached over a channel", () => {
     expect(events.finished[0]).toMatchObject({ error: expect.stringMatching(/cancel/i) });
   });
 
+  it("a run that runs through while another is stopped does not end the session", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        return await new Promise(() => {});
+      }
+    })([]);
+    const { session, events, uiSide } = attachWithMemoryChannel(mod, [], io);
+    const stopped = mod.main();
+    for (let i = 0; i < 200 && io.renderCalls.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    expect((await mod.main()).data).toBe(3);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(events.finished).toEqual([]);
+    expect(session.driver.debuggerState.attached).toBeDefined();
+    expect(io.logLines.some((line) => line.startsWith("Program finished"))).toBe(false);
+    uiSide.close();
+    expect((await stopped).data).toBe(3);
+  });
+
   it("set over the channel changes a local the program returns", async () => {
     const mod = await freshImport(compiledPath(fixtures.stepTest));
     const { io } = attachWithMemoryChannel(mod, [

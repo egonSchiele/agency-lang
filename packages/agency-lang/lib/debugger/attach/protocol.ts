@@ -142,13 +142,32 @@ void responseSchemaMatchesType;
  *  with the wrong shape ends the session instead of crashing the
  *  program. */
 export const REPLY_SCHEMAS = {
-  render: z.undefined(),
+  render: z.void(),
   waitForCommand: DebuggerCommandSchema,
   showRewindSelector: z.number().nullable(),
   answerGuardTrip: InterruptResponseSchema,
-  showCheckpointsPanel: z.undefined(),
+  showCheckpointsPanel: z.void(),
   promptForNodeArgs: z.array(z.unknown()),
   promptForInput: z.string(),
-  // Each schema must produce what the matching `DebuggerIO` method
-  // returns, so a wrong schema for any method fails to compile.
-} satisfies { [M in RequestMethod]: z.ZodType<Awaited<ReturnType<DebuggerIO[M]>>> };
+};
+
+/** Each reply schema must produce exactly what the matching `DebuggerIO`
+ *  method returns, in both directions: a schema that is wider would let a
+ *  wrong answer through, and one that is narrower (`showRewindSelector`
+ *  without `.nullable()`) would end the session on a right one. */
+type ReplySchemasMatch = {
+  [M in RequestMethod]: SameShape<
+    z.infer<(typeof REPLY_SCHEMAS)[M]>,
+    Awaited<ReturnType<DebuggerIO[M]>>
+  >;
+};
+const replySchemasMatchTypes: ReplySchemasMatch = {
+  render: true,
+  waitForCommand: true,
+  showRewindSelector: true,
+  answerGuardTrip: true,
+  showCheckpointsPanel: true,
+  promptForNodeArgs: true,
+  promptForInput: true,
+};
+void replySchemasMatchTypes;

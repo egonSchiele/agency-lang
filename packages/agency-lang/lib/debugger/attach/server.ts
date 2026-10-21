@@ -73,8 +73,10 @@ export function attachOverChannel(channel: Channel, options: AttachOptions): Att
     try {
       ran = await runByDriver(result, leg);
     } catch (error) {
-      // A module compiled before the serve-style resume existed throws
-      // a failed leg's error instead; the person is told the same way.
+      // A function set built by hand without the serve-style resume
+      // (only a test does that today; `attachFunctionsFor` always has it)
+      // throws a failed leg's error instead; the person is told the same
+      // way.
       channel.send({ type: "finished", value: undefined, error: errorText(error) });
       detach();
       throw error;

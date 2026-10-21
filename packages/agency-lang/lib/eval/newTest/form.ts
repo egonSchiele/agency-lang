@@ -96,7 +96,13 @@ export type FormMode =
 
 /** What `eval edit` loaded: the folder, the parsed `test.json` the fields
  *  are written back over, and the values as loaded for the dirty check. */
-export type Editing = { testDir: string; base: Record<string, unknown>; loaded: Loaded };
+export type Editing = {
+  testDir: string;
+  base: Record<string, unknown>;
+  loaded: Loaded;
+  /** Graded by harness pairs under `files/`, so no goal is needed. */
+  harnessGraded: boolean;
+};
 
 /** The field values as loaded and the graders as they would be written. */
 export type Loaded = { values: Record<FieldName, string>; graders: string };
@@ -188,6 +194,7 @@ export function editingForm(args: {
   graders: GraderDraft[];
   locks: FormState["locks"];
   gradersLock: string | null;
+  harnessGraded: boolean;
 }): FormState {
   const state: FormState = {
     ...initialForm(path.dirname(args.testDir)),
@@ -199,6 +206,7 @@ export function editingForm(args: {
       testDir: args.testDir,
       base: args.base,
       loaded: { values: args.values, graders: gradersKey(args.graders) },
+      harnessGraded: args.harnessGraded,
     },
   };
   return { ...state, cursor: rowsOf(state)[0] };
@@ -335,9 +343,13 @@ export function reduceForm(state: FormState, action: FormAction): FormState {
       return { ...state, mode: { kind: "form" } };
     case "saveFailed": {
       const first = action.problems[0];
-      return first === undefined
-        ? state
-        : { ...state, mode: { kind: "form" }, message: first.text, cursor: first.row };
+      if (first === undefined) {
+        return state;
+      }
+      // A problem on a locked row (a write error pinned to the folder name
+      // while editing) lands the cursor on the first row it can reach.
+      const cursor = isLocked(state, first.row) ? rowsOf(state)[0] : first.row;
+      return { ...state, mode: { kind: "form" }, message: first.text, cursor };
     }
     case "saved":
       return { ...state, done: true, written: action.testDir };

@@ -291,6 +291,7 @@ describe("an editing form on screen", () => {
       graders: [],
       locks: { id: "says-its-name", files: "files/ (2 files)" },
       gradersLock,
+      harnessGraded: false,
     });
   }
 

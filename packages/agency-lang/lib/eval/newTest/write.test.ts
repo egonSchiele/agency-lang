@@ -109,6 +109,23 @@ describe("validateForm", () => {
     expect(validateForm(state, { ...NOTHING_ON_DISK, exists: () => true })).toEqual([]);
   });
 
+  it("a goal is not required while the graders section is locked, or the test is graded by harness pairs", () => {
+    const state = form("suite", { id: "t" });
+    expect(
+      validateForm({ ...state, gradersLock: "graders.ts: edit the file" }, NOTHING_ON_DISK),
+    ).toEqual([]);
+    const editing = editingForm({
+      testDir: "suite/t",
+      base: {},
+      values: state.values,
+      graders: [],
+      locks: { id: "t", files: "none" },
+      gradersLock: null,
+      harnessGraded: true,
+    });
+    expect(validateForm(editing, NOTHING_ON_DISK)).toEqual([]);
+  });
+
   it("a goal is not required once the test has a grader", () => {
     expect(validateForm(form("suite", { id: "t" }, [COMMAND_GRADER]), NOTHING_ON_DISK)).toEqual([]);
   });
@@ -398,6 +415,7 @@ describe("writeTest in place", () => {
       graders: graders.map((answers) => ({ answers })),
       locks: { id: "t", files: "files/ (1 files)" },
       gradersLock: null,
+      harnessGraded: false,
     });
   }
 
@@ -439,6 +457,18 @@ describe("writeTest in place", () => {
     expect(() => writeTest(editing("new goal", [GRADER]))).toThrow(/symlink/);
     expect(JSON.parse(read("test.json"))).toEqual(TEST_JSON);
     expect(read("notes.md")).toBe("mine");
+  });
+
+  it("a failed replace keeps the old graders.json, since it moves last", () => {
+    fs.chmodSync(testDir, 0o555);
+    try {
+      expect(() => writeTest(editing("new goal", []))).toThrow();
+    } finally {
+      fs.chmodSync(testDir, 0o755);
+    }
+    expect(JSON.parse(read("graders.json"))).toEqual([GRADER]);
+    expect(JSON.parse(read("test.json"))).toEqual(TEST_JSON);
+    expect(fs.readdirSync(suite)).toEqual(["t"]);
   });
 
   it("the loader reads the folder back after an edit", () => {

@@ -290,13 +290,20 @@ The write keeps one shape for both modes. `stagedFiles` is the "what":
 `replace`. `replace` first checks, with `lstat`, that each target
 (`<testDir>/test.json`, `<testDir>/graders.json`) is absent or a plain
 file, so a target that became a directory or a symlink fails before
-anything moves and the originals stay as they were. When the last grader
+anything moves and the originals stay as they were. Then each staged file
+is renamed over its original, one step each; a failure on the second
+rename says which file was already written. Last, when the last grader
 was removed, the old `graders.json` is renamed into the staging folder and
-leaves with it; `safeDeleteFile` refuses a path outside the nearest
-`package.json`, which every suite in a temp directory is, and
-`safeDeleteDirectoryWithin` already removes the staging folder. Then each
-staged file is renamed over its original, one step each. A failure
-between those two renames is a race the checks cannot close.
+leaves with it, so a failure before that point leaves it in place.
+`safeDeleteFile` refuses a path outside the nearest `package.json`, which
+every suite in a temp directory is, and `safeDeleteDirectoryWithin`
+already removes the staging folder.
+
+The folder path is resolved once at the top of `loadTestForm`, so `.`
+names the folder and every comparison with what the loader returns (which
+is absolute) is absolute against absolute. A test graded by harness pairs
+under `files/` sets `editing.harnessGraded`, and a goal is then not
+required at save, as it is not while the section is locked.
 
 ## Handing the terminal to `$EDITOR`
 

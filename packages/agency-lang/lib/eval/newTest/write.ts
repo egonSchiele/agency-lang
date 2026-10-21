@@ -94,10 +94,14 @@ function fieldProblems(state: FormState, checks: FileChecks): Problem[] {
     problems.push(files);
   }
   // A goal is judged only when the test has no graders of its own, so it
-  // is required only then.
+  // is required only then: no grader in the section, no locked graders
+  // file, and no harness pairs grading it.
+  const graded =
+    state.graders.length > 0 ||
+    state.gradersLock !== null ||
+    (state.editing?.harnessGraded ?? false);
   const required = FIELDS.filter(
-    (spec) =>
-      spec.required && spec.name !== "id" && (spec.name !== "goal" || state.graders.length === 0),
+    (spec) => spec.required && spec.name !== "id" && (spec.name !== "goal" || !graded),
   );
   for (const field of required) {
     if (state.values[field.name] === "") {
@@ -240,15 +244,23 @@ const COMMITS: Record<"create" | "replace", (staging: string, state: FormState) 
     for (const name of names) {
       assertReplaceable(path.join(testDir, name));
     }
+    const staged = stagedFiles(state).map((file) => file.name);
+    staged.forEach((name, i) => {
+      try {
+        fs.renameSync(path.join(staging, name), path.join(testDir, name));
+      } catch (error) {
+        const written = staged.slice(0, i).join(", ");
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(written === "" ? detail : `${detail} (${written} already written)`);
+      }
+    });
     const old = path.join(testDir, "graders.json");
     if (state.graders.length === 0 && fs.existsSync(old)) {
-      // The old file leaves with the staging folder rather than through a
-      // delete helper: `safeDeleteFile` refuses a path outside the nearest
-      // package, which every suite in a temp directory is.
+      // Last, so a failure above leaves it in place. It leaves with the
+      // staging folder rather than through a delete helper: `safeDeleteFile`
+      // refuses a path outside the nearest package, which every suite in a
+      // temp directory is.
       fs.renameSync(old, path.join(staging, "graders.json.old"));
-    }
-    for (const name of stagedFiles(state).map((file) => file.name)) {
-      fs.renameSync(path.join(staging, name), path.join(testDir, name));
     }
     return testDir;
   },

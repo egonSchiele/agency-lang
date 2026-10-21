@@ -128,6 +128,35 @@ describe("loadTestForm", () => {
     );
   });
 
+  it("loads the graders through a relative path, and resolves . to the folder", () => {
+    const graders = [{ kind: "command", name: "runs", command: "true" }];
+    const dir = test("t", { id: "t", goal: "g" }, { "graders.json": JSON.stringify(graders) });
+    const cwd = process.cwd();
+    try {
+      process.chdir(suite);
+      const relative = loadTestForm("t");
+      expect(relative.graders).toHaveLength(1);
+      expect(relative.gradersLock).toBeNull();
+      expect(relative.editing?.testDir).toBe(fs.realpathSync(dir));
+      process.chdir(dir);
+      const dot = loadTestForm(".");
+      expect(dot.locks.id).toBe("t");
+      expect(dot.suiteDir).toBe(fs.realpathSync(suite));
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("marks a test graded by harness pairs, so save does not demand a goal", () => {
+    const dir = test(
+      "t",
+      { input: "hi" },
+      { "files/check.test.json": "{}", "files/check.agency": "" },
+    );
+    expect(loadTestForm(dir).editing?.harnessGraded).toBe(true);
+    expect(loadTestForm(test("u", { goal: "g" })).editing?.harnessGraded).toBe(false);
+  });
+
   it("starts clean, on the first unlocked row", () => {
     const state = loadTestForm(test("t", { description: "d", goal: "g" }));
     expect(state.cursor).toEqual({ kind: "field", name: "description" });

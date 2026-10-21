@@ -17,7 +17,10 @@ import { draftFromSpec, type GraderDraft } from "./graders.js";
 export const STRUCTURED_INPUT_LOCK = "structured input: edit the file";
 const NO_FILES = "none";
 
-export function loadTestForm(testDir: string): FormState {
+export function loadTestForm(testDirAsGiven: string): FormState {
+  // Resolved once, so `.` names the folder and every path comparison below
+  // is absolute against absolute (the loader resolves what it returns).
+  const testDir = path.resolve(testDirAsGiven);
   if (!fs.existsSync(testDir) || !fs.statSync(testDir).isDirectory()) {
     throw new Error(`${testDir} is not a directory`);
   }
@@ -51,7 +54,8 @@ export function loadTestForm(testDir: string): FormState {
     locks.input = STRUCTURED_INPUT_LOCK;
   }
   const graders = gradersOf(testDir, test);
-  return editingForm({ testDir, base, values, locks, ...graders });
+  const harnessGraded = (test.agencyTests ?? []).length > 0;
+  return editingForm({ testDir, base, values, locks, harnessGraded, ...graders });
 }
 
 /** What the files row shows: the path the file names when it names one,

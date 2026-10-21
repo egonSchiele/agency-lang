@@ -315,6 +315,7 @@ describe("an editing form", () => {
       graders: graders.map((answers) => ({ answers })),
       locks: LOCKS,
       gradersLock,
+      harnessGraded: false,
     });
   }
 
@@ -346,6 +347,16 @@ describe("an editing form", () => {
     ]);
     expect(isDirty(state)).toBe(false);
     expect(isDirty(run([{ kind: "pickNext" }], cursorOn(state, grader(0, "repeated"))))).toBe(true);
+  });
+
+  it("a failed save whose row is locked puts the cursor on the first unlocked row", () => {
+    const state = cursorOn(editing(), field("goal"));
+    const failed = run(
+      [{ kind: "saveFailed", problems: [{ row: field("id"), text: "suite/t: ENOENT" }] }],
+      state,
+    );
+    expect(failed.cursor).toEqual(field("description"));
+    expect(failed.message).toBe("suite/t: ENOENT");
   });
 
   it("locked rows are skipped by movement", () => {

@@ -14,6 +14,7 @@ import { nanoid } from "nanoid";
 
 import type { RawOutcome } from "./servedInvocationLifecycle.js";
 import { hasInterrupts, isDebugger, type Interrupt } from "./interrupts.js";
+import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
 
@@ -53,14 +54,21 @@ export function debugRunResumedFrom(execCtx: RuntimeContext<any>): string | unde
   return typeof key === "string" ? key : undefined;
 }
 
-/** Make a checkpoint the run `key`'s, whichever run recorded it. The
- *  attached debugger does this to a checkpoint it rewinds the stopped
- *  run to, a file saved in an earlier session for one: the key is the
- *  one thing the debugger tells runs apart by, and the replay installs
- *  the handlers and the policy as any resume does, so nothing else about
- *  the rewind changes. */
-export function stampDebugRun(stack: { other?: Record<string, unknown> }, key: string): void {
-  stack.other = { ...stack.other, [KEY]: key };
+/** A copy of `checkpoint` that is the run `key`'s, whichever run recorded
+ *  it. The attached debugger rewinds the stopped run to the copy, of a
+ *  file saved in an earlier session for one: the key is the one thing
+ *  the debugger tells runs apart by, and the replay installs the handlers
+ *  and the policy as any resume does, so nothing else about the rewind
+ *  changes. The checkpoint itself is left as it was: one the program
+ *  pinned stays in the store, with the signature it was given, for a
+ *  later resume. The restore re-signs its own copy. */
+export function stampDebugRun(checkpoint: Checkpoint, key: string): Checkpoint {
+  const stamped = Checkpoint.fromJSON(checkpoint.toJSON());
+  if (stamped === null) {
+    throw new Error("a checkpoint the debugger holds could not be copied");
+  }
+  stamped.stack.other = { ...stamped.stack.other, [KEY]: key };
+  return stamped;
 }
 
 /** The run `key` lets go of the debugger with no outcome to judge: its

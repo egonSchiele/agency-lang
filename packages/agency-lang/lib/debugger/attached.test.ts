@@ -14,6 +14,7 @@ import { TestDebuggerIO, fixtureDir, freshImport, withLLMMocks } from "./testHel
 import type { DebuggerCommand } from "./types.js";
 import { hasInterrupts, isDebugger } from "@/runtime/interrupts.js";
 import { isPaused } from "@/runtime/pause.js";
+import { debugRunOfStack } from "@/runtime/debugRun.js";
 import type { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import type { DebugStopData } from "@/runtime/debugger.js";
 import * as helper from "../../tests/debugger/waiter.js";
@@ -369,13 +370,29 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
 
   it("after the caller answers the program's interrupt, a step back reaches before it", async () => {
     const mod = await freshImport(compiledPath(fixtures.pauses));
-    const { io, driver } = attachTo(mod, [
+    // The window's checkpoint the step back lands on, and the key it
+    // carries: the first run's, which the rewind must leave as it is.
+    let target: Checkpoint | undefined;
+    let targetRun: string | undefined;
+    const io = new (class extends TestDebuggerIO {
+      override async waitForCommand(): Promise<DebuggerCommand> {
+        const command = await super.waitForCommand();
+        if (command.type === "stepBack") {
+          // The window holds the first run's checkpoint and the resumed
+          // run's own, from this stop; the step back goes to the first.
+          target = driver.debuggerState.getCheckpoints()[0];
+          targetRun = debugRunOfStack(target?.stack);
+        }
+        return command;
+      }
+    })([
       { type: "step" },
       { type: "continue" },
       { type: "stepBack", preserveOverrides: false },
       { type: "continue" },
       { type: "continue" },
     ]);
+    const { driver } = attachTo(mod, [], io);
 
     const asked = await mod.main();
     expect(hasInterrupts(asked.data)).toBe(true);
@@ -385,6 +402,11 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     const askedAgain = await mod.respondToInterrupts(asked.data, [{ type: "approve" }]);
 
     expect(hasInterrupts(askedAgain.data)).toBe(true);
+    // The rewind went to a copy stamped with the resumed run's key; the
+    // checkpoint itself still carries the key of the run that recorded it.
+    expect(targetRun).toBeDefined();
+    expect(targetRun).not.toBe(debugRunOfStack(askedAgain.data[0].checkpoint?.stack));
+    expect(debugRunOfStack(target?.stack)).toBe(targetRun);
     expect(io.logLines.some((line) => line.startsWith("Rewinding"))).toBe(true);
     expect(io.logLines).not.toContainEqual("Already at earliest checkpoint");
     driver.debuggerState.stepping();

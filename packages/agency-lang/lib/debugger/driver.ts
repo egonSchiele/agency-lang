@@ -875,7 +875,7 @@ export class DebuggerDriver {
     if (session !== undefined) {
       const thisRun = debugRunOfStack(from.checkpoint?.stack);
       if (thisRun !== undefined) {
-        stampDebugRun(checkpoint.stack, thisRun);
+        checkpoint = stampDebugRun(checkpoint, thisRun);
       }
     }
     // Reset state for replay

@@ -81,6 +81,10 @@ async function replayFrom(
   const resolved = resolveInvocation({ kind: "resume", options: args.invocation, runId });
   const execCtx = await ctx.createExecutionContext(resolved);
   try {
+    // The restore can throw too, when the program's code changed since
+    // the checkpoint for one. The debugger decides what a failed rewind
+    // means: a failed `:load` goes back to the stop, which keeps the run,
+    // and a thrown leg is let go of in `settleStops`.
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
       policy: resolved.policy,

@@ -25,7 +25,7 @@ import { isPaused } from "./pause.js";
 import { rewindFrom } from "./rewind.js";
 import type { Checkpoint, CheckpointStore } from "./state/checkpointStore.js";
 import { ATTACHED_AGENT_END } from "./agentEnd.js";
-import { ATTACHED_RESUME } from "./debugRun.js";
+import { ATTACHED_RESUME, debugRunOfStack, letGoOfDebugRun } from "./debugRun.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState, RunNodeCoreResult } from "./types.js";
 
@@ -225,9 +225,22 @@ export async function settleStops(
       current = await letStopsGo(ctx, data, leg);
       continue;
     }
-    const ran = await attached.run(current.value, leg);
+    // The run is let go of when the debugger leaves the stop with no
+    // outcome to judge: its UI throwing an ordinary error, or a leg it
+    // resumed throwing before the leg had a context of its own, as a
+    // rewind whose restore fails does. A failed `:load` is neither: the
+    // driver goes back to the stop, and the run keeps the debugger.
+    const thisRun = debugRunOfStack(stops[0]?.checkpoint?.stack);
+    let ran: AttachedRunResult;
+    try {
+      ran = await attached.run(current.value, leg);
+    } catch (error) {
+      letGoOfDebugRun(ctx, thisRun);
+      throw error;
+    }
     debuggerRanALeg = true;
     if ("threw" in ran) {
+      letGoOfDebugRun(ctx, thisRun);
       return { status: "threw", error: ran.threw, usage: ran.usage, traceId: current.traceId };
     }
     current = {

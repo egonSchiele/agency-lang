@@ -28,15 +28,21 @@ export class DebuggerState {
    *  the debugger. A context with no key is treated as the run's own. A
    *  run other than the last one starts clean: the rolling window and
    *  the step target were the last run's, and a step back from the new
-   *  run's first stop must not land in the old run's state. */
-  owns(key: string | undefined): boolean {
+   *  run's first stop must not land in the old run's state. The last
+   *  run's own continuation is not another run: a caller's resume of it
+   *  carries a new key and the one it came from (`resumedFrom`), and
+   *  keeps the window, so a step back reaches before the interrupt the
+   *  caller answered. */
+  owns(key: string | undefined, resumedFrom?: string): boolean {
     if (this.attached === undefined || key === undefined) {
       return true;
     }
     if (this.ownedRun === null) {
       this.ownedRun = key;
-      if (this.lastOwner !== key) {
-        this.lastOwner = key;
+      const continues =
+        this.lastOwner === key || (resumedFrom !== undefined && this.lastOwner === resumedFrom);
+      this.lastOwner = key;
+      if (!continues) {
         this.checkpoints = new CheckpointStore(100, this.rewindSize);
         // The mode stays: a `continue` the person gave holds across a
         // caller's resume, which is a new owner too.

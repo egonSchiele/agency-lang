@@ -99,12 +99,15 @@ function noteView(help: string): RowView {
 export function rowViewsOf(state: FormState): RowView[] {
   const fields = FIELDS.flatMap((field): RowView[] => {
     const row: Row = { kind: "field", name: field.name };
+    const lock = state.locks[field.name];
+    // A locked field shows its lock text where its help would be: dim,
+    // with no cursor, since the row cannot be reached.
     const view: RowView = {
       row,
       label: field.label,
-      value: state.values[field.name],
-      help: field.help,
-      cursor: sameRow(state.cursor, row),
+      value: lock === undefined ? state.values[field.name] : "",
+      help: lock ?? field.help,
+      cursor: lock === undefined && sameRow(state.cursor, row),
       typed: true,
       heading: false,
     };
@@ -114,7 +117,12 @@ export function rowViewsOf(state: FormState): RowView[] {
   const graders = rowsOf(state)
     .filter((row) => row.kind === "grader")
     .map((row) => graderView(state, row));
-  const section = graders.length === 0 ? [noteView(NO_GRADERS)] : graders;
+  const section =
+    state.gradersLock !== null
+      ? [noteView(state.gradersLock)]
+      : graders.length === 0
+        ? [noteView(NO_GRADERS)]
+        : graders;
   return [...fields, BLANK, { ...BLANK, label: "graders", heading: true }, ...section];
 }
 
@@ -171,12 +179,18 @@ export function renderForm(args: FormViewArgs): Element {
     { justifyContent: "space-between" },
     column(
       { justifyContent: "flex-start" },
-      line(`NEW TEST  ${sanitizeUntrusted(state.suiteDir)}`, { bold: true }),
+      line(titleOf(state), { bold: true }),
       line(""),
       ...visible.map((entry) => entry.element),
     ),
     line(footer, { dim: footer === args.hints }),
   );
+}
+
+function titleOf(state: FormState): string {
+  return state.editing === null
+    ? `NEW TEST  ${sanitizeUntrusted(state.suiteDir)}`
+    : `EDIT TEST  ${sanitizeUntrusted(state.editing.testDir)}`;
 }
 
 /** The state with `scrollTop` moved so the cursor row's last line is on

@@ -3684,6 +3684,7 @@ const unaryNotParser: Parser<Expression> = (input: string) => {
       operator: "!" as Operator,
       left: { type: "boolean" as const, value: true },
       right: atomResult.result,
+      loc: atomResult.result.loc,
     } as BinOpExpression,
     atomResult.rest,
   );
@@ -3705,6 +3706,7 @@ const unaryMinusParser: Parser<Expression> = (input: string) => {
       operator: "unary-" as Operator,
       left: { type: "boolean" as const, value: true },
       right: atomResult.result,
+      loc: atomResult.result.loc,
     } as BinOpExpression,
     atomResult.rest,
   );
@@ -3730,6 +3732,7 @@ function unaryKeywordParser(keyword: string): Parser<Expression> {
         operator: keyword as Operator,
         left: { type: "boolean" as const, value: true },
         right: atomResult.result,
+        loc: atomResult.result.loc,
       } as BinOpExpression,
       atomResult.rest,
     );
@@ -4173,6 +4176,7 @@ const atom: Parser<Expression> = (input: string) => {
       operator: ppResult.result as Operator,
       left: result.result,
       right: { type: "boolean" as const, value: true },
+      loc: result.result.loc,
     } as BinOpExpression,
     ppResult.rest,
   );
@@ -4198,6 +4202,18 @@ function wsOp(opStr: string): Parser<string> {
 const wsKeyword = (kw: string): Parser<string> =>
   map(seqR(optionalSpacesOrNewline, str(kw), not(varNameChar), optionalSpaces), () => kw);
 
+// The span of an expression built from two operands: from the start of
+// the first that has a location to the end of the last. A statement that
+// is a binop, `story += line` or `i++`, is recorded in the source map by
+// this location, so the debugger can highlight it; without one it would
+// be the one kind of statement the map skips.
+function locSpanning(left: Expression, right: Expression): SourceLocation | undefined {
+  const first = left.loc ?? right.loc;
+  const last = right.loc ?? left.loc;
+  if (!first || !last) return undefined;
+  return { line: first.line, col: first.col, start: first.start, end: last.end };
+}
+
 // Build a BinOpExpression AST node
 function makeBinOp(op: string): (left: Expression, right: Expression) => Expression {
   return (left, right) => ({
@@ -4205,6 +4221,7 @@ function makeBinOp(op: string): (left: Expression, right: Expression) => Express
     operator: op as Operator,
     left,
     right,
+    loc: locSpanning(left, right),
   });
 }
 

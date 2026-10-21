@@ -1,0 +1,13 @@
+// A node that hands its own interrupt back to its caller after one
+// statement, and another node, so a test can check that the first run lets
+// go of an attached debugger when it returns to its caller.
+node main() {
+  x = 1
+  interrupt("ok?")
+  return x
+}
+
+node other() {
+  y = 1
+  return y
+}

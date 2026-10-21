@@ -160,6 +160,7 @@ fix `debugger-future-work.md` lists for the UI side's source-map import.
 | `in`, `out`             | Step in, step out.                                                                                       |
 | `continue`              | Run until the next `debugger()` statement, the next stop a person's breakpoint makes, or the end. Prints `running` and exits at once. |
 | `wait [--for <duration>]` | Block until the program stops or ends, up to the duration (default 5 minutes), then print `where`, or `still running` with exit code 3 at the deadline. |
+| `pause`                 | Ask a running program to stop at its next statement, as `s` does while it runs in the terminal debugger: the `pause` message on the channel. Prints `pausing at the next statement` and exits at once; a model call in flight is not interrupted. `wait` then returns at that stop. |
 | `back`                  | Step back one checkpoint, as `stepBack` does; refused at the earliest with the reason.                   |
 | `rewind <id>`           | Rewind to a checkpoint from `checkpoints`.                                                               |
 | `set <name> <json>`     | Queue a local's new value for the next resume, as the debugger's `set`; printed back with the frame.     |

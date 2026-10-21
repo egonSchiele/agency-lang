@@ -6,7 +6,9 @@ description: "Fetch URLs from Agency code."
 # http
 
 Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
-  Aborting tears down the in-flight request.
+  Aborting tears down the in-flight request. A request that has not finished
+  in 30 seconds, headers and body together, fails with a message naming the
+  URL and the limit; `timeout` raises the limit per call, and `0` removes it.
 
   ```ts
   import { fetch, fetchJSON } from "std::http"
@@ -35,7 +37,7 @@ export type HttpMethod =
   | "DELETE"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L34))
 
 ## Effects
 
@@ -50,7 +52,7 @@ effect std::http::fetch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L27))
 
 ### std::http::fetchJSON
 
@@ -63,7 +65,7 @@ effect std::http::fetchJSON {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
 
 ### std::http::fetchMarkdown
 
@@ -76,7 +78,7 @@ effect std::http::fetchMarkdown {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L31))
 
 ## Functions
 
@@ -90,6 +92,7 @@ fetch(
   allowedDomains: string[] = [],
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
+  timeout: number = 30000,
 ): Result
 ```
 
@@ -101,6 +104,7 @@ Fetch a URL and return the response as text.
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
+  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -116,6 +120,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
 | body | `Record<string, any> \| string \| null` | null |
+| timeout | `number` | 30000 |
 
 **Returns:** `Result`
 
@@ -123,7 +128,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L42))
 
 ### fetchJSON
 
@@ -135,6 +140,7 @@ fetchJSON(
   allowedDomains: string[] = [],
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
+  timeout: number = 30000,
 ): Result
 ```
 
@@ -146,6 +152,7 @@ Fetch a URL and return the response parsed as JSON.
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
+  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -161,6 +168,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
 | body | `Record<string, any> \| string \| null` | null |
+| timeout | `number` | 30000 |
 
 **Returns:** `Result`
 
@@ -168,7 +176,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L76))
 
 ### fetchMarkdown
 
@@ -180,6 +188,7 @@ fetchMarkdown(
   allowedDomains: string[] = [],
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
+  timeout: number = 30000,
 ): Result
 ```
 
@@ -191,6 +200,7 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
   @param allowedDomains - Restrict fetches to these domains (empty allows all)
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
+  @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -206,6 +216,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 | allowedDomains | `string[]` | [] |
 | method | [HttpMethod](#httpmethod) | "GET" |
 | body | `Record<string, any> \| string \| null` | null |
+| timeout | `number` | 30000 |
 
 **Returns:** `Result`
 
@@ -213,4 +224,4 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L110))

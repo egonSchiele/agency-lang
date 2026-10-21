@@ -194,6 +194,124 @@ describe("HTTP fetch abort integration", () => {
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
+  it("__internal_fetch: a server that never answers fails with the URL and the limit, not a cancel", async () => {
+    await startServer(() => {
+      /* never write, never end */
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(p).rejects.toThrow(`Request to ${url} timed out after 0.05 seconds`);
+    await expect(p).rejects.not.toBeInstanceOf(AgencyCancelledError);
+    expect(ctx.getAbortSignal(new StateStack()).aborted).toBe(false);
+  });
+
+  it("__internal_fetch: a body that stalls after the headers times out the same way", async () => {
+    await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.write("first-chunk");
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(p).rejects.toThrow(/timed out after 0.05 seconds/);
+  });
+
+  it("__internal_fetchJSON and __internal_fetchMarkdown time out too", async () => {
+    await startServer(() => {
+      /* never answer */
+    });
+    const ctx = makeMockCtx();
+    const json = __internal_fetchJSON(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(json).rejects.toThrow(/timed out/);
+    const markdown = __internal_fetchMarkdown(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      50,
+    );
+    await expect(markdown).rejects.toThrow(/timed out/);
+  });
+
+  it("__internal_fetch: a timeout of 0 waits for a slow server", async () => {
+    await startServer((_req, res) => {
+      setTimeout(() => res.end("late"), 80);
+    });
+    const ctx = makeMockCtx();
+    const text = await __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      0,
+    );
+    expect(text).toBe("late");
+  });
+
+  it("__internal_fetch: a cancel during the wait is still a cancel, not a timeout", async () => {
+    await startServer(() => {
+      /* never answer */
+    });
+    const ctx = makeMockCtx();
+    const p = __internal_fetch(
+      ctx,
+      new StateStack(),
+      new ThreadStore(),
+      url,
+      "",
+      {},
+      [],
+      "GET",
+      null,
+      5_000,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    ctx.cancel("test stop");
+    await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
   it("__internal_fetch: aborts a slow body read (cancellation between chunks)", async () => {
     // Server writes headers immediately, then drip-feeds the body so
     // the abort hits the streaming-read path inside readBodyCapped

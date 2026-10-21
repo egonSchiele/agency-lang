@@ -212,15 +212,18 @@ export class PromptRunner {
       branchStack: StateStack;
       handler: { name: string };
       namedArgs: Record<string, unknown>;
+      /** The tool round, counted from 0 after the first request. */
+      round: number;
     },
     body: () => Promise<Interrupt[] | void>,
   ): Promise<void> {
     const { run, branchStack, handler, namedArgs } = call;
     const label = toolStopLabel(handler.name, namedArgs);
     const location = this.loopLocation(key, run);
-    await branch.step(key, () =>
-      whileBusy(run, branchStack, { kind: "tool", label, location }, body),
-    );
+    // The person counts rounds from the first request, so the calls of
+    // tool round 0 are in round 1, as `llmCallLabel` counts them.
+    const wait = { kind: "tool" as const, label, location, round: call.round + 1 };
+    await branch.step(key, () => whileBusy(run, branchStack, wait, body));
   }
 
   /** Where one of the loop's steps is, for a stop before it and for the

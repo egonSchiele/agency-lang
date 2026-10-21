@@ -39,7 +39,7 @@ let nextWaitToken = 1;
 export async function whileBusy<T>(
   run: Run,
   stack: StateStack,
-  wait: { kind: BusyKind; label: string; location: StopLocation },
+  wait: { kind: BusyKind; label: string; location: StopLocation; round?: number },
   body: () => Promise<T>,
 ): Promise<T> {
   const slot: DebugSlot | undefined = run.ctx.debugSlot;

@@ -45,14 +45,12 @@ export function busyText(shown: BusyShown, line: number | undefined, now: number
 }
 
 /** `round 1, waiting on model`, or `round 2, in tool search(query:
- *  "cats")`. A tool entry's label is the call; its round is in the step
- *  key, `round.N.tool...`, where N counts the tool rounds from 0 after
- *  the first request, so the person's round is N + 1. */
+ *  "cats")`. A tool entry's label is the call, and the run says which
+ *  round it is in (`round`, counted as the person counts). */
 function doing(entry: BusyEntry): string {
   if (entry.kind === "model") {
     return `${entry.label}, waiting on model`;
   }
-  const round = /\/round\.(\d+)\.tool\./.exec(entry.location.stepPath);
-  const prefix = round === null ? "" : `round ${Number(round[1]) + 1}, `;
+  const prefix = entry.round === undefined ? "" : `round ${entry.round}, `;
   return `${prefix}in tool ${entry.label}`;
 }

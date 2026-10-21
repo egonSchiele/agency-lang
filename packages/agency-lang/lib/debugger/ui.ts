@@ -443,12 +443,10 @@ export class DebuggerUI implements DebuggerIO {
         ? ""
         : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
     // At a stop with a wait still open, an `async` call in a model
-    // request for one, the wait is named here; the command bar names it
-    // while the program runs.
-    const waiting =
-      this.spinnerInterval === null && this.busyBarText() !== ""
-        ? ` | waiting: ${this.busyBarText()}`
-        : "";
+    // request for one, the wait is named here, with its time as of the
+    // stop; the command bar names it while the program runs.
+    const busy = this.spinnerInterval === null ? this.busyBarText() : "";
+    const waiting = busy === "" ? "" : ` | waiting: ${busy}`;
     return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${waiting}{/gray-fg}`;
   }
 

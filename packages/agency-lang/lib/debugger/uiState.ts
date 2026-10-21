@@ -308,10 +308,19 @@ export class UIState {
       this.log(`Could not find compiled JS file for module ${moduleId}`);
       return false;
     }
-    // Dynamically import the compiled module
+    // Dynamically import the compiled module. Attached, this runs in the
+    // debugger's process, where the program's dependencies may not load;
+    // a failure costs the source pane its line, not the debugger.
     const absOutput = path.resolve(jsFile);
-    // eslint-disable-next-line no-restricted-syntax -- compiled module path is only known at runtime
-    const mod = await import(absOutput);
+    let mod: { __sourceMap?: SourceMap } | undefined;
+    try {
+      // eslint-disable-next-line no-restricted-syntax -- compiled module path is only known at runtime
+      mod = await import(absOutput);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`Could not load module ${absOutput} for its source map: ${message}`);
+      return false;
+    }
     if (!mod) {
       this.log(`Could not import module ${absOutput} for checkpoint`);
       return false;

@@ -148,6 +148,14 @@ export class DebuggerDriver {
     }
     this.detachRequested = false;
     this.debuggerState.ownedRun = null;
+    // A driver that attaches again is a new session: a wait still open
+    // from before the detach is news to it, so the last report is
+    // forgotten and the install below reports the open waits afresh.
+    this.debuggerState.reportedWaits = [];
+    // Attached, the program is running until its first stop, so the UI
+    // spins from here, with what the program is waiting on once the
+    // install below reports it; `attendStop` stops the spinner.
+    this.ui.startSpinner();
     this.debuggerState.attached = {
       run: (result, leg) => this.runAttached(result, leg),
       finished: (result) => this.finishedAttached(result),
@@ -178,6 +186,7 @@ export class DebuggerDriver {
     this.detachWaiters = [];
     this.debuggerState.ownedRun = null;
     delete this.debuggerState.attached;
+    this.ui.stopSpinner();
     // Another debugger may have been installed since; only this one is
     // removed. A module compiled before `__getDebugger` existed cannot
     // say, and is cleared.
@@ -203,6 +212,7 @@ export class DebuggerDriver {
   /** The program finished in a leg the caller ran: a line in the log and
    *  a render that does not wait. The next run to stop is debugged next. */
   private async finishedAttached(result: any): Promise<void> {
+    this.ui.stopSpinner();
     this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
     this.renderInBackground();
   }
@@ -242,6 +252,10 @@ export class DebuggerDriver {
     render: () => Promise<void>,
     session: AttachedSession | undefined,
   ): Promise<DebuggerCommand> {
+    // The program is stopped: the spinner that ran from the attach, or
+    // from the moment the caller took over the program's own interrupt,
+    // ends here. After a leg the driver ran, it is already off.
+    this.ui.stopSpinner();
     if (session === undefined) {
       await render();
       return await this.ui.waitForCommand();
@@ -439,6 +453,9 @@ export class DebuggerDriver {
               `Passed the stop ${describeStop(stop)} while the program waits on its own interrupt`,
             );
           }
+          // Once the caller answers, the program runs on with no leg of
+          // the driver's, so the UI spins until the next stop.
+          this.ui.startSpinner();
           return result;
         }
         // The interrupt shown: the first that asks the person something,

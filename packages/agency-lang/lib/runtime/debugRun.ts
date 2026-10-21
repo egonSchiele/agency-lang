@@ -17,6 +17,7 @@ import { hasInterrupts, isDebugger, type Interrupt } from "./interrupts.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
+import { reportWaits } from "./waits.js";
 
 const KEY = "debugRun";
 /** The key the run was resumed from, when a caller's resume minted it a
@@ -78,6 +79,9 @@ export function letGoOfDebugRun(execCtx: RuntimeContext<any>, key: string | unde
   const state = execCtx.debuggerState;
   if (state?.attached !== undefined && key !== undefined && state.ownedRun === key) {
     state.ownedRun = null;
+    // The debugger is nobody's again, so the waits of the other runs,
+    // hidden while this one was debugged, are shown at once.
+    reportWaits(execCtx.debugSlot);
   }
 }
 

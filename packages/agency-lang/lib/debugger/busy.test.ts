@@ -49,11 +49,12 @@ describe("busyText", () => {
     );
   });
 
-  it("names the tool call with its round, from the step key", () => {
+  it("names the tool call with its round", () => {
     const shown = {
       entry: entry({
         kind: "tool",
         label: 'search(query: "cats")',
+        round: 2,
         location: {
           moduleId: "story.agency",
           scopeName: "main",

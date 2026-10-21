@@ -3,6 +3,8 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { isDirty, rowsOf } from "./form.js";
+import { specObjectFor } from "./graders.js";
 import { loadTestForm } from "./load.js";
 
 describe("loadTestForm", () => {
@@ -120,6 +122,34 @@ describe("loadTestForm", () => {
     expect(state.locks.files).toBe("../shared");
     expect(state.gradersLock).toBe("../common.ts: edit the file");
     expect(state.graders).toEqual([]);
+  });
+
+  it("a spelled-out ./files shows the sibling count, like the default", () => {
+    const dir = test("t", { goal: "g", files: "./files" }, { "files/a.txt": "a" });
+    expect(loadTestForm(dir).locks.files).toBe("files/ (1 files)");
+  });
+
+  it("shows a git files source as written, without cloning it", () => {
+    const dir = test("t", { goal: "g", files: "git@example.invalid:nobody/nothing.git" });
+    expect(loadTestForm(dir).locks.files).toBe("git@example.invalid:nobody/nothing.git");
+  });
+
+  it("escapes style tags in lock text that came from the file", () => {
+    fs.mkdirSync(path.join(suite, "{red-fg}"));
+    fs.writeFileSync(path.join(suite, "{red-fg}", "g.ts"), "export default []");
+    const dir = test("t", { goal: "g", files: "../{red-fg}", graders: "../{red-fg}/g.ts" });
+    const state = loadTestForm(dir);
+    expect(state.locks.files).toBe("../\\{red-fg\\}");
+    expect(state.gradersLock).toBe("../\\{red-fg\\}/g.ts: edit the file");
+  });
+
+  it("opens a goal grader with a passing score and no must-pass clean, with the row shown", () => {
+    const graders = [{ kind: "goal", name: "judge", goal: "says hi", passingScore: 0.7 }];
+    const dir = test("t", { goal: "g" }, { "graders.json": JSON.stringify(graders) });
+    const state = loadTestForm(dir);
+    expect(isDirty(state)).toBe(false);
+    expect(rowsOf(state)).toContainEqual({ kind: "grader", index: 0, question: "passingScore" });
+    expect(specObjectFor(state.graders[0]).passingScore).toBe(0.7);
   });
 
   it("refuses a test with a rubric", () => {

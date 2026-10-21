@@ -407,14 +407,18 @@ describe("writeTest in place", () => {
     fs.rmSync(suite, { recursive: true, force: true });
   });
 
-  function editing(goal: string, graders: Answers[]): FormState {
+  function editing(
+    goal: string,
+    graders: Answers[],
+    options: { base?: Record<string, unknown>; gradersLock?: string } = {},
+  ): FormState {
     return editingForm({
       testDir,
-      base: TEST_JSON,
+      base: options.base ?? TEST_JSON,
       values: { id: "", description: "", input: "", files: "", goal },
       graders: graders.map((answers) => ({ answers })),
       locks: { id: "t", files: "files/ (1 files)" },
-      gradersLock: null,
+      gradersLock: options.gradersLock ?? null,
       harnessGraded: false,
     });
   }
@@ -440,6 +444,29 @@ describe("writeTest in place", () => {
     expect(JSON.parse(read("test.json")).goal).toBe("new goal");
   });
 
+  it("removing the last grader also drops a graders key the file spelled out, so the loader reads it back", () => {
+    const base = { ...TEST_JSON, graders: "./graders.json" };
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify(base));
+    writeTest(editing("new goal", [], { base }));
+    expect(fs.existsSync(path.join(testDir, "graders.json"))).toBe(false);
+    expect(JSON.parse(read("test.json"))).toEqual({ goal: "new goal", tags: ["a"], timeoutSec: 5 });
+    expect(loadInputs(testDir)[0].graders).toBeUndefined();
+  });
+
+  it("keeps a graders key that still names the file while a grader remains", () => {
+    const base = { ...TEST_JSON, graders: "./graders.json" };
+    writeTest(editing("new goal", [GRADER], { base }));
+    expect(JSON.parse(read("test.json")).graders).toBe("./graders.json");
+  });
+
+  it("leaves a sibling graders.json alone while the section is locked by a graders path elsewhere", () => {
+    fs.writeFileSync(path.join(suite, "shared.ts"), "export default []");
+    const base = { ...TEST_JSON, graders: "../shared.ts" };
+    writeTest(editing("new goal", [], { base, gradersLock: "../shared.ts: edit the file" }));
+    expect(JSON.parse(read("graders.json"))).toEqual([GRADER]);
+    expect(JSON.parse(read("test.json")).graders).toBe("../shared.ts");
+  });
+
   it("writes graders.json for a test that had none", () => {
     fs.unlinkSync(path.join(testDir, "graders.json"));
     writeTest(editing("new goal", [GRADER]));
@@ -459,7 +486,7 @@ describe("writeTest in place", () => {
     expect(read("notes.md")).toBe("mine");
   });
 
-  it("a failed replace keeps the old graders.json, since it moves last", () => {
+  it("a replace that cannot touch the folder leaves the old graders.json and test.json as they were", () => {
     fs.chmodSync(testDir, 0o555);
     try {
       expect(() => writeTest(editing("new goal", []))).toThrow();

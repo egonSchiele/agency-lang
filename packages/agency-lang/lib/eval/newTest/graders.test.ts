@@ -124,6 +124,13 @@ describe("questionsFor", () => {
     expect(names({ kind: "count", mustPass: "yes" })).not.toContain("passingScore");
   });
 
+  it("keeps the passing score row once it holds a value, even when the goal is not must-pass", () => {
+    const answered = draft({ kind: "goal", goal: "g", passingScore: "0.7" });
+    expect(names(answered.answers)).toContain("passingScore");
+    expect(specObjectFor(answered).passingScore).toBe(0.7);
+    expect(names({ kind: "goal", goal: "g", passingScore: " " })).not.toContain("passingScore");
+  });
+
   it("asks max for at-most scoring and full and zero for between", () => {
     expect(names({ kind: "number" })).toEqual([
       "kind",

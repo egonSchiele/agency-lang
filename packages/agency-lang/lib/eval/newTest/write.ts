@@ -212,9 +212,14 @@ export function testJsonFor(
 type StagedFile = { name: string; text: string };
 
 /** What a save writes: `test.json`, and `graders.json` when there is at
- *  least one grader. */
+ *  least one grader. When the last grader was removed from an editable
+ *  section, a `graders` key the file spelled out goes too, or the loader
+ *  would look for the file this save deletes. */
 function stagedFiles(state: FormState): StagedFile[] {
-  const base = state.editing === null ? {} : state.editing.base;
+  const base = state.editing === null ? {} : { ...state.editing.base };
+  if (removesGraders(state)) {
+    delete base.graders;
+  }
   const testJson = `${JSON.stringify(testJsonFor(state.values, base, state.locks), null, JSON_INDENT)}\n`;
   const files: StagedFile[] = [{ name: "test.json", text: testJson }];
   if (state.graders.length > 0) {
@@ -223,10 +228,20 @@ function stagedFiles(state: FormState): StagedFile[] {
   return files;
 }
 
+/** Whether a save takes a test's `graders.json` away: the section is
+ *  editable and empty. A locked section leaves the file alone, since the
+ *  form never read it. */
+function removesGraders(state: FormState): boolean {
+  return state.editing !== null && state.gradersLock === null && state.graders.length === 0;
+}
+
 /** How the staged files reach their place. `create` renames the whole
  *  staging folder into the suite as a new test. `replace` moves each file
  *  over its original in an existing test folder, one rename each. */
-const COMMITS: Record<"create" | "replace", (staging: string, state: FormState) => string> = {
+const COMMITS: Record<
+  "create" | "replace",
+  (staging: string, state: FormState, staged: string[]) => string
+> = {
   create: (staging, state) => {
     const target = testDirFor(path.resolve(state.suiteDir), state.values.id);
     const files = filesDirFor(state);
@@ -241,32 +256,41 @@ const COMMITS: Record<"create" | "replace", (staging: string, state: FormState) 
     fs.renameSync(staging, target);
     return target;
   },
-  replace: (staging, state) => {
-    const testDir = state.editing?.testDir ?? "";
+  replace: (staging, state, staged) => {
+    if (state.editing === null) {
+      throw new Error("replace needs a test being edited");
+    }
+    const testDir = state.editing.testDir;
     const names = ["test.json", "graders.json"];
     // Every target is checked before anything moves, so a failure here
     // leaves the originals as they were.
     for (const name of names) {
       assertReplaceable(path.join(testDir, name));
     }
-    const staged = stagedFiles(state).map((file) => file.name);
+    // The old graders.json is moved into the staging folder first and
+    // leaves with it; a rename that fails after it moves puts it back, so
+    // the folder is the originals or the new files, not a mix. It leaves
+    // this way rather than through a delete helper: `safeDeleteFile`
+    // refuses a path outside the nearest package, which every suite in a
+    // temp directory is.
+    const old = path.join(testDir, "graders.json");
+    const parked =
+      removesGraders(state) && fs.existsSync(old) ? path.join(staging, "graders.json.old") : null;
+    if (parked !== null) {
+      fs.renameSync(old, parked);
+    }
     staged.forEach((name, i) => {
       try {
         fs.renameSync(path.join(staging, name), path.join(testDir, name));
       } catch (error) {
         const written = staged.slice(0, i).join(", ");
         const detail = error instanceof Error ? error.message : String(error);
+        if (parked !== null) {
+          fs.renameSync(parked, old);
+        }
         throw new Error(written === "" ? detail : `${detail} (${written} already written)`);
       }
     });
-    const old = path.join(testDir, "graders.json");
-    if (state.graders.length === 0 && fs.existsSync(old)) {
-      // Last, so a failure above leaves it in place. It leaves with the
-      // staging folder rather than through a delete helper: `safeDeleteFile`
-      // refuses a path outside the nearest package, which every suite in a
-      // temp directory is.
-      fs.renameSync(old, path.join(staging, "graders.json.old"));
-    }
     return testDir;
   },
 };
@@ -305,10 +329,12 @@ export function writeTest(state: FormState): string {
   removeStaging(suiteDir, staging);
   fs.mkdirSync(staging);
   try {
-    for (const file of stagedFiles(state)) {
+    const staged = stagedFiles(state);
+    for (const file of staged) {
       fs.writeFileSync(path.join(staging, file.name), file.text);
     }
-    return COMMITS[state.editing === null ? "create" : "replace"](staging, state);
+    const names = staged.map((file) => file.name);
+    return COMMITS[state.editing === null ? "create" : "replace"](staging, state, names);
   } finally {
     removeStaging(suiteDir, staging);
   }

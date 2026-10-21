@@ -10,6 +10,7 @@ import { parseGradersJson } from "@/eval/gradersJson/schema.js";
 import { walkTreeRefusingSymlinks } from "@/eval/grading/graderFilesSnapshot.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 import type { Test } from "@/eval/runTypes.js";
+import { sanitizeUntrusted } from "@/tui/untrusted.js";
 
 import { editingForm, type FieldName, type FormState } from "./form.js";
 import { draftFromSpec, type GraderDraft } from "./graders.js";
@@ -29,8 +30,9 @@ export function loadTestForm(testDirAsGiven: string): FormState {
     throw new Error(`${testDir} has no test.json; eval edit opens one test folder`);
   }
   // A goal is not required here: a test that lacks one is what the form
-  // is for.
-  const [test] = loadInputs(testDir, undefined, { requireGoal: false });
+  // is for. The files entry is not resolved: the form shows it as written,
+  // and resolving a git source would clone it to draw a row.
+  const [test] = loadInputs(testDir, undefined, { requireGoal: false, skipFiles: true });
   const base = JSON.parse(fs.readFileSync(testJson, "utf8")) as Record<string, unknown>;
   if (base.rubric !== undefined) {
     throw new Error(`${testJson} has a rubric; this form edits goal`);
@@ -49,7 +51,7 @@ export function loadTestForm(testDirAsGiven: string): FormState {
     files: "",
     goal: test.goal ?? "",
   };
-  const locks: FormState["locks"] = { id: folder, files: filesLock(testDir, test, base) };
+  const locks: FormState["locks"] = { id: folder, files: filesLock(testDir, base) };
   if (structured) {
     locks.input = STRUCTURED_INPUT_LOCK;
   }
@@ -58,25 +60,27 @@ export function loadTestForm(testDirAsGiven: string): FormState {
   return editingForm({ testDir, base, values, locks, harnessGraded, ...graders });
 }
 
-/** What the files row shows: the path the file names when it names one,
- *  else a count of the sibling `files/`, else `none`. The form models only
- *  the sibling folder, so a path elsewhere is shown as written. The sibling
- *  is checked by its own path, since the loader resolves a link. */
-function filesLock(testDir: string, test: Test, base: Record<string, unknown>): string {
-  if (typeof base.files === "string") {
-    return base.files;
+/** What the files row shows: a count of the sibling `files/` when the
+ *  file names it or names nothing and it exists, else the path the file
+ *  names as written, else `none`. The form models only the sibling folder,
+ *  so a path elsewhere is shown and not read. Lock text is drawn by the
+ *  style parser, so a name from the file is sanitized here. */
+function filesLock(testDir: string, base: Record<string, unknown>): string {
+  const sibling = path.join(testDir, "files");
+  if (typeof base.files === "string" && path.resolve(testDir, base.files) !== sibling) {
+    return sanitizeUntrusted(base.files);
   }
-  if (test.files === undefined) {
+  if (typeof base.files !== "string" && !fs.existsSync(sibling)) {
     return NO_FILES;
   }
-  const sibling = path.join(testDir, "files");
   try {
     if (fs.lstatSync(sibling).isSymbolicLink()) {
       throw new Error(`files must not be a symlink: ${sibling}`);
     }
     return `files/ (${walkTreeRefusingSymlinks(sibling, "files").length} files)`;
   } catch (error) {
-    return `files/ (could not be read: ${error instanceof Error ? error.message : String(error)})`;
+    const detail = error instanceof Error ? error.message : String(error);
+    return sanitizeUntrusted(`files/ (could not be read: ${detail})`);
   }
 }
 
@@ -93,7 +97,8 @@ function gradersOf(
   }
   const sibling = path.join(testDir, "graders.json");
   if (path.resolve(test.graders) !== sibling) {
-    return { graders: [], gradersLock: `${path.relative(testDir, test.graders)}: edit the file` };
+    const shown = sanitizeUntrusted(path.relative(testDir, test.graders));
+    return { graders: [], gradersLock: `${shown}: edit the file` };
   }
   const specs = parseGradersJson(fs.readFileSync(sibling, "utf8"), sibling);
   return { graders: specs.map(draftFromSpec), gradersLock: null };

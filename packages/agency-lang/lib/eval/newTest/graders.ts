@@ -244,12 +244,17 @@ export const KIND_QUESTIONS: Record<GraderSpec["kind"], QuestionSpec[]> = {
 export const TAIL_QUESTIONS: QuestionSpec[] = [
   text({ name: "name", label: "name", help: "letters, digits, - and _" }),
   choice({ name: "mustPass", label: "must pass", options: YES_NO, output: "yesNo" }),
+  // Shown for a must-pass goal, and kept on screen once it holds a value:
+  // a file may set a passing score on a goal that is not must-pass, and a
+  // row the form hid would be dropped from the file on save.
   text({
     name: "passingScore",
     label: "passing score",
     help: "0.5",
     output: "number",
-    when: (answers) => answers.kind === "goal" && answers.mustPass === "yes",
+    when: (answers) =>
+      answers.kind === "goal" &&
+      (answers.mustPass === "yes" || (answers.passingScore ?? "").trim() !== ""),
   }),
   text({ name: "weight", label: "weight", help: "1 (optional)", output: "number" }),
 ];

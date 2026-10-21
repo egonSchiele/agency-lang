@@ -105,8 +105,8 @@ is not in that list cannot be reached.
 
 The questions live in `graders.ts` as tables. `KIND_QUESTION` is the first
 row. `KIND_QUESTIONS` holds one list per kind, and `TAIL_QUESTIONS` is what
-every kind ends with: name, must pass, passing score (a must-pass goal
-only), weight. A sixth kind is one entry in `KIND_QUESTIONS` and one
+every kind ends with: name, must pass, passing score (a must-pass goal,
+or any goal once it holds one), weight. A sixth kind is one entry in `KIND_QUESTIONS` and one
 label in `KIND_LABELS`. The measure and count options are built from the
 schema's `MEASURES` and `COUNTS` through label tables typed on them, so a
 measure added to the schema without a label fails the typecheck here.
@@ -268,10 +268,14 @@ the value column; `rowsOf` leaves a locked row out, so the cursor never
 lands on it, and `validateForm` does not check it, which is what skips
 the folder-name checks. The folder name is always locked: renaming a test
 is moving a folder. The files row is always locked: replacing a test's
-seeded files would mean deleting the old copy. It reads `files/ (12
-files)`, counted by its own path (the loader resolves a link before
-handing the directory back, so the sibling is `lstat`ed here), `none`, or
-the path when `test.json` names one somewhere else. A structured `input`
+seeded files would mean deleting the old copy. The loader is asked to
+leave `files` alone (`skipFiles`), so a git source is not cloned to draw
+the row. It reads `files/ (12 files)` when the sibling folder is what the
+file names or finds, counted by its own path with `lstat` so a link is
+refused, `none` when there is no files entry at all, or the path as
+written when it points somewhere else. Lock text that came from the file
+is sanitized where it is built, since it is drawn by the style parser. A
+structured `input`
 (an object) locks the input row with `structured input: edit the file`
 and is left in the base as it was. A `graders.ts`, or a `graders` path
 pointing anywhere but the sibling `graders.json`, sets `gradersLock` and
@@ -286,6 +290,11 @@ the loader refuses a goal beside a rubric and the form would write one.
 unchanged test asks nothing. The graders are compared as the objects
 `specObjectFor` builds, serialized, and never as the file's text: a
 `mustPass: false` in the file and a `no` in the form then compare equal.
+That comparison only sees rows the form shows, so every field the file
+may hold needs a row that is shown while it has a value. The passing
+score row is the one case: it is asked for a must-pass goal, and stays
+once it holds a value, so a `passingScore` on a goal that is not
+must-pass is neither hidden nor dropped on save.
 
 The write keeps one shape for both modes. `stagedFiles` is the "what":
 `test.json`, and `graders.json` when there is a grader, written into
@@ -293,14 +302,18 @@ The write keeps one shape for both modes. `stagedFiles` is the "what":
 `replace`. `replace` first checks, with `lstat`, that each target
 (`<testDir>/test.json`, `<testDir>/graders.json`) is absent or a plain
 file, so a target that became a directory or a symlink fails before
-anything moves and the originals stay as they were. Then each staged file
-is renamed over its original, one step each; a failure on the second
-rename says which file was already written. Last, when the last grader
-was removed, the old `graders.json` is renamed into the staging folder and
-leaves with it, so a failure before that point leaves it in place.
-`safeDeleteFile` refuses a path outside the nearest `package.json`, which
-every suite in a temp directory is, and `safeDeleteDirectoryWithin`
-already removes the staging folder.
+anything moves and the originals stay as they were. When the last grader
+was removed from an editable section, the old `graders.json` is moved
+into the staging folder next, and the `graders` key the file may have
+spelled out is left out of `test.json`, or the loader would look for the
+file this save removes. Then each staged file is renamed over its
+original, one step each; a rename that fails puts the old `graders.json`
+back and says which files were already written, so the folder holds the
+originals or the new files. A section locked by a `graders` path
+elsewhere never touches a sibling `graders.json`, since the form never
+read it. The old file leaves with the staging folder rather than through
+`safeDeleteFile`, which refuses a path outside the nearest
+`package.json`, which every suite in a temp directory is.
 
 The folder path is resolved once at the top of `loadTestForm`, so `.`
 names the folder and every comparison with what the loader returns (which

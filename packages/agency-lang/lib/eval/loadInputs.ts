@@ -19,6 +19,10 @@ type LoadOptions = {
   filesProvenance?: Record<string, { source: string; sha?: string }>;
   /** Cache root override for git sources (tests; config.eval.sourceCacheRoot). */
   sourceCacheRoot?: string;
+  /** Leave `files` alone: neither checked nor resolved, and `Test.files`
+   *  unset. For a caller that shows the test without running it, so a git
+   *  source is not cloned to draw a form. */
+  skipFiles?: boolean;
 };
 
 /** The `eval run` one-off test: `--input <text>` gives it that input, no
@@ -311,7 +315,7 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (typeof spec.description === "string") out.description = spec.description;
   if (Array.isArray(spec.tags)) out.tags = spec.tags as string[];
   if (typeof spec.goal === "string") out.goal = spec.goal;
-  if (typeof spec.files === "string")
+  if (typeof spec.files === "string" && options.skipFiles !== true)
     out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
   if (typeof spec.graders === "string")
     out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");

@@ -1,0 +1,37 @@
+[
+  {
+    "kind": "goal",
+    "name": "takes-a-position",
+    "goal": "actually helps the maintainer decide: recommends a direction, or lays out the viable directions with the tradeoff that separates them and says what would settle the choice. It does not merely describe the repo, list considerations without weighing them, or defer the answer pending more research",
+    "mustPass": true,
+    "passingScore": 0.5
+  },
+  {
+    "kind": "checklist",
+    "name": "grounded-in-repo",
+    "points": [
+      "reflects that waypoint-lang is a single package with one `waypoint` bin",
+      "builds on the existing harness/brains seam in src/agent/, where brains sit behind the AgentBrain interface",
+      "proposes a concrete split, such as brains shipping separately while the harness stays with the runtime"
+    ]
+  },
+  {
+    "kind": "goal",
+    "name": "finds-the-hinge",
+    "goal": "surfaces the fact the decision hinges on: what kind of change actually drives agent releases (prompts and brain logic, or harness and runtime logic), either by asking the maintainer or by conditioning the recommendation on it",
+    "weight": 0.5
+  },
+  {
+    "kind": "checklist",
+    "name": "readability",
+    "points": [
+      "plain prose a maintainer can follow without decoding jargon",
+      "the directions are clearly separated from each other",
+      "the advice is easy to find, not buried under repo trivia"
+    ],
+    "weight": 0.5
+  },
+  { "kind": "number", "name": "llm-calls", "measure": "llmCalls", "full": 0, "zero": 30, "weight": 0.1 },
+  { "kind": "number", "name": "wall-seconds", "measure": "agentSeconds", "full": 0, "zero": 480, "weight": 0.1 },
+  { "kind": "number", "name": "cost-usd", "measure": "costUsd", "full": 0, "zero": 2.5, "weight": 0.1 }
+]

@@ -147,6 +147,10 @@ export class DebuggerDriver {
     }
     this.detachRequested = false;
     this.debuggerState.ownedRun = null;
+    // A driver that attaches again is a new session: a wait still open
+    // from before the detach is news to it, so the last report is
+    // forgotten and the install below reports the open waits afresh.
+    this.debuggerState.reportedWaits = [];
     this.debuggerState.attached = {
       run: (result, leg) => this.runAttached(result, leg),
       finished: (result) => this.finishedAttached(result),

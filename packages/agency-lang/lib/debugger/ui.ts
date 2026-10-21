@@ -14,7 +14,7 @@ import { readFileSync } from "fs";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
-import type { DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
+import type { BusyEntry, DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
 import type { Hello } from "./attach/protocol.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
@@ -557,6 +557,10 @@ export class DebuggerUI implements DebuggerIO {
 
   setOverrides(overrides: Record<string, unknown>): void {
     this.state.setOverrides(overrides);
+  }
+
+  setBusy(entries: BusyEntry[]): void {
+    this.state.setBusy(entries);
   }
 
   async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {

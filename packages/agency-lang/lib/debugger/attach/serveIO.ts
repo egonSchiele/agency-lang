@@ -4,7 +4,7 @@
 // methods go to the `events` callbacks.
 import { functionRefReviver, nativeTypeReviver } from "../../runtime/revivers/index.js";
 import { Checkpoint } from "../../runtime/state/checkpointStore.js";
-import type { DebuggerIO } from "../types.js";
+import type { BusyEntry, DebuggerIO } from "../types.js";
 import type { Channel } from "./channel.js";
 import { parseAttachMessage, type Hello } from "./protocol.js";
 
@@ -72,6 +72,9 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         return;
       case "setOverrides":
         io.setOverrides(args[0] as Record<string, unknown>);
+        return;
+      case "setBusy":
+        io.setBusy(Array.isArray(args[0]) ? (args[0] as BusyEntry[]) : []);
         return;
       case "appendStdout":
         io.appendStdout(args[0] as string);

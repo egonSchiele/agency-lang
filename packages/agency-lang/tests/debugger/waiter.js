@@ -57,3 +57,8 @@ export function clearAgentEndNotes() {
   agentEnds = [];
 }
 
+
+// For waiting-tool.agency: a tool body that throws.
+export function failForTest() {
+  throw new Error("the tool failed, as the test asked");
+}

@@ -7,9 +7,17 @@ import type { RuntimeContext } from "@/runtime/state/context.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
 import type { AttachedDebugger } from "@/runtime/attachedDebugger.js";
+import type { BusyEntry } from "@/runtime/waits.js";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";
+  /** Told what the program is waiting on, a model request or a tool
+   *  call, each time that changes: the whole list of open waits
+   *  (`waits.ts`). The driver sets it; the runtime calls it. */
+  onWait?: (entries: BusyEntry[]) => void;
+  /** The tokens of the waits last reported, so the same list is not
+   *  sent twice (`reportWaits`). */
+  reportedWaits: number[] = [];
   /** Set when this debugger was installed on a program something else is
    *  running. The runtime's public entry points hand it every batch of
    *  debug stops (`settleStops`), so the caller never sees one. */
@@ -54,6 +62,18 @@ export class DebuggerState {
     }
     return this.ownedRun === key;
   }
+  /** Whether a wait in the run `key` is shown: not attached, every
+   *  run's; attached with no owner yet, every run's, since the debugger
+   *  is nobody's and what the process is doing is what it should show;
+   *  attached with an owner, that run's only. Read-only, unlike `owns`:
+   *  a wait must never make its run the debugged one. */
+  showsRun(key: string): boolean {
+    if (this.attached === undefined || this.ownedRun === null) {
+      return true;
+    }
+    return this.ownedRun === key;
+  }
+
   public checkpoints: CheckpointStore;
   /** The depth of the step the debugger is stopped at: how many Agency
    *  calls deep it is, with the node's statements at 0. The driver sets it

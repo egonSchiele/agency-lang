@@ -9,7 +9,7 @@ import {
   type LoopState,
   type ThreadSummary,
 } from "../runtime/state/checkpointStore.js";
-import type { DebugStopData } from "../runtime/debugger.js";
+import type { BusyEntry, DebugStopData } from "../runtime/debugger.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
@@ -50,6 +50,8 @@ export class UIState {
   private globals: ValWithOverride[] = [];
   private stdoutContent: string[] = [];
   private sourceMapCache: Record<string, SourceMap> = {};
+  /** What the program is waiting on, as the run last reported it. */
+  private busy: BusyEntry[] = [];
 
   constructor() {
     this.activityLog = [];
@@ -287,6 +289,16 @@ export class UIState {
   /** Replace the queued overrides with the driver's copy. */
   setOverrides(overrides: Record<string, unknown>) {
     this.pendingOverrides = { ...overrides };
+  }
+
+  /** Replace the list of open waits with the run's latest. */
+  setBusy(entries: BusyEntry[]) {
+    this.busy = [...entries];
+  }
+
+  /** The open waits, the one that began last at the end. */
+  getBusy(): BusyEntry[] {
+    return this.busy;
   }
 
   /** The threads the stopped code sees, the active one marked. */

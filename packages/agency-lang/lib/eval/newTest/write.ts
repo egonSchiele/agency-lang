@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { graderProblem } from "@/eval/gradersJson/schema.js";
 import { walkTreeRefusingSymlinks, type TreeFile } from "@/eval/grading/graderFilesSnapshot.js";
 import { isStrictDescendant, safeDeleteDirectoryWithin } from "@/utils.js";
 
@@ -16,6 +17,7 @@ import {
   type Problem,
   type Row,
 } from "./form.js";
+import { questionsFor, specObjectFor, type GraderDraft } from "./graders.js";
 
 /** A folder name the loader takes as a test id. */
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -77,12 +79,58 @@ export function validateForm(state: FormState, checks: FileChecks = realFileChec
   if (files !== null) {
     problems.push(files);
   }
-  for (const field of FIELDS.filter((spec) => spec.required && spec.name !== "id")) {
+  // A goal is judged only when the test has no graders of its own, so it
+  // is required only then.
+  const required = FIELDS.filter(
+    (spec) =>
+      spec.required && spec.name !== "id" && (spec.name !== "goal" || state.graders.length === 0),
+  );
+  for (const field of required) {
     if (state.values[field.name] === "") {
       problems.push({ row: fieldRow(field.name), text: `${field.label} is required` });
     }
   }
-  return problems;
+  return [...problems, ...graderProblems(state.graders)];
+}
+
+/** Every grader's first problem, in the parser's words, then the one check
+ *  the parser makes only at file level: two graders with one name. The
+ *  form holds no rule of its own about what a grader needs. */
+function graderProblems(graders: GraderDraft[]): Problem[] {
+  const own = graders.flatMap((draft, index): Problem[] => {
+    const problem = graderProblem(specObjectFor(draft));
+    return problem === null
+      ? []
+      : [{ row: rowForField(draft, index, problem.field), text: problem.text }];
+  });
+  return [...own, ...duplicateNames(graders)];
+}
+
+/** The row a parser problem is about. A field that names a shown question
+ *  is that row; a repeating question's list key (`points`) is its first row
+ *  (`point.0`); `kind` and a cross-field rule (`null`) are the kind row. */
+function rowForField(draft: GraderDraft, index: number, field: string | null): Row {
+  const questions = questionsFor(draft);
+  const named = questions.find((question) => question.name === field);
+  const first = questions.find(
+    (question) => question.output === "list" && `${question.name.replace(/\.0$/, "")}s` === field,
+  );
+  const question = named ?? first;
+  return { kind: "grader", index, question: question === undefined ? "kind" : question.name };
+}
+
+function duplicateNames(graders: GraderDraft[]): Problem[] {
+  const names = graders.map((draft) => draft.answers.name ?? "");
+  return names.flatMap((name, index): Problem[] =>
+    name !== "" && names.indexOf(name) !== index
+      ? [{ row: { kind: "grader", index, question: "name" }, text: `two graders named "${name}"` }]
+      : [],
+  );
+}
+
+/** The text of `graders.json` for the drafts. */
+export function gradersJsonText(graders: GraderDraft[]): string {
+  return `${JSON.stringify(graders.map(specObjectFor), null, JSON_INDENT)}\n`;
 }
 
 /** The files directory as typed, resolved against the suite; null when
@@ -139,6 +187,9 @@ export function writeTest(state: FormState): string {
   try {
     const json = `${JSON.stringify(testJsonFor(state.values), null, JSON_INDENT)}\n`;
     fs.writeFileSync(path.join(staging, "test.json"), json);
+    if (state.graders.length > 0) {
+      fs.writeFileSync(path.join(staging, "graders.json"), gradersJsonText(state.graders));
+    }
     const files = filesDirFor(state);
     if (files !== null) {
       copyFiles(state, files, path.join(staging, "files"));

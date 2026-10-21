@@ -377,12 +377,13 @@ function readString(name: string, spec: Record<string, unknown>): Answers {
 
 /** The object `graders.json` holds for a draft: the answer of every shown
  *  question, converted by its output. Nothing a hidden question answered
- *  is written. */
+ *  is written. The kind is always written, empty when unpicked, so the
+ *  parser's refusal names it. */
 export function specObjectFor(draft: GraderDraft): Record<string, unknown> {
   const written = applicableQuestions(draft)
     .map((question) => OUTPUTS[question.output].write(question, draft.answers))
     .filter((entry): entry is [string, unknown] => entry !== null);
-  return Object.fromEntries(written);
+  return { kind: draft.answers.kind ?? "", ...Object.fromEntries(written) };
 }
 
 /** The draft that shows a saved spec: every field read back through the

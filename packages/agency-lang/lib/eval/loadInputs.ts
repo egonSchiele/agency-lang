@@ -156,7 +156,9 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Tes
     if (found.length > 1) {
       throw new Error(`${testDir}: has both ${found.join(" and ")}; keep one`);
     }
-    if (found.length === 1) spec.graders = `./${found[0]}`;
+    if (found.length === 1) {
+      spec.graders = `./${found[0]}`;
+    }
   }
   if (spec.graderFiles === undefined && fs.existsSync(path.join(testDir, "graderFiles"))) {
     spec.graderFiles = "./graderFiles";

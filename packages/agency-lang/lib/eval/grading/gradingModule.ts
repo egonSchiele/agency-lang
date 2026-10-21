@@ -99,8 +99,12 @@ export function gradersIdentityOf(
     judgeFiles: snapshot.judgeFiles,
     origin: snapshot.origin,
   };
-  if (snapshot.bundleFile !== undefined) identity.bundleFile = snapshot.bundleFile;
-  if (snapshot.jsonFile !== undefined) identity.jsonFile = snapshot.jsonFile;
+  if (snapshot.bundleFile !== undefined) {
+    identity.bundleFile = snapshot.bundleFile;
+  }
+  if (snapshot.jsonFile !== undefined) {
+    identity.jsonFile = snapshot.jsonFile;
+  }
   return identity;
 }
 

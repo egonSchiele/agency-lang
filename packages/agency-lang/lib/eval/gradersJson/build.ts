@@ -39,8 +39,12 @@ const BUILDERS: {
 /** The three fields every kind shares, read in one place. */
 function optionsOf(spec: GraderSpec): GraderOptions {
   const options: GraderOptions = { name: spec.name };
-  if (spec.weight !== undefined) options.weight = spec.weight;
-  if (spec.mustPass !== undefined) options.mustPass = spec.mustPass;
+  if (spec.weight !== undefined) {
+    options.weight = spec.weight;
+  }
+  if (spec.mustPass !== undefined) {
+    options.mustPass = spec.mustPass;
+  }
   return options;
 }
 
@@ -50,7 +54,9 @@ function optionsOf(spec: GraderSpec): GraderOptions {
  *  threshold; the parser requires it on a must-pass goal grader. */
 function goalGrader(spec: GoalSpec): BaseGrader {
   const options = optionsOf(spec);
-  if (spec.passingScore !== undefined) options.threshold = spec.passingScore;
+  if (spec.passingScore !== undefined) {
+    options.threshold = spec.passingScore;
+  }
   return new LlmJudge({ ...options, goal: spec.goal });
 }
 

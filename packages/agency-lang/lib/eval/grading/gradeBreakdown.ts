@@ -26,8 +26,12 @@ function gradeRow({ grader, grade }: GraderGrade): GradeRow {
     grade.score.kind === "scalar"
       ? { grader: grader.name(), kind: "scalar", value: grade.score.value }
       : { grader: grader.name(), kind: "binary", pass: grade.score.pass };
-  if (grade.feedback) row.feedback = grade.feedback;
-  if (grade.points !== undefined) row.points = grade.points;
+  if (grade.feedback) {
+    row.feedback = grade.feedback;
+  }
+  if (grade.points !== undefined) {
+    row.points = grade.points;
+  }
   return row;
 }
 

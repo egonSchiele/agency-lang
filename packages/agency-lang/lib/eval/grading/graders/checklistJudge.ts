@@ -56,7 +56,9 @@ export class ChecklistJudge extends BaseGrader {
   }
 
   override passes(grade: Grade): boolean {
-    if (grade.points !== undefined) return grade.points.every((point) => point.pass);
+    if (grade.points !== undefined) {
+      return grade.points.every((point) => point.pass);
+    }
     return grade.score.kind === "binary" ? grade.score.pass : grade.score.value === 1;
   }
 
@@ -88,7 +90,9 @@ export class ChecklistJudge extends BaseGrader {
 
   private contextText(graderFiles: string | undefined): string {
     const context = this.options.context;
-    if (context === undefined) return "";
+    if (context === undefined) {
+      return "";
+    }
     const file = graderFiles === undefined ? undefined : path.join(graderFiles, context);
     if (file === undefined || !fs.existsSync(file)) {
       throw new Error(`${this.name()}: context file ${context} is not in graderFiles/`);

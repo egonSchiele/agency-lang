@@ -5,7 +5,9 @@
 // `setMode`, the spinner) are notices and get no reply. Three messages are
 // not methods: `hello` from the run when the connection opens, `finished`
 // from the run when the program ends, and `refused` when a debugger is
-// already attached. Closing the channel, from either side, is the detach.
+// already attached. One message goes the other way unprompted: `pause`
+// from the UI, asking the running program to stop at its next statement.
+// Closing the channel, from either side, is the detach.
 //
 // A checkpoint crosses as `checkpoint.toJSON()` run through the native
 // type replacer, the way `debugStep` prepares the `onCheckpoint` payload,
@@ -64,6 +66,7 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("refused"), reason: z.string() }).strict(),
+  z.object({ type: z.literal("pause") }).strict(),
   z
     .object({
       type: z.literal("request"),

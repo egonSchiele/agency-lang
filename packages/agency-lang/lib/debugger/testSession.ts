@@ -13,13 +13,14 @@ import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { hasInterrupts, createDebugInterrupt } from "../runtime/interrupts.js";
 
 /**
- * An InputSource that notifies when the consumer (driver) is idle —
- * i.e. blocked waiting for the next key.
+ * An InputSource a test feeds keys to. It gives no idle signal: the UI
+ * reads a key while the program runs too, for the pause key, so a read
+ * does not mean the person is being asked for anything. The session waits
+ * on `DebuggerUI.waitForPerson` instead.
  */
 export class TestInput implements InputSource {
   private keyQueue: KeyEvent[] = [];
   private keyWaiters: ((key: KeyEvent) => void)[] = [];
-  private idleResolvers: (() => void)[] = [];
 
   feedKey(key: KeyEvent): void {
     const waiter = this.keyWaiters.shift();
@@ -33,20 +34,8 @@ export class TestInput implements InputSource {
   nextKey(): Promise<KeyEvent> {
     const queued = this.keyQueue.shift();
     if (queued) return Promise.resolve(queued);
-    // Signal idle — the driver is blocked waiting for input
-    const resolvers = this.idleResolvers;
-    this.idleResolvers = [];
-    for (const resolve of resolvers) {
-      resolve();
-    }
     return new Promise<KeyEvent>((resolve) => {
       this.keyWaiters.push(resolve);
-    });
-  }
-
-  waitForIdle(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.idleResolvers.push(resolve);
     });
   }
 
@@ -57,7 +46,6 @@ export class TestInput implements InputSource {
   destroy(): void {
     this.keyQueue = [];
     this.keyWaiters = [];
-    this.idleResolvers = [];
   }
 }
 
@@ -159,12 +147,11 @@ export class DebuggerTestSession {
       const suffix = times > 1 ? ` (${i + 1}/${times})` : "";
       this.labelingOutput.label = `#${this.pressCount} press("${displayKey}")${suffix}`;
 
-      // waitForIdle must be registered before feedKey — feedKey may
-      // synchronously resolve the driver's pending nextKey() waiter,
-      // which would miss the idle signal if we registered after.
-      const idlePromise = this.input.waitForIdle();
+      // Registered before feedKey: feeding a key can resolve the UI's
+      // pending read at once, and the signal would be missed otherwise.
+      const waiting = this.ui.waitForPerson();
       this.input.feedKey({ key, shift: opts?.shift });
-      await Promise.race([idlePromise, this.runPromise]);
+      await Promise.race([waiting, this.runPromise]);
     }
   }
 
@@ -173,14 +160,14 @@ export class DebuggerTestSession {
     this.labelingOutput.label = `#${this.pressCount} type("${str}")`;
     for (const ch of str) {
       if (this.finished) return;
-      const idlePromise = this.input.waitForIdle();
+      const waiting = this.ui.waitForPerson();
       this.input.feedKey({ key: ch });
-      await Promise.race([idlePromise, this.runPromise]);
+      await Promise.race([waiting, this.runPromise]);
     }
     if (this.finished) return;
-    const idlePromise = this.input.waitForIdle();
+    const waiting = this.ui.waitForPerson();
     this.input.feedKey({ key: "enter" });
-    await Promise.race([idlePromise, this.runPromise]);
+    await Promise.race([waiting, this.runPromise]);
   }
 
   frame(): Frame {
@@ -210,14 +197,15 @@ export class DebuggerTestSession {
     return this.finished;
   }
 
-  /** Start the driver loop in the background and wait for it to reach its first idle. */
+  /** Start the driver loop in the background and wait for it to ask the
+   *  person for its first command. */
   private async startDriver(initialResult: any): Promise<void> {
-    const idlePromise = this.input.waitForIdle();
+    const waiting = this.ui.waitForPerson();
     this.runPromise = this.driver.run(initialResult, { interceptConsole: false }).then((r) => {
       this.result = r;
       this.finished = true;
     });
-    await idlePromise;
+    await waiting;
   }
 }
 

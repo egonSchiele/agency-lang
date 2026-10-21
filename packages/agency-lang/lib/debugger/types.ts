@@ -55,6 +55,10 @@ export type DebuggerIO = {
    *  the whole list each time it changes; empty when nothing is open.
    *  Shown while the program runs (`waits.ts`). */
   setBusy(entries: BusyEntry[]): void;
+  /** `listener` is called when the person asks the running program to
+   *  stop at its next statement (`s` or `n` while it runs). Registered
+   *  once by the driver; nothing is sent back. */
+  onPause(listener: () => void): void;
   /** Show `checkpoint`, at `stop` when the stop happened somewhere other
    *  than the checkpoint's own location (a stop inside a tool call, whose
    *  checkpoint is the shared one stamped at the join). */

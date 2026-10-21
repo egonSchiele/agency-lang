@@ -117,6 +117,7 @@ export class DebuggerDriver {
         this.ui.setBusy(entries);
       }
     };
+    this.ui.onPause(() => this.pauseRequested());
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
 
@@ -146,6 +147,7 @@ export class DebuggerDriver {
       throw new Error("attach needs a driver built with attached: true");
     }
     this.detachRequested = false;
+    this.betweenRuns = false;
     this.debuggerState.ownedRun = null;
     // A driver that attaches again is a new session: a wait still open
     // from before the detach is news to it, so the last report is
@@ -167,6 +169,7 @@ export class DebuggerDriver {
       },
       ownerChanged: () => {
         this.ignoredRuns = [];
+        this.betweenRuns = false;
         this.pendingOverrides = {};
         this.ui.setOverrides(this.pendingOverrides);
       },
@@ -212,6 +215,7 @@ export class DebuggerDriver {
    *  a render that does not wait. The next run to stop is debugged next. */
   private async finishedAttached(result: any): Promise<void> {
     this.ui.stopSpinner();
+    this.betweenRuns = true;
     this.ui.log(`Program finished. Return value: ${JSON.stringify(result?.data ?? undefined)}`);
     this.renderInBackground();
   }
@@ -255,16 +259,21 @@ export class DebuggerDriver {
     // from the moment the caller took over the program's own interrupt,
     // ends here. After a leg the driver ran, it is already off.
     this.ui.stopSpinner();
-    if (session === undefined) {
-      await render();
-      return await this.ui.waitForCommand();
+    this.atStop = true;
+    try {
+      if (session === undefined) {
+        await render();
+        return await this.ui.waitForCommand();
+      }
+      const signal = session.leg.abortSignal;
+      if (this.detachRequested || signal?.aborted) {
+        return { type: "continue" };
+      }
+      await this.uiCall(render);
+      return await this.nextCommand(signal);
+    } finally {
+      this.atStop = false;
     }
-    const signal = session.leg.abortSignal;
-    if (this.detachRequested || signal?.aborted) {
-      return { type: "continue" };
-    }
-    await this.uiCall(render);
-    return await this.nextCommand(signal);
   }
 
   private async nextCommand(abortSignal: AbortSignal | undefined): Promise<DebuggerCommand> {
@@ -435,6 +444,7 @@ export class DebuggerDriver {
           // and the end of one run is not the end of the program: another
           // run of the same module may stop next.
           if (this.attached) {
+            this.betweenRuns = true;
             this.renderInBackground();
             return result;
           }
@@ -856,6 +866,29 @@ export class DebuggerDriver {
     this.pendingOverrides = {};
     this.ui.setOverrides(this.pendingOverrides);
     return overrides;
+  }
+
+  /** Whether the driver is showing a stop and waiting on the person. A
+   *  pause lands whenever it is not: in a leg the driver resumed, and,
+   *  attached, while the program runs on after the caller answered its
+   *  own interrupt, which is no leg of the driver's. */
+  private atStop = false;
+  /** Attached: the debugged run ended and no run has taken the debugger
+   *  since, so there is nothing to pause; the next run's first step
+   *  (`ownerChanged`) clears it. */
+  private betweenRuns = false;
+
+  /** The person asked the running program to stop at its next
+   *  statement: stepping mode, which the next step honours, with the
+   *  step target cleared so `next` over a call stops inside it too. A
+   *  call in flight is not interrupted; the stop comes when it returns.
+   *  At a stop, or after the run ended, a pause changes nothing. */
+  private pauseRequested(): void {
+    if (this.atStop || this.betweenRuns || this.programFinished || this.detachedNow()) {
+      return;
+    }
+    this.debuggerState.stepping();
+    this.ui.log("Pausing at the next statement");
   }
 
   private async resumeInterrupt(

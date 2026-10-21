@@ -279,6 +279,22 @@ describe("a debugger attached over a channel", () => {
     }
   });
 
+  it("the pause key crosses the channel and stops the program at its next statement", async () => {
+    const mod = await freshImport(compiledPath(fixtures.awaitsHelper));
+    const { io } = attachWithMemoryChannel(mod, [{ type: "continue" }, { type: "continue" }]);
+
+    const running = mod.main();
+    await helper.untilWaiting();
+    io.pause();
+    helper.releaseWaiter();
+    const result = await running;
+
+    expectNoStop(result);
+    expect(result.data).toBe(2);
+    expect(io.logLines).toContain("Pausing at the next statement");
+    expect(io.renderCalls).toHaveLength(2);
+  });
+
   it("what the program is waiting on reaches the UI side", async () => {
     await withLLMMocks([{ return: "hi" }], async () => {
       const mod = await freshImport(compiledPath(fixtures.llmAfterStep));

@@ -53,6 +53,7 @@ export class ChannelDebuggerIO implements DebuggerIO {
   private nextId = 0;
   private pending: Record<number, Pending> = {};
   private closed = false;
+  private pauseListeners: (() => void)[] = [];
 
   /** `warn` takes the one line printed when the debugger at the other
    *  end fails; the program's stderr by default. */
@@ -70,7 +71,16 @@ export class ChannelDebuggerIO implements DebuggerIO {
    *  line on stderr saying why. */
   private receive(raw: unknown): void {
     const message = parseAttachMessage(raw);
-    if (message === null || message.type !== "reply") {
+    if (message === null) {
+      return;
+    }
+    if (message.type === "pause") {
+      for (const listener of this.pauseListeners) {
+        listener();
+      }
+      return;
+    }
+    if (message.type !== "reply") {
       return;
     }
     const waiting = this.pending[message.id];
@@ -151,6 +161,10 @@ export class ChannelDebuggerIO implements DebuggerIO {
 
   setBusy(entries: BusyEntry[]): void {
     this.notice("setBusy", [entries]);
+  }
+
+  onPause(listener: () => void): void {
+    this.pauseListeners.push(listener);
   }
 
   async render(checkpoint?: Checkpoint, stop?: DebugStopData, interruptId?: string): Promise<void> {

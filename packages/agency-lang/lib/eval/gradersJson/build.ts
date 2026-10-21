@@ -6,8 +6,18 @@ import type { BaseGrader } from "../grading/baseGrader.js";
 import { grader } from "../grading/functionGrader.js";
 import { binary, scalar } from "../grading/grade.js";
 import { formatUsd } from "../grading/gradeBreakdown.js";
+import { ChecklistJudge } from "../grading/graders/checklistJudge.js";
+import { LlmJudge } from "../grading/graders/llmJudge.js";
 import type { Grade, GraderOptions } from "../grading/types.js";
-import type { CommandSpec, CountSpec, GraderSpec, GradersJson, NumberSpec } from "./schema.js";
+import type {
+  ChecklistSpec,
+  CommandSpec,
+  CountSpec,
+  GoalSpec,
+  GraderSpec,
+  GradersJson,
+  NumberSpec,
+} from "./schema.js";
 
 /** Turn the graders of a `graders.json` into `BaseGrader`s, in file order.
  *  Each kind has a builder; the "what" of a kind (which number to read,
@@ -19,16 +29,12 @@ export function buildGraders(specs: GradersJson): BaseGrader[] {
 const BUILDERS: {
   [K in GraderSpec["kind"]]: (spec: Extract<GraderSpec, { kind: K }>) => BaseGrader;
 } = {
-  goal: notYet,
-  checklist: notYet,
+  goal: goalGrader,
+  checklist: checklistGrader,
   number: numberGrader,
   count: countGrader,
   command: commandGrader,
 };
-
-function notYet(spec: GraderSpec): BaseGrader {
-  throw new Error(`not yet: ${spec.kind}`);
-}
 
 /** The three fields every kind shares, read in one place. */
 function optionsOf(spec: GraderSpec): GraderOptions {
@@ -36,6 +42,21 @@ function optionsOf(spec: GraderSpec): GraderOptions {
   if (spec.weight !== undefined) options.weight = spec.weight;
   if (spec.mustPass !== undefined) options.mustPass = spec.mustPass;
   return options;
+}
+
+// --- goal and checklist -----------------------------------------------------
+
+/** The bundled goal judge over the test's output. `passingScore` is the
+ *  threshold; the parser requires it on a must-pass goal grader. */
+function goalGrader(spec: GoalSpec): BaseGrader {
+  const options = optionsOf(spec);
+  if (spec.passingScore !== undefined) options.threshold = spec.passingScore;
+  return new LlmJudge({ ...options, goal: spec.goal });
+}
+
+function checklistGrader(spec: ChecklistSpec): BaseGrader {
+  const options = optionsOf(spec);
+  return new ChecklistJudge({ ...options, points: spec.points, context: spec.context });
 }
 
 // --- number -----------------------------------------------------------------

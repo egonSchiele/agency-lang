@@ -5,6 +5,8 @@ import type { Grade, GraderInput, GraderOptions, Test } from "./types.js";
  * Base class for graders. Authors implement the single-shot `_run`; the base
  * handles k-sample repetition + aggregation, gating policy, and input scoping.
  */
+const SINGLE_TRIAL = 1;
+
 export abstract class BaseGrader {
   constructor(protected readonly options: GraderOptions = {}) {}
 
@@ -67,6 +69,9 @@ export abstract class BaseGrader {
       throw new Error(`${this.name()}: samples must be a positive integer, got ${samples}`);
     }
     const trials = await Promise.all(Array.from({ length: samples }, () => this._run(input)));
+    // One trial is the grade itself. Aggregation would rebuild it from its
+    // score and feedback alone and drop a checklist's per-point answers.
+    if (trials.length === SINGLE_TRIAL) return trials[0];
     return aggregateGrades(trials, this.options.aggregate ?? "all");
   }
 

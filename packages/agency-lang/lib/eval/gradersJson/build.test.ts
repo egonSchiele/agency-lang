@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import type { EvalRecord, NormalizedEvent } from "@/eval/types.js";
 
 import { AgencyRunner } from "../grading/agencyRunner.js";
+import { ChecklistJudge } from "../grading/graders/checklistJudge.js";
+import { LlmJudge } from "../grading/graders/llmJudge.js";
 import { EMPTY_RECORD } from "../grading/testUtils.js";
 import type { Grade, GraderInput } from "../grading/types.js";
 import { buildGraders } from "./build.js";
@@ -256,5 +258,35 @@ describe("buildGraders", () => {
     const [plain] = buildGraders([{ kind: "command", name: "p", command: "true" }]);
     expect(plain.weight()).toBe(1);
     expect(plain.mustPass()).toBe(false);
+  });
+});
+
+describe("goal and checklist builders", () => {
+  it("goalGrader builds an LlmJudge with the goal and passing score", () => {
+    const [judge] = buildGraders([
+      {
+        kind: "goal",
+        name: "takes-a-position",
+        goal: "decides",
+        mustPass: true,
+        passingScore: 0.5,
+      },
+    ]);
+    expect(judge).toBeInstanceOf(LlmJudge);
+    expect(judge.name()).toBe("takes-a-position");
+    expect(judge.mustPass()).toBe(true);
+    expect(judge.passes({ score: { kind: "scalar", value: 0.4 } })).toBe(false);
+    expect(judge.passes({ score: { kind: "scalar", value: 0.6 } })).toBe(true);
+    expect(() => judge.validateInput({ id: "t" })).not.toThrow();
+  });
+
+  it("checklistGrader builds a ChecklistJudge with the points and context", () => {
+    const [judge] = buildGraders([
+      { kind: "checklist", name: "grounded", points: ["a", "b"], context: "notes.md", weight: 2 },
+    ]);
+    expect(judge).toBeInstanceOf(ChecklistJudge);
+    expect(judge.name()).toBe("grounded");
+    expect(judge.weight()).toBe(2);
+    expect(judge.describe()).toContain("2 points");
   });
 });

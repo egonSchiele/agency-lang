@@ -110,6 +110,14 @@ export function formatGrading(objective: number, perInput: InputBreakdown[]): st
   ];
 }
 
+/** Sub-cent but nonzero shows as "<$0.01" so a printed cost never reads $0.00. */
+export function formatUsd(usd: number): string {
+  if (usd > 0 && usd < 0.005) {
+    return "<$0.01";
+  }
+  return `$${usd.toFixed(2)}`;
+}
+
 /** Perfect scores are green, zeroes red, and intermediate scores plain. */
 export function formatScore(score: number): string {
   const text = score.toFixed(3);

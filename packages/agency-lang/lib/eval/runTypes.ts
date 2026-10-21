@@ -47,12 +47,14 @@ export type Test<T = TestInput> = {
    *  A raw spec may hold a relative path (resolved against the inputs file) —
    *  after loading it is always an absolute directory path. */
   files?: string;
-  /** The test's own grading module (a TS file default-exporting graders) —
-   *  success criteria are test-side, like goal and expected. Relative in a
-   *  raw spec, absolute after loading. Auto-discovered in the test-directory
-   *  form: a graders.ts beside test.json. A test without one is scored by
-   *  the bundled goal judge against its `goal`.
-   *  Trust note: graders are code the harness executes — pulling a remote
+  /** The test's own graders: a `graders.ts` module default-exporting
+   *  graders, or a `graders.json` file holding them as data (see
+   *  docs/dev/evals/graders-json.md). Success criteria are test-side, like
+   *  goal and expected. Relative in a raw spec, absolute after loading.
+   *  Auto-discovered in the test-directory form: either file beside
+   *  test.json, never both. A test without one is scored by the bundled
+   *  goal judge against its `goal`.
+   *  Trust note: a module is code the harness executes — pulling a remote
    *  suite means trusting it. */
   graders?: string;
   /** A directory of files for the graders alone, never seeded into the

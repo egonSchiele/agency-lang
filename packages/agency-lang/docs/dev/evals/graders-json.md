@@ -120,6 +120,10 @@ Four facts a reader needs that are easy to miss:
   "timed out after Ns". Output is kept to 2000 characters of feedback.
 - A must-pass goal grader needs `passingScore` because a scalar gate with
   no threshold cannot fail.
+- A `context` must stay inside `graderFiles/`: the parser refuses an
+  absolute path or one with `..`, and the judge checks again at grade time
+  with `isStrictDescendant` before reading. A `full` equal to `zero` is
+  refused too, since the line between them would divide by zero.
 
 ## The checklist judge
 

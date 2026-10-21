@@ -1,3 +1,5 @@
+import * as path from "path";
+
 import { z } from "zod";
 
 /** The shape of `graders.json`: a list of graders in five kinds. See
@@ -84,7 +86,10 @@ const KIND_SCHEMAS: Record<GraderSpec["kind"], z.ZodTypeAny> = {
 };
 
 /** Rules that span more than one field. The first that applies is the error. */
-type Rule = { applies: (spec: GraderSpec) => boolean; problem: string };
+type Rule = {
+  applies: (spec: GraderSpec) => boolean;
+  problem: string | ((spec: GraderSpec) => string);
+};
 
 const RULES: Rule[] = [
   {
@@ -99,6 +104,16 @@ const RULES: Rule[] = [
   {
     applies: (spec) => spec.kind === "number" && !hasRange(spec) && spec.max === undefined,
     problem: "a number grader needs full and zero or max",
+  },
+  {
+    applies: (spec) => spec.kind === "number" && hasRange(spec) && spec.full === spec.zero,
+    problem: "a number grader needs full and zero to differ",
+  },
+  {
+    applies: (spec) =>
+      spec.kind === "checklist" && spec.context !== undefined && !insideGraderFiles(spec.context),
+    problem: (spec) =>
+      `context must be a path inside graderFiles/, not ${spec.kind === "checklist" ? spec.context : ""}`,
   },
   {
     applies: (spec) =>
@@ -119,6 +134,15 @@ const RULES: Rule[] = [
 
 function hasRange(spec: NumberSpec): boolean {
   return spec.full !== undefined && spec.zero !== undefined;
+}
+
+/** A context is read as `graderFiles/<context>`, so it must stay inside:
+ *  relative, and never climbing out with `..`. */
+function insideGraderFiles(context: string): boolean {
+  if (path.isAbsolute(context)) {
+    return false;
+  }
+  return !path.normalize(context).split(path.sep).includes("..");
 }
 
 /** Parse the text of a `graders.json`. Every problem is an `Error` naming
@@ -163,7 +187,8 @@ function parseSpec(element: unknown, index: number, filePath: string): GraderSpe
   const spec = result.data as GraderSpec;
   const broken = RULES.find((rule) => rule.applies(spec));
   if (broken !== undefined) {
-    throw new Error(`${where} (${spec.name}): ${broken.problem}`);
+    const problem = typeof broken.problem === "string" ? broken.problem : broken.problem(spec);
+    throw new Error(`${where} (${spec.name}): ${problem}`);
   }
   return spec;
 }

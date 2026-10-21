@@ -100,6 +100,28 @@ describe("parseGradersJson", () => {
     );
   });
 
+  it("refuses a number grader whose full and zero are the same value", () => {
+    expect(() =>
+      parse([{ kind: "number", name: "n", measure: "llmCalls", full: 5, zero: 5 }]),
+    ).toThrow("t/graders.json: grader 0 (n): a number grader needs full and zero to differ");
+  });
+
+  it("refuses a checklist context that is not a plain relative path", () => {
+    expect(() =>
+      parse([{ kind: "checklist", name: "c", points: ["a"], context: "../x.md" }]),
+    ).toThrow(
+      "t/graders.json: grader 0 (c): context must be a path inside graderFiles/, not ../x.md",
+    );
+    expect(() =>
+      parse([{ kind: "checklist", name: "c", points: ["a"], context: "/etc/x" }]),
+    ).toThrow(
+      "t/graders.json: grader 0 (c): context must be a path inside graderFiles/, not /etc/x",
+    );
+    expect(() =>
+      parse([{ kind: "checklist", name: "c", points: ["a"], context: "sub/x.md" }]),
+    ).not.toThrow();
+  });
+
   it("refuses a count narrowing field that does not fit the count", () => {
     expect(() =>
       parse([{ kind: "count", name: "c", count: "errors", tool: "fetch", max: 0 }]),

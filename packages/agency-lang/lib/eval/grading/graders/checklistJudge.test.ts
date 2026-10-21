@@ -105,6 +105,15 @@ describe("ChecklistJudge", () => {
     );
   });
 
+  it("refuses a context that escapes graderFiles/", async () => {
+    const graderFiles = fs.mkdtempSync(path.join(os.tmpdir(), "checklist-judge-"));
+    fs.writeFileSync(path.join(graderFiles, "..", "outside.md"), "secret");
+    const judge = new ChecklistJudge({ name: "c", points: ["a"], context: "../outside.md" });
+    await expect(judge.run(judgeInput(verdictOf([]), graderFiles))).rejects.toThrow(
+      "c: context file ../outside.md is not in graderFiles/",
+    );
+  });
+
   it("refuses samples greater than 1", () => {
     expect(() => new ChecklistJudge({ name: "c", points: ["a"], samples: 2 })).toThrow(
       "c: a checklist judge cannot be sampled; its per-point answers do not survive aggregation",

@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { isStrictDescendant } from "@/utils.js";
+
 import { BaseGrader } from "../baseGrader.js";
 import {
   CHECKLIST_JUDGE_VERSION,
@@ -93,8 +95,10 @@ export class ChecklistJudge extends BaseGrader {
     if (context === undefined) {
       return "";
     }
-    const file = graderFiles === undefined ? undefined : path.join(graderFiles, context);
-    if (file === undefined || !fs.existsSync(file)) {
+    const root = graderFiles === undefined ? undefined : path.resolve(graderFiles);
+    const file = root === undefined ? undefined : path.resolve(root, context);
+    const inside = root !== undefined && file !== undefined && isStrictDescendant(root, file);
+    if (file === undefined || !inside || !fs.existsSync(file)) {
       throw new Error(`${this.name()}: context file ${context} is not in graderFiles/`);
     }
     return fs.readFileSync(file, "utf8");

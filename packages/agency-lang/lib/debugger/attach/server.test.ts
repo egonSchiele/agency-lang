@@ -24,8 +24,10 @@ beforeAll(() => {
 function functionsOf(mod: any) {
   return {
     respondToInterrupts: mod.respondToInterrupts,
+    respondToInterruptsForServe: mod.__respondToInterruptsForServe,
     rewindFrom: mod.rewindFrom,
     __setDebugger: mod.__setDebugger,
+    __getDebugger: mod.__getDebugger,
     __getCheckpoints: mod.__getCheckpoints,
   };
 }

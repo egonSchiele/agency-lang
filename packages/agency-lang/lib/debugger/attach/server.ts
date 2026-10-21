@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as net from "net";
 
 import { hasInterrupts } from "../../runtime/interrupts.js";
+import type { AttachedRunResult } from "../../runtime/attachedDebugger.js";
 import { DebuggerDriver, type ModuleFunctions } from "../driver.js";
 import type { Channel } from "./channel.js";
 import { ChannelDebuggerIO } from "./channelIO.js";
@@ -68,7 +69,16 @@ export function attachOverChannel(channel: Channel, options: AttachOptions): Att
   };
   const runByDriver = attached.run;
   attached.run = async (result, leg) => {
-    const ran = await runByDriver(result, leg);
+    let ran: AttachedRunResult;
+    try {
+      ran = await runByDriver(result, leg);
+    } catch (error) {
+      // A module compiled before the serve-style resume existed throws
+      // a failed leg's error instead; the person is told the same way.
+      channel.send({ type: "finished", value: undefined, error: errorText(error) });
+      detach();
+      throw error;
+    }
     if ("threw" in ran) {
       channel.send({ type: "finished", value: undefined, error: errorText(ran.threw) });
       detach();

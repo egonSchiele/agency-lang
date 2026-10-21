@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadGradersJson } from "@/eval/gradersJson/load.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 
-import { initialForm, type FormState, type Row } from "./form.js";
+import { editingForm, initialForm, type FormState, type Row } from "./form.js";
 import type { Answers } from "./graders.js";
 import {
   gradersJsonText,
@@ -104,6 +104,11 @@ describe("validateForm", () => {
     expect(validateForm(form("suite", { id: "t", goal: "g" }), NOTHING_ON_DISK)).toEqual([]);
   });
 
+  it("does not check a locked field", () => {
+    const state = { ...form("suite", { goal: "g" }), locks: { id: "t" } };
+    expect(validateForm(state, { ...NOTHING_ON_DISK, exists: () => true })).toEqual([]);
+  });
+
   it("a goal is not required once the test has a grader", () => {
     expect(validateForm(form("suite", { id: "t" }, [COMMAND_GRADER]), NOTHING_ON_DISK)).toEqual([]);
   });
@@ -161,6 +166,36 @@ describe("validateForm", () => {
     expect(validateForm(state, NOTHING_ON_DISK)).toEqual([
       { row: graderRow(1, "name"), text: 'two graders named "runs"' },
     ]);
+  });
+});
+
+describe("testJsonFor over a base", () => {
+  const values = { id: "", description: "", input: "", files: "", goal: "new goal" };
+
+  it("writes fields over a base and keeps every other key", () => {
+    const base = { goal: "old", tags: ["a"], timeoutSec: 5, metadata: { m: 1 }, expected: 2 };
+    expect(testJsonFor({ ...values, description: "d" }, base, {})).toEqual({
+      goal: "new goal",
+      description: "d",
+      tags: ["a"],
+      timeoutSec: 5,
+      metadata: { m: 1 },
+      expected: 2,
+    });
+  });
+
+  it("deletes a key whose field was emptied", () => {
+    expect(testJsonFor(values, { description: "gone", goal: "old" }, {})).toEqual({
+      goal: "new goal",
+    });
+  });
+
+  it("leaves a locked input as the base has it", () => {
+    const base = { input: { a: 1 }, goal: "old" };
+    expect(testJsonFor(values, base, { input: "structured input: edit the file" })).toEqual({
+      input: { a: 1 },
+      goal: "new goal",
+    });
   });
 });
 
@@ -330,5 +365,87 @@ describe("nextCommands", () => {
       "agency eval run <agent> --suite bar-evals --test says-its-name --out runs/<name>",
       "agency eval grade runs/<name>",
     ]);
+  });
+});
+
+describe("writeTest in place", () => {
+  let suite: string;
+  let testDir: string;
+  const TEST_JSON = { goal: "old goal", tags: ["a"], timeoutSec: 5 };
+  const GRADER = { kind: "command", name: "runs", command: "true" };
+
+  beforeEach(() => {
+    suite = fs.mkdtempSync(path.join(os.tmpdir(), "eval-edit-"));
+    testDir = path.join(suite, "t");
+    fs.mkdirSync(path.join(testDir, "files"), { recursive: true });
+    fs.mkdirSync(path.join(testDir, "graderFiles"));
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify(TEST_JSON));
+    fs.writeFileSync(path.join(testDir, "graders.json"), JSON.stringify([GRADER]));
+    fs.writeFileSync(path.join(testDir, "files", "x.txt"), "x");
+    fs.writeFileSync(path.join(testDir, "graderFiles", "notes.md"), "notes");
+    fs.writeFileSync(path.join(testDir, "notes.md"), "mine");
+  });
+
+  afterEach(() => {
+    fs.rmSync(suite, { recursive: true, force: true });
+  });
+
+  function editing(goal: string, graders: Answers[]): FormState {
+    return editingForm({
+      testDir,
+      base: TEST_JSON,
+      values: { id: "", description: "", input: "", files: "", goal },
+      graders: graders.map((answers) => ({ answers })),
+      locks: { id: "t", files: "files/ (1 files)" },
+      gradersLock: null,
+    });
+  }
+
+  function read(name: string): string {
+    return fs.readFileSync(path.join(testDir, name), "utf8");
+  }
+
+  it("replaces test.json and graders.json in place and leaves the rest of the folder alone", () => {
+    const state = editing("new goal", [{ ...GRADER, command: "false" }]);
+    expect(writeTest(state)).toBe(testDir);
+    expect(JSON.parse(read("test.json"))).toEqual({ goal: "new goal", tags: ["a"], timeoutSec: 5 });
+    expect(JSON.parse(read("graders.json"))).toEqual([{ ...GRADER, command: "false" }]);
+    expect(read("files/x.txt")).toBe("x");
+    expect(read("graderFiles/notes.md")).toBe("notes");
+    expect(read("notes.md")).toBe("mine");
+    expect(fs.readdirSync(suite)).toEqual(["t"]);
+  });
+
+  it("deletes graders.json when the last grader was removed", () => {
+    writeTest(editing("new goal", []));
+    expect(fs.existsSync(path.join(testDir, "graders.json"))).toBe(false);
+    expect(JSON.parse(read("test.json")).goal).toBe("new goal");
+  });
+
+  it("writes graders.json for a test that had none", () => {
+    fs.unlinkSync(path.join(testDir, "graders.json"));
+    writeTest(editing("new goal", [GRADER]));
+    expect(JSON.parse(read("graders.json"))).toEqual([GRADER]);
+  });
+
+  it("a graders.json that became a directory, or a symlink, fails before anything moves and leaves test.json as it was", () => {
+    fs.unlinkSync(path.join(testDir, "graders.json"));
+    fs.mkdirSync(path.join(testDir, "graders.json"));
+    expect(() => writeTest(editing("new goal", [GRADER]))).toThrow(TestWriteError);
+    expect(JSON.parse(read("test.json"))).toEqual(TEST_JSON);
+    expect(fs.readdirSync(suite)).toEqual(["t"]);
+    fs.rmdirSync(path.join(testDir, "graders.json"));
+    fs.symlinkSync(path.join(testDir, "notes.md"), path.join(testDir, "graders.json"));
+    expect(() => writeTest(editing("new goal", [GRADER]))).toThrow(/symlink/);
+    expect(JSON.parse(read("test.json"))).toEqual(TEST_JSON);
+    expect(read("notes.md")).toBe("mine");
+  });
+
+  it("the loader reads the folder back after an edit", () => {
+    writeTest(editing("new goal", [GRADER]));
+    const [test] = loadInputs(testDir);
+    expect(test.goal).toBe("new goal");
+    expect(test.timeoutSec).toBe(5);
+    expect(test.graders).toBe(path.join(testDir, "graders.json"));
   });
 });

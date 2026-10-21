@@ -199,7 +199,19 @@ graders
 
 Ctrl+X on a grader's first row removes it, after a question. Save then writes `graders.json` beside `test.json`; the five kinds and their fields are described in `docs/dev/evals/graders-json.md`. Once a test has graders, its `goal` is not judged (the goal row says so); add a goal grader to judge it.
 
-The form creates tests. It does not open an existing one, and it does not take structured inputs, tags or timeouts; write those by hand.
+The form does not take structured inputs, tags or timeouts; write those by hand, and the form keeps them when it opens the test again.
+
+## Editing a test
+
+`agency eval edit <test-dir>` opens the same form over an existing test folder, loaded from its `test.json` and `graders.json`:
+
+```bash
+agency eval edit bar-evals/says-its-name
+```
+
+Two rows cannot be changed. The folder name is the test's id, so renaming a test is moving the folder. The files row shows `files/ (12 files)` or `none`; replacing seeded files would mean deleting the old copy, which the form does not do. A structured `input` (a JSON object) shows `structured input: edit the file`. A test that has a `graders.ts` opens with the graders section reading `graders.ts: edit the file`; the rest of the form works.
+
+Save writes `test.json` and `graders.json` back in place and leaves everything else in the folder alone. Keys the form does not show, such as `tags`, `timeoutSec`, `expected` and `metadata`, are kept. Removing every grader deletes `graders.json`. Quitting an unchanged test asks nothing. A folder whose `test.json` names an `id` that differs from the folder name is refused; rename one of them.
 
 ## The run directory
 

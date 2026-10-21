@@ -1,0 +1,5 @@
+// A node that returns nothing, so a test can check that the end of the
+// run still reaches an attached debugger when there is no value to send.
+node main() {
+  x = 1
+}

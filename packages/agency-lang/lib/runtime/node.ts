@@ -39,6 +39,7 @@ import {
   type LegOptions,
 } from "./attachedDebugger.js";
 import { fireAgentEnd } from "./agentEnd.js";
+import { mintDebugRun } from "./debugRun.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
   tokenStatsOf,
@@ -151,6 +152,7 @@ async function initFreshExecCtx(
 ): Promise<void> {
   const { initializeGlobals } = opts;
 
+  mintDebugRun(execCtx);
   // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
   installRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);

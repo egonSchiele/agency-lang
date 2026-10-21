@@ -57,6 +57,9 @@ export type AttachedDebugger = {
   run(result: RunNodeCoreResult<any>, leg: LegOptions): Promise<AttachedRunResult>;
   /** The program finished while attached, without passing through `run`. */
   finished(result: RunNodeCoreResult<any>): Promise<void>;
+  /** A step in the run `runKey` was let through because another run is
+   *  being debugged (`debugRun.ts`); once per such run is enough. */
+  ignoring?(runKey: string): void;
 };
 
 /** The metadata key an attached debugger sets on the resumes and rewinds

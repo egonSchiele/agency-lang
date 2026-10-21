@@ -7,6 +7,7 @@ import type { RuntimeContext } from "./state/context.js";
 import type { LoopStopKind, SourceLocation } from "./state/sourceLocation.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { Run } from "./asyncContext.js";
+import { debugRunOf } from "./debugRun.js";
 
 /** Where a debug stop happened, carried in the debug interrupt's `data`.
  *  The interrupt's checkpoint cannot say: once a stop inside a tool call
@@ -94,6 +95,14 @@ export async function debugStep(
 
   const dbg = ctx.debuggerState;
   if (!dbg) {
+    return undefined;
+  }
+  // Attached, one run at a time is debugged: the first to get here owns
+  // the debugger, and a step in any other run neither stops nor records
+  // a checkpoint, so that run goes on as if no debugger were attached.
+  const runKey = debugRunOf(ctx);
+  if (!dbg.owns(runKey)) {
+    dbg.attached?.ignoring?.(runKey ?? "");
     return undefined;
   }
 

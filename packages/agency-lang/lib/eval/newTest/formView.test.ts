@@ -256,6 +256,32 @@ describe("renderForm", () => {
     expect(back.scrollTop).toBe(0);
   });
 
+  it("scrolledToCursor shows a wrapped row from its first line when the cursor comes up onto it", () => {
+    const state = withGraders(filled(), [COUNT_EXAMPLE, COUNT_EXAMPLE]);
+    const onLast = { ...state, cursor: { kind: "grader", index: 1, question: "weight" } as const };
+    const down = scrolledToCursor(onLast, 80, 10);
+    const up = scrolledToCursor({ ...down, cursor: { kind: "field", name: "goal" } }, 80, 10);
+    const firstGoalLine = bodyLines(up, 80).findIndex(
+      (line) => line.row?.kind === "field" && line.row.name === "goal",
+    );
+    expect(up.scrollTop).toBe(firstGoalLine);
+    expect(frame(up, 80, 10)).toContain("  goal");
+  });
+
+  it("the graders heading is bold and not dim", () => {
+    const heading = bodyLines(filled(), 80).find((line) => line.element.content === "  graders");
+    expect(heading?.element.style?.bold).toBe(true);
+    expect(heading?.element.style?.dim).toBe(false);
+  });
+
+  it("a style tag on a wrapped cursor row's first line shows as typed", () => {
+    const tagged = `{bold}literal{/bold} ${"word ".repeat(20)}`;
+    const state = reduceForm(initialForm("suite"), { kind: "appendText", text: tagged });
+    const text = frame(state, 60, 24);
+    expect(text).toContain("{bold}literal{/bold}");
+    expect(text).toContain("word █");
+  });
+
   it("the frame shows only the lines from scrollTop", () => {
     const state = { ...withGraders(filled(), [COUNT_EXAMPLE]), scrollTop: 8 };
     const text = frame(state, 80, 12);

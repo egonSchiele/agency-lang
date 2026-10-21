@@ -17,7 +17,13 @@ import {
   type Problem,
   type Row,
 } from "./form.js";
-import { questionsFor, specObjectFor, type GraderDraft } from "./graders.js";
+import {
+  KIND_NEEDED,
+  kindOf,
+  questionForField,
+  specObjectFor,
+  type GraderDraft,
+} from "./graders.js";
 
 /** A folder name the loader takes as a test id. */
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -95,9 +101,14 @@ export function validateForm(state: FormState, checks: FileChecks = realFileChec
 
 /** Every grader's first problem, in the parser's words, then the one check
  *  the parser makes only at file level: two graders with one name. The
- *  form holds no rule of its own about what a grader needs. */
+ *  form holds no rule of its own about what a grader needs; the one
+ *  message it words itself is for a kind not picked yet, where the
+ *  parser's `unknown kind ""` would not say what to do. */
 function graderProblems(graders: GraderDraft[]): Problem[] {
   const own = graders.flatMap((draft, index): Problem[] => {
+    if (kindOf(draft) === null) {
+      return [{ row: { kind: "grader", index, question: "kind" }, text: KIND_NEEDED }];
+    }
     const problem = graderProblem(specObjectFor(draft));
     return problem === null
       ? []
@@ -106,17 +117,11 @@ function graderProblems(graders: GraderDraft[]): Problem[] {
   return [...own, ...duplicateNames(graders)];
 }
 
-/** The row a parser problem is about. A field that names a shown question
- *  is that row; a repeating question's list key (`points`) is its first row
- *  (`point.0`); `kind` and a cross-field rule (`null`) are the kind row. */
+/** The row a parser problem is about: the row `graders.ts` finds for the
+ *  field, or the kind row for `kind` and for a cross-field rule (`null`). */
 function rowForField(draft: GraderDraft, index: number, field: string | null): Row {
-  const questions = questionsFor(draft);
-  const named = questions.find((question) => question.name === field);
-  const first = questions.find(
-    (question) => question.output === "list" && `${question.name.replace(/\.0$/, "")}s` === field,
-  );
-  const question = named ?? first;
-  return { kind: "grader", index, question: question === undefined ? "kind" : question.name };
+  const question = field === null ? null : questionForField(draft, field);
+  return { kind: "grader", index, question: question === null ? "kind" : question.name };
 }
 
 function duplicateNames(graders: GraderDraft[]): Problem[] {

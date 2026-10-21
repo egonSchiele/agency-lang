@@ -108,9 +108,9 @@ describe("validateForm", () => {
     expect(validateForm(form("suite", { id: "t" }, [COMMAND_GRADER]), NOTHING_ON_DISK)).toEqual([]);
   });
 
-  it("an unpicked kind is one problem on the kind row, in the parser's words", () => {
+  it("an unpicked kind is one problem on the kind row, saying how to pick", () => {
     expect(validateForm(form("suite", { id: "t" }, [{}]), NOTHING_ON_DISK)).toEqual([
-      { row: graderRow(0, "kind"), text: 'unknown kind ""' },
+      { row: graderRow(0, "kind"), text: "pick what to check with ← →" },
     ]);
   });
 

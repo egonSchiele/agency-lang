@@ -122,9 +122,11 @@ answer plus one empty row, named `point.0`, `point.1`, and so on.
 A choice row is picked with Left and Right. Letters type nothing there:
 the reducer's `withEdit` returns the state unchanged for a choice row, so
 `s` on "must pass" cannot change it. The form's key table still binds no
-letter. `AUTO_FILL` is a table of defaults applied after a pick; its one
-row fills `passingScore` with `0.5` when a goal grader becomes must-pass,
-so a second default is one more row.
+letter. `AUTO_FILL` is a table of defaults applied after a pick: it fills
+`passingScore` with `0.5` when a goal grader becomes must-pass, and `max`
+with `0` when a count grader is picked, since the parser requires that
+limit and a row with no value would otherwise read as optional. A number
+row holding only spaces counts as empty.
 
 Ctrl+X on a grader's first row asks `remove this grader?  y / n`, a third
 question mode beside save and quit. It is Ctrl+X and not Ctrl+D because
@@ -137,39 +139,40 @@ The form holds no rule of its own about what a grader needs. `validateForm`
 hands `specObjectFor(draft)` to `graderProblem` in
 `lib/eval/gradersJson/schema.ts`, which is `parseSpec`'s check with the
 problem returned as data instead of thrown: the field it is about, or
-`null` for a rule that spans fields, and the parser's words. `rowForField`
-turns that into a row: a field that names a shown question is that row, a
-repeating question's list key (`points`) is its first row (`point.0`), and
-`kind` or a cross-field rule is the kind row. An unpicked kind reaches the
-parser as `kind: ""` and comes back as `unknown kind ""`. The one check the
-parser makes only at file level, two graders with one name, is repeated
-per row so the cursor lands on the second one's name.
+`null` for a rule that spans fields, and the parser's words.
+`questionForField` in `graders.ts` turns the field into a row: a field
+that names a shown question is that row, a repeating question's list key
+(`points`) is its first row (`point.0`), and `kind` or a cross-field rule
+is the kind row. The one exception to the parser's words is a grader with
+no kind picked: the form says `pick what to check with ← →` itself, and
+Enter on that row shows the same message instead of saving. The one check
+the parser makes only at file level, two graders with one name, is
+repeated per row so the cursor lands on the second one's name.
 
 A goal is required only while there are no graders, because the bundled
 goal judge scores only a test with none (`goalJudge` in
 `lib/eval/grading/gradeRun.ts`). For the same reason the goal row shows
 `not judged while the test has graders; add a goal grader to judge it`
-once a grader exists. Without that line a person who filled the goal and
-added a count grader would believe both run.
+once a grader exists.
 
 ### Scrolling
 
 A test with several graders is taller than a terminal. The body is a flat
 list of one-line elements, `bodyLines(state, width)`, each tagged with the
 row it belongs to, and `renderForm` draws the slice from `state.scrollTop`.
-The toolkit's `scrollable` style could not do this: it shifts an element's
-own text lines, and a column's children stay where the layout put them
-(`lib/tui/render/renderer.ts`, `renderTextContent`). So the typed cursor
-row, which was one `textInput` of height `n`, is now `n` one-line
-elements with the text input last; the block cursor is drawn as a cell at
-the end of the input's last line, so the screen is the same.
+The toolkit's `scrollable` style cannot do this: it shifts an element's
+own text lines, and a column's children stay where the layout put them.
+So a typed cursor row that wraps to `n` lines is `n` one-line elements,
+the text input last. The lines above the input are ordinary `line`
+elements, which read style tags, so their braces are escaped; the input
+reads none, so its text is not.
 
-`scrolledToCursor` runs after every key in `handleKey`. It finds the last
-line of the cursor row in `bodyLines` and moves `scrollTop` with
-`followCursor` and `clampScroll` from `lib/tui/scroll.ts`, so a row that
-vanished (a grader removed, a count changed) is absorbed too. One function
-computes the wrapping, and drawing and scrolling both read it. A second
-copy of the wrapping would drift.
+`scrolledToCursor` runs after every key in `handleKey`. It moves
+`scrollTop` with `followCursor` and `clampScroll` from `lib/tui/scroll.ts`
+so the cursor row is on screen: its last line when the cursor came down
+onto it, its first line (the one with the label) when it came up. A row
+that vanished (a grader removed, a count changed) is absorbed too. One
+function computes the wrapping, and drawing and scrolling both read it.
 
 ## Modes and intents
 

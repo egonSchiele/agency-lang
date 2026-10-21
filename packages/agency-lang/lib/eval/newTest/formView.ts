@@ -11,23 +11,18 @@ import { visualWidth, wrapText } from "@/stdlib/layout/ansi.js";
 import { column, line, row, textInput } from "@/tui/builders.js";
 import type { Element, Style } from "@/tui/elements.js";
 import { clampScroll, followCursor } from "@/tui/scroll.js";
+import { escapeStyleTags } from "@/tui/styleParser.js";
 import { sanitizeUntrusted, stripControlCharacters } from "@/tui/untrusted.js";
 
-import {
-  FIELDS,
-  isKindRow,
-  questionAt,
-  rowsOf,
-  sameRow,
-  type FormState,
-  type Row,
-} from "./form.js";
+import { FIELDS, isKindRow, sameRow, type FormState, type Row } from "./form.js";
 import {
   choiceValue,
   KIND_QUESTION,
   KIND_QUESTIONS,
   labelOf,
+  questionsFor,
   TAIL_QUESTIONS,
+  type GraderDraft,
   type QuestionSpec,
 } from "./graders.js";
 
@@ -111,19 +106,22 @@ export function rowViewsOf(state: FormState): RowView[] {
     const judged = field.name === "goal" && state.graders.length > 0;
     return judged ? [view, noteView(GOAL_NOT_JUDGED)] : [view];
   });
-  const graders = rowsOf(state)
-    .filter((row) => row.kind === "grader")
-    .map((row) => graderView(state, row));
+  // Each grader's questions are expanded once here, not once per row.
+  const graders = state.graders.flatMap((draft, index) =>
+    questionsFor(draft).map((question) => graderView(state, draft, index, question)),
+  );
   const section = graders.length === 0 ? [noteView(NO_GRADERS)] : graders;
   return [...fields, BLANK, { ...BLANK, label: "graders", heading: true }, ...section];
 }
 
-function graderView(state: FormState, row: Row): RowView {
-  const question = questionAt(state, row);
-  if (row.kind !== "grader" || question === null) {
-    return BLANK;
-  }
-  const answers = state.graders[row.index].answers;
+function graderView(
+  state: FormState,
+  draft: GraderDraft,
+  index: number,
+  question: QuestionSpec,
+): RowView {
+  const row: Row = { kind: "grader", index, question: question.name };
+  const answers = draft.answers;
   const answer = answers[question.name] ?? "";
   const label = isKindRow(row)
     ? kindLabel(row.index)
@@ -179,16 +177,22 @@ export function renderForm(args: FormViewArgs): Element {
   );
 }
 
-/** The state with `scrollTop` moved so the cursor row's last line is on
- *  screen. Run after every key, so a row that vanished is absorbed too. */
+/** The state with `scrollTop` moved so the cursor row is on screen: its
+ *  last line when the cursor came down onto it, its first line (the one
+ *  with the label) when the cursor came up onto it or the row is taller
+ *  than the screen. Run after every key, so a row that vanished is
+ *  absorbed too. */
 export function scrolledToCursor(state: FormState, width: number, height: number): FormState {
   const lines = bodyLines(state, width);
   const viewport = Math.max(1, height - LINES_AROUND_BODY);
-  const cursorLine = lines
-    .map((entry) => entry.row !== null && sameRow(entry.row, state.cursor))
-    .lastIndexOf(true);
+  const onCursor = lines.map((entry) => entry.row !== null && sameRow(entry.row, state.cursor));
+  const firstLine = onCursor.indexOf(true);
+  const lastLine = onCursor.lastIndexOf(true);
   const clamped = clampScroll(state.scrollTop, lines.length, viewport);
-  const scrollTop = cursorLine < 0 ? clamped : followCursor(clamped, cursorLine, viewport);
+  const scrollTop =
+    firstLine < 0
+      ? clamped
+      : followCursor(followCursor(clamped, lastLine, viewport), firstLine, viewport);
   return scrollTop === state.scrollTop ? state : { ...state, scrollTop };
 }
 
@@ -212,8 +216,9 @@ function footerText(args: FormViewArgs): string {
  *  like every other input in the toolkit; a choice cursor row is drawn on
  *  the cursor background with nothing to type into. An empty row shows its
  *  help dim. A text input draws its value as is, with no style tags read,
- *  so the value only has its control characters removed; escaping braces
- *  there would show the backslashes. */
+ *  so its line only has its control characters removed; escaping braces
+ *  there would show the backslashes. The lines above it are ordinary
+ *  lines, which do read style tags, so their braces are escaped. */
 export function drawRow(view: RowView, width: number): Element[] {
   // A line with no label (a note, the no-graders line) runs from the
   // indent across the whole width.
@@ -226,7 +231,7 @@ export function drawRow(view: RowView, width: number): Element[] {
   if (!view.cursor) {
     const shown = view.value === "" ? view.help : sanitizeUntrusted(view.value);
     const wrapped = wrapText(shown, valueWidth);
-    const style: Style = { dim: view.value === "", bold: view.heading };
+    const style: Style = { dim: view.value === "" && !view.heading, bold: view.heading };
     const first = line(`${label}${wrapped[0] ?? ""}`.trimEnd(), style);
     const rest = wrapped.slice(1).map((text) => line(`${pad}${text}`, style));
     return [first, ...rest];
@@ -263,7 +268,7 @@ export function drawRow(view: RowView, width: number): Element[] {
       line(i === 0 ? label : pad, { width: label.length, bg: CURSOR_BG }),
       i === last
         ? textInput({ bg: CURSOR_BG, width: valueWidth, height: 1 }, text)
-        : line(text, { bg: CURSOR_BG, width: valueWidth }),
+        : line(escapeStyleTags(text), { bg: CURSOR_BG, width: valueWidth }),
     ),
   );
 }

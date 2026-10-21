@@ -5,7 +5,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { editorCommand, openInEditor } from "@/eval/newTest/editor.js";
 import {
   editActionFor,
   initialForm,
@@ -22,25 +21,13 @@ import {
 import { renderForm, scrolledToCursor, wroteSummary } from "@/eval/newTest/formView.js";
 import { nextCommands, TestWriteError, validateForm, writeTest } from "@/eval/newTest/write.js";
 import { formatKey } from "@/tui/input/format.js";
-import { TerminalInput } from "@/tui/input/terminal.js";
-import type { InputSource, KeyEvent } from "@/tui/input/types.js";
+import type { KeyEvent } from "@/tui/input/types.js";
 import { hintsFrom, runKey, type KeyBinding } from "@/tui/keymap.js";
-import { TerminalOutput } from "@/tui/output/terminal.js";
-import type { OutputTarget } from "@/tui/output/types.js";
 import { Screen } from "@/tui/screen.js";
 
-import { terminalDimension } from "./label.js";
+import { openRealTerminal, type FormTerminal, type OpenEditor } from "./formTerminal.js";
 
-/** Opens the user's editor on a field's text; null when `$EDITOR` is unset. */
-export type OpenEditor = ((text: string) => string | null) | null;
-
-/** Where the form draws and reads keys, and how it opens an editor. */
-export type FormTerminal = {
-  input: InputSource;
-  output: OutputTarget;
-  size: { width: number; height: number };
-  openEditor: OpenEditor;
-};
+export type { FormTerminal, OpenEditor } from "./formTerminal.js";
 
 export type EvalNewOptions = {
   suiteDir: string;
@@ -223,13 +210,27 @@ function messageOf(error: unknown): string {
 
 export async function evalNew(options: EvalNewOptions): Promise<void> {
   assertSuiteDirectory(options.suiteDir);
-  const terminal = options.openTerminal();
+  await runForm({
+    initial: initialForm(options.suiteDir),
+    openTerminal: options.openTerminal,
+    print: options.print,
+  });
+}
+
+/** The screen loop both commands share: draw the form, handle keys until
+ *  it is done, then print the folder written and the commands to run next. */
+export async function runForm(args: {
+  initial: FormState;
+  openTerminal: () => FormTerminal;
+  print: (text: string) => void;
+}): Promise<void> {
+  const terminal = args.openTerminal();
   const { openEditor, size } = terminal;
   const screen = new Screen({ input: terminal.input, output: terminal.output, ...size });
   let final: FormState | null = null;
   try {
     final = await screen.runLoop<FormState>({
-      initialState: initialForm(options.suiteDir),
+      initialState: scrolledToCursor(args.initial, size.width, size.height),
       render: (state) =>
         renderForm({
           state,
@@ -251,40 +252,18 @@ export async function evalNew(options: EvalNewOptions): Promise<void> {
     screen.destroy();
   }
   if (final !== null && final.written !== null) {
-    for (const text of wroteSummary(
-      final.written,
-      nextCommands(options.suiteDir, final.values.id),
-    )) {
-      options.print(text);
+    const id = path.basename(final.written);
+    for (const text of wroteSummary(final.written, nextCommands(final.suiteDir, id))) {
+      args.print(text);
     }
   }
 }
 
-const DEFAULT_COLUMNS = 100;
-const DEFAULT_ROWS = 30;
-
-/** The real terminal, and `$EDITOR` when set. */
-function openRealTerminal(): FormTerminal {
-  if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
-    throw new Error("eval new needs an interactive terminal");
-  }
-  const input = new TerminalInput({ suppressSigint: true });
-  const output = new TerminalOutput();
-  const editor = editorCommand(process.env);
-  const openEditor: OpenEditor =
-    editor === null ? null : (text) => openInEditor(text, editor, { input, output });
-  return {
-    input,
-    output,
-    size: {
-      width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
-      height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
-    },
-    openEditor,
-  };
-}
-
 /** The command as the CLI runs it. */
 export async function runEvalNew(suiteDir: string): Promise<void> {
-  await evalNew({ suiteDir, openTerminal: openRealTerminal, print: (text) => console.log(text) });
+  await evalNew({
+    suiteDir,
+    openTerminal: () => openRealTerminal("eval new"),
+    print: (text) => console.log(text),
+  });
 }

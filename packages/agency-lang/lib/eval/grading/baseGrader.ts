@@ -70,8 +70,21 @@ export abstract class BaseGrader {
     return aggregateGrades(trials, this.options.aggregate ?? "all");
   }
 
+  /** A gate that returns a score needs a bar to clear. Without one, a
+   *  scalar 0 would pass. `passes()` refuses once the grade is in hand;
+   *  a grader that knows its score kind up front overrides `validateInput`
+   *  to refuse before any work is done. */
+  protected missingThreshold(): boolean {
+    return this.mustPass() && this.options.threshold === undefined;
+  }
+
   passes(grade: Grade): boolean {
     if (grade.score.kind === "binary") return grade.score.pass;
+    if (this.missingThreshold()) {
+      throw new Error(
+        `${this.name()}: must-pass grader returned a score but has no threshold; set threshold in its options`,
+      );
+    }
     return grade.score.value >= (this.options.threshold ?? 0);
   }
 }

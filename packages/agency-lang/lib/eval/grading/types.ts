@@ -31,7 +31,7 @@ export type Grade = { score: Score; feedback?: string };
 /** Options common to every grader; subclasses extend this with their own fields. */
 export type GraderOptions = {
   mustPass?: boolean; // gate: failure fails the whole iteration for this input
-  threshold?: number; // scalar passing bar (binary reads `pass`)
+  threshold?: number; // scalar passing bar (binary reads `pass`); a must-pass scalar grader requires it
   weight?: number; // contribution to the scalarized objective (default 1)
   samples?: number; // k repetitions (default 1; must be a positive integer)
   aggregate?: "any" | "all"; // binary only; scalar always averages

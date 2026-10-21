@@ -85,4 +85,15 @@ describe("LlmJudge", () => {
     });
     expect(captured).toBe('"Return the capital.", "New Delhi", "New Delhi"');
   });
+  it("validateInput refuses a must-pass judge with no threshold before any call", () => {
+    const judge = new LlmJudge({ name: "goal", goal: "g", mustPass: true });
+    expect(() => judge.validateInput({ id: "t" })).toThrow(
+      "goal: a must-pass judge needs a threshold",
+    );
+  });
+
+  it("validateInput accepts a must-pass binary judge with no threshold", () => {
+    const judge = new LlmJudge({ name: "goal", goal: "g", mustPass: true, binary: true });
+    expect(() => judge.validateInput({ id: "t" })).not.toThrow();
+  });
 });

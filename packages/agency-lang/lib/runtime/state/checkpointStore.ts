@@ -116,9 +116,15 @@ export type GlobalsLocation = { store: Record<string, Record<string, any>>; json
  *  every call answered first; the message is queued and the round
  *  boundary delivers it after the results. Any other thread takes it at
  *  the end. */
-export function messageLanding(thread: { messages: MessageJSON[] }): "messages" | "queued" {
-  type WithCalls = { role?: string; toolCalls?: { id?: string }[]; toolCallId?: string };
-  const messages = thread.messages as WithCalls[];
+export type MessageLike = {
+  role?: string;
+  content?: unknown;
+  toolCalls?: { id?: string; name?: string }[];
+  toolCallId?: string;
+};
+
+export function messageLanding(thread: { messages: MessageLike[] }): "messages" | "queued" {
+  const messages = thread.messages;
   const lastCall = messages.findLastIndex(
     (m) => m.role === "assistant" && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
   );

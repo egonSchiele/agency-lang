@@ -13,7 +13,7 @@ import { exitProcessNow } from "../runtime/exitProcess.js";
 // `prompt`). `chooseOption` in the same module uses `_promptsAutocomplete`
 // for its terminal branch. Each one refuses when stdout is not a terminal;
 // there is no non-terminal fallback here by design. `chooseOption` is the
-// place that falls back to a numbered list read with `input()`.
+// place that falls back to reading a key with `input()`.
 // ---------------------------------------------------------------------------
 
 type PromptsChoiceItem = { key: string; label: string };
@@ -35,7 +35,7 @@ const AUTOCOMPLETE_FREE_TEXT_PREFIX = "__FREETEXT__:";
 // the question they build and the post-processing they apply to the
 // successful value.
 //
-// Three side-effects beyond just calling prompts:
+// Four side-effects beyond just calling prompts:
 //
 //   1. `onCancel` returns `false` to suppress prompts' default
 //      `process.exit(0)` on Ctrl+C, so we can return a Result.failure
@@ -267,9 +267,7 @@ export async function _promptsSelect(
   return success(String(result.value));
 }
 
-// Backs the Agency-side `prompt(...)` primitive (renamed from `text`
-// to avoid colliding with the Layer 1 `text` element builder; see the
-// banner comment above this section).
+// Backs the Agency-side `prompt(...)`.
 //
 // `validate` is forwarded straight to `prompts`. Per the prompts
 // docs: return `true` for valid; return a string to reject and show

@@ -132,4 +132,29 @@ describe("chooseOption, the terminal branch", () => {
     );
     expect(answer).toBe("a");
   });
+
+  it("aborts the run on Escape when allowCancel is set", async () => {
+    // With `allowCancel`, Escape raises a cancellation that unwinds the
+    // run instead of re-asking. `__call` hands that back as an aborted
+    // result value, not a rejection. A second answer is queued so a
+    // regression shows up as the wrong result ("a"), not a hung test.
+    spoofTty(true);
+    prompts.inject([null, "a"]);
+    const ctx = makeTestCtx();
+    const result: any = await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
+      __call(run, chooseOption, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          title: "Pick one",
+          body: "",
+          items: [{ key: "a", label: "approve" }],
+          allowCancel: true,
+        },
+      }),
+    );
+    expect(result).not.toBe("a");
+    expect(result?.__type).toBe("abortedResult");
+    expect(result?.cause?.reason).toMatch(/cancelled/);
+  });
 });

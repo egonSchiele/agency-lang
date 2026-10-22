@@ -10,8 +10,9 @@ export const template = `// \`__resultCheckpointId\` is referenced by interruptA
 // call: pinning at every function entry causes pinned checkpoints to
 // accumulate without bound (evictIfNeeded only evicts unpinned), and the
 // JSON deep-clone of stateStack + globals on each call is a measurable
-// cost in any loop that calls a function per keystroke or per line. The cost of always
-// pinning outweighs the retry-on-failure feature, so it is disabled.
+// cost in any loop that calls a function per keystroke or per line. The
+// cost of always pinning outweighs the retry-on-failure feature, so it is
+// disabled.
 // \`ctx.checkpoints.get(-1)\` returns undefined, so the failure path
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.

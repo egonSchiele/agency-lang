@@ -229,8 +229,9 @@ autocomplete(
 
 Ask the user to pick from a list, filtering by typed text. Returns
   `success(key)` with the chosen item's `key`, or `failure("cancelled")`
-  on Ctrl+C / Escape. The filter matches each item's `key` or `label`
-  (substring, case-insensitive). When `allowFreeText` is true and the
+  on Ctrl+C / Escape. The filter keeps the items whose `key` contains
+  the typed text (case-insensitive); labels are not searched. When
+  `allowFreeText` is true and the
   typed input matches no item, picking it returns the typed text
   verbatim instead of a key.
 
@@ -300,7 +301,7 @@ a tool so the LLM cannot override the constraint.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L203))
 
 ### confirm
 
@@ -328,7 +329,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L227))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L228))
 
 ### chooseOption
 
@@ -344,8 +345,8 @@ chooseOption(
 
 Show a menu and block until the user picks an entry. Returns the
   chosen item's `key`. In a terminal, typing narrows the visible items
-  by substring match on `key` or `label`; otherwise the user types a
-  key at a plain prompt. When `allowFreeText` is true and the typed
+  to those whose `key` contains the typed text; otherwise the user
+  types a key at a plain prompt. When `allowFreeText` is true and the typed
   text matches no item, it returns that text instead of re-asking
   (empty input still re-asks).
 
@@ -357,10 +358,10 @@ Show a menu and block until the user picks an entry. Returns the
     raising a cancellation that unwinds the run, instead of re-prompting.
     The default of false enforces a "must answer" contract
 
-In a terminal this is an arrow-key picker; otherwise it is a numbered
-list read with `input()`, which is what scripted and headless runs
-see. Both branches re-ask until the user answers. std::policy uses it
-for its approve/reject menus.
+In a terminal this is an arrow-key picker. Otherwise it prints the
+title and body and reads a key with `input()`, which is what scripted
+and headless runs see. Both branches re-ask until the user answers.
+std::policy uses it for its approve/reject menus.
 
 **Parameters:**
 
@@ -376,7 +377,7 @@ for its approve/reject menus.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L268))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L269))
 
 ### interruptChoice
 
@@ -394,8 +395,8 @@ interruptChoice(
 Approval prompt for line mode: renders a sticky footer pinned to the
   bottom of the terminal so concurrent tool-call output streams above it
   instead of burying the prompt. Type an option key or a rejection reason,
-  then press Enter. Falls back to `chooseOption` when no line-mode REPL is
-  active (a non-TTY or a headless run).
+  then press Enter. Falls back to `chooseOption` when no line-mode `repl()`
+  is running, which includes non-terminal and headless runs.
 
   @param title - Prompt heading (the interrupt message).
   @param body - Multi-line context shown under the title (or "").
@@ -419,4 +420,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L369))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L370))

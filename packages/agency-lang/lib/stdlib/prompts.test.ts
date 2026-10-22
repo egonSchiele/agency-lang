@@ -78,7 +78,7 @@ describe("_promptsAutocomplete happy path", () => {
     // Key-only matching is intentional: policy interrupt labels
     // contain "approve" / "reject" / "always", so a label-substring
     // match would never narrow anything (every label contains "r"
-    // and "a"). See _buildSuggest in ui.ts for rationale.
+    // and "a"). See _buildSuggest in prompts.ts for rationale.
     const items = [
       { key: "a", label: "Approve once" },
       { key: "r", label: "Reject once" },
@@ -121,12 +121,6 @@ describe("_promptsAutocomplete happy path", () => {
     expect(off.some((m) => String(m.value).startsWith("__FREETEXT__"))).toBe(false);
   });
 });
-
-// All three bridges share `_assertLineModeAvailable`, which is
-// already covered for `_promptsAutocomplete` in the Task 1 block
-// above. To avoid running a full repl harness three more times,
-// these blocks only test the non-TTY branch. Trust that the shared
-// helper guards the active-repl case for all four bridges.
 
 describe("_promptsSelect", () => {
   afterEach(() => restoreTty());

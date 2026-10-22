@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Checkpoint, CheckpointStore } from "./checkpointStore.js";
+import { Checkpoint, CheckpointStore, messageLanding } from "./checkpointStore.js";
 import { verifyCheckpointChecksum } from "../checkpointChecksum.js";
 import { type StateStackJSON, type StateJSON } from "./stateStack.js";
 import { type GlobalStoreJSON } from "./globalStore.js";
@@ -318,7 +318,7 @@ describe("Checkpoint", () => {
 
     it("lists every branch with its status and owner, nested ones under their parent", () => {
       const cp = agentCheckpoint();
-      expect(cp.listBranches()).toEqual([
+      expect(cp.listBranches()).toMatchObject([
         {
           path: ["tool_0_abc"],
           key: "tool_0_abc",
@@ -345,7 +345,7 @@ describe("Checkpoint", () => {
 
     it("lists each guard once, outermost first, with the figures of the branch's own copy", () => {
       const cp = agentCheckpoint();
-      expect(cp.listGuards()).toEqual([
+      expect(cp.listGuards()).toMatchObject([
         {
           label: "research",
           dimension: "cost",
@@ -410,8 +410,8 @@ describe("Checkpoint", () => {
 
     it("reads the deepest tool loop's round and removed tools", () => {
       const cp = agentCheckpoint();
-      expect(cp.loopState()).toEqual({ round: 2, removedTools: ["writeUp"] });
-      expect(cp.loopState(["tool_0_abc"])).toEqual({ round: 1, removedTools: [] });
+      expect(cp.loopState()).toMatchObject({ round: 2, removedTools: ["writeUp"], tools: null });
+      expect(cp.loopState(["tool_0_abc"])).toMatchObject({ round: 1, removedTools: [] });
       expect(
         new Checkpoint({
           id: 1,
@@ -1375,5 +1375,178 @@ describe("CheckpointStore inside a tool call", () => {
     // llm() line on the stack above, not writeUp's first statement.
     const atSearchStart = { ...stoppedInSearch, stepPath: "0" };
     expect(store.findBefore(4, atSearchStart)!.id).toBe(1);
+  });
+});
+
+describe("locators: every reader says where in the JSON it looked", () => {
+  // A node frame holding the store's thread "m", a loop frame holding
+  // its newer copy of "m", and a tool call whose own loop frame holds
+  // a thread "sub" that no store serializes.
+  function located() {
+    const stack = makeStackJSON([
+      {
+        scopeName: "main",
+        threads: {
+          threads: { m: { id: "m", messages: [{ role: "user", content: "task" }], label: "main" } },
+          counter: 1,
+          activeStack: ["m"],
+        },
+      },
+      {
+        scopeName: "runPrompt",
+        locals: {
+          toolCallRound: 0,
+          removedTools: [],
+          toolNames: ["search", "writeUp"],
+          messagesJSON: {
+            id: "m",
+            messages: [
+              { role: "user", content: "task" },
+              { role: "assistant", toolCalls: [{ id: "abc", name: "search" }] },
+            ],
+          },
+        },
+        branches: {
+          tool_0_abc: {
+            stack: makeStackJSON([
+              { scopeName: "search", locals: { url: "u" } },
+              {
+                scopeName: "runPrompt",
+                locals: {
+                  toolCallRound: 0,
+                  removedTools: [],
+                  messagesJSON: { id: "sub", messages: [{ role: "user", content: "summarize" }] },
+                },
+              },
+            ]),
+            globalsJSON: makeGlobalsJSON({ mod: { x: 2 } }),
+          },
+        },
+      },
+    ]);
+    stack.guards = [
+      { kind: "time", timeLimit: 60000, elapsedMs: 10000, guardId: "g-time", label: "research" },
+    ];
+    stack.stack[1].branches!.tool_0_abc.stack.inheritedTimeGuards = [
+      { kind: "time", timeLimit: 50000, elapsedMs: 1500, guardId: "g-time", label: "research" },
+    ];
+    return new Checkpoint({
+      id: 0,
+      stack,
+      globals: makeGlobalsJSON({ mod: { x: 1 } }),
+      nodeId: "n1",
+      moduleId: "mod",
+    });
+  }
+
+  const ROOT = ["stack", "stack"];
+  const TOOL = [...ROOT, "1", "branches", "tool_0_abc", "stack", "stack"];
+
+  it("walks every frame along a branch path with its path", () => {
+    const cp = located();
+    expect(cp.walkFrames(["tool_0_abc"]).map((f) => [f.frame.scopeName, f.jsonPath])).toEqual([
+      ["main", [...ROOT, "0"]],
+      ["runPrompt", [...ROOT, "1"]],
+      ["search", [...TOOL, "0"]],
+      ["runPrompt", [...TOOL, "1"]],
+    ]);
+  });
+
+  it("a thread view carries the path of the list a resume reads", () => {
+    const cp = located();
+    // The loop's copy, newer than the store's: the resume adopts it.
+    expect(cp.threadsAlong([]).map((v) => [v.key, v.jsonPath])).toEqual([
+      ["m", [...ROOT, "1", "locals", "messagesJSON", "messages"]],
+    ]);
+    // Inside the tool: the store's thread still, and the tool loop's
+    // own thread, which only its frame holds.
+    expect(cp.threadsAlong(["tool_0_abc"]).map((v) => [v.key, v.jsonPath])).toEqual([
+      ["m", [...ROOT, "1", "locals", "messagesJSON", "messages"]],
+      ["sub", [...TOOL, "1", "locals", "messagesJSON", "messages"]],
+    ]);
+  });
+
+  it("a thread with no loop copy points at the store", () => {
+    const cp = new Checkpoint({
+      id: 0,
+      stack: makeStackJSON([
+        {
+          scopeName: "main",
+          threads: {
+            threads: { m: { id: "m", messages: [], label: "main" } },
+            counter: 1,
+            activeStack: ["m"],
+          },
+        },
+      ]),
+      globals: makeGlobalsJSON(),
+      nodeId: "n1",
+    });
+    expect(cp.threadsAlong([])[0].jsonPath).toEqual([
+      ...ROOT,
+      "0",
+      "threads",
+      "threads",
+      "m",
+      "messages",
+    ]);
+  });
+
+  it("a guard lists the path of its owning copy and of every clone below", () => {
+    const cp = located();
+    expect(cp.listGuards(["tool_0_abc"])[0].jsonPaths).toEqual([
+      ["stack", "guards", "0"],
+      [...ROOT, "1", "branches", "tool_0_abc", "stack", "inheritedTimeGuards", "0"],
+    ]);
+    expect(cp.listGuards([])[0].jsonPaths).toEqual([["stack", "guards", "0"]]);
+  });
+
+  it("a branch carries its path, and the loop its frame path and tools", () => {
+    const cp = located();
+    expect(cp.listBranches()[0].jsonPath).toEqual([...ROOT, "1", "branches", "tool_0_abc"]);
+    expect(cp.loopState([])).toEqual({
+      round: 1,
+      removedTools: [],
+      tools: ["search", "writeUp"],
+      jsonPath: [...ROOT, "1"],
+    });
+    expect(cp.loopState(["tool_0_abc"])!.tools).toBeNull();
+  });
+
+  it("the globals a stack reads, with their path", () => {
+    const cp = located();
+    expect(cp.globalsLocation([])).toEqual({
+      store: { mod: { x: 1 } },
+      jsonPath: ["globals", "store"],
+    });
+    expect(cp.globalsLocation(["tool_0_abc"])).toEqual({
+      store: { mod: { x: 2 } },
+      jsonPath: [...ROOT, "1", "branches", "tool_0_abc", "globalsJSON", "store"],
+    });
+  });
+
+  it("messageLanding: queued only behind unanswered tool calls", () => {
+    const answered = {
+      messages: [
+        { role: "assistant", toolCalls: [{ id: "a", name: "search" }] },
+        { role: "tool", content: "r", toolCallId: "a" },
+      ],
+    };
+    const pending = {
+      messages: [
+        {
+          role: "assistant",
+          toolCalls: [
+            { id: "a", name: "search" },
+            { id: "b", name: "f" },
+          ],
+        },
+        { role: "tool", content: "r", toolCallId: "a" },
+      ],
+    };
+    expect(messageLanding({ messages: [{ role: "user", content: "hi" }] })).toBe("messages");
+    expect(messageLanding({ messages: [{ role: "assistant", content: "text" }] })).toBe("messages");
+    expect(messageLanding(answered)).toBe("messages");
+    expect(messageLanding(pending)).toBe("queued");
   });
 });

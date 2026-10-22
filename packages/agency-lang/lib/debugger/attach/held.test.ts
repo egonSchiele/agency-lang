@@ -285,17 +285,28 @@ describe("a session the run holds between visits", () => {
       const message = parseAttachMessage(raw);
       if (message !== null) {
         received.push(message);
+        // The stop is acknowledged as a UI does; the request waiting on
+        // it follows only then.
+        if (message.type === "request" && message.method === "render") {
+          terminalSide.send({ type: "reply", id: message.id, result: undefined });
+        }
       }
     });
     session.admit(runSide, "terminal");
-    await until(() => received.some((message) => message.type === "request"), "the stop");
-    expect(received.map((message) => message.type)).toEqual([
+    await until(() => requests(received).length >= 2, "the stop and the request");
+    expect(received[0]).toEqual(hello);
+    expect(received[1]).toEqual({ type: "parties", terminal: true, cli: true });
+    // Between those and the stop come the settings as they stand.
+    expect(received.map((message) => message.type).filter((type) => type !== "notice")).toEqual([
       "hello",
       "parties",
       "request",
       "request",
     ]);
-    expect(received[1]).toEqual({ type: "parties", terminal: true, cli: true });
+    expect(requests(received).map((request) => request.method)).toEqual([
+      "render",
+      "waitForCommand",
+    ]);
 
     // The terminal is a party that needs no lease: with the hold gone,
     // the program still waits on the terminal.

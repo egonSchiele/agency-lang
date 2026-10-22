@@ -20,6 +20,7 @@ import {
 } from "@/debugger/attach/protocol.js";
 import type { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import type { DebugStopData } from "@/runtime/debugger.js";
+import type { PendingPreview } from "@/debugger/edits/rows.js";
 
 /** The stop as the run last drew it. */
 export type Shown = {
@@ -39,6 +40,8 @@ export type Joined = {
   pending: RequestMessage | null;
   /** Set when the program had ended before this visit. */
   finished: FinishedMessage | null;
+  /** The edits queued at the stop, as the run last said. */
+  queuedEdits: PendingPreview;
 };
 
 /** What comes after a reply, or after waiting: the next request (with
@@ -123,6 +126,7 @@ class Inbox {
   private closed = false;
   shown: Shown | null = null;
   recent: string[] = [];
+  queuedEdits: PendingPreview = { edits: [], applied: [] };
 
   constructor(private readonly channel: Channel) {
     channel.onMessage((raw) => {
@@ -147,6 +151,9 @@ class Inbox {
       if (message.type === "notice") {
         if (message.method === "log") {
           this.recent.push(String(message.args[0]));
+        }
+        if (message.method === "setPending") {
+          this.queuedEdits = message.args[0] as PendingPreview;
         }
         return;
       }
@@ -253,6 +260,7 @@ class Inbox {
       shown: this.shown,
       pending,
       finished,
+      queuedEdits: this.queuedEdits,
       answer: (result, timeoutMs) => {
         if (pending === null) {
           return Promise.resolve({ kind: "timeout" });

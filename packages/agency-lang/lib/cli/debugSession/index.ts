@@ -28,6 +28,7 @@ import {
   checkpoints,
   defaultCommandDeps,
   detach,
+  edit,
   frame,
   guards,
   moveVerb,
@@ -330,6 +331,8 @@ async function verb(
       return rewind(visit, record, command.id, commandDeps);
     case "set":
       return set(visit, record, command.varName, command.value, commandDeps);
+    case "edit":
+      return edit(visit, record, command, commandDeps);
     case "checkpoint":
       return checkpoint(visit, record, command.label, commandDeps);
     case "save":

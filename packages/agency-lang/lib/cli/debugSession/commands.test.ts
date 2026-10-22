@@ -10,6 +10,7 @@ import {
   checkpoint,
   checkpoints,
   detach,
+  edit,
   moveVerb,
   pause,
   rewind,
@@ -79,6 +80,7 @@ function scripted(
     shown: null,
     pending,
     finished: null,
+    queuedEdits: { edits: [], applied: [] },
     sent: [] as unknown[],
     paused: 0,
     detached: 0,
@@ -403,5 +405,100 @@ describe("the target", () => {
     expect(sessionWords({ ...held, finished: true }, 10_000)).toBe(
       "finished, held for the next visit",
     );
+  });
+});
+
+describe("edit", () => {
+  const none = { values: {}, drop: false };
+
+  it("with no action lists the edits this stop takes, with the choices and defaults", async () => {
+    const visit = scripted(ask, [], { shown: shownAt(0) });
+    const result = await edit(visit, record, none, deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toContain("set-local");
+    expect(result.text).toContain("--name <x>");
+    expect(result.text).toContain("--value <json>");
+    expect(result.text).not.toContain("append-message");
+    expect(result.json).toEqual({
+      edits: [
+        {
+          name: "set-local",
+          flags: [
+            { flag: "name", choices: ["x"], default: null },
+            { flag: "value", kind: "json" },
+          ],
+        },
+      ],
+    });
+    expect(visit.sent).toEqual([]);
+  });
+
+  it("queues the edit, and prints what the driver applied", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["x = 5"], { x: 1 })], { shown: shownAt(0) });
+    const result = await edit(
+      visit,
+      record,
+      { action: "set-local", values: { name: "x", value: 5 }, drop: false },
+      deps,
+    );
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toContain("x = 5");
+    expect(visit.sent).toEqual([
+      {
+        type: "edit",
+        edits: [{ op: "setLocal", frame: { branchPath: [], depth: 0 }, name: "x", value: 5 }],
+      },
+    ]);
+  });
+
+  it("a refusal from the driver is a refusal here", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["refused: no tool nope in this loop (search)"])], {
+      shown: shownAt(0),
+    });
+    const result = await edit(
+      visit,
+      record,
+      { action: "set-local", values: { name: "x", value: 5 }, drop: false },
+      deps,
+    );
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(result.text).toContain("no tool nope");
+  });
+
+  it("refuses a row the stop does not have, naming the choices, and a missing value", async () => {
+    const visit = scripted(ask, [], { shown: shownAt(0) });
+    const missing = await edit(
+      visit,
+      record,
+      { action: "set-local", values: { name: "y", value: 1 }, drop: false },
+      deps,
+    );
+    expect(missing.exitCode).toBe(EXIT.refused);
+    expect(missing.text).toContain("no local y at this stop; the locals are x");
+    const noValue = await edit(
+      visit,
+      record,
+      { action: "set-local", values: { name: "x" }, drop: false },
+      deps,
+    );
+    expect(noValue.exitCode).toBe(EXIT.refused);
+    expect(noValue.text).toContain("needs --value");
+    const noThread = await edit(
+      visit,
+      record,
+      { action: "append-message", values: { text: "stop" }, drop: false },
+      deps,
+    );
+    expect(noThread.exitCode).toBe(EXIT.refused);
+    expect(noThread.text).toContain("no thread at this stop");
+    expect(visit.sent).toEqual([]);
+  });
+
+  it("--drop sends dropEdits", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["dropped 1 pending edits"])], { shown: shownAt(0) });
+    const result = await edit(visit, record, { values: {}, drop: true }, deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toContain("dropped 1 pending edits");
+    expect(visit.sent).toEqual([{ type: "dropEdits" }]);
   });
 });

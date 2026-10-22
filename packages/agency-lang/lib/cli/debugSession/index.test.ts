@@ -132,6 +132,26 @@ describe("agency debug session against a program in another process", () => {
     expect(await run({ name: "set", varName: "x", value: 5 })).toBe(0);
     expect(printed()).toContain("queued x = 5");
     expect(printed()).toContain("#0 main");
+    // The next visit is told what is queued, and `edit` reads the same
+    // rows: it lists the locals, queues an edit on one, and prints what
+    // the driver will apply.
+    expect(await run({ name: "where" })).toBe(0);
+    expect(printed()).toContain("edits   1 pending: x = 5");
+    expect(await run({ name: "edit", values: {}, drop: false })).toBe(0);
+    expect(printed()).toContain("set-local");
+    expect(printed()).toContain("--name <x|y>");
+    expect(
+      await run({
+        name: "edit",
+        action: "set-local",
+        values: { name: "x", value: 7 },
+        drop: false,
+      }),
+    ).toBe(0);
+    expect(printed()).toContain("x = 7");
+    expect(await run({ name: "edit", values: {}, drop: true })).toBe(0);
+    expect(printed()).toContain("dropped 2 pending edits");
+    expect(await run({ name: "set", varName: "x", value: 5 })).toBe(0);
     expect(await run({ name: "checkpoints" })).toBe(0);
     expect(printed()).toMatch(/#\d+ main/);
 

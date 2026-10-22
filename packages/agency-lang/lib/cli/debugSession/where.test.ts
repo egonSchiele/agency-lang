@@ -80,6 +80,7 @@ describe("where", () => {
       pid: 4242,
       parties,
       recent: ["cli: step"],
+      edits: [],
       checkpoint: second!.checkpoint,
       stop: second!.stop,
       line,
@@ -93,7 +94,7 @@ describe("where", () => {
       "stack   main",
       "usage   0 tokens · $0.00",
       "since   cli: step",
-      "next    step, next, continue, frame, thread, branches, guards, detach",
+      "next    step, next, continue, frame, thread, branches, guards, edit, detach",
     ]);
   });
 
@@ -105,6 +106,7 @@ describe("where", () => {
       pid: 4242,
       parties: { ...parties, terminal: true },
       recent: [],
+      edits: [],
       checkpoint: first!.checkpoint,
       stop: first!.stop,
       line: undefined,

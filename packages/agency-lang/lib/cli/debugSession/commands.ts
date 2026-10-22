@@ -5,6 +5,7 @@
 // readers are pure functions of the checkpoint the visit was shown
 // (`readers.ts`), and a moving verb answers the pending request and
 // prints `where` at the stop that follows.
+import { editsFor, listEdits, listingText, viewOf, type EditRequest } from "./editVerb.js";
 import type { AttachRecord } from "@/debugger/attach/registry.js";
 import { checkpointFromWire } from "@/debugger/attach/serveIO.js";
 import { REPLY_SCHEMAS, type RequestMessage } from "@/debugger/attach/protocol.js";
@@ -73,6 +74,7 @@ export type SessionCommand =
   | { name: "save"; path: string }
   | { name: "load"; path: string }
   | { name: "answer"; value: unknown }
+  | ({ name: "edit" } & EditRequest)
   | { name: "detach" };
 
 function refused(text: string): CommandResult {
@@ -120,6 +122,7 @@ function whereInput(
     pid: record.pid,
     parties: visit.parties,
     recent,
+    edits: visit.queuedEdits.applied,
     checkpoint: shown.checkpoint,
     stop,
     line,
@@ -385,6 +388,7 @@ const FAILURE_LINES = [
   /^No checkpoint to save/,
   /^Failed to (save|load):/,
   /^Invalid checkpoint data/,
+  /^refused: /,
 ];
 
 /** The driver's line saying the command was not done, if one came. */
@@ -563,7 +567,7 @@ async function sameStop(
   record: AttachRecord,
   command: DebuggerCommand,
   deps: CommandDeps,
-): Promise<{ shown: Shown } | CommandResult> {
+): Promise<{ shown: Shown; recent: string[] } | CommandResult> {
   const next = await answerStop(visit, record, command, deps.moveWaitMs);
   if (!("kind" in next)) {
     return next;
@@ -572,7 +576,41 @@ async function sameStop(
   if (result.exitCode !== EXIT.ok || next.kind !== "request") {
     return result;
   }
-  return { shown: next.shown! };
+  return { shown: next.shown!, recent: next.recent };
+}
+
+/** `edit`: with no action, the edits this stop takes; with one, queue it
+ *  and print the driver's line for what it will change; `--drop` clears
+ *  the queue. The rows and flags come from the debugger's action table,
+ *  so an agent sees the edits a person sees on the pane rows. */
+export async function edit(
+  visit: Visit,
+  record: AttachRecord,
+  request: EditRequest,
+  deps: CommandDeps,
+): Promise<CommandResult> {
+  if (request.drop) {
+    const at = await sameStop(visit, record, { type: "dropEdits" }, deps);
+    if (!("shown" in at)) return at;
+    return ok(at.recent.join("\n") || "no edits were pending", { dropped: true });
+  }
+  if (visit.shown === null || visit.pending === null) {
+    return refused("the program is not stopped; `wait` stops here at its next stop");
+  }
+  const view = viewOf(visit.shown, visit.queuedEdits);
+  if (view === null) {
+    return refused("the stop sent no state to edit; try `where`");
+  }
+  if (request.action === undefined) {
+    const listing = listEdits(view);
+    return ok(listingText(listing), { edits: listing });
+  }
+  const made = editsFor(request, view);
+  if ("refused" in made) return refused(made.refused);
+  const at = await sameStop(visit, record, { type: "edit", edits: made.edits }, deps);
+  if (!("shown" in at)) return at;
+  const applied = at.recent.filter((line) => !line.startsWith("Stopped"));
+  return ok(applied.join("\n") || "queued", { edits: made.edits, applied });
 }
 
 export async function set(

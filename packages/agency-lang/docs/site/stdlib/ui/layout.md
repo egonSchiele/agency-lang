@@ -25,7 +25,7 @@ Build terminal output as a tree of boxes, rows, and columns, then render
   (ASCII art, pre-rendered tables). Unsized containers shrink to fit their
   content but cap at the available width, wrapping anything longer.
 
-  For live, redrawing UIs with input handling, use `std::ui` instead.
+  For prompts that read a key or a line, use `std::ui/cli`.
 
 ## Types
 

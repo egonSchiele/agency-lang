@@ -7,7 +7,7 @@ import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
 import { setSlashPalette } from "std::ui/cli"
-import { clearMessages, pushMessage, repl, clearScreen } from "std::ui/cli"
+import { pushMessage, repl, clearScreen } from "std::ui/cli"
 
 import { brainByName, allBrains } from "./brains/registry.agency"
 import { agentNameFor } from "./lib/agentName.agency"
@@ -34,14 +34,6 @@ import {
  } from "./lib/turn.agency"
 import { formatTurnFailure } from "./lib/utils.agency"
 import { getCapabilities } from "./shared.agency"
-
-// UI mode select — one-line swap between the alt-screen TUI and the
-// line-mode REPL. Both modules expose the same `repl` / `pushMessage`
-// / `clearMessages` surface (line mode re-exports `pushMessage` and
-// `clearMessages` from `std::ui`). Trial both and decide. See
-// `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`.
-//
-//import { clearMessages, pushMessage, repl } from "std::ui"
 
 def oneShotAgent(target: string, prompt: string): string {
   setInteractive(false)

@@ -465,7 +465,6 @@ export default defineConfig({
               text: "ui",
               collapsed: true,
               items: [
-                { text: "ui (interactive)", link: "/stdlib/ui" },
                 { text: "ui/chart", link: "/stdlib/ui/chart" },
                 { text: "ui/cli", link: "/stdlib/ui/cli" },
                 { text: "ui/layout", link: "/stdlib/ui/layout" },

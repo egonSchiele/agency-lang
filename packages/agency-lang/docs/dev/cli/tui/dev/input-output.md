@@ -82,5 +82,5 @@ Orchestrates the pipeline:
 - `nextKey()` / `nextLine()` — delegates to input source
 - `size()` — returns `{ width, height }`
 - `resize(width, height)` — adopts a new terminal size. Layout reads these on every render, so an app watching `SIGWINCH` can stay correct without restarting.
-- `runLoop({ initialState, render, handleKey, isDone, label?, tickMs? })` — the standard render/key/re-render loop. All three callbacks may be async, which is what lets Agency callback values drive a TUI. With `tickMs` set, each iteration races `nextKey()` against a timer and re-renders on a tick, so a live status line keeps moving during a long LLM call. The loop reuses one in-flight `nextKey()` promise across tick iterations; a fresh call per tick would queue abandoned waiters and swallow keypresses.
+- `runLoop({ initialState, render, handleKey, isDone, label? })` — the standard render/key/re-render loop. All three callbacks may be async. The loop is purely event-driven: it blocks on `nextKey()` and re-renders only after each key.
 - `destroy()` — calls `input.destroy()` and `output.destroy()`

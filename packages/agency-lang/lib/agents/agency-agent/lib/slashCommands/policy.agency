@@ -8,7 +8,7 @@ import {
   missingPolicyRules,
   recommendedAutoApprovePolicy,
  } from "std::policy"
-import { chooseOption } from "std::ui"
+import { chooseOption } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
 import { POLICY_PATH } from "../config.agency"

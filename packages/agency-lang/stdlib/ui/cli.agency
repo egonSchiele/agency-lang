@@ -8,49 +8,29 @@ import {
   _stickyInterruptAvailable,
  } from "agency-lang/stdlib-lib/cli.js"
 
+import { _isTTY } from "agency-lang/stdlib-lib/system.js"
+import {
+  _promptsSelect,
+  _promptsAutocomplete,
+  _promptsText,
+  _promptsConfirm,
+} from "agency-lang/stdlib-lib/prompts.js"
+import { map } from "std::array"
+
 /** @module
-  @summary A line-mode REPL for CLI agents, driven by Node's readline instead of the alt-screen TUI engine in std::ui.
-  A line-mode REPL for CLI agents, driven by Node's `readline` instead of
-  the alt-screen TUI engine in `std::ui`. It gives up the pinned status
-  line, live spinner, and in-app scrolling. In exchange, every prompt
-  and reply is a plain line in the terminal's scrollback, so you get
-  native search, copy/paste, link clicks, line editing, and history for
-  free. It shares `std::ui`'s `repl` call signature, so switching modes is
-  a one-line import change:
+  @summary The terminal front end for CLI agents: a line-mode REPL driven by Node's readline, and prompts for one-off questions.
+  The terminal front end for CLI agents. `repl` is a line-mode REPL driven
+  by Node's `readline`: every prompt and reply is a plain line in the
+  terminal's scrollback, so you get native search, copy/paste, link
+  clicks, line editing, and history for free. The prompts (`select`,
+  `autocomplete`, `prompt`, `confirm`, `chooseOption`) ask the user one
+  question at a time, and `interruptChoice` is the approval prompt
+  `std::policy` uses.
 
   ```ts
-  // TUI mode (alt-screen)
-  import { repl } from "std::ui"
-
-  // Line mode (scrollback)
-  import { repl } from "std::ui/cli"
+  import { repl, chooseOption } from "std::ui/cli"
   ```
 */
-
-// `pushMessage` / `clearMessages` are re-exported from `std::ui`: the
-// line-mode REPL never sets `_activeRepl`, so their `_activeRepl == null`
-// fallbacks (straight print, silent no-op) are the line-mode behavior.
-// `chooseOption` is intentionally NOT re-exported (see the note on the
-// `export` below); consumers like `std::policy` import it from `std::ui`
-// directly and rely on its own null-repl fallback.
-
-// Re-export the line-mode-compatible parts of `std::ui`. The line
-// mode REPL never sets `_activeRepl`, so each of these falls through
-// to its line-friendly branch:
-//   - pushMessage   → straight print()
-//   - clearMessages → silent no-op
-// `chooseOption` is *not* re-exported here because its compiled
-// schema references the `ChoiceItem` type alias from `std::ui` and
-// re-exporting through the value pathway doesn't bring the type
-// along (the generated `cli.js` references `ChoiceItem` unqualified
-// and crashes at load time). Consumers, notably `std::policy`,
-// already import `chooseOption` directly from `std::ui`, and the
-// fallback path inside `chooseOption` (active when `_activeRepl` is
-// null) is exactly the line-mode behavior. So nothing actually
-// needed to be re-exported here for line mode to work.
-export { pushMessage, clearMessages } from "std::ui"
-
-import { chooseOption } from "std::ui"
 
 // The active `repl()` session's history-file path, held as an Agency module
 // global so it lives in the execution model (serialized, module-isolated)
@@ -59,8 +39,7 @@ import { chooseOption } from "std::ui"
 let _historyFile: string = ""
 
 /**
- * Line-mode sibling of the std::ui TUI repl. Current limitations:
- * `status` is accepted for signature parity but not yet rendered;
+ * Current limitations: `status` is accepted but not yet rendered;
  * `paletteCommands` has no tab completion yet; there is no busy
  * spinner and no Ctrl+C cancel of an in-flight turn.
  */
@@ -74,8 +53,7 @@ export def repl(
   paletteCommands: any = null,
 ) {
   """
-  Line-mode REPL with the same call signature as the std::ui TUI repl,
-  so switching modes is a one-line import change.
+  A line-mode REPL in the terminal's own scrollback.
 
   Each iteration prints `prompt`, awaits one line of input (full line
   editing, history, bracketed paste), and calls `onSubmit(line)`.
@@ -138,6 +116,256 @@ export def hline(char: string = "─", width: number = null): string {
   return char.repeat(_width)
 }
 
+/**
+ * A row in a choice prompt: the `key` is what the prompt returns, the
+ * `label` is the text shown to the user.
+ */
+export type ChoiceItem = {
+  key: string;
+  label: string
+}
+
+@capabilities(terminal)
+export def pushMessage(message: string) {
+  """
+  Print a message to the terminal. The string may include style markup.
+
+  @param message - Styled or plain text to print
+  """
+  print(message)
+}
+
+/**
+ * Needs a terminal: raises when stdout is not a TTY. There is no
+ * non-TTY fallback, so a scripted caller must route around it
+ * (`chooseOption` does).
+ */
+@capabilities(terminal)
+export def select(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+): Result<string> {
+  """
+  Ask the user to pick from a list with arrow keys (no type-to-filter).
+  Returns `success(key)` with the chosen item's `key`, or
+  `failure("cancelled")` if the user pressed Ctrl+C / Escape. When
+  `allowFreeText` is true, the list appends an extra "enter free text"
+  row. Picking it prompts for text and returns that instead of a key.
+
+  @param message - The question shown above the choices
+  @param items - The {key, label} rows to choose from
+  @param allowFreeText - Append a free-text entry row
+  @param hint - Dim hint shown after the message
+  """
+  return _promptsSelect(message, items, allowFreeText, hint)
+}
+
+/**
+ * Needs a terminal: raises when stdout is not a TTY.
+ */
+@capabilities(terminal)
+export def autocomplete(
+  message: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  hint: string = "",
+  cancelOnEscape: boolean = false,
+): Result<string> {
+  """
+  Ask the user to pick from a list, filtering by typed text. Returns
+  `success(key)` with the chosen item's `key`, or `failure("cancelled")`
+  on Ctrl+C / Escape. The filter keeps the items whose `key` contains
+  the typed text (case-insensitive); labels are not searched. When
+  `allowFreeText` is true and the
+  typed input matches no item, picking it returns the typed text
+  verbatim instead of a key.
+
+  @param message - The question shown above the choices
+  @param items - The {key, label} rows to choose from
+  @param allowFreeText - Return the typed input verbatim when no item matches
+  @param hint - Dim hint shown after the message
+  @param cancelOnEscape - When true, Escape raises a cancellation that
+    unwinds the current run instead of returning `failure("cancelled")`.
+    Use it where Escape should abort the whole request rather than re-ask
+  """
+  return _promptsAutocomplete(message, items, allowFreeText, hint, cancelOnEscape)
+}
+
+/**
+ * Needs a terminal: raises when stdout is not a TTY.
+ *
+ * Bind `validate` via `.partial()` before handing `prompt` to an LLM as
+ * a tool so the LLM cannot override the constraint.
+ */
+@capabilities(terminal)
+export def prompt(
+  message: string,
+  initial: string = "",
+  hint: string = "",
+  validate: any = null,
+): Result<string> {
+  """
+  Ask the user for a line of free-form text. Returns `success(typed)`
+  or `failure("cancelled")`. The empty string is a legitimate value, so
+  check the Result tag rather than truthiness. When `validate` is
+  supplied, it runs on each submission: return `true` to accept, or an
+  error string to reject and re-ask.
+
+  @param message - The question shown to the user
+  @param initial - Pre-filled value
+  @param hint - Dim hint shown after the message
+  @param validate - Optional `(value) => true | "error message"` validator
+  """
+  return _promptsText(message, initial, hint, validate)
+}
+
+/**
+ * Needs a terminal: raises when stdout is not a TTY.
+ */
+@capabilities(terminal)
+export def confirm(message: string, initial: boolean = false): Result<boolean> {
+  """
+  Ask the user a yes/no question. Returns `success(true)`,
+  `success(false)`, or `failure("cancelled")`. That is three outcomes,
+  so check the Result tag rather than treating it as a boolean.
+
+  @param message - The question shown to the user
+  @param initial - Default position (false = "no")
+  """
+  return _promptsConfirm(message, initial)
+}
+
+def indent(str: string): string {
+  if (str == "" || str == null || str == undefined) {
+    return ""
+  }
+  if (typeof str != "string") {
+    // Defensive guard against non-string input; don't attempt to
+    // split/indent it. Coerce to a JSON string so the declared
+    // `string` return type is upheld and the rendered prompt still
+    // shows *something* useful instead of crashing.
+    print(
+      "Warning: indent() expected a string but got",
+      typeof str,
+      "- rendering without indentation",
+      JSON.stringify(str),
+    )
+    return JSON.stringify(str)
+  }
+  const lines = str.split("\n")
+  const res = map(lines, \line -> "    ${line}")
+  return res.join("\n")
+}
+
+/**
+ * In a terminal this is an arrow-key picker. Otherwise it prints the
+ * title and body and reads a key with `input()`, which is what scripted
+ * and headless runs see. Both branches re-ask until the user answers.
+ * std::policy uses it for its approve/reject menus.
+ */
+@capabilities(terminal)
+export def chooseOption(
+  title: string,
+  body: string,
+  items: ChoiceItem[],
+  allowFreeText: boolean = false,
+  allowCancel: boolean = false,
+): string {
+  """
+  Show a menu and block until the user picks an entry. Returns the
+  chosen item's `key`. In a terminal, typing narrows the visible items
+  to those whose `key` contains the typed text; otherwise the user
+  types a key at a plain prompt. When `allowFreeText` is true and the typed
+  text matches no item, it returns that text instead of re-asking
+  (empty input still re-asks).
+
+  @param title - Heading (e.g. "Approve interrupt: shell::exec")
+  @param body - Multi-line context shown above the choices (or "")
+  @param items - The set of {key, label} choices to pick from
+  @param allowFreeText - Accept free-form text in addition to item keys
+  @param allowCancel - When true, Escape cancels the whole request,
+    raising a cancellation that unwinds the run, instead of re-prompting.
+    The default of false enforces a "must answer" contract
+  """
+  // Non-TTY fallback: `autocomplete` throws when stdout isn't a TTY
+  // (e.g. piped output, agency-js tests that script answers through
+  // the `inputOverride` invocation option). Route through a plain
+  // `input()` loop in that case so tests can mock answers and the
+  // "must answer" contract is still preserved.
+  if (!_isTTY()) {
+    if (title != "") {
+      print(title)
+    }
+    if (body != "") {
+      print(body)
+    }
+    const validKeys = map(items, _entryKey)
+    while (true) {
+      const answer = input("> ").trim()
+      if (validKeys.includes(answer)) {
+        return answer
+      }
+      if (allowFreeText && answer != "") {
+        return answer
+      }
+      print("(answer required)")
+    }
+    // unreachable
+    return ""
+  }
+  // Print the title/body banner ourselves, then delegate to
+  // `autocomplete`. We loop on `failure("cancelled")` to preserve
+  // chooseOption's "must answer" contract. Safety-critical callers
+  // like std::policy depend on Escape never letting the user skip the
+  // prompt. The non-TTY throw lives inside `autocomplete()` (in TS);
+  // we don't need to repeat it here.
+  print("\n")
+  print(color.cyan(hline()))
+  if (title != "") {
+    print(color.cyan(title), "\n")
+  }
+  if (body != "") {
+    print(indent(body))
+  }
+  print("\n")
+  let cancelHint = ""
+  if (allowCancel) {
+    cancelHint = "Esc to cancel"
+  }
+  while (true) {
+    // With `allowCancel`, autocomplete raises a cancellation on Escape
+    // (it never returns failure("cancelled") here), so the re-prompt loop
+    // below only runs for the must-answer callers.
+    const result = autocomplete(
+      message: "Do you want to continue?",
+      items: items,
+      allowFreeText: allowFreeText,
+      hint: cancelHint,
+      cancelOnEscape: allowCancel,
+    )
+    if (!isFailure(result)) {
+      return result.value
+    }
+    // Agency wraps thrown errors from the TS bridge as Result.failure
+    // (see compiled chooseOption / autocomplete try-catch wrappers).
+    // Only re-prompt on an explicit user-cancel; anything else
+    // (e.g. "requires a TTY") gets surfaced via throw so chooseOption
+    // doesn't loop forever in non-interactive environments.
+    if (result.error != "cancelled") {
+      throw(result.error)
+    }
+    print("(answer required)")
+  }
+  // unreachable; satisfies the type checker
+  return ""
+}
+
+def _entryKey(entry: any): string {
+  return entry.key
+}
+
 @capabilities(terminal)
 export def interruptChoice(
   title: string,
@@ -151,9 +379,8 @@ export def interruptChoice(
   Approval prompt for line mode: renders a sticky footer pinned to the
   bottom of the terminal so concurrent tool-call output streams above it
   instead of burying the prompt. Type an option key or a rejection reason,
-  then press Enter. Falls back to `chooseOption` when no line-mode REPL is
-  active (the TUI, a non-TTY, or a headless run), so every non-line-mode
-  path keeps its current behavior.
+  then press Enter. Falls back to `chooseOption` when no line-mode `repl()`
+  is running, which includes non-terminal and headless runs.
 
   @param title - Prompt heading (the interrupt message).
   @param body - Multi-line context shown under the title (or "").

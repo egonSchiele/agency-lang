@@ -1,8 +1,8 @@
 # TUI primitives
 
 The `lib/tui` module provides a small terminal UI toolkit. The debugger,
-`agency logs view`, `agency label`, and the `std::ui` bridge in
-`lib/stdlib/ui.ts` all build on it. It is layout-driven (flex-like),
+`agency logs view`, `agency eval new`, `agency label`, and the runs
+explorer all build on it. It is layout-driven (flex-like),
 state-driven with no event emitters, and fully testable with no terminal
 attached.
 
@@ -103,16 +103,12 @@ await screen.runLoop({
 
 `runLoop` renders once before the first key press, then for every key
 event applies `handleKey` and re-renders. It exits as soon as
-`isDone(state)` returns true and returns the final state. All four
-callbacks may be async, which is what lets the `std::ui` bridge pass
-Agency functions straight through.
+`isDone(state)` returns true and returns the final state. All three
+callbacks may be async. The loop is purely event-driven: nothing
+re-renders until a key arrives.
 
-Two optional fields round it out. `label` names the frame for
-`FrameRecorder`. `tickMs` races each `nextKey()` against a timer of that
-many milliseconds, and a tick re-renders with the current state without
-running `handleKey`. The REPL uses `tickMs` to keep a status line moving
-during a long LLM call. Leave it out and the loop is purely
-event-driven.
+One optional field rounds it out: `label` names the frame for
+`FrameRecorder`.
 
 ## Key normalization: `formatKey()` and `keyMatches()`
 

@@ -12,7 +12,7 @@ import {
 import { listHostedModels } from "std::llm"
 import { disableMemory } from "std::memory"
 import { isTTY } from "std::system"
-import { chooseOption, ChoiceItem } from "std::ui"
+import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
 import {

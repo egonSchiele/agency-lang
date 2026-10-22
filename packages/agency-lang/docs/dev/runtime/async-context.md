@@ -186,7 +186,6 @@ These read it today:
 | The `stdlib/statelog.ts` helpers | Nothing is logged |
 | `_attachToReply`, `_endTurn`, `_handBack`, `_insideToolCall` in `stdlib/thread.ts` | The attachment or mark is dropped |
 | `_registerLocalProvider` in `stdlib/localModels.ts` | Its log line is skipped |
-| `getUiState` in `stdlib/ui.ts` | A fallback state is used. Only unit tests reach it |
 | The three root runs | A new lineage starts |
 
 ## The lint check
@@ -272,15 +271,8 @@ Some code keeps a function and calls it later, when the run that stored it is no
 | `makeLazyCallbackRef` in `functionRefReviver.ts` | The run its caller passes |
 | `makeRawInvoker` in `serve/discovery.ts` | The run its caller passes |
 | The memory manager | The run each method is called with. One manager serves every fork branch |
-| Console capture in `stdlib/ui.ts` | None. See below |
 
 The subprocess listener's stored run keeps the executing-handler list from when the subprocess was started. So a subprocess started in a handler function does not have that handler asked about its interrupts, and a subprocess started in a handler body does. `tests/agency/subprocess/handler-function-starts-child` covers the first case and `handler-approve` the second.
-
-### Console capture
-
-A REPL replaces `console.log` so that output shows in its transcript. A `console.log` call carries no run, and any code can make one. So captured output goes to the REPL that installed its capture most recently.
-
-With one REPL in the process, that is its own transcript. With two REPLs open at once in one process, the newer one gets the output of both until it closes.
 
 ## Testing
 

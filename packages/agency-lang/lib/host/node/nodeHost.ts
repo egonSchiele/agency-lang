@@ -91,11 +91,8 @@ const nodeEnv: HostEnv = {
 
 const nodeSettings: HostSettings = {
   read: (name) => process.env[name] ?? null,
-  // Through the console, not `process.stderr.write`: while a `std::ui` REPL
-  // owns the screen it captures the console (`_installConsoleCapture` in
-  // lib/stdlib/ui.ts) so messages land in its transcript. A raw write
-  // would bypass that and tear the rendered frame. Outside a REPL the
-  // console writes to standard error and standard output as before.
+  // Through the console, by level, not `process.stderr.write`, so a
+  // program that replaces the console sinks sees these messages too.
   log: consoleLogSink,
 };
 

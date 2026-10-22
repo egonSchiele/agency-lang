@@ -1,12 +1,10 @@
 import type { ColorName } from "./colors.js";
 
 export type Element = {
-  type: "box" | "text" | "list" | "textInput";
+  type: "box" | "text" | "textInput";
   style?: Style;
   content?: string;
   children?: Element[];
-  items?: string[];
-  selectedIndex?: number;
   value?: string;
   key?: string;
 };

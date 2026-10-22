@@ -7,7 +7,7 @@ import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
-import { _promptsAutocomplete } from "./ui.js";
+import { _promptsAutocomplete } from "./prompts.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
@@ -16,24 +16,18 @@ import { exitProcessNow } from "../runtime/exitProcess.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
-// Counterpart to `lib/stdlib/ui.ts` but builds on Node's `readline`
-// instead of the alt-screen TUI engine. The user-facing tradeoff is
-// documented in the spec at
-// docs/superpowers/ideas/2026-06-02-line-mode-agent.md — line mode
-// gives up the TUI's pinned status, modal prompts, and live spinner
-// in exchange for native terminal scrollback / search / copy-paste /
-// link-clicking.
+// Built on Node's `readline`: every prompt and reply is a plain line in
+// the terminal's scrollback, so the user gets native search, copy and
+// paste, link clicking, and history. There is no pinned status line
+// and no live spinner.
 //
-// `std::ui/cli.repl()` calls `_runLineRepl(...)` here.  Everything else
-// the agent uses (`chooseOption`, `pushMessage`, `clearMessages`) is
-// re-exported from `std::ui` whose existing `_activeRepl == null`
-// fallback paths already do the line-mode thing (print + input loop,
-// straight `print`, silent no-op).
+// `std::ui/cli.repl()` calls `_runLineRepl(...)` here. The one-off
+// prompts (`select`, `autocomplete`, `prompt`, `confirm`) are in
+// `./prompts.ts`; `chooseOption` is Agency code in `stdlib/ui/cli.agency`.
 // ---------------------------------------------------------------------------
 
 /** Adapt either a plain JS function or an AgencyFunction-like callback
- *  passed across the bridge into an async callable. Mirrors the
- *  helper of the same name in `ui.ts` — uses `__call` so
+ *  passed across the bridge into an async callable. Uses `__call` so
  *  AgencyFunction values dispatch through the runtime's normal call
  *  path (handlers, ALS context, retries) rather than being invoked as
  *  raw JS. */
@@ -164,10 +158,9 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
  *  → exit when `onSubmit` returns `false` or the user hits Ctrl+D /
  *  Ctrl+C at an idle prompt.
  *
- *  `status` is accepted for signature parity with `std::ui.repl`;
- *  WL1 doesn't render it yet (per-turn footer is WL2). It's not
- *  invoked here so AgencyFunction callbacks that have side effects
- *  don't fire unexpectedly.
+ *  `status` is accepted but not rendered yet. It's not invoked here
+ *  so AgencyFunction callbacks that have side effects don't fire
+ *  unexpectedly.
  *
  *  Cancellation note: while `onSubmit` is awaited, the outer
  *  readline interface is idle, so nested `input()` calls (e.g. from
@@ -176,11 +169,8 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
  *  hook routes them through *this* `rl` instead, which keeps history
  *  and line editing consistent across nested prompts.
  */
-// ANSI SGR sequences for coloring user input. Bright blue (94)
-// matches the `{bright-blue-fg}You{/bright-blue-fg}` styling the TUI
-// uses for user messages in `lib/stdlib/ui.ts`, so line mode and TUI
-// mode look like the same agent. Only applied when stdout is a TTY
-// so piped output (e.g. `agency ... | tee log.txt`) stays clean.
+// ANSI SGR sequences for coloring user input. Only applied when stdout
+// is a TTY so piped output (e.g. `agency ... | tee log.txt`) stays clean.
 const USER_INPUT_COLOR = styles.cyan;
 const COLOR_RESET = RESET;
 const DIM = styles.dim;

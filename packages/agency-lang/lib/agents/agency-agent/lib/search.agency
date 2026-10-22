@@ -26,7 +26,7 @@
   ```
 */
 import { env, isTTY } from "std::system"
-import { select, confirm, ChoiceItem } from "std::ui"
+import { select, confirm, ChoiceItem } from "std::ui/cli"
 import { search as braveSearch, tavilySearch } from "std::web/search"
 import { loadSettings, saveSettings } from "./settings.agency"
 

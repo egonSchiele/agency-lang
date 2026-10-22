@@ -5,7 +5,7 @@
 
 import { setLlmOptions } from "std::llm"
 import { disableMemory } from "std::memory"
-import { ChoiceItem, chooseOption } from "std::ui"
+import { ChoiceItem, chooseOption } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
 import {

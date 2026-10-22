@@ -1,6 +1,7 @@
 import type {
   BranchSummary,
   Checkpoint,
+  CheckpointJSON,
   GuardSummary,
   LoopState,
   ThreadView,
@@ -16,8 +17,8 @@ import type { BranchAddress, FrameAddress, GuardAddress, Refusal, ThreadAddress 
 export type StopAt = { branchPath: string[]; loopStop: LoopStopKind | undefined };
 
 /** The stop a checkpoint names, for a caller with no stop record. */
-export function stopOfCheckpoint(checkpoint: Checkpoint): StopAt {
-  return { branchPath: checkpoint.branchPath, loopStop: checkpoint.loopStop };
+export function stopOfCheckpoint(checkpoint: Checkpoint | CheckpointJSON): StopAt {
+  return { branchPath: checkpoint.branchPath ?? [], loopStop: checkpoint.loopStop };
 }
 
 /** What an address found, and where in the checkpoint's JSON. */
@@ -48,9 +49,9 @@ export function resolveFrame(
     if (!found) return { refused: `no frame of scope ${address.scope} on this stack` };
     return { jsonPath: found.jsonPath, found: found.frame };
   }
-  // Omitted depth at the stop's own stack: the frame the stop shows,
+  // Omitted depth on the stop's own stack: the frame the stop shows,
   // which at one of the loop's own stops is the caller under the loop.
-  const ownStack = address?.branchPath === undefined;
+  const ownStack = branchPath.join("/") === at.branchPath.join("/");
   const depth = address?.depth ?? (ownStack && at.loopStop !== undefined ? 1 : 0);
   const found = frames.at(-1 - depth);
   if (!found) return { refused: `no frame at depth ${depth} on this stack` };

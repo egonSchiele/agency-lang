@@ -32,11 +32,15 @@ export type ResumeOverrides = {
  *  partly edited one. `at` is the stop the edits are made at; a
  *  checkpoint on its own is its own stop. */
 export function patchCheckpoint(
-  source: Checkpoint,
+  checkpointOrJson: Checkpoint | CheckpointJSON,
   edits: CheckpointEdit[],
   settings: HostSettings,
-  at: StopAt = stopOfCheckpoint(source),
+  at?: StopAt,
 ): PatchResult {
+  // A checkpoint read back from a file or an HTTP body is plain JSON.
+  const source = Checkpoint.fromJSON(checkpointOrJson);
+  if (!source) return { refused: ["shape: the checkpoint does not parse"] };
+  at ??= stopOfCheckpoint(source);
   const refused: string[] = [];
   const writes: Write[] = [];
   for (const edit of edits) {
@@ -94,7 +98,7 @@ function scopeNameAlong(json: CheckpointJSON, path: string[]): string | null {
  *  checkpoint's own stop when the caller has no stop record. */
 export function fromOverrides(
   overrides: ResumeOverrides,
-  checkpoint: Checkpoint,
+  checkpoint: Checkpoint | CheckpointJSON,
   at: StopAt = stopOfCheckpoint(checkpoint),
 ): CheckpointEdit[] {
   const edits: CheckpointEdit[] = [];

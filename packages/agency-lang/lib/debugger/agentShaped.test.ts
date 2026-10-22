@@ -179,9 +179,11 @@ describe("the tool loop's own stops", () => {
       expect(activity(session)).toContainEqual('task = "research"');
       await session.press(":");
       await session.type('set task = "other"');
-      expect(activity(session)).toContainEqual(
-        "set before a model request or a tool call is not supported yet",
-      );
+      expect(activity(session)).toContainEqual('Set task = "other"');
+      // The override lands on the caller's frame, the one shown at the
+      // loop's stop, and the next stop shows it.
+      await session.press("s");
+      expect(localsText(session)).toContain('task = "other"');
     });
   });
 
@@ -349,9 +351,9 @@ describe("stopping inside a tool call", () => {
       );
       await session.press(":");
       await session.type('set url = "other"');
-      expect(session.ui.state.getActivityLog()).toContainEqual(
-        "set inside a tool call, a fork, or a parallel block is not supported yet",
-      );
+      expect(session.ui.state.getActivityLog()).toContainEqual('Set url = "other"');
+      await session.press("n");
+      expect(localsText(session)).toContain('url = "other"');
     });
   });
 
@@ -490,7 +492,7 @@ describe("stopping inside a tool call", () => {
         ["writeUp", "interrupted", "llm()"],
       ]);
       expect(session.frame().findByKey("branches")!.toPlainText()).toMatch(/> search/);
-      expect(session.ui.state.loopState()).toEqual({ round: 1, removedTools: [] });
+      expect(session.ui.state.loopState()).toMatchObject({ round: 1, removedTools: [] });
       expect(session.frame().findByKey("guards")!.toPlainText()).toContain("tool loop");
       // The picker: the stopped frame, then the two branches.
       expect(session.ui.state.getCallStack().at(-1)?.functionName).toBe("search");
@@ -600,11 +602,11 @@ describe("stopping inside a fork branch", () => {
     expect(callStackNames(session)).toEqual(["withBreakpoint", "block"]);
     await session.press(":");
     await session.type("set twice = 5");
-    expect(session.ui.state.getActivityLog()).toContainEqual(
-      "set inside a tool call, a fork, or a parallel block is not supported yet",
-    );
+    expect(session.ui.state.getActivityLog()).toContainEqual("Set twice = 5");
+    // The stop is one of a batch that shares a checkpoint located at the
+    // fork; the override lands on this branch's frame, not the fork's.
     await session.press("c");
-    expect(await session.quit()).toBe(12);
+    expect(await session.quit()).toBe(15);
   });
 
   it("a global changed in a branch shows the branch's value, and keeps it through a rewind", async () => {

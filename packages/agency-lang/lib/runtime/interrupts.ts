@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import type { CheckpointEdit, StopAt } from "./state/checkpointPatch/index.js";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
@@ -797,6 +798,7 @@ export type ResumeCliFromCheckpointArgs = {
   ctx: RuntimeContext<GraphState>;
   checkpoint: Checkpoint;
   overrides?: ResumeOverrides;
+  edits?: CheckpointEdit[];
 };
 
 /** Resume a checkpoint as a complete CLI run, including lifecycle events and
@@ -823,6 +825,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
       overrides: args.overrides,
+      edits: args.edits,
     });
     execCtx.stateStack.markReentry();
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
@@ -861,6 +864,10 @@ type RespondToInterruptsArgs = {
   interrupts: Interrupt[];
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
+  /** Edits proper, applied after the overrides; `at` is the stop they
+   *  are made at, when the caller has a stop record. */
+  edits?: CheckpointEdit[];
+  at?: StopAt;
   metadata?: Record<string, any>;
   // Per-invocation config override for this resume leg. The resolver keeps the
   // original interrupt.runId and ignores any supplied traceId; only the config
@@ -902,6 +909,8 @@ async function respondToInterruptsCore(
     resolved,
     checkpoint,
     overrides: { locals: args.overrides },
+    edits: args.edits,
+    at: args.at,
     metadata,
     signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
     afterCheckpointRestored: (execCtx) => {
@@ -929,6 +938,8 @@ type ResumeInvocationArgs = {
   resolved: ResolvedInvocation;
   checkpoint: Checkpoint;
   overrides?: ResumeOverrides;
+  edits?: CheckpointEdit[];
+  at?: StopAt;
   metadata?: ResumeMetadata;
   signals: ExternalSignals;
   afterCheckpointRestored?: (execCtx: RuntimeContext<GraphState>) => void;
@@ -961,6 +972,8 @@ async function runResumeInvocation(
       checkpoint,
       policy: resolved.policy,
       overrides: args.overrides,
+      edits: args.edits,
+      at: args.at,
       metadata,
       afterCheckpointRestored: () => args.afterCheckpointRestored?.(execCtx),
     });
@@ -996,6 +1009,8 @@ async function runResumeInvocation(
 export type ResumeFromCheckpointArgs = {
   ctx: RuntimeContext<GraphState>;
   paused: PausedCheckpoint;
+  /** Edits to the paused checkpoint before it runs on. */
+  edits?: CheckpointEdit[];
   metadata?: ResumeMetadata;
   abortSignal?: AbortSignal;
   pauseSignal?: AbortSignal;
@@ -1008,8 +1023,8 @@ export type ResumeFromCheckpointArgs = {
 /** Continue a run that an external pause stopped. Keeps the paused run's id,
  *  checks code fingerprints, reinstalls the root policy and budget, and runs
  *  the same loop as an interrupt response, so the result can again be a
- *  value, interrupts, or another paused checkpoint. Takes no overrides; a
- *  caller who wants to change a local uses rewindFrom. */
+ *  value, interrupts, or another paused checkpoint. Takes edits, not the
+ *  old overrides; a caller who wants to replay uses rewindFrom. */
 export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Promise<any> {
   if (!args.paused.runId) {
     throw new Error("Cannot resume: the paused value has no run id");
@@ -1023,6 +1038,7 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
     ctx: args.ctx,
     resolved,
     checkpoint: deepClone(args.paused.checkpoint),
+    edits: args.edits,
     metadata: args.metadata,
     signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
     afterRestore: (execCtx) => execCtx.stateStack.markReentry(),

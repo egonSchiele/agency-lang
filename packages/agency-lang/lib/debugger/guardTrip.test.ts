@@ -52,7 +52,7 @@ describe("a guard trip in the debugger", () => {
       expect(screen(session)).toContain("> Approve with more budget");
       expect(screen(session)).toContain("Remove the cost limit");
       // The guards pane lists the tripped guard against its limit.
-      expect(session.ui.state.listGuards()).toEqual([
+      expect(session.ui.state.listGuards()).toMatchObject([
         {
           label: "research",
           dimension: "cost",

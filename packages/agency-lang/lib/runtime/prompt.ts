@@ -55,7 +55,6 @@ import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
 import {
   computeGateVerdict,
   DEFAULT_MAX_REPEATED_TOOL_CALLS,
-  freshRepeatStreak,
   markupArgument,
   noteRepeat,
   refusalMessage,
@@ -67,6 +66,7 @@ import {
   type RepeatStreak,
 } from "./toolLoopGuards.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
+import { initLoopFrame } from "./loopFrame.js";
 import { failure, isFailure, isSuccess, markDestructiveWork, runtimeFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -521,18 +521,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const self = stack.locals;
 
   // Frame-backed locals (survive checkpoint/restore)
-  if (self.__initialized === undefined) {
-    self.__initialized = true;
-    self.removedTools = args.removedTools || [];
-    self.toolErrorCounts = {};
-    self.rejectedCalls = [];
-    self.rejectionCounts = {};
-    self.repeatStreak = freshRepeatStreak();
-    self.toolCallRound = 0;
-    self.validationAttempt = 0;
-    self.messagesJSON = null;
-    self.pendingToolCalls = null;
-  }
+  initLoopFrame(self, args);
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;

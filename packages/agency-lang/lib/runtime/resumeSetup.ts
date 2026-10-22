@@ -1,27 +1,28 @@
 import { runInBootstrapFrame } from "./asyncContext.js";
-import { signCheckpoint } from "./checkpointChecksum.js";
 import type { HostSettings } from "../host/host.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import type { AgencyCallbacks } from "./hooks.js";
-import { CheckpointError, type RestoreSignal } from "./errors.js";
+import { CheckpointEditError, CheckpointError, type RestoreSignal } from "./errors.js";
 import type { Policy } from "./policy.js";
 import { loadConfiguredProviders } from "#platform";
 import { assertCodeUnchanged } from "./referencedModules.js";
 import { reinstallRootBudget } from "./rootBudget.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
-import type { Checkpoint } from "./state/checkpointStore.js";
+import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 import type { PendingArgOverrides, RuntimeContext } from "./state/context.js";
 import type { GlobalStore } from "./state/globalStore.js";
 import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
-import { deepClone } from "./utils.js";
 import { isAttachedResume, mintDebugRun } from "./debugRun.js";
+import {
+  fromOverrides,
+  patchCheckpoint,
+  type CheckpointEdit,
+  type ResumeOverrides,
+  type StopAt,
+} from "./state/checkpointPatch/index.js";
 
-export type ResumeOverrides = {
-  locals?: Record<string, unknown>;
-  args?: Record<string, unknown>;
-  globals?: Record<string, unknown>;
-};
+export type { ResumeOverrides } from "./state/checkpointPatch/index.js";
 
 export type ResumeMetadata = {
   callbacks?: AgencyCallbacks;
@@ -29,10 +30,19 @@ export type ResumeMetadata = {
 
 export type AfterCheckpointRestored = () => void;
 
-export type ResumeRequest = {
+/** What a resume changes in the checkpoint before restoring it: the
+ *  old override shapes, which become edits on the frame at `at`, and
+ *  edits proper. `at` is the stop the edits are made at, for a caller
+ *  with a stop record; the checkpoint's own location otherwise. */
+export type ResumeEdits = {
+  overrides?: ResumeOverrides;
+  edits?: CheckpointEdit[];
+  at?: StopAt;
+};
+
+export type ResumeRequest = ResumeEdits & {
   checkpoint: Checkpoint;
   policy?: Policy;
-  overrides?: ResumeOverrides;
   metadata?: ResumeMetadata;
   afterCheckpointRestored?: AfterCheckpointRestored;
 };
@@ -54,22 +64,32 @@ function checkedOverrides(overrides: Record<string, unknown>): Record<string, un
   return checked;
 }
 
-/** A copy of `source` with `overrides` written into its last frame's
- *  locals, re-signed under `settings` when it was signed. */
+/** A copy of `source` with the overrides and edits applied, re-signed
+ *  under `settings` when it was signed. Throws `CheckpointEditError`
+ *  with every reason when any edit is refused. */
+export function applyResumeEdits(
+  source: Checkpoint | CheckpointJSON,
+  request: ResumeEdits,
+  settings: HostSettings,
+): Checkpoint {
+  const edits = [
+    ...fromOverrides(request.overrides ?? {}, source, request.at),
+    ...(request.edits ?? []),
+  ];
+  const result = patchCheckpoint(source, edits, settings, request.at);
+  if ("refused" in result) throw new CheckpointEditError(result.refused);
+  return result.checkpoint;
+}
+
+/** A copy of `source` with `overrides` written into the frame the
+ *  checkpoint was taken in, re-signed under `settings` when it was
+ *  signed. */
 export function applyLocalOverrides(
   source: Checkpoint,
   overrides: Record<string, unknown>,
   settings: HostSettings,
 ): Checkpoint {
-  const checkpoint = deepClone(source);
-  const frame = StateStack.lastFrameJSON(checkpoint.stack);
-  for (const [key, value] of Object.entries(checkedOverrides(overrides))) {
-    frame.locals[key] = value;
-  }
-  if (checkpoint.signature !== undefined) {
-    signCheckpoint(checkpoint, settings);
-  }
-  return checkpoint;
+  return applyResumeEdits(source, { overrides: { locals: overrides } }, settings);
 }
 
 export function applyRestoreOverrides(
@@ -134,19 +154,11 @@ export async function restoreForResume(
   request: ResumeRequest,
 ): Promise<Checkpoint> {
   const settings = execCtx.host.settings;
-  const checkpoint = applyLocalOverrides(
+  const checkpoint = applyResumeEdits(
     request.checkpoint,
-    request.overrides?.locals ?? {},
+    { overrides: request.overrides, edits: request.edits, at: request.at },
     settings,
   );
-  if (request.overrides?.args) {
-    for (const [name, value] of Object.entries(checkedOverrides(request.overrides.args))) {
-      StateStack.lastFrameJSON(checkpoint.stack).args[name] = value;
-    }
-    if (checkpoint.signature !== undefined) {
-      signCheckpoint(checkpoint, settings);
-    }
-  }
   assertCodeUnchanged(checkpoint.moduleFingerprints);
   installRunPolicyHandler(execCtx, request.policy);
   await loadConfiguredProviders(execCtx);
@@ -167,10 +179,9 @@ export async function restoreForResume(
     mintDebugRun(execCtx);
   }
   reinstallRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);
-  applyRestoreOverrides(execCtx, checkpoint, {
-    args: request.overrides?.args,
-    globals: request.overrides?.globals,
-  });
+  // Globals were written into the checkpoint by the edits above; the
+  // args of a frame not yet entered still wait for its entry.
+  applyRestoreOverrides(execCtx, checkpoint, { args: request.overrides?.args });
 
   if (request.metadata?.callbacks) {
     Object.assign(execCtx.callbacks, request.metadata.callbacks);

@@ -22,6 +22,15 @@ export class CheckpointError extends Error {
   }
 }
 
+/** An edit to a checkpoint was refused before any resume: every reason
+ *  is in `refusals`, one per edit or broken invariant. */
+export class CheckpointEditError extends Error {
+  constructor(public readonly refusals: string[]) {
+    super(`Checkpoint edit refused: ${refusals.join("; ")}`);
+    this.name = "CheckpointEditError";
+  }
+}
+
 /** A resume was refused because the source of a module the checkpoint has a
  *  live frame in no longer matches the loaded code. Terminal: there is no
  *  override; the caller starts a fresh run. */

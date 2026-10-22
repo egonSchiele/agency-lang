@@ -4,7 +4,8 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
-import { applyLocalOverrides, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
+import { applyResumeEdits, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
+import type { CheckpointEdit, StopAt } from "./state/checkpointPatch/index.js";
 import { RuntimeContext } from "./state/context.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import type { GraphState, RunNodeCoreResult } from "./types.js";
@@ -30,7 +31,7 @@ export function applyOverrides(
   overrides: Record<string, unknown>,
   settings: HostSettings = defaultHost().settings,
 ): void {
-  const changed = applyLocalOverrides(checkpoint, overrides, settings);
+  const changed = applyResumeEdits(checkpoint, { overrides: { locals: overrides } }, settings);
   Object.assign(checkpoint, changed);
 }
 
@@ -43,6 +44,10 @@ export async function rewindFrom(args: {
   ctx: RuntimeContext<GraphState>;
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
+  /** Edits proper, applied after the overrides, so an edit wins. */
+  edits?: CheckpointEdit[];
+  /** The stop the edits are made at, for a caller with a stop record. */
+  at?: StopAt;
   metadata?: Record<string, any>;
   /** The root policy and per-invocation config of the run being replayed,
    *  with the same contract as a resume: the caller that started the run
@@ -89,6 +94,8 @@ async function replayFrom(
       checkpoint: args.checkpoint,
       policy: resolved.policy,
       overrides: { locals: overrides },
+      edits: args.edits,
+      at: args.at,
       metadata,
     });
     execCtx._skipNextCheckpoint = true;

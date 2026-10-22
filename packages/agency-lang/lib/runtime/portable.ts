@@ -211,8 +211,20 @@ export { exitProcess } from "./exitProcess.js";
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";
-export { applyLocalOverrides, applyRestoreOverrides, restoreForResume } from "./resumeSetup.js";
-export type { ResumeOverrides, ResumeMetadata, ResumeRequest } from "./resumeSetup.js";
+export {
+  applyLocalOverrides,
+  applyResumeEdits,
+  applyRestoreOverrides,
+  restoreForResume,
+} from "./resumeSetup.js";
+export type { ResumeOverrides, ResumeMetadata, ResumeRequest, ResumeEdits } from "./resumeSetup.js";
+export {
+  patchCheckpoint,
+  checkpointEditSchema,
+  checkpointEditsSchema,
+} from "./state/checkpointPatch/index.js";
+export type { CheckpointEdit, StopAt } from "./state/checkpointPatch/index.js";
+export { CheckpointEditError } from "./errors.js";
 
 export { debugStep } from "./debugger.js";
 

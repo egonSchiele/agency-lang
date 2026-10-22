@@ -398,9 +398,10 @@ through. The rules:
 - every branch key an edit named exists;
 - a guard whose `spent` exceeds its limit is `disarmed`, or the edit that
   lowered the limit is refused as "would trip at once";
-- a `result` set on a branch that also records an unresolved
-  `interruptId` is refused, since the interrupt still waits for an answer,
-  and a `result` on a `tool_*` branch is refused as a control edit;
+- a `result` on a `tool_*` branch is refused as a control edit. A branch
+  stopped on an interrupt takes a result: the debugger's own stop is one,
+  and a resume skips a branch that has a result, so the answer goes
+  unread;
 - a guard edit on a root budget is refused, naming the host ceiling;
 - the result parses under `checkpointSchema` (`lib/runtime/state/schemas.ts`),
   so a shape the runtime would refuse on load is refused here with the

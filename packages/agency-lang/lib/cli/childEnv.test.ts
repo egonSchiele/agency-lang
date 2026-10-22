@@ -24,24 +24,32 @@ describe("withRootCarriers", () => {
     });
   });
 
-  test("clears stale resume carriers and sets both only for resume", () => {
+  test("clears stale resume carriers and sets them only for resume", () => {
     const inherited = {
       AGENCY_RESUME_FILE: "/stale/checkpoint.json",
       AGENCY_RESUME_OVERRIDES: '{"locals":{"stale":true}}',
+      AGENCY_RESUME_EDITS: '[{"op":"appendMessage","text":"stale"}]',
       AGENCY_RESUME_FORCE: "1",
       PATH: "/bin",
     };
 
     expect(withRootCarriers(inherited, {})).toEqual({ PATH: "/bin" });
-    expect(
-      withRootCarriers(inherited, {
-        resume: { checkpointFile: "/new/checkpoint.json", overridesJson: "{}", force: true },
-      }),
-    ).toEqual({
+    const resume = {
+      checkpointFile: "/new/checkpoint.json",
+      overridesJson: "{}",
+      editsJson: "[]",
+      force: true,
+    };
+    // No edits, no carrier: the child reads an absent variable as none.
+    expect(withRootCarriers(inherited, { resume })).toEqual({
       PATH: "/bin",
       AGENCY_RESUME_FILE: "/new/checkpoint.json",
       AGENCY_RESUME_OVERRIDES: "{}",
       AGENCY_RESUME_FORCE: "1",
+    });
+    const editsJson = '[{"op":"removeTool","tool":"search"}]';
+    expect(withRootCarriers(inherited, { resume: { ...resume, editsJson } })).toMatchObject({
+      AGENCY_RESUME_EDITS: editsJson,
     });
   });
 

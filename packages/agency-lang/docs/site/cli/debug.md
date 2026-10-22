@@ -41,9 +41,15 @@ Everything you can change is on a row of a panel, and the change lives on the ro
 
 - **Say something to the model.** In the threads panel, press `Enter` to open the composer under the messages, type, and press `Enter` again. The message is queued on that thread and shows as `(pending)`; press `c` and the model reads it with its next request. If the thread is waiting on tool results, the message is queued behind them and delivered once they are in. `Esc` closes the composer and keeps what you typed.
 - **Set a variable.** Focus the locals panel, move to the variable with the arrow keys, press `Enter`, and type the new value (JSON, or plain text). The panel shows the new value highlighted until the program moves on. `:set name = value` in command mode does the same.
+- **Take a tool away from the model.** The call stack panel lists each tool loop's tools under its `llm()` frame. Move to one and press `e`; the model does not see it from its next request on.
+- **Give a guard more room, or turn it off.** In the guards panel, `b` on a guard asks for a new budget (`30s`, `2m`, or `$0.50`), and `e` disarms it so it stops tripping. The root budget is the ceiling the host set, so it takes neither.
+- **Decide a branch's result yourself.** In the branches panel, `e` on a running fork or parallel branch asks for a value (JSON, or text). The branch is finished with it, and the block that owns it reads the value as the branch's return. The loop records a tool call's own result, so a tool call's branch takes none.
+- **Find an edit by name.** `Ctrl+K` opens a list of every edit every row offers, in plain words such as `disarm the guard research`. Type to narrow it, and `Enter` moves to the row and runs the edit.
 - **Change your mind.** `x` drops the pending edits. A rewind drops them too, since it resumes an earlier checkpoint.
 
-From `agency debug session`, the same edits are `agency debug session edit`: with no action it lists what this stop takes, for example `append-message --thread [main] --text <text>` and `set-local --name <x|y> --value <json>`; `edit append-message --text "Stop research now. Write up what you have."` queues the message, and `continue` sends it.
+From `agency debug session`, the same edits are `agency debug session edit`: with no action it lists what this stop takes, for example `append-message --thread [main] --text <text>`, `set-local --name <x|y> --value <json>`, `remove-tool --tool <search|writeUp>`, `disarm-guard --guard <research>`, `set-guard-limit --guard <research> --amount <amount>`, and `set-branch-result --branch <fork_1> --value <json>`; `edit append-message --text "Stop research now. Write up what you have."` queues the message, and `continue` sends it.
+
+The same edits can be made to a saved checkpoint from the command line: `agency resume checkpoint.json agent.agency --edit '{"op":"appendMessage","text":"stop"}'`, or `--edits edits.json` with a file holding a list of them (see [run and resume](run)).
 
 ## Attaching to a program that is already running
 

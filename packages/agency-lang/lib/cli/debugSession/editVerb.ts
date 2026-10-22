@@ -5,6 +5,7 @@ import { actionByName, EDIT_ACTIONS, type EditAction } from "@/debugger/edits/ac
 import { rowsFor, type PaneRow, type RowKind, type StopView } from "@/debugger/edits/rows.js";
 import type { CheckpointEdit } from "@/runtime/state/checkpointPatch/index.js";
 import type { Shown } from "./visit.js";
+import { parseAmount } from "@/debugger/guardAnswer.js";
 import type { PendingPreview } from "@/debugger/edits/rows.js";
 
 /** How a row kind is named on the command line, and which value of the
@@ -39,6 +40,7 @@ const CHOICE_FLAGS: Partial<Record<RowKind, ChoiceFlag>> = {
     noun: "branch",
     keys: (row) => (row.kind === "branch" ? [row.key] : []),
   },
+  tool: { flag: "tool", noun: "tool", keys: (row) => (row.kind === "tool" ? [row.name] : []) },
 };
 
 /** The flag that carries the typed value, by what the action asks for. */
@@ -50,6 +52,7 @@ export const EDIT_FLAGS: { flag: string; help: string }[] = [
   { flag: "name", help: "The local or argument" },
   { flag: "guard", help: "The guard, by label or index" },
   { flag: "branch", help: "The branch, by key" },
+  { flag: "tool", help: "The tool, by name" },
   { flag: "text", help: "The text to send" },
   { flag: "value", help: "The new value, as JSON (text when it is not JSON)" },
   { flag: "amount", help: "A guard amount: dollars, or a duration such as 30s" },
@@ -154,6 +157,19 @@ export function editsFor(
     const flag = ASK_FLAGS[action.asks.kind];
     value = request.values[flag];
     if (value === undefined) return { refused: `${action.name} needs --${flag}` };
+    if (action.asks.kind === "amount") {
+      const dimension = row.kind === "guard" ? row.dimension : "cost";
+      const amount = parseAmount(dimension, String(value));
+      if (amount === null) {
+        return {
+          refused:
+            dimension === "cost"
+              ? `--amount takes dollars, such as 0.5, not "${String(value)}"`
+              : `--amount takes a duration, such as 30s or 2m, not "${String(value)}"`,
+        };
+      }
+      value = amount;
+    }
   }
   return { edits: action.toEdits(row, value, view) };
 }

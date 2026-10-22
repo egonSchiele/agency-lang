@@ -98,6 +98,8 @@ export const AGENCY_MAX_TIME = "AGENCY_MAX_TIME";
 export const AGENCY_RESUME_FILE = "AGENCY_RESUME_FILE";
 export const AGENCY_RESUME_OVERRIDES = "AGENCY_RESUME_OVERRIDES";
 export const AGENCY_RESUME_FORCE = "AGENCY_RESUME_FORCE";
+/** The edits of `agency resume --edit`, as a JSON array. */
+export const AGENCY_RESUME_EDITS = "AGENCY_RESUME_EDITS";
 
 /** The node `agency run file.agency:node` asks the generated child entry to
  *  start. Unset means `main`. */

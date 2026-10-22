@@ -4,6 +4,7 @@
 import { describe, it, expect } from "vitest";
 import type { AttachRecord } from "@/debugger/attach/registry.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
+import { agentShapedCheckpoint } from "@/runtime/state/checkpointPatch/testCheckpoints.js";
 import {
   EXIT,
   answer,
@@ -500,5 +501,47 @@ describe("edit", () => {
     expect(result.exitCode).toBe(EXIT.ok);
     expect(result.text).toContain("dropped 1 pending edits");
     expect(visit.sent).toEqual([{ type: "dropEdits" }]);
+  });
+});
+
+describe("edit on an agent-shaped stop", () => {
+  const shown = () => ({
+    checkpoint: agentShapedCheckpoint(),
+    stop: undefined,
+    interruptId: undefined,
+  });
+
+  it("lists the guard, tool, and branch verbs with their choices", async () => {
+    const visit = scripted(ask, [], { shown: shown() });
+    const result = await edit(visit, record, { values: {}, drop: false }, deps);
+    expect(result.text).toContain("disarm-guard       --guard <research>");
+    expect(result.text).toContain("set-guard-limit    --guard <research>  --amount <amount>");
+    expect(result.text).toContain("remove-tool        --tool <search|writeUp>");
+    expect(result.text).toContain("set-branch-result  --branch <fork_1|fork_2>  --value <json>");
+  });
+
+  it("parses an amount with the guard's dimension and refuses one it cannot", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["limit 60000 → 120000"])], { shown: shown() });
+    const bad = await edit(
+      visit,
+      record,
+      { action: "set-guard-limit", values: { guard: "research", amount: "lots" }, drop: false },
+      deps,
+    );
+    expect(bad.exitCode).toBe(EXIT.refused);
+    expect(bad.text).toContain("takes a duration");
+    const good = await edit(
+      visit,
+      record,
+      { action: "set-guard-limit", values: { guard: "research", amount: "2m" }, drop: false },
+      deps,
+    );
+    expect(good.exitCode).toBe(EXIT.ok);
+    expect(visit.sent).toEqual([
+      {
+        type: "edit",
+        edits: [{ op: "setGuard", guard: { index: 0 }, branchPath: [], limit: 120000 }],
+      },
+    ]);
   });
 });

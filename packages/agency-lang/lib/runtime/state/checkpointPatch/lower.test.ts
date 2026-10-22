@@ -152,7 +152,7 @@ describe("resolve: setLocal, setArg, setGlobal", () => {
 });
 
 describe("resolve: setBranchResult", () => {
-  it("gives a fork branch a result, and refuses a tool call or a waiting branch", () => {
+  it("gives a fork branch a result, and refuses a tool call", () => {
     const cp = agentShapedCheckpoint();
     expect(
       resolve({ op: "setBranchResult", branch: { key: "fork_1" }, value: 7 }, cp, IN_SEARCH),
@@ -168,10 +168,10 @@ describe("resolve: setBranchResult", () => {
     ).toEqual({
       refused: "a tool call's result is loop bookkeeping; see the spec's not goals",
     });
+    // A branch stopped on an interrupt takes a result too: the resume
+    // skips it, and the interrupt's answer goes unread.
     expect(
       resolve({ op: "setBranchResult", branch: { key: "fork_2" }, value: 7 }, cp, AT_ROUND),
-    ).toEqual({
-      refused: "branch fork_2 is waiting on interrupt i-2",
-    });
+    ).toMatchObject([{ value: { result: 7 } }]);
   });
 });

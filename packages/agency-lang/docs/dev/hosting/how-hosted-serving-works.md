@@ -266,6 +266,17 @@ Until checkpoints are signed with a server key (or stored server-side and
 referred to by id), the interrupt loop should stay between statelog and a
 client the developer trusts.
 
+A `/resume` body may also carry `edits`, the named changes of
+`docs/dev/runtime/checkpoint-patch.md` (a message appended to a thread, a tool
+removed, a guard disarmed, a branch given a result). The handler takes them
+only when it was created with `allowEdits: true`; otherwise a body that
+carries them is refused with 400 and "edits are not enabled on this host",
+before any runtime code runs. With it on, the edits are checked against
+their schema, applied to the checkpoint by the runtime, and a signed
+checkpoint comes back re-signed. The option is off by default because an edit
+changes what the program resumes with: a host turns it on only for clients it
+trusts with that, and should verify the incoming checkpoint's signature first.
+
 ## Root interrupt policy
 
 A host can attach a policy to any invocation — the same JSON rule format

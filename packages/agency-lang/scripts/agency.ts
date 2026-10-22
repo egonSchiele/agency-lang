@@ -50,7 +50,7 @@ import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
-import { parseResumeOverrides } from "@/cli/resumeOverrides.js";
+import { parseResumeEdits, parseResumeOverrides } from "@/cli/resumeOverrides.js";
 import { resolveResumeCarrier, type ResumeCarrier } from "@/cli/resumeCarrier.js";
 import { fixtures, test, testTs, parseShardSpec, TestRunOptions } from "@/cli/test.js";
 import { caseTimings, failedFiles } from "@/cli/testReport.js";
@@ -177,6 +177,8 @@ type ResumeOptions = RunOptions & {
   localVar?: string[];
   globalVar?: string[];
   arg?: string[];
+  edit?: string[];
+  edits?: string;
   programArg?: string[];
   force?: boolean;
 };
@@ -632,6 +634,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
         [] as string[],
       )
       .option(
+        "--edit <json>",
+        'An edit to the checkpoint, as JSON, such as {"op":"appendMessage","text":"stop"} (repeatable; see agency debug)',
+        collectRepeats,
+        [] as string[],
+      )
+      .option("--edits <file>", "A JSON file holding a list of edits to the checkpoint")
+      .option(
         "--program-arg <value>",
         "Pass one value to std::args in the resumed program (repeatable)",
         collectRepeats,
@@ -645,6 +654,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
         checkpointFile,
         parseResumeOverrides(options),
         options.force ?? false,
+        process.cwd(),
+        parseResumeEdits(options),
       );
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);

@@ -115,11 +115,35 @@ describe("rowsFor", () => {
       ["fork_1", "running"],
       ["fork_2", "interrupted"],
     ]);
+    // The loop's tools sit under its frame; the tool's own loop recorded
+    // no names, so nothing sits under it.
     expect(rowsFor("callStack", inSearch())).toEqual([
-      { kind: "frame", scopeName: "main", frame: { branchPath: ["tool_0_abc"], depth: 3 } },
-      { kind: "frame", scopeName: "llm()", frame: { branchPath: ["tool_0_abc"], depth: 2 } },
-      { kind: "frame", scopeName: "search", frame: { branchPath: ["tool_0_abc"], depth: 1 } },
-      { kind: "frame", scopeName: "llm()", frame: { branchPath: ["tool_0_abc"], depth: 0 } },
+      {
+        kind: "frame",
+        scopeName: "main",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 3 },
+      },
+      {
+        kind: "frame",
+        scopeName: "llm()",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 2 },
+      },
+      { kind: "tool", name: "search", removed: false, loop: { branchPath: [] } },
+      { kind: "tool", name: "writeUp", removed: false, loop: { branchPath: [] } },
+      {
+        kind: "frame",
+        scopeName: "search",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 1 },
+      },
+      {
+        kind: "frame",
+        scopeName: "llm()",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 0 },
+      },
     ]);
   });
 

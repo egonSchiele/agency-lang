@@ -1,5 +1,6 @@
 import type { CheckpointEdit } from "../../runtime/state/checkpointPatch/index.js";
 import { formatValue } from "../util.js";
+import { formatElapsed } from "../busy.js";
 import type { PaneName, PaneRow, RowKind, StopView } from "./rows.js";
 
 /** Whether an action is offered on a row, or why not, which the footer
@@ -69,9 +70,110 @@ const setLocal: EditAction = {
       : [],
 };
 
+const removeTool: EditAction = {
+  name: "remove-tool",
+  anchor: { pane: "callStack", row: "tool" },
+  key: "e",
+  hint: () => "remove",
+  sentence: (row) => (row.kind === "tool" ? `remove ${row.name} from this loop` : ""),
+  applies: (row) =>
+    row.kind === "tool" && row.removed
+      ? { offered: false, reason: `${row.name} is already removed` }
+      : { offered: true },
+  toEdits: (row) =>
+    row.kind === "tool" ? [{ op: "removeTool", loop: row.loop, tool: row.name }] : [],
+};
+
+const guardWords = (row: Extract<PaneRow, { kind: "guard" }>) => {
+  const amount =
+    row.dimension === "cost"
+      ? `$${Number(row.spent.toFixed(6))} of $${row.limit}`
+      : `${formatElapsed(row.spent)} of ${formatElapsed(row.limit)}`;
+  return `the guard ${row.label ?? "(unlabelled)"} (${row.dimension}, ${amount})`;
+};
+
+const guardOffered = (row: PaneRow): Offered => {
+  if (row.kind !== "guard") return { offered: false, reason: "not a guard" };
+  if (row.root) return { offered: false, reason: "the root budget is the host's ceiling" };
+  return { offered: true };
+};
+
+const disarmGuard: EditAction = {
+  name: "disarm-guard",
+  anchor: { pane: "guards", row: "guard" },
+  key: "e",
+  hint: () => "disarm",
+  sentence: (row) => (row.kind === "guard" ? `disarm ${guardWords(row)}` : ""),
+  applies: (row) =>
+    row.kind === "guard" && row.disarmed
+      ? { offered: false, reason: `${row.label ?? "the guard"} is already disarmed` }
+      : guardOffered(row),
+  toEdits: (row, _value, view) =>
+    row.kind === "guard"
+      ? [
+          {
+            op: "setGuard",
+            guard: { index: row.index },
+            branchPath: view.viewed.branchPath,
+            disarmed: true,
+          },
+        ]
+      : [],
+};
+
+const setGuardLimit: EditAction = {
+  name: "set-guard-limit",
+  anchor: { pane: "guards", row: "guard" },
+  key: "b",
+  hint: () => "budget",
+  sentence: (row) => (row.kind === "guard" ? `change the budget of ${guardWords(row)}` : ""),
+  applies: guardOffered,
+  asks: { label: "new budget (30s, 2m, or $0.50)", kind: "amount" },
+  toEdits: (row, value, view) =>
+    row.kind === "guard" && typeof value === "number"
+      ? [
+          {
+            op: "setGuard",
+            guard: { index: row.index },
+            branchPath: view.viewed.branchPath,
+            limit: value,
+          },
+        ]
+      : [],
+};
+
+const setBranchResult: EditAction = {
+  name: "set-branch-result",
+  anchor: { pane: "branches", row: "branch" },
+  key: "e",
+  hint: () => "result",
+  sentence: (row) =>
+    row.kind === "branch" ? `give the branch ${row.key} (${row.label}) a result` : "",
+  applies: (row) => {
+    if (row.kind !== "branch") return { offered: false, reason: "not a branch" };
+    if (row.key.startsWith("tool_")) {
+      return { offered: false, reason: "a tool call's result is the loop's to record" };
+    }
+    // A branch stopped on an interrupt takes a result too: the debugger's
+    // own stop is one, and a resume skips a branch that has a result.
+    if (row.status === "done") return { offered: false, reason: `${row.key} has finished` };
+    return { offered: true };
+  },
+  asks: { label: "result =", kind: "json" },
+  toEdits: (row, value) =>
+    row.kind === "branch" ? [{ op: "setBranchResult", branch: { path: row.path }, value }] : [],
+};
+
 /** Every edit the debugger offers. A new edit is one record here and
  *  one test; the panes and the verbs read the table. */
-export const EDIT_ACTIONS: EditAction[] = [appendMessage, setLocal];
+export const EDIT_ACTIONS: EditAction[] = [
+  appendMessage,
+  setLocal,
+  removeTool,
+  disarmGuard,
+  setGuardLimit,
+  setBranchResult,
+];
 
 /** The actions offered on `row` at `view`, in table order. */
 export function actionsFor(row: PaneRow, view: StopView): EditAction[] {

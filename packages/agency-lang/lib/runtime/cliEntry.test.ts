@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AGENCY_ENTRY_NODE, AGENCY_RESUME_FILE, AGENCY_RESUME_OVERRIDES } from "../constants.js";
+import {
+  AGENCY_ENTRY_NODE,
+  AGENCY_RESUME_EDITS,
+  AGENCY_RESUME_FILE,
+  AGENCY_RESUME_OVERRIDES,
+} from "../constants.js";
 import { runCliEntry } from "./cliEntry.js";
 import { signCheckpoint } from "./checkpointChecksum.js";
 import { defaultHost } from "#default-host";
@@ -13,6 +18,7 @@ const originalOverrides = process.env[AGENCY_RESUME_OVERRIDES];
 const originalKey = process.env.AGENCY_CHECKPOINT_KEY;
 const originalForce = process.env.AGENCY_RESUME_FORCE;
 const originalEntryNode = process.env[AGENCY_ENTRY_NODE];
+const originalEdits = process.env[AGENCY_RESUME_EDITS];
 const dirs: string[] = [];
 
 afterEach(() => {
@@ -26,6 +32,8 @@ afterEach(() => {
   else process.env.AGENCY_RESUME_FORCE = originalForce;
   if (originalEntryNode === undefined) delete process.env[AGENCY_ENTRY_NODE];
   else process.env[AGENCY_ENTRY_NODE] = originalEntryNode;
+  if (originalEdits === undefined) delete process.env[AGENCY_RESUME_EDITS];
+  else process.env[AGENCY_RESUME_EDITS] = originalEdits;
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -109,7 +117,24 @@ describe("runCliEntry", () => {
     await expect(runCliEntry({ nodeNames: [], startNode: vi.fn(), resume })).resolves.toBe(
       "resumed",
     );
-    expect(resume).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "main" }), {});
+    expect(resume).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "main" }), {}, []);
+  });
+
+  it("hands the edits carrier to the resume, checked against the edit schema", async () => {
+    delete process.env.AGENCY_CHECKPOINT_KEY;
+    process.env[AGENCY_RESUME_FILE] = writeCheckpoint(makeCheckpoint().toJSON());
+    process.env[AGENCY_RESUME_EDITS] = JSON.stringify([{ op: "appendMessage", text: "stop" }]);
+    const resume = vi.fn(async () => "resumed");
+
+    await runCliEntry({ nodeNames: [], startNode: vi.fn(), resume });
+    expect(resume).toHaveBeenCalledWith(expect.anything(), {}, [
+      { op: "appendMessage", text: "stop" },
+    ]);
+
+    process.env[AGENCY_RESUME_EDITS] = JSON.stringify([{ op: "bogus" }]);
+    await expect(runCliEntry({ nodeNames: [], startNode: vi.fn(), resume })).rejects.toThrow(
+      `${AGENCY_RESUME_EDITS} is not a list of edits`,
+    );
   });
 
   it("accepts a checkpoint with a valid signature", async () => {
@@ -196,10 +221,14 @@ describe("runCliEntry", () => {
 
     await runCliEntry({ nodeNames: [], startNode: vi.fn(), resume });
 
-    expect(resume).toHaveBeenCalledWith(expect.anything(), {
-      locals: { mood: "happy" },
-      args: { name: "Ada" },
-      globals: { count: 2 },
-    });
+    expect(resume).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        locals: { mood: "happy" },
+        args: { name: "Ada" },
+        globals: { count: 2 },
+      },
+      [],
+    );
   });
 });

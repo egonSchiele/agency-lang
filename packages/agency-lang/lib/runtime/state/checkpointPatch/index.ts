@@ -1,6 +1,6 @@
 import type { HostSettings } from "../../../host/host.js";
 import { signCheckpoint } from "../../checkpointChecksum.js";
-import { deepClone } from "../../utils.js";
+import { nativeTypeReplacer } from "../../revivers/index.js";
 import { Checkpoint, type CheckpointJSON } from "../checkpointStore.js";
 import { stopOfCheckpoint, type StopAt } from "./addresses.js";
 import { checkpointEditsSchema, isRefusal, type CheckpointEdit } from "./edits.js";
@@ -51,7 +51,11 @@ export function patchCheckpoint(
   const source = Checkpoint.fromJSON(checkpointOrJson);
   if (!source) return { refused: ["shape: the checkpoint does not parse"] };
   at ??= stopOfCheckpoint(source);
-  const json = deepClone(source.toJSON());
+  // A plain copy with native values tagged, as a checkpoint travels on the
+  // wire: the runtime's own clone revives a function reference through a
+  // registry only a run has, and a UI previews outside any run. A resume
+  // revives the tags when it restores the state.
+  const json = JSON.parse(JSON.stringify(source.toJSON(), nativeTypeReplacer)) as CheckpointJSON;
   const refused: string[] = [];
   const applied: string[] = [];
   // The checkpoint the next edit reads: the source until an edit

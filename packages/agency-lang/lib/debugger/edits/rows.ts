@@ -33,8 +33,16 @@ export type PaneRow =
   | { kind: "thread"; id: string; label: string | null; active: boolean; messageCount: number }
   | { kind: "local"; name: string; value: unknown; arg: boolean; frame: FrameRef }
   | { kind: "global"; module: string; name: string; value: unknown; branchPath: string[] }
-  | { kind: "frame"; scopeName: string; frame: FrameRef }
-  | { kind: "branch"; key: string; path: string[]; label: string; status: string; owner: string }
+  | { kind: "frame"; scopeName: string; moduleId: string; frame: FrameRef }
+  | { kind: "tool"; name: string; removed: boolean; loop: { branchPath: string[] } }
+  | {
+      kind: "branch";
+      key: string;
+      path: string[];
+      label: string;
+      status: string;
+      owner: string;
+    }
   | { kind: "loop"; round: number; removedTools: string[]; tools: string[] | null }
   | {
       kind: "guard";
@@ -50,6 +58,18 @@ export type PaneRow =
 export type RowKind = PaneRow["kind"];
 
 const isInternal = (name: string) => name.startsWith("__");
+
+/** For each frame along `branchPath`, the branch path of the stack it is
+ *  on: the root's frames are on `[]`, a branch's on the path to it. */
+function stacksOf(checkpoint: Checkpoint, branchPath: string[]): string[][] {
+  const stacks: string[][] = [];
+  for (let depth = 0; depth <= branchPath.length; depth++) {
+    const here = branchPath.slice(0, depth);
+    const count = checkpoint.stackAt(here)?.length ?? 0;
+    for (let i = 0; i < count; i++) stacks.push(here);
+  }
+  return stacks;
+}
 
 /** The depth, from the top of the viewed stack, of the frame the panes
  *  show: the last frame, or at one of the loop's own stops on the
@@ -100,12 +120,32 @@ export function rowsFor(pane: PaneName, view: StopView): PaneRow[] {
       }));
     }
     case "callStack": {
+      // A loop frame's tools sit under it, keyed to the stack the frame is
+      // on, which is the loop `removeTool` resolves from that stack.
+      const stacks = stacksOf(checkpoint, viewed.branchPath);
       const frames = checkpoint.framesAlong(viewed.branchPath);
-      return frames.map((frame, index) => ({
-        kind: "frame",
-        scopeName: frameName(frame.scopeName),
-        frame: { branchPath: viewed.branchPath, depth: frames.length - 1 - index },
-      }));
+      const rows: PaneRow[] = [];
+      frames.forEach((frame, index) => {
+        rows.push({
+          kind: "frame",
+          scopeName: frameName(frame.scopeName),
+          moduleId: frame.moduleId ?? "",
+          frame: { branchPath: viewed.branchPath, depth: frames.length - 1 - index },
+        });
+        if (frame.scopeName !== "runPrompt" || !Array.isArray(frame.locals?.toolNames)) return;
+        const removed: string[] = Array.isArray(frame.locals?.removedTools)
+          ? frame.locals.removedTools
+          : [];
+        for (const name of frame.locals.toolNames as string[]) {
+          rows.push({
+            kind: "tool",
+            name,
+            removed: removed.includes(name),
+            loop: { branchPath: stacks[index] },
+          });
+        }
+      });
+      return rows;
     }
     case "branches":
       return checkpoint.listBranches().map((branch) => ({

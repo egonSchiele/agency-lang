@@ -18,6 +18,10 @@ describe("the action table", () => {
     expect(EDIT_ACTIONS.map((a) => [a.name, a.anchor.pane, a.anchor.row, a.key])).toEqual([
       ["append-message", "threads", "thread", "enter"],
       ["set-local", "locals", "local", "enter"],
+      ["remove-tool", "callStack", "tool", "e"],
+      ["disarm-guard", "guards", "guard", "e"],
+      ["set-guard-limit", "guards", "guard", "b"],
+      ["set-branch-result", "branches", "branch", "e"],
     ]);
     expect(actionByName("set-local")?.name).toBe("set-local");
     expect(actionByName("nope")).toBeUndefined();
@@ -57,8 +61,55 @@ describe("the action table", () => {
     ]);
   });
 
-  it("a guard row takes nothing yet", () => {
-    const row = rowsFor("guards", view())[1];
-    expect(actionsFor(row, view())).toEqual([]);
+  it("a tool row under the loop takes remove-tool", () => {
+    const row = rowsFor("callStack", view()).find((r) => r.kind === "tool")!;
+    const [action] = actionsFor(row, view());
+    expect(action.name).toBe("remove-tool");
+    expect(action.hint(row, view())).toBe("remove");
+    expect(action.sentence(row, view())).toBe("remove search from this loop");
+    expect(action.asks).toBeUndefined();
+    expect(action.toEdits(row, undefined, view())).toEqual([
+      { op: "removeTool", loop: { branchPath: [] }, tool: "search" },
+    ]);
+    expect(action.applies({ ...row, removed: true } as typeof row, view())).toEqual({
+      offered: false,
+      reason: "search is already removed",
+    });
+  });
+
+  it("a guard row takes disarm and a new budget; a root budget takes neither", () => {
+    const [research, root] = rowsFor("guards", view()).filter((r) => r.kind === "guard");
+    const [disarm, budget] = actionsFor(research, view());
+    expect([disarm.name, budget.name]).toEqual(["disarm-guard", "set-guard-limit"]);
+    expect(disarm.sentence(research, view())).toBe("disarm the guard research (time, 10s of 1m)");
+    expect(disarm.toEdits(research, undefined, view())).toEqual([
+      { op: "setGuard", guard: { index: 0 }, branchPath: [], disarmed: true },
+    ]);
+    expect(budget.asks).toEqual({ label: "new budget (30s, 2m, or $0.50)", kind: "amount" });
+    expect(budget.toEdits(research, 90000, view())).toEqual([
+      { op: "setGuard", guard: { index: 0 }, branchPath: [], limit: 90000 },
+    ]);
+    expect(actionsFor(root, view())).toEqual([]);
+    expect(disarm.applies(root, view())).toEqual({
+      offered: false,
+      reason: "the root budget is the host's ceiling",
+    });
+  });
+
+  it("a running fork branch takes a result; a tool call's branch does not", () => {
+    const rows = rowsFor("branches", view());
+    const tool = rows.find((r) => r.kind === "branch" && r.key === "tool_0_abc")!;
+    const fork = rows.find((r) => r.kind === "branch" && r.key === "fork_1")!;
+    const [action] = actionsFor(fork, view());
+    expect(action.name).toBe("set-branch-result");
+    expect(action.sentence(fork, view())).toBe("give the branch fork_1 (block) a result");
+    expect(action.asks).toEqual({ label: "result =", kind: "json" });
+    expect(action.toEdits(fork, 7, view())).toEqual([
+      { op: "setBranchResult", branch: { path: ["tool_0_abc", "fork_1"] }, value: 7 },
+    ]);
+    expect(action.applies(tool, view())).toEqual({
+      offered: false,
+      reason: "a tool call's result is the loop's to record",
+    });
   });
 });

@@ -56,7 +56,22 @@ agency resume checkpoint.json foo.agency \
 
 Each `name=value` value is parsed as JSON when possible. Other values remain
 strings. `--program-arg` is separate because process arguments are not saved in
-a checkpoint. Signed checkpoints are verified automatically; use `--force` to
+a checkpoint.
+
+The checkpoint can be edited in other ways too, the same ways the debugger
+offers at a stop: a message appended to a thread, a tool removed from the
+model's next round, a guard disarmed or given a new limit, a branch given its
+result. Each is one `--edit` with the edit as JSON, or a `--edits` file holding
+a list of them, applied in order after the overrides above:
+
+```bash
+agency resume checkpoint.json foo.agency \
+  --edit '{"op":"appendMessage","text":"Stop research now. Write up what you have."}' \
+  --edit '{"op":"removeTool","tool":"search"}'
+```
+
+A wrong shape is refused before the program starts. The edits and their
+addresses are listed in the [debugger](debug) page. Signed checkpoints are verified automatically; use `--force` to
 resume one whose signature cannot be verified. See
 [Checkpointing](../guide/checkpointing) for creating the JSON file and the
 integrity rules.

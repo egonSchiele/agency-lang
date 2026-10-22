@@ -178,6 +178,46 @@ describe.skipIf(!existsSync(CLI))("agency resume (end-to-end)", () => {
     }
   }, 120_000);
 
+  it("applies --edit to the checkpoint, and refuses a malformed one before the child starts", async () => {
+    const dir = mkdtempSync(path.join(process.cwd(), ".agency-resume-spawn-"));
+    try {
+      writeFileSync(path.join(dir, "agent.agency"), SOURCE);
+      const fresh = await invoke(dir, ["run", "agent.agency"]);
+      expect(fresh.code, fresh.stderr).toBe(0);
+      writeFileSync(path.join(dir, "checkpoint.json"), checkpointFrom(fresh.stdout));
+      writeFileSync(
+        path.join(dir, "edits.json"),
+        JSON.stringify([{ op: "setGlobal", name: "status", value: "edited" }]),
+      );
+
+      const resumed = await invoke(dir, [
+        "resume",
+        "checkpoint.json",
+        "agent.agency",
+        "--edit",
+        '{"op":"setLocal","name":"mood","value":"glad"}',
+        "--edits",
+        "edits.json",
+        "--program-arg",
+        "hi",
+      ]);
+      expect(resumed.code, resumed.stderr).toBe(0);
+      expect(resumed.stdout).toContain("VALUES:glad:before:edited:hi");
+
+      const refused = await invoke(dir, [
+        "resume",
+        "checkpoint.json",
+        "agent.agency",
+        "--edit",
+        '{"op":"bogus"}',
+      ]);
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toContain("--edit is not an edit");
+    } finally {
+      removeTemp(dir);
+    }
+  }, 120_000);
+
   it("surfaces another interrupt, or handles it with the resumed root policy", async () => {
     const dir = mkdtempSync(path.join(process.cwd(), ".agency-resume-spawn-"));
     try {

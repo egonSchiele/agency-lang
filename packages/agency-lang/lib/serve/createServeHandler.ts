@@ -9,6 +9,7 @@ import { discoverExports } from "./discovery.js";
 import { createHttpHandler } from "./http/adapter.js";
 import type { RouteResult } from "./http/adapter.js";
 import type { InvocationOptions } from "../runtime/invocationOptions.js";
+import type { CheckpointEdit } from "../runtime/state/checkpointPatch/index.js";
 
 export type ServeHandler = (
   method: string,
@@ -38,6 +39,11 @@ export type CreateServeHandlerOptions = {
    *  unboundedly; a consumer must bound this (e.g. process recycling, or a
    *  child-process execution model). */
   version: string;
+  /** Whether a `/resume` body may carry `edits` to the checkpoint (see
+   *  `docs/dev/runtime/checkpoint-patch.md`). Off by default: an edit
+   *  changes what the program resumes with, so a host turns it on only
+   *  for clients it trusts with that. */
+  allowEdits?: boolean;
   /** Server-side logger for error detail. Defaults to an info logger. */
   logger?: Logger;
 };
@@ -98,7 +104,7 @@ export async function createServeHandler(
   const moduleResume = moduleExports.__respondToInterruptsForServe as (
     interrupts: unknown[],
     responses: unknown[],
-    opts?: { invocation?: InvocationOptions },
+    opts?: { invocation?: InvocationOptions; edits?: CheckpointEdit[] },
   ) => Promise<ServedInvocationOutcome<unknown>>;
 
   return createHttpHandler({
@@ -107,7 +113,8 @@ export async function createServeHandler(
     // The serve resume returns a ServedInvocationOutcome (value/error + usage);
     // the HTTP adapter maps it (and unwraps the RunNodeResult's `{ data }`).
     hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
-    respondToInterrupts: (interrupts, responses, invocation) =>
-      moduleResume(interrupts, responses, { invocation }),
+    respondToInterrupts: (interrupts, responses, invocation, edits) =>
+      moduleResume(interrupts, responses, { invocation, edits }),
+    allowEdits: options.allowEdits ?? false,
   });
 }

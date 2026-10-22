@@ -7,7 +7,7 @@ import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
-import { _promptsAutocomplete } from "./ui.js";
+import { _promptsAutocomplete } from "./prompts.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";

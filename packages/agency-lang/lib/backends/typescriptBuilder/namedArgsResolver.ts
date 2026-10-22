@@ -1,4 +1,5 @@
 import type { Expression, NamedArgument, SplatExpression } from "../../types.js";
+import { validNamesSentence } from "../../utils/validNames.js";
 import type { FunctionCall, FunctionParameter } from "../../types/function.js";
 
 /**
@@ -72,7 +73,9 @@ export function resolveNamedArgs(
     }
     const paramIdx = paramList.findIndex((p) => p.name === arg.name);
     if (paramIdx === -1) {
-      throw new Error(`Unknown named argument '${arg.name}' in call to '${node.functionName}'`);
+      throw new Error(
+        `Unknown named argument '${arg.name}' in call to '${node.functionName}'. ${validNamesSentence(paramList.map((p) => p.name))}`,
+      );
     }
     // Conflict check applies to fixed params only; variadic conflicts are
     // handled below by the mixed-rule check (the wording is more

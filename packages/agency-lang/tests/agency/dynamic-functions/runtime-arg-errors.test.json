@@ -3,7 +3,7 @@
     {
       "nodeName": "testUnknownArg",
       "input": "",
-      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Unknown named argument 'z' in call to 'add'\",\"data\":{},\"checkpoint\":null,\"neverStarted\":false,\"destructiveRan\":false,\"rejected\":false,\"functionName\":\"testUnknownArg\",\"args\":null,\"skippedFunctions\":[]}",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":false,\"error\":\"Unknown named argument 'z' in call to 'add'. Valid names: a, b.\",\"data\":{},\"checkpoint\":null,\"neverStarted\":false,\"destructiveRan\":false,\"rejected\":false,\"functionName\":\"testUnknownArg\",\"args\":null,\"skippedFunctions\":[]}",
       "evaluationCriteria": [
         {
           "type": "exact"

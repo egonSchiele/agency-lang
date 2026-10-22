@@ -246,7 +246,7 @@ Once a call uses a named argument, every following argument must also be named �
 
 <a id="ag6025"></a>
 
-## AG6025 — Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'.
+## AG6025 — Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'. &#123;valid&#125;
 
 *Default severity: error.*
 

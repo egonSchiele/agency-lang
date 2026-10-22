@@ -141,7 +141,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6022](tools.md#ag6022) | Type '&#123;actual&#125;' is not assignable to pipe slot of type '&#123;expected&#125;'. |
 | [AG6023](tools.md#ag6023) | Splat argument cannot follow a named argument in call to '&#123;fn&#125;'. |
 | [AG6024](tools.md#ag6024) | Positional argument cannot follow a named argument in call to '&#123;fn&#125;'. |
-| [AG6025](tools.md#ag6025) | Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'. |
+| [AG6025](tools.md#ag6025) | Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'. &#123;valid&#125; |
 | [AG6026](tools.md#ag6026) | Named argument '&#123;name&#125;' conflicts with positional argument at position &#123;position&#125; in call to '&#123;fn&#125;'. |
 | [AG6027](tools.md#ag6027) | Positional argument cannot feed variadic parameter '&#123;param&#125;' when it is also bound by name in call to '&#123;fn&#125;'. |
 | [AG6028](tools.md#ag6028) | Tool '&#123;tool&#125;' has a required function-typed parameter '&#123;param&#125;' that is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing it as a tool. |

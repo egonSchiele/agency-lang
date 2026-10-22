@@ -231,11 +231,18 @@ describe("AgencyFunction", () => {
       expect(result).toEqual([1, UNSET, UNSET]);
     });
 
-    it("throws on unknown named arg", async () => {
-      const fn = makeFunction([{ name: "a" }]);
+    it("throws on unknown named arg and lists the valid names", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b", hasDefault: true }]);
       await expect(
         fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
-      ).rejects.toThrow("Unknown named argument 'z'");
+      ).rejects.toThrow("Unknown named argument 'z' in call to 'testFn'. Valid names: a, b.");
+    });
+
+    it("lists the variadic parameter among the valid names", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "rest", variadic: true }]);
+      await expect(
+        fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+      ).rejects.toThrow("Valid names: a, rest.");
     });
 
     it("throws on duplicate named arg targeting positional slot", async () => {

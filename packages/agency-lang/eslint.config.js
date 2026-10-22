@@ -65,6 +65,7 @@ export const BROWSER_FILES = [
   "lib/utils/path.node.ts",
   "lib/utils/path.portable.ts",
   "lib/utils/termcolors.ts",
+  "lib/utils/validNames.ts",
 ];
 
 const NODE_IMPORT_MESSAGE =

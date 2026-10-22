@@ -91,6 +91,10 @@ export class DebuggerDriver {
    *  beside the current values; the driver owns it. */
   /** The edits queued at the stop, applied once by the next resume. */
   private pendingEdits: CheckpointEdit[] = [];
+  /** The applied lines of the last accepted preview, one per write; an
+   *  edit can lower to several writes, so the lines of a new edit are
+   *  the ones past these. */
+  private pendingApplied: string[] = [];
   private readonly attached: boolean;
   /** Attached: the runs whose steps were let through because another
    *  run owns the debugger, each told once in the activity log. */
@@ -175,6 +179,7 @@ export class DebuggerDriver {
         this.ignoredRuns = [];
         this.betweenRuns = false;
         this.pendingEdits = [];
+        this.pendingApplied = [];
         this.ui.setPending({ edits: [], applied: [] });
       },
     };
@@ -550,7 +555,7 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    return await this.respond(batch, answers, this.takeEdits(), session);
+    return await this.respond(batch, answers, this.takeEdits(), session, asked[0]);
   }
 
   /** One interrupt's answer, asked for until the input is one of
@@ -643,18 +648,20 @@ export class DebuggerDriver {
 
   /** Resume the program with one response per interrupt of `batch`, in
    *  the batch's order: the answer given for it, else an approve. The
-   *  runtime insists on a response for every interrupt in the batch. */
+   *  runtime insists on a response for every interrupt in the batch.
+   *  `shown` is the interrupt the panes showed while the person decided. */
   private async respond(
     batch: Interrupt[],
     answers: Record<string, InterruptResponse>,
     edits: CheckpointEdit[],
     session: AttachedSession | undefined,
+    shown: Interrupt | undefined,
   ): Promise<any> {
     const responses = batch.map((intr) => answers[intr.interruptId] ?? { type: "approve" });
-    // The edits land on the frame of the stop being answered: a batch of
+    // The edits land on the frame of the stop that was shown: a batch of
     // stops shares one checkpoint located at the batch, so the stop
     // record, not the checkpoint, says which frame an edit meant.
-    const options = { edits, at: stopAtOf(batch[0]), ...this.resumeOptions(session) };
+    const options = { edits, at: stopAtOf(shown), ...this.resumeOptions(session) };
     const serve = this.mod.respondToInterruptsForServe;
     if (session !== undefined && serve !== undefined) {
       return await this.resumeInterrupt(async () => {
@@ -686,23 +693,23 @@ export class DebuggerDriver {
     switch (command.type) {
       case "step": {
         this.debuggerState.stepping();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "stepIn": {
         this.debuggerState.stepIn();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "next": {
         this.debuggerState.stepNext();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "stepOut": {
         this.debuggerState.stepOut();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "continue": {
         this.debuggerState.running();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "set": {
         // The old spelling: one setLocal on the frame the stop shows.
@@ -760,12 +767,7 @@ export class DebuggerDriver {
           this.ui.log("Already at earliest checkpoint");
           return { data: interrupt };
         }
-        return await this.rewindTo(
-          previous,
-          { preserveOverrides: command.preserveOverrides },
-          session,
-          interrupt,
-        );
+        return await this.rewindTo(previous, session, interrupt);
       }
       case "rewind": {
         const allCheckpoints = this.checkpointsToShow();
@@ -780,7 +782,7 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
 
-        return await this.rewindTo(checkpoint, {}, session, interrupt);
+        return await this.rewindTo(checkpoint, session, interrupt);
       }
       case "reject": {
         this.ui.log("Rejected interrupt");
@@ -789,6 +791,7 @@ export class DebuggerDriver {
           { [interrupt.interruptId]: { type: "reject" } },
           this.takeEdits(),
           session,
+          interrupt,
         );
       }
       case "resolve": {
@@ -803,6 +806,7 @@ export class DebuggerDriver {
           },
           this.takeEdits(),
           session,
+          interrupt,
         );
       }
       case "showCheckpoints": {
@@ -838,7 +842,7 @@ export class DebuggerDriver {
             this.ui.log(`Invalid checkpoint data in file: ${JSON.stringify(json)}`);
             return { data: interrupt };
           }
-          return await this.rewindTo(checkpoint, {}, session, interrupt);
+          return await this.rewindTo(checkpoint, session, interrupt);
         } catch (e: any) {
           this.ui.log(`Failed to load: ${e.message}`);
           return { data: interrupt };
@@ -851,7 +855,7 @@ export class DebuggerDriver {
         if (this.attached) {
           this.detach();
           this.debuggerState.running();
-          return await this.resume(batch, session);
+          return await this.resume(batch, session, interrupt);
         }
         return { __debuggerQuit: true };
       }
@@ -883,9 +887,10 @@ export class DebuggerDriver {
       return false;
     }
     this.pendingEdits = all;
-    for (const line of preview.applied.slice(this.pendingEdits.length - edits.length)) {
+    for (const line of preview.applied.slice(this.pendingApplied.length)) {
       this.ui.log(line);
     }
+    this.pendingApplied = preview.applied;
     this.ui.setPending({ edits: all, applied: preview.applied });
     return true;
   }
@@ -894,6 +899,7 @@ export class DebuggerDriver {
     if (this.pendingEdits.length === 0) return;
     this.ui.log(reason);
     this.pendingEdits = [];
+    this.pendingApplied = [];
     this.ui.setPending({ edits: [], applied: [] });
   }
 
@@ -901,6 +907,7 @@ export class DebuggerDriver {
   private takeEdits(): CheckpointEdit[] {
     const edits = this.pendingEdits;
     this.pendingEdits = [];
+    this.pendingApplied = [];
     this.ui.setPending({ edits: [], applied: [] });
     return edits;
   }
@@ -951,13 +958,16 @@ export class DebuggerDriver {
 
   /** Move on from a debug stop: every stop in the batch is approved, an
    *  answer the resume never reads, and pending overrides are applied. */
-  private async resume(batch: Interrupt[], session: AttachedSession | undefined): Promise<any> {
-    return await this.respond(batch, {}, this.takeEdits(), session);
+  private async resume(
+    batch: Interrupt[],
+    session: AttachedSession | undefined,
+    shown: Interrupt,
+  ): Promise<any> {
+    return await this.respond(batch, {}, this.takeEdits(), session, shown);
   }
 
   private async rewindTo(
     checkpoint: Checkpoint,
-    opts: { preserveOverrides?: boolean },
     session: AttachedSession | undefined,
     /** The stop being rewound from. Attached, the run is the stop's, and
      *  the checkpoint becomes this run's whichever run recorded it: a

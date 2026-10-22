@@ -625,6 +625,7 @@ export class DebuggerUI implements DebuggerIO {
         const pane = ctx.focused ?? "";
         this.cursor[pane] = this.cursorIndex(pane) + action.by;
         this.cursor[pane] = this.cursorIndex(pane);
+        this.scrollToCursor(pane);
         this.renderUI();
         return null;
       }
@@ -990,8 +991,9 @@ export class DebuggerUI implements DebuggerIO {
     while (true) {
       const keyEvent = await this.readKey();
 
-      // Attached, escape does nothing: it would detach by accident.
-      if (this.attached !== null && keyEvent.key === "escape") {
+      // Attached, escape does nothing: it would detach by accident. The
+      // open composer still takes it, to close and keep the draft.
+      if (this.attached !== null && keyEvent.key === "escape" && !this.composer.open) {
         continue;
       }
       const simple = this.composer.open ? undefined : SIMPLE_KEYS[keyEvent.key];
@@ -1056,9 +1058,7 @@ export class DebuggerUI implements DebuggerIO {
         return parseCommandInput(input || "");
       }
       case "up":
-        if (focusedName === "source") {
-          return { type: "stepBack", preserveOverrides: keyEvent.shift === true };
-        }
+        if (focusedName === "source") return { type: "stepBack" };
         this.scrollPane(focusedName, -1);
         return null;
       case "down":
@@ -1133,15 +1133,36 @@ export class DebuggerUI implements DebuggerIO {
     // the total line count from the pane's content function.
     const pane = this.getPanes().find((p) => p.name === paneName);
     const totalLines = pane ? pane.content().split("\n").length : 0;
-    const paneFrame = this.lastFrame?.findByKey(paneName);
-    // Inner viewport height = frame height minus the border (1 row top + 1 bottom).
-    const viewportHeight = paneFrame ? Math.max(0, paneFrame.height - 2) : 0;
-    const maxOffset = Math.max(0, totalLines - viewportHeight);
+    const maxOffset = Math.max(0, totalLines - this.viewportHeight(paneName));
     const next = Math.max(0, Math.min(current + direction, maxOffset));
     if (next !== current) {
       this.scrollOffsets[paneName] = next;
       this.renderUI();
     }
+  }
+
+  /** Scroll `paneName` just enough that the cursor's row is in view: a
+   *  row above the viewport becomes its first line, one below it its
+   *  last. The rows are the pane's lines in order, so the row index is
+   *  the line index. */
+  private scrollToCursor(paneName: string): void {
+    const height = this.viewportHeight(paneName);
+    if (height === 0) return;
+    const row = this.cursorIndex(paneName);
+    const current = this.scrollOffsets[paneName] || 0;
+    if (row < current) {
+      this.scrollOffsets[paneName] = row;
+    } else if (row >= current + height) {
+      this.scrollOffsets[paneName] = row - height + 1;
+    }
+  }
+
+  /** The lines `paneName` can show, from its most recently rendered
+   *  frame: the frame's height less the border's two rows. Zero before
+   *  the first render. */
+  private viewportHeight(paneName: string): number {
+    const paneFrame = this.lastFrame?.findByKey(paneName);
+    return paneFrame ? Math.max(0, paneFrame.height - 2) : 0;
   }
 
   // --- Text input ---

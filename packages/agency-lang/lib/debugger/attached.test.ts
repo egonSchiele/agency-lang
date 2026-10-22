@@ -208,7 +208,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     // and its caller gets its own value under its own options.
     const mod = await freshImport(compiledPath(fixtures.echo));
     const io = new PerRunIO([
-      [{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }],
+      [{ type: "step" }, { type: "stepBack" }, { type: "continue" }],
       [{ type: "continue" }],
     ]);
     attachTo(mod, [], io);
@@ -231,7 +231,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
   it("two runs that share a trace id are still told apart", async () => {
     const mod = await freshImport(compiledPath(fixtures.echo));
     const io = new PerRunIO([
-      [{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }],
+      [{ type: "step" }, { type: "stepBack" }, { type: "continue" }],
       [{ type: "continue" }],
     ]);
     attachTo(mod, [], io);
@@ -251,7 +251,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
       { type: "step" },
       { type: "step" },
       { type: "continue" },
-      { type: "stepBack", preserveOverrides: false },
+      { type: "stepBack" },
       { type: "continue" },
     ]);
 
@@ -391,7 +391,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     })([
       { type: "step" },
       { type: "continue" },
-      { type: "stepBack", preserveOverrides: false },
+      { type: "stepBack" },
       { type: "continue" },
       { type: "continue" },
     ]);
@@ -431,7 +431,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
         }
         return command;
       }
-    })([{ type: "step" }, { type: "stepBack", preserveOverrides: false }, { type: "continue" }]);
+    })([{ type: "step" }, { type: "stepBack" }, { type: "continue" }]);
     const { driver } = attachTo(mod, [], io);
 
     await expect(mod.main("alice")).rejects.toThrow(/changed/i);
@@ -715,7 +715,7 @@ describe("a debugger attached to a program a TypeScript caller runs", () => {
     attachTo(mod, [
       { type: "step" },
       { type: "step" },
-      { type: "stepBack", preserveOverrides: false },
+      { type: "stepBack" },
       { type: "continue" },
     ]);
 

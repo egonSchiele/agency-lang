@@ -3,6 +3,7 @@
 // asks for by a typed flag. With no action, the verbs this stop takes.
 import { actionByName, EDIT_ACTIONS, type EditAction } from "@/debugger/edits/actions.js";
 import { rowsFor, type PaneRow, type RowKind, type StopView } from "@/debugger/edits/rows.js";
+import type { CheckpointEdit } from "@/runtime/state/checkpointPatch/index.js";
 import type { Shown } from "./visit.js";
 import type { PendingPreview } from "@/debugger/edits/rows.js";
 
@@ -12,6 +13,8 @@ type ChoiceFlag = {
   flag: string;
   /** The words a refusal uses: "no local y at this stop; the locals are x". */
   noun: string;
+  /** The tokens that pick the row, the one the listing prints first:
+   *  a label before an id, since that is what a person copies. */
   keys: (row: PaneRow) => string[];
   /** The row taken when the flag is omitted, if any. */
   defaultRow?: (rows: PaneRow[]) => PaneRow | undefined;
@@ -21,7 +24,7 @@ const CHOICE_FLAGS: Partial<Record<RowKind, ChoiceFlag>> = {
   thread: {
     flag: "thread",
     noun: "thread",
-    keys: (row) => (row.kind === "thread" ? [row.id, ...(row.label ? [row.label] : [])] : []),
+    keys: (row) => (row.kind === "thread" ? [...(row.label ? [row.label] : []), row.id] : []),
     defaultRow: (rows) => rows.find((row) => row.kind === "thread" && row.active) ?? rows[0],
   },
   local: { flag: "name", noun: "local", keys: (row) => (row.kind === "local" ? [row.name] : []) },
@@ -29,7 +32,7 @@ const CHOICE_FLAGS: Partial<Record<RowKind, ChoiceFlag>> = {
     flag: "guard",
     noun: "guard",
     keys: (row) =>
-      row.kind === "guard" ? [String(row.index), ...(row.label ? [row.label] : [])] : [],
+      row.kind === "guard" ? [...(row.label ? [row.label] : []), String(row.index)] : [],
   },
   branch: {
     flag: "branch",
@@ -62,7 +65,8 @@ export function viewOf(shown: Shown, pending: PendingPreview): StopView | null {
     branchPath: shown.stop?.branchPath ?? checkpoint.branchPath,
     loopStop: shown.stop?.loopStop ?? checkpoint.loopStop,
   };
-  return { checkpoint, stop: at, viewed: at, pending };
+  const moduleId = shown.stop?.moduleId ?? checkpoint.moduleId;
+  return { checkpoint, stop: at, viewed: at, moduleId, pending };
 }
 
 /** The rows `action` is offered on at this view. */
@@ -120,9 +124,7 @@ export function listingText(listing: EditListing[]): string {
 export function editsFor(
   request: EditRequest,
   view: StopView,
-):
-  | { edits: import("@/runtime/state/checkpointPatch/index.js").CheckpointEdit[] }
-  | { refused: string } {
+): { edits: CheckpointEdit[] } | { refused: string } {
   const action = request.action === undefined ? undefined : actionByName(request.action);
   if (action === undefined) {
     const names = EDIT_ACTIONS.map((candidate) => candidate.name).join(", ");

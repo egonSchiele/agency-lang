@@ -373,7 +373,7 @@ describe("Debugger stepBack and rewind", () => {
     await session.press("s"); // past y = 2
     await session.press(":"); // command mode
     await session.type("set x = 10");
-    await session.press("up", { shift: true }); // stepBack with preserveOverrides
+    await session.press("up"); // stepBack
     await session.press("s", { times: 10 });
 
     const result = await session.quit();

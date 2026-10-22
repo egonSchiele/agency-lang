@@ -126,6 +126,8 @@ export class UIState {
       return;
     }
     this.base = cp;
+    // The stop first: the preview places a frameless edit at it.
+    this.stop = stop;
     this.checkpoint = this.previewed(cp);
     // A checkpoint stamped by the tool loop, at one of its own stops or
     // on an interrupt it carried out of a request or a tool, is located
@@ -133,7 +135,6 @@ export class UIState {
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
-    this.stop = stop;
     // A user interrupt raised inside a tool, a fork, or a parallel arm is
     // stamped on the shared checkpoint at the join, whose location has no
     // branch path; the branch is found by the interrupt's id.
@@ -149,7 +150,11 @@ export class UIState {
 
   /** Fill the args and locals panes from the frame at `location`, and
    *  the globals pane from `moduleId`'s globals as that frame's stack
-   *  sees them. False when the checkpoint has no such frame. */
+   *  sees them. False when the checkpoint has no such frame. The
+   *  checkpoint is the preview; a value the pending edits changed is
+   *  marked by comparing it with the same place in the stop's own
+   *  checkpoint, so only the frame an edit named shows it, whatever
+   *  the edit called the frame. */
   private showFrame(
     location: { branchPath?: string[]; loopStop?: LoopStopKind },
     moduleId: string,
@@ -160,15 +165,19 @@ export class UIState {
       this.log("No current frame available in checkpoint");
       return false;
     }
+    const base = this.base === cp ? undefined : this.base;
+    const baseFrame = base?.shownFrame(location);
+    const branchPath = location.branchPath ?? [];
     this.args = [];
     this.locals = [];
     this.globals = [];
     this.globalsModuleId = moduleId;
-    this.setWithOverrides(frame.args, this.args);
-    this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globalsAt(location.branchPath ?? []).store?.[moduleId] ?? null;
+    this.setWithOverrides(frame.args, this.args, baseFrame?.args);
+    this.setWithOverrides(frame.locals, this.locals, baseFrame?.locals);
+    const globalsForModule = cp.globalsAt(branchPath).store?.[moduleId] ?? null;
     if (globalsForModule) {
-      this.setWithOverrides(globalsForModule, this.globals);
+      const baseGlobals = base?.globalsAt(branchPath).store?.[moduleId];
+      this.setWithOverrides(globalsForModule, this.globals, baseGlobals);
     }
     return true;
   }
@@ -223,15 +232,25 @@ export class UIState {
     return state;
   }
 
-  setWithOverrides(obj: Record<string, unknown>, array: ValWithOverride[]) {
+  /** One entry per variable of `obj`, the preview's values. With
+   *  `before`, the same place in the stop's own checkpoint, an entry
+   *  whose value differs carries the preview's as its override and the
+   *  stop's as its value, so the pane highlights it. */
+  setWithOverrides(
+    obj: Record<string, unknown>,
+    array: ValWithOverride[],
+    before?: Record<string, unknown>,
+  ) {
     for (const key in obj) {
       if (this.isInternalVar(key)) {
         continue;
       }
+      const changed =
+        before !== undefined && JSON.stringify(before[key]) !== JSON.stringify(obj[key]);
       array.push({
         key,
-        value: obj[key],
-        override: this.pendingValue(key),
+        value: changed ? before[key] : obj[key],
+        override: changed ? obj[key] : undefined,
       });
     }
   }
@@ -306,22 +325,13 @@ export class UIState {
         loopStop: this.stopLocation.loopStop,
       },
       viewed: { branchPath: this.location.branchPath ?? [], loopStop: this.location.loopStop },
+      moduleId: this.getGlobalsModuleId(),
       pending: this.pending,
     };
   }
 
   getPending(): PendingPreview {
     return this.pending;
-  }
-
-  /** The value a pending `setLocal` or `setArg` gives `name` on the
-   *  shown frame, or undefined when none does. */
-  private pendingValue(name: string): unknown {
-    const edit = this.pending.edits.findLast(
-      (candidate) =>
-        (candidate.op === "setLocal" || candidate.op === "setArg") && candidate.name === name,
-    );
-    return edit === undefined ? undefined : (edit as { value: unknown }).value;
   }
 
   /** Replace the list of open waits with the run's latest, keeping the

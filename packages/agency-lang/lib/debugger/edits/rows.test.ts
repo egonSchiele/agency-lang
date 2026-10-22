@@ -7,6 +7,7 @@ function atRound(): StopView {
     checkpoint: agentShapedCheckpoint(),
     stop: { branchPath: [], loopStop: "round" },
     viewed: { branchPath: [], loopStop: "round" },
+    moduleId: "mod",
     pending: { edits: [], applied: [] },
   };
 }
@@ -17,6 +18,7 @@ function inSearch(): StopView {
     checkpoint,
     stop: { branchPath: ["tool_0_abc"], loopStop: "round" },
     viewed: { branchPath: ["tool_0_abc"], loopStop: "round" },
+    moduleId: "mod",
     pending: { edits: [], applied: [] },
   };
 }
@@ -55,6 +57,21 @@ describe("rowsFor", () => {
         frame: { branchPath: ["tool_0_abc"], depth: 1 },
       },
     ]);
+  });
+
+  it("locals: an internal name is dropped from args as from locals, so rows match lines", () => {
+    const view = atRound();
+    view.checkpoint.stack.stack[0].args.__hidden = 1;
+    view.checkpoint.stack.stack[0].locals.__substep = 2;
+    expect(rowsFor("locals", view).map((row) => (row.kind === "local" ? row.name : ""))).toEqual([
+      "task",
+      "answer",
+    ]);
+  });
+
+  it("globals: the view's module, not the checkpoint's", () => {
+    const view = { ...inSearch(), moduleId: "other" };
+    expect(rowsFor("globals", view)).toEqual([]);
   });
 
   it("threads: every thread the stop can see, the active one marked", () => {

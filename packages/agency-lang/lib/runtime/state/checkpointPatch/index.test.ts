@@ -39,6 +39,54 @@ describe("patchCheckpoint", () => {
     expect(result.checkpoint.signature).toBeUndefined();
   });
 
+  it("two edits on one place add up: each is lowered against the edits before it", () => {
+    const source = agentShapedCheckpoint();
+    const result = patchCheckpoint(
+      source,
+      [
+        { op: "appendMessage", text: "A" },
+        { op: "appendMessage", text: "B" },
+        { op: "removeTool", tool: "search" },
+        { op: "removeTool", tool: "writeUp" },
+      ],
+      unsigned,
+    );
+    if ("refused" in result) throw new Error(result.refused.join());
+    const json = result.checkpoint.toJSON();
+    expect(getAt(json, [...ROOT, "1", "locals", "messagesJSON", "queuedMessages"])).toEqual([
+      { role: "user", content: "A", label: null },
+      { role: "user", content: "B", label: null },
+    ]);
+    expect(getAt(json, [...ROOT, "1", "locals", "removedTools"])).toEqual(["search", "writeUp"]);
+    expect(result.applied).toHaveLength(4);
+  });
+
+  it("an edit that is not one of the schema's shapes is refused, not thrown", () => {
+    const source = agentShapedCheckpoint();
+    const bogus = [
+      { op: "bogus" },
+      { op: "setLocal", name: "constructor", value: {} },
+    ] as unknown as Parameters<typeof patchCheckpoint>[1];
+    const result = patchCheckpoint(source, bogus, unsigned);
+    expect("refused" in result).toBe(true);
+    if (!("refused" in result)) return;
+    expect(result.refused).toHaveLength(2);
+    expect(result.refused[0]).toMatch(/^edit 0 at op: /);
+    expect(result.refused[1]).toBe("edit 1 at name: not a prototype key");
+    expect(Object.hasOwn(source.stack.stack[0].locals, "constructor")).toBe(false);
+  });
+
+  it("no edits is a signed copy and nothing else", () => {
+    const source = agentShapedCheckpoint();
+    signCheckpoint(source, signing);
+    const result = patchCheckpoint(source, [], signing);
+    if ("refused" in result) throw new Error(result.refused.join());
+    expect(result.applied).toEqual([]);
+    expect(result.checkpoint).not.toBe(source);
+    expect(result.checkpoint.toJSON()).toEqual(source.toJSON());
+    expect(verifyCheckpointChecksum(result.checkpoint, signing)).toBe(true);
+  });
+
   it("a signed source comes back signed under the settings; an unsigned one stays unsigned", () => {
     const source = agentShapedCheckpoint();
     signCheckpoint(source, signing);

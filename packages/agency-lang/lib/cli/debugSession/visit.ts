@@ -40,7 +40,8 @@ export type Joined = {
   pending: RequestMessage | null;
   /** Set when the program had ended before this visit. */
   finished: FinishedMessage | null;
-  /** The edits queued at the stop, as the run last said. */
+  /** The edits queued at the stop, as the run last said; read live, so
+   *  the `where` a verb prints after queuing one shows it. */
   queuedEdits: PendingPreview;
 };
 
@@ -253,6 +254,8 @@ class Inbox {
         refused: "the program said who is on it before saying hello; is it an older build?",
       };
     }
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- the getter below reads the inbox's latest
+    const inbox = this;
     return {
       hello,
       parties,
@@ -260,7 +263,9 @@ class Inbox {
       shown: this.shown,
       pending,
       finished,
-      queuedEdits: this.queuedEdits,
+      get queuedEdits() {
+        return inbox.queuedEdits;
+      },
       answer: (result, timeoutMs) => {
         if (pending === null) {
           return Promise.resolve({ kind: "timeout" });

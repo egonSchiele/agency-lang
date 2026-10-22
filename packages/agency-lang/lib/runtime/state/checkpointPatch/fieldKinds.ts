@@ -17,13 +17,19 @@ const LOOP_DATA_LOCALS = ["removedTools"];
 const LOOP_DATA_THREAD_LISTS = ["messages", "queuedMessages"];
 
 /** The kind of the field at `path`, in a frame of `scopeName` when the
- *  path runs through a frame. */
+ *  path runs through a frame. A program's own variable is data whatever
+ *  it is called: the leaf-name rules (`id`, `step`) apply only outside
+ *  a frame's variables and a module's globals, so a function with
+ *  `let id = …` or a loop counter named `step` can still be set. The
+ *  one exception is the loop frame, whose locals are the runtime's. */
 export function fieldKind(path: string[], scopeName: string | null): FieldKind {
   const leaf = path.at(-1);
   if (leaf === undefined) return "identity";
   if (path.length === 1 && IDENTITY_TOP.includes(leaf)) return "identity";
-  if (IDENTITY_LEAVES.includes(leaf)) return "identity";
   if (path.some((segment) => segment.startsWith("__"))) return "control";
+  if (isOwnVariable(path) && scopeName !== "runPrompt") return "data";
+  if (isGlobal(path)) return "data";
+  if (IDENTITY_LEAVES.includes(leaf)) return "identity";
   if (leaf === "step") return "control";
   const parent = path.at(-2);
   if (parent === "stack" && CONTROL_LEAVES_OF_STACK.includes(leaf)) return "control";
@@ -37,6 +43,20 @@ export function fieldKind(path: string[], scopeName: string | null): FieldKind {
     return LOOP_DATA_LOCALS.includes(local ?? "") ? "data" : "control";
   }
   return "data";
+}
+
+/** A frame's own local or argument: the leaf directly under `locals`
+ *  or `args`. */
+function isOwnVariable(path: string[]): boolean {
+  const container = path.at(-2);
+  return container === "locals" || container === "args";
+}
+
+/** A module's global: the leaf directly under a module in a globals
+ *  store, the root's (`globals`) or a branch's (`globalsJSON`). */
+function isGlobal(path: string[]): boolean {
+  const owner = path.at(-4);
+  return path.at(-3) === "store" && (owner === "globals" || owner === "globalsJSON");
 }
 
 function isGuardField(path: string[]): boolean {

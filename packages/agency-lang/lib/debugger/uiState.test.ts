@@ -96,8 +96,8 @@ describe("UIState", () => {
       const ui = new UIState();
       ui.setPending({
         edits: [
-          { op: "setLocal", name: "input", value: "overridden" },
-          { op: "setLocal", name: "count", value: 99 },
+          { op: "setArg", name: "input", value: "overridden" },
+          { op: "setGlobal", name: "count", value: 99 },
         ],
         applied: [],
       });
@@ -146,6 +146,38 @@ describe("UIState", () => {
         ]),
       });
     }
+
+    it("a pending edit on one frame marks that frame's variable, not a namesake elsewhere", async () => {
+      const ui = new UIState();
+      const checkpoint = sharedCheckpoint();
+      checkpoint.stack.stack[0].locals.url = "main's";
+      ui.setPending({
+        edits: [
+          {
+            op: "setLocal",
+            frame: { branchPath: ["tool_0_abc"], depth: 0 },
+            name: "url",
+            value: "v",
+          },
+        ],
+        applied: [],
+      });
+      // Stopped at the loop's round stop, whose frame is main's.
+      await ui.setCheckpoint(checkpoint, {
+        moduleId: "mod.agency",
+        scopeName: "main",
+        stepPath: "1/llm",
+        branchPath: [],
+        depth: 0,
+        label: "round 1",
+        loopStop: "round",
+      });
+      expect(ui.getLocals()).toContainEqual({ key: "url", value: "main's", override: undefined });
+      ui.viewBranch(["tool_0_abc"]);
+      expect(ui.getLocals()).toEqual([
+        { key: "url", value: "https://example.test/grant", override: "v" },
+      ]);
+    });
 
     it("shows the stopped frame's args and locals", async () => {
       const ui = new UIState();

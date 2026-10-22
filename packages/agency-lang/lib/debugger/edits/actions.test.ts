@@ -8,6 +8,7 @@ function view(): StopView {
     checkpoint: agentShapedCheckpoint(),
     stop: { branchPath: [], loopStop: "round" },
     viewed: { branchPath: [], loopStop: "round" },
+    moduleId: "mod",
     pending: { edits: [], applied: [] },
   };
 }

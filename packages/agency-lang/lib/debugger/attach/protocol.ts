@@ -177,7 +177,7 @@ const DebuggerCommandSchema = z.union([
   z.object({ type: z.literal("reject"), value: z.unknown().optional() }),
   z.object({ type: z.literal("resolve"), value: z.unknown() }),
   z.object({ type: z.literal("modify"), overrides: z.record(z.string(), z.unknown()) }),
-  z.object({ type: z.literal("stepBack"), preserveOverrides: z.boolean() }),
+  z.object({ type: z.literal("stepBack") }),
   z.object({ type: z.literal("showCheckpoints") }),
   z.object({ type: z.literal("save"), path: z.string() }),
   z.object({ type: z.literal("load"), path: z.string() }),

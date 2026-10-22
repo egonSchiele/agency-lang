@@ -11,12 +11,14 @@ export type ViewAt = { branchPath: string[]; loopStop: LoopStopKind | undefined 
 export type PendingPreview = { edits: CheckpointEdit[]; applied: string[] };
 
 /** What the panes draw from: the stop's checkpoint, where the stop is,
- *  where the person is looking (another branch, after `b`), and the
+ *  where the person is looking (another branch, after `b`), the module
+ *  whose globals the globals pane shows (the viewed frame's), and the
  *  edits queued so far. */
 export type StopView = {
   checkpoint: Checkpoint;
   stop: ViewAt;
   viewed: ViewAt;
+  moduleId: string;
   pending: PendingPreview;
 };
 
@@ -76,13 +78,11 @@ export function rowsFor(pane: PaneName, view: StopView): PaneRow[] {
       const frame = stack.at(-1 - depth);
       if (!frame) return [];
       const ref: FrameRef = { branchPath: viewed.branchPath, depth };
-      const args = Object.entries(frame.args ?? {}).map(([name, value]): PaneRow => ({
-        kind: "local",
-        name,
-        value,
-        arg: true,
-        frame: ref,
-      }));
+      // The same names the pane prints, in the same order, so row i is
+      // line i: an internal name is dropped from args and locals alike.
+      const args = Object.entries(frame.args ?? {})
+        .filter(([name]) => !isInternal(name))
+        .map(([name, value]): PaneRow => ({ kind: "local", name, value, arg: true, frame: ref }));
       const locals = Object.entries(frame.locals ?? {})
         .filter(([name]) => !isInternal(name))
         .map(([name, value]): PaneRow => ({ kind: "local", name, value, arg: false, frame: ref }));
@@ -90,7 +90,7 @@ export function rowsFor(pane: PaneName, view: StopView): PaneRow[] {
     }
     case "globals": {
       const store = checkpoint.globalsAt(viewed.branchPath).store ?? {};
-      const module = checkpoint.moduleId;
+      const module = view.moduleId;
       return Object.entries(store[module] ?? {}).map(([name, value]) => ({
         kind: "global",
         module,

@@ -84,6 +84,25 @@ describe("resume setup", () => {
     });
   });
 
+  it("queues argument overrides for the frame at the stop, where the patch wrote them", () => {
+    // A checkpoint taken inside a tool call: the args override lands on
+    // the tool's frame, so the queued half names the tool's scope, not
+    // the root stack's last frame (the loop's).
+    const checkpoint = agentShapedCheckpoint();
+    const target = {
+      stateStack: StateStack.fromJSON(checkpoint.stack),
+      globals: GlobalStore.fromJSON(checkpoint.globals),
+      _pendingArgOverrides: undefined,
+    };
+    const at = { branchPath: ["tool_0_abc"], loopStop: "round" as const };
+    applyRestoreOverrides(target, checkpoint, { args: { query: "x" } }, at);
+    expect(target._pendingArgOverrides).toEqual({
+      moduleId: null,
+      scopeName: "search",
+      values: { query: "x" },
+    });
+  });
+
   it("rejects prototype-mutating argument and global overrides", () => {
     const checkpoint = makeCheckpoint();
     checkpoint.moduleId = "fixture.agency";

@@ -368,7 +368,7 @@ const MOVES: Record<string, DebuggerCommand> = {
   in: { type: "stepIn" },
   out: { type: "stepOut" },
   continue: { type: "continue" },
-  back: { type: "stepBack", preserveOverrides: false },
+  back: { type: "stepBack" },
 };
 
 /** How long `continue` waits after its reply for the run to refuse it

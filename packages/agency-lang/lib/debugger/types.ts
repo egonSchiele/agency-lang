@@ -23,7 +23,7 @@ export type DebuggerCommand =
   | { type: "reject"; value?: unknown }
   | { type: "resolve"; value: unknown }
   | { type: "modify"; overrides: Record<string, unknown> }
-  | { type: "stepBack"; preserveOverrides: boolean }
+  | { type: "stepBack" }
   | { type: "showCheckpoints" }
   | { type: "save"; path: string }
   | { type: "load"; path: string }

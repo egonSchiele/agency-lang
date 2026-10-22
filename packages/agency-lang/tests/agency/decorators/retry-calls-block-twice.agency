@@ -1,0 +1,32 @@
+// A decorator may call the body more than once. The body fails on the first
+// attempt, pauses on an interrupt during the second, and then succeeds.
+let attempts = 0
+
+def retry(times: number, block: () -> any): Result<string> {
+  let last: Result<string> = failure("never ran")
+  for (i in range(0, times)) {
+    last = block()
+    if (!isFailure(last)) {
+      return last
+    }
+  }
+  return last
+}
+
+@retry(3)
+def flaky(): Result<string> {
+  attempts = attempts + 1
+  if (attempts == 1) {
+    return failure("first attempt fails")
+  }
+  interrupt("try again?")
+  return success("won on attempt ${attempts}")
+}
+
+node main() {
+  const result = flaky()
+  if (isFailure(result)) {
+    return "unexpected: ${result.error}"
+  }
+  return { value: result.value, attempts: attempts }
+}

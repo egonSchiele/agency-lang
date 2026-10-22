@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"outer:in\",\"inner:in\",\"body\",\"inner:out\",\"outer:out\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Stacked decorators run outermost first"
+    }
+  ]
+}

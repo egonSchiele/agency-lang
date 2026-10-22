@@ -1,0 +1,21 @@
+// The simplest decorator: run the body between two log lines. The block
+// is typed `any` so one `logged` fits a function of any return type.
+let log: string[] = []
+
+def logged(block: () -> any): any {
+  log = [...log, "before"]
+  let result = block()
+  log = [...log, "after"]
+  return result
+}
+
+@logged
+def greet(name: string): string {
+  log = [...log, "body"]
+  return "hello ${name}"
+}
+
+node main() {
+  let greeting = greet("ada")
+  return { log: log, greeting: greeting }
+}

@@ -1,0 +1,41 @@
+// A handler the decorator installs around the body is on the chain when the
+// body raises: one decorator approves, the other rejects.
+def approving(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with approve
+  return result
+}
+
+def rejecting(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with reject
+  return result
+}
+
+@approving
+def askThenRun(): string {
+  interrupt("may I?")
+  return "ran"
+}
+
+@rejecting
+def askThenRefused(): Result<string> {
+  interrupt("may I?")
+  return "ran"
+}
+
+node approved() {
+  return askThenRun()
+}
+
+node rejected() {
+  const r = askThenRefused()
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "unexpected: ${r}"
+}

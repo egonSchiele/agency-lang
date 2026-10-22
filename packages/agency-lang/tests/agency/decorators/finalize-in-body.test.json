@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"draft:started cats\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A finalize at the top of a decorated body salvages through the decorator's guard",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

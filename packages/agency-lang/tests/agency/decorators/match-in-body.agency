@@ -1,0 +1,18 @@
+// A value-producing match inside a decorated body reads back its value
+// (the #928 shape, reached through a decorator).
+def logged(block: () -> any): any {
+  return block()
+}
+
+@logged
+def label(n: number): string {
+  const m = match (n) {
+    1 => "one"
+    _ => "other"
+  }
+  return m
+}
+
+node main() {
+  return [label(1), label(2)]
+}

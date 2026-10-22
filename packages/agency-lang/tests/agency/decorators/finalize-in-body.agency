@@ -1,0 +1,25 @@
+// A budgeting decorator over guard. The guard trips (the test rejects the
+// budget interrupt), and the body's finalize provides the draft that comes
+// back through the decorator's Result.
+def budgeted(call: Call, cost: number, block: () -> any): Result<string> {
+  return guard(cost: cost, label: call.name) {
+    return block()
+  }
+}
+
+@budgeted(cost: 0.000001)
+def research(topic: string): Result<string> {
+  let progress = "started ${topic}"
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize {
+    return "draft:${progress}"
+  }
+}
+
+node main() {
+  const result = research("cats")
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

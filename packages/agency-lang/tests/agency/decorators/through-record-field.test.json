@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "4",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A decorated function reached through a record field runs decorated"
+    }
+  ]
+}

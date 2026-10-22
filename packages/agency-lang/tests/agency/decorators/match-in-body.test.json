@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"one\",\"other\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A match expression inside a decorated body keeps its value"
+    }
+  ]
+}

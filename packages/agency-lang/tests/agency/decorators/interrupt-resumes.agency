@@ -1,0 +1,18 @@
+// An interrupt raised inside a decorated body pauses the program and, once
+// approved, resumes at the next statement. Each side of the pause runs once.
+def logged(block: () -> any): any {
+  return block()
+}
+
+@logged
+def counted(): number {
+  let count = 0
+  count = count + 1
+  interrupt("ok?")
+  count = count + 1
+  return count
+}
+
+node main() {
+  return counted()
+}

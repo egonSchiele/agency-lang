@@ -1,0 +1,25 @@
+// A decorated handoff function called as a tool by a scripted model. The
+// decorator's work brackets the body once, the handoff still continues the
+// caller's conversation, and the tool the model sees is the def's own.
+let trace: string[] = []
+
+def logged(call: Call, block: () -> any): any {
+  trace = [...trace, "enter:${call.name}:${call.args.question}"]
+  const result = block()
+  trace = [...trace, "leave:${call.name}"]
+  return result
+}
+
+def lookup(key: string): string {
+  return "value-of-${key}"
+}
+
+@logged
+handoff def subagent(question: string): string {
+  return llm("brief: ${question}", { tools: [lookup] })
+}
+
+export node decorated() {
+  const answer = llm("Answer with the subagent.", { tools: [subagent] })
+  return { answer: answer, trace: trace }
+}

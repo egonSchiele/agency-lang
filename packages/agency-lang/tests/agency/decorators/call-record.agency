@@ -1,0 +1,17 @@
+// A decorator whose first parameter is `call` receives the decorated
+// function's name and its arguments by name, on a direct call and through
+// a partial application.
+def named(call: Call, block: () -> any): any {
+  return "${call.name}:${call.args.a}:${call.args.b}"
+}
+
+@named
+def f(a: number, b: string = "x"): string {
+  return "never reached"
+}
+
+node main() {
+  const direct = f(a: 1)
+  const viaPartial = f.partial(a: 2)
+  return [direct, viaPartial(b: "y")]
+}

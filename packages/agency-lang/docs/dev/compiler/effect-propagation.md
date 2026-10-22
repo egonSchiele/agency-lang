@@ -207,6 +207,7 @@ creates, moves, or renames a call is somewhere the two can disagree.
 | pattern lowering | in the parser | nothing needed |
 | splice expansion | before the symbol table, in memory | cannot see it; one of the blind spots |
 | lifting callbacks | after imports resolve | nothing needed, measured: both sides agree |
+| decorator lowering | in the TypeChecker constructor and the TypescriptPreprocessor | counts each decorator tag above a def as a call to the decorator (`decoratorNamesByDef` in `effects.ts`); see `docs/dev/language/decorators.md` |
 | `guard` lowering | in the TypeChecker constructor | treats a `guardBlock` node as a call to `_guard` |
 | parallel blocks | in the TypescriptPreprocessor | runs after every effect analysis |
 | prelude shadow pruning | in the TypescriptPreprocessor | runs after every effect analysis |

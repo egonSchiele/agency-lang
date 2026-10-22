@@ -1,0 +1,21 @@
+// A decorated function that itself takes a block. The block parameter is
+// left out of the call record and is still usable inside the body.
+def named(call: Call, block: () -> any): any {
+  const result = block()
+  return [call.args.xs, result]
+}
+
+@named
+def each(xs: number[], block: (number) -> number): number[] {
+  let out: number[] = []
+  for (x in xs) {
+    out = [...out, block(x)]
+  }
+  return out
+}
+
+node main() {
+  return each([1, 2, 3]) as n {
+    return n * 10
+  }
+}

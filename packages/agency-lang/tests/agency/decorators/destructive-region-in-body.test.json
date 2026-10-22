@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "KNOWN GAP (found by the decorators PR): a destructive region inside a block argument loses destructiveRan at block exit, so the escaping failure reads false. Expected [true]. Unskip when regions inside blocks carry the flag."
+    }
+  ],
+  "skip": true
+}

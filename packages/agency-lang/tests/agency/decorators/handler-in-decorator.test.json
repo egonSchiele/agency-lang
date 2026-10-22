@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "approved",
+      "input": "",
+      "expectedOutput": "\"ran\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A decorator's approve handler answers the body's interrupt; nothing reaches the test harness"
+    },
+    {
+      "nodeName": "rejected",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A decorator's reject handler rejects the body's interrupt"
+    }
+  ]
+}

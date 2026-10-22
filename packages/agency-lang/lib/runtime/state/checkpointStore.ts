@@ -64,6 +64,8 @@ export type ThreadMessages = {
 export type BranchSummary = {
   /** The branch keys from the root down to this branch. */
   path: string[];
+  /** Where the branch's record is in the checkpoint's JSON. */
+  jsonPath: string[];
   key: string;
   /** The frame that owns the branch; the tool loop's is `llm()`. */
   owner: string;
@@ -85,11 +87,61 @@ export type GuardSummary = {
    *  a time guard's clone carries the parent's remaining time as its
    *  limit, and the branch's own working time as spent. */
   inherited: boolean;
+  /** Where every copy of the guard is in the checkpoint's JSON, the
+   *  owning copy first, then each clone down the branch path. */
+  jsonPaths: string[][];
 };
 
-/** The tool loop the stopped code is in: its round, counted from 1, and
- *  the tools the loop has removed. */
-export type LoopState = { round: number; removedTools: string[] };
+/** The tool loop the stopped code is in: its round, counted from 1, the
+ *  tools the loop has removed, the tools it was offered (null for a
+ *  checkpoint from before the loop recorded them), and where its frame
+ *  is in the checkpoint's JSON. */
+export type LoopState = {
+  round: number;
+  removedTools: string[];
+  tools: string[] | null;
+  jsonPath: string[];
+};
+
+/** A frame along a branch path, with where it is in the checkpoint's
+ *  JSON, so a reader can say what it found and where. */
+export type FrameAt = { frame: StateJSON; jsonPath: string[] };
+
+/** The globals a stack reads and where they are in the JSON. */
+export type GlobalsLocation = { store: Record<string, Record<string, any>>; jsonPath: string[] };
+
+/** Which list a message appended to `thread` goes in. A thread whose
+ *  last assistant message made tool calls that the messages after it do
+ *  not all answer cannot take a user message yet, since providers want
+ *  every call answered first; the message is queued and the round
+ *  boundary delivers it after the results. Any other thread takes it at
+ *  the end. */
+export type MessageLike = {
+  role?: string;
+  content?: unknown;
+  toolCalls?: { id?: string; name?: string }[];
+  toolCallId?: string;
+};
+
+export function messageLanding(thread: { messages: MessageLike[] }): "messages" | "queued" {
+  return pendingToolCalls(thread) > 0 ? "queued" : "messages";
+}
+
+/** How many calls of the thread's last assistant message have no result
+ *  after it yet. */
+export function pendingToolCalls(thread: { messages: MessageLike[] }): number {
+  const messages = thread.messages;
+  const lastCall = messages.findLastIndex(
+    (m) => m.role === "assistant" && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
+  );
+  if (lastCall < 0) return 0;
+  const answered = messages
+    .slice(lastCall + 1)
+    .map((m) => m.toolCallId)
+    .filter((id): id is string => typeof id === "string");
+  const calls = (messages[lastCall].toolCalls ?? []).map((call) => call.id ?? "");
+  return calls.filter((id) => !answered.includes(id)).length;
+}
 
 /** One thread of the store, as the threads pane and its picker list it. */
 export type ThreadSummary = {
@@ -180,11 +232,14 @@ function toolCallName(frame: StateJSON | undefined, key: string): string | undef
 /** A thread as the panes see it: the store's key, its JSON, whether the
  *  program is in it, and a newer copy of its messages when a tool loop
  *  holds one. */
-type ThreadView = {
+export type ThreadView = {
   key: string;
   thread: MessageThreadJSON;
   active: boolean;
   newer?: MessageJSON[];
+  /** Where the messages a resume reads are in the checkpoint's JSON:
+   *  the loop's copy when a loop frame holds one, else the store's. */
+  jsonPath: string[];
 };
 
 /** The thread a tool loop's frame is working on, from `messagesJSON` in
@@ -296,23 +351,59 @@ export class Checkpoint implements SourceLocation {
     return this.stackAt(branchPath)?.at(-1);
   }
 
-  /** The frames of the stack `branchPath` leads to, from the root. */
+  /** The frames of the stack `branchPath` leads to, from the root;
+   *  undefined when the path names a branch the checkpoint does not
+   *  hold. */
   stackAt(branchPath: string[]): StateJSON[] | undefined {
-    let frames: StateJSON[] | undefined = this.stack.stack;
-    for (const key of branchPath) {
-      frames = frames?.at(-1)?.branches?.[key]?.stack.stack;
-    }
-    return frames;
+    const stacks = this.stacksAlong(branchPath);
+    return stacks.length === branchPath.length + 1 ? stacks.at(-1)!.frames : undefined;
   }
 
   /** The frames from the root down the branch path, the deepest last:
    *  every frame of every stack the path passes through. */
   framesAlong(branchPath: string[]): StateJSON[] {
-    const frames: StateJSON[] = [];
-    for (let depth = 0; depth <= branchPath.length; depth++) {
-      frames.push(...(this.stackAt(branchPath.slice(0, depth)) ?? []));
+    return this.walkFrames(branchPath).map((at) => at.frame);
+  }
+
+  /** Every frame along `branchPath`, root first, each with its path in
+   *  the checkpoint's JSON. The one walk the readers and the patch
+   *  library share, so the layout of the JSON is known here and nowhere
+   *  else. A path that names a branch the checkpoint does not hold
+   *  stops at the last stack it reaches. */
+  walkFrames(branchPath: string[]): FrameAt[] {
+    return this.stacksAlong(branchPath).flatMap((stack) =>
+      stack.frames.map((frame, index) => ({
+        frame,
+        jsonPath: [...stack.jsonPath, "stack", String(index)],
+      })),
+    );
+  }
+
+  /** The stacks along `branchPath`, the root first, each with the path
+   *  of its `StateStackJSON`. A branch hangs off the last frame of the
+   *  stack above it. */
+  private stacksAlong(branchPath: string[]): { frames: StateJSON[]; jsonPath: string[] }[] {
+    const stacks: { frames: StateJSON[]; jsonPath: string[] }[] = [];
+    let frames: StateJSON[] | undefined = this.stack.stack;
+    let jsonPath = ["stack"];
+    for (const key of [undefined, ...branchPath]) {
+      if (key !== undefined) {
+        const last = frames?.length ? frames.length - 1 : undefined;
+        const branch: BranchStateJSON | undefined = frames?.at(-1)?.branches?.[key];
+        if (last === undefined || !branch) break;
+        jsonPath = [...jsonPath, "stack", String(last), "branches", key, "stack"];
+        frames = branch.stack.stack;
+      }
+      stacks.push({ frames: frames ?? [], jsonPath });
     }
-    return frames;
+    return stacks;
+  }
+
+  /** The path of the stack `branchPath` leads to, or undefined when the
+   *  checkpoint does not hold it. */
+  private stackPathAt(branchPath: string[]): string[] | undefined {
+    const stacks = this.stacksAlong(branchPath);
+    return stacks.length === branchPath.length + 1 ? stacks.at(-1)!.jsonPath : undefined;
   }
 
   /** The path to the branch paused on the interrupt `interruptId`, or
@@ -386,23 +477,31 @@ export class Checkpoint implements SourceLocation {
    *  thread: it is listed under its own id, named after the function that
    *  called `llm()`, with no parent, since its `parentId` names a thread
    *  of the store that was not serialized. */
-  private threadsAlong(branchPath: string[]): ThreadView[] {
-    const frames = this.framesAlong(branchPath);
-    const store = frames.findLast((frame) => frame.threads)?.threads;
+  threadsAlong(branchPath: string[]): ThreadView[] {
+    const along = this.walkFrames(branchPath);
+    const storeAt = along.findLast((at) => at.frame.threads);
+    const store = storeAt?.frame.threads;
     const views: ThreadView[] = [];
-    if (store) {
+    if (store && storeAt) {
       const activeStack = this.branchActiveStack(branchPath) ?? store.activeStack;
       const activeId = activeStack.findLast((id) => store.threads[id] != null);
       for (const [key, thread] of Object.entries(store.threads)) {
-        views.push({ key, thread, active: key === activeId });
+        views.push({
+          key,
+          thread,
+          active: key === activeId,
+          jsonPath: [...storeAt.jsonPath, "threads", "threads", key, "messages"],
+        });
       }
     }
-    frames.forEach((frame, index) => {
+    along.forEach(({ frame, jsonPath }, index) => {
       const copy = loopThreadCopy(frame);
       if (!copy) return;
+      const copyPath = [...jsonPath, "locals", "messagesJSON", "messages"];
       const stored = views.find((view) => copy.id !== undefined && view.thread.id === copy.id);
       if (stored) {
         stored.newer = copy.messages;
+        stored.jsonPath = copyPath;
         return;
       }
       if (copy.id === undefined) return;
@@ -411,10 +510,11 @@ export class Checkpoint implements SourceLocation {
         key: copy.id,
         thread: {
           ...copy,
-          label: copy.label ?? frames[index - 1]?.scopeName ?? null,
+          label: copy.label ?? along[index - 1]?.frame.scopeName ?? null,
           parentId: null,
         },
         active: true,
+        jsonPath: copyPath,
       });
     });
     return views;
@@ -487,22 +587,25 @@ export class Checkpoint implements SourceLocation {
    *  the call, when the loop is the owner. */
   listBranches(): BranchSummary[] {
     const branches: BranchSummary[] = [];
-    const visit = (frames: StateJSON[] | undefined, path: string[]) => {
+    const visit = (frames: StateJSON[] | undefined, path: string[], stackPath: string[]) => {
       const frame = frames?.at(-1);
+      const framePath = [...stackPath, "stack", String((frames?.length ?? 1) - 1)];
       for (const [key, branch] of Object.entries(frame?.branches ?? {})) {
         const branchPathHere = [...path, key];
+        const jsonPath = [...framePath, "branches", key];
         const first = branch.stack.stack?.[0]?.scopeName ?? undefined;
         branches.push({
           path: branchPathHere,
+          jsonPath,
           key,
           owner: frameName(frame?.scopeName),
           label: first === undefined ? (toolCallName(frame, key) ?? key) : frameName(first),
           status: branchStatus(branch),
         });
-        visit(branch.stack.stack, branchPathHere);
+        visit(branch.stack.stack, branchPathHere, [...jsonPath, "stack"]);
       }
     };
-    visit(this.stack.stack, []);
+    visit(this.stack.stack, [], ["stack"]);
     return branches;
   }
 
@@ -520,9 +623,17 @@ export class Checkpoint implements SourceLocation {
     const indexById: Record<string, number> = {};
     for (let depth = 0; depth <= branchPath.length; depth++) {
       const stack = this.stackJSONAt(branchPath.slice(0, depth));
+      const stackPath = this.stackPathAt(branchPath.slice(0, depth)) ?? [];
       const own = stack?.guards ?? [];
       const inherited = stack?.inheritedTimeGuards ?? [];
       for (const guard of [...inherited, ...own]) {
+        const isInherited = inherited.includes(guard);
+        const list = isInherited ? inherited : own;
+        const jsonPath = [
+          ...stackPath,
+          isInherited ? "inheritedTimeGuards" : "guards",
+          String(list.indexOf(guard)),
+        ];
         const summary: GuardSummary = {
           label: guard.label ?? null,
           dimension: guard.kind,
@@ -530,10 +641,12 @@ export class Checkpoint implements SourceLocation {
           spent: guard.kind === "cost" ? guard.spent : guard.elapsedMs,
           disarmed: guard.disarmed === true,
           root: guard.isRootBudget === true,
-          inherited: inherited.includes(guard),
+          inherited: isInherited,
+          jsonPaths: [jsonPath],
         };
         const seen = guard.guardId === undefined ? undefined : indexById[guard.guardId];
         if (seen !== undefined) {
+          summary.jsonPaths = [...guards[seen].jsonPaths, jsonPath];
           guards[seen] = summary;
           continue;
         }
@@ -549,14 +662,16 @@ export class Checkpoint implements SourceLocation {
   /** The tool loop the stopped code is in, from the deepest loop frame
    *  along `branchPath`; null outside any `llm()` call. */
   loopState(branchPath: string[] = []): LoopState | null {
-    const frame = this.framesAlong(branchPath).findLast(
-      (candidate) =>
-        candidate.scopeName === "runPrompt" && candidate.locals?.toolCallRound !== undefined,
+    const at = this.walkFrames(branchPath).findLast(
+      ({ frame }) => frame.scopeName === "runPrompt" && frame.locals?.toolCallRound !== undefined,
     );
-    if (!frame) return null;
+    if (!at) return null;
+    const { frame, jsonPath } = at;
     return {
       round: frame.locals.toolCallRound + 1,
       removedTools: Array.isArray(frame.locals.removedTools) ? frame.locals.removedTools : [],
+      tools: Array.isArray(frame.locals.toolNames) ? frame.locals.toolNames : null,
+      jsonPath,
     };
   }
 
@@ -571,14 +686,40 @@ export class Checkpoint implements SourceLocation {
    *  the root's in `globals`. A branch that shares the globals, a tool
    *  call, has no copy and sees the nearest copy above it, or the root's. */
   globalsAt(branchPath: string[]): GlobalStoreJSON {
+    return this.globalsAlong(branchPath).globals;
+  }
+
+  /** `globalsAt`, with where in the JSON that store is. */
+  globalsLocation(branchPath: string[]): GlobalsLocation {
+    const { globals, jsonPath } = this.globalsAlong(branchPath);
+    return { store: globals.store, jsonPath: [...jsonPath, "store"] };
+  }
+
+  private globalsAlong(branchPath: string[]): { globals: GlobalStoreJSON; jsonPath: string[] } {
     let globals = this.globals;
-    let frame = this.rootFrame();
-    for (const key of branchPath) {
-      const branch = frame?.branches?.[key];
-      if (branch?.globalsJSON) globals = branch.globalsJSON;
-      frame = branch?.stack.stack.at(-1);
+    let jsonPath = ["globals"];
+    const branches = this.listBranches();
+    for (let depth = 1; depth <= branchPath.length; depth++) {
+      const here = branchPath.slice(0, depth);
+      const branch = branches.find((b) => b.path.join("/") === here.join("/"));
+      const record = this.branchRecordAt(here);
+      if (branch && record?.globalsJSON) {
+        globals = record.globalsJSON;
+        jsonPath = [...branch.jsonPath, "globalsJSON"];
+      }
     }
-    return globals;
+    return { globals, jsonPath };
+  }
+
+  /** The branch's own record (its stack, result, globals copy). */
+  private branchRecordAt(branchPath: string[]): BranchStateJSON | undefined {
+    let frame = this.rootFrame();
+    let record: BranchStateJSON | undefined;
+    for (const key of branchPath) {
+      record = frame?.branches?.[key];
+      frame = record?.stack.stack.at(-1);
+    }
+    return record;
   }
 
   getFilename(): string {

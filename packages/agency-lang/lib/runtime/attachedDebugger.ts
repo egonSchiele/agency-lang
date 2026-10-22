@@ -12,6 +12,7 @@
 import type { DebuggerState } from "../debugger/debuggerState.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { InvocationOptions } from "./invocationOptions.js";
+import type { CheckpointEdit, StopAt } from "./state/checkpointPatch/index.js";
 import type { RunUsage, ServedInvocationOutcome } from "./invocationUsage.js";
 import {
   hasInterrupts,
@@ -81,6 +82,8 @@ export type AttachFunctions = {
     responses: InterruptResponse[],
     opts?: {
       overrides?: Record<string, unknown>;
+      edits?: CheckpointEdit[];
+      at?: StopAt;
       metadata?: Record<string, any>;
       invocation?: InvocationOptions;
       abortSignal?: AbortSignal;
@@ -91,6 +94,8 @@ export type AttachFunctions = {
     checkpoint: Checkpoint,
     overrides: Record<string, unknown>,
     opts?: {
+      edits?: CheckpointEdit[];
+      at?: StopAt;
       metadata?: Record<string, any>;
       invocation?: InvocationOptions;
       abortSignal?: AbortSignal;
@@ -105,6 +110,8 @@ export type AttachFunctions = {
     responses: InterruptResponse[],
     opts?: {
       overrides?: Record<string, unknown>;
+      edits?: CheckpointEdit[];
+      at?: StopAt;
       metadata?: Record<string, any>;
       invocation?: InvocationOptions;
       abortSignal?: AbortSignal;
@@ -132,6 +139,8 @@ export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunct
         interrupts,
         responses,
         overrides: opts?.overrides,
+        edits: opts?.edits,
+        at: opts?.at,
         metadata: opts?.metadata,
         invocation: opts?.invocation,
         abortSignal: opts?.abortSignal,
@@ -142,6 +151,8 @@ export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunct
         ctx,
         checkpoint,
         overrides,
+        edits: opts?.edits,
+        at: opts?.at,
         metadata: opts?.metadata,
         invocation: opts?.invocation,
         abortSignal: opts?.abortSignal,
@@ -153,6 +164,8 @@ export function attachFunctionsFor(ctx: RuntimeContext<GraphState>): AttachFunct
         interrupts,
         responses,
         overrides: opts?.overrides,
+        edits: opts?.edits,
+        at: opts?.at,
         metadata: opts?.metadata,
         invocation: opts?.invocation,
         abortSignal: opts?.abortSignal,

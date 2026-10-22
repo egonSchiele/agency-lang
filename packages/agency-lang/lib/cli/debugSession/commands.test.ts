@@ -188,15 +188,6 @@ describe("the same-stop commands", () => {
     expect(visit.sent).toEqual([{ type: "set", varName: "x", value: 5 }]);
   });
 
-  it("set is refused where the driver refuses it", async () => {
-    const visit = scripted(ask, [
-      stopAfter(1, ["set inside a tool call, a fork, or a parallel block is not supported yet"]),
-    ]);
-    const result = await set(visit, record, "x", 5, deps);
-    expect(result.exitCode).toBe(EXIT.refused);
-    expect(result.text).toContain("not supported yet");
-  });
-
   it("checkpoint says it pinned one", async () => {
     const visit = scripted(ask, [stopAfter(1)]);
     const result = await checkpoint(visit, record, "before", deps);

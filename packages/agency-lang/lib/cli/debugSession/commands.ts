@@ -385,7 +385,6 @@ const FAILURE_LINES = [
   /^No checkpoint to save/,
   /^Failed to (save|load):/,
   /^Invalid checkpoint data/,
-  /^set (inside|before) .* not supported yet/,
 ];
 
 /** The driver's line saying the command was not done, if one came. */

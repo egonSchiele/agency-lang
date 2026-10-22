@@ -87,29 +87,32 @@ The implementation is `rewindFrom` in `lib/runtime/rewind.ts`. It:
 6. returns `createReturnObject({ result, globals })`, the same
    `{ messages, data, tokens }` shape a direct call returns.
 
-## Overriding values
+## Overriding values and edits
 
-`applyOverrides(checkpoint, overrides, settings)` writes each entry into
-`StateStack.lastFrameJSON(checkpoint.stack).locals` and re-signs a signed
-checkpoint under `settings`, the host settings that hold the key; a caller
-outside any run can leave them out and get the platform's default host. So:
-
-- you can override any local variable in the checkpoint's top frame;
-- you cannot override arguments, which live in `frame.args`, not `frame.locals`;
-- you cannot override locals in outer frames;
-- you cannot override globals or shared variables this way.
+`rewindFrom(checkpoint, overrides, { edits })` takes the old override map
+and a list of edits, and applies both before the replay through
+`applyResumeEdits` (`lib/runtime/resumeSetup.ts`): each override becomes
+a `setLocal` edit on the frame the checkpoint was taken in, then the
+edits follow, so an explicit edit wins. The edits, their addresses, and
+what each may change are in [checkpoint-patch.md](checkpoint-patch.md).
+A refused edit throws `CheckpointEditError`, with every reason, and
+nothing is replayed.
 
 ```ts
-const fixed = await rewindFrom(checkpoint, {
-  mood: "happy",
-  confidence: "high",
-  retryCount: 0,
+const fixed = await rewindFrom(checkpoint, { mood: "happy" }, {
+  edits: [{ op: "appendMessage", text: "Stop research now. Write it up." }],
 });
 ```
 
-Overriding a variable does not rewrite thread message history. The message
-thread is restored from the checkpoint as it was, so a later LLM call sees the
-original conversation but the new variable value in its prompt.
+An override lands on the frame the checkpoint was taken in: inside a
+tool call that is the tool's frame, and at one of the tool loop's own
+stops it is the frame that called `llm()`. Arguments, outer frames,
+globals, threads, guards, and branches are reached with an edit and its
+address.
+
+`applyOverrides(checkpoint, overrides, settings)` writes the overrides
+into a checkpoint in place, re-signing a signed one; `patchCheckpoint`
+beside it takes edits and returns a new checkpoint or the refusals.
 
 ## Handlers
 
@@ -123,6 +126,7 @@ so this replay is the only thing that puts them back.
 | File | Role |
 |------|------|
 | `lib/runtime/rewind.ts` | `rewindFrom`, `applyOverrides` |
+| `lib/runtime/state/checkpointPatch/` | the edits a rewind takes; see `checkpoint-patch.md` |
 | `lib/runtime/resumeSetup.ts` | shared setup for rewind, interrupt response, and CLI resume |
 | `lib/runtime/interrupts.ts` | lifecycle-complete CLI resume |
 | `lib/runtime/checkpoint.ts` | `checkpoint()`, `getCheckpoint()`, `restore()` |

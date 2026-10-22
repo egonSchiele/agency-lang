@@ -14,6 +14,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.
 - `docs/dev/runtime/checkpoint-integrity.md` — The optional HMAC checksum embedded in a checkpoint, and how a host verifies it.
 - `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
+- `docs/dev/runtime/checkpoint-patch.md` — Editing a paused program before it resumes: the named edits and their addresses, the field-kind table, the validator that checks the result against the source, re-signing, how the old resume overrides became edits and which frame they land on, the two thread copies and the guard clones, and why the loop now records its tool names.
 - `docs/dev/runtime/rewind.md` — Replaying execution from a checkpoint, optionally with different values for its local variables.
 - `docs/dev/runtime/pause.md` — Pausing a node run from outside with `pauseSignal`: the runner check, the thrown signal, which steps defer a pause, cancel precedence, and `resumeFromCheckpoint`.
 - `docs/dev/runtime/resume-command.md` — The `agency resume` child carrier, shared restore setup, overrides, integrity check, and lifecycle.

@@ -272,7 +272,7 @@ This avoids exporting `__globalCtx` directly.
 | `q` or `Esc` | quit |
 | `:` | command mode |
 
-Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [value]`, `resolve <val>`, `modify k=v`, `save <path>`, and `load <path>`. `parseCommandInput()` in `lib/debugger/util.ts` is the grammar.
+`set` works at any stop, inside a tool call, a fork, or a parallel block, and at one of the loop's own stops, where it changes the frame shown, the caller's: the override is an edit on that frame (`docs/dev/runtime/checkpoint-patch.md`), located by the stop record, since stops in one batch share a checkpoint. Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [value]`, `resolve <val>`, `modify k=v`, `save <path>`, and `load <path>`. `parseCommandInput()` in `lib/debugger/util.ts` is the grammar.
 
 ## Known limitations
 
@@ -281,7 +281,5 @@ Command mode accepts `set x = 42`, `checkpoint "label"`, `print x`, `reject [val
 - **Conditional breakpoints**: not supported. Use `debugger("label")` statements in code for manual breakpoints.
 - **Checkpoint rewind vs resume**: rolling checkpoints capture state before the step advances, while the interrupt checkpoint captures state after. This means rewinding to a checkpoint re-enters at that step, while resuming from an interrupt advances past it.
 - **Several stops at once**: one is shown; the next command moves all of them (see "Stops inside a tool call").
-- **`set` on a branch stack**: refused inside a tool call, a fork, or a parallel block.
-- **`set` at one of the loop's own stops**: refused before a model request or a tool call. The frame shown there is the caller's, but an override would land on the loop's frame, the last one on the stack.
 - **`debugger()` inside a handler body**: does not stop. A handler body has no step address a resume could re-enter, so the hook skips it, as it skips a callback body. A tool called from an `llm()` inside a handler body does not stop either.
 - **Trace replay inside a tool call**: a trace records root-stack steps only.

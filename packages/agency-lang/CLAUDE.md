@@ -252,6 +252,7 @@ Other process docs:
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.
 - `docs/dev/runtime/checkpoint-integrity.md` — The optional HMAC checksum embedded in a checkpoint, and how a host verifies it.
 - `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
+- `docs/dev/runtime/checkpoint-patch.md` — Editing a paused program before it resumes: the named edits and their addresses, the field-kind table, the validator that checks the result against the source, re-signing, how the old resume overrides became edits and which frame they land on, the two thread copies and the guard clones, and why the loop now records its tool names.
 - `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
 - `docs/dev/runtime/config.md` — Every `AgencyConfig` option, with types and defaults, and how config is resolved.
 - `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.

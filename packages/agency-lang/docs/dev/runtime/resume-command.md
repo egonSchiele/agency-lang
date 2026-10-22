@@ -75,8 +75,12 @@ source paths as stable module identities and emits code fingerprints too.
 
 The repeatable flags `--local-var`, `--arg`, and `--global-var` accept
 `name=value`. Agency parses each value as JSON when possible and otherwise uses
-the text unchanged. Local and argument overrides change the top checkpoint
-frame. Global overrides change the checkpoint's module namespace.
+the text unchanged. Each becomes an edit on the checkpoint
+(`checkpoint-patch.md`): a local or argument override changes the frame the
+checkpoint was taken in, which inside a tool call is the tool's frame and
+at one of the tool loop's own stops is the frame that called `llm()`; a
+global override changes the checkpoint's module namespace. Before edits,
+an override always changed the last frame of the root stack.
 
 Process arguments are not part of a checkpoint. Each `--program-arg <value>` is
 passed to the compiled child, where `std::args` can read it. With no such flags,

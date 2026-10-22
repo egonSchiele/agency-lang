@@ -1,5 +1,5 @@
 import { z } from "agency-lang/zod";
-import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides, CheckpointEdit, StopAt } from "agency-lang/runtime";
 import {
   goToNode, color, nanoid, smoltalk,
   RuntimeContext, MessageThread, ThreadStore, Runner,
@@ -13,6 +13,7 @@ import {
   resumeFromCheckpoint as _resumeFromCheckpoint,
   resumeCliFromCheckpoint as _resumeCliFromCheckpoint,
   rewindFrom as _rewindFrom,
+  patchCheckpoint as _patchCheckpoint,
   runExportedFunction as _runExportedFunction,
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
@@ -90,13 +91,15 @@ function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isPaused, isDebugger };
-type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-type __ResumeFromCheckpointOptions = { metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
-export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-type __RewindOptions = { metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: __RewindOptions) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
-const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
+type __ResumeOptions = { overrides?: Record<string, unknown>; edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+type __ResumeFromCheckpointOptions = { edits?: CheckpointEdit[]; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+type __RewindOptions = { edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: __RewindOptions) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides, edits?: CheckpointEdit[]) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides, edits });
+/** A copy of `checkpoint` with `edits` applied, validated, and re-signed, or every reason one was refused. */
+export const patchCheckpoint = (checkpoint: Checkpoint, edits: CheckpointEdit[]) => _patchCheckpoint(checkpoint, edits, __globalCtx.host.settings);
 
 // Invoke an exported function in a node-grade execution frame. Used by
 // `agency serve` to call a function from an HTTP/MCP request — outside any
@@ -109,8 +112,8 @@ export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) =>
 // requires all three; a bundle without them must be recompiled.
 export const __invokeFunctionForServe = (fn: any, namedArgs: Record<string, unknown>, invocation?: InvocationOptions) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, invocation, initializeGlobals: __initializeGlobals });
 export const __invokeNodeForServe = (nodeName: string, data: Record<string, any>, invocation?: InvocationOptions) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, invocation, initializeGlobals: __initializeGlobals });
-type ServeResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
-export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: ServeResumeOptions) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+type ServeResumeOptions = { overrides?: Record<string, unknown>; edits?: CheckpointEdit[]; at?: StopAt; metadata?: Record<string, any>; invocation?: InvocationOptions; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: ServeResumeOptions) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __getDebugger = () => __globalCtx.debuggerState;

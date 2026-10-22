@@ -4,6 +4,7 @@ import { DebuggerState } from "./debuggerState.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import type { AgencyCallbacks } from "../runtime/hooks.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
+import type { StopAt } from "../runtime/state/checkpointPatch/index.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
@@ -546,7 +547,7 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    return await this.respond(batch, answers, undefined, session);
+    return await this.respond(batch, answers, undefined, session, asked[0]);
   }
 
   /** One interrupt's answer, asked for until the input is one of
@@ -639,15 +640,20 @@ export class DebuggerDriver {
 
   /** Resume the program with one response per interrupt of `batch`, in
    *  the batch's order: the answer given for it, else an approve. The
-   *  runtime insists on a response for every interrupt in the batch. */
+   *  runtime insists on a response for every interrupt in the batch.
+   *  `shown` is the interrupt the panes showed while the person decided. */
   private async respond(
     batch: Interrupt[],
     answers: Record<string, InterruptResponse>,
     overrides: Record<string, unknown> | undefined,
     session: AttachedSession | undefined,
+    shown: Interrupt | undefined,
   ): Promise<any> {
     const responses = batch.map((intr) => answers[intr.interruptId] ?? { type: "approve" });
-    const options = { overrides, ...this.resumeOptions(session) };
+    // The overrides land on the frame of the stop that was shown: a batch
+    // of stops shares one checkpoint located at the batch, so the stop
+    // record, not the checkpoint, says which frame a `set` meant.
+    const options = { overrides, at: stopAtOf(shown), ...this.resumeOptions(session) };
     const serve = this.mod.respondToInterruptsForServe;
     if (session !== undefined && serve !== undefined) {
       return await this.resumeInterrupt(async () => {
@@ -679,40 +685,25 @@ export class DebuggerDriver {
     switch (command.type) {
       case "step": {
         this.debuggerState.stepping();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "stepIn": {
         this.debuggerState.stepIn();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "next": {
         this.debuggerState.stepNext();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "stepOut": {
         this.debuggerState.stepOut();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "continue": {
         this.debuggerState.running();
-        return await this.resume(batch, session);
+        return await this.resume(batch, session, interrupt);
       }
       case "set": {
-        // A resume applies overrides to the root's last frame
-        // (applyLocalOverrides in resumeSetup.ts), so a stop on a branch
-        // stack, inside a tool call, a fork, or a parallel block, cannot
-        // take one yet.
-        const stop = stopOf(interrupt);
-        if (stop && stop.branchPath.length > 0) {
-          this.ui.log("set inside a tool call, a fork, or a parallel block is not supported yet");
-          return { data: interrupt };
-        }
-        // The frame shown at one of the loop's own stops is the caller's,
-        // but the override would land on the loop's frame, the last one.
-        if (stop?.loopStop !== undefined) {
-          this.ui.log("set before a model request or a tool call is not supported yet");
-          return { data: interrupt };
-        }
         this.pendingOverrides[command.varName] = command.value;
         this.ui.setOverrides(this.pendingOverrides);
         this.ui.log(`Set ${command.varName} = ${JSON.stringify(command.value)}`);
@@ -783,6 +774,7 @@ export class DebuggerDriver {
           { [interrupt.interruptId]: { type: "reject" } },
           undefined,
           session,
+          interrupt,
         );
       }
       case "resolve": {
@@ -797,6 +789,7 @@ export class DebuggerDriver {
           },
           undefined,
           session,
+          interrupt,
         );
       }
       case "showCheckpoints": {
@@ -845,7 +838,7 @@ export class DebuggerDriver {
         if (this.attached) {
           this.detach();
           this.debuggerState.running();
-          return await this.resume(batch, session);
+          return await this.resume(batch, session, interrupt);
         }
         return { __debuggerQuit: true };
       }
@@ -914,9 +907,13 @@ export class DebuggerDriver {
 
   /** Move on from a debug stop: every stop in the batch is approved, an
    *  answer the resume never reads, and pending overrides are applied. */
-  private async resume(batch: Interrupt[], session: AttachedSession | undefined): Promise<any> {
+  private async resume(
+    batch: Interrupt[],
+    session: AttachedSession | undefined,
+    shown: Interrupt,
+  ): Promise<any> {
     const overrides = this.takeOverrides();
-    return await this.respond(batch, {}, overrides, session);
+    return await this.respond(batch, {}, overrides, session, shown);
   }
 
   private async rewindTo(
@@ -1027,4 +1024,11 @@ function dataBeyondMessage(interrupt: Interrupt): string {
  *  and for the placeholder interrupt a trace replay starts from. */
 function stopOf(interrupt: Interrupt): DebugStopData | undefined {
   return isDebugStop(interrupt.data) ? interrupt.data : undefined;
+}
+
+/** Where `interrupt` stopped, for the edits a resume applies: the stop
+ *  record's own location, or undefined to use the checkpoint's. */
+function stopAtOf(interrupt: Interrupt | undefined): StopAt | undefined {
+  const stop = interrupt === undefined ? undefined : stopOf(interrupt);
+  return stop === undefined ? undefined : { branchPath: stop.branchPath, loopStop: stop.loopStop };
 }

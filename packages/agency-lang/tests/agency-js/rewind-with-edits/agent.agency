@@ -1,0 +1,9 @@
+// A checkpoint between two model calls, handed back to JS so a rewind
+// can edit it: set a local, and append a message the second call sends.
+node main(): object {
+  let mood = "sad"
+  const first = llm("say one")
+  const cid = checkpoint()
+  const second = llm("say two")
+  return { value: mood + ":" + first + ":" + second, cp: getCheckpoint(cid) }
+}

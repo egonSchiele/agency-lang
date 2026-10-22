@@ -35,6 +35,16 @@ Here are some things you may want to do with the debugger:
 - Stop a running program: press space while it runs, after `c` or `n`, and it stops at its next statement. Space is also `continue` at a stop, so it is one key to let the program run and the same key to stop it; `s` and `n` pause too. The bottom bar says `(space)pause` while the program runs. A model call in flight is not interrupted, so the stop comes when the call returns; the bar reads `pausing at the next statement` until then. It also works while the program runs on after one of its own interrupts went to its caller. At a stop, or after the program ended, the key does nothing; and if you press it just as the program stops, it is neither a pause nor a step, so press it again.
 - While the program runs, after `c` or `n`, the bottom bar reads `▶ running · (space)pause (q)quit`, and a line above it says what the program is waiting on and for how long: `waiting: in llm() at story.agency:11 · 4s · round 1, waiting on model`, or `· round 2, in tool search(query: "cats")` during a tool call the model made. The source panel marks that `llm()` line with `▶`. It is not a stop: the program is somewhere inside that statement, and the panels keep the last stop's state until the next one.
 
+## Changing the program at a stop
+
+Everything you can change is on a row of a panel, and the change lives on the row. The bottom line says which keys the row under the cursor takes.
+
+- **Say something to the model.** In the threads panel, press `Enter` to open the composer under the messages, type, and press `Enter` again. The message is queued on that thread and shows as `(pending)`; press `c` and the model reads it with its next request. If the thread is waiting on tool results, the message is queued behind them and delivered once they are in. `Esc` closes the composer and keeps what you typed.
+- **Set a variable.** Focus the locals panel, move to the variable with the arrow keys, press `Enter`, and type the new value (JSON, or plain text). The panel shows the new value highlighted until the program moves on. `:set name = value` in command mode does the same.
+- **Change your mind.** `x` drops the pending edits. A rewind drops them too, since it resumes an earlier checkpoint.
+
+From `agency debug session`, the same edits are `agency debug session edit`: with no action it lists what this stop takes, for example `append-message --thread [main] --text <text>` and `set-local --name <x|y> --value <json>`; `edit append-message --text "Stop research now. Write up what you have."` queues the message, and `continue` sends it.
+
 ## Attaching to a program that is already running
 
 A program started with `agency run`, or from TypeScript, can take the debugger while it runs. Nothing has to be planned in advance: no flag, no trace mode. In one terminal:

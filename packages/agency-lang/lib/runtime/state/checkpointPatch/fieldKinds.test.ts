@@ -19,6 +19,16 @@ describe("fieldKind", () => {
     expect(fieldKind([...FRAME, "locals", "messagesJSON", "id"], "runPrompt")).toBe("identity");
   });
 
+  it("a program's own variable is data whatever it is called; the loop's are not", () => {
+    expect(fieldKind([...FRAME, "locals", "id"], "main")).toBe("data");
+    expect(fieldKind([...FRAME, "locals", "step"], "main")).toBe("data");
+    expect(fieldKind([...FRAME, "args", "guardId"], "search")).toBe("data");
+    expect(fieldKind([...FRAME, "locals", "item"], null)).toBe("data");
+    expect(fieldKind(["globals", "store", "mod", "id"], null)).toBe("data");
+    expect(fieldKind([...FRAME, "locals", "id"], "runPrompt")).not.toBe("data");
+    expect(fieldKind([...FRAME, "locals", "step"], "runPrompt")).not.toBe("data");
+  });
+
   it("a __ name is control in every frame", () => {
     expect(fieldKind([...FRAME, "locals", "__substep_2"], "main")).toBe("control");
     expect(fieldKind([...FRAME, "locals", "__initialized"], "runPrompt")).toBe("control");

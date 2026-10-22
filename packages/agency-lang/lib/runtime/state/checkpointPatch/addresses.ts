@@ -32,6 +32,9 @@ function framesOfStack(
 ): { frame: StateJSON; jsonPath: string[] }[] | Refusal {
   const stack = checkpoint.stackAt(branchPath);
   if (!stack) return { refused: `no branch at ${branchPath.join("/")}` };
+  // A finished branch keeps an empty stack; `slice(-0)` would hand back
+  // the walk's every frame, the parent's included.
+  if (stack.length === 0) return [];
   return checkpoint.walkFrames(branchPath).slice(-stack.length);
 }
 

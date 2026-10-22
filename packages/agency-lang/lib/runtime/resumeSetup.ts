@@ -11,16 +11,18 @@ import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Checkpoint, CheckpointJSON } from "./state/checkpointStore.js";
 import type { PendingArgOverrides, RuntimeContext } from "./state/context.js";
 import type { GlobalStore } from "./state/globalStore.js";
-import { StateStack } from "./state/stateStack.js";
+import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { isAttachedResume, mintDebugRun } from "./debugRun.js";
 import {
   fromOverrides,
   patchCheckpoint,
+  stopOfCheckpoint,
   type CheckpointEdit,
   type ResumeOverrides,
   type StopAt,
 } from "./state/checkpointPatch/index.js";
+import { resolveFrame } from "./state/checkpointPatch/addresses.js";
 
 export type { ResumeOverrides } from "./state/checkpointPatch/index.js";
 
@@ -92,18 +94,25 @@ export function applyLocalOverrides(
   return applyResumeEdits(source, { overrides: { locals: overrides } }, settings);
 }
 
+/** The args of a function frame the program has not entered yet wait
+ *  for its entry (`__takeArgOverrides`), keyed by the frame's scope.
+ *  The frame is the one at `at`, the same frame `fromOverrides` writes
+ *  the args into, so the two halves of an args override name one
+ *  frame: inside a tool call that is the tool's frame, not the root's
+ *  last. A node frame has been entered, so its args are never queued. */
 export function applyRestoreOverrides(
   target: RestoreOverrideTarget,
   checkpoint: Checkpoint,
   overrides: Pick<ResumeOverrides, "args" | "globals"> = {},
+  at: StopAt = stopOfCheckpoint(checkpoint),
 ): void {
   if (overrides.args) {
     const args = checkedOverrides(overrides.args);
-    const frame = StateStack.lastFrameJSON(checkpoint.stack);
-    if (frame.scopeName !== checkpoint.nodeId) {
+    const frame = resolveFrame({ branchPath: at.branchPath }, checkpoint, at);
+    if (!("refused" in frame) && frame.found.scopeName !== checkpoint.nodeId) {
       target._pendingArgOverrides = {
-        moduleId: frame.moduleId ?? null,
-        scopeName: frame.scopeName,
+        moduleId: frame.found.moduleId ?? null,
+        scopeName: frame.found.scopeName,
         values: args,
       };
     }
@@ -181,7 +190,7 @@ export async function restoreForResume(
   reinstallRootBudget(execCtx.stateStack, execCtx.host, execCtx.budget);
   // Globals were written into the checkpoint by the edits above; the
   // args of a frame not yet entered still wait for its entry.
-  applyRestoreOverrides(execCtx, checkpoint, { args: request.overrides?.args });
+  applyRestoreOverrides(execCtx, checkpoint, { args: request.overrides?.args }, request.at);
 
   if (request.metadata?.callbacks) {
     Object.assign(execCtx.callbacks, request.metadata.callbacks);

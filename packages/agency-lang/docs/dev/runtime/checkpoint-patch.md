@@ -37,6 +37,23 @@ one. `applied` is one line per write in the words the debugger prints
 the writes go into a deep copy, and a signed source comes back signed
 under `settings` with a fresh signature.
 
+In order means each edit reads the checkpoint as the edits before it
+left it. An edit is lowered to whole-value writes (`appendMessage`
+writes the whole message list), so two edits on one place only add up
+if the second reads the first's result: `appendMessage "A"` then
+`appendMessage "B"` leaves both on the thread, and `removeTool search`
+then `removeTool writeUp` leaves both names in `removedTools`. The
+working copy is written after every edit and the next edit reads it
+through a fresh `Checkpoint` over it.
+
+The edits are checked against `checkpointEditsSchema` before anything
+is read, whatever the caller: a plain JavaScript caller or a file can
+hand in any shape, and an edit of no known op, or a name that is a
+prototype key, is a refusal ("edit 1 at name: not a prototype key"),
+not a crash. With no edits at all there is nothing to lower or
+validate, and the result is a copy of the source, re-signed; that is
+every resume with no overrides, so it stays cheap.
+
 `at` is the stop the edits are made at: a branch path and, when the stop
 is one of the tool loop's own, which kind. It matters because several
 branches can stop at once and share one checkpoint whose own location is
@@ -123,6 +140,16 @@ because the tool loop keeps its bookkeeping in locals under names a
 user's function may use for values: `toolCallRound` is control in a
 `runPrompt` frame and data in `main`.
 
+The table is structural before it is by name. A leaf directly under a
+frame's `locals` or `args`, or directly under a module in a globals
+store, is the program's own variable and is data whatever it is
+called: a function with `let id = …` or a loop counter named `step`
+can be set. The leaf-name rules below (`id`, `guardId`, `step`) apply
+outside those containers, where the names are the checkpoint's own.
+The one exception is the `runPrompt` frame, whose locals are the
+runtime's, so its `id` or `step` is still control. A name starting
+with `__` is control everywhere, since no program can declare one.
+
 - **Data**, which an edit may change: locals, args, globals, a thread's
   messages and queue, the loop's `removedTools`, a guard's limit and
   `disarmed`, a branch's `result`.
@@ -150,7 +177,10 @@ refused by the rule's name. The rules:
   running `tool_` branch for it;
 - a guard whose spend is over its limit and is not disarmed ("would trip
   at once");
-- the result parses under `checkpointSchema` (`schemas.ts`).
+- the result parses under `checkpointSchema` (`schemas.ts`), checked
+  once by `patchCheckpoint` when it parses the result, before the rules
+  run on it; the rules are handed the parsed checkpoint and never parse
+  it again.
 
 There is no rule about `step`: no edit can write it.
 
@@ -180,15 +210,26 @@ tool's frame and at one of the loop's own stops is the frame that called
 `llm()`. That is the frame a person means, and it is why the debugger's
 `set` no longer refuses a stop on a branch stack or at a loop stop. The
 debugger passes the stop record's location as `at`, since a batch of
-stops shares one checkpoint.
+stops shares one checkpoint; it is the location of the stop the panes
+showed, which when a program's own interrupt shares the batch with
+debug stops is that interrupt, not the batch's first entry.
 
 Globals are written into the checkpoint's store by the patch and
 restored with the rest. The one write that stays outside the patch is
 `_pendingArgOverrides`, the args for a function frame the program has
 not entered yet; that is a runtime mechanism, applied at the frame's
-entry, and `applyRestoreOverrides` keeps it. An in-program
-`restore(cp, { globals })` also goes through `applyRestoreOverrides`,
-on every run loop, and keeps writing the live store as before.
+entry, and `applyRestoreOverrides` keeps it. It names the frame by
+scope, and the frame is the same one the patch wrote the args into:
+the frame at `at`, resolved by the same `resolveFrame`. Inside a tool
+call that is the tool's frame, so a resume with `args` there queues
+them for the tool's scope, not for the loop on the root stack. An
+in-program `restore(cp, { globals })` also goes through
+`applyRestoreOverrides`, on every run loop, and keeps writing the live
+store as before.
+
+A branch that has finished keeps an empty stack under its result. An
+address on it is refused ("no frames on the stack"), not resolved to
+the parent's frames above it.
 
 ## Interrupts, handlers, and hosts
 

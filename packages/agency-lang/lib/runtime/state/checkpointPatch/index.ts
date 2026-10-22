@@ -3,7 +3,7 @@ import { signCheckpoint } from "../../checkpointChecksum.js";
 import { deepClone } from "../../utils.js";
 import { Checkpoint, type CheckpointJSON } from "../checkpointStore.js";
 import { stopOfCheckpoint, type StopAt } from "./addresses.js";
-import { isRefusal, type CheckpointEdit } from "./edits.js";
+import { checkpointEditsSchema, isRefusal, type CheckpointEdit } from "./edits.js";
 import { fieldKind } from "./fieldKinds.js";
 import { getAt, setAt } from "./jsonPath.js";
 import { resolve, type Write } from "./lower.js";
@@ -30,38 +30,73 @@ export type ResumeOverrides = {
  *  under `settings` when the source was signed; or every reason an
  *  edit was refused, with no checkpoint, so a caller never resumes a
  *  partly edited one. `at` is the stop the edits are made at; a
- *  checkpoint on its own is its own stop. */
+ *  checkpoint on its own is its own stop.
+ *
+ *  Each edit is lowered against the checkpoint as the edits before it
+ *  left it, so two edits on one place add up: a second `appendMessage`
+ *  on a thread lands after the first. The edits are checked against
+ *  their schema first, since a caller outside TypeScript can hand in
+ *  any shape. */
 export function patchCheckpoint(
   checkpointOrJson: Checkpoint | CheckpointJSON,
   edits: CheckpointEdit[],
   settings: HostSettings,
   at?: StopAt,
 ): PatchResult {
+  const parsedEdits = checkpointEditsSchema.safeParse(edits);
+  if (!parsedEdits.success) {
+    return { refused: parsedEdits.error.issues.map(describeIssue) };
+  }
   // A checkpoint read back from a file or an HTTP body is plain JSON.
   const source = Checkpoint.fromJSON(checkpointOrJson);
   if (!source) return { refused: ["shape: the checkpoint does not parse"] };
   at ??= stopOfCheckpoint(source);
+  const json = deepClone(source.toJSON());
   const refused: string[] = [];
-  const writes: Write[] = [];
-  for (const edit of edits) {
-    const lowered = resolve(edit, source, at);
+  const applied: string[] = [];
+  // The checkpoint the next edit reads: the source until an edit
+  // writes, then a reader over the working copy.
+  let current = source;
+  for (const edit of parsedEdits.data) {
+    const lowered = resolve(edit, current, at);
     if (isRefusal(lowered)) {
       refused.push(lowered.refused);
       continue;
     }
-    writes.push(...lowered);
+    const problems = applyWrites(json, lowered);
+    if (problems.length > 0) {
+      refused.push(...problems);
+      continue;
+    }
+    applied.push(...lowered.map((write) => write.applied));
+    if (lowered.length > 0) current = new Checkpoint(json);
   }
-  const json = deepClone(source.toJSON());
-  refused.push(...applyWrites(json, writes));
   if (refused.length > 0) return { refused };
-  const broken = validate(source.toJSON(), json);
-  if (broken.length > 0) return { refused: broken.map((r) => r.refused) };
+  if (applied.length === 0) return signed(new Checkpoint(json), source, settings, applied);
   const checkpoint = Checkpoint.fromJSON(json);
   if (!checkpoint) return { refused: ["shape: the patched checkpoint does not parse"] };
+  const broken = validate(source, checkpoint);
+  if (broken.length > 0) return { refused: broken.map((r) => r.refused) };
+  return signed(checkpoint, source, settings, applied);
+}
+
+function signed(
+  checkpoint: Checkpoint,
+  source: Checkpoint,
+  settings: HostSettings,
+  applied: string[],
+): PatchResult {
   if (source.signature !== undefined) {
     signCheckpoint(checkpoint, settings);
   }
-  return { checkpoint, applied: writes.map((write) => write.applied) };
+  return { checkpoint, applied };
+}
+
+/** One schema issue as a refusal: which edit, where in it, and why. */
+function describeIssue(issue: { path: PropertyKey[]; message: string }): string {
+  const [index, ...rest] = issue.path.map(String);
+  const where = rest.length > 0 ? ` at ${rest.join(".")}` : "";
+  return `edit ${index ?? ""}${where}: ${issue.message}`;
 }
 
 /** Write every write into `json`, after checking each path names a data

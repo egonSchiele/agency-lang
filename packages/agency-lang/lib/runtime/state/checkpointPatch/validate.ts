@@ -1,20 +1,20 @@
-import { Checkpoint, pendingToolCalls, type CheckpointJSON } from "../checkpointStore.js";
+import { pendingToolCalls, type Checkpoint } from "../checkpointStore.js";
 import type { MessageLike } from "../checkpointStore.js";
-import { checkpointSchema } from "../schemas.js";
 import type { StateStackJSON } from "../stateStack.js";
 import type { Refusal } from "./edits.js";
 import { getAt } from "./jsonPath.js";
 
 /** One invariant a patched checkpoint must keep. `check` returns a
- *  message per place the invariant is broken. */
+ *  message per place the invariant is broken. The checkpoint is handed
+ *  in parsed, so no rule parses it again. */
 export type ValidationRule = {
   name: string;
-  check: (json: CheckpointJSON) => string[];
+  check: (checkpoint: Checkpoint) => string[];
 };
 
 /** Every stack in the checkpoint: the root's and each branch's, found
  *  by walking the branches off every frame. */
-function everyStack(json: CheckpointJSON): StateStackJSON[] {
+function everyStack(checkpoint: Checkpoint): StateStackJSON[] {
   const stacks: StateStackJSON[] = [];
   const visit = (stack: StateStackJSON | undefined) => {
     if (!stack) return;
@@ -23,7 +23,7 @@ function everyStack(json: CheckpointJSON): StateStackJSON[] {
       for (const branch of Object.values(frame.branches ?? {})) visit(branch.stack);
     }
   };
-  visit(json.stack);
+  visit(checkpoint.stack);
   return stacks;
 }
 
@@ -33,9 +33,8 @@ function everyStack(json: CheckpointJSON): StateStackJSON[] {
  *  thread, where the calls and the branches sit together. */
 const unansweredToolCall: ValidationRule = {
   name: "unanswered tool call",
-  check: (json) => {
-    const checkpoint = Checkpoint.fromJSON(json);
-    if (!checkpoint) return [];
+  check: (checkpoint) => {
+    const json = checkpoint.toJSON();
     const paths = [[], ...checkpoint.listBranches().map((branch) => branch.path)];
     const seen: string[] = [];
     const problems: string[] = [];
@@ -73,9 +72,9 @@ const unansweredToolCall: ValidationRule = {
  *  disarmed, so lowering a limit under what is spent is refused. */
 const guardOverLimit: ValidationRule = {
   name: "guard over its limit",
-  check: (json) => {
+  check: (checkpoint) => {
     const problems: string[] = [];
-    for (const stack of everyStack(json)) {
+    for (const stack of everyStack(checkpoint)) {
       for (const guard of [...(stack.guards ?? []), ...(stack.inheritedTimeGuards ?? [])]) {
         const limit = guard.kind === "cost" ? guard.costLimit : guard.timeLimit;
         const spent = guard.kind === "cost" ? guard.spent : guard.elapsedMs;
@@ -88,25 +87,18 @@ const guardOverLimit: ValidationRule = {
   },
 };
 
-/** The shape the runtime refuses on load is refused here. */
-const shape: ValidationRule = {
-  name: "shape",
-  check: (json) => {
-    const parsed = checkpointSchema.safeParse(json);
-    return parsed.success ? [] : [parsed.error.issues.map((issue) => issue.message).join("; ")];
-  },
-};
-
-export const VALIDATION_RULES: ValidationRule[] = [unansweredToolCall, guardOverLimit, shape];
+export const VALIDATION_RULES: ValidationRule[] = [unansweredToolCall, guardOverLimit];
 
 /** The invariants `result` breaks that `source` kept, each named after
  *  its rule. The source decides what counts: a checkpoint the debugger
  *  stops on may already break a rule (a tripped guard, a tool stop's
- *  unanswered calls), and an edit that touches neither must go through. */
-export function validate(source: CheckpointJSON, result: CheckpointJSON): Refusal[] {
+ *  unanswered calls), and an edit that touches neither must go through.
+ *  The shape is not a rule here: `result` is parsed before it is
+ *  validated, and a copy that does not parse never reaches this. */
+export function validate(source: Checkpoint, result: Checkpoint): Refusal[] {
   const refusals: Refusal[] = [];
   for (const rule of VALIDATION_RULES) {
-    const before = rule.name === "shape" ? [] : rule.check(source);
+    const before = rule.check(source);
     for (const problem of rule.check(result)) {
       if (before.includes(problem)) continue;
       refusals.push({ refused: `${rule.name}: ${problem}` });

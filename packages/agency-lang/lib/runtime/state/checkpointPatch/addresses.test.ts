@@ -51,6 +51,18 @@ describe("resolveFrame", () => {
       refused: "no branch at tool_9_zzz",
     });
   });
+
+  it("a finished branch, whose stack is empty, has no frame to address", () => {
+    const cp = agentShapedCheckpoint();
+    const json = cp.toJSON();
+    const loop = json.stack.stack[1].branches!.tool_0_abc.stack.stack[1];
+    loop.branches!.fork_1 = { stack: makeStackJSON([]), result: { result: 1 } };
+    const finished = new Checkpoint(json);
+    const address = { branchPath: ["tool_0_abc", "fork_1"] };
+    expect(resolveFrame(address, finished, IN_SEARCH)).toEqual({
+      refused: "no frames on the stack at tool_0_abc/fork_1",
+    });
+  });
 });
 
 describe("resolveLoopFrame", () => {

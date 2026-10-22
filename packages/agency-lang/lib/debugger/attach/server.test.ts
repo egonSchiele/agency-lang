@@ -112,6 +112,38 @@ describe("the attach server", () => {
     expect(io.renderCalls.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("answers a probe with the session's state: none, then held after a CLI visit", async () => {
+    const mod = await freshImport(fixtureCompiled);
+    const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });
+    server = started as AttachServer;
+    const probe = async (): Promise<unknown> => {
+      const channel = await connect(server!.socketPath);
+      return await new Promise((resolve) => {
+        channel.onMessage((raw) => resolve(raw));
+        channel.send({ type: "client", kind: "probe" });
+      });
+    };
+    expect(await probe()).toEqual({ type: "status", terminal: false, cli: null, stopped: false });
+
+    const visit = await connect(server.socketPath);
+    const joined = new Promise<void>((resolve) =>
+      visit.onMessage((raw) => {
+        if ((raw as { type: string }).type === "parties") resolve();
+      }),
+    );
+    visit.send({ type: "client", kind: "cli" });
+    await joined;
+    visit.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(await probe()).toMatchObject({
+      type: "status",
+      terminal: false,
+      cli: { visiting: false },
+    });
+    expect(server.current()).not.toBeNull();
+  });
+
   it("drives the program from a client, refuses a second client, and says when it ends", async () => {
     const mod = await freshImport(fixtureCompiled);
     const started = await startAttachServer({ dir, record, functions: () => functionsOf(mod) });

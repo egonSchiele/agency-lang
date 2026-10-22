@@ -48,7 +48,7 @@ export const LATER_START_KEEP_MS = 60_000;
 export const EARLY_START_LIMIT_MS = 5 * 60_000;
 /** How long to keep trying to connect after the signal: the socket
  *  appears once the program's event loop handles the signal. */
-const CONNECT_RETRY_MS = 2_000;
+export const CONNECT_RETRY_MS = 2_000;
 const CONNECT_RETRY_STEP_MS = 50;
 
 export type AttachRefusal = { refused: string };
@@ -198,7 +198,7 @@ export function checkedRecord(
 /** Connect to `sock`, retrying while the program opens it. The retry's
  *  error listener comes off once connected, so a later error on the
  *  socket does not open a second connection. */
-function connectWithRetry(pid: number, sock: string, retryMs: number): Promise<Channel> {
+export function connectWithRetry(pid: number, sock: string, retryMs: number): Promise<Channel> {
   const deadline = Date.now() + retryMs;
   return new Promise((resolve, reject) => {
     const attempt = (): void => {

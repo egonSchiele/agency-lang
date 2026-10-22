@@ -329,8 +329,8 @@ describe("a party's messages", () => {
     const acked = step(both, { type: "fromParty", party: 1, message: ack });
     const { state, effects } = step(acked.state, { type: "disconnect", party: 2, now: NOW });
     expect(effects).toEqual([
-      { type: "toDriver", message: { type: "reply", id: 7, result: undefined } },
       { type: "startLease" },
+      { type: "toDriver", message: { type: "reply", id: 7, result: undefined } },
       { type: "send", to: 1, message: { type: "parties", terminal: true, cli: true } },
     ]);
     expect(state.pending).toBeNull();
@@ -357,6 +357,27 @@ describe("a party's messages", () => {
     const pause: AttachMessage = { type: "pause" };
     const { effects } = step(terminalAtStop(), { type: "fromParty", party: 1, message: pause });
     expect(effects).toEqual([{ type: "toDriver", message: pause }]);
+  });
+
+  it("detach from a visit releases the hold and closes it; alone, the session ends", () => {
+    const visiting = { ...heldAtStop(), cli: { visit: 2, lastVisit: NOW } };
+    const detach: AttachMessage = { type: "detach" };
+    const { state, effects } = step(visiting, { type: "fromParty", party: 2, message: detach });
+    expect(effects).toEqual([{ type: "clearLease" }, { type: "close", party: 2 }, { type: "end" }]);
+    expect(state.cli).toBeNull();
+  });
+
+  it("detach from a visit with a terminal attached leaves the terminal driving", () => {
+    const both = { ...terminalAtStop(), cli: { visit: 2, lastVisit: null } };
+    const detach: AttachMessage = { type: "detach" };
+    const { state, effects } = step(both, { type: "fromParty", party: 2, message: detach });
+    expect(effects).toEqual([
+      { type: "clearLease" },
+      { type: "close", party: 2 },
+      { type: "send", to: 1, message: { type: "parties", terminal: true, cli: false } },
+    ]);
+    expect(state.cli).toBeNull();
+    expect(state.pending).toBe(ask);
   });
 
   it("a client message after joining is ignored", () => {

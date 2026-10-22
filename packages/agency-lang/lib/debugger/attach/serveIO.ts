@@ -159,6 +159,7 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         return;
       case "reply":
       case "pause":
+      case "detach":
       case "client":
       case "status":
         return;

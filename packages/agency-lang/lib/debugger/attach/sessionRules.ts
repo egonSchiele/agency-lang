@@ -236,17 +236,18 @@ function shown(state: SessionState, party: PartyId): Effect[] {
 }
 
 /** A party has left: it is waited on for nothing, and the rest are told
- *  who is still on the run. The session ends with the last party. */
-function left(state: SessionState, party: PartyId, lease: Effect[]): Stepped {
+ *  who is still on the run. The session ends with the last party. The
+ *  `before` effects (a lease to start, a channel to close) come first. */
+function left(state: SessionState, party: PartyId, before: Effect[]): Stepped {
   const stillAwaited = state.awaitingRender.filter((other) => other !== party);
   const settled = settleRender({ ...state, awaitingRender: stillAwaited });
   const rest = connected(settled.state);
   if (settled.state.terminal === null && settled.state.cli === null) {
-    return { state: settled.state, effects: [...settled.effects, { type: "end" }] };
+    return { state: settled.state, effects: [...before, ...settled.effects, { type: "end" }] };
   }
   return {
     state: settled.state,
-    effects: [...settled.effects, ...lease, ...sendTo(rest, partiesOf(settled.state))],
+    effects: [...before, ...settled.effects, ...sendTo(rest, partiesOf(settled.state))],
   };
 }
 
@@ -318,9 +319,21 @@ function fromParty(state: SessionState, party: PartyId, message: AttachMessage):
       return reply(state, party, message);
     case "pause":
       return { state, effects: [{ type: "toDriver", message }] };
+    case "detach":
+      return detachParty(state, party);
     default:
       return { state, effects: [] };
   }
+}
+
+/** A CLI visit releasing the hold: the visit is closed, the hold is
+ *  gone, and the session ends unless a terminal is attached. A terminal
+ *  sending it is treated as closing. */
+function detachParty(state: SessionState, party: PartyId): Stepped {
+  if (party === state.terminal) {
+    return left({ ...state, terminal: null }, party, [{ type: "close", party }]);
+  }
+  return left({ ...state, cli: null }, party, [{ type: "clearLease" }, { type: "close", party }]);
 }
 
 /** A reply from a party. To a pending render, one acknowledgement of

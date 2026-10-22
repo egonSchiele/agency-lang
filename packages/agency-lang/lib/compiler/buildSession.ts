@@ -21,6 +21,7 @@ import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { decoratorProblems } from "@/preprocessors/decoratorDesugar.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
@@ -459,6 +460,7 @@ export class BuildSession {
     // appear in functionDefinitions and get their bodies typechecked.
     const liftedProgram = liftCallbackBlocks(resolvedProgram);
     const info = buildCompilationUnit(liftedProgram, symbolTable, absoluteInputFile, contents);
+    checkDecoratorsOrExit(liftedProgram, info, absoluteInputFile);
     const compilationUnitEndTime = performance.now();
     logTime({
       label: `Built compilation unit for ${absoluteInputFile}`,
@@ -627,6 +629,29 @@ function expandSplicesOrExit(
     process.exit(1);
   }
   return expanded.value;
+}
+
+/** Stop the build when a decorator cannot lower: an unknown name, a tag on
+ *  something other than a def, a decorator that takes no block, and the
+ *  rest `decoratorProblems` lists. prepareProgram runs the same check for
+ *  its callers; this build does not go through prepareProgram, so it runs
+ *  the check itself. It does not wait for the type checker, which is off by
+ *  default: without this, a typo in a decorator name compiles and fails at
+ *  runtime. */
+function checkDecoratorsOrExit(
+  program: AgencyProgram,
+  info: CompilationUnit,
+  absPath: string,
+): void {
+  const problems = decoratorProblems(program, info);
+  if (problems.length === 0) return;
+  for (const problem of problems) {
+    const where = problem.loc
+      ? `${absPath}:${problem.loc.line + 1}:${problem.loc.col + 1}`
+      : absPath;
+    console.error(`${where} - error: ${problem.message}`);
+  }
+  process.exit(1);
 }
 
 function runTypecheck(

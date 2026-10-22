@@ -23,6 +23,24 @@ export type FunctionParameter = {
   defaultValue?: Literal | AgencyArray | AgencyObject;
 };
 
+/** Whether a function with these parameters can receive a block argument.
+ *  The backend passes the block as the final positional argument, so the
+ *  last parameter receives it: a block-typed slot, or one that could hold a
+ *  block (untyped, or `any`). The type checker and the decorator check both
+ *  use this, so they agree on what counts. */
+export function lastParameterTakesBlock(parameters: FunctionParameter[]): boolean {
+  const last = parameters[parameters.length - 1];
+  if (!last) {
+    return false;
+  }
+  const hint = last.typeHint;
+  return (
+    hint === undefined ||
+    hint.type === "blockType" ||
+    (hint.type === "primitiveType" && hint.value === "any")
+  );
+}
+
 export const VALID_CALLBACK_NAMES = [
   "onAgentStart",
   "onAgentEnd",

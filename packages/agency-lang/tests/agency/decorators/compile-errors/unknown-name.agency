@@ -1,0 +1,11 @@
+// A typo in a decorator name stops `agency compile`, with the type checker
+// off. Before the CLI build ran the decorator check, this compiled and
+// failed at runtime with "budgted is not defined".
+@budgted
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

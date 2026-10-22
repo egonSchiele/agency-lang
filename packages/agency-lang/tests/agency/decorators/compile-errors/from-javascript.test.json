@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'wrap' is imported from JavaScript, so it cannot decorate 'greet'.",
+  "description": "agency compile refuses a decorator imported from JavaScript"
+}

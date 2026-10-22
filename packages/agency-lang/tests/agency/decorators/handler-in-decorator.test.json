@@ -13,6 +13,13 @@
       "expectedOutput": "\"rejected\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "A decorator's reject handler rejects the body's interrupt"
+    },
+    {
+      "nodeName": "callerRejects",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The caller's reject wins over the decorator's approve: every handler on the chain is consulted"
     }
   ]
 }

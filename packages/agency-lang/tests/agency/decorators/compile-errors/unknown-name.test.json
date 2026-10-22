@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Unknown decorator 'budgted' on 'greet'",
+  "description": "agency compile refuses an unknown decorator even with the type checker off"
+}

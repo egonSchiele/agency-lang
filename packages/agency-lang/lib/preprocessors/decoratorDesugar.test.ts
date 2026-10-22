@@ -233,6 +233,61 @@ describe("decoratorProblems", () => {
     ]);
   });
 
+  it("refuses defs that decorate each other, naming the loop", () => {
+    const program = parse(
+      `@b\ndef a(block: () -> any): any { return block() }\n@a\ndef b(block: () -> any): any { return block() }\n`,
+    );
+    const both = {
+      ...scope,
+      functionDefinitions: { a: defNamed(program, "a"), b: defNamed(program, "b") },
+    };
+    expect(decoratorProblems(program, both).map((problem) => problem.message)).toEqual([
+      expect.stringContaining("a loop: a → b → a."),
+      expect.stringContaining("a loop: b → a → b."),
+    ]);
+  });
+
+  it("allows a chain of decorators that does not loop back", () => {
+    const program = parse(
+      `@plain\ndef a(block: () -> any): any { return block() }\n@a\ndef b(): string { return "x" }\n`,
+    );
+    const chain = {
+      ...scope,
+      functionDefinitions: { a: defNamed(program, "a"), b: defNamed(program, "b") },
+    };
+    expect(decoratorProblems(program, chain)).toEqual([]);
+  });
+
+  it("refuses a decorator imported from JavaScript", () => {
+    const program = parse(
+      `import { wrap } from "./wrap.js"\n@wrap\ndef f(): string { return "x" }\n`,
+    );
+    expect(decoratorProblems(program, scope).map((problem) => problem.message)).toEqual([
+      expect.stringContaining("'wrap' is imported from JavaScript, so it cannot decorate 'f'."),
+    ]);
+  });
+
+  it("refuses a decorator whose last parameter cannot take a block", () => {
+    const program = parse(
+      `def tagged(label: string): string { return label }\n@tagged("x")\ndef f(): string { return "x" }\n`,
+    );
+    const withTagged = { ...scope, functionDefinitions: { tagged: defNamed(program, "tagged") } };
+    expect(decoratorProblems(program, withTagged).map((problem) => problem.message)).toEqual([
+      expect.stringContaining("'tagged' cannot decorate 'f': a decorator receives the body"),
+    ]);
+  });
+
+  it("accepts a last parameter typed any or left untyped, as the type checker does", () => {
+    const program = parse(
+      `def loose(block: any): any { return block() }\ndef bare(block): any { return block() }\n@loose\n@bare\ndef f(): string { return "x" }\n`,
+    );
+    const both = {
+      ...scope,
+      functionDefinitions: { loose: defNamed(program, "loose"), bare: defNamed(program, "bare") },
+    };
+    expect(decoratorProblems(program, both)).toEqual([]);
+  });
+
   it("ignores reserved tags wherever they are", () => {
     const program = parse(`@capabilities(terminal)\nnode main() { return "x" }\n`);
     expect(decoratorProblems(program, scope)).toEqual([]);

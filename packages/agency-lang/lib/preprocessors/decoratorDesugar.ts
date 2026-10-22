@@ -6,6 +6,8 @@ import type {
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
+import { lastParameterTakesBlock } from "@/types/function.js";
+import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
 import type { Tag } from "@/types/tag.js";
 import { isDecoratorTag } from "@/types/tag.js";
@@ -58,13 +60,11 @@ export function decoratorLookup(
   importedFunctions: Record<string, ImportedFunctionSignature>,
 ): DecoratorLookup {
   return (name) => {
-    const local = functionDefinitions[name];
-    if (local) {
-      return { parameters: local.parameters, imported: false };
+    if (Object.hasOwn(functionDefinitions, name)) {
+      return { parameters: functionDefinitions[name].parameters, imported: false };
     }
-    const imported = importedFunctions[name];
-    if (imported) {
-      return { parameters: imported.parameters, imported: true };
+    if (Object.hasOwn(importedFunctions, name)) {
+      return { parameters: importedFunctions[name].parameters, imported: true };
     }
     return undefined;
   };
@@ -205,9 +205,16 @@ export type DecoratorScope = {
 
 /**
  * Everything wrong with a program's decorators, before or after the
- * lowering: a decorator written on anything but a top-level def, a def that
- * decorates itself, and a decorator name that is neither declared nor
- * imported. Pure; prepareProgram turns the list into diagnostics.
+ * lowering:
+ *
+ * - a decorator written on anything but a top-level def,
+ * - a def that decorates itself,
+ * - defs that decorate each other in a loop (`@b def a` and `@a def b`),
+ * - a decorator imported from JavaScript, which cannot take a block,
+ * - a decorator name that is neither declared nor imported,
+ * - a decorator whose last parameter cannot take the body as a block.
+ *
+ * Pure; prepareProgram and the CLI build turn the list into errors.
  */
 export function decoratorProblems(
   program: AgencyProgram,
@@ -222,22 +229,80 @@ export function decoratorProblems(
       })),
     );
   const onDefs = decoratorTagsOnDefs(program.nodes);
-  const selfDecorated = onDefs
-    .filter(({ def, tag }) => declaredName(def.functionName) === tag.name)
-    .map(({ tag }) => ({ message: `'${tag.name}' cannot decorate itself.`, loc: tag.loc }));
-  const unknown = onDefs
-    .filter(({ tag }) => !isKnownDecorator(tag.name, scope))
-    .map(({ def, tag }) => ({
-      message: `Unknown decorator '${tag.name}' on '${declaredName(def.functionName)}'. A decorator is a def whose last parameter is a block; declare or import '${tag.name}'.`,
-      loc: tag.loc,
-    }));
-  return [...misplaced, ...selfDecorated, ...unknown];
+  const lookup = decoratorLookup(scope.functionDefinitions, scope.importedFunctions);
+  const fromJavaScript = javaScriptImportNames(program.nodes);
+  const problems = onDefs.flatMap(({ def, tag }) => {
+    const problem = problemWithTag(declaredName(def.functionName), tag.name, {
+      lookup,
+      fromJavaScript,
+      onDefs,
+    });
+    return problem === null ? [] : [{ message: problem, loc: tag.loc }];
+  });
+  return [...misplaced, ...problems];
 }
 
-function isKnownDecorator(name: string, scope: DecoratorScope): boolean {
-  return (
-    Object.hasOwn(scope.functionDefinitions, name) || Object.hasOwn(scope.importedFunctions, name)
+type TagContext = {
+  lookup: DecoratorLookup;
+  fromJavaScript: string[];
+  onDefs: TagOnDef[];
+};
+
+/** What is wrong with `@decorator` written on the def named `target`, or
+ *  null when nothing is. */
+function problemWithTag(target: string, decorator: string, context: TagContext): string | null {
+  if (target === decorator) {
+    return `'${decorator}' cannot decorate itself.`;
+  }
+  const loop = decoratorLoop(target, decorator, context.onDefs);
+  if (loop !== null) {
+    return `Decorators call each other in a loop: ${loop.join(" → ")}. Calling any of these functions would never return.`;
+  }
+  const signature = context.lookup(decorator);
+  if (signature === undefined && context.fromJavaScript.includes(decorator)) {
+    return `'${decorator}' is imported from JavaScript, so it cannot decorate '${target}'. A decorator receives the body as a block, and only an Agency def can take a block.`;
+  }
+  if (signature === undefined) {
+    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a def whose last parameter is a block; declare or import '${decorator}'.`;
+  }
+  if (!lastParameterTakesBlock(signature.parameters)) {
+    return `'${decorator}' cannot decorate '${target}': a decorator receives the body of the function it decorates as a block, so its last parameter must be a block, such as \`block: () -> any\`.`;
+  }
+  return null;
+}
+
+/** The names a program imports from JavaScript or TypeScript files. */
+function javaScriptImportNames(nodes: AgencyNode[]): string[] {
+  return nodes.flatMap((node) =>
+    node.type === "importStatement" && !node.isAgencyImport
+      ? node.importedNames.flatMap(getImportedNames)
+      : [],
   );
+}
+
+/** The loop `@decorator` on `target` closes, as the def names in call
+ *  order starting and ending at `target`, or null when there is none.
+ *  `@b def a` means `a` calls `b`, so the edges run from a def to each of
+ *  its decorators. Only this file's defs are followed: a loop through
+ *  another file still ends at the runtime's call-depth limit. */
+function decoratorLoop(target: string, decorator: string, onDefs: TagOnDef[]): string[] | null {
+  const decoratorsOf = (name: string): string[] =>
+    onDefs.filter(({ def }) => declaredName(def.functionName) === name).map(({ tag }) => tag.name);
+  const visit = (path: string[]): string[] | null => {
+    const current = path[path.length - 1];
+    if (current === target) {
+      return path;
+    }
+    const next = decoratorsOf(current).filter((name) => !path.includes(name) || name === target);
+    for (const name of next) {
+      const found = visit([...path, name]);
+      if (found !== null) {
+        return found;
+      }
+    }
+    return null;
+  };
+  return visit([target, decorator]);
 }
 
 type TagOnDef = { def: FunctionDefinition; tag: Tag };

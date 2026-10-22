@@ -1,9 +1,11 @@
 import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
+import { getImportedNames } from "../types/importStatement.js";
 
 /**
  * Prune auto-imported `std::index` prelude symbols that a file shadows with
- * its own top-level `def` / `node` / global-variable declaration.
+ * its own top-level `def` / `node` / `type` / global-variable declaration, or
+ * with a name it imports from another module.
  *
  * The prelude (`import { ... } from "std::index"`) is injected invisibly into
  * every file. In JS, an import and a same-name top-level declaration are a
@@ -41,6 +43,17 @@ export function prunePreludeShadows(program: AgencyProgram): void {
       // Top-level `let`/`const` global. `declKind` is absent on a bare
       // re-assignment (`x = 1`), which is not a new binding.
       shadowed.add(node.variableName);
+    } else if (node.type === "typeAlias") {
+      // A type compiles to a runtime value (`const Call = z.object(...)`),
+      // so it collides with a prelude type of the same name, such as `Call`.
+      shadowed.add(node.aliasName);
+    } else if (node.type === "importStatement" && node.modulePath !== "std::index") {
+      // `import { Call } from "./types.agency"` is a binding of its own.
+      for (const spec of node.importedNames) {
+        for (const name of getImportedNames(spec)) {
+          shadowed.add(name);
+        }
+      }
     }
   }
   for (const name of UNPRUNABLE_PRELUDE_NAMES) {

@@ -1,5 +1,7 @@
 // A handler the decorator installs around the body is on the chain when the
-// body raises: one decorator approves, the other rejects.
+// body raises: one decorator approves, the other rejects. A decorator's
+// approve does not outrank its caller: when the caller rejects, the interrupt
+// is rejected, as with any nested handlers.
 def approving(block: () -> any): any {
   let result = null
   handle {
@@ -28,12 +30,29 @@ def askThenRefused(): Result<string> {
   return "ran"
 }
 
+@approving
+def askThenRunOrFail(): Result<string> {
+  interrupt("may I?")
+  return "ran"
+}
+
 node approved() {
   return askThenRun()
 }
 
 node rejected() {
   const r = askThenRefused()
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "unexpected: ${r}"
+}
+
+node callerRejects() {
+  let r = null
+  handle {
+    r = askThenRunOrFail()
+  } with reject
   if (isFailure(r)) {
     return "rejected"
   }

@@ -48,7 +48,9 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
 ## The rules
 
-1. **The `call` record.** A decorator whose first parameter is named `call` receives `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). The record is passed as the first positional argument, before the tag's own arguments, so `@retry(3)` works as well as `@budgeted(cost: maxCost)`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`).
+1. **The `call` record.** A decorator whose first parameter is named `call` receives `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). The record is passed as the first positional argument, before the tag's own arguments, so `@retry(3)` works as well as `@budgeted(cost: maxCost)`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`). The rule goes by the parameter's name, not its type: a decorator written as `def tagWith(call: string, block: () -> any)` still receives the record in `call`, and `@tagWith("x")` then passes `"x"` where the block goes. Name the first parameter something else unless it is the record.
+
+   Because `Call` is a prelude name, a file's own `type Call`, or a `Call` it imports from another file, must win over it. `prunePreludeShadows` drops a prelude name a type or an import shadows, as it already did for a def, a node, or a global; without that, the prelude's `Call` and the file's are two bindings of one name and the module fails to load (`tests/agency/decorators/local-call-type.agency`).
 2. **The tag's arguments are evaluated on every call**, in the decorated function's scope, so they can name its parameters.
 3. **Stacking is nesting.** `@a @b def f` becomes `a(...) { return b(...) { body } }`.
 4. **Resolution is by name**, like a call, imports included. The reserved tag names (`RESERVED_TAG_NAMES` in `lib/types/tag.ts`: `capabilities`, `validate`, `jsonSchema`, `hidden`, `always`, `alwaysUnder`, `optimize`) are never decorators.
@@ -64,11 +66,18 @@ Before this, every tag took the static argument grammar: literals, identifiers, 
 
 ## Where mistakes are reported
 
-The type checker is off by default (`typechecker.enabled`, `docs/dev/runtime/config.md`), so a diagnostic only it emits is invisible to most users. The three mistakes this part catches are reported from `prepareProgram` (`lib/compiler/prepareProgram.ts`), the pipeline every build goes through, as a `"decorators"` pipeline stage beside `"lift"`:
+The type checker is off by default (`typechecker.enabled`, `docs/dev/runtime/config.md`), so a diagnostic only it emits is invisible to most users. `decoratorProblems` lists every mistake below, and two places turn the list into errors:
+
+- `prepareProgram` (`lib/compiler/prepareProgram.ts`) reports it as a `"decorators"` pipeline stage beside `"lift"`. Its callers are `compileSource`, `agency typecheck`, the LSP, and `agency interrupts`.
+- The CLI build (`lib/compiler/buildSession.ts`, behind `agency run` and `agency compile`) does not go through `prepareProgram`, so `checkDecoratorsOrExit` runs the same check right after the compilation unit is built and stops the build. The first version of this feature missed this path: a typo in a decorator name compiled and failed at runtime, and a decorator on a node was dropped without a word. `tests/agency/decorators/compile-errors/` pins each mistake through `agency compile` with the checker off.
+
+The mistakes:
 
 - an unknown decorator: "Unknown decorator 'budgted' on 'f'. A decorator is a def whose last parameter is a block; declare or import 'budgted'."
 - a decorator in the wrong place: "'@logged' is written on node 'main', but a decorator goes on a def."
-- a def that decorates itself, which would recurse forever.
+- a decorator with nowhere to put the body: "'tagged' cannot decorate 'greet': a decorator receives the body of the function it decorates as a block, so its last parameter must be a block". Compiled anyway, `greet` would return `tagged`'s value and never run its own body. The test for "can take a block" is `lastParameterTakesBlock` in `lib/types/function.ts`, which the checker's AG6015 also uses: a block-typed, untyped, or `any` last parameter.
+- a decorator imported from JavaScript: "'wrap' is imported from JavaScript, so it cannot decorate 'greet'." A JavaScript function cannot take a block, so this would fail on every call.
+- a def that decorates itself, or defs that decorate each other: "Decorators call each other in a loop: a → b → a." Either would recurse until the call-depth limit. Only the file's own defs are followed; a loop that runs through another file still ends at the runtime's limit.
 
 `decoratorProblems` reads tags wherever they are at the moment (standalone, attached, or already lowered), so it works before or after the lowering. The LSP gives the stage a range from the tag's location; `failIfNotCheckable` in `lib/compiler/typecheck.ts` treats the stage like a lift failure. When the editor keeps going past the failure, the checker's generic undefined-function warning may also fire on the lowered call; part 2 can suppress it.
 
@@ -98,11 +107,11 @@ One consequence worth knowing: a `Result<T>` function returns a success by writi
 
 ## Why interrupts needed nothing
 
-The body is a block argument, and blocks already resume through step counters, already carry handlers on the chain, and already run more than once under `revise`. `tests/agency/decorators/interrupt-resumes`, `retry-calls-block-twice`, and `handler-in-decorator` pin each of these. The runtime did not change.
+The body is a block argument, and blocks already resume through step counters, already carry handlers on the chain, and already run more than once under `revise`. `tests/agency/decorators/interrupt-resumes`, `retry-calls-block-twice`, and `handler-in-decorator` pin each of these. `handler-in-decorator` also pins that a decorator's `approve` does not outrank its caller: a caller that rejects still gets a rejection, because every handler on the chain is consulted. This matters because a decorator from a package can install a handler that is invisible where the def is written. The runtime did not change.
 
 ## A gap this work found
 
-`tests/agency/decorators/destructive-region-in-body.test.json` is skipped. A `destructive { }` region inside a block argument loses its `destructiveRan` mark when the block exits, so a failure that escapes the decorated function reads `destructiveRan: false`. Today the tool loop uses that mark to remove a tool after a destructive failure, so a `@budgeted` decorator over a function with a destructive region would make that protection fail open. The test keeps the correct expectation and says so in its description; unskip it when regions inside blocks carry the mark. The fix belongs to the destructive-region code, not here.
+`tests/agency/decorators/destructive-region-in-body.test.json` is skipped. A `destructive { }` region inside a block argument loses its `destructiveRan` mark when the block exits, so a failure that escapes the decorated function reads `destructiveRan: false`. Today the tool loop uses that mark to remove a tool after a destructive failure, so a `@budgeted` decorator over a function with a destructive region would make that protection fail open. The test keeps the correct expectation and says so in its description; unskip it when regions inside blocks carry the mark. The fix belongs to the destructive-region code, not here, and is tracked as ADI-56.
 
 ## Files
 
@@ -112,10 +121,12 @@ The body is a block argument, and blocks already resume through step counters, a
 - `lib/types/function.ts`: `FunctionDefinition.decorators`, `DecoratorOrigin`, `FunctionCall.decorator`.
 - `lib/typeChecker/index.ts`, `lib/preprocessors/typescriptPreprocessor.ts`: the two call sites.
 - `lib/compiler/prepareProgram.ts`: `DecoratorFailure` and the check; `lib/lsp/diagnostics.ts`, `lib/compiler/typecheck.ts`.
+- `lib/compiler/buildSession.ts`: `checkDecoratorsOrExit`, the same check for `agency run` and `agency compile`.
+- `lib/preprocessors/prunePreludeShadows.ts`: a local type or an import shadows a prelude name such as `Call`.
 - `lib/analysis/effects.ts`: `decoratorNamesByDef`.
 - `lib/backends/agencyGenerator.ts`: `formatTag`.
 - `stdlib/index.agency` and `lib/prelude.ts`: `type Call`.
-- Tests: `tests/agency/decorators/`, `tests/agency-js/decorator-handoff/`, `tests/typescriptGenerator/decorators.agency`.
+- Tests: `tests/agency/decorators/` (with `compile-errors/` for the checks through the CLI), `tests/agency-js/decorator-handoff/`, `tests/typescriptGenerator/decorators.agency`.
 
 ## Not in this part
 

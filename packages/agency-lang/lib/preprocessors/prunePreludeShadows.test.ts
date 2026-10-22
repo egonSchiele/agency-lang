@@ -40,6 +40,34 @@ describe("prunePreludeShadows", () => {
     expect(imp.importedNames[0].safeNames).toEqual(["range"]);
   });
 
+  it("drops a prelude name shadowed by a local type or a name imported from another module", () => {
+    const program = {
+      type: "agencyProgram",
+      nodes: [
+        preludeImport(),
+        // a type compiles to a runtime value, so it shadows like a def
+        {
+          type: "typeAlias",
+          aliasName: "map",
+          aliasedType: { type: "primitiveType", value: "string" },
+        },
+        {
+          type: "importStatement",
+          modulePath: "./mine.agency",
+          isAgencyImport: true,
+          importedNames: [{ type: "namedImport", importedNames: ["filter"], aliases: {} }],
+        },
+      ],
+    } as unknown as AgencyProgram;
+
+    prunePreludeShadows(program);
+
+    const imp = program.nodes.find(
+      (n) => n.type === "importStatement" && n.modulePath === "std::index",
+    ) as any;
+    expect(imp.importedNames[0].importedNames).toEqual(["count", "range"]);
+  });
+
   it("ignores a bare re-assignment (no declKind) — only real declarations shadow", () => {
     const program = {
       type: "agencyProgram",

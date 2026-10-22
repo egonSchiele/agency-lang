@@ -28,6 +28,7 @@ import { checkAssignmentValue } from "./scopes.js";
 import { checkMatchExprYields } from "./matchExprTypes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
+import { lastParameterTakesBlock } from "../types/function.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 
 /**
@@ -522,17 +523,7 @@ function checkBlockArgShape(
   ctx: TypeCheckerContext,
 ): boolean {
   if (!call.block) return true;
-  // The backend pushes `call.block` as the final positional argument, so the
-  // last parameter is what receives it. Accept a block-typed slot, or the
-  // permissive cases — untyped (no hint) and `any` — that could legitimately
-  // hold a block.
-  const lastParam = params[params.length - 1];
-  if (lastParam) {
-    const hint = lastParam.typeHint;
-    if (hint === undefined || hint.type === "blockType" || isAnyType(hint)) {
-      return true;
-    }
-  }
+  if (lastParameterTakesBlock(params)) return true;
   ctx.errors.push(
     diagnostic(
       "blockArgNotAccepted",

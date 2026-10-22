@@ -242,6 +242,18 @@ send edits must verify the incoming checkpoint's signature, apply the
 edits, and resume the re-signed result, so an edited checkpoint is never
 one the host did not make.
 
+## A tool's parameters
+
+`setArg` writes the frame's `args`, which holds for a node frame and for
+a frame restored in place. A function frame the tool loop re-enters is
+different: the loop re-binds the tool's parameters from the recorded
+call, so a `setArg` on `query` inside `search` is lost on resume, while
+a `setLocal` in the same frame is kept. `_pendingArgOverrides` in
+`resumeSetup.ts` is the mechanism for an argument a frame has not been
+entered with yet, keyed by module and scope; routing `setArg` through
+it for a frame on a branch stack is a follow-up, since the record names
+no branch path today.
+
 ## The loop records its tools
 
 No checkpoint used to say which tools a loop was offered: the list is an
@@ -250,6 +262,13 @@ argument to `runPrompt`, not a frame local. `initLoopFrame`
 which `loopState().tools` reads, so `removeTool` can refuse a name the
 loop does not have. A checkpoint from before the field has `tools:
 null`, and any name is accepted.
+
+## The debugger over it
+
+The debugger's edits on its pane rows, and `agency debug session edit`,
+are clients of this library: `docs/dev/cli/debugger.md`, "Edits on the
+rows". The driver checks a queued edit with `patchCheckpoint` at once
+and resumes with the list; each UI draws the same patch as its preview.
 
 ## Tests
 

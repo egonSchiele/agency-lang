@@ -166,8 +166,25 @@ describe("a debugger attached over a channel", () => {
     const result = await mod.main();
 
     expect(result.data).toBe(12);
-    expect(io.overrides).toEqual({});
+    expect(io.pending).toEqual({ edits: [], applied: [] });
     expect(io.logLines).toContainEqual("Set x = 10");
+  });
+
+  it("a refused edit is logged and leaves the queued edits as they were", async () => {
+    const mod = await freshImport(compiledPath(fixtures.stepTest));
+    const { io } = attachWithMemoryChannel(mod, [
+      { type: "step" },
+      { type: "edit", edits: [{ op: "setLocal", name: "x", value: 10 }] },
+      { type: "edit", edits: [{ op: "removeTool", tool: "search" }] },
+      { type: "continue" },
+    ]);
+
+    const result = await mod.main();
+
+    // x = 10 went through; the second edit was refused as a whole.
+    expect(result.data).toBe(12);
+    expect(io.logLines).toContainEqual("x = 10");
+    expect(io.logLines).toContainEqual("refused: no tool loop above this stop");
   });
 
   it("closing the channel resumes a stopped run and removes the debugger", async () => {

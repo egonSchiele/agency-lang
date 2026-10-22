@@ -93,7 +93,6 @@ Feed a single key and wait for the driver to become idle again.
 await session.press("s");              // step
 await session.press("s", { times: 5 }); // step 5 times
 await session.press("up");            // stepBack (when source pane is focused)
-await session.press("up", { shift: true }); // stepBack with preserveOverrides
 ```
 
 Key names match what `TerminalInput` produces:
@@ -117,7 +116,6 @@ Key-to-command mapping (when source pane is focused):
 | `q` or `escape` | quit | Exit the debugger |
 | `up` | stepBack | Go to previous debug pause |
 | `down` | step | Same as `s` when source pane focused |
-| `up` + shift | stepBack (preserveOverrides) | Go back but keep variable overrides |
 | `z` | zoom | Toggle zoom on focused pane |
 | `tab` | focus next | Cycle focus to next pane |
 | `1`-`9` | focus pane N | Jump to Nth pane |
@@ -268,7 +266,6 @@ The `up` arrow key triggers stepBack when the source pane is focused (which is t
 
 ```typescript
 await session.press("up"); // stepBack
-await session.press("up", { shift: true }); // stepBack with preserveOverrides
 ```
 
 ### Testing rewind selector

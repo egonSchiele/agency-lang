@@ -14,6 +14,9 @@ import { withSince, type BusyShown } from "./busy.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
+import type { PendingPreview, StopView } from "./edits/rows.js";
+import { previewOf } from "./edits/pending.js";
+import { defaultHost } from "#default-host";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -30,8 +33,12 @@ export type ValWithOverride = {
 
 export class UIState {
   private activityLog: string[];
-  private pendingOverrides: Record<string, unknown>;
+  private pending: PendingPreview;
   private mode: "stepping" | "running";
+  /** The stop's checkpoint as the driver sent it. */
+  private base?: Checkpoint;
+  /** What the panes draw: the base with the pending edits applied, or
+   *  the base when there are none or the preview is refused. */
   private checkpoint?: Checkpoint;
   /** Where the program is stopped: the stop's location when the driver
    *  gave one, else the checkpoint's own. Names the frame whose locals
@@ -57,7 +64,7 @@ export class UIState {
 
   constructor() {
     this.activityLog = [];
-    this.pendingOverrides = {};
+    this.pending = { edits: [], applied: [] };
     this.mode = "stepping";
     this.checkpoint = undefined;
     this.args = [];
@@ -118,14 +125,16 @@ export class UIState {
       this.log("Invalid checkpoint provided, cannot set checkpoint");
       return;
     }
-    this.checkpoint = cp;
+    this.base = cp;
+    // The stop first: the preview places a frameless edit at it.
+    this.stop = stop;
+    this.checkpoint = this.previewed(cp);
     // A checkpoint stamped by the tool loop, at one of its own stops or
     // on an interrupt it carried out of a request or a tool, is located
     // under the `llm()` statement: its step path is the statement's
     // path, a slash, and the loop's key. The source pane shows the
     // statement. At the loop's own stops the frame is the caller's.
     const location = stop ?? cp.location;
-    this.stop = stop;
     // A user interrupt raised inside a tool, a fork, or a parallel arm is
     // stamped on the shared checkpoint at the join, whose location has no
     // branch path; the branch is found by the interrupt's id.
@@ -141,7 +150,11 @@ export class UIState {
 
   /** Fill the args and locals panes from the frame at `location`, and
    *  the globals pane from `moduleId`'s globals as that frame's stack
-   *  sees them. False when the checkpoint has no such frame. */
+   *  sees them. False when the checkpoint has no such frame. The
+   *  checkpoint is the preview; a value the pending edits changed is
+   *  marked by comparing it with the same place in the stop's own
+   *  checkpoint, so only the frame an edit named shows it, whatever
+   *  the edit called the frame. */
   private showFrame(
     location: { branchPath?: string[]; loopStop?: LoopStopKind },
     moduleId: string,
@@ -152,15 +165,19 @@ export class UIState {
       this.log("No current frame available in checkpoint");
       return false;
     }
+    const base = this.base === cp ? undefined : this.base;
+    const baseFrame = base?.shownFrame(location);
+    const branchPath = location.branchPath ?? [];
     this.args = [];
     this.locals = [];
     this.globals = [];
     this.globalsModuleId = moduleId;
-    this.setWithOverrides(frame.args, this.args);
-    this.setWithOverrides(frame.locals, this.locals);
-    const globalsForModule = cp.globalsAt(location.branchPath ?? []).store?.[moduleId] ?? null;
+    this.setWithOverrides(frame.args, this.args, baseFrame?.args);
+    this.setWithOverrides(frame.locals, this.locals, baseFrame?.locals);
+    const globalsForModule = cp.globalsAt(branchPath).store?.[moduleId] ?? null;
     if (globalsForModule) {
-      this.setWithOverrides(globalsForModule, this.globals);
+      const baseGlobals = base?.globalsAt(branchPath).store?.[moduleId];
+      this.setWithOverrides(globalsForModule, this.globals, baseGlobals);
     }
     return true;
   }
@@ -215,15 +232,25 @@ export class UIState {
     return state;
   }
 
-  setWithOverrides(obj: Record<string, unknown>, array: ValWithOverride[]) {
+  /** One entry per variable of `obj`, the preview's values. With
+   *  `before`, the same place in the stop's own checkpoint, an entry
+   *  whose value differs carries the preview's as its override and the
+   *  stop's as its value, so the pane highlights it. */
+  setWithOverrides(
+    obj: Record<string, unknown>,
+    array: ValWithOverride[],
+    before?: Record<string, unknown>,
+  ) {
     for (const key in obj) {
       if (this.isInternalVar(key)) {
         continue;
       }
+      const changed =
+        before !== undefined && JSON.stringify(before[key]) !== JSON.stringify(obj[key]);
       array.push({
         key,
-        value: obj[key],
-        override: this.pendingOverrides[key],
+        value: changed ? before[key] : obj[key],
+        override: changed ? obj[key] : undefined,
       });
     }
   }
@@ -265,9 +292,46 @@ export class UIState {
     this.mode = mode;
   }
 
-  /** Replace the queued overrides with the driver's copy. */
-  setOverrides(overrides: Record<string, unknown>) {
-    this.pendingOverrides = { ...overrides };
+  /** Replace the queued edits with the driver's copy, and redraw the
+   *  panes from the checkpoint as it will be once they apply. */
+  setPending(preview: PendingPreview) {
+    this.pending = { edits: [...preview.edits], applied: [...preview.applied] };
+    if (!this.base || !this.location) return;
+    this.checkpoint = this.previewed(this.base);
+    this.showFrame(this.location, this.location.moduleId);
+  }
+
+  /** `base` with the pending edits applied; `base` itself when none are
+   *  pending or the patch is refused (the driver has already said why). */
+  private previewed(base: Checkpoint): Checkpoint {
+    if (this.pending.edits.length === 0) return base;
+    const at =
+      this.stop === undefined
+        ? undefined
+        : { branchPath: this.stop.branchPath, loopStop: this.stop.loopStop };
+    const preview = previewOf(base, this.pending.edits, defaultHost().settings, at);
+    return "refused" in preview ? base : preview.checkpoint;
+  }
+
+  /** What the panes draw from, for the edit tables: the stop's
+   *  checkpoint, where the stop is, where the person is looking, and
+   *  the pending edits. Null before a stop. */
+  getStopView(): StopView | null {
+    if (!this.checkpoint || !this.stopLocation || !this.location) return null;
+    return {
+      checkpoint: this.checkpoint,
+      stop: {
+        branchPath: this.stopLocation.branchPath ?? [],
+        loopStop: this.stopLocation.loopStop,
+      },
+      viewed: { branchPath: this.location.branchPath ?? [], loopStop: this.location.loopStop },
+      moduleId: this.getGlobalsModuleId(),
+      pending: this.pending,
+    };
+  }
+
+  getPending(): PendingPreview {
+    return this.pending;
   }
 
   /** Replace the list of open waits with the run's latest, keeping the
@@ -341,9 +405,28 @@ export class UIState {
 
   /** The messages of `threadId`, or of the active thread when none is
    *  named. */
+  /** The thread's messages as the panes show them, with the ones a
+   *  pending edit added marked: those past the end of the stop's own
+   *  list, and the queued ones past the end of its queue. */
   getThreadMessages(threadId?: string): ThreadMessages | null {
-    if (!this.checkpoint) return null;
-    return this.checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
+    const shown = this.threadMessagesOf(this.checkpoint, threadId);
+    if (!shown || !this.base || this.checkpoint === this.base) return shown;
+    const before = this.threadMessagesOf(this.base, threadId);
+    const was = before?.messages.length ?? 0;
+    const wasQueued = before?.queued.length ?? 0;
+    return {
+      ...shown,
+      messages: shown.messages.map((m, index) => (index >= was ? { ...m, pending: true } : m)),
+      queued: shown.queued.map((m, index) => (index >= wasQueued ? { ...m, pending: true } : m)),
+    };
+  }
+
+  private threadMessagesOf(
+    checkpoint: Checkpoint | undefined,
+    threadId: string | undefined,
+  ): ThreadMessages | null {
+    if (!checkpoint) return null;
+    return checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
   }
 
   /** The module the source pane shows: the stop's, or, before any stop
@@ -420,7 +503,7 @@ export class UIState {
   toJSON() {
     return {
       activityLog: this.activityLog,
-      pendingOverrides: this.pendingOverrides,
+      pending: this.pending,
       mode: this.mode,
       checkpoint: this.checkpoint ? this.checkpoint.toJSON() : undefined,
       args: this.args,
@@ -433,7 +516,7 @@ export class UIState {
   static fromJSON(json: any): UIState {
     const uiState = new UIState();
     uiState.activityLog = json.activityLog;
-    uiState.pendingOverrides = json.pendingOverrides;
+    uiState.pending = json.pending ?? { edits: [], applied: [] };
     uiState.mode = json.mode;
     const cp = json.checkpoint ? Checkpoint.fromJSON(json.checkpoint) : null;
     if (!cp) {

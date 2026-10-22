@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import * as path from "path";
 import { DebuggerDriver } from "./driver.js";
 import type { BusyEntry, DebuggerCommand, DebuggerIO, DebuggerMode } from "./types.js";
+import type { PendingPreview } from "./edits/rows.js";
 import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
@@ -20,7 +21,7 @@ export class TestDebuggerIO implements DebuggerIO {
   /** Every line the driver logged, in order. */
   logLines: string[] = [];
   mode: DebuggerMode = "stepping";
-  overrides: Record<string, unknown> = {};
+  pending: PendingPreview = { edits: [], applied: [] };
   /** Every list `setBusy` received, in order. */
   busyCalls: BusyEntry[][] = [];
   private pauseListeners: (() => void)[] = [];
@@ -41,8 +42,8 @@ export class TestDebuggerIO implements DebuggerIO {
     this.mode = mode;
   }
 
-  setOverrides(overrides: Record<string, unknown>): void {
-    this.overrides = { ...overrides };
+  setPending(preview: PendingPreview): void {
+    this.pending = preview;
   }
 
   setBusy(entries: BusyEntry[]): void {

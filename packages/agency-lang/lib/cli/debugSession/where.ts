@@ -14,6 +14,8 @@ export type WhereInput = {
   pid: number;
   parties: PartiesMessage;
   recent: string[];
+  /** The driver's line for each edit queued at the stop. */
+  edits: string[];
   checkpoint: Checkpoint | undefined;
   stop: DebugStopData | undefined;
   /** The stop's source line, when the module's map is on disk. */
@@ -58,6 +60,7 @@ export type WhereJson = {
   usage: { totalTokens: number; totalCost: number };
   parties: { terminal: boolean; cli: boolean };
   recent: string[];
+  edits: string[];
   interruptId: string | null;
 };
 
@@ -116,6 +119,7 @@ export function whereJson(input: WhereInput): WhereJson {
     usage: checkpoint === undefined ? { totalTokens: 0, totalCost: 0 } : usageOf(checkpoint),
     parties: { terminal: input.parties.terminal, cli: input.parties.cli },
     recent: input.recent,
+    edits: input.edits,
     interruptId: input.interruptId ?? null,
   };
 }
@@ -171,7 +175,10 @@ export function whereText(input: WhereInput): string {
   if (json.recent.length > 0) {
     lines.push(`since   ${json.recent.join(" · ")}`);
   }
-  lines.push("next    step, next, continue, frame, thread, branches, guards, detach");
+  if (json.edits.length > 0) {
+    lines.push(`edits   ${json.edits.length} pending: ${json.edits.join(" · ")}`);
+  }
+  lines.push("next    step, next, continue, frame, thread, branches, guards, edit, detach");
   return lines.join("\n");
 }
 

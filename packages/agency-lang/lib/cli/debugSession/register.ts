@@ -4,8 +4,23 @@
 import type { Command } from "@/vendor/commander/index.js";
 
 import { debugSession, type SessionCliCommand, type SessionCliOptions } from "./index.js";
+import { EDIT_FLAGS } from "./editVerb.js";
 
 type LeafOptions = { json?: boolean; pid?: string };
+type EditLeafOptions = LeafOptions & { drop?: boolean } & Record<
+    string,
+    string | boolean | undefined
+  >;
+
+/** A flag's value as JSON when it parses, else the text as typed. */
+function parseJsonOrText(raw: string | boolean | undefined): unknown {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
 
 function withSharedOptions(command: Command): Command {
   return command
@@ -223,6 +238,28 @@ function addMoves(session: Command): void {
       return;
     }
     await exitWith({ name: "set", varName, value }, options);
+  });
+
+  const editLeaf = withSharedOptions(
+    session
+      .command("edit")
+      .description(
+        "Queue an edit to the stopped program; with no action, the edits this stop takes",
+      )
+      .argument("[action]", "An edit from the list `edit` prints, such as append-message")
+      .option("--drop", "Drop the pending edits"),
+  );
+  for (const { flag, help } of EDIT_FLAGS) {
+    editLeaf.option(`--${flag} <${flag}>`, help);
+  }
+  editLeaf.action(async (action: string | undefined, options: EditLeafOptions) => {
+    const values: Record<string, unknown> = {};
+    for (const { flag } of EDIT_FLAGS) {
+      const given = options[flag];
+      if (given === undefined) continue;
+      values[flag] = flag === "value" ? parseJsonOrText(given) : given;
+    }
+    await exitWith({ name: "edit", action, values, drop: options.drop === true }, options);
   });
 
   withSharedOptions(

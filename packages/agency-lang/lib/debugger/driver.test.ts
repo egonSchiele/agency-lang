@@ -365,7 +365,7 @@ describe("Debugger stepBack and rewind", () => {
     expect(activityLog(session)).not.toContainEqual("Already at earliest checkpoint");
   });
 
-  it("stepBack with preserveOverrides keeps pending overrides", async () => {
+  it("stepBack drops the pending edits, since the replay resumes another checkpoint", async () => {
     const mod = await freshImport(stepTestCompiled);
     const session = await DebuggerTestSession.create({ mod });
 
@@ -373,11 +373,14 @@ describe("Debugger stepBack and rewind", () => {
     await session.press("s"); // past y = 2
     await session.press(":"); // command mode
     await session.type("set x = 10");
-    await session.press("up", { shift: true }); // stepBack with preserveOverrides
+    await session.press("up"); // stepBack
     await session.press("s", { times: 10 });
 
     const result = await session.quit();
-    expect(result).toBe(12);
+    expect(result).toBe(3);
+    expect(session.ui.state.getActivityLog()).toContainEqual(
+      "dropped 1 pending edits: a rewind resumes a different checkpoint",
+    );
   });
 
   it("stepBack actually rewinds: locals reflect an earlier state", async () => {

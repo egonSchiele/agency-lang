@@ -2,6 +2,7 @@
 // matching call on a real `DebuggerIO`, the terminal UI or a scripted one
 // in a test, and sends the reply. The three messages that are not
 // methods go to the `events` callbacks.
+import type { PendingPreview } from "../edits/rows.js";
 import { functionRefReviver, nativeTypeReviver } from "../../runtime/revivers/index.js";
 import { Checkpoint } from "../../runtime/state/checkpointStore.js";
 import { isBusyEntry } from "../../runtime/waits.js";
@@ -81,8 +82,8 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
       case "setMode":
         io.setMode(args[0] as never);
         return;
-      case "setOverrides":
-        io.setOverrides(args[0] as Record<string, unknown>);
+      case "setPending":
+        io.setPending(args[0] as PendingPreview);
         return;
       case "setBusy": {
         // The sender is the other half of this package, so a bad entry

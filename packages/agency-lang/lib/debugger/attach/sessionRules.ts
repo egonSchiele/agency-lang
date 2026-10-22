@@ -134,7 +134,7 @@ export const RECENT_LINES = 20;
 export const ANSWERED_KEPT = 10;
 
 /** The notices a joiner is sent the latest of. */
-const SETTING_METHODS = ["setMode", "setOverrides", "setBusy"];
+const SETTING_METHODS = ["setMode", "setPending", "setBusy"];
 
 export function step(state: SessionState, event: SessionEvent): Stepped {
   switch (event.type) {

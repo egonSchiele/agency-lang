@@ -9,7 +9,7 @@ describe("describeCommand", () => {
     expect(describeCommand({ type: "stepOut" })).toBe("step out");
     expect(describeCommand({ type: "continue" })).toBe("continue");
     expect(describeCommand({ type: "rewind" })).toBe("rewind");
-    expect(describeCommand({ type: "stepBack", preserveOverrides: false })).toBe("step back");
+    expect(describeCommand({ type: "stepBack" })).toBe("step back");
     expect(describeCommand({ type: "showCheckpoints" })).toBe("checkpoints");
     expect(describeCommand({ type: "checkpoint" })).toBe("checkpoint");
     expect(describeCommand({ type: "checkpoint", label: "before" })).toBe("checkpoint before");

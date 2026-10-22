@@ -12,7 +12,7 @@ import type { LoopStopKind, SourceLocation } from "./sourceLocation.js";
 import { isIntrinsicToolName } from "../intrinsicTools.js";
 import { isBlockName } from "../blockNames.js";
 import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js";
-import type { MessageThreadJSON } from "./messageThread.js";
+import type { MessageThreadJSON, QueuedMessage } from "./messageThread.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
 
@@ -56,8 +56,16 @@ export type ThreadMessages = {
   label: string | null;
   threadIndex: number;
   threadCount: number;
-  messages: { role: string; content: string }[];
+  messages: ThreadMessage[];
+  /** Messages waiting on the thread's queue, delivered at the next
+   *  round boundary; a debugger's edit lands here behind unanswered
+   *  tool calls. */
+  queued: ThreadMessage[];
 };
+
+/** One message as a pane shows it; `pending` when a queued edit added
+ *  it and the program has not resumed yet. */
+export type ThreadMessage = { role: string; content: string; pending?: boolean };
 
 /** One branch of a frame, as the branches pane lists it: a tool call, a
  *  fork branch, or a parallel item, with its own stack. */
@@ -237,6 +245,8 @@ export type ThreadView = {
   thread: MessageThreadJSON;
   active: boolean;
   newer?: MessageJSON[];
+  /** The loop copy's queue, when a loop frame holds the thread. */
+  queued?: QueuedMessage[];
   /** Where the messages a resume reads are in the checkpoint's JSON:
    *  the loop's copy when a loop frame holds one, else the store's. */
   jsonPath: string[];
@@ -501,6 +511,7 @@ export class Checkpoint implements SourceLocation {
       const stored = views.find((view) => copy.id !== undefined && view.thread.id === copy.id);
       if (stored) {
         stored.newer = copy.messages;
+        stored.queued = copy.queuedMessages;
         stored.jsonPath = copyPath;
         return;
       }
@@ -549,6 +560,10 @@ export class Checkpoint implements SourceLocation {
       messages: (selected.newer ?? selected.thread.messages).map((m: MessageJSON) => ({
         role: m.role ?? "unknown",
         content: this.getContentFromMessage(m),
+      })),
+      queued: (selected.queued ?? selected.thread.queuedMessages ?? []).map((m) => ({
+        role: m.role,
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
       })),
     };
   }

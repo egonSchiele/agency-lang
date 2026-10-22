@@ -4,6 +4,8 @@ import type { BusyEntry, DebugStopData } from "../runtime/debugger.js";
 
 export type { BusyEntry } from "../runtime/debugger.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
+import type { CheckpointEdit } from "../runtime/state/checkpointPatch/index.js";
+import type { PendingPreview } from "./edits/rows.js";
 import type { FunctionParameter } from "../types.js";
 
 export type DebuggerCommand =
@@ -15,11 +17,13 @@ export type DebuggerCommand =
   | { type: "rewind" }
   | { type: "checkpoint"; label?: string }
   | { type: "set"; varName: string; value: unknown }
+  | { type: "edit"; edits: CheckpointEdit[] }
+  | { type: "dropEdits" }
   | { type: "approve" }
   | { type: "reject"; value?: unknown }
   | { type: "resolve"; value: unknown }
   | { type: "modify"; overrides: Record<string, unknown> }
-  | { type: "stepBack"; preserveOverrides: boolean }
+  | { type: "stepBack" }
   | { type: "showCheckpoints" }
   | { type: "save"; path: string }
   | { type: "load"; path: string }
@@ -70,7 +74,9 @@ export type DebuggerIO = {
   setMode(mode: DebuggerMode): void;
   /** The overrides a `set` has queued for the next resume, for the
    *  locals pane to show beside the current values. */
-  setOverrides(overrides: Record<string, unknown>): void;
+  /** The edits queued at the stop, with the driver's line for each; the
+   *  UI draws the preview from them. An empty list clears it. */
+  setPending(preview: PendingPreview): void;
   /** What the program is waiting on, a model request or a tool call,
    *  the whole list each time it changes; empty when nothing is open.
    *  Shown while the program runs (`waits.ts`). */

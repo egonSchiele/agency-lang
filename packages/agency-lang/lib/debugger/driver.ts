@@ -4,7 +4,9 @@ import { DebuggerState } from "./debuggerState.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import type { AgencyCallbacks } from "../runtime/hooks.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
-import type { StopAt } from "../runtime/state/checkpointPatch/index.js";
+import type { CheckpointEdit, StopAt } from "../runtime/state/checkpointPatch/index.js";
+import { previewOf } from "./edits/pending.js";
+import { defaultHost } from "#default-host";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { isDebugStop, type DebugStopData } from "../runtime/debugger.js";
@@ -87,7 +89,12 @@ export class DebuggerDriver {
   private programFinished = false;
   /** What `set` has queued for the next resume. The UI shows a copy
    *  beside the current values; the driver owns it. */
-  private pendingOverrides: Record<string, unknown> = {};
+  /** The edits queued at the stop, applied once by the next resume. */
+  private pendingEdits: CheckpointEdit[] = [];
+  /** The applied lines of the last accepted preview, one per write; an
+   *  edit can lower to several writes, so the lines of a new edit are
+   *  the ones past these. */
+  private pendingApplied: string[] = [];
   private readonly attached: boolean;
   /** Attached: the runs whose steps were let through because another
    *  run owns the debugger, each told once in the activity log. */
@@ -171,8 +178,9 @@ export class DebuggerDriver {
       ownerChanged: () => {
         this.ignoredRuns = [];
         this.betweenRuns = false;
-        this.pendingOverrides = {};
-        this.ui.setOverrides(this.pendingOverrides);
+        this.pendingEdits = [];
+        this.pendingApplied = [];
+        this.ui.setPending({ edits: [], applied: [] });
       },
     };
     this.mod.__setDebugger(this.debuggerState);
@@ -547,7 +555,7 @@ export class DebuggerDriver {
       const position = asked.length > 1 ? ` (${index + 1} of ${asked.length})` : "";
       answers[interrupt.interruptId] = await this.askAbout(interrupt, position);
     }
-    return await this.respond(batch, answers, undefined, session, asked[0]);
+    return await this.respond(batch, answers, this.takeEdits(), session, asked[0]);
   }
 
   /** One interrupt's answer, asked for until the input is one of
@@ -645,15 +653,15 @@ export class DebuggerDriver {
   private async respond(
     batch: Interrupt[],
     answers: Record<string, InterruptResponse>,
-    overrides: Record<string, unknown> | undefined,
+    edits: CheckpointEdit[],
     session: AttachedSession | undefined,
     shown: Interrupt | undefined,
   ): Promise<any> {
     const responses = batch.map((intr) => answers[intr.interruptId] ?? { type: "approve" });
-    // The overrides land on the frame of the stop that was shown: a batch
-    // of stops shares one checkpoint located at the batch, so the stop
-    // record, not the checkpoint, says which frame a `set` meant.
-    const options = { overrides, at: stopAtOf(shown), ...this.resumeOptions(session) };
+    // The edits land on the frame of the stop that was shown: a batch of
+    // stops shares one checkpoint located at the batch, so the stop
+    // record, not the checkpoint, says which frame an edit meant.
+    const options = { edits, at: stopAtOf(shown), ...this.resumeOptions(session) };
     const serve = this.mod.respondToInterruptsForServe;
     if (session !== undefined && serve !== undefined) {
       return await this.resumeInterrupt(async () => {
@@ -704,9 +712,23 @@ export class DebuggerDriver {
         return await this.resume(batch, session, interrupt);
       }
       case "set": {
-        this.pendingOverrides[command.varName] = command.value;
-        this.ui.setOverrides(this.pendingOverrides);
-        this.ui.log(`Set ${command.varName} = ${JSON.stringify(command.value)}`);
+        // The old spelling: one setLocal on the frame the stop shows.
+        const edit: CheckpointEdit = {
+          op: "setLocal",
+          name: command.varName,
+          value: command.value,
+        };
+        if (this.queueEdits([edit], interrupt)) {
+          this.ui.log(`Set ${command.varName} = ${JSON.stringify(command.value)}`);
+        }
+        return { data: interrupt };
+      }
+      case "edit": {
+        this.queueEdits(command.edits, interrupt);
+        return { data: interrupt };
+      }
+      case "dropEdits": {
+        this.dropEdits(`dropped ${this.pendingEdits.length} pending edits`);
         return { data: interrupt };
       }
       case "checkpoint": {
@@ -745,12 +767,7 @@ export class DebuggerDriver {
           this.ui.log("Already at earliest checkpoint");
           return { data: interrupt };
         }
-        return await this.rewindTo(
-          previous,
-          { preserveOverrides: command.preserveOverrides },
-          session,
-          interrupt,
-        );
+        return await this.rewindTo(previous, session, interrupt);
       }
       case "rewind": {
         const allCheckpoints = this.checkpointsToShow();
@@ -765,14 +782,14 @@ export class DebuggerDriver {
           return { data: interrupt };
         }
 
-        return await this.rewindTo(checkpoint, {}, session, interrupt);
+        return await this.rewindTo(checkpoint, session, interrupt);
       }
       case "reject": {
         this.ui.log("Rejected interrupt");
         return await this.respond(
           batch,
           { [interrupt.interruptId]: { type: "reject" } },
-          undefined,
+          this.takeEdits(),
           session,
           interrupt,
         );
@@ -787,7 +804,7 @@ export class DebuggerDriver {
               value: command.value,
             } as InterruptResponse,
           },
-          undefined,
+          this.takeEdits(),
           session,
           interrupt,
         );
@@ -825,7 +842,7 @@ export class DebuggerDriver {
             this.ui.log(`Invalid checkpoint data in file: ${JSON.stringify(json)}`);
             return { data: interrupt };
           }
-          return await this.rewindTo(checkpoint, {}, session, interrupt);
+          return await this.rewindTo(checkpoint, session, interrupt);
         } catch (e: any) {
           this.ui.log(`Failed to load: ${e.message}`);
           return { data: interrupt };
@@ -853,12 +870,46 @@ export class DebuggerDriver {
     return [...debugCheckpoints, ...userCheckpoints].sort((a, b) => a.id - b.id);
   }
 
-  /** The queued overrides, cleared: a resume applies them once. */
-  private takeOverrides(): Record<string, unknown> {
-    const overrides = this.pendingOverrides;
-    this.pendingOverrides = {};
-    this.ui.setOverrides(this.pendingOverrides);
-    return overrides;
+  /** Queue `edits` after checking them against the stop's checkpoint:
+   *  on a refusal every reason is logged and the list is unchanged; on
+   *  success the list grows, the applied lines are logged, and the UI
+   *  is told so it can draw the preview. */
+  private queueEdits(edits: CheckpointEdit[], interrupt: Interrupt): boolean {
+    const checkpoint = Checkpoint.fromJSON(interrupt.checkpoint);
+    if (!checkpoint) {
+      this.ui.log("refused: the stop has no checkpoint to edit");
+      return false;
+    }
+    const all = [...this.pendingEdits, ...edits];
+    const preview = previewOf(checkpoint, all, defaultHost().settings, stopAtOf(interrupt));
+    if ("refused" in preview) {
+      for (const reason of preview.refused) this.ui.log(`refused: ${reason}`);
+      return false;
+    }
+    this.pendingEdits = all;
+    for (const line of preview.applied.slice(this.pendingApplied.length)) {
+      this.ui.log(line);
+    }
+    this.pendingApplied = preview.applied;
+    this.ui.setPending({ edits: all, applied: preview.applied });
+    return true;
+  }
+
+  private dropEdits(reason: string): void {
+    if (this.pendingEdits.length === 0) return;
+    this.ui.log(reason);
+    this.pendingEdits = [];
+    this.pendingApplied = [];
+    this.ui.setPending({ edits: [], applied: [] });
+  }
+
+  /** The queued edits, cleared: a resume applies them once. */
+  private takeEdits(): CheckpointEdit[] {
+    const edits = this.pendingEdits;
+    this.pendingEdits = [];
+    this.pendingApplied = [];
+    this.ui.setPending({ edits: [], applied: [] });
+    return edits;
   }
 
   /** Whether the driver is showing a stop and waiting on the person. A
@@ -912,13 +963,11 @@ export class DebuggerDriver {
     session: AttachedSession | undefined,
     shown: Interrupt,
   ): Promise<any> {
-    const overrides = this.takeOverrides();
-    return await this.respond(batch, {}, overrides, session, shown);
+    return await this.respond(batch, {}, this.takeEdits(), session, shown);
   }
 
   private async rewindTo(
     checkpoint: Checkpoint,
-    opts: { preserveOverrides?: boolean },
     session: AttachedSession | undefined,
     /** The stop being rewound from. Attached, the run is the stop's, and
      *  the checkpoint becomes this run's whichever run recorded it: a
@@ -937,16 +986,19 @@ export class DebuggerDriver {
     this.debuggerState.reset();
     this.ui.log(`Rewinding to checkpoint #${checkpoint.id}`);
 
-    // For "time travel" (shift+up), keep overrides pending so they're
-    // applied on the next step forward. Otherwise clear them.
-    const overrides = opts.preserveOverrides ? this.pendingOverrides : this.takeOverrides();
+    // A rewind resumes a different checkpoint, on which the preview the
+    // person saw may not hold, so the pending edits are dropped and the
+    // log says so; this covers the time-travel step back too.
+    this.dropEdits(
+      `dropped ${this.pendingEdits.length} pending edits: a rewind resumes a different checkpoint`,
+    );
 
     this.debuggerState.deleteAfterCheckpoint(checkpoint.id);
 
     const options = this.resumeOptions(session);
     return await this.resumeInterrupt(async () => {
       try {
-        return await this.mod.rewindFrom(checkpoint, overrides, options);
+        return await this.mod.rewindFrom(checkpoint, {}, options);
       } catch (error) {
         // The module's rewind throws a failed leg's error. Attached, the
         // caller gets it as a thrown outcome, as from a resume; its usage

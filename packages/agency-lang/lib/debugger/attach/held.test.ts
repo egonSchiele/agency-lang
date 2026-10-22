@@ -12,6 +12,7 @@ import { memoryChannelPair, type Channel } from "./channel.js";
 import type { AttachMessage, Hello } from "./protocol.js";
 import { openSession, type AttachedSession } from "./server.js";
 import { parseAttachMessage } from "./protocol.js";
+import { LEASE_MS } from "./sessionRules.js";
 import type { SessionTimers } from "./sessionChannel.js";
 
 const fixture = "step-test";
@@ -23,12 +24,15 @@ beforeAll(() => {
 
 const hello: Hello = { type: "hello", program: "agent.agency", node: "main", pid: 1 };
 
-/** Timers the test fires by hand. */
-function fakeTimers(): SessionTimers & { fire(): void; armed(): boolean } {
+/** Timers the test fires by hand, remembering how long the last was
+ *  armed for. */
+function fakeTimers(): SessionTimers & { fire(): void; armed(): boolean; armedFor(): number } {
   let pending: (() => void) | null = null;
+  let armedFor = 0;
   return {
-    set: (fire) => {
+    set: (fire, ms) => {
       pending = fire;
+      armedFor = ms;
       return pending;
     },
     clear: (handle) => {
@@ -42,6 +46,7 @@ function fakeTimers(): SessionTimers & { fire(): void; armed(): boolean } {
       fire?.();
     },
     armed: () => pending !== null,
+    armedFor: () => armedFor,
   };
 }
 
@@ -111,8 +116,18 @@ async function settled(promise: Promise<unknown>): Promise<boolean> {
   return first !== marker;
 }
 
+type Opened = { session: AttachedSession; keepAlive: boolean[] };
+
+/** A session on the fixture, recording every `keepAlive` the session
+ *  asks of the server: the last must be `false` once nothing waits on a
+ *  debugger, or the process never exits. */
 function open(mod: any, timers: SessionTimers): AttachedSession {
-  return openSession({
+  return opened(mod, timers).session;
+}
+
+function opened(mod: any, timers: SessionTimers): Opened {
+  const keepAlive: boolean[] = [];
+  const session = openSession({
     functions: {
       respondToInterrupts: mod.respondToInterrupts,
       respondToInterruptsForServe: mod.__respondToInterruptsForServe,
@@ -122,8 +137,9 @@ function open(mod: any, timers: SessionTimers): AttachedSession {
       __getCheckpoints: mod.__getCheckpoints,
     },
     hello,
-    session: { timers, log: () => {} },
+    session: { timers, log: () => {}, keepAlive: (on) => keepAlive.push(on) },
   });
+  return { session, keepAlive };
 }
 
 /** Answer every render a visit is sent, the way a UI acknowledges one. */
@@ -153,6 +169,7 @@ describe("a session the run holds between visits", () => {
     const stop = lastRequest(first.received);
     first.close();
     expect(timers.armed()).toBe(true);
+    expect(timers.armedFor()).toBe(LEASE_MS);
 
     // Nothing is connected and the program has not moved.
     expect(await settled(running)).toBe(false);
@@ -228,7 +245,7 @@ describe("a session the run holds between visits", () => {
   it("a program that ends while no visit is connected tells the next one, which is then closed", async () => {
     const mod = await freshImport(compiled);
     const timers = fakeTimers();
-    const session = open(mod, timers);
+    const { session, keepAlive } = opened(mod, timers);
     const running = mod.main();
 
     const first = visit(session);
@@ -241,10 +258,13 @@ describe("a session the run holds between visits", () => {
     await Promise.resolve();
     first.close();
     expect((await running).data).toBe(3);
+    // The driver's final redraw went to no one; the session must not
+    // keep the process up for it while it holds the news.
+    await until(() => keepAlive.at(-1) === false, "the server let go");
 
     const next = visit(session);
-    await until(() => next.received.length > 0, "the news");
-    expect(next.received).toEqual([{ type: "finished", value: 3 }]);
+    await until(() => next.received.length > 1, "the news");
+    expect(next.received).toEqual([hello, { type: "finished", value: 3 }]);
     expect(next.closed()).toBe(true);
   });
 

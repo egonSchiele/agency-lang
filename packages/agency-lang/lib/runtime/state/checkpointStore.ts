@@ -124,17 +124,23 @@ export type MessageLike = {
 };
 
 export function messageLanding(thread: { messages: MessageLike[] }): "messages" | "queued" {
+  return pendingToolCalls(thread) > 0 ? "queued" : "messages";
+}
+
+/** How many calls of the thread's last assistant message have no result
+ *  after it yet. */
+export function pendingToolCalls(thread: { messages: MessageLike[] }): number {
   const messages = thread.messages;
   const lastCall = messages.findLastIndex(
     (m) => m.role === "assistant" && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
   );
-  if (lastCall < 0) return "messages";
+  if (lastCall < 0) return 0;
   const answered = messages
     .slice(lastCall + 1)
     .map((m) => m.toolCallId)
     .filter((id): id is string => typeof id === "string");
   const calls = (messages[lastCall].toolCalls ?? []).map((call) => call.id ?? "");
-  return calls.every((id) => answered.includes(id)) ? "messages" : "queued";
+  return calls.filter((id) => !answered.includes(id)).length;
 }
 
 /** One thread of the store, as the threads pane and its picker list it. */

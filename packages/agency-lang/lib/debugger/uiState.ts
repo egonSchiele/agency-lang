@@ -14,7 +14,9 @@ import { withSince, type BusyShown } from "./busy.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
-import type { PendingPreview } from "./edits/rows.js";
+import type { PendingPreview, StopView } from "./edits/rows.js";
+import { previewOf } from "./edits/pending.js";
+import { defaultHost } from "#default-host";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -33,6 +35,10 @@ export class UIState {
   private activityLog: string[];
   private pending: PendingPreview;
   private mode: "stepping" | "running";
+  /** The stop's checkpoint as the driver sent it. */
+  private base?: Checkpoint;
+  /** What the panes draw: the base with the pending edits applied, or
+   *  the base when there are none or the preview is refused. */
   private checkpoint?: Checkpoint;
   /** Where the program is stopped: the stop's location when the driver
    *  gave one, else the checkpoint's own. Names the frame whose locals
@@ -119,7 +125,8 @@ export class UIState {
       this.log("Invalid checkpoint provided, cannot set checkpoint");
       return;
     }
-    this.checkpoint = cp;
+    this.base = cp;
+    this.checkpoint = this.previewed(cp);
     // A checkpoint stamped by the tool loop, at one of its own stops or
     // on an interrupt it carried out of a request or a tool, is located
     // under the `llm()` statement: its step path is the statement's
@@ -266,9 +273,41 @@ export class UIState {
     this.mode = mode;
   }
 
-  /** Replace the queued edits with the driver's copy. */
+  /** Replace the queued edits with the driver's copy, and redraw the
+   *  panes from the checkpoint as it will be once they apply. */
   setPending(preview: PendingPreview) {
     this.pending = { edits: [...preview.edits], applied: [...preview.applied] };
+    if (!this.base || !this.location) return;
+    this.checkpoint = this.previewed(this.base);
+    this.showFrame(this.location, this.location.moduleId);
+  }
+
+  /** `base` with the pending edits applied; `base` itself when none are
+   *  pending or the patch is refused (the driver has already said why). */
+  private previewed(base: Checkpoint): Checkpoint {
+    if (this.pending.edits.length === 0) return base;
+    const at =
+      this.stop === undefined
+        ? undefined
+        : { branchPath: this.stop.branchPath, loopStop: this.stop.loopStop };
+    const preview = previewOf(base, this.pending.edits, defaultHost().settings, at);
+    return "refused" in preview ? base : preview.checkpoint;
+  }
+
+  /** What the panes draw from, for the edit tables: the stop's
+   *  checkpoint, where the stop is, where the person is looking, and
+   *  the pending edits. Null before a stop. */
+  getStopView(): StopView | null {
+    if (!this.checkpoint || !this.stopLocation || !this.location) return null;
+    return {
+      checkpoint: this.checkpoint,
+      stop: {
+        branchPath: this.stopLocation.branchPath ?? [],
+        loopStop: this.stopLocation.loopStop,
+      },
+      viewed: { branchPath: this.location.branchPath ?? [], loopStop: this.location.loopStop },
+      pending: this.pending,
+    };
   }
 
   getPending(): PendingPreview {
@@ -356,9 +395,28 @@ export class UIState {
 
   /** The messages of `threadId`, or of the active thread when none is
    *  named. */
+  /** The thread's messages as the panes show them, with the ones a
+   *  pending edit added marked: those past the end of the stop's own
+   *  list, and the queued ones past the end of its queue. */
   getThreadMessages(threadId?: string): ThreadMessages | null {
-    if (!this.checkpoint) return null;
-    return this.checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
+    const shown = this.threadMessagesOf(this.checkpoint, threadId);
+    if (!shown || !this.base || this.checkpoint === this.base) return shown;
+    const before = this.threadMessagesOf(this.base, threadId);
+    const was = before?.messages.length ?? 0;
+    const wasQueued = before?.queued.length ?? 0;
+    return {
+      ...shown,
+      messages: shown.messages.map((m, index) => (index >= was ? { ...m, pending: true } : m)),
+      queued: shown.queued.map((m, index) => (index >= wasQueued ? { ...m, pending: true } : m)),
+    };
+  }
+
+  private threadMessagesOf(
+    checkpoint: Checkpoint | undefined,
+    threadId: string | undefined,
+  ): ThreadMessages | null {
+    if (!checkpoint) return null;
+    return checkpoint.getThreadMessages(threadId, this.location?.branchPath ?? []);
   }
 
   /** The module the source pane shows: the stop's, or, before any stop

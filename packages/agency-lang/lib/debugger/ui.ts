@@ -39,6 +39,28 @@ import {
 } from "./overlays.js";
 import type { GuardTripData } from "./guardAnswer.js";
 import type { PendingPreview } from "./edits/rows.js";
+import { rowsFor, type PaneName, type StopView } from "./edits/rows.js";
+import { askLabel } from "./edits/actions.js";
+import { bindingsFor, footerHints, type KeyContext, type UiAction } from "./edits/keys.js";
+import { findBinding } from "../tui/keymap.js";
+import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
+import type { ThreadMessage } from "../runtime/state/checkpointStore.js";
+
+const LIST_PANES: PaneName[] = ["threads", "locals", "globals", "callStack", "branches", "guards"];
+
+/** The rows of `pane`, or none for a pane that lists no rows. */
+function rowsForPane(pane: string, view: StopView) {
+  return LIST_PANES.includes(pane as PaneName) ? rowsFor(pane as PaneName, view) : [];
+}
+
+/** A typed value as JSON when it parses, else the text as typed. */
+function parseJsonOrText(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
 import type { InterruptResponse } from "../runtime/interrupts.js";
 
 // ---------------------------------------------------------------------------
@@ -143,6 +165,11 @@ export class DebuggerUI implements DebuggerIO {
   /** The thread the threads pane shows; the active one when unset. */
   private threadDisplayId: string | undefined = undefined;
   private scrollOffsets: Record<string, number> = {};
+  /** The row under the cursor in each pane that lists rows. */
+  private cursor: Record<string, number> = {};
+  /** The composer under the thread: open takes typing; the draft stays
+   *  when it is closed. */
+  private composer = { open: false, draft: "" };
 
   // Spinner
   private spinnerInterval: ReturnType<typeof setInterval> | null = null;
@@ -356,60 +383,98 @@ export class DebuggerUI implements DebuggerIO {
     const threadData = this.state.getThreadMessages(this.threadDisplayId);
     if (!threadData) return "";
     const isZoomed = this.zoomedPane === "threads";
-    return threadData.messages
-      .map((m) => {
-        const display =
-          isZoomed || m.content.length <= 200 ? m.content : m.content.slice(0, 197) + "...";
-        return `  {bold}[${escapeStyleTags(m.role)}]{/bold} ${escapeStyleTags(display)}`;
-      })
+    const line = (m: ThreadMessage, role: string) => {
+      const display =
+        isZoomed || m.content.length <= 200 ? m.content : m.content.slice(0, 197) + "...";
+      const mark = m.pending ? " {yellow-fg}(pending){/yellow-fg}" : "";
+      return `  {bold}[${escapeStyleTags(role)}]{/bold} ${escapeStyleTags(display)}${mark}`;
+    };
+    const lines = [
+      ...threadData.messages.map((m) => line(m, m.role)),
+      ...threadData.queued.map((m) => line(m, `queued ${m.role}`)),
+    ];
+    const composer = this.composerLine();
+    if (composer !== null) lines.push(composer);
+    return lines.join("\n");
+  }
+
+  /** The composer, under the thread's messages: the draft with a
+   *  cursor while open, the draft or an invitation while closed; none
+   *  before a stop. */
+  private composerLine(): string | null {
+    if (this.state.getStopView() === null) return null;
+    const draft = escapeStyleTags(this.composer.draft);
+    if (this.composer.open) return `> ${draft}\u2588`;
+    if (this.composer.draft !== "") return `{gray-fg}> ${draft}{/gray-fg}`;
+    return "{gray-fg}> say something to the model\u2026{/gray-fg}";
+  }
+
+  /** The pane's lines with the cursor's row marked, while the pane is
+   *  focused and has a stop to act on. */
+  private withCursor(pane: string, lines: string[]): string {
+    if (this.focusedPaneName() !== pane || this.state.getStopView() === null) {
+      return lines.join("\n");
+    }
+    const at = this.cursorIndex(pane);
+    return lines
+      .map((text, index) => (index === at ? `{cyan-fg}\u25b8{/cyan-fg}${text.slice(1)}` : text))
       .join("\n");
+  }
+
+  private cursorIndex(pane: string): number {
+    const view = this.state.getStopView();
+    const count = view === null ? 0 : rowsForPane(pane, view).length;
+    return Math.max(0, Math.min(this.cursor[pane] ?? 0, count - 1));
+  }
+
+  /** The pane under focus, by name. */
+  focusedPaneName(): string | undefined {
+    return this.getPanes()[this.focusIndex]?.name;
   }
 
   private buildLocalsContent(): string {
-    return [...this.state.getArgs(), ...this.state.getLocals()]
-      .map((e) =>
+    const lines = [...this.state.getArgs(), ...this.state.getLocals()].map(
+      (e) =>
+        " " +
         this.formatKeyVal(e.key, e.override ?? e.value, {
           highlight: e.override !== undefined,
         }),
-      )
-      .join("\n");
+    );
+    return this.withCursor("locals", lines);
   }
 
   private buildGlobalsContent(): string {
-    return this.state
-      .getGlobals()
-      .map((g) =>
+    const lines = this.state.getGlobals().map(
+      (g) =>
+        " " +
         this.formatKeyVal(g.key, g.override ?? g.value, {
           highlight: g.override !== undefined,
         }),
-      )
-      .join("\n");
+    );
+    return this.withCursor("globals", lines);
   }
 
   private buildCallStackContent(): string {
     const callStack = this.state.getCallStack();
-    return callStack
-      .map((entry, i) => {
-        const prefix = i === callStack.length - 1 ? " > " : "   ";
-        const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
-        const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
-        return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
-      })
-      .join("\n");
+    const lines = callStack.map((entry, i) => {
+      const prefix = i === callStack.length - 1 ? " > " : "   ";
+      const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
+      const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
+      return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
+    });
+    return this.withCursor("callStack", lines);
   }
 
   /** One line per branch: its status, its label, and the owner it runs
    *  under; the branch being viewed is marked. */
   private buildBranchesContent(): string {
     const viewed = this.state.getLocation()?.branchPath ?? [];
-    return this.state
-      .listBranches()
-      .map((branch) => {
-        const marker = branch.path.join("/") === viewed.join("/") ? ">" : " ";
-        const indent = "  ".repeat(branch.path.length - 1);
-        return `${marker} ${indent}${escapeStyleTags(branch.label)} [${branch.status}] under ${escapeStyleTags(branch.owner)}`;
-      })
-      .join("\n");
+    const lines = this.state.listBranches().map((branch) => {
+      const marker = branch.path.join("/") === viewed.join("/") ? ">" : " ";
+      const indent = "  ".repeat(branch.path.length - 1);
+      return ` ${marker} ${indent}${escapeStyleTags(branch.label)} [${branch.status}] under ${escapeStyleTags(branch.owner)}`;
+    });
+    return this.withCursor("branches", lines);
   }
 
   /** The tool loop's round and removed tools, then one line per guard:
@@ -435,7 +500,7 @@ export class DebuggerUI implements DebuggerIO {
       const note = notes.length > 0 ? ` (${notes.join(", ")})` : "";
       lines.push(`  ${escapeStyleTags(name)} · ${guard.dimension} ${amount}${note}`);
     }
-    return lines.join("\n");
+    return this.withCursor("guards", lines);
   }
 
   private buildActivityContent(): string {
@@ -518,11 +583,83 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildStatsBar(): Element {
-    const waiting = this.buildWaitingContent();
-    return box(
-      { height: waiting === "" ? 1 : 2, key: "stats" },
-      text(waiting === "" ? this.buildStatsContent() : `${this.buildStatsContent()}\n${waiting}`),
-    );
+    const lines = [
+      this.buildStatsContent(),
+      this.buildWaitingContent(),
+      this.buildEditsLine(),
+    ].filter((line) => line !== "");
+    return box({ height: lines.length, key: "stats" }, text(lines.join("\n")));
+  }
+
+  /** The edits waiting at the stop, and the keys the focused row takes,
+   *  from the same tables that handle them. Empty before a stop. */
+  private buildEditsLine(): string {
+    const ctx = this.keyContext();
+    if (ctx.view === null) return "";
+    const count = ctx.pendingCount;
+    const pending = count === 0 ? "" : `${count} edit${count === 1 ? "" : "s"} pending`;
+    const hints = footerHints(bindingsFor(ctx));
+    const parts = [pending, hints].filter((part) => part !== "");
+    return parts.length === 0 ? "" : `{gray-fg}  ${parts.join("   ")}{/gray-fg}`;
+  }
+
+  /** What the key tables need to know right now. */
+  private keyContext(): KeyContext {
+    const view = this.state.getStopView();
+    const focused = this.focusedPaneName();
+    const rows = view === null || focused === undefined ? [] : rowsForPane(focused, view);
+    return {
+      view,
+      focused,
+      cursorRow: rows[this.cursorIndex(focused ?? "")],
+      composer: this.composer,
+      pendingCount: this.state.getPending().edits.length,
+    };
+  }
+
+  /** Carry out what a key table said, returning the command to send
+   *  when there is one. */
+  private async carryOut(action: UiAction, ctx: KeyContext): Promise<UiCommand | null> {
+    switch (action.kind) {
+      case "moveCursor": {
+        const pane = ctx.focused ?? "";
+        this.cursor[pane] = this.cursorIndex(pane) + action.by;
+        this.cursor[pane] = this.cursorIndex(pane);
+        this.renderUI();
+        return null;
+      }
+      case "runAction": {
+        const { action: edit, row } = action;
+        let value: unknown = undefined;
+        if (edit.asks !== undefined) {
+          const raw = await this.enterTextInput(askLabel(edit, row));
+          if (raw === null) return null;
+          value = edit.asks.kind === "json" ? parseJsonOrText(raw) : raw;
+        }
+        return { type: "edit", edits: edit.toEdits(row, value, ctx.view!) };
+      }
+      case "openComposer":
+        this.composer.open = true;
+        this.renderUI();
+        return null;
+      case "closeComposer":
+        this.composer.open = false;
+        this.renderUI();
+        return null;
+      case "sendComposer": {
+        const text = this.composer.draft.trim();
+        this.composer = { open: false, draft: "" };
+        this.renderUI();
+        const shown = this.state.getThreadMessages(this.threadDisplayId);
+        if (text === "" || !shown) return null;
+        return {
+          type: "edit",
+          edits: [{ op: "appendMessage", thread: { id: shown.threadId }, text }],
+        };
+      }
+      case "dropEdits":
+        return { type: "dropEdits" };
+    }
   }
 
   /**
@@ -771,6 +908,7 @@ export class DebuggerUI implements DebuggerIO {
 
   setPending(preview: PendingPreview): void {
     this.state.setPending(preview);
+    this.renderUI();
   }
 
   setBusy(entries: BusyEntry[]): void {
@@ -856,7 +994,7 @@ export class DebuggerUI implements DebuggerIO {
       if (this.attached !== null && keyEvent.key === "escape") {
         continue;
       }
-      const simple = SIMPLE_KEYS[keyEvent.key];
+      const simple = this.composer.open ? undefined : SIMPLE_KEYS[keyEvent.key];
       if (simple?.type === "quit") {
         for (const listener of this.quitListeners) listener();
       }
@@ -888,6 +1026,21 @@ export class DebuggerUI implements DebuggerIO {
   private async handleInteractiveKey(keyEvent: KeyEvent): Promise<UiCommand | null> {
     const panes = this.getPanes();
     const focusedName = panes[this.focusIndex]?.name;
+
+    // The pane's own table first, so a row's edit key and the composer
+    // win over the keys below; then the composer's line editor.
+    const ctx = this.keyContext();
+    const binding = findBinding(bindingsFor(ctx), keyEvent.key);
+    if (binding !== undefined) {
+      const action = binding.run();
+      return action === undefined ? null : await this.carryOut(action, ctx);
+    }
+    if (this.composer.open) {
+      const edit = lineEditAction(keyEvent);
+      if (edit !== null) this.composer.draft = applyLineEdit(this.composer.draft, edit);
+      this.renderUI();
+      return null;
+    }
 
     switch (keyEvent.key) {
       case "k": {

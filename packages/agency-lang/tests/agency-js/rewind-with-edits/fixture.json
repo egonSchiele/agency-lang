@@ -1,0 +1,9 @@
+{
+  "fresh": "sad:one:two",
+  "edited": "happy:one:two",
+  "stopWasSent": true,
+  "overridden": "calm:one:two",
+  "refused": [
+    "no tool loop above this stop"
+  ]
+}

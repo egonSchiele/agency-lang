@@ -7,6 +7,26 @@ import { FrameRecorder, Screen } from "@/tui/index.js";
 import { TestInput } from "./testSession.js";
 import { DebuggerUI } from "./ui.js";
 import { RequestWithdrawn } from "./types.js";
+import { Checkpoint } from "../runtime/state/checkpointStore.js";
+
+/** The smallest checkpoint the rewind picker will show. */
+function checkpoint(id: number): Checkpoint {
+  return new Checkpoint({
+    id,
+    stack: {
+      stack: [{ args: {}, locals: { x: id }, threads: null, step: 1, scopeName: "main" }],
+      mode: "serialize",
+      other: {},
+      deserializeStackLength: 0,
+      nodesTraversed: [],
+    },
+    globals: { store: {}, initializedModules: [] },
+    nodeId: "main",
+    moduleId: "mod.agency",
+    scopeName: "main",
+    stepPath: "0",
+  });
+}
 
 function screenful(): { ui: DebuggerUI; recorder: FrameRecorder; input: TestInput } {
   const recorder = new FrameRecorder();
@@ -53,10 +73,26 @@ describe("a withdrawn read", () => {
     }
   });
 
-  it("does nothing when no read is in progress", () => {
+  it("between a request's reads, it rejects the request's next read", async () => {
     const { ui } = screenful();
     try {
+      // The picker loads its checkpoint before its first read; the
+      // withdrawal lands in that gap.
+      const picking = ui.showRewindSelector([checkpoint(1), checkpoint(2)]);
+      ui.withdraw();
+      await expect(picking).rejects.toBeInstanceOf(RequestWithdrawn);
+    } finally {
+      ui.destroy();
+    }
+  });
+
+  it("with no request in progress, it does not carry over to the next one", async () => {
+    const { ui, input } = screenful();
+    try {
       expect(() => ui.withdraw()).not.toThrow();
+      const next = ui.waitForCommand();
+      input.feedKey({ key: "s" });
+      expect(await next).toEqual({ type: "step" });
     } finally {
       ui.destroy();
     }

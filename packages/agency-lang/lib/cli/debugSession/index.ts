@@ -21,6 +21,7 @@ import { CONNECT_RETRY_MS, checkedRecord, connectWithRetry } from "../attach.js"
 
 import {
   EXIT,
+  answer,
   branch,
   branches,
   checkpoint,
@@ -95,9 +96,15 @@ export async function debugSession(
   return print(deps, options, await run(command, options, deps));
 }
 
+/** Text goes to stdout, a refusal's to stderr. JSON always goes to
+ *  stdout, so a program reading it finds the `refused` field where it
+ *  reads everything else. */
 function print(deps: SessionCliDeps, options: SessionCliOptions, result: CommandResult): number {
-  const text = options.json ? JSON.stringify(result.json, null, 2) : result.text;
-  (result.exitCode === EXIT.refused ? deps.writeStderr : deps.writeStdout)(text + "\n");
+  if (options.json) {
+    deps.writeStdout(JSON.stringify(result.json, null, 2) + "\n");
+    return result.exitCode;
+  }
+  (result.exitCode === EXIT.refused ? deps.writeStderr : deps.writeStdout)(result.text + "\n");
   return result.exitCode;
 }
 
@@ -116,16 +123,17 @@ async function run(
   if (command.name === "attach") {
     return attach(command.pid, deps);
   }
-  const target = resolveTarget(
-    options.pid,
-    options.pid === undefined ? await probeAll(deps) : [],
-    (pid) => deps.checked(deps.sessionsDir, pid),
-  );
+  const probed = await probeAll(deps);
+  const target = resolveTarget(options.pid, probed, (pid) => deps.checked(deps.sessionsDir, pid));
   if (target.kind === "refused") {
     return refused(target.reason);
   }
+  // A socket that answers with no session is a program listening for a
+  // debugger, not one being debugged: a visit would open a session and
+  // stop it, which only `attach` may do.
+  const status = probed.find((entry) => entry.record.pid === target.record.pid)?.status ?? null;
   const sock = recordPaths(deps.sessionsDir, target.record.pid).sock;
-  if (!fs.existsSync(sock)) {
+  if (status === null || (status.cli === null && !status.terminal && !status.finished)) {
     return refused(
       `no session on ${target.record.pid}; \`agency debug session attach ${target.record.pid}\` opens one`,
     );
@@ -220,6 +228,9 @@ async function attach(pid: number, deps: SessionCliDeps): Promise<CommandResult>
           deps.commandDeps,
         );
       }
+      if (next.kind === "finished") {
+        return where({ ...visit, finished: next.finished }, record, deps.commandDeps);
+      }
     }
     return where(visit, record, deps.commandDeps);
   });
@@ -231,39 +242,49 @@ async function withVisit(
   deps: SessionCliDeps,
   body: (visit: Visit) => Promise<CommandResult> | CommandResult,
 ): Promise<CommandResult> {
-  let channel: Channel;
-  try {
-    channel = await deps.connect(record.pid, sock);
-  } catch (error) {
-    return refused((error as Error).message);
+  const opened = await openVisitWithRetry(record, sock, deps);
+  if ("refused" in opened) {
+    return refused(opened.refused);
   }
-  const visit = await openVisit(channel);
-  if ("refused" in visit) {
-    channel.close();
-    return refused(visit.refused);
-  }
+  const { channel, visit } = opened;
   try {
     return await body(visit);
   } finally {
-    // The run learns a visit is over from the socket closing, which takes
-    // a moment; the next command, from a script running them back to
-    // back, must not find this one still connected and be refused as a
-    // second visit.
-    await closed(channel, () => visit.close());
+    visit.close();
   }
 }
 
-const CLOSE_WAIT_MS = 500;
+/** How long a command keeps trying to join while the run still counts
+ *  the command before it as connected. The run learns a visit is over
+ *  from its socket closing, which lands a moment after that process
+ *  exits, so a script running commands back to back can arrive first. */
+export const VISIT_RETRY_MS = 1_000;
+const VISIT_RETRY_STEP_MS = 50;
+const EARLIER_VISIT = "another visit is in progress";
 
-function closed(channel: Channel, close: () => void): Promise<void> {
-  return new Promise((resolve) => {
-    const fallback = setTimeout(resolve, CLOSE_WAIT_MS);
-    channel.onClose(() => {
-      clearTimeout(fallback);
-      resolve();
-    });
-    close();
-  });
+async function openVisitWithRetry(
+  record: AttachRecord,
+  sock: string,
+  deps: SessionCliDeps,
+): Promise<{ channel: Channel; visit: Visit } | { refused: string }> {
+  const deadline = Date.now() + VISIT_RETRY_MS;
+  while (true) {
+    let channel: Channel;
+    try {
+      channel = await deps.connect(record.pid, sock);
+    } catch (error) {
+      return { refused: (error as Error).message };
+    }
+    const visit = await openVisit(channel);
+    if (!("refused" in visit)) {
+      return { channel, visit };
+    }
+    channel.close();
+    if (visit.refused !== EARLIER_VISIT || Date.now() >= deadline) {
+      return visit;
+    }
+    await new Promise((resolve) => setTimeout(resolve, VISIT_RETRY_STEP_MS));
+  }
 }
 
 async function verb(
@@ -314,6 +335,8 @@ async function verb(
     case "save":
     case "load":
       return saveOrLoad(visit, record, command.name, command.path, commandDeps);
+    case "answer":
+      return answer(visit, record, command.value, commandDeps);
     case "detach":
       return detach(visit, record);
   }

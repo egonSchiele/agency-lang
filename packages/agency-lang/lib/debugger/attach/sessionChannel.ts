@@ -92,6 +92,9 @@ export function sessionChannel(options: SessionChannelOptions = {}): SessionChan
       case "log":
         log(effect.line);
         return;
+      case "release":
+        options.keepAlive?.(false);
+        return;
       case "end":
         end();
         return;

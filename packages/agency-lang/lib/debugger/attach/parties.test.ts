@@ -176,6 +176,14 @@ function visit(session: AttachedSession): Visit {
   };
 }
 
+/** Whether the visit has been sent the stop's `waitForCommand`, which
+ *  follows its acknowledgement of the render. */
+function askedToCommand(received: AttachMessage[]): boolean {
+  return received.some(
+    (message) => message.type === "request" && message.method === "waitForCommand",
+  );
+}
+
 function pendingAsk(received: AttachMessage[]): number {
   const asks = received.filter(
     (message) => message.type === "request" && message.method === "waitForCommand",
@@ -196,7 +204,7 @@ describe("a terminal and a CLI visit on one run", () => {
     const person = terminal(session);
     await until(() => person.io.isWaiting(), "the terminal's first stop");
     const agent = visit(session);
-    await until(() => agent.received.some((m) => m.type === "request"), "the visit's copy");
+    await until(() => askedToCommand(agent.received), "the visit's copy");
     expect(person.io.parties.at(-1)).toEqual({ terminal: true, cli: true });
 
     const stop = pendingAsk(agent.received);
@@ -221,7 +229,7 @@ describe("a terminal and a CLI visit on one run", () => {
     const person = terminal(session);
     await until(() => person.io.isWaiting(), "the stop");
     const agent = visit(session);
-    await until(() => agent.received.some((m) => m.type === "request"), "the visit's copy");
+    await until(() => askedToCommand(agent.received), "the visit's copy");
     const stop = pendingAsk(agent.received);
 
     person.io.answer({ type: "step" });
@@ -250,7 +258,7 @@ describe("a terminal and a CLI visit on one run", () => {
     const person = terminal(session);
     await until(() => person.io.isWaiting(), "the stop");
     const agent = visit(session);
-    await until(() => agent.received.some((m) => m.type === "request"), "the visit's copy");
+    await until(() => askedToCommand(agent.received), "the visit's copy");
     agent.close();
     await until(() => person.io.parties.length >= 2, "the terminal told of the visit leaving");
 
@@ -271,7 +279,7 @@ describe("a terminal and a CLI visit on one run", () => {
     const person = terminal(session);
     await until(() => person.io.isWaiting(), "the first stop");
     const agent = visit(session);
-    await until(() => agent.received.some((m) => m.type === "request"), "the visit's copy");
+    await until(() => askedToCommand(agent.received), "the visit's copy");
     person.io.answer({ type: "continue" });
     await helper.untilWaiting();
 

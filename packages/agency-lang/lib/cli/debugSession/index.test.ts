@@ -127,6 +127,14 @@ describe("agency debug session against a program in another process", () => {
     expect(await run({ name: "frame", globals: false })).toBe(0);
     expect(printed()).toContain("x = 1");
 
+    // `set` and `checkpoints` redraw the same stop: the driver sends a
+    // render with no checkpoint, and the visit keeps the one it has.
+    expect(await run({ name: "set", varName: "x", value: 5 })).toBe(0);
+    expect(printed()).toContain("queued x = 5");
+    expect(printed()).toContain("#0 main");
+    expect(await run({ name: "checkpoints" })).toBe(0);
+    expect(printed()).toMatch(/#\d+ main/);
+
     expect(await run({ name: "continue" })).toBe(0);
     expect(printed()).toContain("is running");
     expect(await run({ name: "where" })).toBe(0);
@@ -146,7 +154,7 @@ describe("agency debug session against a program in another process", () => {
 
     expect(await run({ name: "attach", pid })).toBe(0);
     expect(await run({ name: "detach" })).toBe(0);
-    expect(printed()).toContain("runs on");
+    expect(printed()).toContain("runs on with no debugger");
 
     expect(await run({ name: "where" })).toBe(1);
     expect(printed()).toMatch(/no run holds a session|no session on/);

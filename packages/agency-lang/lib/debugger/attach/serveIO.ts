@@ -43,6 +43,9 @@ function checkpointsFromWire(wire: unknown): Checkpoint[] {
 /** Answer the run's requests with `io` until the channel closes. Returns
  *  the function that stops listening. */
 export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeEvents = {}) {
+  // A terminal's connection is its session: the run sees it as one party
+  // that stays until it closes.
+  channel.send({ type: "client", kind: "terminal" });
   // The one message the UI sends unprompted: the person asked the
   // running program to stop at its next statement.
   io.onPause(() => channel.send({ type: "pause" }));
@@ -130,6 +133,8 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         return;
       case "reply":
       case "pause":
+      case "client":
+      case "status":
         return;
     }
   });

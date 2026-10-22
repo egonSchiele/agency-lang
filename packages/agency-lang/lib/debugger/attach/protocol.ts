@@ -2,12 +2,15 @@
 // long-lived two-way channel. The run side holds the driver and sends a
 // request for each `DebuggerIO` method it calls; the UI side answers with
 // a reply carrying the method's return value. One-way methods (`log`,
-// `setMode`, the spinner) are notices and get no reply. Three messages are
-// not methods: `hello` from the run when the connection opens, `finished`
-// from the run when the program ends, and `refused` when a debugger is
-// already attached. One message goes the other way unprompted: `pause`
-// from the UI, asking the running program to stop at its next statement.
-// Closing the channel, from either side, is the detach.
+// `setMode`, the spinner) are notices and get no reply. Five messages are
+// not methods: `client`, the first message a connection sends, saying
+// what it is (`sessionRules.ts` has what follows from that); `hello` from
+// the run when a party joins; `finished` from the run when the program
+// ends; `refused` when a party cannot join; and `status`, the answer a
+// probe gets. One message goes the other way unprompted: `pause` from the
+// UI, asking the running program to stop at its next statement. A
+// terminal debugger's connection is its session, so closing it is the
+// detach; a CLI visit's session is held by the run between visits.
 //
 // A checkpoint crosses as `checkpoint.toJSON()` run through the native
 // type replacer, the way `debugStep` prepares the `onCheckpoint` payload,
@@ -43,6 +46,23 @@ export const NOTICE_METHODS = [
 export type RequestMethod = (typeof REQUEST_METHODS)[number];
 export type NoticeMethod = (typeof NOTICE_METHODS)[number];
 
+/** What a connection says it is, in its first message. A `terminal` is
+ *  a person's debugger, whose connection is its session; a `cli` is one
+ *  visit of `agency debug session`, whose session the run holds between
+ *  visits; a `probe` wants the session's state and nothing else. */
+export const CLIENT_KINDS = ["terminal", "cli", "probe"] as const;
+export type ClientKind = (typeof CLIENT_KINDS)[number];
+
+/** The CLI's hold on a session, as `status` reports it. */
+const CliStatusSchema = z
+  .object({
+    visiting: z.boolean(),
+    /** When the last visit closed, as a timestamp; null while one is
+     *  connected and before the first has closed. */
+    lastVisit: z.number().nullable(),
+  })
+  .strict();
+
 export const HelloSchema = z
   .object({
     type: z.literal("hello"),
@@ -66,6 +86,20 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("refused"), reason: z.string() }).strict(),
+  z.object({ type: z.literal("client"), kind: z.enum(CLIENT_KINDS) }).strict(),
+  z
+    .object({
+      type: z.literal("status"),
+      terminal: z.boolean(),
+      cli: CliStatusSchema.nullable(),
+      /** Whether the driver is waiting on an answer: the program is
+       *  stopped at a debug stop, or at a selector or prompt. */
+      stopped: z.boolean(),
+      /** Whether the program ended while the session was held, with the
+       *  news waiting for the next visit. */
+      finished: z.boolean(),
+    })
+    .strict(),
   z.object({ type: z.literal("pause") }).strict(),
   z
     .object({
@@ -94,6 +128,10 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
 
 export type AttachMessage = z.infer<typeof AttachMessageSchema>;
 export type Hello = z.infer<typeof HelloSchema>;
+export type RequestMessage = Extract<AttachMessage, { type: "request" }>;
+export type NoticeMessage = Extract<AttachMessage, { type: "notice" }>;
+export type FinishedMessage = Extract<AttachMessage, { type: "finished" }>;
+export type StatusMessage = Extract<AttachMessage, { type: "status" }>;
 
 /** A parsed JSON value as one of our messages, or null when it is not
  *  one. The sender is the other half of this package, so a bad message is

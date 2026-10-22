@@ -381,11 +381,20 @@ describe("a program registered for attach, over the socket", () => {
     const io = new TestDebuggerIO([{ type: "step" }, { type: "continue" }]);
     const hellos: Hello[] = [];
     const finished: unknown[] = [];
-    serveDebuggerIO(channel, io, {
-      hello: (message) => hellos.push(message),
-      finished: (value) => finished.push(value),
-    });
+    // The driver is installed when the run reads the connection's first
+    // message, so the program is let go only once `hello` is back: a
+    // release before that could run it through with no debugger yet.
+    const helloSeen = new Promise<void>((resolve) =>
+      serveDebuggerIO(channel, io, {
+        hello: (message) => {
+          hellos.push(message);
+          resolve();
+        },
+        finished: (value) => finished.push(value),
+      }),
+    );
     const closedByRun = new Promise<void>((resolve) => channel.onClose(resolve));
+    await helloSeen;
     helper.releaseWaiter();
 
     const result = await running;

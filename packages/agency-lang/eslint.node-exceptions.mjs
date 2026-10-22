@@ -73,8 +73,6 @@ export const NODE_ONLY = {
     "std::statelog reads a statelog file through lib/eval/statelogParser.ts, which uses fs",
   "lib/stdlib/template.ts": "std::template fills a template, which runs the compiler",
   "lib/stdlib/prompts.ts": "the line-mode prompts read the terminal through the prompts package",
-  "lib/stdlib/ui-region.ts": "the terminal UI needs the terminal's size and raw mode",
-  "lib/stdlib/ui.ts": "the terminal UI needs the terminal's size and raw mode",
   "lib/stdlib/vision.ts": "std::vision runs through local models",
   "lib/stdlib/visionFiles.ts": "local models",
   "lib/utils/sha256.node.ts":

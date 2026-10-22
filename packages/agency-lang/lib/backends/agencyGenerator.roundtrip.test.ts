@@ -197,7 +197,7 @@ describe("formatter gate: pinned repros", () => {
   it("import hoisting converges in one pass (blank-line accumulation)", () => {
     // An import below other code hoists to the top block; the blanks it
     // leaves behind must collapse, or each fmt pass shifts them.
-    const src = `export { x } from "std::ui"\n\nimport { y } from "std::ui"\n\nnode main() {\n  return y\n}\n`;
+    const src = `export { x } from "std::array"\n\nimport { y } from "std::array"\n\nnode main() {\n  return y\n}\n`;
     const once = generateAgency(parseTemplateMode(src));
     const twice = generateAgency(parseTemplateMode(once));
     expect(twice).toBe(once);

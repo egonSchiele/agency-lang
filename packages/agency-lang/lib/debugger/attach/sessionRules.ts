@@ -433,9 +433,21 @@ function fromParty(state: SessionState, party: PartyId, message: AttachMessage):
       return reply(state, party, message);
     case "pause":
       return { state, effects: [{ type: "toDriver", message }] };
+    case "detach":
+      return detachParty(state, party);
     default:
       return { state, effects: [] };
   }
+}
+
+/** A CLI visit releasing the hold: the visit is closed, the hold is
+ *  gone, and the session ends unless a terminal is attached. A terminal
+ *  sending it is treated as closing. */
+function detachParty(state: SessionState, party: PartyId): Stepped {
+  if (party === state.terminal) {
+    return left({ ...state, terminal: null }, party, [{ type: "close", party }]);
+  }
+  return left({ ...state, cli: null }, party, [{ type: "clearLease" }, { type: "close", party }]);
 }
 
 /** A reply from a party. To a pending render, one acknowledgement of the

@@ -9,9 +9,9 @@
 // ends; `refused` when a party cannot join; and `status`, the answer a
 // probe gets. Two more go to the parties of a session with more than
 // one: `parties`, who is on the run, and `answered`, that another party
-// answered a request first. One message goes the other way unprompted:
-// `pause` from the UI, asking the running program to stop at its next
-// statement. A terminal debugger's connection is its session, so closing
+// answered a request first. Two messages go the other way unprompted:
+// `pause`, asking the running program to stop at its next statement, and
+// `detach`, a CLI visit releasing its hold. A terminal debugger's connection is its session, so closing
 // it is the detach; a CLI visit's session is held by the run between
 // visits.
 //
@@ -120,6 +120,9 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("pause") }).strict(),
+  /** From a CLI visit: release the CLI's hold on the session. With no
+   *  terminal attached the session ends and the program runs on. */
+  z.object({ type: z.literal("detach") }).strict(),
   z
     .object({
       type: z.literal("request"),

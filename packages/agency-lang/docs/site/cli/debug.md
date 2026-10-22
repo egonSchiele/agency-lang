@@ -70,6 +70,39 @@ A program's own interrupts keep going wherever the program sends them: a policy,
 
 How it works: a running program listens for the `SIGUSR2` signal and opens a Unix socket under `~/.agency/debug-sessions` when it arrives; `--attach` sends the signal and connects. Only a process running as the same user can send it, the directory is readable by that user alone, and a program nobody signals opens nothing. Two things follow from the signal: a program run under `nodemon`, which restarts a child with `SIGUSR2`, opens its debug socket instead of restarting; and whoever can reach that directory can do what the program's owner can do, including changing a variable, so keep it yours.
 
+## Driving the debugger from a script
+
+`agency debug session` is the same debugger, one command at a time, for a script or an agent that works by running a command and reading what it printed. The session lives in the program: a command connects, is shown where the program is, answers or reads, and disconnects, and the next command picks up where the last left off. A program held this way with no command for ten minutes lets itself go and runs on.
+
+```
+$ agency debug session list
+  PID    PROGRAM          NODE  STARTED  SESSION
+  48213  agent.js         main  4m ago   none
+
+$ agency debug session attach 48213
+agent.js · node main · pid 48213
+stopped in search ("in search") · agent.agency:8
+  const url = "https://example.test/" + query
+stack   main › llm() (round 3) › search
+threads main (12 messages) · search (3 messages, active)
+guards  research · cost $0.42 of $0.50 · root budget · time 4m10s of 30m
+usage   31,204 tokens · $0.42
+next    step, next, continue, frame, thread, branches, guards, detach
+```
+
+`attach` opens the session; the program stops at its next statement. Then, with one session held, no pid is needed:
+
+- `where` prints the summary again. Run it first, and after every move.
+- The readers, none of which moves the program: `frame [n] [--globals]`, `stack`, `threads`, `thread [label] [--last n]`, `branches`, `branch <key>`, `guards`, `source [--context n]`, `checkpoints`.
+- The moves: `step`, `next`, `in`, `out`, `continue`, `back`, `rewind <id>`, `set <name> <json>`, `checkpoint [label]`, `save <path>`, `load <path>`. Each answers the stop and prints `where` at the next one. `continue` prints that the program is running and returns at once.
+- `wait [--for 5m]` blocks until the program stops or ends, then prints `where`; `pause` asks a running program to stop at its next statement, and `wait` returns at that stop.
+- `answer <json>` replies when the program is waiting on a question rather than stopped at a statement: a guard trip (`{"type":"approve"}` or `{"type":"reject","value":"why"}`), a node's arguments (a JSON array), or `input()` (a JSON string). A move is refused at such a stop and says so.
+- `detach` releases the session. With no one else on the run the program runs on with no debugger; with a person at `agency debug --attach`, they keep driving and the program waits for them.
+
+A move the debugger could not do, `back` at the earliest checkpoint, or a `save` to a path it cannot write, is a refusal with the debugger's own line, not a stop. Readable text by default, `--json` for the same facts as fields, `--pid <pid>` when more than one session is held. The exit codes: 0 for an answer, 1 for a refusal, with what to do instead on stderr (in the JSON on stdout with `--json`), 2 when the program has ended, 3 when `wait` ran out.
+
+A person can be on the same run at `agency debug --attach`. Both see every stop, and whichever answers first moves the program. A move the person got to first is refused: `the stop you saw was answered by the terminal (continue); run \`where\` and decide again`. The person's moves show up in `where` as `since   terminal: continue`, and `where` says `a terminal debugger is attached too`. The program's own interrupts go to its caller, as they do for the terminal debugger; neither party answers them.
+
 ## Options
 
 - `--attach [pid]` — attach to the running program with that pid, or with no pid, list the programs that can take a debugger. It takes no file and none of the other flags: the program keeps the options it was started with, so `--policy` or `--rewind-size` with `--attach` is refused rather than ignored.

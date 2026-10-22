@@ -143,6 +143,7 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
+import { addDebugSessionCommands } from "@/cli/debugSession/register.js";
 import type { InvocationOptions } from "@/runtime/invocationOptions.js";
 import type { ResolvedModelFlag } from "@/config/config.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -1915,11 +1916,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // non-zero path.
     });
 
+  const debugCmd = program
+    .command("debug")
+    .description("Debug an Agency file interactively, or attach to a running program")
+    .argument("[file]", "Agency file to debug (not with --attach)");
+  addDebugSessionCommands(debugCmd);
   addRunOptions(
-    program
-      .command("debug")
-      .description("Debug an Agency file interactively, or attach to a running program")
-      .argument("[file]", "Agency file to debug (not with --attach)")
+    debugCmd
       .option(
         "--attach [pid]",
         "Attach to a running Agency program by pid; with no pid, list the programs that can take a debugger",

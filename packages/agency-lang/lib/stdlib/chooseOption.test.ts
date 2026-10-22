@@ -59,7 +59,14 @@ function makeTestCtx(): RuntimeContext<any> {
 }
 
 describe("chooseOption, the terminal branch", () => {
-  afterEach(() => restoreTty());
+  afterEach(() => {
+    restoreTty();
+    // `prompts.inject` appends to a module-level queue that only a prompt
+    // call drains. A test that queues more answers than it reads (the
+    // allowCancel case does, on purpose) would otherwise hand its leftover
+    // to the next test. `_injected` is the package's private field for it.
+    (prompts as any)._injected = undefined;
+  });
 
   it("returns the picked key on a clean select", async () => {
     spoofTty(true);

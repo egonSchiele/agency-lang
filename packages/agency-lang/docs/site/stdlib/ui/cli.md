@@ -231,9 +231,8 @@ Ask the user to pick from a list, filtering by typed text. Returns
   `success(key)` with the chosen item's `key`, or `failure("cancelled")`
   on Ctrl+C / Escape. The filter keeps the items whose `key` contains
   the typed text (case-insensitive); labels are not searched. When
-  `allowFreeText` is true and the
-  typed input matches no item, picking it returns the typed text
-  verbatim instead of a key.
+  `allowFreeText` is true and the typed input matches no item, picking
+  it returns the typed text verbatim instead of a key.
 
   @param message - The question shown above the choices
   @param items - The {key, label} rows to choose from
@@ -301,7 +300,7 @@ a tool so the LLM cannot override the constraint.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L202))
 
 ### confirm
 
@@ -329,7 +328,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L227))
 
 ### chooseOption
 
@@ -377,7 +376,7 @@ std::policy uses it for its approve/reject menus.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L268))
 
 ### interruptChoice
 
@@ -420,4 +419,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L370))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L369))

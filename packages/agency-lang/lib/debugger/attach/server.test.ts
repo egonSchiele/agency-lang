@@ -123,7 +123,13 @@ describe("the attach server", () => {
         channel.send({ type: "client", kind: "probe" });
       });
     };
-    expect(await probe()).toEqual({ type: "status", terminal: false, cli: null, stopped: false });
+    expect(await probe()).toEqual({
+      type: "status",
+      terminal: false,
+      cli: null,
+      stopped: false,
+      finished: false,
+    });
 
     const visit = await connect(server.socketPath);
     const joined = new Promise<void>((resolve) =>

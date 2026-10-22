@@ -14,7 +14,15 @@ import { readFileSync } from "fs";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
-import type { BusyEntry, DebuggerCommand, DebuggerIO, DebuggerMode, UiCommand } from "./types.js";
+import {
+  RequestWithdrawn,
+  type BusyEntry,
+  type DebuggerCommand,
+  type DebuggerIO,
+  type DebuggerMode,
+  type Parties,
+  type UiCommand,
+} from "./types.js";
 import type { Hello } from "./attach/protocol.js";
 import { UIState } from "./uiState.js";
 import { busyText, formatElapsed, type BusyShown } from "./busy.js";
@@ -163,7 +171,14 @@ export class DebuggerUI implements DebuggerIO {
   // which the person's next read drains first, so `c` pressed while
   // running is acted on at the next stop, in order.
   private pendingKey: Promise<void> | null = null;
-  private personWaiter: ((key: KeyEvent) => void) | null = null;
+  private personWaiter: {
+    resolve: (key: KeyEvent) => void;
+    reject: (error: Error) => void;
+  } | null = null;
+  /** Set by `withdraw` while the request it is for is between reads. */
+  private withdrawn = false;
+  /** Who else is on the run, attached; shown on the stats line. */
+  private parties: Parties | null = null;
   private heldKeys: KeyEvent[] = [];
   private waitingListeners: (() => void)[] = [];
 
@@ -448,7 +463,9 @@ export class DebuggerUI implements DebuggerIO {
       this.attached === null
         ? ""
         : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
-    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}{/gray-fg}`;
+    const beside =
+      this.attached !== null && this.parties?.cli ? " | with agency debug session" : "";
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${beside}{/gray-fg}`;
   }
 
   /** What the program is waiting on, while it runs and at a stop with a
@@ -631,6 +648,37 @@ export class DebuggerUI implements DebuggerIO {
     this.pauseListeners.push(listener);
   }
 
+  /** Another party answered the request this UI is answering: the read
+   *  the person is in rejects, which closes an open picker or form and
+   *  ends the command loop's wait, and the activity line already says
+   *  who. A request can be between reads for a moment (the rewind
+   *  picker loads a checkpoint before its first read and between
+   *  moves), so with no read in progress the withdrawal is kept for the
+   *  request's next read, and each request starts with it cleared. */
+  withdraw(): void {
+    const waiter = this.personWaiter;
+    if (waiter === null) {
+      this.withdrawn = true;
+      return;
+    }
+    this.personWaiter = null;
+    this.inputPrompt = null;
+    this.inputValue = "";
+    waiter.reject(new RequestWithdrawn());
+    this.renderUI();
+  }
+
+  /** The start of a request that reads keys: a withdrawal left over from
+   *  the one before does not apply to it. */
+  private beginRequest(): void {
+    this.withdrawn = false;
+  }
+
+  setParties(parties: Parties): void {
+    this.parties = parties;
+    this.renderUI();
+  }
+
   /** Resolves the next time this UI waits on the person for a key: a
    *  command at a stop, a text input, or an overlay. A test feeds a key
    *  and waits on this to know the UI has taken it and come back for
@@ -645,12 +693,18 @@ export class DebuggerUI implements DebuggerIO {
   /** The next key for the person: a held one first, else the next the
    *  screen gives. The one place the UI reads a key for someone. */
   private readKey(): Promise<KeyEvent> {
+    if (this.withdrawn) {
+      this.withdrawn = false;
+      this.inputPrompt = null;
+      this.inputValue = "";
+      return Promise.reject(new RequestWithdrawn());
+    }
     const held = this.heldKeys.shift();
     if (held !== undefined) {
       return Promise.resolve(held);
     }
-    return new Promise<KeyEvent>((resolve) => {
-      this.personWaiter = resolve;
+    return new Promise<KeyEvent>((resolve, reject) => {
+      this.personWaiter = { resolve, reject };
       const waiting = this.waitingListeners;
       this.waitingListeners = [];
       for (const listener of waiting) listener();
@@ -681,7 +735,7 @@ export class DebuggerUI implements DebuggerIO {
     const waiter = this.personWaiter;
     if (waiter !== null) {
       this.personWaiter = null;
-      waiter(key);
+      waiter.resolve(key);
     } else if (this.spinnerInterval !== null && PAUSE_KEYS.includes(key.key)) {
       this.pausing = true;
       for (const listener of this.pauseListeners) listener();
@@ -792,6 +846,7 @@ export class DebuggerUI implements DebuggerIO {
   // --- Key handling ---
 
   async waitForCommand(): Promise<DebuggerCommand> {
+    this.beginRequest();
     this.pausing = false;
     while (true) {
       const keyEvent = await this.readKey();
@@ -970,21 +1025,20 @@ export class DebuggerUI implements DebuggerIO {
     }
   }
 
-  promptForInput(prompt: string): Promise<string> {
-    return new Promise<string>((resolve) => {
-      const tryInput = async () => {
-        const value = await this.enterTextInput(prompt);
-        if (value !== null) {
-          resolve(value);
-        } else {
-          await tryInput();
-        }
-      };
-      tryInput();
-    });
+  /** Ask until the person answers: escape clears the prompt and asks
+   *  again. A withdrawn read rejects out of here like any other. */
+  async promptForInput(prompt: string): Promise<string> {
+    this.beginRequest();
+    while (true) {
+      const value = await this.enterTextInput(prompt);
+      if (value !== null) {
+        return value;
+      }
+    }
   }
 
   async promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]> {
+    this.beginRequest();
     const args: unknown[] = [];
     for (const param of parameters) {
       const typeLabel = param.typeHint ? ` (${formatTypeHint(param.typeHint)})` : "";
@@ -1021,6 +1075,7 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   async showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null> {
+    this.beginRequest();
     this.prevState = this.state.clone();
     const result = await showRewindSelector(this.overlayContext(), checkpoints);
     this.state = this.prevState!.clone();
@@ -1030,12 +1085,14 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   async answerGuardTrip(data: GuardTripData): Promise<InterruptResponse> {
+    this.beginRequest();
     const response = await showGuardTripForm(this.overlayContext(), data);
     await this.render();
     return response;
   }
 
   async showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void> {
+    this.beginRequest();
     const selected = await showCheckpointsPanel(this.overlayContext(), checkpoints);
     if (selected) {
       await this.render(selected);

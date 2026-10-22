@@ -7,10 +7,13 @@
 // what it is (`sessionRules.ts` has what follows from that); `hello` from
 // the run when a party joins; `finished` from the run when the program
 // ends; `refused` when a party cannot join; and `status`, the answer a
-// probe gets. One message goes the other way unprompted: `pause` from the
-// UI, asking the running program to stop at its next statement. A
-// terminal debugger's connection is its session, so closing it is the
-// detach; a CLI visit's session is held by the run between visits.
+// probe gets. Two more go to the parties of a session with more than
+// one: `parties`, who is on the run, and `answered`, that another party
+// answered a request first. One message goes the other way unprompted:
+// `pause` from the UI, asking the running program to stop at its next
+// statement. A terminal debugger's connection is its session, so closing
+// it is the detach; a CLI visit's session is held by the run between
+// visits.
 //
 // A checkpoint crosses as `checkpoint.toJSON()` run through the native
 // type replacer, the way `debugStep` prepares the `onCheckpoint` payload,
@@ -52,6 +55,9 @@ export type NoticeMethod = (typeof NOTICE_METHODS)[number];
  *  visits; a `probe` wants the session's state and nothing else. */
 export const CLIENT_KINDS = ["terminal", "cli", "probe"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
+/** The kinds that stay on the session, and so can answer a request. */
+export const PARTY_KINDS = ["terminal", "cli"] as const;
+export type PartyKind = (typeof PARTY_KINDS)[number];
 
 /** The CLI's hold on a session, as `status` reports it. */
 const CliStatusSchema = z
@@ -87,6 +93,19 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("refused"), reason: z.string() }).strict(),
   z.object({ type: z.literal("client"), kind: z.enum(CLIENT_KINDS) }).strict(),
+  /** A request was answered by another party: `command` says how, in
+   *  the activity line's words. Sent to the other parties when a reply
+   *  is accepted, and to a party whose reply came too late. */
+  z
+    .object({
+      type: z.literal("answered"),
+      id: z.number().int().nonnegative(),
+      by: z.enum(PARTY_KINDS),
+      command: z.string(),
+    })
+    .strict(),
+  /** Who is on the run, sent to every party when that changes. */
+  z.object({ type: z.literal("parties"), terminal: z.boolean(), cli: z.boolean() }).strict(),
   z
     .object({
       type: z.literal("status"),
@@ -132,6 +151,8 @@ export type RequestMessage = Extract<AttachMessage, { type: "request" }>;
 export type NoticeMessage = Extract<AttachMessage, { type: "notice" }>;
 export type FinishedMessage = Extract<AttachMessage, { type: "finished" }>;
 export type StatusMessage = Extract<AttachMessage, { type: "status" }>;
+export type AnsweredMessage = Extract<AttachMessage, { type: "answered" }>;
+export type PartiesMessage = Extract<AttachMessage, { type: "parties" }>;
 
 /** A parsed JSON value as one of our messages, or null when it is not
  *  one. The sender is the other half of this package, so a bad message is

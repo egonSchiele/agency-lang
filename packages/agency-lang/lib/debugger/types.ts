@@ -44,9 +44,29 @@ export class DebuggerDetached extends Error {
   }
 }
 
+/** Thrown out of a `DebuggerIO` read that another party answered first:
+ *  attached, a person and an agent can both be on one run, and the
+ *  request this read was for is no longer pending. The read's caller
+ *  sends no reply; the next request finds a UI waiting for nothing. */
+export class RequestWithdrawn extends Error {
+  constructor() {
+    super("another party answered first");
+    this.name = "RequestWithdrawn";
+  }
+}
+
+/** Who is on a run beside this debugger. */
+export type Parties = { terminal: boolean; cli: boolean };
+
 export type DebuggerIO = {
   /** A line for the activity log. */
   log(line: string): void;
+  /** Who is on the run, each time it changes. Attached only. */
+  setParties?(parties: Parties): void;
+  /** Stop the read in progress, because another party answered the
+   *  request it was for: the read rejects with `RequestWithdrawn`. A UI
+   *  with no read in progress does nothing. */
+  withdraw?(): void;
   setMode(mode: DebuggerMode): void;
   /** The overrides a `set` has queued for the next resume, for the
    *  locals pane to show beside the current values. */

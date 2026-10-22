@@ -7,18 +7,27 @@
 // or a promise; `sessionChannel.ts` applies the effects.
 //
 // The one idea: the run holds the session, and a connection is a party on
-// it. A terminal debugger's connection is its session, as before. A CLI
-// visit connects, is shown where the program is, answers or reads, and
-// disconnects, and the session stays, with the driver's requests pending,
-// until the next visit or the lease.
-import type {
-  AttachMessage,
-  ClientKind,
-  FinishedMessage,
-  Hello,
-  NoticeMessage,
-  RequestMessage,
-  StatusMessage,
+// it. A terminal debugger and a CLI visit can both be on the run at once,
+// and either one drives: every request goes to every party, the first
+// reply answers it, and the other party is told who answered and with
+// what. A reply to a request that is no longer pending is refused, never
+// reconciled; there is no merging anywhere here. A terminal's close is
+// its detach, as before. A CLI visit connects, is shown where the program
+// is, answers or reads, and disconnects, and the CLI's hold on the
+// session stays, with the driver's requests pending, until the next visit
+// or the lease.
+import { describeAnswer } from "./describe.js";
+import {
+  REPLY_SCHEMAS,
+  type AttachMessage,
+  type ClientKind,
+  type FinishedMessage,
+  type Hello,
+  type NoticeMessage,
+  type PartiesMessage,
+  type PartyKind,
+  type RequestMessage,
+  type StatusMessage,
 } from "./protocol.js";
 
 /** A number the adapter gives each connection. */
@@ -30,6 +39,16 @@ export type CliHold = {
   visit: PartyId | null;
   lastVisit: number | null;
 };
+
+/** An answer the session accepted, kept so a late reply to the same
+ *  request can be told what happened. */
+export type Answered = {
+  id: number;
+  by: PartyKind;
+  command: string;
+};
+
+type ReplyMessage = Extract<AttachMessage, { type: "reply" }>;
 
 export type SessionState = {
   /** The run's `hello`, sent to every party as it joins. */
@@ -43,6 +62,12 @@ export type SessionState = {
    *  without waiting, so two renders can be out before the first is
    *  acknowledged. */
   pending: RequestMessage[];
+  /** For each pending `render`, by id, the parties still to acknowledge
+   *  it. */
+  awaiting: Record<number, PartyId[]>;
+  /** The parties sent the last render on joining and not yet done
+   *  drawing it; the requests waiting go to each once it has. */
+  drawing: PartyId[];
   /** The last `render`, so a joining party sees the stop. A render the
    *  driver sends without a checkpoint means "the same stop, redrawn",
    *  so the checkpoint of the render before is carried into it. */
@@ -55,6 +80,8 @@ export type SessionState = {
   spinning: boolean;
   /** The last activity lines, so a visit sees what happened since. */
   recent: string[];
+  /** The last answers, newest last. */
+  answered: Answered[];
   /** The program's end, kept for a visit that comes after it. */
   finished: FinishedMessage | null;
 };
@@ -66,10 +93,13 @@ export function emptySession(): SessionState {
     terminal: null,
     cli: null,
     pending: [],
+    awaiting: {},
+    drawing: [],
     lastRender: null,
     settings: {},
     spinning: false,
     recent: [],
+    answered: [],
     finished: null,
   };
 }
@@ -101,6 +131,7 @@ export type Stepped = { state: SessionState; effects: Effect[] };
  *  forget. */
 export const LEASE_MS = 10 * 60 * 1000;
 export const RECENT_LINES = 20;
+export const ANSWERED_KEPT = 10;
 
 /** The notices a joiner is sent the latest of. */
 const SETTING_METHODS = ["setMode", "setOverrides", "setBusy"];
@@ -136,14 +167,27 @@ export function statusOf(state: SessionState): StatusMessage {
   };
 }
 
+/** Who is on the run, as every party is told when that changes. */
+export function partiesOf(state: SessionState): PartiesMessage {
+  return { type: "parties", terminal: state.terminal !== null, cli: state.cli !== null };
+}
+
 /** The parties a message from the driver goes to. */
 function connected(state: SessionState): PartyId[] {
   const parties = [state.terminal, state.cli?.visit ?? null];
   return parties.filter((party): party is PartyId => party !== null);
 }
 
+function kindOf(state: SessionState, party: PartyId): PartyKind {
+  return party === state.terminal ? "terminal" : "cli";
+}
+
 function sendTo(parties: PartyId[], message: AttachMessage): Effect[] {
   return parties.map((to) => ({ type: "send", to, message }));
+}
+
+function logLine(line: string): AttachMessage {
+  return { type: "notice", method: "log", args: [line] };
 }
 
 function sinceText(state: SessionState, now: number): string {
@@ -182,7 +226,7 @@ function connect(state: SessionState, party: PartyId, kind: ClientKind, now: num
       ],
     };
   }
-  if (state.terminal !== null) {
+  if (kind === "terminal" && state.terminal !== null) {
     return {
       state,
       effects: refuse(
@@ -191,65 +235,123 @@ function connect(state: SessionState, party: PartyId, kind: ClientKind, now: num
       ),
     };
   }
-  if (kind === "terminal" && state.cli !== null) {
-    return {
-      state,
-      effects: refuse(
-        party,
-        `already attached since ${sinceText(state, now)}, by agency debug session`,
-      ),
-    };
-  }
   if (kind === "cli" && state.cli?.visit != null) {
     return { state, effects: refuse(party, "another visit is in progress") };
   }
   const joined: SessionState =
     kind === "terminal"
-      ? { ...state, terminal: party }
-      : { ...state, cli: { visit: party, lastVisit: state.cli?.lastVisit ?? null } };
+      ? { ...state, terminal: party, attachedSince: state.attachedSince ?? now }
+      : {
+          ...state,
+          cli: { visit: party, lastVisit: state.cli?.lastVisit ?? null },
+          attachedSince: state.attachedSince ?? now,
+        };
   const lease: Effect[] = kind === "cli" ? [{ type: "clearLease" }] : [];
+  const others = connected(joined).filter((other) => other !== party);
+  const { state: showing, effects } = shown(joined, party);
   return {
-    state: { ...joined, attachedSince: state.attachedSince ?? now },
-    effects: [...lease, ...shown(joined, party)],
+    state: showing,
+    effects: [...lease, ...effects, ...sendTo(others, partiesOf(joined))],
   };
 }
 
-/** What a party is sent as it joins: the run's hello, the settings and
- *  the spinner as they stand, the recent activity, then, when the driver
- *  is waiting on an answer, the stop and every request waiting. With
- *  nothing pending the program is running, and the last stop is not
- *  shown: it is where the program was, not where it is. */
-function shown(state: SessionState, party: PartyId): Effect[] {
+/** What a party is sent as it joins: the run's hello, who else is on the
+ *  run, the settings and the spinner as they stand, the recent activity,
+ *  then, when the driver is waiting on an answer, the stop. The requests
+ *  waiting follow once the party has acknowledged the stop, so it has
+ *  drawn or stored it before it is asked for a command, as the driver
+ *  arranges for a party that was there when the stop came. A joiner
+ *  during a render that is still pending is one more party it waits
+ *  for. With nothing pending the program is running, and the last stop
+ *  is not shown: it is where the program was, not where it is. */
+function shown(state: SessionState, party: PartyId): Stepped {
   const hello: AttachMessage[] = state.hello === null ? [] : [state.hello];
   const settings = Object.values(state.settings);
   const spinner: AttachMessage[] = state.spinning
     ? [{ type: "notice", method: "startSpinner", args: [] }]
     : [];
-  const recent: AttachMessage[] = state.recent.map((line) => ({
-    type: "notice",
-    method: "log",
-    args: [line],
-  }));
-  const stopped = state.pending.length > 0;
-  const render: AttachMessage[] = stopped && state.lastRender !== null ? [state.lastRender] : [];
-  const pending = state.pending.filter((request) => request !== state.lastRender);
-  return [...hello, ...settings, ...spinner, ...recent, ...render, ...pending].map((message) => ({
-    type: "send",
-    to: party,
-    message,
-  }));
+  const recent = state.recent.map(logLine);
+  const first = [...hello, partiesOf(state), ...settings, ...spinner, ...recent];
+  const render = state.pending.length > 0 ? state.lastRender : null;
+  if (render === null) {
+    return { state, effects: first.flatMap((message) => sendTo([party], message)) };
+  }
+  const awaited = state.awaiting[render.id];
+  const awaiting =
+    awaited === undefined
+      ? state.awaiting
+      : { ...state.awaiting, [render.id]: [...awaited, party] };
+  return {
+    state: { ...state, awaiting, drawing: [...state.drawing, party] },
+    effects: [...first, render].flatMap((message) => sendTo([party], message)),
+  };
+}
+
+/** A party has left: it is waited on for nothing, and the rest are told
+ *  who is still on the run. The session ends with the last party. The
+ *  `before` effects (a lease to start, a channel to close) come first. */
+function left(state: SessionState, party: PartyId, before: Effect[]): Stepped {
+  const gone = {
+    ...state,
+    drawing: state.drawing.filter((other) => other !== party),
+    awaiting: withoutParty(state.awaiting, party),
+  };
+  const settled = settleRenders(gone);
+  const rest = connected(settled.state);
+  if (settled.state.terminal === null && settled.state.cli === null) {
+    return { state: settled.state, effects: [...before, ...settled.effects, { type: "end" }] };
+  }
+  return {
+    state: settled.state,
+    effects: [...before, ...settled.effects, ...sendTo(rest, partiesOf(settled.state))],
+  };
+}
+
+function withoutParty(
+  awaiting: Record<number, PartyId[]>,
+  party: PartyId,
+): Record<number, PartyId[]> {
+  const result: Record<number, PartyId[]> = {};
+  for (const [id, parties] of Object.entries(awaiting)) {
+    result[Number(id)] = parties.filter((other) => other !== party);
+  }
+  return result;
+}
+
+/** Every pending render that no party is still waited on for is done:
+ *  the driver gets the one acknowledgement it asked for. */
+function settleRenders(state: SessionState): Stepped {
+  const done = state.pending.filter(
+    (request) => request.method === "render" && (state.awaiting[request.id] ?? []).length === 0,
+  );
+  if (done.length === 0) {
+    return { state, effects: [] };
+  }
+  const awaiting = { ...state.awaiting };
+  for (const render of done) {
+    delete awaiting[render.id];
+  }
+  return {
+    state: {
+      ...state,
+      pending: state.pending.filter((request) => !done.includes(request)),
+      awaiting,
+    },
+    effects: done.map((render) => ({
+      type: "toDriver",
+      message: { type: "reply", id: render.id, result: undefined },
+    })),
+  };
 }
 
 function disconnect(state: SessionState, party: PartyId, now: number): Stepped {
   if (party === state.terminal) {
-    const left = { ...state, terminal: null };
-    return { state: left, effects: left.cli === null ? [{ type: "end" }] : [] };
+    return left({ ...state, terminal: null }, party, []);
   }
   if (state.cli !== null && party === state.cli.visit) {
-    return {
-      state: { ...state, cli: { visit: null, lastVisit: now } },
-      effects: [{ type: "startLease" }],
-    };
+    return left({ ...state, cli: { visit: null, lastVisit: now } }, party, [
+      { type: "startLease" },
+    ]);
   }
   return { state, effects: [] };
 }
@@ -270,15 +372,18 @@ function fromDriver(state: SessionState, message: AttachMessage): Stepped {
     case "hello":
       return { state: { ...state, hello: message }, effects: [] };
     case "request": {
+      // A party still drawing the replayed stop is sent this once it has.
+      const parties = connected(state).filter((party) => !state.drawing.includes(party));
       const isRender = message.method === "render";
       const kept = isRender ? asLastRender(state, message) : message;
       return {
         state: {
           ...state,
           pending: [...state.pending, kept],
+          awaiting: isRender ? { ...state.awaiting, [message.id]: parties } : state.awaiting,
           lastRender: isRender ? kept : state.lastRender,
         },
-        effects: sendTo(connected(state), message),
+        effects: sendTo(parties, message),
       };
     }
     case "notice":
@@ -287,7 +392,7 @@ function fromDriver(state: SessionState, message: AttachMessage): Stepped {
       const parties = connected(state);
       if (parties.length === 0) {
         return {
-          state: { ...state, finished: message, pending: [] },
+          state: { ...state, finished: message, pending: [], awaiting: {} },
           effects: [{ type: "release" }],
         };
       }
@@ -324,18 +429,109 @@ function fromParty(state: SessionState, party: PartyId, message: AttachMessage):
     return { state, effects: [] };
   }
   switch (message.type) {
-    case "reply": {
-      if (!state.pending.some((request) => request.id === message.id)) {
-        return { state, effects: [] };
-      }
-      const pending = state.pending.filter((request) => request.id !== message.id);
-      return { state: { ...state, pending }, effects: [{ type: "toDriver", message }] };
-    }
+    case "reply":
+      return reply(state, party, message);
     case "pause":
       return { state, effects: [{ type: "toDriver", message }] };
     default:
       return { state, effects: [] };
   }
+}
+
+/** A reply from a party. To a pending render, one acknowledgement of the
+ *  ones waited on; from a party drawing the replayed stop, also the cue
+ *  to send it the requests waiting. To any other pending request, the
+ *  answer: the driver gets it, every party is told who answered and how,
+ *  and the other parties are sent `answered` so a read they are inside
+ *  stops. To a request already answered, `answered` again, so a late
+ *  party is told; to anything else, nothing. A reply that carries the
+ *  party's error, or an answer of the wrong shape for the request, is
+ *  that party failing: it is dropped from the session, the way its
+ *  failure ended the session when it was the only party, and the request
+ *  stays pending for the rest. */
+function reply(state: SessionState, party: PartyId, message: ReplyMessage): Stepped {
+  const pending = state.pending.find((request) => request.id === message.id);
+  if (pending === undefined) {
+    const earlier = state.answered.find((answer) => answer.id === message.id);
+    if (earlier !== undefined) {
+      return { state, effects: sendTo([party], { type: "answered", ...earlier }) };
+    }
+    if (state.drawing.includes(party) && message.id === state.lastRender?.id) {
+      return drawn(state, party);
+    }
+    return { state, effects: [] };
+  }
+  const failure = replyFailure(pending, message);
+  if (failure !== null) {
+    return dropped(state, party, `the ${kindOf(state, party)} ${failure}`);
+  }
+  if (pending.method === "render") {
+    const awaited = (state.awaiting[pending.id] ?? []).filter((other) => other !== party);
+    const acked = { ...state, awaiting: { ...state.awaiting, [pending.id]: awaited } };
+    const settled = settleRenders(acked);
+    if (!state.drawing.includes(party) || pending !== state.lastRender) {
+      return settled;
+    }
+    const after = drawn(settled.state, party);
+    return { state: after.state, effects: [...settled.effects, ...after.effects] };
+  }
+  const by = kindOf(state, party);
+  const answer: Answered = {
+    id: message.id,
+    by,
+    command: describeAnswer(pending.method, message.result),
+  };
+  const line = `${by}: ${answer.command}`;
+  const others = connected(state).filter((other) => other !== party);
+  return {
+    state: {
+      ...state,
+      pending: state.pending.filter((request) => request !== pending),
+      recent: [...state.recent, line].slice(-RECENT_LINES),
+      answered: [...state.answered, answer].slice(-ANSWERED_KEPT),
+    },
+    effects: [
+      { type: "toDriver", message },
+      ...sendTo(connected(state), logLine(line)),
+      ...sendTo(others, { type: "answered", ...answer }),
+    ],
+  };
+}
+
+/** Why a reply cannot answer `pending`, in the words the log gets, or
+ *  null when it can. */
+function replyFailure(pending: RequestMessage, message: ReplyMessage): string | null {
+  if (message.error !== undefined) {
+    return `failed to answer ${pending.method}: ${message.error}`;
+  }
+  const checked = REPLY_SCHEMAS[pending.method].safeParse(message.result);
+  if (!checked.success) {
+    return `answered ${pending.method} with something that is not a ${pending.method} answer`;
+  }
+  return null;
+}
+
+/** A joining party has drawn the stop: the requests waiting go to it. */
+function drawn(state: SessionState, party: PartyId): Stepped {
+  const waiting = state.pending.filter((request) => request !== state.lastRender);
+  return {
+    state: { ...state, drawing: state.drawing.filter((other) => other !== party) },
+    effects: waiting.flatMap((request) => sendTo([party], request)),
+  };
+}
+
+/** A party that cannot answer is closed and taken off the session; a
+ *  terminal's close is its detach, a visit's leaves the CLI's hold. */
+function dropped(state: SessionState, party: PartyId, reason: string): Stepped {
+  const log: Effect = { type: "log", line: `[agency debug] ${reason}; dropping it` };
+  if (party === state.terminal) {
+    return left({ ...state, terminal: null }, party, [log, { type: "close", party }]);
+  }
+  return left({ ...state, cli: { visit: null, lastVisit: null } }, party, [
+    log,
+    { type: "close", party },
+    { type: "startLease" },
+  ]);
 }
 
 function leaseExpired(state: SessionState): Stepped {
@@ -360,6 +556,7 @@ function leaseExpired(state: SessionState): Stepped {
         type: "log",
         line: `[agency debug] no visit for ${minutes} minutes; released the CLI's hold`,
       },
+      ...sendTo([released.terminal], partiesOf(released)),
     ],
   };
 }

@@ -43,8 +43,14 @@ function heldAtStop(): SessionState {
   };
 }
 
+const parties = (terminal: boolean, cli: boolean): AttachMessage => ({
+  type: "parties",
+  terminal,
+  cli,
+});
 const mode: AttachMessage = { type: "notice", method: "setMode", args: ["step"] };
 const busy: AttachMessage = { type: "notice", method: "setBusy", args: [[]] };
+const ack: AttachMessage = { type: "reply", id: 7, result: undefined };
 
 function sendsTo(effects: Effect[], party: number): unknown[] {
   return effects
@@ -57,15 +63,15 @@ function kinds(effects: Effect[]): string[] {
 }
 
 describe("joining", () => {
-  it("the first terminal is sent hello and nothing else, and the session remembers since when", () => {
+  it("the first terminal is sent hello and who is on the run, and the session remembers since when", () => {
     const { state, effects } = step(withHello(), {
       type: "connect",
       party: 1,
       kind: "terminal",
       now: NOW,
     });
-    expect(sendsTo(effects, 1)).toEqual([hello]);
-    expect(kinds(effects)).toEqual(["send"]);
+    expect(sendsTo(effects, 1)).toEqual([hello, { type: "parties", terminal: true, cli: false }]);
+    expect(kinds(effects)).toEqual(["send", "send"]);
     expect(state.terminal).toBe(1);
     expect(state.attachedSince).toBe(NOW);
   });
@@ -77,56 +83,72 @@ describe("joining", () => {
       kind: "cli",
       now: NOW,
     });
-    expect(kinds(effects)).toEqual(["clearLease", "send"]);
+    expect(kinds(effects)).toEqual(["clearLease", "send", "send"]);
     expect(state.cli).toEqual({ visit: 1, lastVisit: null });
   });
 
-  it("a party joining at a stop is sent hello, the recent lines, the render, then the request", () => {
+  it("a party joining at a stop is sent hello, the recent lines, then the stop; the request waits for its acknowledgement", () => {
     const held = { ...heldAtStop(), recent: ["Program stopped", "cli: step"] };
-    const { effects } = step(held, { type: "connect", party: 2, kind: "cli", now: NOW + 5 });
-    expect(sendsTo(effects, 2)).toEqual([
+    const joined = step(held, { type: "connect", party: 2, kind: "cli", now: NOW + 5 });
+    expect(sendsTo(joined.effects, 2)).toEqual([
       hello,
+      parties(false, true),
       { type: "notice", method: "log", args: ["Program stopped"] },
       { type: "notice", method: "log", args: ["cli: step"] },
       render,
-      ask,
     ]);
+    expect(joined.state.drawing).toEqual([2]);
+    const drawn = step(joined.state, { type: "fromParty", party: 2, message: ack });
+    expect(drawn.effects).toEqual([{ type: "send", to: 2, message: ask }]);
+    expect(drawn.state.drawing).toEqual([]);
+    expect(drawn.state.pending).toEqual([ask]);
   });
 
-  it("a request that is the render itself is sent once", () => {
-    const held = { ...heldAtStop(), pending: [render] };
-    const { effects } = step(held, { type: "connect", party: 2, kind: "cli", now: NOW });
-    expect(sendsTo(effects, 2)).toEqual([hello, render]);
-  });
-
-  it("every request waiting is sent, after the stop", () => {
+  it("a request arriving while a joiner still draws the stop reaches it once it has", () => {
+    const joined = step(heldAtStop(), { type: "connect", party: 2, kind: "cli", now: NOW });
     const panel: RequestMessage = {
       type: "request",
       id: 9,
       method: "showCheckpointsPanel",
       args: [[]],
     };
-    const held = { ...heldAtStop(), pending: [ask, panel] };
-    const { effects } = step(held, { type: "connect", party: 2, kind: "cli", now: NOW });
-    expect(sendsTo(effects, 2)).toEqual([hello, render, ask, panel]);
+    const asked = step(joined.state, { type: "fromDriver", message: panel });
+    expect(asked.effects).toEqual([]);
+    const drawn = step(asked.state, { type: "fromParty", party: 2, message: ack });
+    expect(sendsTo(drawn.effects, 2)).toEqual([ask, panel]);
+  });
+
+  it("a joiner during a render still pending is one more party it waits for", () => {
+    const mid = { ...terminalAtStop(), pending: [render], awaiting: { 7: [1] } };
+    const joined = step(mid, { type: "connect", party: 2, kind: "cli", now: NOW });
+    expect(sendsTo(joined.effects, 2)).toEqual([hello, parties(true, true), render]);
+    expect(joined.state.awaiting).toEqual({ 7: [1, 2] });
+    const first = step(joined.state, { type: "fromParty", party: 1, message: ack });
+    expect(first.effects).toEqual([]);
+    const second = step(first.state, { type: "fromParty", party: 2, message: ack });
+    expect(second.effects).toEqual([{ type: "toDriver", message: ack }]);
+    expect(second.state.pending).toEqual([]);
+    expect(second.state.drawing).toEqual([]);
   });
 
   it("with nothing pending the program is running: the last stop is not shown", () => {
     const running = { ...heldAtStop(), pending: [] };
-    const { effects } = step(running, { type: "connect", party: 2, kind: "cli", now: NOW });
-    expect(sendsTo(effects, 2)).toEqual([hello]);
+    const { state, effects } = step(running, { type: "connect", party: 2, kind: "cli", now: NOW });
+    expect(sendsTo(effects, 2)).toEqual([hello, parties(false, true)]);
+    expect(state.drawing).toEqual([]);
   });
 
-  it("the settings and the spinner as they stand come right after hello", () => {
+  it("the settings and the spinner as they stand come right after who is on the run", () => {
     const busyRun = {
       ...heldAtStop(),
       pending: [],
       settings: { setMode: mode, setBusy: busy },
       spinning: true,
     } as SessionState;
-    const { effects } = step(busyRun, { type: "connect", party: 2, kind: "cli", now: NOW });
+    const { effects } = step(busyRun, { type: "connect", party: 2, kind: "terminal", now: NOW });
     expect(sendsTo(effects, 2)).toEqual([
       hello,
+      parties(true, true),
       mode,
       busy,
       { type: "notice", method: "startSpinner", args: [] },
@@ -180,8 +202,8 @@ describe("joining", () => {
     ]);
   });
 
-  it("the program's end outranks a refusal: a terminal after it, while the hold lasts, is told", () => {
-    const after = { ...heldAtStop(), pending: [], finished } as SessionState;
+  it("the program's end outranks a refusal: a second terminal after it is told", () => {
+    const after = { ...terminalAtStop(), pending: [], finished } as SessionState;
     const { effects } = step(after, { type: "connect", party: 2, kind: "terminal", now: NOW });
     expect(sendsTo(effects, 2)).toEqual([hello, finished]);
     expect(kinds(effects)).toContain("end");
@@ -206,28 +228,30 @@ describe("refusing", () => {
     expect(state.terminal).toBe(1);
   });
 
-  it("a CLI visit while a terminal is attached", () => {
-    const { effects } = step(terminalAtStop(), {
+  it("a CLI visit while a terminal is attached joins, and both are told who is on the run", () => {
+    const { state, effects } = step(terminalAtStop(), {
       type: "connect",
       party: 2,
       kind: "cli",
       now: NOW,
     });
-    expect(sendsTo(effects, 2)).toEqual([
-      { type: "refused", reason: expect.stringMatching(/by a terminal debugger$/) },
-    ]);
+    const both = parties(true, true);
+    expect(sendsTo(effects, 2)).toEqual([hello, both, render]);
+    expect(sendsTo(effects, 1)).toEqual([both]);
+    expect(state.terminal).toBe(1);
+    expect(state.cli).toEqual({ visit: 2, lastVisit: null });
   });
 
-  it("a terminal while the CLI holds the session", () => {
-    const { effects } = step(heldAtStop(), {
+  it("a terminal while the CLI holds the session joins and sees the stop", () => {
+    const { state, effects } = step(heldAtStop(), {
       type: "connect",
       party: 2,
       kind: "terminal",
       now: NOW,
     });
-    expect(sendsTo(effects, 2)).toEqual([
-      { type: "refused", reason: expect.stringMatching(/by agency debug session$/) },
-    ]);
+    expect(sendsTo(effects, 2)).toEqual([hello, parties(true, true), render]);
+    expect(state.terminal).toBe(2);
+    expect(state.cli).toEqual({ visit: null, lastVisit: NOW });
   });
 
   it("a second CLI visit during one", () => {
@@ -246,11 +270,16 @@ describe("the driver's messages", () => {
     expect(state.hello).toEqual(hello);
   });
 
-  it("a request goes to the connected party and joins the pending ones; a render is also the last render", () => {
-    const { state, effects } = step(terminalAtStop(), { type: "fromDriver", message: render });
-    expect(effects).toEqual([{ type: "send", to: 1, message: render }]);
+  it("a request goes to every connected party and joins the pending ones; a render is also the last render, waited on from each", () => {
+    const both = { ...terminalAtStop(), cli: { visit: 2, lastVisit: null } };
+    const { state, effects } = step(both, { type: "fromDriver", message: render });
+    expect(effects).toEqual([
+      { type: "send", to: 1, message: render },
+      { type: "send", to: 2, message: render },
+    ]);
     expect(state.pending).toEqual([ask, render]);
     expect(state.lastRender).toBe(render);
+    expect(state.awaiting).toEqual({ 7: [1, 2] });
   });
 
   it("a render without a checkpoint is the same stop redrawn: it keeps the checkpoint before it", () => {
@@ -261,10 +290,8 @@ describe("the driver's messages", () => {
   });
 
   it("a request with no party connected is kept and sent to no one", () => {
-    const { state, effects } = step(
-      { ...heldAtStop(), pending: [] },
-      { type: "fromDriver", message: ask },
-    );
+    const running = { ...heldAtStop(), pending: [] };
+    const { state, effects } = step(running, { type: "fromDriver", message: ask });
     expect(effects).toEqual([]);
     expect(state.pending).toEqual([ask]);
   });
@@ -300,7 +327,7 @@ describe("the driver's messages", () => {
     const notice: AttachMessage = { type: "notice", method: "appendStdout", args: ["hi"] };
     const { state, effects } = step(terminalAtStop(), { type: "fromDriver", message: notice });
     expect(effects).toEqual([{ type: "send", to: 1, message: notice }]);
-    expect(state).toEqual({ ...terminalAtStop() });
+    expect(state).toEqual(terminalAtStop());
   });
 
   it("finished goes to the connected party and ends the session", () => {
@@ -318,27 +345,146 @@ describe("the driver's messages", () => {
 });
 
 describe("a party's messages", () => {
-  it("the reply to the pending request reaches the driver and clears it", () => {
+  it("the reply to the pending request reaches the driver, clears it, and is logged as the party's", () => {
     const reply: AttachMessage = { type: "reply", id: 8, result: { type: "step" } };
     const { state, effects } = step(terminalAtStop(), {
       type: "fromParty",
       party: 1,
       message: reply,
     });
-    expect(effects).toEqual([{ type: "toDriver", message: reply }]);
+    expect(effects).toEqual([
+      { type: "toDriver", message: reply },
+      { type: "send", to: 1, message: { type: "notice", method: "log", args: ["terminal: step"] } },
+    ]);
+    expect(state.pending).toEqual([]);
+    expect(state.recent).toEqual(["terminal: step"]);
+    expect(state.answered).toEqual([{ id: 8, by: "terminal", command: "step" }]);
+  });
+
+  it("with two parties, the first reply wins and the other is told who answered and how", () => {
+    const both = { ...terminalAtStop(), cli: { visit: 2, lastVisit: null } };
+    const reply: AttachMessage = {
+      type: "reply",
+      id: 8,
+      result: { type: "set", varName: "x", value: 5 },
+    };
+    const { state, effects } = step(both, { type: "fromParty", party: 2, message: reply });
+    const line = { type: "notice", method: "log", args: ["cli: set x = 5"] };
+    expect(effects).toEqual([
+      { type: "toDriver", message: reply },
+      { type: "send", to: 1, message: line },
+      { type: "send", to: 2, message: line },
+      {
+        type: "send",
+        to: 1,
+        message: { type: "answered", id: 8, by: "cli", command: "set x = 5" },
+      },
+    ]);
     expect(state.pending).toEqual([]);
   });
 
   it("with two requests in flight, each reply answers its own", () => {
-    const both = { ...terminalAtStop(), pending: [render, ask] };
-    const ack: AttachMessage = { type: "reply", id: 7, result: undefined };
+    const both = { ...terminalAtStop(), pending: [render, ask], awaiting: { 7: [1] } };
     const first = step(both, { type: "fromParty", party: 1, message: ack });
     expect(first.effects).toEqual([{ type: "toDriver", message: ack }]);
     expect(first.state.pending).toEqual([ask]);
     const command: AttachMessage = { type: "reply", id: 8, result: { type: "step" } };
     const second = step(first.state, { type: "fromParty", party: 1, message: command });
-    expect(second.effects).toEqual([{ type: "toDriver", message: command }]);
+    expect(second.effects[0]).toEqual({ type: "toDriver", message: command });
     expect(second.state.pending).toEqual([]);
+  });
+
+  it("a reply carrying the party's error drops that party; the request stays for the rest", () => {
+    const both = { ...terminalAtStop(), cli: { visit: 2, lastVisit: null } };
+    const failed: AttachMessage = { type: "reply", id: 8, error: "the picker threw" };
+    const { state, effects } = step(both, { type: "fromParty", party: 2, message: failed });
+    expect(effects).toEqual([
+      {
+        type: "log",
+        line: "[agency debug] the cli failed to answer waitForCommand: the picker threw; dropping it",
+      },
+      { type: "close", party: 2 },
+      { type: "startLease" },
+      { type: "send", to: 1, message: parties(true, true) },
+    ]);
+    expect(state.cli).toEqual({ visit: null, lastVisit: null });
+    expect(state.pending).toEqual([ask]);
+  });
+
+  it("an answer of the wrong shape drops the party the same way; alone, that ends the session", () => {
+    const wrong: AttachMessage = { type: "reply", id: 8, result: { nonsense: true } };
+    const { state, effects } = step(terminalAtStop(), {
+      type: "fromParty",
+      party: 1,
+      message: wrong,
+    });
+    expect(kinds(effects)).toEqual(["log", "close", "end"]);
+    expect(state.terminal).toBeNull();
+  });
+
+  it("a failed render is not an acknowledgement: the party is dropped and the render waits on the rest", () => {
+    const both = {
+      ...terminalAtStop(),
+      cli: { visit: 2, lastVisit: null },
+      pending: [render],
+      awaiting: { 7: [1, 2] },
+    };
+    const failed: AttachMessage = { type: "reply", id: 7, error: "no source map" };
+    const { state, effects } = step(both, { type: "fromParty", party: 1, message: failed });
+    expect(kinds(effects)).toEqual(["log", "close", "send"]);
+    expect(state.terminal).toBeNull();
+    expect(state.awaiting).toEqual({ 7: [2] });
+    expect(state.pending).toEqual([render]);
+  });
+
+  it("a late reply to a request another party answered is told so", () => {
+    const answered = {
+      ...terminalAtStop(),
+      cli: { visit: 2, lastVisit: null },
+      pending: [],
+      answered: [{ id: 8, by: "cli" as const, command: "step" }],
+    };
+    const reply: AttachMessage = { type: "reply", id: 8, result: { type: "continue" } };
+    const { state, effects } = step(answered, { type: "fromParty", party: 1, message: reply });
+    expect(effects).toEqual([
+      { type: "send", to: 1, message: { type: "answered", id: 8, by: "cli", command: "step" } },
+    ]);
+    expect(state).toBe(answered);
+  });
+
+  it("a render waits for every party it went to, then the driver gets one acknowledgement", () => {
+    const both = {
+      ...terminalAtStop(),
+      cli: { visit: 2, lastVisit: null },
+      pending: [render],
+      awaiting: { 7: [1, 2] },
+    };
+    const first = step(both, { type: "fromParty", party: 2, message: ack });
+    expect(first.effects).toEqual([]);
+    expect(first.state.awaiting).toEqual({ 7: [1] });
+    const second = step(first.state, { type: "fromParty", party: 1, message: ack });
+    expect(second.effects).toEqual([
+      { type: "toDriver", message: { type: "reply", id: 7, result: undefined } },
+    ]);
+    expect(second.state.pending).toEqual([]);
+    expect(second.state.awaiting).toEqual({});
+  });
+
+  it("a party leaving mid-render is no longer waited on", () => {
+    const both = {
+      ...terminalAtStop(),
+      cli: { visit: 2, lastVisit: null },
+      pending: [render],
+      awaiting: { 7: [1, 2] },
+    };
+    const acked = step(both, { type: "fromParty", party: 1, message: ack });
+    const { state, effects } = step(acked.state, { type: "disconnect", party: 2, now: NOW });
+    expect(effects).toEqual([
+      { type: "startLease" },
+      { type: "toDriver", message: { type: "reply", id: 7, result: undefined } },
+      { type: "send", to: 1, message: parties(true, true) },
+    ]);
+    expect(state.pending).toEqual([]);
   });
 
   it("a reply to a request that is not pending is dropped", () => {
@@ -372,10 +518,40 @@ describe("a party's messages", () => {
 });
 
 describe("leaving", () => {
-  it("a terminal closing ends the session", () => {
+  it("a terminal closing with no CLI hold ends the session", () => {
     const { state, effects } = step(terminalAtStop(), { type: "disconnect", party: 1, now: NOW });
     expect(effects).toEqual([{ type: "end" }]);
     expect(state.terminal).toBeNull();
+  });
+
+  it("a terminal closing while the CLI holds the session ends nothing", () => {
+    const both = { ...terminalAtStop(), cli: { visit: null, lastVisit: NOW } };
+    const { state, effects } = step(both, { type: "disconnect", party: 1, now: NOW });
+    expect(effects).toEqual([]);
+    expect(state.terminal).toBeNull();
+    expect(state.pending).toEqual([ask]);
+  });
+
+  it("a visit closing while a terminal is attached tells the terminal", () => {
+    const both = { ...terminalAtStop(), cli: { visit: 2, lastVisit: null } };
+    const { effects } = step(both, { type: "disconnect", party: 2, now: NOW + 9 });
+    expect(effects).toEqual([
+      { type: "startLease" },
+      { type: "send", to: 1, message: { type: "parties", terminal: true, cli: true } },
+    ]);
+  });
+
+  it("the lease running out with a terminal attached releases the hold and tells the terminal", () => {
+    const both = { ...terminalAtStop(), cli: { visit: null, lastVisit: NOW } };
+    const { state, effects } = step(both, { type: "leaseExpired" });
+    expect(effects).toEqual([
+      {
+        type: "log",
+        line: `[agency debug] no visit for ${LEASE_MS / 60_000} minutes; released the CLI's hold`,
+      },
+      { type: "send", to: 1, message: { type: "parties", terminal: true, cli: false } },
+    ]);
+    expect(state.cli).toBeNull();
   });
 
   it("a visit closing starts the lease and leaves the request pending", () => {

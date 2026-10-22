@@ -268,7 +268,7 @@ describe("a session the run holds between visits", () => {
     expect(next.closed()).toBe(true);
   });
 
-  it("a terminal is refused while the CLI holds the session", async () => {
+  it("a terminal joining a held session is shown the stop, and a visit closing leaves it attached", async () => {
     const mod = await freshImport(compiled);
     const timers = fakeTimers();
     const session = open(mod, timers);
@@ -285,16 +285,39 @@ describe("a session the run holds between visits", () => {
       const message = parseAttachMessage(raw);
       if (message !== null) {
         received.push(message);
+        // The stop is acknowledged as a UI does; the request waiting on
+        // it follows only then.
+        if (message.type === "request" && message.method === "render") {
+          terminalSide.send({ type: "reply", id: message.id, result: undefined });
+        }
       }
     });
     session.admit(runSide, "terminal");
-    await until(() => received.length > 0, "the refusal");
-    expect(received[0]).toMatchObject({
-      type: "refused",
-      reason: expect.stringMatching(/by agency debug session$/),
-    });
+    await until(() => requests(received).length >= 2, "the stop and the request");
+    expect(received[0]).toEqual(hello);
+    expect(received[1]).toEqual({ type: "parties", terminal: true, cli: true });
+    // Between those and the stop come the settings as they stand.
+    expect(received.map((message) => message.type).filter((type) => type !== "notice")).toEqual([
+      "hello",
+      "parties",
+      "request",
+      "request",
+    ]);
+    expect(requests(received).map((request) => request.method)).toEqual([
+      "render",
+      "waitForCommand",
+    ]);
 
-    session.detach();
+    // The terminal is a party that needs no lease: with the hold gone,
+    // the program still waits on the terminal.
+    timers.fire();
+    await until(
+      () => received.some((message) => message.type === "parties" && !message.cli),
+      "the hold released",
+    );
+    expect(await settled(running)).toBe(false);
+
+    terminalSide.close();
     expect((await running).data).toBe(3);
   });
 });

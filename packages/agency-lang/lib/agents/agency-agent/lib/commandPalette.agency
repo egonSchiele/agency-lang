@@ -5,7 +5,7 @@ export static const projectCommands = commandsDir("${cwd()}/.claude/commands") w
 export def builtinPalette(): Record<string, string> {
   return {
     "/exit": "Exit the agent",
-    "/clear": "Clear the conversation transcript",
+    "/clear": "Clear the screen",
     "/clear-history": "Clear the input history (recall + saved file)",
     "/cost": "Show cumulative LLM cost and tokens",
     "/rename": "Give this session a title: /rename <title>",

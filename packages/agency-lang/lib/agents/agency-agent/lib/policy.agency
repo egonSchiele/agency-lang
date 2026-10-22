@@ -13,7 +13,7 @@ import {
  } from "std::policy"
 import { _policyOverlayFromFlags } from "agency-lang/stdlib-lib/policy.js"
 import { cwd } from "std::system"
-import { ChoiceItem, chooseOption } from "std::ui"
+import { ChoiceItem, chooseOption } from "std::ui/cli"
 
 import { POLICY_PATH, SESSION_POLICY_PATH } from "./config.agency"
 

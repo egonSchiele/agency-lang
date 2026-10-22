@@ -7,7 +7,7 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
-import { chooseOption, ChoiceItem } from "std::ui"
+import { chooseOption, ChoiceItem } from "std::ui/cli"
 
 import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
 

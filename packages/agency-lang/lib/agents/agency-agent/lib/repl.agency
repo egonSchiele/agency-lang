@@ -8,12 +8,13 @@ import { listHostedModels } from "std::llm"
 import { expandSlash } from "std::skills"
 import { turnStart } from "std::statelog"
 import { getCost, getModelCosts } from "std::thread"
-import { chooseOption, ChoiceItem } from "std::ui"
 import {
-  clearMessages,
+  chooseOption,
+  ChoiceItem,
   pushMessage,
   repl,
   clearHistory,
+  clearScreen,
  } from "std::ui/cli"
 
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
@@ -44,14 +45,6 @@ import {
 import { formatTurnFailure } from "./utils.agency"
 import { configureLocalModel, getResolvedSlots, currentProvider } from "../shared.agency"
 
-
-// UI mode select — one-line swap between the alt-screen TUI and the
-// line-mode REPL. Both modules expose the same `repl` / `pushMessage`
-// / `clearMessages` surface (line mode re-exports `pushMessage` and
-// `clearMessages` from `std::ui`). Trial both and decide. See
-// `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`.
-//
-//import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
 
@@ -281,7 +274,7 @@ def _runTurn(msg: string): boolean {
     "/exit" => false
     "/quit" => false
     "/clear" => {
-      clearMessages()
+      clearScreen()
       return true
     }
     "/clear-history" => {

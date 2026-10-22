@@ -299,9 +299,9 @@ describe("attaching to a program in another process", () => {
       }
       throw new Error(`no frame matching ${wanted}; last:\n${plain().at(-1)}`);
     };
-    await untilFrame(/^│x = 1 /m);
+    await untilFrame(/^│.x = 1 /m);
     input.feedKey({ key: "s" });
-    await untilFrame(/^│y = 2 /m);
+    await untilFrame(/^│.y = 2 /m);
     input.feedKey({ key: "q" });
     const code = await session;
 
@@ -316,13 +316,14 @@ describe("attaching to a program in another process", () => {
     // deliberately puts none; see debugger-future-work.md.)
     // The hello frame comes first, with empty panes, so the first stop is
     // the first frame whose locals pane shows x. A locals pane line
-    // starts at the box edge; the source pane's lines carry a line number
-    // first.
-    const firstStop = frames.findIndex((text) => /^│x = 1 /m.test(text));
-    const afterStep = frames.findIndex((text) => /^│y = 2 /m.test(text));
+    // starts at the box edge with the row cursor's column (a space, or
+    // the marker when the pane is focused); the source pane's lines
+    // carry a line number first.
+    const firstStop = frames.findIndex((text) => /^│.x = 1 /m.test(text));
+    const afterStep = frames.findIndex((text) => /^│.y = 2 /m.test(text));
     expect(firstStop).toBeGreaterThanOrEqual(0);
     expect(afterStep).toBeGreaterThan(firstStop);
-    expect(frames[firstStop]).not.toMatch(/^│y = 2 /m);
+    expect(frames[firstStop]).not.toMatch(/^│.y = 2 /m);
     expect(printed).toEqual([`Detached from pid ${started.pid}.`]);
     const exit = await new Promise<number | null>((resolve) => started.on("exit", resolve));
     expect(exit, childOutput).toBe(0);

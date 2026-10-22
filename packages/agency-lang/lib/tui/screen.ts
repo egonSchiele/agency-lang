@@ -50,58 +50,14 @@ export class Screen {
     handleKey: (state: S, event: KeyEvent) => S | Promise<S>;
     isDone: (state: S) => boolean | Promise<boolean>;
     label?: string;
-    /**
-     * If set, the loop races each `nextKey()` against a `setTimeout`
-     * of `tickMs` milliseconds. On a tick, it re-renders with the
-     * current state (no transition). On a key, it runs `handleKey`
-     * then re-renders. Used by `repl()` to keep a live status line
-     * ticking while no keys arrive (e.g. during a long LLM call).
-     *
-     * When omitted, the loop is pure event-driven: it blocks on
-     * `nextKey()` and re-renders only after each keypress.
-     *
-     * The tick-side branch reuses a single in-flight `nextKey()`
-     * promise across iterations so a key the user types during a
-     * tick race is consumed by the next race rather than queued
-     * behind abandoned waiters.
-     */
-    tickMs?: number;
   }): Promise<S> {
-    // The render / handleKey / isDone callbacks may be async — the
-    // declarative bridge in `lib/stdlib/ui.ts` adapts Agency callback
-    // values into async wrappers (Agency functions invoke through the
-    // runtime call path which returns a Promise). Pure-TS callers can
-    // still pass sync functions; the awaits become trivial.
+    // The render / handleKey / isDone callbacks may be async. Pure-TS
+    // callers can still pass sync functions; the awaits become trivial.
     let state = opts.initialState;
     this.render(await opts.render(state), opts.label);
-    // Single in-flight `nextKey()` shared across tick iterations.
-    // Calling `this.nextKey()` once per tick would enqueue a fresh
-    // waiter on the underlying input source's FIFO queue every time
-    // a tick wins the race; the next keypress would then resolve the
-    // oldest waiter (an abandoned tick-race promise) instead of the
-    // one the current `Promise.race` is awaiting, requiring one
-    // keypress per accumulated tick before the loop starts reacting.
-    let pendingKeyPromise: Promise<{ kind: "key"; ev: KeyEvent }> | null = null;
     while (!(await opts.isDone(state))) {
-      if (opts.tickMs !== undefined) {
-        if (pendingKeyPromise === null) {
-          pendingKeyPromise = this.nextKey().then((ev) => ({ kind: "key" as const, ev }));
-        }
-        const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
-          setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
-        );
-        const result = await Promise.race<{ kind: "tick" } | { kind: "key"; ev: KeyEvent }>([
-          pendingKeyPromise,
-          tickPromise,
-        ]);
-        if (result.kind === "key") {
-          pendingKeyPromise = null;
-          state = await opts.handleKey(state, result.ev);
-        }
-      } else {
-        const event = await this.nextKey();
-        state = await opts.handleKey(state, event);
-      }
+      const event = await this.nextKey();
+      state = await opts.handleKey(state, event);
       this.render(await opts.render(state), opts.label);
     }
     return state;

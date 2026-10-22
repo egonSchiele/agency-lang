@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { box, row, column, text, list, textInput } from "../builders.js";
+import { box, row, column, text, textInput } from "../builders.js";
 
 describe("builders", () => {
   it("text() creates a text element", () => {
@@ -31,13 +31,6 @@ describe("builders", () => {
   it("column() sets flexDirection to column", () => {
     const el = column({ flex: 1 }, text("a"));
     expect(el.style?.flexDirection).toBe("column");
-  });
-
-  it("list() creates a list element", () => {
-    const el = list({ key: "mylist" }, ["a", "b", "c"], 1);
-    expect(el.type).toBe("list");
-    expect(el.items).toEqual(["a", "b", "c"]);
-    expect(el.selectedIndex).toBe(1);
   });
 
   it("textInput() creates a textInput element", () => {

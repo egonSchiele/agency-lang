@@ -330,20 +330,8 @@ export class TerminalInput implements InputSource {
   }
 
   /**
-   * Synchronously deliver a synthetic key, exactly as if the user had
-   * pressed it. If a `nextKey()` waiter is registered, the key resolves
-   * that waiter; otherwise it queues. Mirrors `ScriptedInput.feedKey`
-   * so cross-input code (notably the std::ui bridge's `_triggerRender`)
-   * can poke a running event loop without knowing which input source
-   * is installed.
-   */
-  feedKey(key: KeyEvent): void {
-    this.emitKey(key);
-  }
-
-  /**
    * Internal: route a parsed `KeyEvent` to the next waiter or queue.
-   * Shared by `feedKey` and the per-keystroke emissions in
+   * Shared by the per-keystroke emissions in
    * `parseAndEmit`.
    */
   private emitKey(key: KeyEvent): void {

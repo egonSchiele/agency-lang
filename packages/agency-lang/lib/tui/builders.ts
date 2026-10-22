@@ -64,11 +64,6 @@ export function lines(strings: string[], style?: Style): Element {
   return column({ justifyContent: "flex-start", ...style }, ...strings.map((s) => line(s)));
 }
 
-export function list(style: StyleProps, items: string[], selectedIndex?: number): Element {
-  const { style: resolvedStyle, key } = splitStyleAndKey(style);
-  return { type: "list", style: resolvedStyle, key, items, selectedIndex };
-}
-
 export function textInput(style: StyleProps, value?: string): Element {
   const { style: resolvedStyle, key } = splitStyleAndKey(style);
   return { type: "textInput", style: resolvedStyle, key, value };

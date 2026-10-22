@@ -124,7 +124,7 @@ describe("joining", () => {
       settings: { setMode: mode, setBusy: busy },
       spinning: true,
     } as SessionState;
-    const { effects } = step(busyRun, { type: "connect", party: 2, kind: "terminal", now: NOW });
+    const { effects } = step(busyRun, { type: "connect", party: 2, kind: "cli", now: NOW });
     expect(sendsTo(effects, 2)).toEqual([
       hello,
       mode,

@@ -47,6 +47,9 @@ export function sessionWords(status: StatusMessage | null, now: number): string 
   if (status === null) {
     return "none";
   }
+  if (status.finished) {
+    return "finished, held for the next visit";
+  }
   const parts: string[] = [];
   if (status.terminal) {
     parts.push("terminal");

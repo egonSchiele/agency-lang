@@ -96,9 +96,10 @@ next    step, next, continue, frame, thread, branches, guards, detach
 - The readers, none of which moves the program: `frame [n] [--globals]`, `stack`, `threads`, `thread [label] [--last n]`, `branches`, `branch <key>`, `guards`, `source [--context n]`, `checkpoints`.
 - The moves: `step`, `next`, `in`, `out`, `continue`, `back`, `rewind <id>`, `set <name> <json>`, `checkpoint [label]`, `save <path>`, `load <path>`. Each answers the stop and prints `where` at the next one. `continue` prints that the program is running and returns at once.
 - `wait [--for 5m]` blocks until the program stops or ends, then prints `where`; `pause` asks a running program to stop at its next statement, and `wait` returns at that stop.
-- `detach` ends the session; the program runs on with no debugger.
+- `answer <json>` replies when the program is waiting on a question rather than stopped at a statement: a guard trip (`{"type":"approve"}` or `{"type":"reject","value":"why"}`), a node's arguments (a JSON array), or `input()` (a JSON string). A move is refused at such a stop and says so.
+- `detach` releases the session. With no one else on the run the program runs on with no debugger; with a person at `agency debug --attach`, they keep driving and the program waits for them.
 
-Readable text by default, `--json` for the same facts as fields, `--pid <pid>` when more than one session is held. The exit codes: 0 for an answer, 1 for a refusal, with what to do instead on stderr, 2 when the program has ended, 3 when `wait` ran out.
+A move the debugger could not do, `back` at the earliest checkpoint, or a `save` to a path it cannot write, is a refusal with the debugger's own line, not a stop. Readable text by default, `--json` for the same facts as fields, `--pid <pid>` when more than one session is held. The exit codes: 0 for an answer, 1 for a refusal, with what to do instead on stderr (in the JSON on stdout with `--json`), 2 when the program has ended, 3 when `wait` ran out.
 
 A person can be on the same run at `agency debug --attach`. Both see every stop, and whichever answers first moves the program. A move the person got to first is refused: `the stop you saw was answered by the terminal (continue); run \`where\` and decide again`. The person's moves show up in `where` as `since   terminal: continue`, and `where` says `a terminal debugger is attached too`. The program's own interrupts go to its caller, as they do for the terminal debugger; neither party answers them.
 

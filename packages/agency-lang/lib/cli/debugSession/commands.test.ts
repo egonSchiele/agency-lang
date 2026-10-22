@@ -3,9 +3,57 @@
 // are in where.test.ts; the whole path over a socket in index.test.ts.
 import { describe, it, expect } from "vitest";
 import type { AttachRecord } from "@/debugger/attach/registry.js";
-import { EXIT, detach, moveVerb, pause, wait, where, type CommandDeps } from "./commands.js";
+import { Checkpoint } from "@/runtime/state/checkpointStore.js";
+import {
+  EXIT,
+  answer,
+  checkpoint,
+  checkpoints,
+  detach,
+  moveVerb,
+  pause,
+  rewind,
+  saveOrLoad,
+  set,
+  wait,
+  where,
+  type CommandDeps,
+} from "./commands.js";
 import { resolveTarget, sessionWords } from "./target.js";
-import type { Next, Visit } from "./visit.js";
+import type { Next, Shown, Visit } from "./visit.js";
+
+/** The smallest checkpoint a reader can print: one frame, one local. */
+function smallCheckpoint(id: number, locals: Record<string, unknown> = { x: 1 }): Checkpoint {
+  return new Checkpoint({
+    id,
+    stack: {
+      stack: [{ args: {}, locals, threads: null, step: 1, scopeName: "main" }],
+      mode: "serialize",
+      other: {},
+      deserializeStackLength: 0,
+      nodesTraversed: [],
+    },
+    globals: { store: {}, initializedModules: [] },
+    nodeId: "main",
+    moduleId: "mod.agency",
+    scopeName: "main",
+    stepPath: "0",
+  });
+}
+
+function shownAt(id: number, locals?: Record<string, unknown>): Shown {
+  return { checkpoint: smallCheckpoint(id, locals), stop: undefined, interruptId: undefined };
+}
+
+/** The next stop, as a scripted visit reports it. */
+function stopAfter(id: number, recent: string[] = [], locals?: Record<string, unknown>): Next {
+  return {
+    kind: "request",
+    request: { type: "request", id: 20 + id, method: "waitForCommand", args: [] },
+    shown: shownAt(id, locals),
+    recent,
+  };
+}
 
 const record: AttachRecord = { pid: 4242, program: "agent.js", node: "main", startedAt: 0 };
 const parties = { type: "parties" as const, terminal: false, cli: true };
@@ -93,11 +141,158 @@ describe("a moving verb", () => {
     expect(visit.sent).toEqual([{ type: "continue" }]);
   });
 
-  it("is refused when the program is waiting on something a command cannot answer", async () => {
+  it("is refused when the program is waiting on a question, naming the verb that answers it", async () => {
     const visit = scripted({ ...ask, method: "promptForInput" }, []);
     const result = await moveVerb(visit, record, "step", deps);
     expect(result.exitCode).toBe(EXIT.refused);
     expect(result.text).toContain("promptForInput");
+    expect(result.text).toContain("`answer <json>`");
+  });
+
+  it("prints where at the stop that follows", async () => {
+    const visit = scripted(ask, [stopAfter(2, ["terminal: continue"])]);
+    const result = await moveVerb(visit, record, "step", deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toContain("stopped (no statement to show)");
+    expect(result.text).toContain("terminal: continue");
+  });
+
+  it("continue sees a refusal that came with its reply, before reporting the program running", async () => {
+    const visit = scripted(ask, [
+      { kind: "answered", answered: { type: "answered", id: 8, by: "terminal", command: "step" } },
+    ]);
+    const result = await moveVerb(visit, record, "continue", deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(result.text).toContain("answered by the terminal (step)");
+  });
+
+  it("the driver's line that a command could not be done is a refusal, not the stop after it", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["Already at earliest checkpoint"])]);
+    const result = await moveVerb(visit, record, "back", deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(result.text).toBe("Already at earliest checkpoint");
+    const saving = scripted(ask, [stopAfter(1, ["Failed to save: EACCES"])]);
+    expect((await saveOrLoad(saving, record, "save", "/nowhere/cp", deps)).exitCode).toBe(
+      EXIT.refused,
+    );
+  });
+});
+
+describe("the same-stop commands", () => {
+  it("set prints the frame of the stop the set redrew", async () => {
+    const visit = scripted(ask, [stopAfter(1, ["Set x = 5"], { x: 1 })], { shown: shownAt(0) });
+    const result = await set(visit, record, "x", 5, deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toContain("queued x = 5 for the next resume");
+    expect(result.text).toContain("#0 main");
+    expect(visit.sent).toEqual([{ type: "set", varName: "x", value: 5 }]);
+  });
+
+  it("set is refused where the driver refuses it", async () => {
+    const visit = scripted(ask, [
+      stopAfter(1, ["set inside a tool call, a fork, or a parallel block is not supported yet"]),
+    ]);
+    const result = await set(visit, record, "x", 5, deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(result.text).toContain("not supported yet");
+  });
+
+  it("checkpoint says it pinned one", async () => {
+    const visit = scripted(ask, [stopAfter(1)]);
+    const result = await checkpoint(visit, record, "before", deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toBe('pinned a checkpoint "before"');
+  });
+});
+
+describe("the two-step commands", () => {
+  const picker = (id: number, cps: Checkpoint[]): Next => ({
+    kind: "request",
+    request: {
+      type: "request",
+      id,
+      method: "showRewindSelector",
+      args: [cps.map((cp) => cp.toJSON())],
+    },
+    shown: null,
+    recent: [],
+  });
+
+  it("rewind picks by the checkpoint's id, not its place in the list", async () => {
+    const replies: unknown[] = [];
+    const visit = scripted(
+      ask,
+      [picker(9, [smallCheckpoint(4), smallCheckpoint(7)]), stopAfter(4)],
+      {
+        reply: (id: number, result: unknown) => {
+          replies.push([id, result]);
+          return Promise.resolve(stopAfter(4));
+        },
+      },
+    );
+    const result = await rewind(visit, record, 7, deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(replies).toEqual([[9, 7]]);
+  });
+
+  it("rewind to a checkpoint that is not there closes the picker and refuses", async () => {
+    const replies: unknown[] = [];
+    const visit = scripted(ask, [picker(9, [smallCheckpoint(4)])], {
+      reply: (id: number, result: unknown) => {
+        replies.push([id, result]);
+        return Promise.resolve({ kind: "timeout" as const });
+      },
+    });
+    const result = await rewind(visit, record, 7, deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(replies).toEqual([[9, null]]);
+  });
+
+  it("checkpoints lists them and closes the panel", async () => {
+    const panel: Next = {
+      kind: "request",
+      request: {
+        type: "request",
+        id: 9,
+        method: "showCheckpointsPanel",
+        args: [[smallCheckpoint(4).toJSON()]],
+      },
+      shown: null,
+      recent: [],
+    };
+    const visit = scripted(ask, [panel], { shown: shownAt(4) });
+    const result = await checkpoints(visit, record, deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(result.text).toBe("> #4 main · mod.agency · step 0");
+  });
+
+  it("are refused, like a move, when the program waits on something else", async () => {
+    const visit = scripted({ ...ask, method: "showRewindSelector" }, []);
+    const result = await checkpoints(visit, record, deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(visit.sent).toEqual([]);
+  });
+});
+
+describe("answer", () => {
+  it("replies to the question with the value, and prints the stop after", async () => {
+    const visit = scripted({ ...ask, method: "promptForInput" }, [stopAfter(2)]);
+    const result = await answer(visit, record, "yes", deps);
+    expect(result.exitCode).toBe(EXIT.ok);
+    expect(visit.sent).toEqual(["yes"]);
+  });
+
+  it("checks the answer's shape before sending it", async () => {
+    const visit = scripted({ ...ask, method: "answerGuardTrip" }, []);
+    const result = await answer(visit, record, "yes", deps);
+    expect(result.exitCode).toBe(EXIT.refused);
+    expect(result.text).toContain("not a answerGuardTrip answer");
+    expect(visit.sent).toEqual([]);
+  });
+
+  it("is refused at a statement stop and on a running program", async () => {
+    expect((await answer(scripted(ask, []), record, "yes", deps)).text).toContain("`step`");
+    expect((await answer(scripted(null, []), record, "yes", deps)).exitCode).toBe(EXIT.refused);
   });
 });
 
@@ -120,10 +315,14 @@ describe("pause and detach", () => {
     expect(stopped.paused).toBe(0);
   });
 
-  it("detach releases the hold", () => {
+  it("detach releases the hold, and says whether the program runs on or a terminal keeps it", () => {
     const visit = scripted(ask, []);
-    expect(detach(visit, record).exitCode).toBe(EXIT.ok);
+    const alone = detach(visit, record);
+    expect(alone.exitCode).toBe(EXIT.ok);
+    expect(alone.text).toContain("runs on with no debugger");
     expect(visit.detached).toBe(1);
+    const shared = scripted(ask, [], { parties: { ...parties, terminal: true } });
+    expect(detach(shared, record).text).toContain("the terminal debugger stays on it");
   });
 });
 
@@ -148,8 +347,15 @@ describe("the target", () => {
     terminal: false,
     cli: { visiting: false, lastVisit: 5 },
     stopped: true,
+    finished: false,
   };
-  const none = { type: "status" as const, terminal: false, cli: null, stopped: false };
+  const none = {
+    type: "status" as const,
+    terminal: false,
+    cli: null,
+    stopped: false,
+    finished: false,
+  };
   const other: AttachRecord = { ...record, pid: 1 };
 
   it("a pid names the program, through the record check", () => {
@@ -202,6 +408,9 @@ describe("the target", () => {
     );
     expect(sessionWords({ ...held, cli: { visiting: true, lastVisit: null } }, 10_000)).toBe(
       "visiting",
+    );
+    expect(sessionWords({ ...held, finished: true }, 10_000)).toBe(
+      "finished, held for the next visit",
     );
   });
 });

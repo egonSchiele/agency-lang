@@ -7,7 +7,7 @@
 // prints `where` at the stop that follows.
 import type { AttachRecord } from "@/debugger/attach/registry.js";
 import { checkpointFromWire } from "@/debugger/attach/serveIO.js";
-import type { RequestMessage } from "@/debugger/attach/protocol.js";
+import { REPLY_SCHEMAS, type RequestMessage } from "@/debugger/attach/protocol.js";
 import type { DebuggerCommand } from "@/debugger/types.js";
 import type { Checkpoint } from "@/runtime/state/checkpointStore.js";
 import type { DebugStopData } from "@/runtime/debugger.js";
@@ -72,6 +72,7 @@ export type SessionCommand =
   | { name: "checkpoint"; label?: string }
   | { name: "save"; path: string }
   | { name: "load"; path: string }
+  | { name: "answer"; value: unknown }
   | { name: "detach" };
 
 function refused(text: string): CommandResult {
@@ -200,8 +201,17 @@ export function frame(
   index: number | undefined,
   globals: boolean,
 ): CommandResult {
-  return read(visit, record, (checkpoint, stop) => {
-    const found = frameAt(checkpoint, stop?.branchPath ?? [], index);
+  return read(visit, record, (checkpoint, stop) => frameResult(checkpoint, stop, index, globals));
+}
+
+function frameResult(
+  checkpoint: Checkpoint,
+  stop: DebugStopData | undefined,
+  index: number | undefined,
+  globals: boolean,
+): CommandResult {
+  {
+    const found = frameAt(checkpoint, stop, index);
     if (found === null) {
       return refused(`no frame ${index}; \`stack\` numbers them`);
     }
@@ -209,7 +219,7 @@ export function frame(
       ? (checkpoint.globalsAt(stop?.branchPath ?? []).store?.[found.moduleId] ?? {})
       : null;
     return ok(frameText(found, moduleGlobals), { ...found, globals: moduleGlobals });
-  });
+  }
 }
 
 export function stack(visit: Visit, record: AttachRecord): CommandResult {
@@ -358,6 +368,55 @@ const MOVES: Record<string, DebuggerCommand> = {
   back: { type: "stepBack", preserveOverrides: false },
 };
 
+/** How long `continue` waits after its reply for the run to refuse it
+ *  (another party answered the stop first) before reporting the program
+ *  running. The refusal comes with the reply's round trip; a stop may
+ *  not come for an hour. */
+export const ANSWER_GRACE_MS = 300;
+
+/** The lines the driver logs when a command it was given could not be
+ *  done: the stop that follows is the same stop, not a success. */
+const FAILURE_LINES = [
+  /^Already at earliest checkpoint/,
+  /^No checkpoint on current interrupt/,
+  /^Current checkpoint is not valid for stepping back/,
+  /^No checkpoints available for rewind/,
+  /^Checkpoint #\d+ not found/,
+  /^No checkpoint to save/,
+  /^Failed to (save|load):/,
+  /^Invalid checkpoint data/,
+  /^set (inside|before) .* not supported yet/,
+];
+
+/** The driver's line saying the command was not done, if one came. */
+function failureLine(recent: string[]): string | null {
+  return recent.find((line) => FAILURE_LINES.some((pattern) => pattern.test(line))) ?? null;
+}
+
+/** Answer the stop the visit was shown with `command` and wait for what
+ *  follows, or the refusal when the stop cannot take a command: the
+ *  program is running, has ended, or waits on a question `answer`
+ *  takes instead. */
+async function answerStop(
+  visit: Visit,
+  record: AttachRecord,
+  command: DebuggerCommand,
+  waitMs: number,
+): Promise<Next | CommandResult> {
+  if (visit.finished !== null) {
+    return finishedResult(visit.finished);
+  }
+  if (visit.pending === null) {
+    return refused(`${record.program} is running; \`wait\` stops here at its next stop`);
+  }
+  if (visit.pending.method !== "waitForCommand") {
+    return refused(
+      `the program is waiting on ${visit.pending.method}, which this command cannot answer; \`answer <json>\` replies to it, \`where\` says more, \`detach\` leaves it`,
+    );
+  }
+  return visit.answer(command, waitMs);
+}
+
 /** Answer the pending request with `command` and report what followed:
  *  `where` at the next stop, the refusal when another party answered
  *  first, the program's end, or that it is running. */
@@ -368,18 +427,8 @@ export async function move(
   deps: CommandDeps,
   waitMs: number,
 ): Promise<CommandResult> {
-  if (visit.finished !== null) {
-    return finishedResult(visit.finished);
-  }
-  if (visit.pending === null) {
-    return refused(`${record.program} is running; \`wait\` stops here at its next stop`);
-  }
-  if (visit.pending.method !== "waitForCommand") {
-    return refused(
-      `the program is waiting on ${visit.pending.method}, which this command cannot answer; \`where\` says more`,
-    );
-  }
-  return afterMove(visit, record, await visit.answer(command, waitMs), deps);
+  const next = await answerStop(visit, record, command, waitMs);
+  return "kind" in next ? afterMove(visit, record, next, deps) : next;
 }
 
 function afterMove(
@@ -390,6 +439,10 @@ function afterMove(
 ): CommandResult {
   switch (next.kind) {
     case "request": {
+      const failed = failureLine(next.recent);
+      if (failed !== null) {
+        return refused(failed);
+      }
       if (next.shown?.checkpoint === undefined) {
         return refused("the program stopped but sent no state to show; try `where`");
       }
@@ -424,9 +477,50 @@ export async function moveVerb(
   deps: CommandDeps,
 ): Promise<CommandResult> {
   // `continue` does not wait for a stop: the program may run for an hour.
-  const waitMs = name === "continue" ? 0 : deps.moveWaitMs;
+  const waitMs = name === "continue" ? ANSWER_GRACE_MS : deps.moveWaitMs;
   return move(visit, record, MOVES[name]!, deps, waitMs);
 }
+
+/** Reply to the question the program is waiting on, a guard trip, a
+ *  node's arguments, or `input()`, with `value` as the answer. The run
+ *  checks the answer's shape for the question and drops the visit on a
+ *  wrong one, so the shape is checked here first. */
+export async function answer(
+  visit: Visit,
+  record: AttachRecord,
+  value: unknown,
+  deps: CommandDeps,
+): Promise<CommandResult> {
+  if (visit.finished !== null) {
+    return finishedResult(visit.finished);
+  }
+  if (visit.pending === null) {
+    return refused(`${record.program} is running and waiting on no question`);
+  }
+  const method = visit.pending.method;
+  if (method === "waitForCommand") {
+    return refused(
+      "the program is stopped at a statement, not a question; `step` and the other moves answer that",
+    );
+  }
+  if (method === "render" || method === "showRewindSelector" || method === "showCheckpointsPanel") {
+    return refused(
+      `the program is waiting on ${method}, which \`rewind\` and \`checkpoints\` handle`,
+    );
+  }
+  const checked = REPLY_SCHEMAS[method].safeParse(value);
+  if (!checked.success) {
+    return refused(`${cut(value)} is not a ${method} answer: ${ANSWER_SHAPES[method]}`);
+  }
+  return afterMove(visit, record, await visit.answer(checked.data, deps.moveWaitMs), deps);
+}
+
+/** What `answer` takes for each question, for the refusal. */
+const ANSWER_SHAPES = {
+  answerGuardTrip: '{"type":"approve"} or {"type":"reject","value":"why"}',
+  promptForNodeArgs: "a JSON array, one value per parameter",
+  promptForInput: "a JSON string",
+} as const;
 
 export async function wait(
   visit: Visit,
@@ -462,6 +556,26 @@ export function pause(visit: Visit, record: AttachRecord): CommandResult {
   return ok("pausing at the next statement; `wait` returns at that stop", { pausing: true });
 }
 
+/** A command the driver answers by redrawing the same stop (`set`,
+ *  `checkpoint`): the stop that follows is the one before, with what the
+ *  command changed, or the driver's line saying it could not be done. */
+async function sameStop(
+  visit: Visit,
+  record: AttachRecord,
+  command: DebuggerCommand,
+  deps: CommandDeps,
+): Promise<{ shown: Shown } | CommandResult> {
+  const next = await answerStop(visit, record, command, deps.moveWaitMs);
+  if (!("kind" in next)) {
+    return next;
+  }
+  const result = afterMove(visit, record, next, deps);
+  if (result.exitCode !== EXIT.ok || next.kind !== "request") {
+    return result;
+  }
+  return { shown: next.shown! };
+}
+
 export async function set(
   visit: Visit,
   record: AttachRecord,
@@ -469,11 +583,13 @@ export async function set(
   value: unknown,
   deps: CommandDeps,
 ): Promise<CommandResult> {
-  const result = await move(visit, record, { type: "set", varName, value }, deps, deps.moveWaitMs);
-  if (result.exitCode !== EXIT.ok) {
-    return result;
+  const at = await sameStop(visit, record, { type: "set", varName, value }, deps);
+  if (!("shown" in at)) {
+    return at;
   }
-  const after = frame(visit, record, undefined, false);
+  // The frame is read from the stop the set redrew, not from the one
+  // the visit joined at; the `Visit` fields are what it was shown then.
+  const after = frameResult(at.shown.checkpoint!, at.shown.stop, undefined, false);
   return ok(`queued ${varName} = ${cut(value)} for the next resume\n${after.text}`, {
     set: { varName, value },
     frame: after.json,
@@ -486,9 +602,9 @@ export async function checkpoint(
   label: string | undefined,
   deps: CommandDeps,
 ): Promise<CommandResult> {
-  const result = await move(visit, record, { type: "checkpoint", label }, deps, deps.moveWaitMs);
-  if (result.exitCode !== EXIT.ok) {
-    return result;
+  const at = await sameStop(visit, record, { type: "checkpoint", label }, deps);
+  if (!("shown" in at)) {
+    return at;
   }
   return ok(`pinned a checkpoint${label === undefined ? "" : ` "${label}"`}`, {
     pinned: label ?? null,
@@ -560,17 +676,13 @@ export async function rewind(
     return asked.result;
   }
   const rows = checkpointRows(checkpointsFromArgs(asked.request));
-  const index = rows.findIndex((row) => row.id === id);
-  if (index === -1) {
+  if (!rows.some((row) => row.id === id)) {
     await visit.reply(asked.request.id, null, 0);
     return refused(`no checkpoint #${id}; \`checkpoints\` lists them`);
   }
-  return afterMove(
-    visit,
-    record,
-    await visit.reply(asked.request.id, index, deps.moveWaitMs),
-    deps,
-  );
+  // The picker answers with the checkpoint's id, which is what the
+  // driver looks the checkpoint up by.
+  return afterMove(visit, record, await visit.reply(asked.request.id, id, deps.moveWaitMs), deps);
 }
 
 function checkpointsFromArgs(request: RequestMessage): Checkpoint[] {
@@ -590,15 +702,10 @@ async function askForPanel(
   method: "showCheckpointsPanel" | "showRewindSelector",
   deps: CommandDeps,
 ): Promise<{ request: RequestMessage } | { result: CommandResult }> {
-  if (visit.finished !== null) {
-    return { result: finishedResult(visit.finished) };
+  const next = await answerStop(visit, record, command, deps.moveWaitMs);
+  if (!("kind" in next)) {
+    return { result: next };
   }
-  if (visit.pending === null) {
-    return {
-      result: refused(`${record.program} is running; \`wait\` stops here at its next stop`),
-    };
-  }
-  const next = await visit.answer(command, deps.moveWaitMs);
   if (next.kind === "request" && next.request.method === method) {
     return { request: next.request };
   }
@@ -610,9 +717,17 @@ async function askForPanel(
   return { result: afterMove(visit, record, next, deps) };
 }
 
-/** Leave the session: the CLI's hold is released, and with no terminal
- *  attached the program runs on with no debugger. */
+/** Leave the session: the CLI's hold is released. With no terminal
+ *  attached the program runs on with no debugger; with one, the
+ *  terminal keeps driving, and the program stays where it is. */
 export function detach(visit: Visit, record: AttachRecord): CommandResult {
   visit.detach();
-  return ok(`detached from ${record.program} (pid ${record.pid}); it runs on`, { detached: true });
+  const terminal = visit.parties.terminal;
+  const what = terminal
+    ? "the terminal debugger stays on it and the program waits for it"
+    : "it runs on with no debugger";
+  return ok(`detached from ${record.program} (pid ${record.pid}); ${what}`, {
+    detached: true,
+    terminal,
+  });
 }

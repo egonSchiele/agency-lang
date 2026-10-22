@@ -131,9 +131,14 @@ class Inbox {
         return;
       }
       if (message.type === "request" && message.method === "render") {
+        // A render without a checkpoint is the same stop redrawn (the
+        // driver sends one after `set` and `checkpoint`): what was shown
+        // stays, as the terminal keeps its checkpoint for such a redraw.
+        const checkpoint =
+          message.args[0] == null ? this.shown?.checkpoint : checkpointFromWire(message.args[0]);
         this.shown = {
-          checkpoint: checkpointFromWire(message.args[0]),
-          stop: message.args[1] as DebugStopData | undefined,
+          checkpoint,
+          stop: (message.args[1] as DebugStopData | undefined) ?? this.shown?.stop,
           interruptId: message.args[2] as string | undefined,
         };
         channel.send({ type: "reply", id: message.id, result: undefined });
@@ -166,7 +171,8 @@ class Inbox {
   }
 
   /** The next message, null when the channel closed, undefined at the
-   *  deadline. */
+   *  deadline. What has already arrived is taken whatever the deadline,
+   *  so a zero wait still sees a refusal that came with the reply. */
   private take(timeoutMs: number): Promise<AttachMessage | null | undefined> {
     const queued = this.queue.shift();
     if (queued !== undefined) {
@@ -174,6 +180,9 @@ class Inbox {
     }
     if (this.closed) {
       return Promise.resolve(null);
+    }
+    if (timeoutMs <= 0) {
+      return Promise.resolve(undefined);
     }
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -212,9 +221,12 @@ class Inbox {
       }
     }
     // The stop and the pending request follow at once when the program
-    // is stopped; nothing follows when it is running.
+    // is stopped; nothing follows when it is running. The activity lines
+    // `next` hands over with the request are the ones since the last
+    // visit, and belong to this one.
     const after = await this.next(graceMs);
     if (after.kind === "request") {
+      this.recent = [...after.recent, ...this.recent];
       return this.visit(hello, parties, after.request, null);
     }
     if (after.kind === "finished") {
@@ -267,11 +279,7 @@ class Inbox {
   async next(timeoutMs: number): Promise<Next> {
     const deadline = Date.now() + timeoutMs;
     while (true) {
-      const left = deadline - Date.now();
-      if (left <= 0) {
-        return { kind: "timeout" };
-      }
-      const message = await this.take(left);
+      const message = await this.take(Math.max(0, deadline - Date.now()));
       if (message === undefined) {
         return { kind: "timeout" };
       }

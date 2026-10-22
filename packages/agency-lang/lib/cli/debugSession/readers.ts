@@ -58,13 +58,18 @@ function loopOf(frame: StateJSON): { round: number; removedTools: string[] } | n
   };
 }
 
+/** Frame `index`, or with none the frame a person inspects at the stop:
+ *  the last, or, at one of the tool loop's own stops, the one that
+ *  called `llm()` under the loop's frame, as `Checkpoint.shownFrame`
+ *  picks for the terminal. */
 export function frameAt(
   checkpoint: Checkpoint,
-  branchPath: string[],
+  stop: { branchPath?: string[]; loopStop?: unknown } | undefined,
   index: number | undefined,
 ): FrameView | null {
-  const frames = stackOf(checkpoint, branchPath);
-  const at = index === undefined ? frames.length - 1 : index;
+  const frames = stackOf(checkpoint, stop?.branchPath ?? []);
+  const last = stop?.loopStop === undefined ? frames.length - 1 : frames.length - 2;
+  const at = index === undefined ? last : index;
   return frames[at] ?? null;
 }
 

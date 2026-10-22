@@ -253,6 +253,29 @@ function addMoves(session: Command): void {
   );
 
   withSharedOptions(
-    session.command("detach").description("End the session; the program runs on with no debugger"),
+    session
+      .command("answer")
+      .description(
+        "Answer the question the program is waiting on: a guard trip, a node's arguments, or input()",
+      )
+      .argument("<json>", "The answer, as JSON"),
+  ).action(async (json: string, options: LeafOptions) => {
+    let value: unknown;
+    try {
+      value = JSON.parse(json);
+    } catch {
+      console.error(`Error: answer takes JSON, not "${json}"`);
+      process.exitCode = 1;
+      return;
+    }
+    await exitWith({ name: "answer", value }, options);
+  });
+
+  withSharedOptions(
+    session
+      .command("detach")
+      .description(
+        "Release the CLI's hold on the session; with no terminal debugger attached, the program runs on",
+      ),
   ).action(async (options: LeafOptions) => exitWith({ name: "detach" }, options));
 }

@@ -114,6 +114,9 @@ export const AttachMessageSchema = z.discriminatedUnion("type", [
       /** Whether the driver is waiting on an answer: the program is
        *  stopped at a debug stop, or at a selector or prompt. */
       stopped: z.boolean(),
+      /** Whether the program ended while the session was held, with the
+       *  news waiting for the next visit. */
+      finished: z.boolean(),
     })
     .strict(),
   z.object({ type: z.literal("pause") }).strict(),

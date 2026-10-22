@@ -556,9 +556,9 @@ node main() {
 
 **How to fix:** move positional arguments before the named ones, or name them too.`,
 
-  unknownNamedArg: `A named argument in this call does not correspond to any parameter of the function.
+  unknownNamedArg: `A named argument in this call does not correspond to any parameter of the function. The message lists the names the call may use.
 
-**How to fix:** use a declared parameter name, or fix a typo.`,
+**How to fix:** use one of the listed parameter names, or fix a typo.`,
 
   namedArgConflictsPositional: `A parameter was filled both positionally and by name in the same call, so it is bound twice.
 

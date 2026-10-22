@@ -1,0 +1,17 @@
+---
+description: Look at a running Agency program with the debugger, through agency debug session
+argument-hint: [pid]
+---
+
+Please look at a running Agency program with me. You drive the debugger with the `agency debug session` commands, one per decision, instead of grepping its log. Each command prints what you need for the next one; add `--json` for the same facts as fields. The exit codes: 0 an answer, 1 a refusal with what to do instead on stderr, 2 the program has ended, 3 `wait` ran out.
+
+If I gave a pid with this command, start with step 2's `attach` on it: $ARGUMENTS
+
+1. **When to attach.** A run I say is stuck, slow, or doing the wrong thing while it is still running. A run that has ended is a log question: use `/debug-logs`. Attaching stops the program at its next statement, so it is never a free look. `agency debug session list` shows the programs that can take a debugger and who is on each.
+2. **Ask first.** Before attaching to a program I am watching or interacting with, say that attaching stops it and ask. The exception is a program I just asked you to look at, which is the ask. Never attach to a run another person started. Then `agency debug session attach <pid>`, which prints where the program is.
+3. **What to look at**, from `agency debug session where`, which you run first and after every move. The stack line says which tool the model is inside and the tool loop's round: a round near the loop's limit means the model is looping. `thread` prints the active thread's latest messages, which shows what it keeps saying; `thread <label>` another. `branches` shows a tool call that has been running the whole time. `guards` says what the run has spent against its budgets. `frame` prints the stopped frame's locals; `source` the statement and the lines around it.
+4. **Keep it moving.** Think with the program running, not stopped. `continue` lets it run and returns at once; `wait --for 2m` blocks until it stops or ends; `pause` asks a running program to stop at its next statement. `detach` the moment the question is answered, and never leave a program stopped while writing a long reply. The run lets itself go after ten minutes without a command; that is a safety net, not a plan.
+5. **One command at a time.** The session has one pending question; a second command while one is still connected is refused as another visit.
+6. **I may be driving too.** `where` says `a terminal debugger is attached too` when I am at `agency debug --attach` on the same run. Then my moves show up as `since   terminal: continue`, a move of yours can be refused because I got there first (`the stop you saw was answered by the terminal`), and the answer is to run `where` and look again, not to retry. Do not `continue` or `detach` a run I am stepping through without saying so.
+7. **Do not change the run without asking.** `set`, `rewind`, `back`, and `load` change what the program will do. Report what you would change and why, and do it only when I say so. The program's own interrupts are mine to answer, in the program's terminal; neither of us answers them from the debugger.
+8. **Report.** Where it was, what it was doing, what it had spent, and what you changed, if anything, with the exact commands.

@@ -91,6 +91,7 @@ describe("rowsFor", () => {
         dimension: "time",
         limit: 60000,
         spent: 10000,
+        ownerLimit: 60000,
         disarmed: false,
         root: false,
       },
@@ -101,10 +102,15 @@ describe("rowsFor", () => {
         dimension: "cost",
         limit: 1,
         spent: 0.1,
+        ownerLimit: 1,
         disarmed: false,
         root: true,
       },
     ]);
+    // Inside the tool call the research guard is the branch's clone, with
+    // the parent's remaining time as its limit and the owner's as ownerLimit.
+    const clone = rowsFor("guards", inSearch()).find((r) => r.kind === "guard");
+    expect(clone).toMatchObject({ label: "research", limit: 50000, ownerLimit: 60000 });
   });
 
   it("branches and the call stack", () => {

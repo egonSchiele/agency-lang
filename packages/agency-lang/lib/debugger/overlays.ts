@@ -569,7 +569,9 @@ export async function showPalette(
   const lines = (matching: PaletteEntry[]) =>
     matching.length === 0
       ? ["  (no edit matches)"]
-      : matching.map((entry, i) => `${i === selected ? ">" : " "} ${entry.sentence}`);
+      : matching.map(
+          (entry, i) => `${i === selected ? ">" : " "} ${escapeStyleTags(entry.sentence)}`,
+        );
   const render = (matching: PaletteEntry[]) =>
     ctx.screen.render(
       column(

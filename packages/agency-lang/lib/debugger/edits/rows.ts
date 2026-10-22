@@ -49,8 +49,12 @@ export type PaneRow =
       index: number;
       label: string | null;
       dimension: "cost" | "time";
+      /** The figures shown: a branch's own copy of an inherited guard. */
       limit: number;
       spent: number;
+      /** The owning copy's limit, the whole budget; `limit` unless the
+       *  row is a branch's copy. */
+      ownerLimit: number;
       disarmed: boolean;
       root: boolean;
     };
@@ -168,6 +172,7 @@ export function rowsFor(pane: PaneName, view: StopView): PaneRow[] {
         dimension: guard.dimension,
         limit: guard.limit,
         spent: guard.spent,
+        ownerLimit: guard.ownerLimit,
         disarmed: guard.disarmed,
         root: guard.root,
       }));

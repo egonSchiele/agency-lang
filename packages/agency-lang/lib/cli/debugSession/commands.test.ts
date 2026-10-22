@@ -520,6 +520,49 @@ describe("edit on an agent-shaped stop", () => {
     expect(result.text).toContain("set-branch-result  --branch <fork_1|fork_2>  --value <json>");
   });
 
+  it("a tool two loops offer is named with its loop, and a bare name is refused", async () => {
+    const checkpoint = agentShapedCheckpoint();
+    const inner = checkpoint.stack.stack[1].branches!.tool_0_abc.stack.stack[1];
+    inner.locals.toolNames = ["search"];
+    const stop = {
+      moduleId: "mod",
+      scopeName: "search",
+      stepPath: "1/llm",
+      branchPath: ["tool_0_abc"],
+      depth: 0,
+      label: "round 1",
+      loopStop: "round" as const,
+    };
+    const visit = scripted(ask, [stopAfter(1, ["removed search from the next round"])], {
+      shown: { checkpoint, stop, interruptId: undefined },
+    });
+    const listing = await edit(visit, record, { values: {}, drop: false }, deps);
+    expect(listing.text).toContain(
+      "remove-tool        --tool <search@root|writeUp|search@tool_0_abc>",
+    );
+    const bare = await edit(
+      visit,
+      record,
+      { action: "remove-tool", values: { tool: "search" }, drop: false },
+      deps,
+    );
+    expect(bare.exitCode).toBe(EXIT.refused);
+    expect(bare.text).toContain("search names 2 tools; say which: search@root, search@tool_0_abc");
+    const qualified = await edit(
+      visit,
+      record,
+      { action: "remove-tool", values: { tool: "search@tool_0_abc" }, drop: false },
+      deps,
+    );
+    expect(qualified.exitCode).toBe(EXIT.ok);
+    expect(visit.sent).toEqual([
+      {
+        type: "edit",
+        edits: [{ op: "removeTool", loop: { branchPath: ["tool_0_abc"] }, tool: "search" }],
+      },
+    ]);
+  });
+
   it("parses an amount with the guard's dimension and refuses one it cannot", async () => {
     const visit = scripted(ask, [stopAfter(1, ["limit 60000 → 120000"])], { shown: shown() });
     const bad = await edit(

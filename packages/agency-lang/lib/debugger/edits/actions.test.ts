@@ -89,6 +89,17 @@ describe("the action table", () => {
     expect(budget.toEdits(research, 90000, view())).toEqual([
       { op: "setGuard", guard: { index: 0 }, branchPath: [], limit: 90000 },
     ]);
+    // A branch's copy shows 50s of the owner's 60s; typing 40s as the new
+    // budget takes 10s off the owner, which the clone then follows.
+    const inSearch: StopView = {
+      ...view(),
+      stop: { branchPath: ["tool_0_abc"], loopStop: "round" },
+      viewed: { branchPath: ["tool_0_abc"], loopStop: "round" },
+    };
+    const clone = rowsFor("guards", inSearch).find((r) => r.kind === "guard")!;
+    expect(budget.toEdits(clone, 40000, inSearch)).toEqual([
+      { op: "setGuard", guard: { index: 0 }, branchPath: ["tool_0_abc"], limit: 50000 },
+    ]);
     expect(actionsFor(root, view())).toEqual([]);
     expect(disarm.applies(root, view())).toEqual({
       offered: false,

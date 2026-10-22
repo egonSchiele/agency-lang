@@ -653,6 +653,8 @@ export class DebuggerUI implements DebuggerIO {
     if (paneIndex >= 0) this.focusIndex = paneIndex;
     this.cursor[picked.pane] = picked.rowIndex;
     this.scrollToCursor(picked.pane);
+    // The threads pane shows one thread; the entry's row says which.
+    if (picked.row.kind === "thread") this.showThread(picked.row.id);
     this.renderUI();
     return await this.carryOut(
       { kind: "runAction", action: picked.action, row: picked.row },

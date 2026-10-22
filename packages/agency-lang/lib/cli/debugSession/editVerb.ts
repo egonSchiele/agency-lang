@@ -40,8 +40,28 @@ const CHOICE_FLAGS: Partial<Record<RowKind, ChoiceFlag>> = {
     noun: "branch",
     keys: (row) => (row.kind === "branch" ? [row.key] : []),
   },
-  tool: { flag: "tool", noun: "tool", keys: (row) => (row.kind === "tool" ? [row.name] : []) },
+  tool: {
+    flag: "tool",
+    noun: "tool",
+    // Two loops along the branch path can offer the same tool, so a tool
+    // is also named with its loop: `search@root`, `search@tool_0_abc`.
+    keys: (row) => (row.kind === "tool" ? [row.name, `${row.name}@${loopName(row.loop)}`] : []),
+  },
 };
+
+/** The loop a tool row is under, for the `name@loop` spelling: the
+ *  branch path of the loop's stack, `root` for the root stack. */
+function loopName(loop: { branchPath: string[] }): string {
+  return loop.branchPath.length === 0 ? "root" : loop.branchPath.join("/");
+}
+
+/** The token the listing prints for `row`: its first key, unless another
+ *  row shares it, then the first key no other row has. */
+function tokenFor(row: PaneRow, rows: PaneRow[], choice: ChoiceFlag): string {
+  const keys = choice.keys(row);
+  const others = rows.filter((other) => other !== row).flatMap((other) => choice.keys(other));
+  return keys.find((key) => !others.includes(key)) ?? keys[0];
+}
 
 /** The flag that carries the typed value, by what the action asks for. */
 const ASK_FLAGS = { text: "text", json: "value", amount: "amount" } as const;
@@ -98,8 +118,8 @@ export function listEdits(view: StopView): EditListing[] {
     const flags: EditListing["flags"] = [
       {
         flag: choice.flag,
-        choices: rows.map((row) => choice.keys(row)[0]),
-        default: fallback === undefined ? null : choice.keys(fallback)[0],
+        choices: rows.map((row) => tokenFor(row, rows, choice)),
+        default: fallback === undefined ? null : tokenFor(fallback, rows, choice),
       },
     ];
     if (action.asks !== undefined) {
@@ -137,12 +157,19 @@ export function editsFor(
   if (choice === undefined) return { refused: `${action.name} has no row to act on` };
   const rows = rowsOffered(action, view);
   const wanted = request.values[choice.flag];
-  const row =
+  const matching =
     wanted === undefined
-      ? choice.defaultRow?.(rows)
-      : rows.find((candidate) => choice.keys(candidate).includes(String(wanted)));
+      ? []
+      : rows.filter((candidate) => choice.keys(candidate).includes(String(wanted)));
+  if (matching.length > 1) {
+    const names = matching.map((candidate) => tokenFor(candidate, rows, choice)).join(", ");
+    return {
+      refused: `${String(wanted)} names ${matching.length} ${choice.noun}s; say which: ${names}`,
+    };
+  }
+  const row = wanted === undefined ? choice.defaultRow?.(rows) : matching[0];
   if (row === undefined) {
-    const have = rows.map((candidate) => choice.keys(candidate)[0]).join(", ");
+    const have = rows.map((candidate) => tokenFor(candidate, rows, choice)).join(", ");
     return {
       refused:
         rows.length === 0

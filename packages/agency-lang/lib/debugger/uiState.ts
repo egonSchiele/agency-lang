@@ -19,6 +19,7 @@ import { previewOf } from "./edits/pending.js";
 import { defaultHost } from "#default-host";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
+import { nativeTypeReplacer } from "../runtime/revivers/index.js";
 import { getStdlibDir } from "../importPaths.js";
 import { color } from "@/utils/termcolors.js";
 import { uniq } from "@/utils.js";
@@ -30,6 +31,13 @@ export type ValWithOverride = {
   value: unknown;
   override?: unknown;
 };
+
+/** A value as a checkpoint on the wire writes it, for comparing a live
+ *  value with its copy in a preview. Wrapped in an object first: the
+ *  replacer tells a Date from its string by looking at the parent. */
+function asWire(value: unknown): string {
+  return JSON.stringify({ value }, nativeTypeReplacer);
+}
 
 export class UIState {
   private activityLog: string[];
@@ -235,7 +243,10 @@ export class UIState {
   /** One entry per variable of `obj`, the preview's values. With
    *  `before`, the same place in the stop's own checkpoint, an entry
    *  whose value differs carries the preview's as its override and the
-   *  stop's as its value, so the pane highlights it. */
+   *  stop's as its value, so the pane highlights it; one that is the
+   *  same shows the stop's own value. The two are compared as the wire
+   *  writes them: the preview holds a Date as a tagged object, the
+   *  stop's checkpoint in this process may hold the Date itself. */
   setWithOverrides(
     obj: Record<string, unknown>,
     array: ValWithOverride[],
@@ -245,11 +256,10 @@ export class UIState {
       if (this.isInternalVar(key)) {
         continue;
       }
-      const changed =
-        before !== undefined && JSON.stringify(before[key]) !== JSON.stringify(obj[key]);
+      const changed = before !== undefined && asWire(before[key]) !== asWire(obj[key]);
       array.push({
         key,
-        value: changed ? before[key] : obj[key],
+        value: before !== undefined ? before[key] : obj[key],
         override: changed ? obj[key] : undefined,
       });
     }

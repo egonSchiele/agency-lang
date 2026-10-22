@@ -129,6 +129,10 @@ const setGuardLimit: EditAction = {
   sentence: (row) => (row.kind === "guard" ? `change the budget of ${guardWords(row)}` : ""),
   applies: guardOffered,
   asks: { label: "new budget (30s, 2m, or $0.50)", kind: "amount" },
+  // The row shows a branch's own copy of an inherited guard, whose limit
+  // is what the parent had left; the edit sets the owner's whole budget,
+  // so the typed figure is a change to the shown one, applied to the
+  // owner's. On an own copy the two are the same number.
   toEdits: (row, value, view) =>
     row.kind === "guard" && typeof value === "number"
       ? [
@@ -136,7 +140,7 @@ const setGuardLimit: EditAction = {
             op: "setGuard",
             guard: { index: row.index },
             branchPath: view.viewed.branchPath,
-            limit: value,
+            limit: row.ownerLimit + (value - row.limit),
           },
         ]
       : [],

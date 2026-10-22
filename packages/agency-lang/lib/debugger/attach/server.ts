@@ -27,6 +27,10 @@ import { emptySession, statusOf } from "./sessionRules.js";
  *  Linux). */
 const MAX_SOCKET_PATH_BYTES = 104;
 const DEFAULT_REWIND_SIZE = 30;
+/** How long a connection has to say what it is. A client built before
+ *  `client` existed sends nothing first and would wait on `hello` for
+ *  ever; it is told why instead. */
+export const HANDSHAKE_MS = 5_000;
 
 export type AttachOptions = {
   functions: ModuleFunctions;
@@ -208,11 +212,30 @@ export async function startAttachServer(
     }
     session.admit(channel, kind);
   };
+  // The connections that have not said what they are yet. The session
+  // owns a connection only from its `client` message, so these are closed
+  // here, by the deadline or at `stop`.
+  let greeting: Channel[] = [];
   const server = net.createServer((socket) => {
     socket.unref();
     const channel = lineChannel(socket);
-    const stop = channel.onMessage((raw) => {
+    greeting.push(channel);
+    const done = (): void => {
+      greeting = greeting.filter((entry) => entry !== channel);
+      clearTimeout(deadline);
       stop();
+    };
+    const deadline = setTimeout(() => {
+      done();
+      channel.send({
+        type: "refused",
+        reason: `no client message within ${HANDSHAKE_MS / 1000} seconds; is the debugger an older build?`,
+      });
+      channel.close();
+    }, HANDSHAKE_MS);
+    deadline.unref();
+    const stop = channel.onMessage((raw) => {
+      done();
       const message = parseAttachMessage(raw);
       if (message === null || message.type !== "client") {
         channel.send({ type: "refused", reason: "the first message must say what the client is" });
@@ -221,6 +244,7 @@ export async function startAttachServer(
       }
       admit(channel, message.kind);
     });
+    channel.onClose(done);
   });
   server.unref();
 
@@ -243,6 +267,9 @@ export async function startAttachServer(
         stop: () =>
           new Promise<void>((done) => {
             session?.detach();
+            for (const channel of [...greeting]) {
+              channel.close();
+            }
             server.close(() => {
               fs.rmSync(paths.sock, { force: true });
               done();

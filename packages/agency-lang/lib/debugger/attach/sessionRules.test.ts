@@ -3,11 +3,23 @@
 // has a case here; a new rule is a new case.
 import { describe, it, expect } from "vitest";
 import type { AttachMessage, Hello, RequestMessage } from "./protocol.js";
-import { emptySession, statusOf, step, type Effect, type SessionState } from "./sessionRules.js";
+import {
+  emptySession,
+  LEASE_MS,
+  statusOf,
+  step,
+  type Effect,
+  type SessionState,
+} from "./sessionRules.js";
 
 const NOW = 1_700_000_000_000;
 const hello: Hello = { type: "hello", program: "agent.agency", node: "main", pid: 42 };
-const render: RequestMessage = { type: "request", id: 7, method: "render", args: [{}, {}] };
+const render: RequestMessage = {
+  type: "request",
+  id: 7,
+  method: "render",
+  args: [{ id: 1 }, { line: 4 }],
+};
 const ask: RequestMessage = { type: "request", id: 8, method: "waitForCommand", args: [] };
 const finished: AttachMessage = { type: "finished", value: 3 };
 
@@ -17,7 +29,7 @@ function withHello(state: SessionState = emptySession()): SessionState {
 
 /** A session a terminal joined, at the stop `render` and `ask` describe. */
 function terminalAtStop(): SessionState {
-  return { ...withHello(), attachedSince: NOW, terminal: 1, pending: ask, lastRender: render };
+  return { ...withHello(), attachedSince: NOW, terminal: 1, pending: [ask], lastRender: render };
 }
 
 /** A session the CLI holds with no visit connected, at the same stop. */
@@ -26,10 +38,13 @@ function heldAtStop(): SessionState {
     ...withHello(),
     attachedSince: NOW,
     cli: { visit: null, lastVisit: NOW },
-    pending: ask,
+    pending: [ask],
     lastRender: render,
   };
 }
+
+const mode: AttachMessage = { type: "notice", method: "setMode", args: ["step"] };
+const busy: AttachMessage = { type: "notice", method: "setBusy", args: [[]] };
 
 function sendsTo(effects: Effect[], party: number): unknown[] {
   return effects
@@ -79,9 +94,43 @@ describe("joining", () => {
   });
 
   it("a request that is the render itself is sent once", () => {
-    const held = { ...heldAtStop(), pending: render };
+    const held = { ...heldAtStop(), pending: [render] };
     const { effects } = step(held, { type: "connect", party: 2, kind: "cli", now: NOW });
     expect(sendsTo(effects, 2)).toEqual([hello, render]);
+  });
+
+  it("every request waiting is sent, after the stop", () => {
+    const panel: RequestMessage = {
+      type: "request",
+      id: 9,
+      method: "showCheckpointsPanel",
+      args: [[]],
+    };
+    const held = { ...heldAtStop(), pending: [ask, panel] };
+    const { effects } = step(held, { type: "connect", party: 2, kind: "cli", now: NOW });
+    expect(sendsTo(effects, 2)).toEqual([hello, render, ask, panel]);
+  });
+
+  it("with nothing pending the program is running: the last stop is not shown", () => {
+    const running = { ...heldAtStop(), pending: [] };
+    const { effects } = step(running, { type: "connect", party: 2, kind: "cli", now: NOW });
+    expect(sendsTo(effects, 2)).toEqual([hello]);
+  });
+
+  it("the settings and the spinner as they stand come right after hello", () => {
+    const busyRun = {
+      ...heldAtStop(),
+      pending: [],
+      settings: { setMode: mode, setBusy: busy },
+      spinning: true,
+    } as SessionState;
+    const { effects } = step(busyRun, { type: "connect", party: 2, kind: "terminal", now: NOW });
+    expect(sendsTo(effects, 2)).toEqual([
+      hello,
+      mode,
+      busy,
+      { type: "notice", method: "startSpinner", args: [] },
+    ]);
   });
 
   it("a later visit keeps the hold's last visit time until it closes", () => {
@@ -102,6 +151,7 @@ describe("joining", () => {
           terminal: false,
           cli: { visiting: false, lastVisit: NOW },
           stopped: true,
+          finished: false,
         },
       },
       { type: "close", party: 9 },
@@ -115,18 +165,26 @@ describe("joining", () => {
       terminal: false,
       cli: null,
       stopped: false,
+      finished: false,
     });
   });
 
-  it("a party joining after the program ended is sent finished, closed, and the session ends", () => {
-    const after = { ...heldAtStop(), pending: null, finished } as SessionState;
+  it("a party joining after the program ended is sent hello and finished, closed, and the session ends", () => {
+    const after = { ...heldAtStop(), pending: [], finished } as SessionState;
     const { effects } = step(after, { type: "connect", party: 2, kind: "cli", now: NOW });
     expect(effects).toEqual([
-      { type: "clearLease" },
+      { type: "send", to: 2, message: hello },
       { type: "send", to: 2, message: finished },
       { type: "close", party: 2 },
       { type: "end" },
     ]);
+  });
+
+  it("the program's end outranks a refusal: a terminal after it, while the hold lasts, is told", () => {
+    const after = { ...heldAtStop(), pending: [], finished } as SessionState;
+    const { effects } = step(after, { type: "connect", party: 2, kind: "terminal", now: NOW });
+    expect(sendsTo(effects, 2)).toEqual([hello, finished]);
+    expect(kinds(effects)).toContain("end");
   });
 });
 
@@ -188,17 +246,27 @@ describe("the driver's messages", () => {
     expect(state.hello).toEqual(hello);
   });
 
-  it("a request goes to the connected party and is kept as pending; a render is also the last render", () => {
+  it("a request goes to the connected party and joins the pending ones; a render is also the last render", () => {
     const { state, effects } = step(terminalAtStop(), { type: "fromDriver", message: render });
     expect(effects).toEqual([{ type: "send", to: 1, message: render }]);
-    expect(state.pending).toBe(render);
+    expect(state.pending).toEqual([ask, render]);
     expect(state.lastRender).toBe(render);
   });
 
+  it("a render without a checkpoint is the same stop redrawn: it keeps the checkpoint before it", () => {
+    const redraw: RequestMessage = { type: "request", id: 12, method: "render", args: [] };
+    const { state, effects } = step(terminalAtStop(), { type: "fromDriver", message: redraw });
+    expect(effects).toEqual([{ type: "send", to: 1, message: redraw }]);
+    expect(state.lastRender).toEqual({ ...redraw, args: [{ id: 1 }, { line: 4 }, undefined] });
+  });
+
   it("a request with no party connected is kept and sent to no one", () => {
-    const { state, effects } = step(heldAtStop(), { type: "fromDriver", message: ask });
+    const { state, effects } = step(
+      { ...heldAtStop(), pending: [] },
+      { type: "fromDriver", message: ask },
+    );
     expect(effects).toEqual([]);
-    expect(state.pending).toBe(ask);
+    expect(state.pending).toEqual([ask]);
   });
 
   it("a log notice is sent on and kept, the last twenty", () => {
@@ -211,11 +279,28 @@ describe("the driver's messages", () => {
     expect(state.recent[19]).toBe("line 20");
   });
 
+  it("a setting is sent on and the latest one kept by method", () => {
+    const later: AttachMessage = { type: "notice", method: "setMode", args: ["continue"] };
+    const first = step(terminalAtStop(), { type: "fromDriver", message: mode });
+    const { state, effects } = step(first.state, { type: "fromDriver", message: later });
+    expect(effects).toEqual([{ type: "send", to: 1, message: later }]);
+    expect(state.settings).toEqual({ setMode: later });
+    expect(state.recent).toEqual([]);
+  });
+
+  it("the spinner notices are sent on and remembered as on or off", () => {
+    const on: AttachMessage = { type: "notice", method: "startSpinner", args: [] };
+    const off: AttachMessage = { type: "notice", method: "stopSpinner", args: [] };
+    const started = step(terminalAtStop(), { type: "fromDriver", message: on });
+    expect(started.state.spinning).toBe(true);
+    expect(step(started.state, { type: "fromDriver", message: off }).state.spinning).toBe(false);
+  });
+
   it("another notice is sent on and not kept", () => {
-    const notice: AttachMessage = { type: "notice", method: "startSpinner", args: [] };
+    const notice: AttachMessage = { type: "notice", method: "appendStdout", args: ["hi"] };
     const { state, effects } = step(terminalAtStop(), { type: "fromDriver", message: notice });
     expect(effects).toEqual([{ type: "send", to: 1, message: notice }]);
-    expect(state.recent).toEqual([]);
+    expect(state).toEqual({ ...terminalAtStop() });
   });
 
   it("finished goes to the connected party and ends the session", () => {
@@ -223,10 +308,12 @@ describe("the driver's messages", () => {
     expect(effects).toEqual([{ type: "send", to: 1, message: finished }, { type: "end" }]);
   });
 
-  it("finished with no party connected is kept for the next visit", () => {
+  it("finished with no party connected is kept for the next visit, and the process is let go", () => {
     const { state, effects } = step(heldAtStop(), { type: "fromDriver", message: finished });
-    expect(effects).toEqual([]);
+    expect(effects).toEqual([{ type: "release" }]);
     expect(state.finished).toEqual(finished);
+    expect(state.pending).toEqual([]);
+    expect(statusOf(state)).toMatchObject({ stopped: false, finished: true });
   });
 });
 
@@ -239,7 +326,19 @@ describe("a party's messages", () => {
       message: reply,
     });
     expect(effects).toEqual([{ type: "toDriver", message: reply }]);
-    expect(state.pending).toBeNull();
+    expect(state.pending).toEqual([]);
+  });
+
+  it("with two requests in flight, each reply answers its own", () => {
+    const both = { ...terminalAtStop(), pending: [render, ask] };
+    const ack: AttachMessage = { type: "reply", id: 7, result: undefined };
+    const first = step(both, { type: "fromParty", party: 1, message: ack });
+    expect(first.effects).toEqual([{ type: "toDriver", message: ack }]);
+    expect(first.state.pending).toEqual([ask]);
+    const command: AttachMessage = { type: "reply", id: 8, result: { type: "step" } };
+    const second = step(first.state, { type: "fromParty", party: 1, message: command });
+    expect(second.effects).toEqual([{ type: "toDriver", message: command }]);
+    expect(second.state.pending).toEqual([]);
   });
 
   it("a reply to a request that is not pending is dropped", () => {
@@ -250,7 +349,7 @@ describe("a party's messages", () => {
       message: reply,
     });
     expect(effects).toEqual([]);
-    expect(state.pending).toBe(ask);
+    expect(state.pending).toEqual([ask]);
   });
 
   it("a message from a party that is not on the session is dropped", () => {
@@ -284,7 +383,7 @@ describe("leaving", () => {
     const { state, effects } = step(visiting, { type: "disconnect", party: 2, now: NOW + 9 });
     expect(effects).toEqual([{ type: "startLease" }]);
     expect(state.cli).toEqual({ visit: null, lastVisit: NOW + 9 });
-    expect(state.pending).toBe(ask);
+    expect(state.pending).toEqual([ask]);
   });
 
   it("a refused party closing changes nothing", () => {
@@ -297,7 +396,7 @@ describe("leaving", () => {
   it("the lease running out with no one else on the session logs a line and ends it", () => {
     const { state, effects } = step(heldAtStop(), { type: "leaseExpired" });
     expect(effects).toEqual([
-      { type: "log", line: "[agency debug] no visit for 10 minutes; detaching" },
+      { type: "log", line: `[agency debug] no visit for ${LEASE_MS / 60_000} minutes; detaching` },
       { type: "end" },
     ]);
     expect(state.cli).toBeNull();

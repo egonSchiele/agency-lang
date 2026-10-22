@@ -76,6 +76,56 @@ describe("prepareProgram", () => {
     expect(topLevelFunctions).toHaveLength(1);
   });
 
+  describe("decorators", () => {
+    const DECORATOR = `export def logged(block: () -> any): any {\n  return block()\n}\n`;
+
+    it("prepares a program whose decorator is declared or imported", () => {
+      write("deco.agency", DECORATOR);
+      const result = prepare(
+        "main.agency",
+        `import { logged } from "./deco.agency"\n@logged\ndef f(): string {\n  return "x"\n}\n`,
+      );
+      expect(result.ok).toBe(true);
+      expect(result.diagnostics).toEqual([]);
+    });
+
+    it("refuses an unknown decorator, naming it and the def", () => {
+      const result = prepare(
+        "main.agency",
+        `@budgted(cost: 1)\ndef f(): string {\n  return "x"\n}\n`,
+      );
+      expect(result.ok).toBe(false);
+      expect(stages(result)).toEqual(["decorators"]);
+      const failure = result.diagnostics[0];
+      expect(failure.stage === "decorators" && failure.message).toContain(
+        "Unknown decorator 'budgted' on 'f'",
+      );
+      expect(failure.stage === "decorators" && failure.loc).toBeDefined();
+      expect(describeDiagnostic(failure, "main.agency")).toContain(
+        "main.agency - error: Unknown decorator",
+      );
+    });
+
+    it("refuses a decorator on a node", () => {
+      const result = prepare(
+        "main.agency",
+        `${DECORATOR}@logged\nnode main() {\n  return "x"\n}\n`,
+      );
+      expect(result.ok).toBe(false);
+      expect(stages(result)).toEqual(["decorators"]);
+    });
+
+    it("keeps every decorator problem under keepGoing", () => {
+      const result = prepare(
+        "main.agency",
+        `@one\ndef f(): string {\n  return "x"\n}\n@two\ndef g(): string {\n  return "y"\n}\n`,
+        { keepGoing: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(stages(result)).toEqual(["decorators", "decorators"]);
+    });
+  });
+
   it("reports a parse failure with its position", () => {
     const result = prepare("main.agency", `node main( {\n`);
     expect(result.ok).toBe(false);

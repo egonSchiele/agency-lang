@@ -23,6 +23,7 @@ import { applySuppressions, parseSuppressions } from "./suppression.js";
 import { inferReturnTypes } from "./inference.js";
 import { buildScopes } from "./scopes.js";
 import { desugarGuardsInBody } from "../preprocessors/guardDesugar.js";
+import { decoratorLookup, desugarDecorators } from "../preprocessors/decoratorDesugar.js";
 import { checkCastPositions } from "./castPositions.js";
 import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
@@ -100,20 +101,35 @@ export class TypeChecker {
   private sourceText: string | undefined;
 
   constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
-    // Guard constructs desugar to the legacy `_guard(...)` call +
-    // block-argument shape BEFORE any checking, so every existing rule
-    // — block return exclusion, saveDraft draft typing, finalize
-    // attachment, flow narrowing, and the whole effect machinery
-    // (_guard declares `raises <std::guard>`) — applies to the
-    // construct with no guard-specific cases. The compile pipeline
-    // desugars again in TypescriptPreprocessor; the pass is idempotent
-    // (no guardBlock nodes remain after the first run). The
+    // Two lowerings run BEFORE any checking, so every existing rule
+    // applies to the lowered shape with no construct-specific cases.
+    // Both mutate in place and both are idempotent, because the compile
+    // pipeline runs them again in TypescriptPreprocessor.
+    //
+    // Decorators first: a `@name(...)` tag on a def becomes `return
+    // name(...) { body }` (decoratorDesugar.ts). The compilation unit is
+    // built before it so the lookup can tell whether the decorator takes
+    // the `call` record; the unit holds the same def objects, so the
+    // in-place body rewrite is what the checker sees.
+    //
+    // Guards second: `guard(...) { }` becomes the legacy `_guard(...)`
+    // call + block-argument shape, so block return exclusion, saveDraft
+    // draft typing, finalize attachment, flow narrowing, and the effect
+    // machinery (_guard declares `raises <std::guard>`) all apply. Guards
+    // go after decorators so a return-position guard inside a decorated
+    // body is met inside a block argument, where it gets no yield stamp;
+    // stamped with the def's return type it would be wrong, since inside
+    // the block a `return` yields to the decorator, not the def. The
     // synthesizer's `_guard` case restores the construct's Result<T>
     // precision on top of this shape.
+    const resolved = info ?? buildCompilationUnit(program);
+    desugarDecorators(
+      program,
+      decoratorLookup(resolved.functionDefinitions, resolved.importedFunctions),
+    );
     program.nodes = desugarGuardsInBody(program.nodes) as typeof program.nodes;
     this.program = program;
     this.config = config;
-    const resolved = info ?? buildCompilationUnit(program);
     this.scopedTypeAliases = resolved.typeAliases.clone();
     this.functionDefs = { ...resolved.functionDefinitions };
     this.nodeDefs = Object.fromEntries(resolved.graphNodes.map((n) => [n.nodeName, n]));

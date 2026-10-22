@@ -96,9 +96,23 @@ export type FunctionDefinition = BaseNode & {
   markers?: FunctionMarkers;
   exported?: boolean;
   tags?: Tag[];
+  /** The decorator tags that were written above this def and have been
+   *  lowered into its body, outermost first. Set by decoratorDesugar, which
+   *  moves them off `tags` so a second run finds nothing to lower. `agency
+   *  fmt` never lowers, so it never sees this field. */
+  decorators?: Tag[];
   /** Declared effect set this function may raise (`raises <...>`).
    *  Absent = unconstrained (may raise anything). */
   raises?: VariableType;
+};
+
+/** Where a call the decorator lowering synthesized came from: the decorator
+ *  named by the tag, the tag's own location for diagnostics, and the def it
+ *  was written on. */
+export type DecoratorOrigin = {
+  name: string;
+  tagLoc: SourceLocation | undefined;
+  target: string;
 };
 
 export type FunctionCall = BaseNode & {
@@ -128,4 +142,8 @@ export type FunctionCall = BaseNode & {
    *  synthesized call is covered without its author having to discover a
    *  registry in the diagnostic. */
   synthetic?: boolean;
+  /** Set by decoratorDesugar on the call it builds from a `@name(...)` tag,
+   *  so a diagnostic about the call can point at the tag and name the
+   *  decorator. */
+  decorator?: DecoratorOrigin;
 };

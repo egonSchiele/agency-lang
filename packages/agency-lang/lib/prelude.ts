@@ -55,6 +55,9 @@ export const PRELUDE_NAMES: readonly string[] = [
   "setAgentCwd",
   "getAgentCwd",
   "applyAgentCwd",
+  // The record a decorator's `call` parameter receives
+  // (docs/dev/language/decorators.md).
+  "Call",
 ];
 
 /** The prelude as a single-line `import { … } from "std::index"` statement. */

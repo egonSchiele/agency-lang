@@ -9,6 +9,7 @@ import { walkNodes } from "../utils/node.js";
 import type { AgencyNode } from "../types.js";
 import { collectBodyFacts, collectUnansweredFacts, unique, type BodyFacts } from "./bodyFacts.js";
 import { declaredName } from "../types/hole.js";
+import { decoratorsAbove } from "../preprocessors/decoratorDesugar.js";
 import type { AgencyProgram } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { GraphNodeDefinition } from "../types/graphNode.js";
@@ -210,6 +211,7 @@ function summariesForFile(
   view: EffectView,
 ): EffectSummary[] {
   const resolve = makeResolver(table, program, file);
+  const decorators = decoratorNamesByDef(program);
   return [...walkNodes(program.nodes)]
     .map((visit) => visit.node)
     .filter(isCallableDeclaration)
@@ -217,13 +219,26 @@ function summariesForFile(
       const name = declaredName(
         declaration.type === "function" ? declaration.functionName : declaration.nodeName,
       );
+      const callees = [
+        ...view.readBody(declaration.body).callees,
+        ...(declaration.type === "function" ? decorators(declaration) : []),
+      ];
       return {
         file,
         name,
         effects: directEffectsOf(table, file, name, view),
-        calleeKeys: view.readBody(declaration.body).callees.map((callee) => keyOf(resolve(callee))),
+        calleeKeys: callees.map((callee) => keyOf(resolve(callee))),
       };
     });
+}
+
+/** The decorators written above each def, as callee names. A decorator tag
+ *  lowers to a call of the decorator in the TypeChecker constructor, and the
+ *  symbol table walks the tree before that, so the body holds no such call
+ *  yet; this is the same arrangement as `_guard` in bodyFacts.ts. */
+function decoratorNamesByDef(program: AgencyProgram): (def: FunctionDefinition) => string[] {
+  const decorated = decoratorsAbove(program.nodes);
+  return (def) => decorated.find((entry) => entry.def === def)?.tags.map((tag) => tag.name) ?? [];
 }
 
 /** What classifySymbols already worked out, including the seed table. Read

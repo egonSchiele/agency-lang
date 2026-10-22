@@ -50,6 +50,12 @@ describe("the two analyses agree on effects that arise in one file", () => {
       label: "a two-hop local chain",
       source: `export def inner(): string {\n  return read("x")\n}\nexport def middle(): string {\n  return inner()\n}\nexport def caller(): string {\n  return middle()\n}\n`,
     },
+    {
+      // The decorator lowers to a call in the TypeChecker constructor; the
+      // symbol table reads the tag instead. Both must land on std::read.
+      label: "a decorator whose body raises",
+      source: `export def deco(block: () -> any): any {\n  read("x")\n  return block()\n}\n@deco\nexport def caller(): string {\n  return "y"\n}\n`,
+    },
   ];
 
   for (const { label, source } of cases) {
@@ -84,6 +90,22 @@ describe("the new pass agrees with the type-check-everything analysis", () => {
     const sites = analyzeInterrupts(main, {}).sites.map((result) => result.site.effect);
     expect(sites).toContain("std::read");
     expect(symbolTableEffects(main, "main")).toEqual(["std::read"]);
+  });
+
+  it("finds the effect of a decorator imported from another file", () => {
+    fs.writeFileSync(
+      path.join(dir, "deco.agency"),
+      `export def logged(block: () -> any): any {\n  read("log.txt")\n  return block()\n}\n`,
+      "utf-8",
+    );
+    const main = path.join(dir, "main.agency");
+    fs.writeFileSync(
+      main,
+      `import { logged } from "./deco.agency"\n@logged\nexport def caller(): string {\n  return "y"\n}\n`,
+      "utf-8",
+    );
+    expect(symbolTableEffects(main, "caller")).toEqual(["std::read"]);
+    expect((getEffectsFromFile(main)["caller"] ?? []).sort()).toEqual(["std::read"]);
   });
 });
 

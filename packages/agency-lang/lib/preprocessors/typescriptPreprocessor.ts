@@ -33,6 +33,7 @@ import {
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
 import { desugarGuardsInBody } from "./guardDesugar.js";
+import { decoratorLookup, desugarDecorators } from "./decoratorDesugar.js";
 import { hoistCallsInProgram } from "./hoistCalls.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 import { prunePreludeShadows } from "./prunePreludeShadows.js";
@@ -333,6 +334,22 @@ export class TypescriptPreprocessor {
   preprocess(): AgencyProgram {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
+    if (Object.keys(this.functionDefinitions).length === 0) {
+      this.getFunctionDefinitions();
+    }
+    if (Object.keys(this.graphNodeDefinitions).length === 0) {
+      this.getGraphNodeDefinitions();
+    }
+    // Decorator tags lower into a call with the def's body as the block.
+    // After collectTags, which has attached them to `def.tags` (the
+    // desugar reads them from there); after the definition tables are
+    // filled, which is what the lookup reads; before the guard desugar,
+    // for the reason given in the TypeChecker constructor. Idempotent:
+    // the constructor may have lowered this program already.
+    desugarDecorators(
+      this.program,
+      decoratorLookup(this.functionDefinitions, this.importedFunctions),
+    );
     // Guard constructs lower to the legacy _guard call before the
     // LATER passes here — parallel desugar and callback lifting — so
     // those see the call+blockArgument shape they have always seen.
@@ -344,12 +361,6 @@ export class TypescriptPreprocessor {
     // program already. See guardDesugar.ts.
     this.program.nodes = desugarGuardsInBody(this.program.nodes);
     this.desugarParallelBlocks();
-    if (Object.keys(this.functionDefinitions).length === 0) {
-      this.getFunctionDefinitions();
-    }
-    if (Object.keys(this.graphNodeDefinitions).length === 0) {
-      this.getGraphNodeDefinitions();
-    }
     prunePreludeShadows(this.program);
     this.propagateBlockTypes();
     injectSchemaArgsInProgram(this.program, this.functionDefinitions, this.importedFunctions);

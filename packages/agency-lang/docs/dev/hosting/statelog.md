@@ -125,7 +125,7 @@ bare `process.exit()` in those directories. The module has two functions:
 | Stdlib `exit()` (`_exit`) | `exitProcess` |
 | MCP stdio server's `exit` method | `exitProcess` |
 | The agent's own exits, which call `_exit` | `exitProcess` |
-| Ctrl+C and signal handlers in `std::ui` and `std::ui/cli` | `exitProcessNow` |
+| Ctrl+C and signal handlers in `std::ui/cli` | `exitProcessNow` |
 | Subprocess bootstrap, parent disconnected or no node run yet | `exitProcessNow` |
 | `std::args` help, version, and usage errors (a synchronous parse) | `exitProcessNow` |
 | A served program told to stop by SIGTERM or SIGINT (`lib/serve/shutdown.ts`) | `exitProcess` |

@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLogger } from "./logger.js";
 
-// The logger now routes through `console.*` so that an active
-// `std::ui.repl()` capture (which monkeypatches the console sinks)
-// can funnel output into the on-screen transcript instead of having
-// raw `stderr.write` corrupt the rendered frame. Tests spy on
-// `console.error` / `.warn` / etc. to verify dispatch.
+// The logger routes through `console.*` rather than writing to
+// `stderr` directly, so anything that replaces the console sinks
+// sees its output. Tests spy on `console.error` / `.warn` / etc. to
+// verify dispatch.
 
 type ConsoleMethod = "error" | "warn" | "info" | "debug";
 

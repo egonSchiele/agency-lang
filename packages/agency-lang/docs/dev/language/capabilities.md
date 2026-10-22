@@ -186,7 +186,7 @@ load. A TypeScript file the program imports is also invisible unless an
 Agency function that calls it is tagged; if it imports `fs`, the bundler
 reports it. A stdlib module whose functions touch Node without going
 through the host (`std::agency/local` manages model files with the
-synchronous file module, `std::ui` drives a terminal in raw mode) is kept
+synchronous file module, `std::ui/cli` reads keys from a terminal) is kept
 off the browser only by the tags its functions carry, which the runtime
 check cannot verify for it.
 
@@ -280,7 +280,7 @@ The functions that raise nothing and touch the host carry their own tag:
 | `std::mcp` | `readProjectMcpConfig`: `fileRead`. `loadMcpTools`, `loadMcpToolsWithStatus`: `fileRead, fileWrite, subprocess, network`. |
 | `std::agency`, `std::agency/eval` | the functions that compile or read a file: `fileRead`. `run` and its siblings: `subprocess, fileWrite` as well. |
 | `std::agency/local` | per function: downloading needs `fileRead, fileWrite, network`; listing needs `fileRead`; asking the server needs `network`. |
-| `std::ui`, `std::ui/cli` | everything that draws or reads a key: `terminal`. |
+| `std::ui/cli` | everything that draws or reads a key: `terminal`. |
 | `std::embedding` | `embed`, `embedMany`: `llm`. |
 
 `lib/stdlibCapabilities.test.ts` keeps the table honest. For every exported

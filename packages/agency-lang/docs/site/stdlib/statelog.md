@@ -124,7 +124,7 @@ Mark the start of a turn: a message a person sent this program. The logs viewer 
 Records a `turnStart` event. The logs viewer splits a session into turns
 at these events: each turn runs from its message to the next, and the
 time after a turn's last event is shown as waiting for the person. The
-`repl` functions in `std::ui` and `std::ui/cli` log one for every line
+`repl` function in `std::ui/cli` logs one for every line
 a person submits that is not a slash command, so a program that takes
 its messages another way (a seeded first prompt, a chat server) calls
 this itself.

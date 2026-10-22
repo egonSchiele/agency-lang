@@ -113,6 +113,4 @@ correct without restarting.
 ## `runLoop`
 
 `screen.runLoop({ initialState, render, handleKey, isDone })` is the built-in
-version of the main loop above. Pass `tickMs` to re-render on a timer while no
-keys arrive, which is how `repl()` keeps a live status line moving during a
-long LLM call.
+version of the main loop above.

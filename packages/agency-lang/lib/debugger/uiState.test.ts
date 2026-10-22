@@ -94,7 +94,13 @@ describe("UIState", () => {
 
     it("should include pending overrides in populated values", async () => {
       const ui = new UIState();
-      ui.setOverrides({ input: "overridden", count: 99 });
+      ui.setPending({
+        edits: [
+          { op: "setLocal", name: "input", value: "overridden" },
+          { op: "setLocal", name: "count", value: 99 },
+        ],
+        applied: [],
+      });
       await ui.setCheckpoint(makeCheckpoint());
 
       expect(ui.getArgs()).toEqual([{ key: "input", value: "hello", override: "overridden" }]);

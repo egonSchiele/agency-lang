@@ -2,6 +2,7 @@
 // channel, and a method that expects an answer waits for the reply with
 // its id. The driver in the program's process sees an ordinary
 // `DebuggerIO`; the person at the other end sees the terminal UI.
+import type { PendingPreview } from "../edits/rows.js";
 import { nativeTypeReplacer } from "../../runtime/revivers/index.js";
 import type { InterruptResponse } from "../../runtime/interrupts.js";
 import type { DebugStopData } from "../../runtime/debugger.js";
@@ -155,8 +156,8 @@ export class ChannelDebuggerIO implements DebuggerIO {
     this.notice("setMode", [mode]);
   }
 
-  setOverrides(overrides: Record<string, unknown>): void {
-    this.notice("setOverrides", [overrides]);
+  setPending(preview: PendingPreview): void {
+    this.notice("setPending", [preview]);
   }
 
   setBusy(entries: BusyEntry[]): void {

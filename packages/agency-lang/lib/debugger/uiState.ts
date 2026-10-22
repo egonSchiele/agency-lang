@@ -14,6 +14,7 @@ import { withSince, type BusyShown } from "./busy.js";
 import { statementStepPath } from "../runtime/promptRunner.js";
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import type { LoopStopKind } from "../runtime/state/sourceLocation.js";
+import type { PendingPreview } from "./edits/rows.js";
 import type { StateJSON } from "../runtime/state/stateStack.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
@@ -30,7 +31,7 @@ export type ValWithOverride = {
 
 export class UIState {
   private activityLog: string[];
-  private pendingOverrides: Record<string, unknown>;
+  private pending: PendingPreview;
   private mode: "stepping" | "running";
   private checkpoint?: Checkpoint;
   /** Where the program is stopped: the stop's location when the driver
@@ -57,7 +58,7 @@ export class UIState {
 
   constructor() {
     this.activityLog = [];
-    this.pendingOverrides = {};
+    this.pending = { edits: [], applied: [] };
     this.mode = "stepping";
     this.checkpoint = undefined;
     this.args = [];
@@ -223,7 +224,7 @@ export class UIState {
       array.push({
         key,
         value: obj[key],
-        override: this.pendingOverrides[key],
+        override: this.pendingValue(key),
       });
     }
   }
@@ -265,9 +266,23 @@ export class UIState {
     this.mode = mode;
   }
 
-  /** Replace the queued overrides with the driver's copy. */
-  setOverrides(overrides: Record<string, unknown>) {
-    this.pendingOverrides = { ...overrides };
+  /** Replace the queued edits with the driver's copy. */
+  setPending(preview: PendingPreview) {
+    this.pending = { edits: [...preview.edits], applied: [...preview.applied] };
+  }
+
+  getPending(): PendingPreview {
+    return this.pending;
+  }
+
+  /** The value a pending `setLocal` or `setArg` gives `name` on the
+   *  shown frame, or undefined when none does. */
+  private pendingValue(name: string): unknown {
+    const edit = this.pending.edits.findLast(
+      (candidate) =>
+        (candidate.op === "setLocal" || candidate.op === "setArg") && candidate.name === name,
+    );
+    return edit === undefined ? undefined : (edit as { value: unknown }).value;
   }
 
   /** Replace the list of open waits with the run's latest, keeping the
@@ -420,7 +435,7 @@ export class UIState {
   toJSON() {
     return {
       activityLog: this.activityLog,
-      pendingOverrides: this.pendingOverrides,
+      pending: this.pending,
       mode: this.mode,
       checkpoint: this.checkpoint ? this.checkpoint.toJSON() : undefined,
       args: this.args,
@@ -433,7 +448,7 @@ export class UIState {
   static fromJSON(json: any): UIState {
     const uiState = new UIState();
     uiState.activityLog = json.activityLog;
-    uiState.pendingOverrides = json.pendingOverrides;
+    uiState.pending = json.pending ?? { edits: [], applied: [] };
     uiState.mode = json.mode;
     const cp = json.checkpoint ? Checkpoint.fromJSON(json.checkpoint) : null;
     if (!cp) {

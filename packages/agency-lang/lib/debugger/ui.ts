@@ -38,6 +38,7 @@ import {
   type OverlayContext,
 } from "./overlays.js";
 import type { GuardTripData } from "./guardAnswer.js";
+import type { PendingPreview } from "./edits/rows.js";
 import type { InterruptResponse } from "../runtime/interrupts.js";
 
 // ---------------------------------------------------------------------------
@@ -768,8 +769,8 @@ export class DebuggerUI implements DebuggerIO {
     this.state.setMode(mode);
   }
 
-  setOverrides(overrides: Record<string, unknown>): void {
-    this.state.setOverrides(overrides);
+  setPending(preview: PendingPreview): void {
+    this.state.setPending(preview);
   }
 
   setBusy(entries: BusyEntry[]): void {

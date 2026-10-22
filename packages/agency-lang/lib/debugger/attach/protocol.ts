@@ -18,6 +18,7 @@
 // A checkpoint crosses as `checkpoint.toJSON()` run through the native
 // type replacer, the way `debugStep` prepares the `onCheckpoint` payload,
 // and comes back through `Checkpoint.fromJSON` after the reviver.
+import { checkpointEditsSchema } from "../../runtime/state/checkpointPatch/index.js";
 import { z } from "zod";
 
 import type { InterruptResponse } from "../../runtime/interruptResponse.js";
@@ -38,7 +39,7 @@ export const REQUEST_METHODS = [
 export const NOTICE_METHODS = [
   "log",
   "setMode",
-  "setOverrides",
+  "setPending",
   "setBusy",
   "appendStdout",
   "renderActivityOnly",
@@ -170,6 +171,8 @@ const DebuggerCommandSchema = z.union([
   z.object({ type: z.enum(["step", "next", "stepIn", "stepOut", "continue", "rewind"]) }),
   z.object({ type: z.literal("checkpoint"), label: z.string().optional() }),
   z.object({ type: z.literal("set"), varName: z.string(), value: z.unknown() }),
+  z.object({ type: z.literal("edit"), edits: checkpointEditsSchema }),
+  z.object({ type: z.literal("dropEdits") }),
   z.object({ type: z.literal("approve") }),
   z.object({ type: z.literal("reject"), value: z.unknown().optional() }),
   z.object({ type: z.literal("resolve"), value: z.unknown() }),

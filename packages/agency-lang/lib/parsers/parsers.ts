@@ -154,6 +154,7 @@ import {
   Tag,
   ValueParam,
 } from "../types.js";
+import { isReservedTagName } from "../types/tag.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { Hole } from "../types/hole.js";
 import { CodeLiteral } from "../types/codeLiteral.js";
@@ -2956,7 +2957,7 @@ export const staticTagArgParser: Parser<Expression> = label(
 // behaviour is the tightened one: bare function calls are rejected.
 const restrictedTagArgParser: Parser<Expression> = staticTagArgParser;
 
-// Parenthesized argument list: (arg1, arg2)
+// Parenthesized argument list for a reserved tag: (arg1, arg2)
 const tagArgsList = map(
   seqC(
     char("("),
@@ -2968,27 +2969,86 @@ const tagArgsList = map(
   (result) => result.args,
 );
 
+/** The arguments a tag was written with, and how. */
+type TagArguments = {
+  arguments: Tag["arguments"];
+  argumentTrivia?: ListTrivia[];
+  parentheses: boolean;
+};
+
+const NO_TAG_ARGUMENTS: TagArguments = { arguments: [], parentheses: false };
+
+/** A reserved tag (`@validate`, `@capabilities`, ...) keeps the static
+ *  argument grammar: literals, identifiers, and partial applications, no
+ *  calls. An argument list that does not parse falls through, so the tag
+ *  ends at its name and the rest of the line fails downstream as it
+ *  always has. */
+function reservedTagArguments(input: string): ParserResult<TagArguments> {
+  const parsed = tagArgsList(input);
+  if (!parsed.success) {
+    return success(NO_TAG_ARGUMENTS, input);
+  }
+  return success({ arguments: parsed.result, parentheses: true }, parsed.rest);
+}
+
+/** A decorator tag takes the same argument list as a function call, named
+ *  arguments included, because its arguments are forwarded verbatim to a
+ *  call. Splats and inline blocks are the two shapes that list admits and a
+ *  decorator cannot use: a decorator's block is the decorated body. */
+function decoratorTagArguments(input: string): ParserResult<TagArguments> {
+  if (!input.startsWith("(")) {
+    return success(NO_TAG_ARGUMENTS, input);
+  }
+  const parsed = argumentListParser(input);
+  if (!parsed.success) {
+    return parsed;
+  }
+  const captured = parsed.result as { arguments: ArgWithBlock[]; argumentTrivia?: ListTrivia[] };
+  const refused = captured.arguments.find(
+    (arg) => arg.type === "splat" || arg.type === "blockArgument",
+  );
+  if (refused) {
+    return failure("a decorator argument cannot be a splat or a block", input);
+  }
+  return success(
+    {
+      arguments: captured.arguments as Tag["arguments"],
+      ...(captured.argumentTrivia && { argumentTrivia: captured.argumentTrivia }),
+      parentheses: true,
+    },
+    parsed.rest,
+  );
+}
+
+const tagHeadParser = seqC(char("@"), capture(many1WithJoin(varNameChar), "name"));
+
 // The full tag: @name, @name() or @name(args). Whether the parentheses
 // were written is kept, so the formatter can write them back: a function
 // that needs nothing from the host can say so with `@capabilities()`.
-const _tagParserInner = memo(
-  "tagParser",
-  map(
-    seqC(
-      set("type", "tag"),
-      char("@"),
-      capture(many1WithJoin(varNameChar), "name"),
-      capture(or(tagArgsList, succeed(null)), "writtenArguments"),
-      optionalSemicolon,
-    ),
-    (result) => ({
-      type: "tag" as const,
-      name: result.name,
-      arguments: result.writtenArguments ?? [],
-      parentheses: result.writtenArguments !== null,
-    }),
-  ),
-);
+// The name decides the argument grammar (see tag.ts: RESERVED_TAG_NAMES).
+const _tagParserInner = memo("tagParser", (input: string): ParserResult<Tag> => {
+  const head = tagHeadParser(input);
+  if (!head.success) {
+    return head;
+  }
+  const name = (head.result as { name: string }).name;
+  const readArguments = isReservedTagName(name) ? reservedTagArguments : decoratorTagArguments;
+  const written = readArguments(head.rest);
+  if (!written.success) {
+    return written;
+  }
+  const tail = optionalSemicolon(written.rest);
+  return success(
+    {
+      type: "tag",
+      name,
+      arguments: written.result.arguments,
+      ...(written.result.argumentTrivia && { argumentTrivia: written.result.argumentTrivia }),
+      parentheses: written.result.parentheses,
+    } as Tag,
+    tail.success ? tail.rest : written.rest,
+  );
+});
 
 export const tagParser = label("a tag", withLoc(_tagParserInner));
 

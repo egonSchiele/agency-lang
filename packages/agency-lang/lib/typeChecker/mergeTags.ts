@@ -1,4 +1,5 @@
 import type { Tag, Expression, AgencyObject, AgencyObjectKV, SplatExpression } from "../types.js";
+import { positionalTagArguments } from "../types/tag.js";
 
 /**
  * Merge two tag lists per the spec rules in
@@ -40,7 +41,7 @@ export function mergeTagSets(
   if (aliasValidate.length + useSiteValidate.length > 0) {
     const allArgs: Expression[] = [];
     for (const t of [...aliasValidate, ...useSiteValidate]) {
-      allArgs.push(...t.arguments);
+      allArgs.push(...positionalTagArguments(t));
     }
     combined.push({
       type: "tag",
@@ -92,7 +93,7 @@ export function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {
       const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";
       throw new Error(`@jsonSchema(...) requires at least one object-literal argument${where}.`);
     }
-    for (const arg of t.arguments) {
+    for (const arg of positionalTagArguments(t)) {
       if (arg.type !== "agencyObject") {
         const loc = arg.loc ?? t.loc;
         const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";

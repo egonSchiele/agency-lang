@@ -1,4 +1,5 @@
 import type { Tag, VariableType, TypeAliasEntry } from "../../types.js";
+import { positionalTagArguments } from "../../types/tag.js";
 import type { TsNode, TsObjectEntry } from "@/ir/tsIR.js";
 import { ts } from "@/ir/builders.js";
 import { mapTypeToValidationSchema } from "./typeToZodSchema.js";
@@ -167,7 +168,7 @@ function validatorNodes(tags: Tag[] | undefined): TsNode[] {
   const out: TsNode[] = [];
   for (const t of tags) {
     if (t.name !== "validate") continue;
-    for (const arg of t.arguments) {
+    for (const arg of positionalTagArguments(t)) {
       out.push(ts.raw(tagArgToTs(arg)));
     }
   }

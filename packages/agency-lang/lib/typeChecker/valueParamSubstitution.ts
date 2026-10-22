@@ -12,6 +12,7 @@ import type {
   AccessChainElement,
   VariableType,
 } from "../types.js";
+import { positionalTagArguments } from "../types/tag.js";
 
 /**
  * Bindings map: value-parameter name → use-site Expression that should
@@ -64,7 +65,7 @@ export function isValueParamInstantiation(
 export function substituteValueArgsInTag(tag: Tag, bindings: ValueArgBindings): Tag {
   return {
     ...tag,
-    arguments: tag.arguments.map((a) => substituteValueArgsInExpression(a, bindings)),
+    arguments: positionalTagArguments(tag).map((a) => substituteValueArgsInExpression(a, bindings)),
   };
 }
 
@@ -509,7 +510,7 @@ function assertNoUnsubstitutedValueParams(
   aliasName: string,
 ): void {
   for (const t of tags) {
-    for (const arg of t.arguments) {
+    for (const arg of positionalTagArguments(t)) {
       checkExpr(arg, paramNames, aliasName, t.name);
     }
   }

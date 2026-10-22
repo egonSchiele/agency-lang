@@ -2207,12 +2207,15 @@ export class AgencyGenerator {
     }
   }
 
+  /** A tag prints its arguments the way a call prints its own: a decorator
+   *  tag's arguments are call arguments (named ones included), and the
+   *  reserved tags' static arguments are a subset of that grammar. */
   protected formatTag(tag: Tag): string {
     if (tag.arguments.length === 0) {
       return this.indentStr(tag.parentheses === true ? `@${tag.name}()` : `@${tag.name}`);
     }
-    const args = tag.arguments.map((arg) => this.processNode(arg as AgencyNode).trim());
-    return this.indentStr(`@${tag.name}(${args.join(", ")})`);
+    const args = this.renderArgList(tag.arguments, undefined, tag.argumentTrivia);
+    return this.indentStr(`@${tag.name}${args}`);
   }
 
   protected formatAttachedTags(node: { tags?: Tag[] }): string {

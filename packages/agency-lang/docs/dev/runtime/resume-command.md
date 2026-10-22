@@ -9,22 +9,28 @@ separate.
 
 The parent CLI validates and resolves the checkpoint path, parses overrides,
 and compiles the input with the same options as `agency run`. It then starts the
-compiled child with three environment carriers:
+compiled child with four environment carriers:
 
 - `AGENCY_RESUME_FILE` is the absolute checkpoint path.
 - `AGENCY_RESUME_OVERRIDES` is JSON with `locals`, `args`, and `globals`
   objects.
+- `AGENCY_RESUME_EDITS` is a JSON array of edits (`checkpoint-patch.md`), from
+  `--edit` and `--edits`; absent when there are none.
 - `AGENCY_RESUME_FORCE` is set when `--force` allows an unverifiable signed
   checkpoint.
 
-`withRootCarriers` clears all three variables for every child launch, including
+`withRootCarriers` clears all four variables for every child launch, including
 fresh runs. This prevents a nested or shell-inherited resume request from
 silently changing a later run.
 
 The generated executable calls `runCliEntry`. With no resume carrier it calls
 `main` as before. With a carrier it reads and validates the checkpoint, then
-calls the generated private `__resumeFromCheckpoint` binding. That binding
-supplies the compiled module's `__globalCtx` to `resumeCliFromCheckpoint`. The
+calls the generated private `__resumeFromCheckpoint` binding with the
+checkpoint, the overrides, and the edits. That binding supplies the compiled
+module's `__globalCtx` to `resumeCliFromCheckpoint`. The edits are checked
+against the edit schema twice: in the parent, so a wrong `--edit` is refused
+before anything is compiled, and again in the child, since the carrier is an
+environment variable anything could have set. The
 public `rewindFrom(checkpoint, flatLocalOverrides, opts?)` export is unchanged.
 
 ## Shared restore setup
@@ -81,6 +87,10 @@ checkpoint was taken in, which inside a tool call is the tool's frame and
 at one of the tool loop's own stops is the frame that called `llm()`; a
 global override changes the checkpoint's module namespace. Before edits,
 an override always changed the last frame of the root stack.
+
+`--edit <json>` (repeatable) and `--edits <file>` carry edits proper, the
+same `CheckpointEdit` shapes the debugger makes, applied after the overrides
+and in order (`parseResumeEdits` in `lib/cli/resumeOverrides.ts`).
 
 Process arguments are not part of a checkpoint. Each `--program-arg <value>` is
 passed to the compiled child, where `std::args` can read it. With no such flags,

@@ -10,9 +10,15 @@ import type { LLMMock } from "../../runtime/deterministicClient.js";
 
 const agentAgency = path.join(fixtureDir, "agent-shaped.agency");
 const agentCompiled = path.join(fixtureDir, "agent-shaped.ts");
+const guardAgency = path.join(fixtureDir, "guard-trip.agency");
+const guardCompiled = path.join(fixtureDir, "guard-trip.ts");
+const forkAgency = path.join(fixtureDir, "fork-test.agency");
+const forkCompiled = path.join(fixtureDir, "fork-test.ts");
 
 beforeAll(() => {
   compile({}, agentAgency, agentCompiled, { ts: true });
+  compile({}, guardAgency, guardCompiled, { ts: true });
+  compile({}, forkAgency, forkCompiled, { ts: true });
 });
 
 const mocks: LLMMock[] = [
@@ -149,5 +155,77 @@ describe("a row's edit", () => {
       expect(pane(s, "locals")).toContain("url");
       expect(stats(s)).toContain("enter: set");
     });
+  });
+});
+
+describe("the other rows", () => {
+  it("disarming a guard before it trips lets the program run past the trip", async () => {
+    await withLLMMocks([{ return: "one" }, { return: "two" }], async () => {
+      const mod = await freshImport(guardCompiled);
+      const s = await DebuggerTestSession.create({ mod });
+      // Into the guard block, where the guards pane lists research.
+      const guards = () => s.frame().findByKey("guards")?.toPlainText() ?? "";
+      for (let i = 0; i < 5 && !guards().includes("research"); i++) await s.press("s");
+      await focus(s, "guards");
+      expect(stats(s)).toContain("e: disarm");
+      expect(stats(s)).toContain("b: budget");
+      await s.press("e");
+      expect(activity(s)).toContainEqual("disarmed");
+      expect(pane(s, "guards")).toContain("(disarmed)");
+      await s.press("c");
+      expect(await s.quit()).toMatchObject({ success: true, value: "onetwo" });
+    });
+  });
+
+  it("Ctrl+K opens the palette; typing narrows it and Enter runs the edit on its row", async () => {
+    await withLLMMocks([{ return: "one" }, { return: "two" }], async () => {
+      const mod = await freshImport(guardCompiled);
+      const s = await DebuggerTestSession.create({ mod });
+      const guards = () => s.frame().findByKey("guards")?.toPlainText() ?? "";
+      for (let i = 0; i < 5 && !guards().includes("research"); i++) await s.press("s");
+      await s.press("k", { ctrl: true });
+      const palette = () => s.frame().toPlainText();
+      expect(palette()).toContain("edits (type to filter");
+      expect(palette()).toContain("set label in _guard");
+      expect(palette()).toContain("  disarm the guard research");
+      for (const ch of "disarm") await s.press(ch);
+      expect(palette()).toContain("> disarm the guard research");
+      expect(palette()).not.toContain("set label in _guard");
+      await s.press("enter");
+      expect(activity(s)).toContainEqual("disarmed");
+      expect(s.ui.focusedPaneName()).toBe("guards");
+      expect(pane(s, "guards")).toContain("(disarmed)");
+    });
+  });
+
+  it("removing a tool from the loop shows from the next round", async () => {
+    await withLLMMocks(mocks, async () => {
+      const s = await session();
+      await s.press("s"); // round 1
+      await focus(s, "callStack");
+      // main, llm(), then the loop's tools: search is the first.
+      await s.press("down", { times: 2 });
+      expect(stats(s)).toContain("e: remove");
+      await s.press("e");
+      expect(activity(s)).toContainEqual("removed search from the next round");
+      expect(pane(s, "callStack")).toContain("(remove");
+      await s.press("s");
+      expect(pane(s, "guards")).toContain("removed: search");
+    });
+  });
+
+  it("a fork branch given a result at its breakpoint finishes with it", async () => {
+    const mod = await freshImport(forkCompiled);
+    const s = await DebuggerTestSession.create({ mod: { ...mod, main: mod.withBreakpoint } });
+    await s.press("c"); // the breakpoint in the first branch
+    await focus(s, "branches");
+    await s.press("down"); // the second branch
+    expect(stats(s)).toContain("e: result");
+    await s.press("e");
+    await s.type("100");
+    expect(activity(s).some((line) => line.endsWith("finished with 100"))).toBe(true);
+    await s.press("c");
+    // 2 + 100 + 6: the second branch's doubled 2 is replaced.
+    expect(await s.quit()).toBe(108);
   });
 });

@@ -95,6 +95,9 @@ export type GuardSummary = {
    *  a time guard's clone carries the parent's remaining time as its
    *  limit, and the branch's own working time as spent. */
   inherited: boolean;
+  /** The owning copy's limit: the guard's whole budget, which a
+   *  `setGuard` edit sets. The same as `limit` unless inherited. */
+  ownerLimit: number;
   /** Where every copy of the guard is in the checkpoint's JSON, the
    *  owning copy first, then each clone down the branch path. */
   jsonPaths: string[][];
@@ -657,11 +660,13 @@ export class Checkpoint implements SourceLocation {
           disarmed: guard.disarmed === true,
           root: guard.isRootBudget === true,
           inherited: isInherited,
+          ownerLimit: guard.kind === "cost" ? guard.costLimit : guard.timeLimit,
           jsonPaths: [jsonPath],
         };
         const seen = guard.guardId === undefined ? undefined : indexById[guard.guardId];
         if (seen !== undefined) {
           summary.jsonPaths = [...guards[seen].jsonPaths, jsonPath];
+          summary.ownerLimit = guards[seen].ownerLimit;
           guards[seen] = summary;
           continue;
         }

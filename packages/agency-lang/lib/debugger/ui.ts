@@ -34,13 +34,17 @@ import {
   showBranchPicker,
   showCheckpointsPanel,
   showGuardTripForm,
+  showPalette,
   showThreadPicker,
   type OverlayContext,
 } from "./overlays.js";
+import { paletteEntries } from "./edits/palette.js";
 import type { GuardTripData } from "./guardAnswer.js";
 import type { PendingPreview } from "./edits/rows.js";
 import { rowsFor, type PaneName, type StopView } from "./edits/rows.js";
-import { askLabel } from "./edits/actions.js";
+import { askLabel, type EditAction } from "./edits/actions.js";
+import { parseAmount } from "./guardAnswer.js";
+import type { PaneRow } from "./edits/rows.js";
 import { bindingsFor, footerHints, type KeyContext, type UiAction } from "./edits/keys.js";
 import { findBinding } from "../tui/keymap.js";
 import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
@@ -51,6 +55,13 @@ const LIST_PANES: PaneName[] = ["threads", "locals", "globals", "callStack", "br
 /** The rows of `pane`, or none for a pane that lists no rows. */
 function rowsForPane(pane: string, view: StopView) {
   return LIST_PANES.includes(pane as PaneName) ? rowsFor(pane as PaneName, view) : [];
+}
+
+/** The words for a guard amount that did not parse. */
+function amountHint(dimension: "cost" | "time"): string {
+  return dimension === "cost"
+    ? "type an amount in dollars, such as 0.5."
+    : "type a duration, such as 30s, 2m, or 500 for milliseconds.";
 }
 
 /** A typed value as JSON when it parses, else the text as typed. */
@@ -455,12 +466,19 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   private buildCallStackContent(): string {
-    const callStack = this.state.getCallStack();
-    const lines = callStack.map((entry, i) => {
-      const prefix = i === callStack.length - 1 ? " > " : "   ";
-      const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
+    const view = this.state.getStopView();
+    const rows = view === null ? [] : rowsFor("callStack", view);
+    const frames = rows.filter((row) => row.kind === "frame");
+    const lines = rows.map((row) => {
+      if (row.kind === "tool") {
+        const note = row.removed ? " (removed)" : "";
+        return `       ${escapeStyleTags(row.name)}${note}`;
+      }
+      if (row.kind !== "frame") return "";
+      const prefix = row === frames.at(-1) ? " > " : "   ";
+      const fileName = row.moduleId.split("/").pop() || row.moduleId;
       const where = fileName ? ` (${escapeStyleTags(fileName)})` : "";
-      return `${prefix}${escapeStyleTags(entry.functionName)}${where}`;
+      return `${prefix}${escapeStyleTags(row.scopeName)}${where}`;
     });
     return this.withCursor("callStack", lines);
   }
@@ -603,6 +621,47 @@ export class DebuggerUI implements DebuggerIO {
     return parts.length === 0 ? "" : `{gray-fg}  ${parts.join("   ")}{/gray-fg}`;
   }
 
+  /** The one value `action` asks for on `row`, typed in the command bar:
+   *  JSON or text, text, or a guard amount, which is parsed with the
+   *  row's dimension and asked again with the reason when it does not
+   *  parse. Null when the person escapes. */
+  private async askValue(action: EditAction, row: PaneRow): Promise<{ value: unknown } | null> {
+    if (action.asks === undefined) return { value: undefined };
+    let prompt = askLabel(action, row);
+    while (true) {
+      const raw = await this.enterTextInput(prompt);
+      if (raw === null) return null;
+      if (action.asks.kind === "json") return { value: parseJsonOrText(raw) };
+      if (action.asks.kind === "text") return { value: raw };
+      const dimension = row.kind === "guard" ? row.dimension : "cost";
+      const amount = parseAmount(dimension, raw);
+      if (amount !== null) return { value: amount };
+      prompt = `Not "${raw}": ${amountHint(dimension)} ${askLabel(action, row)}`;
+    }
+  }
+
+  /** The palette: every edit every row offers, filtered by typing. The
+   *  entry picked is run the way its key would be, after the cursor has
+   *  moved to its row, so the panes show what is being changed. */
+  private async openPalette(): Promise<UiCommand | null> {
+    const view = this.state.getStopView();
+    if (view === null) return null;
+    const picked = await showPalette(this.overlayContext(), paletteEntries(view));
+    this.renderUI();
+    if (picked === null) return null;
+    const paneIndex = this.getPanes().findIndex((pane) => pane.name === picked.pane);
+    if (paneIndex >= 0) this.focusIndex = paneIndex;
+    this.cursor[picked.pane] = picked.rowIndex;
+    this.scrollToCursor(picked.pane);
+    // The threads pane shows one thread; the entry's row says which.
+    if (picked.row.kind === "thread") this.showThread(picked.row.id);
+    this.renderUI();
+    return await this.carryOut(
+      { kind: "runAction", action: picked.action, row: picked.row },
+      this.keyContext(),
+    );
+  }
+
   /** What the key tables need to know right now. */
   private keyContext(): KeyContext {
     const view = this.state.getStopView();
@@ -631,13 +690,9 @@ export class DebuggerUI implements DebuggerIO {
       }
       case "runAction": {
         const { action: edit, row } = action;
-        let value: unknown = undefined;
-        if (edit.asks !== undefined) {
-          const raw = await this.enterTextInput(askLabel(edit, row));
-          if (raw === null) return null;
-          value = edit.asks.kind === "json" ? parseJsonOrText(raw) : raw;
-        }
-        return { type: "edit", edits: edit.toEdits(row, value, ctx.view!) };
+        const value = await this.askValue(edit, row);
+        if (value === null) return null;
+        return { type: "edit", edits: edit.toEdits(row, value.value, ctx.view!) };
       }
       case "openComposer":
         this.composer.open = true;
@@ -1043,6 +1098,7 @@ export class DebuggerUI implements DebuggerIO {
       this.renderUI();
       return null;
     }
+    if (keyEvent.key === "k" && keyEvent.ctrl) return await this.openPalette();
 
     switch (keyEvent.key) {
       case "k": {

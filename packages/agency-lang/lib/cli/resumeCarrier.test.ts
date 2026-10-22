@@ -18,8 +18,20 @@ describe("resolveResumeCarrier", () => {
     expect(resolveResumeCarrier("cp.json", { locals: { x: 1 } }, false, dir)).toEqual({
       checkpointFile: path.join(dir, "cp.json"),
       overridesJson: JSON.stringify({ locals: { x: 1 } }),
+      editsJson: "[]",
       force: false,
     });
+  });
+
+  it("serializes the edits it is given", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "agency-resume-carrier-"));
+    dirs.push(dir);
+    writeFileSync(path.join(dir, "cp.json"), "{}");
+    const edits = [{ op: "appendMessage" as const, text: "stop" }];
+
+    expect(resolveResumeCarrier("cp.json", {}, false, dir, edits).editsJson).toBe(
+      JSON.stringify(edits),
+    );
   });
 
   it("carries the force choice", () => {

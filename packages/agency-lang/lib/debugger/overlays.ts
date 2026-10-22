@@ -19,6 +19,7 @@ import { formatValue } from "./util.js";
 import type { InterruptResponse } from "../runtime/interrupts.js";
 import type { BranchSummary, ThreadSummary } from "../runtime/state/checkpointStore.js";
 import { applyLineEdit, lineEditAction } from "../tui/lineEditor.js";
+import { filterPalette, type PaletteEntry } from "./edits/palette.js";
 import {
   MESSAGE_PROMPT,
   amountPrompt,
@@ -548,5 +549,64 @@ export async function showThreadPicker(
     }
     if (keyEvent.key === "enter") return threads[selected].id;
     if (keyEvent.key === "escape" || keyEvent.key === "q") return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Edit palette
+// ---------------------------------------------------------------------------
+
+/** A line to type a filter into over the edits every row offers, as the
+ *  action table words them: `↑`/`↓` pick, Enter takes the entry, Escape
+ *  cancels. The caller moves to the row and runs the action. */
+export async function showPalette(
+  ctx: OverlayContext,
+  entries: PaletteEntry[],
+): Promise<PaletteEntry | null> {
+  let query = "";
+  let selected = 0;
+  const shown = () => filterPalette(entries, query);
+  const lines = (matching: PaletteEntry[]) =>
+    matching.length === 0
+      ? ["  (no edit matches)"]
+      : matching.map(
+          (entry, i) => `${i === selected ? ">" : " "} ${escapeStyleTags(entry.sentence)}`,
+        );
+  const render = (matching: PaletteEntry[]) =>
+    ctx.screen.render(
+      column(
+        ...ctx.buildTopRows(),
+        box(
+          {
+            flex: 1,
+            border: true,
+            borderColor: "yellow",
+            label: " edits (type to filter; Enter=do it, Esc=cancel) ",
+          },
+          text([`> ${escapeStyleTags(query)}\u2588`, ...lines(matching)].join("\n")),
+        ),
+        ctx.buildStatsBar(),
+        box({ height: 3, border: true, borderColor: "white" }, text(ctx.commandBarContent)),
+      ),
+    );
+
+  while (true) {
+    const matching = shown();
+    selected = Math.max(0, Math.min(selected, matching.length - 1));
+    render(matching);
+    const keyEvent = await ctx.nextKey();
+    if (keyEvent.key === "c" && keyEvent.ctrl) {
+      ctx.cleanup();
+      return null;
+    }
+    if (keyEvent.key === "up" && selected > 0) selected--;
+    if (keyEvent.key === "down" && selected < matching.length - 1) selected++;
+    if (keyEvent.key === "enter") return matching[selected] ?? null;
+    if (keyEvent.key === "escape") return null;
+    const edit = lineEditAction(keyEvent);
+    if (edit !== null) {
+      query = applyLineEdit(query, edit);
+      selected = 0;
+    }
   }
 }

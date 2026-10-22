@@ -12,6 +12,7 @@ import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_RESUME_EDITS,
   AGENCY_RESUME_FILE,
   AGENCY_RESUME_FORCE,
   AGENCY_RESUME_OVERRIDES,
@@ -38,6 +39,7 @@ export function withRootCarriers(
   delete out[AGENCY_MAX_TIME];
   delete out[AGENCY_RESUME_FILE];
   delete out[AGENCY_RESUME_OVERRIDES];
+  delete out[AGENCY_RESUME_EDITS];
   delete out[AGENCY_RESUME_FORCE];
   delete out[AGENCY_ENTRY_NODE];
   if (carriers.entryNode !== undefined) {
@@ -53,6 +55,9 @@ export function withRootCarriers(
   if (carriers.resume !== undefined) {
     out[AGENCY_RESUME_FILE] = carriers.resume.checkpointFile;
     out[AGENCY_RESUME_OVERRIDES] = carriers.resume.overridesJson;
+    if (carriers.resume.editsJson !== "[]") {
+      out[AGENCY_RESUME_EDITS] = carriers.resume.editsJson;
+    }
     if (carriers.resume.force) {
       out[AGENCY_RESUME_FORCE] = "1";
     }

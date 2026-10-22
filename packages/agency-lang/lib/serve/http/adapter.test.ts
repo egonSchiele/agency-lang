@@ -335,6 +335,37 @@ describe("HTTP adapter", () => {
     expect(resumed.usage).toEqual(breakdownUsage);
   });
 
+  it("POST /resume takes edits only when the host allows them, and only well-formed ones", async () => {
+    const body = {
+      interrupts: [makeInterrupt("id-1")],
+      responses: [{ type: "approve" }],
+      edits: [{ op: "appendMessage", text: "stop" }],
+    };
+    const closed = makeSpyHandler();
+    const refused = await closed.handler("POST", "/resume", body);
+    expect(refused.status).toBe(400);
+    expect((refused.body as { error: string }).error).toBe("edits are not enabled on this host");
+    expect(closed.respondSpy).not.toHaveBeenCalled();
+
+    const { exports } = makeExports();
+    const respondSpy = vi.fn(async () => returnedOutcome({ data: "resumed" }));
+    const open = createHttpHandler({
+      exports,
+      logger: createLogger("error"),
+      hasInterrupts: () => false,
+      respondToInterrupts: respondSpy,
+      allowEdits: true,
+    });
+    const resumed = await open("POST", "/resume", body);
+    expect(resumed.status).toBe(200);
+    expect(respondSpy).toHaveBeenCalledWith(body.interrupts, body.responses, undefined, body.edits);
+
+    const malformed = await open("POST", "/resume", { ...body, edits: [{ op: "bogus" }] });
+    expect(malformed.status).toBe(400);
+    expect((malformed.body as { error: string }).error).toMatch(/^edits must be a list of edits/);
+    expect(respondSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("POST /resume rejects non-array inputs", async () => {
     const result = await handler("POST", "/resume", {
       interrupts: "not-array",

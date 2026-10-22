@@ -91,6 +91,7 @@ describe("rowsFor", () => {
         dimension: "time",
         limit: 60000,
         spent: 10000,
+        ownerLimit: 60000,
         disarmed: false,
         root: false,
       },
@@ -101,10 +102,15 @@ describe("rowsFor", () => {
         dimension: "cost",
         limit: 1,
         spent: 0.1,
+        ownerLimit: 1,
         disarmed: false,
         root: true,
       },
     ]);
+    // Inside the tool call the research guard is the branch's clone, with
+    // the parent's remaining time as its limit and the owner's as ownerLimit.
+    const clone = rowsFor("guards", inSearch()).find((r) => r.kind === "guard");
+    expect(clone).toMatchObject({ label: "research", limit: 50000, ownerLimit: 60000 });
   });
 
   it("branches and the call stack", () => {
@@ -115,11 +121,35 @@ describe("rowsFor", () => {
       ["fork_1", "running"],
       ["fork_2", "interrupted"],
     ]);
+    // The loop's tools sit under its frame; the tool's own loop recorded
+    // no names, so nothing sits under it.
     expect(rowsFor("callStack", inSearch())).toEqual([
-      { kind: "frame", scopeName: "main", frame: { branchPath: ["tool_0_abc"], depth: 3 } },
-      { kind: "frame", scopeName: "llm()", frame: { branchPath: ["tool_0_abc"], depth: 2 } },
-      { kind: "frame", scopeName: "search", frame: { branchPath: ["tool_0_abc"], depth: 1 } },
-      { kind: "frame", scopeName: "llm()", frame: { branchPath: ["tool_0_abc"], depth: 0 } },
+      {
+        kind: "frame",
+        scopeName: "main",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 3 },
+      },
+      {
+        kind: "frame",
+        scopeName: "llm()",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 2 },
+      },
+      { kind: "tool", name: "search", removed: false, loop: { branchPath: [] } },
+      { kind: "tool", name: "writeUp", removed: false, loop: { branchPath: [] } },
+      {
+        kind: "frame",
+        scopeName: "search",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 1 },
+      },
+      {
+        kind: "frame",
+        scopeName: "llm()",
+        moduleId: "",
+        frame: { branchPath: ["tool_0_abc"], depth: 0 },
+      },
     ]);
   });
 

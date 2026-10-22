@@ -147,6 +147,28 @@ describe("UIState", () => {
       });
     }
 
+    it("a live Date an edit did not touch is neither marked nor shown in wire form", async () => {
+      const ui = new UIState();
+      const checkpoint = sharedCheckpoint();
+      const when = new Date("2026-01-02T03:04:05Z");
+      checkpoint.stack.stack[0].locals.when = when;
+      ui.setPending({
+        edits: [{ op: "setLocal", frame: { branchPath: [], depth: 1 }, name: "answer", value: 1 }],
+        applied: [],
+      });
+      await ui.setCheckpoint(checkpoint, {
+        moduleId: "mod.agency",
+        scopeName: "main",
+        stepPath: "1/llm",
+        branchPath: [],
+        depth: 0,
+        label: "round 1",
+        loopStop: "round",
+      });
+      expect(ui.getLocals()).toContainEqual({ key: "when", value: when, override: undefined });
+      expect(ui.getLocals()).toContainEqual({ key: "answer", value: null, override: 1 });
+    });
+
     it("a pending edit on one frame marks that frame's variable, not a namesake elsewhere", async () => {
       const ui = new UIState();
       const checkpoint = sharedCheckpoint();

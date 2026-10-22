@@ -57,8 +57,9 @@ export async function __invokeNodeForServe(nodeName, data) {
   if (nodeName === "needsApproval") return __returned(await needsApproval());
   throw new Error("unknown node: " + nodeName);
 }
-export async function __respondToInterruptsForServe(interrupts, responses) {
-  return __returned(await respondToInterrupts(interrupts, responses));
+export async function __respondToInterruptsForServe(interrupts, responses, opts) {
+  const resumed = await respondToInterrupts(interrupts, responses);
+  return __returned({ data: { ...resumed.data, edits: opts?.edits } });
 }
 `;
 }
@@ -134,6 +135,34 @@ describe("createServeHandler", () => {
     });
     const resumedBody = resumed.body as { success: boolean; value: { resumed: boolean } };
     expect(resumedBody.value.resumed).toBe(true);
+  });
+
+  it("forwards edits to the module's resume only when the host allows them", async () => {
+    const edits = [{ op: "appendMessage", text: "stop" }];
+    const body = {
+      interrupts: [
+        {
+          type: "interrupt",
+          effect: "std::read",
+          message: "ok?",
+          origin: "agent",
+          interruptId: "fixture-int-1",
+          runId: "fixture-run-1",
+          data: null,
+        },
+      ],
+      responses: [{ type: "approve" }],
+      edits,
+    };
+    const closed = await createServeHandler(modulePath, baseOptions());
+    const refused = await closed("POST", "/resume", body);
+    expect(refused.status).toBe(400);
+    expect((refused.body as { error: string }).error).toBe("edits are not enabled on this host");
+
+    const open = await createServeHandler(modulePath, { ...baseOptions(), allowEdits: true });
+    const resumed = await open("POST", "/resume", body);
+    expect(resumed.status).toBe(200);
+    expect((resumed.body as { value: { edits: unknown } }).value.edits).toEqual(edits);
   });
 
   it("cache-busts on version change: re-written module loads new code", async () => {

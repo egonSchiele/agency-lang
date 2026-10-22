@@ -155,12 +155,9 @@ export function resolve(
       if (branch.found.key.startsWith("tool_")) {
         return { refused: "a tool call's result is loop bookkeeping; see the spec's not goals" };
       }
-      const record = getAt(json, branch.jsonPath) as { interruptId?: string; result?: unknown };
-      if (record.interruptId !== undefined && record.result === undefined) {
-        return {
-          refused: `branch ${branch.found.key} is waiting on interrupt ${record.interruptId}`,
-        };
-      }
+      // A branch that stopped on an interrupt takes a result too: the
+      // debugger's own stop is one, and `runBatch` skips a branch with a
+      // result on resume, so the interrupt's answer is never read.
       return [
         {
           jsonPath: [...branch.jsonPath, "result"],

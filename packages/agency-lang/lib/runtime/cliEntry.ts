@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
   AGENCY_ENTRY_NODE,
+  AGENCY_RESUME_EDITS,
   AGENCY_RESUME_FILE,
   AGENCY_RESUME_FORCE,
   AGENCY_RESUME_OVERRIDES,
@@ -9,6 +10,7 @@ import {
 import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import { exitProcessNow } from "./exitProcess.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
+import { checkpointEditsSchema, type CheckpointEdit } from "./state/checkpointPatch/index.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 
 const DEFAULT_ENTRY_NODE = "main";
@@ -18,7 +20,11 @@ type CliEntryArgs<T> = {
   nodeNames: string[];
   /** Run one of those nodes from the top, as a fresh program. */
   startNode: (nodeName: string) => Promise<T>;
-  resume: (checkpoint: Checkpoint, overrides: ResumeOverrides) => Promise<T>;
+  resume: (
+    checkpoint: Checkpoint,
+    overrides: ResumeOverrides,
+    edits: CheckpointEdit[],
+  ) => Promise<T>;
 };
 
 /** Start the node `agency run file.agency:node` named, or `main`. A name the
@@ -64,6 +70,27 @@ function parseOverrides(raw: string | undefined): ResumeOverrides {
   return parsed as ResumeOverrides;
 }
 
+/** The edits `agency resume --edit` carried, checked against their
+ *  schema again here: the carrier is an environment variable, which
+ *  anything could have set. */
+function parseEdits(raw: string | undefined): CheckpointEdit[] {
+  if (!raw) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`${AGENCY_RESUME_EDITS} is not valid JSON: ${String(error)}`);
+  }
+  const checked = checkpointEditsSchema.safeParse(parsed);
+  if (!checked.success) {
+    const reasons = checked.error.issues.map((issue) => issue.message).join("; ");
+    throw new Error(`${AGENCY_RESUME_EDITS} is not a list of edits: ${reasons}`);
+  }
+  return checked.data;
+}
+
 export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
   const filename = process.env[AGENCY_RESUME_FILE];
   if (!filename) {
@@ -88,5 +115,9 @@ export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
   ) {
     throw new Error(`Checkpoint file "${filename}" failed checksum verification`);
   }
-  return args.resume(checkpoint, parseOverrides(process.env[AGENCY_RESUME_OVERRIDES]));
+  return args.resume(
+    checkpoint,
+    parseOverrides(process.env[AGENCY_RESUME_OVERRIDES]),
+    parseEdits(process.env[AGENCY_RESUME_EDITS]),
+  );
 }

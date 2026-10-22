@@ -7,6 +7,10 @@ import type {
 } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
+import {
+  checkpointEditsSchema,
+  type CheckpointEdit,
+} from "../../runtime/state/checkpointPatch/index.js";
 import { readCause, CheckpointCodeChangedError } from "../../runtime/errors.js";
 import { formatBudgetExceeded } from "../../runtime/budgetExit.js";
 import type { ServedInvocationOutcome, RunUsage } from "../../runtime/invocationUsage.js";
@@ -44,7 +48,10 @@ type ServedHandlerConfig = {
     interrupts: unknown[],
     responses: unknown[],
     invocation?: InvocationOptions,
+    edits?: CheckpointEdit[],
   ) => Promise<ServedInvocationOutcome<unknown>>;
+  /** Whether `/resume` accepts `edits` in its body. Unset means no. */
+  allowEdits?: boolean;
 };
 
 export type HttpConfig = ServedHandlerConfig & {
@@ -208,12 +215,9 @@ async function callNode(
 }
 
 async function resumeInterrupts(
-  respondToInterrupts: (
-    i: unknown[],
-    r: unknown[],
-    invocation?: InvocationOptions,
-  ) => Promise<ServedInvocationOutcome<unknown>>,
+  respondToInterrupts: ServedHandlerConfig["respondToInterrupts"],
   hasInterrupts: (data: unknown) => boolean,
+  allowEdits: boolean,
   body: unknown,
   logger: Logger,
   invocation: InvocationOptions | undefined,
@@ -221,9 +225,10 @@ async function resumeInterrupts(
   if (body == null || typeof body !== "object" || Array.isArray(body)) {
     return { status: 400, body: { error: "Request body must be a JSON object" } };
   }
-  const { interrupts, responses } = body as {
+  const { interrupts, responses, edits } = body as {
     interrupts: unknown[];
     responses: unknown[];
+    edits?: unknown;
   };
   const validationError = validateResumeBatch(interrupts, responses);
   if (validationError) {
@@ -231,9 +236,24 @@ async function resumeInterrupts(
     // reach the resume path, where an unknown type continues past the interrupt.
     return { status: 400, body: { error: validationError } };
   }
+  // Edits are refused here, before the runtime, unless the host allows
+  // them; the shape is checked here too, so the runtime only ever sees a
+  // list of edits it knows.
+  let checkedEdits: CheckpointEdit[] | undefined;
+  if (edits !== undefined) {
+    if (!allowEdits) {
+      return { status: 400, body: { error: "edits are not enabled on this host" } };
+    }
+    const parsed = checkpointEditsSchema.safeParse(edits);
+    if (!parsed.success) {
+      const reasons = parsed.error.issues.map((issue) => issue.message).join("; ");
+      return { status: 400, body: { error: `edits must be a list of edits: ${reasons}` } };
+    }
+    checkedEdits = parsed.data;
+  }
   let outcome: ServedInvocationOutcome<unknown>;
   try {
-    outcome = await respondToInterrupts(interrupts, responses, invocation);
+    outcome = await respondToInterrupts(interrupts, responses, invocation, checkedEdits);
   } catch (err) {
     return errorResult(err, logger, "resume");
   }
@@ -259,6 +279,7 @@ export function createHttpHandler(
   invocation?: InvocationOptions,
 ) => Promise<RouteResult> {
   const { exports, hasInterrupts, respondToInterrupts, logger } = config;
+  const allowEdits = config.allowEdits ?? false;
 
   // Null-prototype maps: function/node names come from the request URL, so a
   // plain object would let a name like `/function/toString` resolve to an
@@ -322,7 +343,14 @@ export function createHttpHandler(
         if (!respondToInterrupts) {
           return { status: 400, body: { error: "Module does not support interrupt resume" } };
         }
-        return resumeInterrupts(respondToInterrupts, hasInterrupts, body, logger, invocation);
+        return resumeInterrupts(
+          respondToInterrupts,
+          hasInterrupts,
+          allowEdits,
+          body,
+          logger,
+          invocation,
+        );
       }
     }
 

@@ -71,7 +71,7 @@ location is used.
 | `setLocal`        | frame, name, value          | `locals[name]` on that frame.                                                                                                 |
 | `setArg`          | frame, name, value          | `args[name]` on that frame.                                                                                                   |
 | `setGlobal`       | module, name, value         | The module's global in the store the stop reads: the root's, or a fork or parallel branch's own copy.                         |
-| `setBranchResult` | branch, value               | The branch's `result`, so the block that owns it reads the value as a returned one. A tool call's branch is refused.          |
+| `setBranchResult` | branch, value               | The branch's `result`, so the block that owns it reads the value as a returned one. A branch stopped on an interrupt, the debugger's own stop included, takes one and the resume skips it. A tool call's branch is refused.          |
 
 An omitted address means the stop's own: the frame the stop shows (at
 one of the loop's own stops, the caller under the loop's frame), the
@@ -230,6 +230,14 @@ store as before.
 A branch that has finished keeps an empty stack under its result. An
 address on it is refused ("no frames on the stack"), not resolved to
 the parent's frames above it.
+
+## The entry points outside the debugger
+
+`agency resume --edit <json>` and `--edits <file>` take the same edits from
+the command line (`resume-command.md`), and a served program's `/resume`
+takes them in its body when the host was created with `allowEdits`
+(`docs/dev/hosting/how-hosted-serving-works.md`). Both check the shape at the
+boundary and again where the runtime reads it.
 
 ## Interrupts, handlers, and hosts
 

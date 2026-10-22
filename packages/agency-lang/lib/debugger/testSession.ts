@@ -138,7 +138,10 @@ export class DebuggerTestSession {
     return session;
   }
 
-  async press(key: string, opts?: { times?: number; shift?: boolean }): Promise<void> {
+  async press(
+    key: string,
+    opts?: { times?: number; shift?: boolean; ctrl?: boolean },
+  ): Promise<void> {
     const times = opts?.times ?? 1;
     for (let i = 0; i < times; i++) {
       if (this.finished) return;
@@ -150,7 +153,7 @@ export class DebuggerTestSession {
       // Registered before feedKey: feeding a key can resolve the UI's
       // pending read at once, and the signal would be missed otherwise.
       const waiting = this.ui.waitForPerson();
-      this.input.feedKey({ key, shift: opts?.shift });
+      this.input.feedKey({ key, shift: opts?.shift, ctrl: opts?.ctrl });
       await Promise.race([waiting, this.runPromise]);
     }
   }

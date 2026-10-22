@@ -5,7 +5,7 @@
 import { functionRefReviver, nativeTypeReviver } from "../../runtime/revivers/index.js";
 import { Checkpoint } from "../../runtime/state/checkpointStore.js";
 import { isBusyEntry } from "../../runtime/waits.js";
-import type { BusyEntry, DebuggerIO } from "../types.js";
+import { RequestWithdrawn, type BusyEntry, type DebuggerIO } from "../types.js";
 import type { Channel } from "./channel.js";
 import { parseAttachMessage, type Hello } from "./protocol.js";
 
@@ -69,6 +69,10 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         throw new Error(`unknown request ${method} (id ${id})`);
     }
   };
+  // The requests being answered, by id, and the ones another party
+  // answered first, whose reply is not sent.
+  const inFlight: Record<number, true> = {};
+  const withdrawn: Record<number, true> = {};
   const notice = (method: string, args: unknown[]): void => {
     switch (method) {
       case "log":
@@ -121,15 +125,37 @@ export function serveDebuggerIO(channel: Channel, io: DebuggerIO, events: ServeE
         notice(message.method, message.args);
         return;
       case "request":
+        inFlight[message.id] = true;
         void answer(message.id, message.method, message.args).then(
-          (result) => channel.send({ type: "reply", id: message.id, result }),
-          (error: unknown) =>
+          (result) => {
+            delete inFlight[message.id];
+            if (withdrawn[message.id] === undefined) {
+              channel.send({ type: "reply", id: message.id, result });
+            }
+          },
+          (error: unknown) => {
+            delete inFlight[message.id];
+            if (withdrawn[message.id] !== undefined || error instanceof RequestWithdrawn) {
+              return;
+            }
             channel.send({
               type: "reply",
               id: message.id,
               error: error instanceof Error ? error.message : String(error),
-            }),
+            });
+          },
         );
+        return;
+      case "answered":
+        // The activity line has already said who answered; what is left
+        // is to stop the read this UI is inside for that request.
+        if (inFlight[message.id] !== undefined) {
+          withdrawn[message.id] = true;
+          io.withdraw?.();
+        }
+        return;
+      case "parties":
+        io.setParties?.({ terminal: message.terminal, cli: message.cli });
         return;
       case "reply":
       case "pause":

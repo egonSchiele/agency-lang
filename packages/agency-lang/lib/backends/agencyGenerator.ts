@@ -661,6 +661,11 @@ export class AgencyGenerator {
     if (child.type === "castExpression") {
       return bindsTighterThanCast(parentOp);
     }
+    // A prefix operator binds to the atom before `is` takes it, so
+    // `!value is string` reads as `(!value) is string`.
+    if (child.type === "isExpression") {
+      return PREFIX_OPS.includes(parentOp);
+    }
     if (child.type !== "binOpExpression") {
       return false;
     }

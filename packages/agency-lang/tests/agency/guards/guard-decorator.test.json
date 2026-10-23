@@ -1,0 +1,136 @@
+{
+  "tests": [
+    {
+      "nodeName": "finishesUnderBudget",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:DONE x\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A body that finishes is the result."
+    },
+    {
+      "nodeName": "emptyAnswerIsAFailure",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:it returned no answer\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A finished empty string is a failure."
+    },
+    {
+      "nodeName": "inFlightInReturnPosition",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:in-flight\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A draft the body returns directly is not an answer: the trip is a failure carrying it."
+    },
+    {
+      "nodeName": "inFlightInThread",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:in-flight\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The same for a body that returns from inside a thread block."
+    },
+    {
+      "nodeName": "tripWithoutDraft",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip with nothing saved is a failure whose message comes from the trip."
+    },
+    {
+      "nodeName": "completedAttemptSurvivesReviewTrip",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\\n\\n[researcherShape: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "With draftsAreAnswers, revise's finished attempt survives a trip in its review."
+    },
+    {
+      "nodeName": "completedAttemptInThread",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\\n\\n[agencyCodingShape: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The same inside a thread block."
+    },
+    {
+      "nodeName": "outerTripInsideInnerGuard",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "An outer budget that runs out inside an inner decorated call is the outer's stop."
+    },
+    {
+      "nodeName": "labelOverride",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\\n\\n[custom: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "label: replaces the function's name as the guard's label."
+    },
+    {
+      "nodeName": "emptyListIsNotNoAnswer",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "An empty list is a clean result, not \"no answer\"."
+    },
+    {
+      "nodeName": "bodyFailurePassesThrough",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:the writing reviewer failed: nope\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A failure the body returns passes through unchanged."
+    }
+  ]
+}

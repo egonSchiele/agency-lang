@@ -2,7 +2,7 @@ import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict, encodeBase64 } from "./base64.js";
 import type { WriteMode } from "../host/host.js";
 export type { WriteMode } from "../host/host.js";
-import { AgencyCancelledError } from "../runtime/errors.js";
+import { AgencyCancelledError, readCause } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -139,9 +139,31 @@ export function _input(prompt: string): Promise<string> {
   return inputImpl(ctx, stack, prompt);
 }
 
-/** Shared impl for `__internal_sleep` and `_sleep`. */
-function sleepImpl(ctx: RuntimeContext<any>, stack: StateStack, ms: number): Promise<void> {
-  return abortableSleep(ms, ctx.getAbortSignal(stack));
+/** Shared impl for `__internal_sleep` and `_sleep`. Resolves to the
+ *  milliseconds still left to sleep: 0 when the sleep ran to the end.
+ *
+ *  When a guard's time budget runs out mid-sleep, the guard's timer
+ *  aborts the sleep. If the runner would raise that trip at its next
+ *  step, this does not throw: it returns the time left, `sleep` loops,
+ *  and the loop's next step raises the trip as a `std::guard`
+ *  interrupt. So every handler around the guard sees it, as it sees a
+ *  trip between statements. Approve gives the guard more time and the
+ *  loop sleeps the rest; reject makes the guard return its failure.
+ *  Every other cancel (Ctrl-C, a race loser, a root budget) throws as
+ *  before. */
+async function sleepImpl(ctx: RuntimeContext<any>, stack: StateStack, ms: number): Promise<number> {
+  const start = ctx.clock.now();
+  try {
+    await abortableSleep(ms, ctx.getAbortSignal(stack));
+    return 0;
+  } catch (error) {
+    const raisableTrip =
+      readCause(error)?.kind === "guardTrip" && stack.firstRaisableTrip() !== null;
+    if (!raisableTrip) throw error;
+    // At least 1ms: a cut sleep has time left, and the loop must come
+    // back to a step for the trip to be raised.
+    return Math.max(1, ms - (ctx.clock.now() - start));
+  }
 }
 
 /** Deprecated; see comment on `__internal_input`. */
@@ -150,12 +172,12 @@ export function __internal_sleep(
   stack: StateStack,
   _threads: ThreadStore,
   ms: number,
-): Promise<void> {
+): Promise<number> {
   return sleepImpl(ctx, stack, ms);
 }
 
 /** ALS-reading replacement for `__internal_sleep`. */
-export function _sleep(ms: number): Promise<void> {
+export function _sleep(ms: number): Promise<number> {
   const { ctx, stack } = getRuntimeContext();
   return sleepImpl(ctx, stack, ms);
 }

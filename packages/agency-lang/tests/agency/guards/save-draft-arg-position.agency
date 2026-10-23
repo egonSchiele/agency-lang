@@ -17,12 +17,21 @@ def f(x: string): number {
 }
 
 node argPositionDrops() {
-  const arr = [leaf]
-  const r = guard(time: 600ms) {
-    return f(arr[0]())
+  // The time trip during sleep() is a std::guard interrupt.
+  // Rejecting it sends the guard down its trip path.
+  handle {
+    const arr = [leaf]
+    const r = guard(time: 600ms) {
+      return f(arr[0]())
+    }
+    if (isFailure(r)) { return "failed-no-cross-type-salvage" }
+    return "leaked:${r.value}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(r)) { return "failed-no-cross-type-salvage" }
-  return "leaked:${r.value}"
 }
 
 // The mirror case: the OUTER call of `return f2(g())` trips after its
@@ -39,9 +48,18 @@ def f2(x: string): string {
 }
 
 node outerCallSalvages() {
-  const r = guard(time: 600ms) {
-    return f2(g())
+  // The time trip during sleep() is a std::guard interrupt.
+  // Rejecting it sends the guard down its trip path.
+  handle {
+    const r = guard(time: 600ms) {
+      return f2(g())
+    }
+    if (isFailure(r)) { return "unexpected-failure" }
+    return r.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(r)) { return "unexpected-failure" }
-  return r.value
 }

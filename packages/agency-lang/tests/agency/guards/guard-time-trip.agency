@@ -2,19 +2,15 @@
 // A tiny time budget (20ms) wrapping a sleep that overruns it. The
 // timer fires while the JS-bodied sleep is in flight; sleep is
 // abortable, so it wakes promptly on the guard's abort signal. The
-// next runner step boundary then throws GuardExceededError("time",
-// ...). The stdlib guard's `try` converts it to a Failure with type
-// "timeoutFailure". We assert actualTime is a real elapsed
-// measurement (at least half the budget) rather than a 0/sentinel
-// value; see the comment on the assertion below for why the bound is
-// deliberately loose.
-// The handler is race insurance, not part of the pinned behavior: on a
-// slow runner the walk from pushGuard to the sleep can eat the whole
-// 20ms budget, so the trip is DETECTED at a step boundary and raised
-// as a resumable interrupt instead of aborting the in-flight sleep.
-// Rejecting it delivers the same GuardExceededError from the step, and
-// the output is identical on both paths. On a fast run the handler
-// never fires.
+// next runner step raises the trip; the handler rejects it, the step
+// throws GuardExceededError("time", ...), and the stdlib guard's `try`
+// converts it to a Failure with type "timeoutFailure". We assert
+// actualTime is a real elapsed measurement (at least half the budget)
+// rather than a 0/sentinel value; see the comment on the assertion
+// below for why the bound is deliberately loose.
+// The handler answers the trip. A time trip during `sleep` raises a
+// `std::guard` interrupt at the next step, as a trip between statements
+// does, and rejecting it sends the guard down its Failure path.
 node main() {
   handle {
   const result = guard(time: 20ms) {

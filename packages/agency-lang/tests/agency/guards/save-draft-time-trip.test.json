@@ -5,7 +5,7 @@
       "input": "",
       "expectedOutput": "\"timed-draft\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Salvage on a TIME trip (aborted-leaf delivery path)."
+      "description": "Salvage on a TIME trip during sleep: the handler rejects the std::guard interrupt and the guard returns the saved draft."
     }
   ]
 }

@@ -10,6 +10,7 @@
 
 ### Runtime
 
+- **A time guard that runs out during `sleep` now raises its `std::guard` interrupt, so handlers see it.** Before, the trip cancelled the sleep and the guard returned its failure (or saved draft) without asking any handler, unlike a trip between statements or during a model request. Now a handler can reject it, which gives the same failure or draft as before, or approve more time, and the sleep finishes the time that was left. A guard around a `sleep` with no handler now stops with an unhandled `std::guard` interrupt, as any other trip does; add `with reject` to the guard, or a handler, to keep the old result. The `@guard` decorator now adds its "may be unfinished" note to a draft saved before a mid-sleep trip. A trip during `fetch`, `bash`, a subprocess, or another waiting call still skips the handlers.
 - **`input()` is answered through the invocation, not a process global.** A TypeScript caller that scripted answers by setting `globalThis.__agencyInputOverride` now passes `inputOverride` in the options object that follows the node's own arguments: `main(args, { inputOverride: async (prompt) => "yes" })`, or `main({ inputOverride })` for a node with no parameters. The old global is no longer read, so a caller still setting it falls back to the terminal.
 
 ### Standard Library

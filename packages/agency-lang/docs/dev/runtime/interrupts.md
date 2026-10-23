@@ -404,6 +404,26 @@ them. PR 3 adds two raise surfaces and the join rule:
   (`<key>.retryGate.N`), and re-issues the request from the same thread
   state. The prompt push is its own idempotent `pushPrompt` step so
   re-issue never duplicates the user message.
+- **Mid-sleep cancellation is resumable too:** the guard's timer aborts
+  an in-flight `sleep`. `sleepImpl` (`lib/stdlib/builtins.ts`) does not
+  throw that cancel when it carries a `guardTrip` cause and
+  `stack.firstRaisableTrip()` admits a trip; it returns the time still
+  left, and `sleep` in `stdlib/index.agency` loops over the rest. The
+  loop's next step is the step-boundary raise above, inside the guard's
+  own scope, so every handler sees the trip. Approve sleeps the rest;
+  reject throws at that step and the guard boundary converts it, exactly
+  as for a trip between statements. The `firstRaisableTrip` test is what
+  keeps the loop from spinning: when nothing would raise (a root
+  budget, a suspended guard, a race loser), the cancel throws as before.
+- **Other in-flight calls are not resumable yet:** a trip during
+  `fetch`, `bash`, a subprocess, or any other stdlib call that takes
+  `ctx.getAbortSignal(stack)` still rejects the call with the trip's
+  cause, and `__tryCall` in the guard delivers it as the guard's
+  failure (or salvaged draft) without asking a handler. The run stops,
+  so nothing goes through that should have been blocked, but a handler
+  cannot grant more time and the `@guard` decorator's note is lost.
+  Re-issuing these calls on approve, as `llm()` does, is not safe in
+  general: a shell command or a POST may already have had its effect.
 - **Settling at the block boundary:** when `_runGuarded` exits, the
   Result is guard()'s answer; `stack.settleGuards(ids)` suspends the
   owned guards for the one remaining step before `_popGuard`. Without

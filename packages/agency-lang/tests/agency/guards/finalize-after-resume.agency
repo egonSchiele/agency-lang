@@ -1,6 +1,6 @@
 
-// Interrupt, resume, then a TIME trip (the abort-signal delivery path,
-// distinct from a cost trip's post-call check). The finalize runs with
+// Interrupt, resume, then a TIME trip during a sleep (distinct from a
+// cost trip's post-call check). The finalize runs with
 // the RESTORED locals: progress was assigned before the pause and must
 // survive serialization into the finalize.
 def work(): string {
@@ -18,9 +18,18 @@ def work(): string {
 }
 
 node main() {
-  const result = guard(time: 600ms) {
-    return work()
+  // The time trip during sleep() is a std::guard interrupt.
+  // Rejecting it sends the guard down its trip path.
+  handle {
+    const result = guard(time: 600ms) {
+      return work()
+    }
+    if (isFailure(result)) { return "unexpected" }
+    return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(result)) { return "unexpected" }
-  return result.value
 }

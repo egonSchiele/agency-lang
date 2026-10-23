@@ -21,12 +21,12 @@ node main() {
   const res = guard(time: 1s) {
     sleep(2s)
     return "finalResult"
-  }
+  } with reject
   print(res)
 }
 ```
 
-Running this returns a failure. Now lets use `saveDraft`:
+When the time runs out, the guard raises a `std::guard` interrupt asking whether to give it more time (see [guards](/guide/guards#when-a-guard-trips)). The `with reject` answers no, so the guard stops. Running this returns a failure. Now lets use `saveDraft`:
 
 ```ts
 node main() {
@@ -34,7 +34,7 @@ node main() {
     saveDraft("draft1")
     sleep(2s)
     return "finalResult"
-  }
+  } with reject
   print(res)
 }
 ```
@@ -125,7 +125,7 @@ node main() {
     finalize {
       return x * 2
     }
-  }
+  } with reject
   print(res)
 }
 ```
@@ -134,7 +134,7 @@ What's happening:
 - we set a 1 second guard in `main`
 - we save a draft of `1` in `main`
 - we call `add`, which saves a draft of `103` and then sleeps for 2 seconds
-- the guard trips while `add` is sleeping
+- the guard trips while `add` is sleeping, and `with reject` turns down more time
 - we return the saved draft of `103` from `add`, setting `x` to `103` in `main`
 - the `finalize` block in `main` runs
 - the `finalize` block returns `x * 2`, which is `206`.

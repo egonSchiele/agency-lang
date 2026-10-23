@@ -1,11 +1,20 @@
 
 node main() {
-  const result = guard(time: 500ms) {
-    saveDraft("pre-interrupt")
-    interrupt("continue?")      // pause; harness approves → resume
-    sleep(2000)                 // after resume, exceed 500ms → trip
-    return "done"
+  // The time trip during sleep() is a std::guard interrupt.
+  // Rejecting it sends the guard down its trip path.
+  handle {
+    const result = guard(time: 500ms) {
+      saveDraft("pre-interrupt")
+      interrupt("continue?")      // pause; harness approves → resume
+      sleep(2000)                 // after resume, exceed 500ms → trip
+      return "done"
+    }
+    if (isFailure(result)) { return "unexpected" }
+    return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(result)) { return "unexpected" }
-  return result.value
 }

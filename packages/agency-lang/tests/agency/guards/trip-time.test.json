@@ -112,6 +112,53 @@
       ],
       "description": "Taxonomy case (b): the trip fires inside an executing TOOL; the raise happens at the tool's own step boundary, the handler grants time, the tool completes on resume, and its result reaches the thread \u2014 no dangling tool_use. Runs under the fake clock: _advanceTime drives the trip deterministically.",
       "fakeClock": true
+    },
+    {
+      "input": "",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "nodeName": "midSleepApproved",
+      "expectedOutput": "\"done|granted:time\"",
+      "description": "A time trip cancels an in-flight sleep (1s sleep, 100ms budget); the handler is asked, grants more time, and the sleep finishes."
+    },
+    {
+      "input": "",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "nodeName": "midSleepRejected",
+      "expectedOutput": "\"salvaged:before-sleep|asked:time\"",
+      "description": "The same mid-sleep trip, rejected: the handler is asked and the guard returns the saved draft."
+    },
+    {
+      "input": "",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "nodeName": "midSleepCheckpointApproved",
+      "expectedOutput": "\"done\"",
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "resolvedValue": {
+            "maxTime": 600000
+          }
+        }
+      ],
+      "description": "A mid-sleep trip with no in-program handler surfaces across a checkpoint; the harness grants more time and the resumed run finishes the sleep."
     }
   ]
 }

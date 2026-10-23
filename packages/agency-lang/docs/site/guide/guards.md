@@ -143,6 +143,9 @@ What "continue" means is situation dependent, depending on what code was running
 - **Between steps** (a loop, plain code): the work continues in place.
 - **Inside a tool call**: the tool finishes on resume and its result reaches the model normally.
 - **Mid LLM request**: the trip already cancelled the request. After approval the request is sent again from the same conversation state.
+- **Mid `sleep`**: the trip ends the sleep early. After approval it sleeps for the time that was left.
+
+One case does not raise the interrupt yet: a trip while the code waits on any other call, such as `fetch`, `bash`, or a subprocess, cancels that call and the guard returns its failure (or saved draft) without asking any handler.
 
 ## Trips in forks
 
@@ -207,7 +210,7 @@ So if the model in `summarize` calls `saveDraft` halfway through and then the ti
 
 Because the decorator answers its own trip, the caller never sees a `std::guard` interrupt for it and cannot give it more budget. To allow more, pass a larger limit, as the standard library agents do with their `maxCost` and `maxTime` parameters.
 
-One gap: a time limit that runs out while the body is inside `sleep()` ends the sleep without raising the interrupt, so the decorator returns the guard's own result unchanged: a saved draft without the note, or the guard's own failure ("Guard 'summarize' exceeded its time budget...").
+One gap: a time limit that runs out while the body waits on a call such as `fetch` or `bash` cancels the call without raising the interrupt, so the decorator returns the guard's own result unchanged: a saved draft without the note, or the guard's own failure ("Guard 'summarize' exceeded its time budget..."). A trip during `sleep` or a model request does raise it.
 
 ## Root budgets
 

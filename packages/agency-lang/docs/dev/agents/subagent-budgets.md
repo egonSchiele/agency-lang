@@ -171,15 +171,18 @@ and the researcher's grounding check (`checkGrounding`,
 rejection telling the model its sources were not confirmed. `revise` then
 runs another attempt, or returns the last one when attempts run out.
 
-**Known gap: a trip during `sleep()` bypasses the handler** (ticket
-ADI-137). A time guard that fires while `sleep()` is running cancels the
-sleep directly, and no handler sees a `std::guard` interrupt. The
-decorator then has no trip data, so `_budgetOutcome` takes rule 1 and
-returns the guard's own Result unchanged: a saved draft comes back as a
-success without the note, and with nothing saved the result is the guard's
-plain failure, "Guard 'oracleAgent' exceeded its time budget: ran 100.9ms
-of 100ms.", with no `draft`. No stdlib agent sleeps inside its budget
-today.
+**Known gap: a trip during a waiting call bypasses the handler.** A time
+guard that fires while the body waits on a call such as `fetch`, `bash`,
+or a subprocess cancels the call directly, and no handler sees a
+`std::guard` interrupt. The decorator then has no trip data, so
+`_budgetOutcome` takes rule 1 and returns the guard's own Result
+unchanged: a saved draft comes back as a success without the note, and
+with nothing saved the result is the guard's plain failure, "Guard
+'oracleAgent' exceeded its time budget: ran 100.9ms of 100ms.". The
+researcher and the explorer fetch inside their budgets, so this case is
+reachable. A trip during a model request or a `sleep` does raise the
+interrupt, so those get the note; the runtime side is in
+`docs/dev/runtime/interrupts.md`, "Time trips".
 
 ## Why the answer was lost (ADI-49)
 

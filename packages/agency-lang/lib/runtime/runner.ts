@@ -313,7 +313,7 @@ export class Runner {
   private shouldSkip(): boolean {
     if (this.stack?.abortSignal?.aborted && !this.halted) {
       // If the abort carries a guard trip that was ALREADY delivered via
-      // the leaf-op path (an in-flight sleep/fetch aborted, then __tryCall
+      // the leaf-op path (an in-flight fetch or shell call aborted, then __tryCall
       // converted it to a Failure), the trip is handled. Do NOT re-throw
       // it here — this `shouldSkip` may be gating the guard's own
       // `_popGuard` cleanup step, and throwing would surface an unhandled

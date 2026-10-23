@@ -191,6 +191,16 @@ def writingReviewShape(): Result<string[]> {
   }
 }
 
+// A trip while the body sleeps reaches the decorator too, so the saved
+// draft comes back with its note. Real clock, unlike the rest of this file:
+// nothing can advance a fake clock while the body is blocked in the sleep.
+@guard(cost: $5, time: 100ms)
+def sleepsPastTheBudget(): Result<string> {
+  saveDraft("before-sleep")
+  sleep(1s)
+  return "FULL"
+}
+
 node finishesUnderBudget(): string {
   return describe(finishes("x"))
 }
@@ -253,4 +263,8 @@ node writingReviewTripReturnsSavedFindings(): string {
     return "failure:${r.error}"
   }
   return "success:${r.value}"
+}
+
+node tripDuringSleepIsNoted(): string {
+  return describe(sleepsPastTheBudget())
 }

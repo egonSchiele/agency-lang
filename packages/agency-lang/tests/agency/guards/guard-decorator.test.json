@@ -155,6 +155,17 @@
         }
       ],
       "description": "The writing reviewer's main pass, run after its parallel side passes, hands its saved findings and the side findings to the guard."
+    },
+    {
+      "nodeName": "tripDuringSleepIsNoted",
+      "input": "",
+      "expectedOutput": "\"success:before-sleep\\n\\n[sleepsPastTheBudget: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip during sleep raises std::guard, so the decorator sees it and the saved draft comes back with the budget note. Real clock."
     }
   ]
 }

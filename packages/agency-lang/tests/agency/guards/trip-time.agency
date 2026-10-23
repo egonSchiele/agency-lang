@@ -152,3 +152,58 @@ node toolBodyApproved() {
     }
   }
 }
+
+// 7. A time trip that cancels an IN-FLIGHT sleep (a 1s sleep against a
+// 100ms budget): the handler sees it, as it sees a trip between
+// statements, grants more time, and the sleep finishes the rest. Before
+// this, the cancelled sleep went straight to the guard's failure and no
+// handler was asked. Wall-clock, like nodes 3 and 4: nothing can
+// advance a fake clock while the fixture is blocked in the sleep.
+node midSleepApproved() {
+  handle {
+    const r = guard(time: 100ms) {
+      sleep(1s)
+      return "done"
+    }
+    if (isFailure(r)) { return "unexpected-failure" }
+    return "${r.value}|${log[0]}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("granted:${i.data.dimension}")
+      return approve({ maxTime: 600000 })
+    }
+    return pass()
+  }
+}
+
+// 8. The same trip, rejected: the handler is asked, and the guard
+// returns the saved draft.
+node midSleepRejected() {
+  handle {
+    const r = guard(time: 100ms) {
+      saveDraft("before-sleep")
+      sleep(1s)
+      return "done"
+    }
+    if (isFailure(r)) { return "no-salvage|${log[0]}" }
+    return "salvaged:${r.value}|${log[0]}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("asked:${i.data.dimension}")
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// 9. A mid-sleep trip with NO in-program handler surfaces across a real
+// checkpoint, like node 5; the harness grants more time, and the resumed
+// run finishes the sleep.
+node midSleepCheckpointApproved() {
+  const r = guard(time: 100ms) {
+    sleep(1s)
+    return "done"
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r.value
+}

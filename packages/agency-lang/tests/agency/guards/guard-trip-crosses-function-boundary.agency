@@ -1,24 +1,28 @@
+import { bash } from "std::shell"
 
 // A guard's trip must propagate across a FUNCTION-call boundary, not just
 // within a single node body. The outer guard (20ms) wraps a call to `inner`,
-// whose sleep overruns the budget. The timer fires while `inner`'s sleep is
-// in flight; the rejection unwinds through `inner`'s generated function-body
+// whose shell command overruns the budget. The timer fires while `inner`'s
+// command is in flight; the rejection unwinds through `inner`'s generated function-body
 // catch — which must RE-THROW the abort (the single `instanceof AgencyAbort`
 // rung), not convert it to a Failure — and lands at the outer guard's `try`,
 // which converts it to a timeoutFailure. The existing nested-guard fixtures
 // all live in one function and only exercise the node-level catch ladder;
 // this is the first cross-function backstop for B2's collapsed rung.
+// A shell command, not `sleep`: a trip during `sleep` is raised as an
+// interrupt at the next step, so it would not exercise the cancelled-call
+// path this fixture pins. `bash` still takes that path.
 def inner(): string {
-  sleep(150ms)
+  const out = bash("sleep 1")
   return "inner returned"
 }
 
-// The handler is race insurance, not part of the pinned behavior: on a
-// slow runner the setup walk can eat the whole tight budget, so the
-// trip is DETECTED at a step boundary and raised as a resumable
-// interrupt instead of aborting the in-flight sleep. Rejecting it
-// delivers the same GuardExceededError from the step, and the output
-// is identical on both paths. On a fast run the handler never fires.
+// The handler approves the shell command's own interrupt. For the guard it
+// is race insurance, not part of the pinned behavior: on a slow runner the
+// setup walk can eat the whole tight budget, so the trip is DETECTED at a
+// step boundary and raised as a resumable interrupt instead of cancelling
+// the in-flight command. Rejecting it delivers the same GuardExceededError
+// from the step, and the output is identical on both paths.
 node main() {
   handle {
   const result = guard(time: 20ms) {
@@ -31,7 +35,7 @@ node main() {
   } with (i) {
     return match(i.effect) {
       "std::guard" => reject()
-      _ => pass()
+      _ => approve()
     }
   }
 }

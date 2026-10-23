@@ -4,12 +4,9 @@
 // catches the inner's Failure without itself tripping. Verifies that
 // inner trips don't leak into the outer scope (uninstall properly
 // restores the outer's abort plumbing).
-// The handler is race insurance, not part of the pinned behavior: on a
-// slow runner the setup walk can eat the whole tight budget, so the
-// trip is DETECTED at a step boundary and raised as a resumable
-// interrupt instead of aborting the in-flight sleep. Rejecting it
-// delivers the same GuardExceededError from the step, and the output
-// is identical on both paths. On a fast run the handler never fires.
+// The handler answers the trip. A time trip during `sleep` raises a
+// `std::guard` interrupt at the next step, as a trip between statements
+// does, and rejecting it sends the guard down its Failure path.
 node main() {
   handle {
   const outer = guard(time: 5s) {

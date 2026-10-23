@@ -1,23 +1,25 @@
+import { bash } from "std::shell"
 
 // A plain `try` around an abortable leaf, sitting INSIDE a guard, must NOT
 // swallow the guard's trip. The guard's 20ms timer fires while the inner
-// `try sleep(...)` is in flight; the sleep aborts carrying the guard's
-// guardTrip cause. The plain `try`'s __tryCall owns NO guards (ownedGuardIds
+// `try bash(...)` is in flight; the command aborts carrying the guard's
+// guardTrip cause. (Not `sleep`: a trip during `sleep` is raised as an
+// interrupt at the next step instead, so it would not pin this path.) The plain `try`'s __tryCall owns NO guards (ownedGuardIds
 // is absent), so it RE-THROWS the trip instead of converting it to a Failure;
 // the trip then reaches the guard's own boundary and surfaces as a
 // timeoutFailure. Before Increment-2 guardId matching, the plain `try`
 // converted ANY guardTrip and swallowed the guard's trip, so the guard never
 // tripped. This pins the corrected behavior.
-// The handler is race insurance, not part of the pinned behavior: on a
-// slow runner the setup walk can eat the whole tight budget, so the
-// trip is DETECTED at a step boundary and raised as a resumable
-// interrupt instead of aborting the in-flight sleep. Rejecting it
-// delivers the same GuardExceededError from the step, and the output
-// is identical on both paths. On a fast run the handler never fires.
+// The handler approves the shell command's own interrupt. For the guard it
+// is race insurance, not part of the pinned behavior: on a slow runner the
+// setup walk can eat the whole tight budget, so the trip is DETECTED at a
+// step boundary and raised as a resumable interrupt instead of cancelling
+// the in-flight command. Rejecting it delivers the same GuardExceededError
+// from the step, and the output is identical on both paths.
 node main() {
   handle {
   const result = guard(time: 20ms) {
-    const inner = try sleep(150ms)
+    const inner = try bash("sleep 1")
     if (isFailure(inner)) {
       return "inner-try swallowed the trip"
     }
@@ -30,7 +32,7 @@ node main() {
   } with (i) {
     return match(i.effect) {
       "std::guard" => reject()
-      _ => pass()
+      _ => approve()
     }
   }
 }

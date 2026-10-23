@@ -12,12 +12,21 @@ def branchWork(tag: string): string {
 }
 
 node main() {
-  const result = guard(time: 600ms) {
-    const tags = fork(["a"]) as t {
-      return branchWork(t)
+  // The time trip during sleep() is a std::guard interrupt.
+  // Rejecting it sends the guard down its trip path.
+  handle {
+    const result = guard(time: 600ms) {
+      const tags = fork(["a"]) as t {
+        return branchWork(t)
+      }
+      return "joined"
     }
-    return "joined"
+    if (isFailure(result)) { return "failed-no-branch-salvage" }
+    return "leaked:${result.value}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(result)) { return "failed-no-branch-salvage" }
-  return "leaked:${result.value}"
 }

@@ -4,10 +4,9 @@
 //   2. either guard tripping triggers the Failure path
 //   3. the time variant produces "timeoutFailure" with maxTime set
 //      and the cost fields null.
-// The handler is race insurance, the same as in guard-time-trip.agency:
-// on a slow runner the 20ms budget can run out before the sleep starts,
-// so the trip is detected at a step boundary and raised as an interrupt
-// instead of aborting the sleep. Rejecting it gives the same Failure.
+// The handler answers the trip. A time trip during `sleep` raises a
+// `std::guard` interrupt at the next step, as a trip between statements
+// does, and rejecting it sends the guard down its Failure path.
 node main() {
   handle {
   const result = guard(cost: $1.0, time: 20ms) {

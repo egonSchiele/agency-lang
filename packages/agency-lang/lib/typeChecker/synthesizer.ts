@@ -1,6 +1,7 @@
 import { isAnyType } from "./utils.js";
 import { isDataShaped } from "./dataShape.js";
 import { diagnostic } from "./diagnostics.js";
+import { parameterForKey } from "../utils/parameterAliases.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import type { TypeTestExpression } from "../types/pattern.js";
 import type { CastExpression } from "../types/castExpression.js";
@@ -1106,6 +1107,19 @@ function validateAgencyFunctionMethod(
     const namedArgs = args.filter((a: any) => "type" in a && a.type === "namedArgument");
     const typeAliases = ctx.getTypeAliases();
     for (const arg of namedArgs) {
+      const match = parameterForKey(params, arg.name);
+      if (match?.viaAlias) {
+        // `.partial()` is Agency code, so it binds by the parameter's
+        // name, never by an alias. Spec: parameter-aliases.
+        ctx.errors.push(
+          diagnostic(
+            "namedArgumentIsAlias",
+            { name: arg.name, param: match.param.name, fn: baseName },
+            expr.loc ?? null,
+          ),
+        );
+        continue;
+      }
       if (!paramNames.has(arg.name)) {
         ctx.errors.push(
           diagnostic(

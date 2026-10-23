@@ -231,6 +231,7 @@ Other process docs:
 - `docs/dev/language/match-expression-positions.md` — Where a `match` may appear as a value, and why each such position has to be wired up by hand.
 - `docs/dev/language/null-and-undefined.md` — Why Agency has exactly one nothing-value, `null`, and treats `undefined` as another spelling of it.
 - `docs/dev/language/on-clause-handlers.md` — The `on`-clause handler alias (`with { on <effect>(param) { ... } }`) and expression-position `handle`, which desugar at parse time to the canonical handler so `agency fmt` normalizes them away.
+- `docs/dev/language/parameter-aliases.md` — Parameter aliases, `def fetch(baseUrl | url: string)`: an alias is a misspelling the tool forgives, not a second name; why every named call reaches `resolveNamed` and the `forgiveAliases` flag that picks the two callers who are forgiven; the one pure helper the checker, the synthesizer, and the runtime share; why the tool-loop gate never throws and how a conflict reaches the model; the null-alias rule; the strict-mode constraint, smoltalk's part in it, and the MCP schema; the `argCorrections` log field; aliases on defs only; and the two departures from the ticket.
 - `docs/dev/language/parallel-blocks-v2-dataflow.md` — A spec for grouping parallel statements automatically by dataflow. Not implemented.
 - `docs/dev/language/parallel-blocks.md` — The shipped design for `parallel` and `seq` blocks: what they lower to and what they refuse.
 - `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages with the `pkg::` prefix.

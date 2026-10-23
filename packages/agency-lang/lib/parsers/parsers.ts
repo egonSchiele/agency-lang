@@ -7235,79 +7235,149 @@ export const forLoopParser: Parser<ForLoop> = label(
 );
 
 // Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
-export const functionParameterParser: Parser<FunctionParameter> = memo(
-  "functionParameterParser",
-  map(
-    seqC(
-      set("type", "functionParameter"),
-      capture(identifierParser, "name"),
-      capture(optional(char("?")), "__optional"),
-      optional(
-        captureCaptures(
-          seqC(
-            optionalSpaces,
-            char(":"),
-            optionalSpaces,
-            capture(variableTypeParser, "typeHint"),
-            capture(optional(map(str("!"), () => true)), "validated"),
+// One alias after a parameter name: ` | url` in `baseUrl | url: string`.
+const parameterAliasParser: Parser<string> = seq(
+  [optionalSpaces, char("|"), optionalSpaces, identifierParser],
+  (results) => results[3] as string,
+);
+
+/**
+ * The name part of a parameter. A `def` parameter may carry aliases,
+ * `baseUrl | url | href`, which only a runtime caller from outside the
+ * program may use (see `lib/utils/parameterAliases.ts`). Node parameters
+ * and the inline handler parameter take the plain name, because nothing
+ * would ever forgive an alias on them.
+ */
+function parameterNameParser(allowAliases: boolean): Parser<any> {
+  if (!allowAliases) {
+    return capture(identifierParser, "name");
+  }
+  return captureCaptures(
+    seqC(capture(identifierParser, "name"), capture(many(parameterAliasParser), "aliases")),
+  );
+}
+
+/** Drop an empty alias list so a parameter without aliases has no
+ *  `aliases` field, the way `variadic` is absent when false. */
+function withoutEmptyAliases<T extends { aliases?: string[] }>(param: T): T {
+  if (param.aliases && param.aliases.length === 0) {
+    const { aliases: _none, ...rest } = param;
+    return rest as T;
+  }
+  return param;
+}
+
+function makeFunctionParameterParser(
+  memoName: string,
+  allowAliases: boolean,
+): Parser<FunctionParameter> {
+  return memo(
+    memoName,
+    map(
+      seqC(
+        set("type", "functionParameter"),
+        parameterNameParser(allowAliases),
+        capture(optional(char("?")), "__optional"),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpaces,
+              char(":"),
+              optionalSpaces,
+              capture(variableTypeParser, "typeHint"),
+              capture(optional(map(str("!"), () => true)), "validated"),
+            ),
           ),
         ),
-      ),
-      optional(
-        captureCaptures(
-          seqC(
-            optionalSpaces,
-            str("="),
-            optionalSpaces,
-            capture(
-              or(agencyArrayParser, agencyObjectParser, literalParserNoVarName),
-              "defaultValue",
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpaces,
+              str("="),
+              optionalSpaces,
+              capture(
+                or(agencyArrayParser, agencyObjectParser, literalParserNoVarName),
+                "defaultValue",
+              ),
             ),
           ),
         ),
       ),
-    ),
-    (result: any) => {
-      const { __optional, validated: _validated, ...rest } = result;
-      // An optional param with no explicit default resolves to null when the
-      // arg is omitted. Inject that default AND widen the static type to
-      // `T | null` so the type matches the runtime value (nullish unification).
-      // When an explicit default is present (e.g. `x?: string = "hi"`), the
-      // value is never null, so neither the default nor the widening applies.
-      if (__optional && !rest.defaultValue) {
-        rest.defaultValue = { type: "null" };
-        if (rest.typeHint) {
-          const nullT = { type: "primitiveType", value: "null" };
-          const existingMembers =
-            rest.typeHint.type === "unionType" ? rest.typeHint.types : [rest.typeHint];
-          rest.typeHint = {
-            type: "unionType",
-            types: [...existingMembers, nullT],
-          };
+      (result: any) => {
+        const { __optional, validated: _validated, ...rest } = result;
+        // An optional param with no explicit default resolves to null when the
+        // arg is omitted. Inject that default AND widen the static type to
+        // `T | null` so the type matches the runtime value (nullish unification).
+        // When an explicit default is present (e.g. `x?: string = "hi"`), the
+        // value is never null, so neither the default nor the widening applies.
+        if (__optional && !rest.defaultValue) {
+          rest.defaultValue = { type: "null" };
+          if (rest.typeHint) {
+            const nullT = { type: "primitiveType", value: "null" };
+            const existingMembers =
+              rest.typeHint.type === "unionType" ? rest.typeHint.types : [rest.typeHint];
+            rest.typeHint = {
+              type: "unionType",
+              types: [...existingMembers, nullT],
+            };
+          }
         }
-      }
-      if (_validated) rest.validated = true;
-      return rest as FunctionParameter;
-    },
-  ),
+        if (_validated) rest.validated = true;
+        return withoutEmptyAliases(rest as FunctionParameter);
+      },
+    ),
+  );
+}
+
+/** A parameter of a node or of an inline handler: no aliases. */
+export const functionParameterParser: Parser<FunctionParameter> = makeFunctionParameterParser(
+  "functionParameterParser",
+  false,
+);
+
+/** A parameter of a `def`: may carry aliases, `baseUrl | url: string`. */
+export const defParameterParser: Parser<FunctionParameter> = makeFunctionParameterParser(
+  "defParameterParser",
+  true,
 );
 
 // Parses: ...name, ...name: type
-export const variadicParameterParser: Parser<FunctionParameter> = memo(
-  "variadicParameterParser",
-  map(
-    seqC(
-      set("type", "functionParameter"),
-      str("..."),
-      capture(identifierParser, "name"),
-      optional(
-        captureCaptures(
-          seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
+function makeVariadicParameterParser(
+  memoName: string,
+  allowAliases: boolean,
+): Parser<FunctionParameter> {
+  return memo(
+    memoName,
+    map(
+      seqC(
+        set("type", "functionParameter"),
+        str("..."),
+        parameterNameParser(allowAliases),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpaces,
+              char(":"),
+              optionalSpaces,
+              capture(variableTypeParser, "typeHint"),
+            ),
+          ),
         ),
       ),
+      (result) => withoutEmptyAliases({ ...result, variadic: true } as FunctionParameter),
     ),
-    (result) => ({ ...result, variadic: true }),
-  ),
+  );
+}
+
+export const variadicParameterParser: Parser<FunctionParameter> = makeVariadicParameterParser(
+  "variadicParameterParser",
+  false,
+);
+
+/** A variadic `def` parameter: `...rest | items: string[]`. */
+export const defVariadicParameterParser: Parser<FunctionParameter> = makeVariadicParameterParser(
+  "defVariadicParameterParser",
+  true,
 );
 
 export const functionReturnTypeParser: Parser<VariableType> = memo(
@@ -7345,7 +7415,7 @@ const _baseFunctionParser: Parser<any> = memo(
     optionalSpacesOrNewline,
     captureCaptures(
       commaDelimitedListCaptures(
-        or(variadicParameterParser, functionParameterParser),
+        or(defVariadicParameterParser, defParameterParser),
         CALL_ARGUMENT_LIST,
         "parameters",
         "parameterTrivia",

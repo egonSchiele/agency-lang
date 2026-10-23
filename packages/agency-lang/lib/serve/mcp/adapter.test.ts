@@ -97,6 +97,14 @@ describe("MCP adapter", () => {
     const addTool = tools.find((t: any) => t.name === "add");
     expect(addTool.description).toBe("Add two numbers");
     expect(addTool.inputSchema).toBeTruthy();
+    // The zod schema says additionalProperties: false; the served schema
+    // drops that so an MCP client that validates arguments lets a
+    // parameter alias through to the server.
+    expect(addTool.inputSchema.properties).toEqual({
+      a: { type: "number" },
+      b: { type: "number" },
+    });
+    expect("additionalProperties" in addTool.inputSchema).toBe(false);
     expect(addTool.annotations.idempotentHint).toBe(true);
     const mainTool = tools.find((t: any) => t.name === "main");
     expect(mainTool.description).toContain("main");

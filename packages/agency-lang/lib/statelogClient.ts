@@ -1,4 +1,5 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
+import type { AliasCorrection } from "./utils/parameterAliases.js";
 import { defaultHost } from "#default-host";
 import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
@@ -144,6 +145,18 @@ function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
 // default no-op mode. The runner only ever reads from this snapshot
 // (passes it back into `runInBranchContext`), never mutates it.
 const EMPTY_STACK: ReadonlyArray<SpanContext> = Object.freeze([]) as ReadonlyArray<SpanContext>;
+
+/** `argCorrections` is written only when a key was renamed, so the record
+ *  of a call that needed no help is unchanged. An undefined field is left
+ *  out of the posted JSON. */
+function presentCorrections(
+  argCorrections: AliasCorrection[] | undefined,
+): AliasCorrection[] | undefined {
+  if (!argCorrections || argCorrections.length === 0) {
+    return undefined;
+  }
+  return argCorrections;
+}
 
 export class StatelogClient {
   private host: string;
@@ -956,11 +969,17 @@ export class StatelogClient {
   async toolCallStart({
     toolName,
     args,
+    argCorrections,
     model,
     threadId,
   }: {
     toolName: string;
     args: any;
+    /** Alias keys the runtime renamed before the call, `url` to
+     *  `baseUrl`. `args` already carries the corrected keys. Left out
+     *  when nothing was renamed. This is the record of which aliases are
+     *  earning their keep. */
+    argCorrections?: AliasCorrection[];
     model?: ModelName;
     /** Registry id of the thread that issued the LLM call which is
      *  invoking this tool. Stamped here so downstream tools can
@@ -972,6 +991,7 @@ export class StatelogClient {
       type: "toolCallStart",
       toolName,
       args,
+      argCorrections: presentCorrections(argCorrections),
       model,
       threadId: threadId ?? null,
     });
@@ -980,6 +1000,7 @@ export class StatelogClient {
   async toolCall({
     toolName,
     args,
+    argCorrections,
     output,
     model,
     timeTaken,
@@ -987,6 +1008,8 @@ export class StatelogClient {
   }: {
     toolName: string;
     args: any;
+    /** See `toolCallStart`. */
+    argCorrections?: AliasCorrection[];
     output: any;
     model?: ModelName;
     timeTaken?: number;
@@ -998,6 +1021,7 @@ export class StatelogClient {
       type: "toolCall",
       toolName,
       args,
+      argCorrections: presentCorrections(argCorrections),
       output,
       model,
       timeTaken,

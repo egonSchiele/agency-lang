@@ -1,4 +1,5 @@
 import { validNamesSentence } from "../utils/validNames.js";
+import { aliasHint, canonicalKeys, type CanonicalKeysResult } from "../utils/parameterAliases.js";
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
@@ -44,6 +45,14 @@ export type FuncParam = {
    * (the param accepts failures) — same convention as `isFunctionTyped`.
    */
   acceptsResult?: boolean;
+  /**
+   * Other names a caller from outside the program may use for this
+   * parameter, from `def fetch(baseUrl | url: string)`. Only a call whose
+   * descriptor sets `forgiveAliases` gets them renamed; for everyone else
+   * an alias is an unknown argument. Absent when there are none. Spec:
+   * `docs/superpowers/specs/2026-10-23-parameter-aliases.md`.
+   */
+  aliases?: string[];
   boundValue?: unknown;
   isBound?: boolean;
 };
@@ -67,6 +76,12 @@ export type CallType =
        *  uniformly. Without this, `f(name: val) as { ... }` silently
        *  dropped the block. */
       blockArg?: unknown;
+      /** Set by a caller whose arguments come from outside the program: a
+       *  model calling a tool, an HTTP body, the command line. Then an
+       *  alias key is renamed to its parameter's name. A call compiled
+       *  from Agency source never sets it, so there an alias is an unknown
+       *  argument, whether or not the type checker ran. */
+      forgiveAliases?: boolean;
     };
 
 export type ToolDefinition = {
@@ -274,6 +289,8 @@ export class AgencyFunction {
     // the supplied value must be an array. Runtime backstop only — the
     // type checker rejects shape mismatches earlier.
     for (const name of Object.keys(bindings)) {
+      // By canonical name only: `.partial()` is Agency code, and an alias
+      // is for a caller that guessed. Spec: parameter-aliases.
       const param = this.params.find((p) => p.name === name);
       if (!param) {
         throw new Error(`Unknown parameter '${name}' in .partial() call`);
@@ -402,11 +419,51 @@ export class AgencyFunction {
     return fullArgs;
   }
 
+  /**
+   * The arguments with alias keys renamed to their parameter's name, the
+   * list of renames, and the conflict message if two keys name one
+   * parameter. Never throws, and idempotent: the tool loop calls it before
+   * the invoke (for the repeat key) and `resolveNamed` calls it again.
+   */
+  canonicalizeNamedArgs(namedArgs: Record<string, unknown>): CanonicalKeysResult {
+    return canonicalKeys(namedArgs, this._unboundParams);
+  }
+
   private resolveArgs(descriptor: CallType): unknown[] {
     if (descriptor.type === "positional") {
       return this.resolvePositional(descriptor.args);
     }
-    return this.resolveNamed(descriptor.positionalArgs, descriptor.namedArgs, descriptor.blockArg);
+    return this.resolveNamed(
+      descriptor.positionalArgs,
+      this.namedArgsWithoutAliases(descriptor),
+      descriptor.blockArg,
+    );
+  }
+
+  /** The one place that decides what an alias key means for a caller. A
+   *  forgiven caller gets the rename, or the conflict if two keys name one
+   *  parameter. Any other caller gets an error naming the parameter, so
+   *  Agency code cannot use an alias even with the type checker off. */
+  private namedArgsWithoutAliases(descriptor: {
+    namedArgs: Record<string, unknown>;
+    forgiveAliases?: boolean;
+  }): Record<string, unknown> {
+    const corrected = this.canonicalizeNamedArgs(descriptor.namedArgs);
+    if (descriptor.forgiveAliases) {
+      if (corrected.conflict !== null) {
+        throw new Error(
+          `${corrected.conflict.replace(". Pass one.", "")} in call to '${this.name}'. Pass one.`,
+        );
+      }
+      return corrected.args;
+    }
+    const [firstCorrection] = corrected.corrections;
+    if (firstCorrection) {
+      throw new Error(
+        `${aliasHint(firstCorrection.from, firstCorrection.to).slice(0, -1)} in call to '${this.name}'.`,
+      );
+    }
+    return descriptor.namedArgs;
   }
 
   private resolvePositional(args: unknown[]): unknown[] {

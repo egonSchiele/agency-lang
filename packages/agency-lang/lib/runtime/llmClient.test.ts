@@ -174,3 +174,16 @@ describe("apiKeysFromSettings", () => {
     expect(PROVIDER_KEY_VARIABLES).toEqual(pairs);
   });
 });
+
+describe("toSmolConfig — tools are never strict", () => {
+  // With strict off, smoltalk lets a provider accept an argument key that
+  // is not in the schema, which is what lets the runtime forgive a
+  // parameter alias (`url` for `baseUrl`). A strict tool would have the
+  // provider refuse the alias before Agency saw it.
+  it("passes tools through without a strict flag", () => {
+    const tool = { name: "fetch", description: "", schema: null };
+    const out = toSmolConfig({ messages: [], tools: [tool] } as any) as any;
+    expect(out.tools).toEqual([tool]);
+    expect(out.tools[0].strict).toBeUndefined();
+  });
+});

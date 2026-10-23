@@ -40,7 +40,7 @@ export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
 */
 @capabilities(network)
 export def fetch(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
@@ -74,7 +74,7 @@ export def fetch(
 */
 @capabilities(network)
 export def fetchJSON(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
@@ -108,7 +108,7 @@ export def fetchJSON(
 */
 @capabilities(network)
 export def fetchMarkdown(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],

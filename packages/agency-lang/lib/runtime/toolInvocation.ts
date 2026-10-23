@@ -4,7 +4,8 @@
  * constants that decide when a tool is removed. prompt.ts decides when
  * to call them.
  */
-import type { FuncParam } from "./agencyFunction.js";
+import type { FuncParam, CallType } from "./agencyFunction.js";
+import type { AliasCorrection, CanonicalKeysResult } from "../utils/parameterAliases.js";
 import { withChildRun, type Run } from "./asyncContext.js";
 import { isSuccess } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -170,6 +171,37 @@ export function capToolResultForLlm(result: any, cap: number): any {
  *  Params without a default keep their value untouched: a required arg passed
  *  `null` still surfaces its normal type error for the model to correct, and
  *  an intentionally-nullable param is left alone. */
+/**
+ * The model's arguments as the function will see them: alias keys renamed
+ * to the parameter (`url` to `baseUrl`), then null-valued defaulted keys
+ * dropped. Never throws. On a conflict between two keys for one parameter
+ * the arguments stay as written, and the invoke reports the conflict as a
+ * failure that never ran. `argCorrections` lists the renames for the log.
+ */
+export function toolArgumentsFor(
+  handler: {
+    params: readonly FuncParam[];
+    canonicalizeNamedArgs(args: Record<string, unknown>): CanonicalKeysResult;
+  } | null,
+  toolCall: { arguments?: Record<string, unknown> | null },
+): { namedArgs: Record<string, unknown>; argCorrections: AliasCorrection[] } {
+  if (!handler) {
+    return { namedArgs: {}, argCorrections: [] };
+  }
+  const corrected = handler.canonicalizeNamedArgs(toolCall.arguments ?? {});
+  return {
+    namedArgs: dropNullDefaultedArgs(corrected.args, handler.params),
+    argCorrections: corrected.corrections,
+  };
+}
+
+/** A named call whose arguments came from outside the program (a model, an
+ *  HTTP body, the command line), so an alias key is renamed to the
+ *  parameter. A call compiled from Agency source never gets this. */
+export function callFromOutside(namedArgs: Record<string, unknown>): CallType {
+  return { type: "named", positionalArgs: [], namedArgs, forgiveAliases: true };
+}
+
 export function dropNullDefaultedArgs(
   args: Record<string, any> | null | undefined,
   params: readonly FuncParam[],

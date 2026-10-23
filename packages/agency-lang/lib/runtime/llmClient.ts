@@ -474,7 +474,11 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   const metaApiKey = (metadata as { apiKey?: SmolConfig["apiKey"] } | undefined)?.apiKey;
   return {
     ...metadata,
-    messages,
+    // Never `strict`. With smoltalk's default of strict off, a provider
+    // accepts an argument key that is not in the schema, and the runtime
+    // renames a parameter alias (`url` for `baseUrl`) to the parameter.
+    // A strict schema would have the provider refuse the alias first.
+    // Spec: docs/superpowers/specs/2026-10-23-parameter-aliases.md.
     tools,
     responseFormat,
     abortSignal,

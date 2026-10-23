@@ -213,3 +213,48 @@ describe("runnableHandoffs", () => {
     expect(runnableHandoffs(state(["explorer"]), inputs)).toEqual(["oracle"]);
   });
 });
+
+describe("parameter aliases in the gate", () => {
+  // The gate takes its key from the corrected arguments, so the two
+  // spellings of one call are one call to the repeat and rejected guards.
+  const fetchLike = new AgencyFunction({
+    name: "fetchLike",
+    module: "test.agency",
+    fn: async () => "ok",
+    params: [
+      {
+        name: "baseUrl",
+        hasDefault: false,
+        defaultValue: undefined,
+        variadic: false,
+        aliases: ["url"],
+      },
+    ],
+    toolDefinition: null,
+  });
+  const keyFor = (args: Record<string, unknown>) =>
+    repeatKey(fetchLike.name, fetchLike.canonicalizeNamedArgs(args).args);
+
+  it("gives the alias spelling and the canonical spelling the same repeat key", () => {
+    expect(keyFor({ url: "https://a" })).toBe(keyFor({ baseUrl: "https://a" }));
+  });
+
+  it("treats a call rejected under one spelling as already rejected under the other", () => {
+    const state: GateState = {
+      removedTools: [],
+      rejectedCalls: [keyFor({ baseUrl: "https://a" })],
+      repeatStreak: freshRepeatStreak(),
+      toolCallRound: 0,
+      maxToolCallRounds: 10,
+      maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
+    };
+    const call: GateCall = {
+      toolCall: { id: "c1", name: "fetchLike", arguments: { url: "https://a" } },
+      handler: fetchLike,
+      markupArg: null,
+      callKey: keyFor({ url: "https://a" }),
+      runnableHandoffs: [],
+    };
+    expect(computeGateVerdict(state, call)).toBe("priorRejected");
+  });
+});

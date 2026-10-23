@@ -744,13 +744,16 @@ export class AgencyGenerator {
   private renderParams(parameters: FunctionParameter[], policy: TypeRenderPolicy): string[] {
     return parameters.map((p) => {
       const prefix = p.variadic ? "..." : "";
+      // `baseUrl | url`: the aliases a runtime caller may use, printed back
+      // as written.
+      const name = [p.name, ...(p.aliases ?? [])].join(" | ");
       const defaultSuffix = p.defaultValue ? ` = ${this.processNode(p.defaultValue).trim()}` : "";
       if (p.typeHint) {
         const typeStr = this.renderType(p.typeHint, policy);
         const bang = p.validated ? "!" : "";
-        return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
+        return `${prefix}${name}: ${typeStr}${bang}${defaultSuffix}`;
       } else {
-        return `${prefix}${p.name}${defaultSuffix}`;
+        return `${prefix}${name}${defaultSuffix}`;
       }
     });
   }

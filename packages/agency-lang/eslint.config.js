@@ -60,6 +60,7 @@ export const BROWSER_FILES = [
   "lib/utils/diff.ts",
   "lib/utils/hash.ts",
   "lib/utils/iteration.ts",
+  "lib/utils/parameterAliases.ts",
   "lib/utils/sha256.node.ts",
   "lib/utils/sha256.portable.ts",
   "lib/utils/path.node.ts",

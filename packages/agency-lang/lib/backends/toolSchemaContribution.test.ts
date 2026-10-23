@@ -128,3 +128,16 @@ describe("paramSchemaContribution — schema field generation", () => {
     expect(ts).toContain("the values to sum");
   });
 });
+
+describe("paramSchemaContribution — parameter aliases", () => {
+  // The schema the model reads names the parameter only. An alias is a
+  // misspelling the runtime forgives, not a name the model is told about.
+  it("lists the canonical name and never an alias", () => {
+    const slice = toolSchemaSlice(
+      `def fetchLike(baseUrl | url: string): string { return baseUrl }`,
+      "fetchLike",
+    );
+    expect(slice).toContain(`"baseUrl"`);
+    expect(slice).not.toContain(`"url"`);
+  });
+});

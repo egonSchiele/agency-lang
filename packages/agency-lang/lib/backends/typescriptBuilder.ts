@@ -2577,16 +2577,24 @@ export class TypeScriptBuilder {
     // from the tool schema (buildToolDefinition); the `isFunctionTyped`
     // flag is forwarded so the runtime backstop (validateForLLM) can
     // re-check tool arrays it cannot see statically.
-    const paramNodes = parameters.map((p) =>
-      ts.obj({
+    // `aliases` is written only when a parameter has some, unlike its
+    // neighbours, which are written on every parameter. The maintainer
+    // chose that (2026-10-23) so the generated code of every existing
+    // program stays byte-identical and the fixtures do not all change.
+    const paramNodes = parameters.map((p) => {
+      const fields: Record<string, TsNode> = {
         name: ts.str(p.name),
         hasDefault: ts.bool(!!p.defaultValue),
         defaultValue: ts.id("undefined"),
         variadic: ts.bool(!!p.variadic),
         isFunctionTyped: ts.bool(isFunctionTyped(p)),
         acceptsResult: ts.bool(paramAcceptsFailure(p)),
-      }),
-    );
+      };
+      if (p.aliases) {
+        fields.aliases = ts.arr(p.aliases.map((alias) => ts.str(alias)));
+      }
+      return ts.obj(fields);
+    });
 
     // Build tool definition (Zod schema)
     const toolDef = this.buildToolDefinition(node);

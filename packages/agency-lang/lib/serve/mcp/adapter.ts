@@ -38,11 +38,21 @@ function rpcError(id: JsonRpcId, code: number, message: string): JsonRpcMessage 
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+/**
+ * The schema `tools/list` sends for an Agency function. The zod schema
+ * writes `additionalProperties: false` on the top-level object, and an MCP
+ * client that validates arguments against it would refuse a parameter
+ * alias (`url` for `baseUrl`) before the call reached the server. The
+ * field is dropped here, the way smoltalk drops it for a non-strict
+ * OpenAI tool, so a forgiven key can arrive. Nested objects are unchanged.
+ */
 function schemaToJsonSchema(schema: unknown): unknown {
   const s = schema as { toJSONSchema?: () => unknown } | null | undefined;
-  return s && typeof s.toJSONSchema === "function"
-    ? s.toJSONSchema()
-    : { type: "object", properties: {} };
+  if (!s || typeof s.toJSONSchema !== "function") {
+    return { type: "object", properties: {} };
+  }
+  const { additionalProperties: _refused, ...open } = s.toJSONSchema() as Record<string, unknown>;
+  return open;
 }
 
 export type PolicyConfig = {

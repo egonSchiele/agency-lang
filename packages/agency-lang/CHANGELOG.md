@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Language
+
+- **Parameters can carry aliases: `def fetch(baseUrl | url: string)`.** A model that calls a tool with a guessed name (`url` for `baseUrl`) gets the call instead of a wasted round. An alias is a misspelling the tool forgives and is not a second name. The body sees `baseUrl`, the tool schema lists `baseUrl`, and Agency code that writes `fetch(url: x)` or `fetch.partial(url: x)` gets AG6042 naming the parameter. Only a call whose arguments come from outside the program (a model, an HTTP body, the command line) is forgiven; passing both spellings in one call is a failure naming both. Names and aliases in one signature must be distinct (AG2022), and aliases go on `def` parameters only. `std::http`'s `fetch`, `fetchJSON`, and `fetchMarkdown` accept `url` for `baseUrl`.
+- **Tool-call records show the call the function saw.** The `toolCallStart` and `toolCall` log events, and the `onToolCallStart` and `onToolCallEnd` callbacks, carry the arguments with alias keys renamed, and the log events gain `argCorrections` (`[{ from: "url", to: "baseUrl" }]`) when a key was renamed. The repeated-call and already-rejected guards treat the two spellings as one call.
+- **The MCP `tools/list` schema no longer says `additionalProperties: false`.** An MCP client that validated arguments against it would have refused a parameter alias before the call reached the server.
+
 ### Debugger
 
 - **A debugger can be installed on a program something else is running.** The runtime answers debug stops before any of its entry points returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, cancel signal, and usage figure are the same with the debugger as without it.

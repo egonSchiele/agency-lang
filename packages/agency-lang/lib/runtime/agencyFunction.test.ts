@@ -40,6 +40,7 @@ function makeFunction(
     defaultValue?: unknown;
     variadic?: boolean;
     isFunctionTyped?: boolean;
+    aliases?: string[];
   }[],
   fn?: (...args: any[]) => any,
 ) {
@@ -54,6 +55,7 @@ function makeFunction(
       defaultValue: p.defaultValue,
       variadic: p.variadic ?? false,
       isFunctionTyped: p.isFunctionTyped ?? false,
+      aliases: p.aliases,
     })),
     toolDefinition: null,
   });
@@ -908,5 +910,129 @@ describe("preapprove verdict shape", () => {
       fn.invoke(run, { type: "positional", args: [] }),
     );
     expect(entry.liveGuardIds).toEqual([]);
+  });
+});
+
+describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
+  // The alias is a misspelling the tool forgives for a caller whose
+  // arguments come from outside the program, never a second name. Spec:
+  // docs/superpowers/specs/2026-10-23-parameter-aliases.md.
+  const fetchLike = () =>
+    makeFunction([
+      { name: "baseUrl", aliases: ["url", "href"] },
+      { name: "path", hasDefault: true, defaultValue: "/" },
+    ]);
+  const forgiven = (namedArgs: Record<string, unknown>) =>
+    ({ type: "named", positionalArgs: [], namedArgs, forgiveAliases: true }) as const;
+  const compiled = (namedArgs: Record<string, unknown>) =>
+    ({ type: "named", positionalArgs: [], namedArgs }) as const;
+
+  describe("a forgiven caller", () => {
+    it("receives the value under the parameter's name", async () => {
+      const result = await fetchLike().invoke(testRun(), forgiven({ url: "https://a" }));
+      expect(result).toEqual(["https://a", UNSET]);
+    });
+
+    it("rejects canonical plus alias, naming both keys and the function", async () => {
+      await expect(
+        fetchLike().invoke(testRun(), forgiven({ baseUrl: "a", url: "b" })),
+      ).rejects.toThrow(
+        "Both 'baseUrl' and 'url' were given for parameter 'baseUrl' in call to 'testFn'. Pass one.",
+      );
+    });
+
+    it("rejects two aliases of one parameter", async () => {
+      await expect(
+        fetchLike().invoke(testRun(), forgiven({ href: "a", url: "b" })),
+      ).rejects.toThrow("Both 'href' and 'url' were given for parameter 'baseUrl'");
+    });
+
+    it("tags the conflict as a failure that never ran", async () => {
+      await expect(
+        fetchLike().invoke(testRun(), forgiven({ baseUrl: "a", url: "b" })),
+      ).rejects.toMatchObject({ preExecution: true });
+    });
+
+    it("drops a null alias key instead of conflicting", async () => {
+      const result = await fetchLike().invoke(testRun(), forgiven({ baseUrl: "a", url: null }));
+      expect(result).toEqual(["a", UNSET]);
+    });
+
+    it("reports an alias beside a positional for the same slot as the positional conflict", async () => {
+      await expect(
+        fetchLike().invoke(testRun(), {
+          type: "named",
+          positionalArgs: ["a"],
+          namedArgs: { url: "b" },
+          forgiveAliases: true,
+        }),
+      ).rejects.toThrow(
+        "Named argument 'baseUrl' conflicts with positional argument at position 1",
+      );
+    });
+
+    it("binds a variadic through its alias", async () => {
+      const fn = makeFunction([
+        { name: "first" },
+        { name: "rest", variadic: true, aliases: ["items"] },
+      ]);
+      const result = await fn.invoke(testRun(), forgiven({ first: 1, items: [2, 3] }));
+      expect(result).toEqual([1, [2, 3]]);
+    });
+
+    it("still refuses a key that is nobody's name, listing canonical names only", async () => {
+      await expect(fetchLike().invoke(testRun(), forgiven({ uri: "a" }))).rejects.toThrow(
+        "Unknown named argument 'uri' in call to 'testFn'. Valid names: baseUrl, path.",
+      );
+    });
+  });
+
+  describe("a compiled Agency call (no forgiveAliases)", () => {
+    it("treats the alias as an error that names the parameter", async () => {
+      await expect(fetchLike().invoke(testRun(), compiled({ url: "a" }))).rejects.toThrow(
+        "'url' is an alias of 'baseUrl'; use 'baseUrl' in call to 'testFn'.",
+      );
+    });
+
+    it("tags that error as a failure that never ran", async () => {
+      await expect(fetchLike().invoke(testRun(), compiled({ url: "a" }))).rejects.toMatchObject({
+        preExecution: true,
+      });
+    });
+
+    it("accepts the canonical name", async () => {
+      expect(await fetchLike().invoke(testRun(), compiled({ baseUrl: "a" }))).toEqual(["a", UNSET]);
+    });
+  });
+
+  describe(".partial()", () => {
+    it("binds by the parameter's name only", () => {
+      expect(() => fetchLike().partial({ url: "a" })).toThrow(
+        "Unknown parameter 'url' in .partial() call",
+      );
+    });
+
+    it("after binding the parameter, its alias is an unknown argument", async () => {
+      const bound = fetchLike().partial({ baseUrl: "a" });
+      await expect(bound.invoke(testRun(), forgiven({ url: "b" }))).rejects.toThrow(
+        "Unknown named argument 'url'",
+      );
+    });
+  });
+
+  describe("canonicalizeNamedArgs", () => {
+    it("returns the corrected arguments and the corrections without throwing", () => {
+      expect(fetchLike().canonicalizeNamedArgs({ url: "a" })).toEqual({
+        args: { baseUrl: "a" },
+        corrections: [{ from: "url", to: "baseUrl" }],
+        conflict: null,
+      });
+    });
+
+    it("reports a conflict as data and leaves the arguments as given", () => {
+      const result = fetchLike().canonicalizeNamedArgs({ baseUrl: "a", url: "b" });
+      expect(result.args).toEqual({ baseUrl: "a", url: "b" });
+      expect(result.conflict).toContain("Both 'baseUrl' and 'url'");
+    });
   });
 });

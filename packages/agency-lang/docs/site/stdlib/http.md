@@ -86,7 +86,7 @@ effect std::http::fetchMarkdown {
 
 ```ts
 fetch(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
@@ -114,7 +114,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 | Name | Type | Default |
 |---|---|---|
-| baseUrl | `string` |  |
+| baseUrl (also `url`) | `string` |  |
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
@@ -134,7 +134,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 ```ts
 fetchJSON(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
@@ -162,7 +162,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 | Name | Type | Default |
 |---|---|---|
-| baseUrl | `string` |  |
+| baseUrl (also `url`) | `string` |  |
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |
@@ -182,7 +182,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 ```ts
 fetchMarkdown(
-  baseUrl: string,
+  baseUrl | url: string,
   path: string = "",
   headers: Record<string, any> = {},
   allowedDomains: string[] = [],
@@ -210,7 +210,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 | Name | Type | Default |
 |---|---|---|
-| baseUrl | `string` |  |
+| baseUrl (also `url`) | `string` |  |
 | path | `string` | "" |
 | headers | `Record<string, any>` | {} |
 | allowedDomains | `string[]` | [] |

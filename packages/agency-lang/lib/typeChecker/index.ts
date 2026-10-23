@@ -15,6 +15,7 @@ import {
   GraphNodeDefinition,
   TypeAliasEntry,
   VariableType,
+  FunctionParameter,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
@@ -291,6 +292,7 @@ export class TypeChecker {
     }
 
     this.checkValidatedParamReturns();
+    this.checkParameterAliases();
     this.checkDocStringParams();
 
     // Infer return types
@@ -470,6 +472,47 @@ export class TypeChecker {
     }
     for (const [name, def] of Object.entries(this.nodeDefs)) {
       checkOne(name, def);
+    }
+  }
+
+  /** Every name and alias in a def's signature must be distinct, so a key
+   *  a caller writes names one parameter. Only defs can carry aliases (the
+   *  parser refuses them on nodes), so only defs are checked. */
+  private checkParameterAliases(): void {
+    for (const [fn, def] of Object.entries(this.functionDefs)) {
+      type Taken = { key: string; param: FunctionParameter; alias?: string };
+      const taken: Taken[] = def.parameters.flatMap((param) => [
+        { key: param.name, param },
+        ...(param.aliases ?? []).map((alias) => ({ key: alias, param, alias })),
+      ]);
+      // The first key that appears twice where at least one of the two is
+      // an alias. Two parameters with the same name are someone else's
+      // error.
+      const repeat = taken.find((entry, index) =>
+        taken
+          .slice(0, index)
+          .some(
+            (earlier) =>
+              earlier.key === entry.key &&
+              (earlier.alias !== undefined || entry.alias !== undefined),
+          ),
+      );
+      if (!repeat) continue;
+      const earlier = taken.find((entry) => entry.key === repeat.key)!;
+      const aliasEntry = repeat.alias !== undefined ? repeat : earlier;
+      const otherEntry = aliasEntry === repeat ? earlier : repeat;
+      this.errors.push(
+        diagnostic(
+          "parameterAliasCollision",
+          {
+            param: aliasEntry.param.name,
+            fn,
+            alias: aliasEntry.key,
+            other: otherEntry.param.name,
+          },
+          def.loc ?? null,
+        ),
+      );
     }
   }
 

@@ -240,11 +240,13 @@ export const varNameChar: Parser<string> = oneOf(
  *  the template filler import this rather than restating it. */
 export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** The language's keywords: names that parse but cannot be declared. Used
- *  by identifier-hole filling — `fill(t, { name: "if" })` must be rejected
- *  here, not explode at re-parse far from its cause. Mirrors the keyword
- *  strings this grammar consumes (`def`, `node`, statement keywords,
- *  modifiers, literal words); extend it when a new keyword lands. */
+/** The language's keywords: the names an identifier hole may not be filled
+ *  with — `fill(t, { name: "if" })` must be rejected here, not explode at
+ *  re-parse far from its cause. Mirrors the keyword strings this grammar
+ *  consumes (`def`, `node`, statement keywords, modifiers, literal words);
+ *  extend it when a new keyword lands. A few are claimed only in one shape
+ *  and are ordinary names elsewhere: `guard(...) {` is the guard block, but
+ *  `def guard` is a function (the `@guard` decorator in `std::strategy`). */
 export const RESERVED_WORDS: readonly string[] = [
   "def",
   "function",

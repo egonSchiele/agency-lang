@@ -683,8 +683,8 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
 
 /** Internal: what a budgeted agent call reports, given the Result its
   guard returned and the guard's trip interrupt data (`null` when the guard
-  did not trip). The rule is written once here, for the coordinator's
-  `budgeted` and the `@guard` decorator:
+  did not trip). The rule is written once here, for the `@guard`
+  decorator in `std::strategy`:
 
   1. No trip: the guard's Result, except that a finished `""` is a failure,
      "it returned no answer".
@@ -702,7 +702,7 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
 export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
   """
   Internal: turn a budgeted agent's guard Result and trip into the Result
-  its caller reports. Use budgeted or @guard, not this function.
+  its caller reports. Use the @guard decorator, not this function.
   """
   if (trip == null) {
     if (isSuccess(guarded) && guarded.value == "") {

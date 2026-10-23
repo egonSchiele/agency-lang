@@ -20,6 +20,7 @@ import {
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
+import { guard } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("oracle")
@@ -121,6 +122,7 @@ def consider(
 /** Called from code, this runs on the caller's thread like any function:
  *  the system prompt, the reads, and the answer stay there. Wrap the call
  *  in `thread { ... }` for an isolated consult. */
+@guard(cost: maxCost, time: maxTime)
 export handoff def oracleAgent(
   question: string,
   context: string = "",
@@ -149,21 +151,13 @@ export handoff def oracleAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime, label: "oracleAgent") {
-    let reply = ""
-    reply = consider(
-      question: question,
-      context: context,
-      model: model,
-      provider: provider,
-      extraTools: extraTools,
-    )
-    return reply
-
-    // Salvage the model's best-so-far saveDraft if an outer budget guard
-    // trips mid-analysis; the assignment above would otherwise drop it.
-    finalize {
-      return reply
-    }
-  }
+  // Return position: a draft the model saved reaches the guard, which
+  // returns it as the backup answer if the budget runs out.
+  return consider(
+    question: question,
+    context: context,
+    model: model,
+    provider: provider,
+    extraTools: extraTools,
+  )
 }

@@ -30,6 +30,7 @@ import {
   wikidataQuery,
  } from "std::data/wikidata"
 import { agentSkill } from "std::skills"
+import { guard } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You answer questions using structured public-data APIs.
@@ -104,6 +105,7 @@ def answer(
   )
 }
 
+@guard(cost: maxCost, time: maxTime)
 export def dataAgent(
   task: string,
   context: string = "",
@@ -128,23 +130,13 @@ export def dataAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime, label: "dataAgent") {
-    let reply = ""
-    thread(label: "dataAgent", session: session) {
-      reply = answer(
-        task: task,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
-    return reply
-
-    // Salvage the model's best-so-far saveDraft if an outer budget guard
-    // trips mid-answer; the assignment above would otherwise drop it.
-    finalize {
-      return reply
-    }
+  thread(label: "dataAgent", session: session) {
+    return answer(
+      task: task,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
   }
 }

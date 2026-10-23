@@ -184,6 +184,31 @@ guard(cost: $5.0, label: "outer") {
 
 If you give the inner guard more budget, it does not give the outer guard more budget. The outer guard is still limited to $5.0, and if it trips, it will raise its own interrupt.
 
+## Guarding a whole function
+
+To put a guard around a whole function, use the `@guard` decorator from `std::strategy`:
+
+```ts
+import { guard } from "std::strategy"
+
+@guard(cost: $1.00, time: 5m)
+def summarize(text: string): Result<string> {
+  return llm("Summarize this: ${text}", { tools: [saveDraft] })
+}
+```
+
+The `guard` block and the `@guard` decorator share a name, but the decorator does more than wrap the body in the block. It labels the guard with the function's name (pass `label:` to choose another), answers its own trip, and applies three rules:
+
+- If the body finishes, its result is the result. A finished `""` is a failure, "it returned no answer".
+- If the budget runs out and the body had saved a draft, the draft is the result, as a success. A string gets one line appended saying the budget ran out, so the answer may be unfinished or unchecked.
+- If the budget runs out with nothing saved, the result is a failure naming the budget, such as "its time budget of 5m ran out".
+
+So if the model in `summarize` calls `saveDraft` halfway through and then the time runs out, you get the half-written summary with the note. The draft reaches the guard the same way any [partial result](/guide/partial-results) does: by return position, or through a `finalize`.
+
+Because the decorator answers its own trip, the caller never sees a `std::guard` interrupt for it and cannot give it more budget. To allow more, pass a larger limit, as the standard library agents do with their `maxCost` and `maxTime` parameters.
+
+One gap: a time limit that runs out while the body is inside `sleep()` ends the sleep without raising the interrupt, so the decorator returns the guard's own result unchanged: a saved draft without the note, or the guard's own failure ("Guard 'summarize' exceeded its time budget...").
+
 ## Root budgets
 
 You can also set a hard limit when you run an Agency agent on the command line:

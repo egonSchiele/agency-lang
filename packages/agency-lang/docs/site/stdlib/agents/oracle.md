@@ -28,11 +28,12 @@ Return the oracle's tools. Read-only by design: it inspects, consults, and
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L86))
 
 ### oracleAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 oracleAgent(
   question: string,
   context: string = "",
@@ -81,4 +82,4 @@ Called from code, this runs on the caller's thread like any function:
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L126))

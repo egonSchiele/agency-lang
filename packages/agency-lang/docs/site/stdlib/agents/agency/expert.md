@@ -29,11 +29,12 @@ Return the Agency expert's tools: the bundled language documentation and
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L23))
 
 ### agencyExpertAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 agencyExpertAgent(
   task: string,
   context: string = "",
@@ -75,4 +76,4 @@ Consult an Agency-language specialist: return the syntax rules and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L59))

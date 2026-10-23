@@ -93,7 +93,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "disableMemory",
     "_budgetOutcome",
   ],
-  "a guard: its trip is raised on the TypeScript side and needs no host": ["_guard"],
+  "a guard: its trip is raised on the TypeScript side and needs no host": ["_guard", "guard"],
   "agents and strategies that assemble a prompt and hand on the tools they are given": [
     "agencyExpertAgent",
     "agencyResearcherAgent",

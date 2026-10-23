@@ -26,11 +26,12 @@ Return the Agency researcher's tools: the bundled documentation, read-only
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L35))
 
 ### agencyResearcherAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 agencyResearcherAgent(
   question: string,
   context: string = "",
@@ -72,4 +73,4 @@ Answer a question about the Agency language from the bundled documentation,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/researcher.agency#L62))

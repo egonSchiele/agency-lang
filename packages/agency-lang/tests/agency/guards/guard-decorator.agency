@@ -1,0 +1,188 @@
+import test { _advanceTime } from "std::date"
+import { Critique, guard, revise } from "std::strategy"
+
+// The @guard decorator: a finished answer is the result; when the budget
+// runs out, a draft the body saved is the backup answer, with a note; with
+// nothing saved, the trip is a failure naming the budget. No node has a
+// handler: the decorator answers its own trip. See
+// docs/dev/agents/subagent-budgets.md.
+
+// Twice the 10s budget every decorated def below uses, in milliseconds, so
+// one advance is always enough to trip it.
+const PAST_THE_BUDGET = 20000
+
+// Stands in for consider() or solve(): the model files a draft, then the
+// budget runs out before the answer.
+def savesThenTrips(): string {
+  saveDraft("in-flight")
+  _advanceTime(PAST_THE_BUDGET)
+  return "FULL"
+}
+
+def tripsWithNothingSaved(): string {
+  _advanceTime(PAST_THE_BUDGET)
+  return "FULL"
+}
+
+// A review that takes longer than the whole budget, then accepts.
+def slowReview(answer: any): Critique {
+  _advanceTime(PAST_THE_BUDGET)
+  return {
+    accepted: true,
+    feedback: ""
+  }
+}
+
+def describe(r: Result): string {
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value}"
+}
+
+// A stop: the message and the draft the failure carries.
+def describeStop(r: Result): string {
+  if (isFailure(r)) {
+    return "failure:${r.error}|draft:${r.data.draft}"
+  }
+  return "success:${r.value}"
+}
+
+@guard(cost: $5, time: 10s)
+def finishes(task: string): Result<string> {
+  return "DONE ${task}"
+}
+
+@guard(cost: $5, time: 10s)
+def returnsNothing(): Result<string> {
+  return ""
+}
+
+// The oracle's shape: the body returns its inner call directly.
+@guard(cost: $5, time: 10s)
+def oracleShape(): Result<string> {
+  return savesThenTrips()
+}
+
+// The coding agent's shape: the body returns from inside a thread block.
+@guard(cost: $5, time: 10s)
+def codingShape(): Result<string> {
+  thread(label: "codingShape", session: "") {
+    return savesThenTrips()
+  }
+}
+
+@guard(cost: $5, time: 10s)
+def codingShapeNothingSaved(): Result<string> {
+  thread(label: "codingShapeNothingSaved", session: "") {
+    return tripsWithNothingSaved()
+  }
+}
+
+// Stands in for researchLoop(): the first attempt saves a draft ("half")
+// and then finishes, and the review overruns the budget. revise hands back
+// the completed attempt, not the draft.
+def reviewedAnswer(): string {
+  return revise(maxAttempts: 2, check: slowReview) as critique {
+    saveDraft("half")
+    return "ANSWER"
+  }
+}
+
+@guard(cost: $5, time: 10s)
+def researcherShape(): Result<string> {
+  return reviewedAnswer()
+}
+
+// The agencyCodingAgent shape: the same loop, inside a thread block.
+@guard(cost: $5, time: 10s)
+def agencyCodingShape(): Result<string> {
+  thread(label: "agencyCodingShape", session: "") {
+    return reviewedAnswer()
+  }
+}
+
+// An inner agent with a long budget, called by an outer one with a short
+// budget: the outer budget runs out inside the inner call.
+@guard(cost: $5, time: 1h)
+def innerAgent(): Result<string> {
+  return tripsWithNothingSaved()
+}
+
+@guard(cost: $5, time: 10s)
+def outerAgent(): Result<string> {
+  const inner = innerAgent()
+  return "outer saw ${inner}"
+}
+
+// The note on a recovered answer names the guard, so it shows the label.
+@guard(cost: $5, time: 10s, label: "custom")
+def relabelled(): Result<string> {
+  return reviewedAnswer()
+}
+
+@guard(cost: $5, time: 10s)
+def cleanReview(): Result<string[]> {
+  return []
+}
+
+// The writing rewrite agent's shape: a failure returned from inside a loop.
+@guard(cost: $5, time: 10s)
+def failsFromLoop(): Result<string> {
+  let attempt = 0
+  while (attempt < 3) {
+    attempt = attempt + 1
+    if (attempt == 2) {
+      return failure("the writing reviewer failed: nope")
+    }
+  }
+  return "never"
+}
+
+node finishesUnderBudget(): string {
+  return describe(finishes("x"))
+}
+
+node emptyAnswerIsAFailure(): string {
+  return describe(returnsNothing())
+}
+
+node draftInReturnPositionIsTheAnswer(): string {
+  return describe(oracleShape())
+}
+
+node draftInThreadIsTheAnswer(): string {
+  return describe(codingShape())
+}
+
+node tripWithoutDraft(): string {
+  return describeStop(codingShapeNothingSaved())
+}
+
+node completedAttemptSurvivesReviewTrip(): string {
+  return describe(researcherShape())
+}
+
+node completedAttemptInThread(): string {
+  return describe(agencyCodingShape())
+}
+
+node outerTripInsideInnerGuard(): string {
+  return describeStop(outerAgent())
+}
+
+node labelOverride(): string {
+  return describe(relabelled())
+}
+
+node emptyListIsNotNoAnswer(): string {
+  const r = cleanReview()
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value.length}"
+}
+
+node bodyFailurePassesThrough(): string {
+  return describe(failsFromLoop())
+}

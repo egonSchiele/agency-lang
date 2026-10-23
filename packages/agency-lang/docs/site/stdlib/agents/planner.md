@@ -27,7 +27,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L34))
 
 ## Functions
 
@@ -42,7 +42,7 @@ Return the planner's tools: read-only access to the project it is planning
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L24))
 
 ### planCodePrompt
 
@@ -62,7 +62,7 @@ Build the code-generation instruction: emit a program whose node main
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L68))
 
 ### renderEffects
 
@@ -81,7 +81,7 @@ Human-readable capability envelope for the approval prompt, or an
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L96))
 
 ### runApproved
 
@@ -113,11 +113,12 @@ Gate generated code behind user approval, then run it: shows the plan,
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L187))
 
 ### plannerAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 plannerAgent(
   task: string,
   context: string = "",
@@ -167,4 +168,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L224))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L226))

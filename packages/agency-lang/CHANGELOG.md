@@ -12,6 +12,12 @@
 
 - **`input()` is answered through the invocation, not a process global.** A TypeScript caller that scripted answers by setting `globalThis.__agencyInputOverride` now passes `inputOverride` in the options object that follows the node's own arguments: `main(args, { inputOverride: async (prompt) => "yes" })`, or `main({ inputOverride })` for a node with no parameters. The old global is no longer read, so a caller still setting it falls back to the terminal.
 
+### Standard Library
+
+- **`@guard` puts a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is the result, with a line saying it may be unfinished; with nothing saved, the result is a failure naming the budget, "its time budget of 5m ran out".
+- **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, and planner agents.
+- **A caller can no longer give a stdlib agent more budget mid-run.** The agent answers its own budget interrupt, so a handler that approves it, or `agency run --interactive`, is never asked. Pass a larger `maxTime` or `maxCost` instead.
+
 ### Formatter
 
 - **`agency fmt` keeps the parentheses in `!(value is string)`.** It used to print `!value is string`, which parses as `(!value) is string` and so changed what the code did. The same holds for the other prefix operators (`-`, `typeof`, `void`) in front of an `is` check.

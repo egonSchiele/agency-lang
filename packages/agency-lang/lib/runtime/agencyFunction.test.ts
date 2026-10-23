@@ -34,7 +34,13 @@ function makeNamedFunction(
 }
 
 function makeFunction(
-  params: { name: string; hasDefault?: boolean; defaultValue?: unknown; variadic?: boolean }[],
+  params: {
+    name: string;
+    hasDefault?: boolean;
+    defaultValue?: unknown;
+    variadic?: boolean;
+    isFunctionTyped?: boolean;
+  }[],
   fn?: (...args: any[]) => any,
 ) {
   return new AgencyFunction({
@@ -47,6 +53,7 @@ function makeFunction(
       hasDefault: p.hasDefault ?? false,
       defaultValue: p.defaultValue,
       variadic: p.variadic ?? false,
+      isFunctionTyped: p.isFunctionTyped ?? false,
     })),
     toolDefinition: null,
   });
@@ -231,11 +238,44 @@ describe("AgencyFunction", () => {
       expect(result).toEqual([1, UNSET, UNSET]);
     });
 
-    it("throws on unknown named arg", async () => {
-      const fn = makeFunction([{ name: "a" }]);
+    it("throws on unknown named arg and lists the valid names", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "b", hasDefault: true }]);
       await expect(
         fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
-      ).rejects.toThrow("Unknown named argument 'z'");
+      ).rejects.toThrow("Unknown named argument 'z' in call to 'testFn'. Valid names: a, b.");
+    });
+
+    it("lists the variadic parameter among the valid names", async () => {
+      const fn = makeFunction([{ name: "a" }, { name: "rest", variadic: true }]);
+      await expect(
+        fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+      ).rejects.toThrow("Valid names: a, rest.");
+    });
+
+    it("leaves a function-typed parameter out of the valid names", async () => {
+      // The tool schema hides function-typed parameters from the model, so
+      // the message must not invite it to pass one.
+      const fn = makeFunction([
+        { name: "query" },
+        { name: "onResult", hasDefault: true, defaultValue: null, isFunctionTyped: true },
+      ]);
+      await expect(
+        fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { q: 1 } }),
+      ).rejects.toThrow("Valid names: query.");
+    });
+
+    it("lists only what a partially applied function may still take", async () => {
+      const bound = makeFunction([{ name: "a" }, { name: "b" }]).partial({ a: 1 });
+      await expect(
+        bound.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+      ).rejects.toThrow("Valid names: b.");
+    });
+
+    it("says a function takes no arguments when nothing is left to pass", async () => {
+      const bound = makeFunction([{ name: "a" }]).partial({ a: 1 });
+      await expect(
+        bound.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+      ).rejects.toThrow("Unknown named argument 'z' in call to 'testFn'. It takes no arguments.");
     });
 
     it("throws on duplicate named arg targeting positional slot", async () => {

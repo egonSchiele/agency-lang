@@ -1,6 +1,7 @@
 import { ANY_T } from "./primitives.js";
 import { checkToolElementTypes } from "./toolElementTypes.js";
 import { diagnostic } from "./diagnostics.js";
+import { validNamesSentence } from "../utils/validNames.js";
 import { AgencyNode, FunctionCall, FunctionParameter, VariableType } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { parseMatchValId } from "../matchVal.js";
@@ -613,7 +614,11 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "unknownNamedArg",
-          { name: arg.name, fn: displayFunctionName(call.functionName) },
+          {
+            name: arg.name,
+            fn: displayFunctionName(call.functionName),
+            valid: validNamesSentence(params.map((p) => p.name)),
+          },
           call.loc ?? null,
         ),
       );

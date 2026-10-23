@@ -409,7 +409,7 @@ export const DIAGNOSTICS = {
   unknownNamedArg: {
     code: "AG6025",
     severity: "error",
-    message: "Unknown named argument '{name}' in call to '{fn}'.",
+    message: "Unknown named argument '{name}' in call to '{fn}'. {valid}",
   },
   namedArgConflictsPositional: {
     code: "AG6026",

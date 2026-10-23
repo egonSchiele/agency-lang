@@ -147,7 +147,7 @@ describe("resolveNamedArgs", () => {
 
   it("throws on unknown named arg", () => {
     expect(() => resolveNamedArgs(call([named("z", str("x"))]), [param("a")], true)).toThrow(
-      /Unknown named argument 'z'/,
+      /Unknown named argument 'z' in call to '\w+'\. Valid names: a\./,
     );
   });
 

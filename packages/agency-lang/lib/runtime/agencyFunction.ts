@@ -1,3 +1,4 @@
+import { validNamesSentence } from "../utils/validNames.js";
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
@@ -455,7 +456,15 @@ export class AgencyFunction {
       const paramIdx = this._nonVariadicUnbound.findIndex((p) => p.name === name);
       const targetsVariadic = variadicParam && variadicParam.name === name;
       if (paramIdx === -1 && !targetsVariadic) {
-        throw new Error(`Unknown named argument '${name}' in call to '${this.name}'`);
+        // Name the valid parameters so a model that guessed wrong gets it
+        // right on the next round instead of guessing again. Function-typed
+        // parameters are left out: the tool schema hides them from the model
+        // (it cannot supply a function), so listing one would invite a
+        // guess it has no way to fill.
+        const valid = this._unboundParams.filter((p) => !p.isFunctionTyped).map((p) => p.name);
+        throw new Error(
+          `Unknown named argument '${name}' in call to '${this.name}'. ${validNamesSentence(valid)}`,
+        );
       }
       if (paramIdx !== -1 && paramIdx < positionalArgs.length) {
         throw new Error(

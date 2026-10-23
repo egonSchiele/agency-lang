@@ -1,0 +1,135 @@
+// The destructive flag belongs to the function, not to the block frame the
+// region happens to run in. Every case here puts destructive work inside a
+// block argument and checks that a failure leaving the FUNCTION still says
+// destructiveRan: true (ADI-56).
+
+def run(block: () -> any): any {
+  return block()
+}
+
+def twice(block: () -> any): any {
+  block()
+  return block()
+}
+
+destructive def burn(): number {
+  return 1
+}
+
+// A region inside a block whose failure escapes through the block.
+def regionInBlock(): Result {
+  return run() {
+    destructive {
+      return failure("boom")
+    }
+  }
+}
+node regionInBlock_() {
+  const r = regionInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A region inside a block that SUCCEEDS; the function fails afterwards. The
+// mark has to outlive the block.
+def regionThenFail(): Result {
+  run() {
+    destructive {
+      print("burning")
+    }
+  }
+  return failure("later")
+}
+node regionThenFail_() {
+  const r = regionThenFail()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Rule 2 inside a block: a call to a destructive def binds a local in the
+// block, then the function fails after the block.
+def destructiveCallInBlock(): Result {
+  run() {
+    const n = burn()
+  }
+  return failure("later")
+}
+node destructiveCallInBlock_() {
+  const r = destructiveCallInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Two blocks deep.
+def nested(): Result {
+  run() {
+    run() {
+      destructive {
+        print("deep")
+      }
+    }
+  }
+  return failure("later")
+}
+node nested_() {
+  const r = nested()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A block that runs more than once: the mark is sticky across runs.
+def ranTwice(): Result {
+  twice() {
+    destructive {
+      print("again")
+    }
+  }
+  return failure("later")
+}
+node ranTwice_() {
+  const r = ranTwice()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call in a parallel arm. The arm is a fork branch with its own
+// frame; the mark still reaches the function.
+def inParallelArm(): Result {
+  parallel {
+    const a = burn()
+    const b = 2
+  }
+  return failure("later")
+}
+node inParallelArm_() {
+  const r = inParallelArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The negative: no destructive work in the block, so the flag stays false.
+def cleanBlock(): Result {
+  run() {
+    print("harmless")
+  }
+  return failure("later")
+}
+node cleanBlock_() {
+  const r = cleanBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

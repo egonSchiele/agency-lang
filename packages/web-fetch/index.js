@@ -133,7 +133,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "c18e5dd8fc47759917ed718472ff573aeba7dbb9684f53aaea3834d9c390ca58");
+__registerModuleFingerprint("index.agency", "04ce149152e7a9ac7a6e9041079455b5e623f7b41b9ff34022b43ac462a9a24f");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -184,6 +184,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -210,7 +211,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -238,7 +239,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -263,7 +264,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "fetchPage",
       args: __stack.args
     });

@@ -668,8 +668,9 @@ export class TypeScriptBuilder {
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
       case "markDestructiveRan":
-        // Synthetic flip from an inlined `destructive { }` region. Inlined into
-        // the function body, so `__self` is the function activation.
+        // Synthetic flip from an inlined `destructive { }` region. It writes
+        // the enclosing function's activation, so a region inside a block
+        // argument counts for the function (docs/dev/language/destructive-regions.md).
         return this.tracking.markDestructiveRan();
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
@@ -3802,10 +3803,12 @@ export class TypeScriptBuilder {
     }
     runPromptEntries.maxToolCallRounds = ts.num(this.agencyConfig.maxToolCallRounds || 10);
     runPromptEntries.removedTools = ts.self("__removedTools");
-    // Decision 8: hand runPrompt this function's own locals object so a
+    // Decision 8: hand runPrompt this function's activation so a
     // destructive tool executed inside the call marks OUR `__destructiveRan`,
-    // which our exit stamp reads. By-reference, exactly like `removedTools`.
-    runPromptEntries.destructiveSink = ts.runtime.self;
+    // which our exit stamp reads. By-reference, like `removedTools`. The
+    // activation, not `__self`: an llm() call inside a block argument still
+    // belongs to the function (docs/dev/language/destructive-regions.md).
+    runPromptEntries.destructiveSink = ts.runtime.activation;
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
     const runPromptCall = $(ts.id("runPrompt"))

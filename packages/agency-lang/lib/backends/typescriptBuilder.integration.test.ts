@@ -233,9 +233,11 @@ def plain(id: string): string {
     const body = bodyOf(output, "plain");
     // Unconditional per function: the tool loop can set the flag at runtime
     // in any llm()-calling function, so both must always be present.
-    expect(body).toContain("__self.__destructiveRan = __self.__destructiveRan ?? false");
     expect(body).toContain(
-      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)",
+      "__activation.__destructiveRan = __activation.__destructiveRan ?? false",
+    );
+    expect(body).toContain(
+      "stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false)",
     );
     // The old machinery is gone.
     expect(body).not.toContain("__retryable");
@@ -251,7 +253,7 @@ destructive def rm(id: string): string {
 }
 `);
     const body = bodyOf(output, "rm");
-    expect(body).toContain("__self.__destructiveRan = true");
+    expect(body).toContain("__activation.__destructiveRan = true");
   });
 
   it("emits markers into the AgencyFunction registration", () => {
@@ -281,7 +283,7 @@ def caller(id: string): string {
     // ternary printer parenthesizes each arm); the compile pipeline's
     // formatter collapses the redundant parens in the emitted .js.
     expect(body).toContain(
-      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true))",
+      "__activation.__destructiveRan = __activation.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true))",
     );
   });
 });

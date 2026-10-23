@@ -312,14 +312,14 @@ async function __schedule_impl(__run: __Run, label: string, when: string) {
         if (runner.halted) {
           return;
         }
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run, { name: "onFunctionStart", ... });
       });
       await runner.step(1, ...);        // the body starts here
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }

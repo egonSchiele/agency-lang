@@ -41,7 +41,7 @@ if (__error instanceof AgencyAbort) {
 }
 return runtimeFailure(__error, {
   checkpoint: __run.ctx.getResultCheckpoint(),
-  destructiveRan: __self.__destructiveRan,
+  destructiveRan: __activation.__destructiveRan,
   functionName: {{{functionName}}},
   args: __stack.args,
 });

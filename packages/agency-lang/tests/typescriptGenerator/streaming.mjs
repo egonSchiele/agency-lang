@@ -189,6 +189,7 @@ graph.node("foo", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
@@ -219,7 +220,7 @@ __stack.locals.response = await runPrompt(__run, {
             },
             maxToolCallRounds: 10,
             removedTools: __self.__removedTools,
-            destructiveSink: __self,
+            destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt
@@ -260,7 +261,7 @@ __stack.locals.response2 = await runPrompt(__run, {
             },
             maxToolCallRounds: 10,
             removedTools: __self.__removedTools,
-            destructiveSink: __self,
+            destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt

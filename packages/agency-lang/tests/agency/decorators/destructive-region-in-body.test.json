@@ -9,8 +9,7 @@
           "type": "exact"
         }
       ],
-      "description": "KNOWN GAP (found by the decorators PR): a destructive region inside a block argument loses destructiveRan at block exit, so the escaping failure reads false. Expected [true]. Unskip when regions inside blocks carry the flag (ADI-56)."
+      "description": "a destructive region inside a decorated body marks the failure that escapes the function (ADI-56)"
     }
-  ],
-  "skip": true
+  ]
 }

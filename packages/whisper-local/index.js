@@ -133,7 +133,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "5abd8e4393ededa8724051cbfbfb05fb2b67a184b8ddfd4e4d35783a438707a0");
+__registerModuleFingerprint("index.agency", "3eef714192a2c6a3f359c366819745625b693c990bf1e579779721114b08f69e");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -184,6 +184,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -210,7 +211,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -235,7 +236,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -260,7 +261,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "transcribe",
       args: __stack.args
     });

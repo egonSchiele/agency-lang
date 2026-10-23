@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "716fd6a3a32e4b861b8de43cb92c3829873b810285d318cdc876c8f43dd1425e");
+__registerModuleFingerprint("index.agency", "da575cf5d41f5ce2156a64613eb4f60ad2be05e9b981574a5679145b7af6aceb");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -192,6 +192,7 @@ async function __realOutput_impl(__run, outputFile) {
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -214,7 +215,7 @@ async function __realOutput_impl(__run, outputFile) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -290,7 +291,7 @@ async function __realOutput_impl(__run, outputFile) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -315,7 +316,7 @@ async function __realOutput_impl(__run, outputFile) {
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "realOutput",
       args: __stack.args
     });
@@ -356,6 +357,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -392,7 +394,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -547,7 +549,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -572,7 +574,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "speak",
       args: __stack.args
     });
@@ -671,6 +673,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -695,7 +698,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -787,7 +790,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -812,7 +815,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "download",
       args: __stack.args
     });
@@ -863,6 +866,7 @@ async function __voices_impl(__run) {
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -881,7 +885,7 @@ async function __voices_impl(__run) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -902,7 +906,7 @@ async function __voices_impl(__run) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -927,7 +931,7 @@ async function __voices_impl(__run) {
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "voices",
       args: __stack.args
     });

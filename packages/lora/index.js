@@ -144,7 +144,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "cbc38d0f5cffeb50c598f1bef62d6eb972910fba153ff644ce6b97512f605940");
+__registerModuleFingerprint("index.agency", "f9ec8a2e8bc77fd6ccc4cd5cb7873f292154487ba3123b3b16042a09d161955e");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -222,6 +222,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -266,7 +267,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -408,7 +409,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -433,7 +434,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "trainLora",
       args: __stack.args
     });
@@ -570,6 +571,7 @@ async function __loraInfo_impl(__run, path2) {
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -592,7 +594,7 @@ async function __loraInfo_impl(__run, path2) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -719,7 +721,7 @@ async function __loraInfo_impl(__run, path2) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -744,7 +746,7 @@ async function __loraInfo_impl(__run, path2) {
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "loraInfo",
       args: __stack.args
     });

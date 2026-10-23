@@ -75,12 +75,13 @@ function isAssignmentDecl(node: AgencyNode): node is Assignment {
  * then check cross-arm references. Throws on violation.
  */
 export function validateParallelBlock(pb: ParallelBlock): void {
-  // 0. A `destructive { }` region cannot live inside a `parallel` block. Each
-  //    arm runs in its own fork branch, whose `__self` is the branch frame — so
-  //    a region's `__destructiveRan` flip would land there, never on the calling
-  //    tool's activation, and could never remove the tool on failure (a silent
-  //    fail-open). Reject it rather than accept broken commit semantics. This
-  //    walks the whole subtree, so a region nested in a `seq` arm is caught too.
+  // 0. A `destructive { }` region cannot live inside a `parallel` block. The
+  //    flip itself would now land on the calling function (the tracking codegen
+  //    writes `__activation`, which a fork branch reaches lexically; see
+  //    docs/dev/language/destructive-regions.md), but what a failure from one
+  //    arm should say about the destructive work of the arms running beside it
+  //    has not been decided, so the refusal stays. This walks the whole
+  //    subtree, so a region nested in a `seq` arm is caught too.
   if (functionContainsDestructiveBlock(pb.body)) {
     throw new Error(
       "A `destructive { }` region is not allowed inside a `parallel` block: it would run in a fork branch and could not commit its destructive work to the calling tool. Move the destructive region out of the `parallel` block.",

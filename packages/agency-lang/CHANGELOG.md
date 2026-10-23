@@ -14,10 +14,13 @@
 
 ### Standard Library
 
-- **`@guard` puts a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. A finished answer is the result even if the budget runs out just after; a budget that runs out before one is a failure naming it, "its time budget of 5m ran out", with the draft so far in `data.draft`. A draft the model saved halfway through is never reported as the answer.
-- **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, and planner agents. When one of them runs out of budget with only a half-finished draft, it now returns that failure, with the draft in `data.draft`, where it used to return the draft as a success.
-- **The reviewers, verifiers, and writing agents use `@guard` too.** A reviewer or verifier that runs out of budget now reports no findings; it used to return the findings the model had saved so far. `writingRewriteAgent` returns "it returned no answer" for an empty text, like every other `@guard` function.
+- **`@guard` puts a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is the result, with a line saying it may be unfinished; with nothing saved, the result is a failure naming the budget, "its time budget of 5m ran out".
+- **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, and planner agents.
 - **A caller can no longer give a stdlib agent more budget mid-run.** The agent answers its own budget interrupt, so a handler that approves it, or `agency run --interactive`, is never asked. Pass a larger `maxTime` or `maxCost` instead.
+
+### Formatter
+
+- **`agency fmt` keeps the parentheses in `!(value is string)`.** It used to print `!value is string`, which parses as `(!value) is string` and so changed what the code did. The same holds for the other prefix operators (`-`, `typeof`, `void`) in front of an `is` check.
 
 ## Oct 15 2026 — v0.31.0
 

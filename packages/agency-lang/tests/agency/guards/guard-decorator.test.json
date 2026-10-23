@@ -25,22 +25,22 @@
       "description": "A finished empty string is a failure."
     },
     {
-      "nodeName": "inFlightInReturnPosition",
+      "nodeName": "draftInReturnPositionIsTheAnswer",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:in-flight\"",
+      "expectedOutput": "\"success:in-flight\\n\\n[oracleShape: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "A draft the body returns directly is not an answer: the trip is a failure carrying it."
+      "description": "A draft the body returns directly is the backup answer when the budget runs out."
     },
     {
-      "nodeName": "inFlightInThread",
+      "nodeName": "draftInThreadIsTheAnswer",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:in-flight\"",
+      "expectedOutput": "\"success:in-flight\\n\\n[codingShape: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -64,19 +64,19 @@
       "nodeName": "completedAttemptSurvivesReviewTrip",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"success:ANSWER\\n\\n[researcherShape: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "expectedOutput": "\"success:ANSWER\\n\\n[researcherShape: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "With draftsAreAnswers, revise's finished attempt survives a trip in its review."
+      "description": "revise's finished attempt survives a trip in its review."
     },
     {
       "nodeName": "completedAttemptInThread",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"success:ANSWER\\n\\n[agencyCodingShape: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "expectedOutput": "\"success:ANSWER\\n\\n[agencyCodingShape: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -100,7 +100,7 @@
       "nodeName": "labelOverride",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"success:ANSWER\\n\\n[custom: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "expectedOutput": "\"success:ANSWER\\n\\n[custom: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"

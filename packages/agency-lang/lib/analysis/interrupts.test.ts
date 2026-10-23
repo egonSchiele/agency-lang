@@ -630,6 +630,57 @@ node main() {
     );
   });
 
+  it("lists a callee's handler only when it encloses every call to the block", () => {
+    // The first attempt runs under the handler and the second runs bare, so
+    // the handler cannot be counted on for a raise in the block.
+    withSingleFile(
+      `
+def retryOnce(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with approve
+  result = block()
+  return result
+}
+
+node main() {
+  retryOnce() as {
+    return interrupt std::env("read?", { name: "FOO" })
+  }
+}
+`,
+      (file) => {
+        expect(handlerLines(file)).toEqual([]);
+      },
+    );
+  });
+
+  it("keeps a handler that encloses both calls to the block", () => {
+    withSingleFile(
+      `
+def twice(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+    result = block()
+  } with approve
+  return result
+}
+
+node main() {
+  twice() as {
+    return interrupt std::env("read?", { name: "FOO" })
+  }
+}
+`,
+      (file) => {
+        // twice's handle block is on line 4 of the program.
+        expect(handlerLines(file)).toEqual([4]);
+      },
+    );
+  });
+
   it("adds nothing when the callee never calls its block", () => {
     withSingleFile(
       `

@@ -147,7 +147,7 @@ def researchLoop(
   }
 }
 
-@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
+@guard(cost: maxCost, time: maxTime)
 export handoff def researcherAgent(
   task: string,
   context: string = "",
@@ -177,9 +177,9 @@ export handoff def researcherAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  // draftsAreAnswers: the only draft researchLoop can send up is a
-  // completed attempt revise saved; the model's own drafts stop at
-  // revise's assignment.
+  // Return position: when the budget runs out, the best answer revise had
+  // (its last completed attempt, or the draft a first attempt saved)
+  // reaches the guard and comes back as the result.
   return researchLoop(
     task: task,
     context: context,

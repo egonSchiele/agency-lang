@@ -70,10 +70,13 @@ export type CallGraphFunction = {
     /** The callees whose block arguments enclose this site, outermost first. */
     viaBlockOf: QualifiedKey[];
   }[];
-  /** The `handle` blocks around this function's own calls to its block
-   *  parameter. A block passed to this function runs inside them, so a site
-   *  or call written in that block gains them too (lib/analysis/interrupts.ts,
-   *  `withBlockCallHandlers`). Empty for a function that takes no block. */
+  /** The `handle` blocks around EVERY one of this function's own calls to
+   *  its block parameter. A block passed to this function runs inside them,
+   *  so a site or call written in that block gains them too
+   *  (lib/analysis/interrupts.ts, `withBlockCallHandlers`). A handler around
+   *  only some of the calls is left out: listing it would tell the reader a
+   *  raise is answered on a run where it is not. Empty for a function that
+   *  takes no block or never calls it. */
   blockCallHandlers: TaggedHandler[];
 };
 
@@ -346,6 +349,8 @@ export function buildInterruptCallGraph(
       blockCallHandlers: [],
     };
     const blockParameter = ownBlockParameter(info.name, ctx);
+    // The handlers around each call to the block, one list per call.
+    const aroundBlockCalls: TaggedHandler[][] = [];
     ctx.withScope(info.scopeKey, () => {
       for (const { node, ancestors } of walkNodes(info.body)) {
         const enclosing = enclosingHandleBlocks(ancestors, file);
@@ -371,13 +376,14 @@ export function buildInterruptCallGraph(
             addEdge(refName);
           }
           if (node.functionName === blockParameter) {
-            addUniqueHandlers(entry.blockCallHandlers, enclosing);
+            aroundBlockCalls.push(enclosing);
           }
         } else if (node.type === "gotoStatement") {
           addEdge(node.nodeCall.functionName);
         }
       }
     });
+    entry.blockCallHandlers = handlersAroundEvery(aroundBlockCalls);
     out[qualifyName(file, info.name)] = entry;
   }
   return out;
@@ -448,10 +454,14 @@ function blockOwners(ancestors: WalkAncestor[]): string[] {
   });
 }
 
-function addUniqueHandlers(into: TaggedHandler[], handlers: TaggedHandler[]): void {
-  for (const handler of handlers) {
-    if (!into.some((existing) => existing.block === handler.block)) into.push(handler);
-  }
+/** The handlers present in every list: the ones that enclose every call to
+ *  a block. No calls means no handlers. */
+function handlersAroundEvery(lists: TaggedHandler[][]): TaggedHandler[] {
+  if (lists.length === 0) return [];
+  const [first, ...rest] = lists;
+  return first.filter((handler) =>
+    rest.every((list) => list.some((other) => other.block === handler.block)),
+  );
 }
 
 /** Return the `handle` block ancestors of a walked node, tagged with the

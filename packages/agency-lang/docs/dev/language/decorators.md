@@ -115,7 +115,7 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 
 ## The stdlib decorator: `@guard`
 
-`std::strategy` ships one decorator, `@guard(cost:, time:, label:, draftsAreAnswers:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and why it assigns the body's result before returning it, is in `docs/dev/agents/subagent-budgets.md`. Two things about it belong here:
+`std::strategy` ships one decorator, `@guard(cost:, time:, label:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. Two things about it belong here:
 
 - **It cannot be called with a block.** `guard(...) {` is always the guard block (`guardBlockParser`), so `guard(record, cost: 1) { ... }` parses as the block with a stray argument, not a call to the decorator. An agent that needs to post-process its guarded result moves the guarded part into a hidden inner def that carries the tag. This is the cost of sharing the block's name.
 - **A lowered `@guard` must never be printed as text.** The lowered body, `return guard({ name: ..., args: ... }, cost: ...) { ... }`, would re-parse as the guard block. Nothing prints a lowered tree today: `agency fmt` prints the raw tree, and `agency doc` prints signatures and tags, not bodies. A feature that prints a lowered tree has to print the tag instead.
@@ -151,12 +151,17 @@ The lowering gives the synthesized call and the `return` around it the tag's `lo
 | argument (`checkArgsAgainstParams`) | AG6019 `argNotAssignable` | AG6041 `decoratorArgType` |
 | block return (`checkExpressionsInScope`) | AG2001 `typeNotAssignableInContext` | AG2018 `decoratorBodyReturn`, or AG2019 `decoratorStackedReturn` |
 | declared return (`checkReturnTypesInScope`) | AG2001 `typeNotAssignableInContext` | AG2020 `decoratorReturnMismatch` |
+| draft (`checkSaveDraftCall`) | AG2001 `typeNotAssignableInContext` | AG2021 `decoratorDraftType` |
 
 The decorator entry is used when the owning call carries `decorator`. The stacked entry covers `@a @b def f`: `return b(...)` sits in `a`'s block, so a block return whose value is itself a decorator's call is the two decorators disagreeing, and the message names both.
 
 The return sites still go through `checkType`. `checkType` and `emitAssignabilityError` take the entry to push as their last argument, so `rejectRegexInLlmType`, `reportFailureDataError` (`failureNeedsData`), and `checkExcessObjectProperties` run as before. Both return sites now pass the `return` statement's `loc` as the fallback, so a mismatch on a literal, which has no position of its own, gets a line. That fixed plain block returns too.
 
 A plain block-taking function's block body was already checked against its block type; `decoratorChecks.test.ts` pins it.
+
+### Drafts in a decorated body
+
+A `saveDraft(value)` is the value of the frame it is saved in. A decorated body is the decorator's block, so its draft must fit the block slot's return type (`any` when the slot is untyped), not the def's declared type: in a `Result<string>` def under a decorator whose block returns `string`, `saveDraft("partial")` is right and `saveDraft(42)` is AG2021. `draftTarget` in `mismatch.ts` picks the type from the innermost block around the draft. A draft in an ordinary call's block, such as a `guard` block, is still checked against the scope's return type, as before; block bodies share their enclosing scope in the checker, and changing that for every block is a separate decision.
 
 ### Counts on a tag
 
@@ -168,7 +173,7 @@ The lowering adds the body and, when the decorator's first parameter is named `c
 
 ### `agency interrupts`
 
-A block runs inside the handlers its callee puts around `block()`. The call graph records that, and a decorator's handler is listed for a raise in the body; `docs/dev/compiler/interrupts-command.md`, "Blocks run under their callee's handlers", has the rule and its one known gap. The effect walk above is a different analysis and still over-reports.
+A block runs inside the handlers its callee puts around `block()`. The call graph records that, and a decorator's handler is listed for a raise in the body when it encloses every `block()` call in the decorator; `docs/dev/compiler/interrupts-command.md`, "Blocks run under their callee's handlers", has the rule and its one known gap. The effect walk above is a different analysis and still over-reports.
 
 ### `agency doc`
 

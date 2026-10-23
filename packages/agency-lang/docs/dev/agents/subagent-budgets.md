@@ -12,15 +12,11 @@ not guard the turn.
   be granted more.
 - `researchAgent`, `explorerAgent`, and `oracleAgent` take `maxSeconds`
   and `maxDollars`. The coordinator fills them in from the user's words.
-  Each wrapper (`brains/coordinator/subagents/*.agency`) converts them in
-  one line before it calls the stdlib agent:
-
-  ```
-  const maxTime = if maxSeconds == null then 30m else maxSeconds * 1s
-  ```
-
-  and passes `maxCost: maxDollars ?? $50.00`. Unset means the default the
-  wrapper names, which is the stdlib agent's own default.
+  Each wrapper (`brains/coordinator/subagents/*.agency`) passes
+  `maxTime: timeBudget(maxSeconds, 30m)` (`brains/coordinator/lib/budgets.agency`,
+  seconds to milliseconds) and `maxCost: maxDollars ?? $50.00` to the
+  stdlib agent. Unset means the default the wrapper names, which is the
+  stdlib agent's own default.
 
 `codeAgent` runs on fixed internal budgets and does not take the
 parameters yet.
@@ -42,10 +38,15 @@ export handoff def oracleAgent(question: string, maxCost: number = $20.00, maxTi
 name (or `label:`), answers that guard's trip itself, and reports through
 `_budgetOutcome` (below). It is the one place the three rules are applied.
 
+The decorator lives in `std::strategy`, beside `revise` and `retry`, and
+not in the prelude. Every file that uses it says so in an import line, so
+a file's own `def guard` cannot silently replace it, and the prelude does
+not grow a name only the agents use.
+
 An agent that post-processes its guarded result cannot call the decorator
 inline: `guard(...) {` is always the block form. Such an agent puts the
-guarded part in a hidden inner def that carries the tag, with an explicit
-`label:` so the guard keeps the agent's name.
+guarded part in a non-exported inner def that carries the tag, with an
+explicit `label:` so the guard keeps the agent's name.
 
 ## When a budget runs out
 
@@ -60,11 +61,11 @@ guarded part in a hidden inner def that carries the tag, with an explicit
 3. The guard converts the rejection into a failure, or into a success
    carrying whatever partial reached it. The decorator reports that by the
    rule below.
-4. For a handoff agent, the tool loop pushes the stopped-handoff resume
-   message (`finishStoppedHandoff`, `lib/runtime/handoff.ts`) for a
-   failure: the subagent stopped, why, and that its work is in the
-   messages above. The coordinator's next request follows as after any
-   tool.
+4. For a handoff agent that failed, the tool loop pushes the
+   stopped-handoff resume message (`finishStoppedHandoff`,
+   `lib/runtime/handoff.ts`): the subagent stopped, why, and that its work
+   is in the messages above. The coordinator's next request follows as
+   after any tool.
 
 Because the decorator answers its own trip, a caller cannot give a
 decorated agent more budget, and `agency run --interactive` never asks.
@@ -85,109 +86,66 @@ once.
 1. **No trip.** The guard's Result, except that a finished `""` is a
    failure, "it returned no answer". An empty list is a clean result, not
    "no answer".
-2. **A trip, and a completed answer reached the guard.** The answer, as a
-   success. A string answer gets one line appended:
-   `[researcherAgent: the time budget ran out before this answer was accepted. This is the best answer so far.]`
-   The line says "accepted" and not "verified" because the trip can come
-   after a review that rejected the attempt.
+2. **A trip, and a value reached the guard.** That value, as a success.
+   A draft that reaches the guard is the backup answer: that is what
+   `saveDraft` is for, and the agent prompts promise it ("the most recent
+   draft is what the caller receives"). The value can be a finished
+   answer, such as the last attempt `revise` saved, or a draft the model
+   saved halfway through. A string gets one line appended:
+   `[researcherAgent: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]`
 3. **A trip, and nothing reached the guard.** A failure naming the
    budget, "its time budget of 30m ran out", with
    `{ dimension, limit, draft }` in its data. `draft` is the trip's
    `draftValue`: the innermost draft saved anywhere on the stack when the
    guard tripped (`draftPreview`, `lib/runtime/guardTripInterrupt.ts`).
-   It can belong to a nested agent. When the researcher's guard trips
-   inside the `reviewAgent` call that checks its answer, `draft` is
-   whatever Feedback list the reviewer had saved.
+
+Rule 2 returns a success, and not a failure carrying the draft, because a
+model calling the agent as a tool only sees a failure's message. The tool
+loop's `recordFailure` (`lib/runtime/prompt.ts`) shows `failed.error` and
+never `data`, so a draft in the data would be lost to the coordinator.
 
 The message in rule 3 is built from the trip, never from the guard's
 Result. A guard whose `finalize` returned an empty local hands back
 `success(null)`, which has no error to reuse.
 
-## How the decorator keeps in-flight drafts away from its guard
+## How a draft reaches the guard
 
-Rule 2 trusts that anything reaching the guard is a completed answer. The
-runtime cannot check that. A draft the model saves halfway through its
-work and a finished attempt look the same: both are `saveDraft` values,
-and both travel up the same two ways, by return position or through a
-`finalize` (`docs/dev/runtime/saveDraft.md`). An assignment drops a
-callee's draft, and the stopped caller returns its own draft instead.
+The decorator's guard block is `return block()`, so the body's partial
+result travels to the guard by the ordinary salvage rules
+(`docs/dev/runtime/saveDraft.md`): return position passes a callee's draft
+through, a `finalize` hands its return value up, and an assignment without
+a `finalize` drops it.
 
 When the model calls the `saveDraft` tool, the draft is filed on the frame
 running the `llm()` call (`tests/agency/guards/savedraft-tool-basic.agency`).
-Most agents call a def that ends in `return llm(...)` and return that call,
-so without help the draft rides all the way up. Before the decorator, the
-review of this work found twelve of the seventeen agents carrying the
-model's draft to their guard this way, through return position or a
-`finalize`.
+So an agent whose inner def ends in `return llm(...)` passes the model's
+draft to the guard when its body returns that call, directly or from
+inside a `thread` block:
 
-The decorator owns the fix. By default its guard block does
+- **The oracle, the explorer, and the Agency researcher** return
+  `consider(...)`, `survey(...)`, or `answer(...)`.
+- **The coding, data, expert, and Agency expert agents** return their
+  inner call from inside their `thread` block.
+- **The planner** saves its summary after each step with `saveDraft`, in
+  the decorated body itself.
+- **The researcher** returns `researchLoop(...)`, which returns
+  `revise(...)`. `revise`'s `finalize` hands back the last completed
+  attempt, or, before any attempt completes, the draft the unfinished
+  attempt saved (`stdlib/strategy.agency`).
 
-```
-const answer = block()
-saveDraft(answer)
-return answer
-```
+An agent that assigns its model's result without a `finalize` drops the
+draft there, and a trip becomes a failure. Writing a new agent, return the
+call, or assign it and hand the local back through a `finalize`.
 
-A draft from anywhere in the body stops at that assignment. The guard
-block has saved nothing of its own yet, so the guard returns its plain
-failure, and rule 3 puts the trip's `draftValue` in the failure's data. A
-body that finishes reaches `saveDraft(answer)`, so the finished answer
-survives a trip in the one step before the guard block returns. So a
-decorated body may return its call directly, or `return` from inside a
-`thread` block, and an in-flight draft still never becomes the answer.
-
-`@guard(..., draftsAreAnswers: true)` skips the assignment, so the body's
-draft reaches the guard by return position. It is only safe when every
-draft the body can send up is a finished answer. Two agents use it:
-
-- **The researcher** (`stdlib/agents/researcher.agency`) returns
-  `researchLoop(...)`, which returns `revise(...)`. The model's drafts land
-  in the `revise` block's frame and stop at `result = block(feedback)`
-  inside `revise`. What `revise` sends up is its own draft: it saves each
-  completed attempt (`stdlib/strategy.agency`).
-- **`agencyCodingAgent`** (`stdlib/agents/agency/coding.agency`), in its
-  inner def `agencyCodingUnderBudget`, returns `generateLoop(...)` from
-  inside its thread, and `generateLoop` returns `revise(...)`. What reaches
-  the guard is the last `WriteOutcome` `revise` saved, a finished attempt
-  even when it is invalid.
-
-Setting `draftsAreAnswers: true` on a body whose model can save a draft
-brings the old bug back, and nothing checks it. Leave it off unless the
-body's drafts all come through something like `revise`.
-
-## What a trip returns, by agent
-
-| Agents | On a trip with only an in-flight draft |
-|---|---|
-| researcher, `agencyCodingAgent` | the last completed attempt, as a success with the note; a failure when no attempt completed |
-| oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, writing rewrite | a failure naming the budget, with the draft in `data.draft` |
-| review, TypeScript review, Agency review, verifier, Agency verifier | a failure, which `failOpenFeedback` turns into `success([])` |
-| writing review | the failure; its `failOpen` flag decides as before |
-
-The seven agents that post-process their guarded result (the five
-reviewers and verifiers above, the writing review, and
-`agencyCodingAgent`) keep their exported def and move the guarded part
-into a non-exported inner def named `<agent>UnderBudget`, which carries the
-tag with the agent's own label. The writing rewrite needed no inner def: it
-returns the reviewer's failure from inside its loop, and the decorator
-passes a failure the body returns through unchanged.
-
-**Known gap: a reviewer's partial findings are lost on a trip.** Before
-the decorator, a reviewer that ran out of budget returned the findings the
-model had saved so far. Now the trip is a failure and `failOpenFeedback`
-reports no findings. Getting them back would mean reading `data.draft` as
-a `Feedback[]` in `failOpenFeedback`, which is not done.
-
-**Known gap: a trip during `sleep()` bypasses the handler.** A time guard
-that fires while `sleep()` is running cancels the sleep directly, and no
-handler sees a `std::guard` interrupt. The decorator then has no trip
-data, so `_budgetOutcome` takes rule 1 and returns the guard's own Result
-unchanged. For a body with nothing finished, that is the guard's plain
-failure, "Guard 'oracleAgent' exceeded its time budget: ran 100.9ms of
-100ms.", with `GuardFailureData` and no `draft`. For a
-`draftsAreAnswers` body with a finished attempt, it is the success
-without the note. The outcome is still right; only the wording and the
-draft are missing. No stdlib agent sleeps inside its budget today.
+**Known gap: a trip during `sleep()` bypasses the handler** (ticket
+ADI-137). A time guard that fires while `sleep()` is running cancels the
+sleep directly, and no handler sees a `std::guard` interrupt. The
+decorator then has no trip data, so `_budgetOutcome` takes rule 1 and
+returns the guard's own Result unchanged: a saved draft comes back as a
+success without the note, and with nothing saved the result is the guard's
+plain failure, "Guard 'oracleAgent' exceeded its time budget: ran 100.9ms
+of 100ms.", with no `draft`. No stdlib agent sleeps inside its budget
+today.
 
 ## Why the answer was lost (ADI-49)
 
@@ -212,23 +170,23 @@ Before the fix, the salvage went like this:
    returned "its time budget of 30m ran out". The coordinator wrote a
    recap instead of the answer.
 
-Step 3 was the missing piece. `revise` now saves each completed attempt,
-so step 3 returns it, and the decorator (with `draftsAreAnswers: true`)
-lets it reach the guard, which returns it as a success that rule 2
-reports.
+Step 3 was the missing piece. `revise` now has a `finalize` that hands
+back the last completed attempt, so step 3 returns it, the researcher
+returns it in return position, the guard returns it as a success, and
+rule 2 reports it.
 
 ## Tests
 
 - `tests/agency/guards/guard-decorator.agency`: the decorator against each
   agent shape: a direct return and a thread return that save a draft and
-  trip, a trip with nothing saved, a recovered `revise` answer with and
-  without a thread, an outer budget that runs out inside an inner
-  decorated call, a label override, a finished answer, an empty answer,
-  an empty list, a failure the body returns, and the reviewer shape (an
-  inner decorated def whose trip the outer def turns into no findings).
+  trip (the draft is the answer), a trip with nothing saved, a recovered
+  `revise` answer with and without a thread, an outer budget that runs
+  out inside an inner decorated call, a label override, a finished
+  answer, an empty answer, an empty list, and a failure the body returns.
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
-  under a guard that trips in the check, in an attempt, or in a later
-  attempt, and the `agencyCodingAgent` shape.
+  under a guard that trips in the check, in a first attempt with and
+  without a saved draft, or in a later attempt, and the
+  `agencyCodingAgent` shape.
 - `lib/agents/agency-agent/tests/turn.agency`:
   `budgetTripIsHardStopAndBrainContinues`.
 - `tests/agency/guards/unowned-guard-rejected.agency`: `guardStopHandler`.

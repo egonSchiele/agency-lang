@@ -93,6 +93,42 @@ describe("decorator mismatch diagnostics", () => {
   });
 });
 
+describe("a saveDraft in a decorated body", () => {
+  // The body is the decorator's block, so a draft is the block's value and
+  // must fit the block slot's return type, not the def's declared type.
+  it("accepts a draft of the block's return type", () => {
+    const src =
+      BUDGETED +
+      '@budgeted(cost: 1)\ndef f(): Result<string> {\n  saveDraft("partial")\n  return "a"\n}\n';
+    expect(typecheckSource(src).filter((error) => error.severity === "error")).toEqual([]);
+  });
+
+  it("refuses a draft that does not fit the block, naming the decorator", () => {
+    const src =
+      BUDGETED +
+      '@budgeted(cost: 1)\ndef f(): Result<string> {\n  saveDraft(42)\n  return "a"\n}\n';
+    const [error] = withCode(typecheckSource(src), "decoratorDraftType");
+    expect(error).toBeDefined();
+    expect(error.message).toBe(
+      "The body of 'f' saves a draft of type 'number', but decorator 'budgeted' takes a block returning 'string'.",
+    );
+    expect(error.loc?.line).toBe(lineOf(src, "saveDraft(42)"));
+  });
+
+  it("accepts any draft when the decorator's block returns any", () => {
+    // The shape of the stdlib @guard: a reusable decorator over a Result def.
+    const src =
+      "def wrapped(call: Call, block: () -> any): Result {\n  return success(block())\n}\n" +
+      '@wrapped\ndef f(): Result<string> {\n  saveDraft("partial")\n  return "a"\n}\n';
+    expect(typecheckSource(src).filter((error) => error.severity === "error")).toEqual([]);
+  });
+
+  it("checks a draft in a plain def against the def's return type, as before", () => {
+    const src = 'def f(): string {\n  saveDraft(42)\n  return "a"\n}\n';
+    expect(withCode(typecheckSource(src), "typeNotAssignableInContext")).toHaveLength(1);
+  });
+});
+
 describe("the checks checkType does besides assignability still run on a decorated def", () => {
   const ANY_DECORATOR = "def wrapped(block: () -> any): any {\n  return block()\n}\n";
 

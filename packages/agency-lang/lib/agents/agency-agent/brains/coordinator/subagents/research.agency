@@ -23,6 +23,7 @@ import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
 import { announce } from "../lib/announce.agency"
+import { timeBudget } from "../lib/budgets.agency"
 
 export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print]
 
@@ -58,22 +59,20 @@ export handoff def researchAgent(
   announce("research", userMsg)
   setMemoryId("research")
   if (agencyTopic) {
-    const agencyMaxTime = if maxSeconds == null then 10m else maxSeconds * 1s
     return agencyResearcherAgent(
       question: userMsg,
       context: replStyle,
       maxCost: maxDollars ?? $10.00,
-      maxTime: agencyMaxTime,
+      maxTime: timeBudget(maxSeconds, 10m),
       session: "research",
       extraTools: [...researchTools, question],
     )
   }
-  const maxTime = if maxSeconds == null then 30m else maxSeconds * 1s
   return researcherAgent(
     task: userMsg,
     context: replStyle,
     maxCost: maxDollars ?? $50.00,
-    maxTime: maxTime,
+    maxTime: timeBudget(maxSeconds, 30m),
     session: "research",
     extraTools: researchTools,
   )

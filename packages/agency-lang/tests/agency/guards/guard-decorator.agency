@@ -1,11 +1,11 @@
 import test { _advanceTime } from "std::date"
 import { Critique, guard, revise } from "std::strategy"
 
-// The @guard decorator: a finished answer is the result, a trip before one
-// is a failure naming the budget with the draft in its data, and a draft
-// the body saved mid-call never reaches the guard as an answer unless the
-// tag says it is a finished one. No node has a handler: the decorator
-// answers its own trip. See docs/dev/agents/subagent-budgets.md.
+// The @guard decorator: a finished answer is the result; when the budget
+// runs out, a draft the body saved is the backup answer, with a note; with
+// nothing saved, the trip is a failure naming the budget. No node has a
+// handler: the decorator answers its own trip. See
+// docs/dev/agents/subagent-budgets.md.
 
 // Twice the 10s budget every decorated def below uses, in milliseconds, so
 // one advance is always enough to trip it.
@@ -79,9 +79,9 @@ def codingShapeNothingSaved(): Result<string> {
   }
 }
 
-// Stands in for researchLoop(): revise saves each finished attempt, and the
-// model's draft ("half") stops at revise's assignment. The review then
-// overruns the budget.
+// Stands in for researchLoop(): the first attempt saves a draft ("half")
+// and then finishes, and the review overruns the budget. revise hands back
+// the completed attempt, not the draft.
 def reviewedAnswer(): string {
   return revise(maxAttempts: 2, check: slowReview) as critique {
     saveDraft("half")
@@ -89,13 +89,13 @@ def reviewedAnswer(): string {
   }
 }
 
-@guard(cost: $5, time: 10s, draftsAreAnswers: true)
+@guard(cost: $5, time: 10s)
 def researcherShape(): Result<string> {
   return reviewedAnswer()
 }
 
 // The agencyCodingAgent shape: the same loop, inside a thread block.
-@guard(cost: $5, time: 10s, draftsAreAnswers: true)
+@guard(cost: $5, time: 10s)
 def agencyCodingShape(): Result<string> {
   thread(label: "agencyCodingShape", session: "") {
     return reviewedAnswer()
@@ -116,7 +116,7 @@ def outerAgent(): Result<string> {
 }
 
 // The note on a recovered answer names the guard, so it shows the label.
-@guard(cost: $5, time: 10s, label: "custom", draftsAreAnswers: true)
+@guard(cost: $5, time: 10s, label: "custom")
 def relabelled(): Result<string> {
   return reviewedAnswer()
 }
@@ -172,12 +172,12 @@ node emptyAnswerIsAFailure(): string {
   return describe(returnsNothing())
 }
 
-node inFlightInReturnPosition(): string {
-  return describeStop(oracleShape())
+node draftInReturnPositionIsTheAnswer(): string {
+  return describe(oracleShape())
 }
 
-node inFlightInThread(): string {
-  return describeStop(codingShape())
+node draftInThreadIsTheAnswer(): string {
+  return describe(codingShape())
 }
 
 node tripWithoutDraft(): string {

@@ -276,3 +276,15 @@ A decorator returns a type the decorated function is not declared to return.
 A decorated function returns whatever its outermost decorator returns. A function declared `: number` under a decorator that returns `Result<string>` would hand its callers a `Result<string>`.
 
 **How to fix:** declare the function's return type as the decorator's return type, or use a decorator that returns the function's type.
+
+<a id="ag2021"></a>
+
+## AG2021 — The body of '&#123;target&#125;' saves a draft of type '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'.
+
+*Default severity: error.*
+
+A `saveDraft` in a decorated function's body saves a value the decorator's block does not return.
+
+The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared `def budgeted(cost: number, block: () -> string): Result<string>`, the body saves a `string` draft, even though the function is declared to return `Result<string>`.
+
+**How to fix:** save a value of the type the decorator's block returns.

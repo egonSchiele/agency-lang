@@ -1,0 +1,14 @@
+/** @module
+  @summary The time conversion for the coordinator's subagent tools: the
+  model passes a deadline in seconds, and the stdlib agents take
+  milliseconds.
+*/
+
+/** Milliseconds for the stdlib agent's `maxTime`: the model's seconds, or
+  the wrapper's default when it gave none. */
+export def timeBudget(maxSeconds: number | null, fallback: number): number {
+  if (maxSeconds == null) {
+    return fallback
+  }
+  return maxSeconds * 1s
+}

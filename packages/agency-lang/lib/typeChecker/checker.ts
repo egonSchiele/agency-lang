@@ -31,7 +31,7 @@ import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import { lastParameterTakesBlock } from "../types/function.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
-import { mismatchEntry } from "./mismatch.js";
+import { draftTarget, mismatchEntry } from "./mismatch.js";
 
 /**
  * Derive arity bounds and per-position param types from a parameter list,
@@ -226,7 +226,7 @@ function checkFunctionCallsInScope(info: ScopeInfo, ctx: TypeCheckerContext): vo
       const parent = ancestors[ancestors.length - 1];
       if (parent?.type === "valueAccess") continue;
       checkSingleFunctionCall(node, info.scope, ctx);
-      checkSaveDraftCall(node, info, ctx);
+      checkSaveDraftCall(node, ancestors, info, ctx);
     }
   }
 }
@@ -238,7 +238,12 @@ function checkFunctionCallsInScope(info: ScopeInfo, ctx: TypeCheckerContext): vo
  *  Only a scope with no inferred/declared return type (`info.returnType`
  *  undefined) is skipped. Name-keyed: aliasing `saveDraft` (`const s = saveDraft;
  *  s(v)`) escapes the check (documented v1 limitation). */
-function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeCheckerContext): void {
+function checkSaveDraftCall(
+  call: FunctionCall,
+  ancestors: WalkAncestor[],
+  info: ScopeInfo,
+  ctx: TypeCheckerContext,
+): void {
   if (call.functionName !== "saveDraft") return;
   // Only the stdlib saveDraft carries the draft contract. Stand down when
   // the name resolves to anything the user wrote: a local def or node, or
@@ -257,7 +262,12 @@ function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeChecke
     ctx.errors.push(diagnostic("saveDraftAtTopLevel", {}, call.loc ?? null));
     return;
   }
-  if (!info.returnType) return; // no declared/inferred return type in scope
+  // The innermost block around the draft decides its target type: a
+  // decorator's block is the frame the draft belongs to (mismatch.ts).
+  const blockOwner = innermostBlockOwner(ancestors);
+  const blockSlot = blockOwner && getBlockSlot(blockOwner.functionName, ctx);
+  const expected = draftTarget(blockOwner, blockSlot, info.returnType);
+  if (!expected) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const first = call.arguments[0];
   // A splat's runtime expansion is unknowable here: the argument node
@@ -268,7 +278,9 @@ function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeChecke
   // `saveDraft(value: x)` names the parameter but carries the same draft;
   // check the value it wraps so the named form cannot bypass the rule.
   const arg = first.type === "namedArgument" ? first.value : first;
-  checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
+  checkType(arg, expected, info.scope, "the saveDraft() draft value", ctx, call.loc, (types) =>
+    mismatchEntry({ site: "draft", owner: blockOwner, value: arg, params: types }),
+  );
 }
 
 /** True when an import's origin file is the stdlib prelude (or the
@@ -886,12 +898,17 @@ function findEnclosingBlockSlot(
   ancestors: WalkAncestor[],
   ctx: TypeCheckerContext,
 ): { slot: BlockType; call: FunctionCall } | undefined {
+  const call = innermostBlockOwner(ancestors);
+  const slot = call && getBlockSlot(call.functionName, ctx);
+  return slot ? { slot, call } : undefined;
+}
+
+/** The call that owns the innermost block around a walked node, if any. */
+function innermostBlockOwner(ancestors: WalkAncestor[]): FunctionCall | undefined {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     if (ancestors[i].type !== "blockArgument") continue;
     const parent = ancestors[i - 1];
-    if (parent?.type !== "functionCall") return undefined;
-    const slot = getBlockSlot(parent.functionName, ctx);
-    return slot === undefined ? undefined : { slot, call: parent };
+    return parent?.type === "functionCall" ? parent : undefined;
   }
   return undefined;
 }

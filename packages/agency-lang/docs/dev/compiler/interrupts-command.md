@@ -86,6 +86,7 @@ type CallEdge = {
   calleeName: string;
   calleeKey: QualifiedKey;
   enclosingHandlers: TaggedHandler[];
+  viaBlockOf: QualifiedKey[];
 };
 type CallGraphFunction = {
   name: string;
@@ -95,19 +96,29 @@ type CallGraphFunction = {
     site: InterruptStatement;
     file: string;
     enclosingHandlers: TaggedHandler[];
+    viaBlockOf: QualifiedKey[];
   }[];
+  blockCallHandlers: TaggedHandler[];
 };
 type InterruptCallGraph = Record<QualifiedKey, CallGraphFunction>;
 ```
+
+Two fields record what blocks need, explained under "Blocks run under their callee's handlers" below:
+
+- `viaBlockOf` on a site or edge lists the callees whose block arguments enclose it, outermost first.
+- `blockCallHandlers` on a function lists the `handle` blocks around its own calls to its block parameter (the last parameter, when it takes a block).
+
+Every site and edge stays on the function it is written in, even inside a block. The platform check (`lib/typeChecker/platformCheck.ts`) reads `callEdges` to build its call path and relies on that.
 
 This lives on `TypeCheckResult.interruptCallGraph` alongside the existing `interruptEffectsByFunction`. The two analyses are intentionally independent. This one records exact handler identities, the other propagates effect sets.
 
 ## Layer 2: the handler-set analyzer
 
-`analyzeInterrupts(rootFile, config)` is a five-phase declarative pipeline:
+`analyzeInterrupts(rootFile, config)` is a declarative pipeline:
 
 ```ts
-const cg               = loadCallGraph(rootFile, config);
+const loaded           = loadCallGraph(rootFile, config);
+const cg               = withBlockCallHandlers(loaded);
 const sites            = collectAllSites(cg);
 const reachableHandlers = propagateHandlers(cg);
 const perSite          = unionAcrossEntries(reachableHandlers, collectEntries(cg));
@@ -121,6 +132,38 @@ The typechecker only knows about one file's local definitions at a time — `sco
 To analyze the whole import closure, `loadCallGraph` builds the symbol table once and then runs the typechecker on **every** `.agency` file in `symbolTable.filePaths()`, calling `Object.assign(merged, cg)` to merge the per-file call graphs into one. The merge is collision-free because every key is a `QualifiedKey` of the form `${file}:${name}`. Two files declaring the same top-level name produce distinct entries.
 
 `analyzeOneFile` parses the file, expands splices, and lifts callback blocks before building the compilation unit. Splice expansion is best-effort here: if a splice fails to expand, the analysis runs over the unexpanded program rather than refusing to report anything.
+
+### Blocks run under their callee's handlers
+
+A block passed to a function runs inside the `handle` blocks that function puts around its `block()` call:
+
+```
+def approving(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with approve
+  return result
+}
+
+@approving
+def readIt(): any {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+```
+
+A decorator lowers to a call with the body as the block, so `readIt`'s interrupt is inside `approving`'s block. Lexically, `readIt` has no handlers around it, and `approving`'s `block()` call is an edge to a function named `block` that does not exist. Before this, the listing said `(none)`.
+
+An edge from `approving` to every block passed to it would not fix that: `approving` is called from many places with different blocks, and the edge would carry one caller's handlers to another caller's sites. So the call site records the facts instead:
+
+- The interrupt in `readIt` has `viaBlockOf: [approving]`.
+- `approving` has `blockCallHandlers: [its handle block]`.
+
+`withBlockCallHandlers` runs after the per-file graphs are merged and before seeding. It returns a new graph in which each site's and each edge's `enclosingHandlers` also holds the `blockCallHandlers` of every key in its `viaBlockOf`. Running after the merge lets a decorator imported from another file contribute its handlers. A key with no entry in the graph, such as a builtin, adds nothing. The fixed point is unchanged.
+
+This applies to every block-taking function, not only decorators: `approving() as { ... }` gets the same listing.
+
+**Known gap.** A function that passes its block on to another function instead of calling it has no `blockCallHandlers`, so the handlers the other function puts around its own `block()` call are missed.
 
 ### Phase 2: collect sites
 

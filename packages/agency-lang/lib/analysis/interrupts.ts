@@ -62,7 +62,8 @@ export type AnalysisResult = {
 // Each phase is a named helper; this function is the "what".
 
 export function analyzeInterrupts(rootFile: string, config: AgencyConfig): AnalysisResult {
-  const { callGraph: cg, warnings } = loadCallGraph(rootFile, config);
+  const { callGraph: loaded, warnings } = loadCallGraph(rootFile, config);
+  const cg = withBlockCallHandlers(loaded);
   const sites = collectAllSites(cg);
   const reachableHandlers = propagateHandlers(cg);
   const perSite = unionAcrossEntries(reachableHandlers, collectEntries(cg));
@@ -131,6 +132,45 @@ function siteKey(file: string, site: InterruptStatement): SiteId {
 function collectAllSites(cg: InterruptCallGraph): Map<SiteId, SiteRecord> {
   const entries = Object.values(cg).flatMap((fn) => fn.interruptSites);
   return new Map(entries.map((e) => [siteKey(e.file, e.site), { site: e.site, file: e.file }]));
+}
+
+// -- Phase 2b: Blocks run under their callee's handlers --
+//
+// A block passed to `g` runs inside whatever `handle` blocks `g` puts
+// around its own `block()` call:
+//
+//     def approving(block: () -> any): any {
+//       handle { result = block() } with approve     // blockCallHandlers
+//     }
+//     approving() as { interrupt std::env(...) }    // viaBlockOf: [approving]
+//
+// The call graph records both facts and keeps every site and edge on the
+// function it is written in. This phase adds the callee's handlers to each
+// site and edge inside its block. It runs after the per-file graphs are
+// merged, so a decorator imported from another file contributes its
+// handlers. A callee with no entry (a builtin, an unresolved import) adds
+// nothing. Known gap: a callee that hands its block to another function
+// instead of calling it contributes nothing either.
+
+function withBlockCallHandlers(cg: InterruptCallGraph): InterruptCallGraph {
+  const extra = (viaBlockOf: QualifiedKey[]): TaggedHandler[] =>
+    viaBlockOf.flatMap((key) => cg[key]?.blockCallHandlers ?? []);
+  return Object.fromEntries(
+    Object.entries(cg).map(([key, fn]) => [
+      key,
+      {
+        ...fn,
+        interruptSites: fn.interruptSites.map((entry) => ({
+          ...entry,
+          enclosingHandlers: [...entry.enclosingHandlers, ...extra(entry.viaBlockOf)],
+        })),
+        callEdges: fn.callEdges.map((edge) => ({
+          ...edge,
+          enclosingHandlers: [...edge.enclosingHandlers, ...extra(edge.viaBlockOf)],
+        })),
+      },
+    ]),
+  );
 }
 
 // -- Phase 3: Fixed-point handler propagation --

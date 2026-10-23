@@ -501,3 +501,176 @@ def b() {
     );
   });
 });
+
+describe("analyzeInterrupts: a block runs under the handlers its callee puts around it", () => {
+  // `approving` answers whatever its block raises: the block runs inside
+  // the `handle` at line 4 of every program below.
+  const APPROVING = `
+def approving(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with approve
+  return result
+}
+`;
+  const APPROVING_HANDLE_LINE = 4;
+
+  function handlerLines(file: string): number[] {
+    const result = analyzeInterrupts(file, {});
+    expect(result.sites).toHaveLength(1);
+    return result.sites[0].handlers.map((handler) => handler.line).sort((a, b) => a - b);
+  }
+
+  it("lists the handler a decorator installs around the body", () => {
+    withSingleFile(
+      APPROVING +
+        `
+@approving
+def readIt(): any {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+
+node main() {
+  readIt()
+}
+`,
+      (file) => {
+        expect(handlerLines(file)).toEqual([APPROVING_HANDLE_LINE]);
+      },
+    );
+  });
+
+  it("lists it for a plain call with a trailing block too", () => {
+    withSingleFile(
+      APPROVING +
+        `
+node main() {
+  approving() as {
+    return interrupt std::env("read?", { name: "FOO" })
+  }
+}
+`,
+      (file) => {
+        expect(handlerLines(file)).toEqual([APPROVING_HANDLE_LINE]);
+      },
+    );
+  });
+
+  it("lists the handlers of every stacked decorator", () => {
+    withSingleFile(
+      APPROVING +
+        `
+def auditing(block: () -> any): any {
+  let result = null
+  handle {
+    result = block()
+  } with (intr) {
+    return approve()
+  }
+  return result
+}
+
+@auditing
+@approving
+def readIt(): any {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+`,
+      (file) => {
+        // auditing's handle block is on line 12 of the program.
+        expect(handlerLines(file)).toEqual([APPROVING_HANDLE_LINE, 12]);
+      },
+    );
+  });
+
+  it("lists the handler of a decorator imported from another file", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "agency-int-"));
+    try {
+      const decoratorFile = path.join(dir, "approving.agency");
+      writeFileSync(decoratorFile, "export " + APPROVING.trimStart());
+      const mainFile = path.join(dir, "main.agency");
+      writeFileSync(
+        mainFile,
+        `import { approving } from "./approving.agency"
+
+@approving
+def readIt(): any {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+`,
+      );
+      const result = analyzeInterrupts(mainFile, {});
+      expect(result.sites).toHaveLength(1);
+      expect(result.sites[0].handlers).toHaveLength(1);
+      expect(result.sites[0].handlers[0].file).toBe(path.resolve(decoratorFile));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds nothing for a block passed to a function the graph has no entry for", () => {
+    withSingleFile(
+      `
+def check(x: number): number {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+
+node main() {
+  const results = map([1, 2]) as x {
+    return interrupt std::read("hi")
+  }
+}
+`,
+      (file) => {
+        const result = analyzeInterrupts(file, {});
+        const read = result.sites.find((site) => site.site.effect === "std::read");
+        expect(read?.handlers).toEqual([]);
+      },
+    );
+  });
+
+  it("adds nothing when the callee never calls its block", () => {
+    withSingleFile(
+      `
+def ignoring(block: () -> any): any {
+  handle {
+    print("not calling it")
+  } with approve
+  return null
+}
+
+node main() {
+  ignoring() as {
+    return interrupt std::env("read?", { name: "FOO" })
+  }
+}
+`,
+      (file) => {
+        expect(handlerLines(file)).toEqual([]);
+      },
+    );
+  });
+
+  it("keeps the caller's own handler beside the decorator's", () => {
+    withSingleFile(
+      APPROVING +
+        `
+@approving
+def readIt(): any {
+  return interrupt std::env("read?", { name: "FOO" })
+}
+
+node main() {
+  handle {
+    readIt()
+  } with reject
+}
+`,
+      (file) => {
+        // main's handle block is on line 16 of the program.
+        expect(handlerLines(file)).toEqual([APPROVING_HANDLE_LINE, 16]);
+      },
+    );
+  });
+});

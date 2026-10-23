@@ -22,6 +22,7 @@ import {
 import { propagateToFixpoint } from "../analysis/effects.js";
 import type { HandleBlock } from "../types/handleBlock.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
+import { lastParameterTakesBlock } from "../types/function.js";
 
 export type TaggedHandler = { block: HandleBlock; file: string };
 
@@ -47,6 +48,9 @@ export type CallEdge = {
    *  unknown identifiers) it falls back to `${currentFile}:${name}`. */
   calleeKey: QualifiedKey;
   enclosingHandlers: TaggedHandler[];
+  /** The callees whose block arguments enclose this call, outermost first.
+   *  See `CallGraphFunction.blockCallHandlers`. */
+  viaBlockOf: QualifiedKey[];
 };
 
 export type CallGraphFunction = {
@@ -63,7 +67,14 @@ export type CallGraphFunction = {
      *  have to look it up. */
     file: string;
     enclosingHandlers: TaggedHandler[];
+    /** The callees whose block arguments enclose this site, outermost first. */
+    viaBlockOf: QualifiedKey[];
   }[];
+  /** The `handle` blocks around this function's own calls to its block
+   *  parameter. A block passed to this function runs inside them, so a site
+   *  or call written in that block gains them too (lib/analysis/interrupts.ts,
+   *  `withBlockCallHandlers`). Empty for a function that takes no block. */
+  blockCallHandlers: TaggedHandler[];
 };
 
 /** Cross-file call graph keyed by `QualifiedKey`. Built per-file by
@@ -332,30 +343,38 @@ export function buildInterruptCallGraph(
       file,
       callEdges: [],
       interruptSites: [],
+      blockCallHandlers: [],
     };
-    const addEdge = (calleeName: string, enclosing: TaggedHandler[]) => {
-      entry.callEdges.push({
-        calleeName,
-        calleeKey: resolveCallee(calleeName, file),
-        enclosingHandlers: enclosing,
-      });
-    };
+    const blockParameter = ownBlockParameter(info.name, ctx);
     ctx.withScope(info.scopeKey, () => {
       for (const { node, ancestors } of walkNodes(info.body)) {
         const enclosing = enclosingHandleBlocks(ancestors, file);
+        const viaBlockOf = blockOwners(ancestors).map((owner) => resolveCallee(owner, file));
+        const addEdge = (calleeName: string) => {
+          entry.callEdges.push({
+            calleeName,
+            calleeKey: resolveCallee(calleeName, file),
+            enclosingHandlers: enclosing,
+            viaBlockOf,
+          });
+        };
         if (node.type === "interruptStatement") {
           entry.interruptSites.push({
             site: node,
             file,
             enclosingHandlers: enclosing,
+            viaBlockOf,
           });
         } else if (node.type === "functionCall") {
-          addEdge(node.functionName, enclosing);
+          addEdge(node.functionName);
           for (const refName of functionRefsInArgs(node.arguments, info.scope, ctx).names) {
-            addEdge(refName, enclosing);
+            addEdge(refName);
+          }
+          if (node.functionName === blockParameter) {
+            addUniqueHandlers(entry.blockCallHandlers, enclosing);
           }
         } else if (node.type === "gotoStatement") {
-          addEdge(node.nodeCall.functionName, enclosing);
+          addEdge(node.nodeCall.functionName);
         }
       }
     });
@@ -407,6 +426,32 @@ function makeCalleeResolver(
     }
     return qualifyName(currentFile, calleeName);
   };
+}
+
+/** The name of the block parameter `name` takes, if it is a def whose last
+ *  parameter takes a block. Calls to that name are calls to the block. */
+function ownBlockParameter(name: string, ctx: TypeCheckerContext): string | undefined {
+  const parameters = ctx.functionDefs[name]?.parameters;
+  if (parameters === undefined || !lastParameterTakesBlock(parameters)) return undefined;
+  return parameters[parameters.length - 1].name;
+}
+
+/** The names of the calls whose block arguments enclose a walked node,
+ *  outermost first. `walkNodes` puts each `blockArgument` in `ancestors`,
+ *  right after the call that owns it. */
+function blockOwners(ancestors: WalkAncestor[]): string[] {
+  return ancestors.flatMap((ancestor, i) => {
+    const owner = ancestors[i - 1];
+    return ancestor.type === "blockArgument" && owner?.type === "functionCall"
+      ? [owner.functionName]
+      : [];
+  });
+}
+
+function addUniqueHandlers(into: TaggedHandler[], handlers: TaggedHandler[]): void {
+  for (const handler of handlers) {
+    if (!into.some((existing) => existing.block === handler.block)) into.push(handler);
+  }
 }
 
 /** Return the `handle` block ancestors of a walked node, tagged with the

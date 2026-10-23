@@ -363,7 +363,10 @@ describe("the UI between attaching and the first stop", () => {
       expect(busy).not.toContain("waiting for the program to reach its next statement");
 
       // The wait closes before any stop: the connecting screen comes
-      // back and its figure keeps counting.
+      // back and its figure keeps counting. The wait stays up for longer
+      // than one tick of the figure's timer first, so a timer that gives
+      // up while a wait is showing is caught.
+      await new Promise((resolve) => setTimeout(resolve, 400));
       ui.setBusy([]);
       clock.now += 2_000;
       const back = await untilFrame(recorder, "statement\u2026 5s");

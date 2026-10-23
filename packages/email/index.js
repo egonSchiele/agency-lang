@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, saveDraft, _guard, _budgetOutcome, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
 import { sendEmail as sendEmailImpl } from "./dist/src/email.js";
 import { z } from "agency-lang/zod";
 import {
@@ -134,13 +134,14 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "30a9a676d4534f3fdcc9b6f5422748b1fb9b99d6f1354587f68ac82637ef8a8b");
+__registerModuleFingerprint("index.agency", "7c479749e3c8131c7bcec1f3c3e63197eb8d8e36348b2d107908381d994dd984");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(saveDraft);
 __registerTool(_guard);
+__registerTool(_budgetOutcome);
 __registerTool(_pairsOf);
 __registerTool(read);
 __registerTool(write);

@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, saveDraft, _guard, _budgetOutcome, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
 import { mcp as mcpImpl } from "./dist/src/mcp.js";
 import { z } from "agency-lang/zod";
 import {
@@ -133,13 +133,14 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "97c5daad809ffd59ea37148747385dec8e9e32538a2c69b472fe6347cb9feb21");
+__registerModuleFingerprint("index.agency", "24ce751e19e9a6b7474896b0c5702a397bb3fff38dff693febf8a23238539b25");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(saveDraft);
 __registerTool(_guard);
+__registerTool(_budgetOutcome);
 __registerTool(_pairsOf);
 __registerTool(read);
 __registerTool(write);

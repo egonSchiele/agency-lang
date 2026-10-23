@@ -138,18 +138,18 @@ decorated body may return its call directly, or `return` from inside a
 
 `@guard(..., draftsAreAnswers: true)` skips the assignment, so the body's
 draft reaches the guard by return position. It is only safe when every
-draft the body can send up is a finished answer. Two agents use it, or will:
+draft the body can send up is a finished answer. Two agents use it:
 
 - **The researcher** (`stdlib/agents/researcher.agency`) returns
   `researchLoop(...)`, which returns `revise(...)`. The model's drafts land
   in the `revise` block's frame and stop at `result = block(feedback)`
   inside `revise`. What `revise` sends up is its own draft: it saves each
   completed attempt (`stdlib/strategy.agency`).
-- **`agencyCodingAgent`** (`stdlib/agents/agency/coding.agency`), once it
-  moves to the decorator, returns `generateLoop(...)` from inside its
-  thread, and `generateLoop` returns `revise(...)`. What reaches the guard
-  is the last `WriteOutcome` `revise` saved, a finished attempt even when
-  it is invalid.
+- **`agencyCodingAgent`** (`stdlib/agents/agency/coding.agency`), in its
+  inner def `agencyCodingUnderBudget`, returns `generateLoop(...)` from
+  inside its thread, and `generateLoop` returns `revise(...)`. What reaches
+  the guard is the last `WriteOutcome` `revise` saved, a finished attempt
+  even when it is invalid.
 
 Setting `draftsAreAnswers: true` on a body whose model can save a draft
 brings the old bug back, and nothing checks it. Leave it off unless the
@@ -159,11 +159,24 @@ body's drafts all come through something like `revise`.
 
 | Agents | On a trip with only an in-flight draft |
 |---|---|
-| researcher | the last completed attempt, as a success with the note; a failure when no attempt completed |
-| oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner | a failure naming the budget, with the draft in `data.draft` |
+| researcher, `agencyCodingAgent` | the last completed attempt, as a success with the note; a failure when no attempt completed |
+| oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, writing rewrite | a failure naming the budget, with the draft in `data.draft` |
+| review, TypeScript review, Agency review, verifier, Agency verifier | a failure, which `failOpenFeedback` turns into `success([])` |
+| writing review | the failure; its `failOpen` flag decides as before |
 
-The reviewers, the verifiers, the writing agents, and `agencyCodingAgent`
-still write their own `guard` block; they move to the decorator next.
+The seven agents that post-process their guarded result (the five
+reviewers and verifiers above, the writing review, and
+`agencyCodingAgent`) keep their exported def and move the guarded part
+into a non-exported inner def named `<agent>UnderBudget`, which carries the
+tag with the agent's own label. The writing rewrite needed no inner def: it
+returns the reviewer's failure from inside its loop, and the decorator
+passes a failure the body returns through unchanged.
+
+**Known gap: a reviewer's partial findings are lost on a trip.** Before
+the decorator, a reviewer that ran out of budget returned the findings the
+model had saved so far. Now the trip is a failure and `failOpenFeedback`
+reports no findings. Getting them back would mean reading `data.draft` as
+a `Feedback[]` in `failOpenFeedback`, which is not done.
 
 **Known gap: a trip during `sleep()` bypasses the handler.** A time guard
 that fires while `sleep()` is running cancels the sleep directly, and no
@@ -211,7 +224,8 @@ reports.
   trip, a trip with nothing saved, a recovered `revise` answer with and
   without a thread, an outer budget that runs out inside an inner
   decorated call, a label override, a finished answer, an empty answer,
-  an empty list, and a failure the body returns.
+  an empty list, a failure the body returns, and the reviewer shape (an
+  inner decorated def whose trip the outer def turns into no findings).
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
   under a guard that trips in the check, in an attempt, or in a later
   attempt, and the `agencyCodingAgent` shape.

@@ -117,7 +117,7 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 
 `std::strategy` ships one decorator, `@guard(cost:, time:, label:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. Two things about it belong here:
 
-- **It cannot be called with a block.** `guard(...) {` is always the guard block (`guardBlockParser`), so `guard(record, cost: 1) { ... }` parses as the block with a stray argument, not a call to the decorator. An agent that needs to post-process its guarded result moves the guarded part into a hidden inner def that carries the tag. This is the cost of sharing the block's name.
+- **It cannot be called with a block.** `guard(...) {` is always the guard block (`guardBlockParser`), so `guard(record, cost: 1) { ... }` parses as the block with a stray argument, not a call to the decorator. An agent that needs to post-process its guarded result moves the guarded part into a non-exported inner def that carries the tag. This is the cost of sharing the block's name.
 - **A lowered `@guard` must never be printed as text.** The lowered body, `return guard({ name: ..., args: ... }, cost: ...) { ... }`, would re-parse as the guard block. Nothing prints a lowered tree today: `agency fmt` prints the raw tree, and `agency doc` prints signatures and tags, not bodies. A feature that prints a lowered tree has to print the tag instead.
 
 ## Files

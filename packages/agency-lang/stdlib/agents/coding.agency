@@ -30,6 +30,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
+import { guard } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -105,6 +106,7 @@ ${finalizeReminder}
   )
 }
 
+@guard(cost: maxCost, time: maxTime)
 export def codingAgent(
   task: string,
   context: string = "",
@@ -129,24 +131,13 @@ export def codingAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime, label: "codingAgent") {
-    let reply = ""
-    thread(label: "codingAgent", session: session) {
-      reply = solve(
-        task: task,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
-    return reply
-
-    // If an outer budget guard trips mid-solve, `reply` holds the model's
-    // most recent saveDraft (an assignment would otherwise drop it), so the
-    // caller gets the best-so-far answer instead of nothing.
-    finalize {
-      return reply
-    }
+  thread(label: "codingAgent", session: session) {
+    return solve(
+      task: task,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
   }
 }

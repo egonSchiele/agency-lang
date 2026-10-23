@@ -15,6 +15,7 @@ import {
   readOnlyFileTools,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
+import { guard } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("agency/researcher")
@@ -57,6 +58,7 @@ def answer(
   )
 }
 
+@guard(cost: maxCost, time: maxTime)
 export handoff def agencyResearcherAgent(
   question: string,
   context: string = "",
@@ -80,20 +82,14 @@ export handoff def agencyResearcherAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  return guard(cost: maxCost, time: maxTime, label: "agencyResearcherAgent") {
-    // The assignment is deliberate, and there is no finalize. The model's
-    // saveDraft lands in the callee's frame and stops here, so a budget trip
-    // is a failure, never an answer (the coordinator reads the draft off the
-    // trip interrupt). Returning the call directly would carry the draft to
-    // the guard as a success. See docs/dev/agents/subagent-budgets.md.
-    let reply = ""
-    reply = answer(
-      question: question,
-      context: context,
-      model: model,
-      provider: provider,
-      extraTools: extraTools,
-    )
-    return reply
-  }
+  // Returned directly: the decorator assigns the body's result before it
+  // reaches the guard, so the model's in-flight saveDraft stops there and a
+  // budget trip is a failure carrying it. See docs/dev/agents/subagent-budgets.md.
+  return answer(
+    question: question,
+    context: context,
+    model: model,
+    provider: provider,
+    extraTools: extraTools,
+  )
 }

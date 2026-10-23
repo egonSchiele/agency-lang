@@ -26,11 +26,12 @@ Return the data agent's tools: every connector, plus the search and fetch
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L49))
 
 ### dataAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 dataAgent(
   task: string,
   context: string = "",
@@ -72,4 +73,4 @@ Answer a question from structured public-data APIs, naming the source and
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L109))

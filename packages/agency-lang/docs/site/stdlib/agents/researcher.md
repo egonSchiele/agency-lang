@@ -29,7 +29,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L215))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L214))
 
 ## Functions
 
@@ -50,6 +50,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 ### researcherAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
 researcherAgent(
   task: string,
   context: string = "",
@@ -98,4 +99,4 @@ Answer a research question from web and Wikipedia sources and return a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L151))

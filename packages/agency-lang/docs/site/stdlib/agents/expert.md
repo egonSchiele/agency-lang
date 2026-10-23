@@ -31,11 +31,12 @@ Return the expert's tools: the web and encyclopedia lookups it uses to
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L26))
 
 ### expertAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 expertAgent(
   task: string,
   context: string = "",
@@ -77,4 +78,4 @@ Consult a domain expert: identify the task's technical domain and return
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L70))

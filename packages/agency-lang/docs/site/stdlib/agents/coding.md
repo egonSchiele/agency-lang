@@ -32,11 +32,12 @@ Return the coding agent's tools. Exported so a caller can inspect what the
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L61))
 
 ### codingAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 codingAgent(
   task: string,
   context: string = "",
@@ -78,4 +79,4 @@ Write, edit, and run code to complete a task on disk. Returns a short
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L110))

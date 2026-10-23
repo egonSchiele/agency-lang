@@ -14,7 +14,7 @@ import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { Critique, revise } from "std::strategy"
+import { Critique, guard, revise } from "std::strategy"
 import {
   ThreadMessage,
   assistantMessage,
@@ -147,6 +147,7 @@ def researchLoop(
   }
 }
 
+@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
 export handoff def researcherAgent(
   task: string,
   context: string = "",
@@ -176,20 +177,18 @@ export handoff def researcherAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
-    // Return position passes a partial through. The only partial
-    // researchLoop can send up is a completed attempt that revise saved,
-    // because the model's own drafts stop at revise's assignment.
-    return researchLoop(
-      task: task,
-      context: context,
-      history: history,
-      maxAttempts: maxAttempts,
-      model: model,
-      provider: provider,
-      extraTools: extraTools,
-    )
-  }
+  // draftsAreAnswers: the only draft researchLoop can send up is a
+  // completed attempt revise saved; the model's own drafts stop at
+  // revise's assignment.
+  return researchLoop(
+    task: task,
+    context: context,
+    history: history,
+    maxAttempts: maxAttempts,
+    model: model,
+    provider: provider,
+    extraTools: extraTools,
+  )
 }
 
 /** Approves the effects a research run needs, web fetches, searches,

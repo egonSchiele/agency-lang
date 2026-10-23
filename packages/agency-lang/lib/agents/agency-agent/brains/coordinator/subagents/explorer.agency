@@ -15,7 +15,6 @@ import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
-import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
 export handoff def explorerAgent(
   userMsg: string,
@@ -44,13 +43,12 @@ export handoff def explorerAgent(
     for the default ($20).
   """
   announce("explorer", userMsg)
-  return budgeted("explorerAgent") {
-    return stdExplorerAgent(
-      question: userMsg,
-      maxCost: costBudget(maxDollars, $20.00),
-      maxTime: timeBudget(maxSeconds, 15m),
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-    )
-  }
+  const maxTime = if maxSeconds == null then 15m else maxSeconds * 1s
+  return stdExplorerAgent(
+    question: userMsg,
+    maxCost: maxDollars ?? $20.00,
+    maxTime: maxTime,
+    model: getSlowModel(),
+    provider: getSlowProvider(),
+  )
 }

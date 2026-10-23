@@ -13,16 +13,40 @@
       "description": "A completed attempt survives a guard trip during its review."
     },
     {
-      "nodeName": "tripDuringAttemptHasNoAnswer",
+      "nodeName": "tripDuringAttemptReturnsDraft",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"failure|in-flight\"",
+      "expectedOutput": "\"success:in-flight|in-flight\"",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "A trip before any attempt completes is a failure; the in-flight draft is on the trip."
+      "description": "A trip before any attempt completes returns the draft the attempt saved."
+    },
+    {
+      "nodeName": "tripBeforeAnyDraftIsAFailure",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip before any attempt completes or saves a draft is a failure."
+    },
+    {
+      "nodeName": "completedAttemptBeatsLaterDraft",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:attempt()\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A completed attempt wins over a later attempt's unfinished draft."
     },
     {
       "nodeName": "secondAttemptTripKeepsFirst",

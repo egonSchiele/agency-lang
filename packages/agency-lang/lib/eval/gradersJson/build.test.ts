@@ -230,33 +230,6 @@ describe("command graders", () => {
     expect(without.feedback).toBe("[]\n");
   });
 
-  it("names a file holding the answer in AGENCY_OUTPUT, a string as it is and anything else as JSON", async () => {
-    const [grader] = buildGraders([
-      { kind: "command", name: "c", command: 'cat "$AGENCY_OUTPUT"' },
-    ]);
-    const asString = await grader.run({
-      ...input(EMPTY_RECORD, workdir),
-      run: { output: "the answer", traceId: "trace", workdir, record: EMPTY_RECORD },
-    });
-    expect(asString.feedback).toBe("the answer");
-    const asObject = await grader.run({
-      ...input(EMPTY_RECORD, workdir),
-      run: { output: { cited: 2 }, traceId: "trace", workdir, record: EMPTY_RECORD },
-    });
-    expect(asObject.feedback).toBe('{"cited":2}');
-  });
-
-  it("removes the answer file after the command", async () => {
-    const [grader] = buildGraders([
-      { kind: "command", name: "c", command: 'echo "$AGENCY_OUTPUT"' },
-    ]);
-    const grade = await grader.run({
-      ...input(EMPTY_RECORD, workdir),
-      run: { output: "gone", traceId: "trace", workdir, record: EMPTY_RECORD },
-    });
-    expect(fs.existsSync(grade.feedback.trim())).toBe(false);
-  });
-
   it("a fractional timeout still runs the command", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "echo hi", timeoutSec: 1.001 },
@@ -305,6 +278,26 @@ describe("command graders", () => {
     expect(grade.score).toEqual({ kind: "binary", pass: false });
     expect(grade.feedback).toBe("timed out after 1s");
     expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it("a background process holding the output pipe does not hold the grader past its timeout", async () => {
+    const started = Date.now();
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "sleep 5 & echo started", timeoutSec: 1 },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.feedback).toBe("timed out after 1s");
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it("keeps a multi-byte character whole when it arrives split across two writes", async () => {
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "printf '\\342\\202'; sleep 0.2; printf '\\254\\n'" },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.feedback).toBe("\u20ac\n");
   });
 
   it("no workdir fails with a message", async () => {

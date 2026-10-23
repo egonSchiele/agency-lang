@@ -11,16 +11,16 @@ in milestone M3.
 
 ## Score 0.791
 
-| grader               | score | note                                        |
-| -------------------- | ----- | ------------------------------------------- |
-| answered (must pass) | pass  |                                             |
-| facts                | 6/8   | missed Brian May; missed "sanctuary"        |
-| sourcing             | 2/4   | no listed long interview; quote count flips |
-| llm-calls            | 0.813 | 14 calls                                    |
-| wall-seconds         | 0.000 | 360 s, the whole six-minute budget          |
-| cost-usd             | 0.984 | $0.29, of which $0.22 is hosted search      |
-| no-repeated-retrieval | pass | one fetch in the whole run                  |
-| citations-resolve    | 0.909 | 11 cited, one missing: an Abingdon School PDF is 404 |
+| grader                | score | note                                                 |
+| --------------------- | ----- | ---------------------------------------------------- |
+| answered (must pass)  | pass  |                                                      |
+| facts                 | 6/8   | missed Brian May; missed "sanctuary"                 |
+| sourcing              | 2/4   | no listed long interview; quote count flips          |
+| llm-calls             | 0.813 | 14 calls                                             |
+| wall-seconds          | 0.000 | 360 s, the whole six-minute budget                   |
+| cost-usd              | 0.984 | $0.29, of which $0.22 is hosted search               |
+| no-repeated-retrieval | pass  | one fetch in the whole run                           |
+| citations-resolve     | 0.909 | 11 cited, one missing: an Abingdon School PDF is 404 |
 
 ## What the trace shows
 

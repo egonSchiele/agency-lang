@@ -229,7 +229,7 @@ export const KIND_QUESTIONS: Record<GraderSpec["kind"], QuestionSpec[]> = {
     text({
       name: "command",
       label: "command",
-      help: "runs in the agent's working directory; $AGENCY_GRADER_FILES names the grader-only files, $AGENCY_OUTPUT a file holding the answer",
+      help: "runs in the agent's working directory; $AGENCY_GRADER_FILES names the grader-only files",
       long: true,
     }),
     text({

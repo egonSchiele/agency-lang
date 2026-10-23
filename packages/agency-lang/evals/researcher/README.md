@@ -39,8 +39,8 @@ where his strengths lie. It is the question shape from a real session
 57 minutes on the equivalent question about Grant Sanderson, fetched the
 same pages up to ten times, and quoted almost none of what it read. The
 test is a `graders.ts` so it can share `citations-resolve` with the two
-older tests; its other graders are the shapes `graders.json` offers,
-written by hand:
+older tests. Its checklist and band graders are `graders.json` specs passed
+to `buildGraders`, and only the no-repeat grader is written by hand:
 
 - `answered` (must pass): the answer is not empty and not a failure line.
 - `facts`: a checklist of eight findable facts, judged against

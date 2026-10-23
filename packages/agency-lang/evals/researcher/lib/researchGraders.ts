@@ -1,6 +1,6 @@
 // The grading library for researcher tests. The output under test is the
 // researcher's answer, a string with citations.
-import { binary, grader, scalar, type Grader } from "agency-lang/eval";
+import { binary, grader, scalar, type Grade, type Grader } from "agency-lang/eval";
 
 /** Mirrors `ResearchEvalInput` in stdlib/agents/researcher.agency. */
 type ResearchInput = { task: string; history?: { role: string; content: string }[] };
@@ -56,7 +56,9 @@ export function citedUrls(text: string): string[] {
   const urls: string[] = [];
   for (const match of text.match(URL_PATTERN) ?? []) {
     const url = trimUrl(match);
-    if (!urls.includes(url)) urls.push(url);
+    if (!urls.includes(url)) {
+      urls.push(url);
+    }
   }
   return urls;
 }
@@ -74,10 +76,12 @@ function count(text: string, char: string): number {
 }
 
 type Verdict = "ok" | "missing" | "unchecked";
-type Check = { url: string; verdict: Verdict; note: string };
+export type CitationCheck = { url: string; verdict: Verdict; note: string };
 
 const MISSING_STATUSES = [404, 410];
 const CHECK_TIMEOUT_MS = 15000;
+/** Wide enough for the longest verdict, so the URLs line up. */
+const VERDICT_COLUMN = "UNCHECKED".length;
 
 /** Every URL the answer cites is fetched. One that does not exist (a host
  *  that does not resolve, a 404, a 410) is an invented citation and costs
@@ -90,43 +94,65 @@ export function citationsResolve(): ResearchGrader {
   return grader<ResearchInput>(
     async ({ output }) => {
       const urls = citedUrls(answerText(output));
-      if (urls.length === 0) {
-        return binary(false, "the answer cites no URL");
-      }
-      const checks = await Promise.all(urls.map(check));
-      const lines = checks
-        .map((c) => `${c.verdict.toUpperCase().padEnd(9)} ${c.url} (${c.note})`)
-        .join("\n");
-      if (checks.every((c) => c.verdict === "unchecked")) {
-        return binary(false, `none of the ${urls.length} cited URLs could be checked\n${lines}`);
-      }
-      const missing = checks.filter((c) => c.verdict === "missing").length;
-      return scalar(
-        1 - missing / urls.length,
-        `${urls.length} cited, ${missing} missing\n${lines}`,
-      );
+      const checks = await Promise.all(urls.map(checkCitation));
+      return citationGrade(checks);
     },
     { name: "citations-resolve" },
   );
 }
 
-async function check(url: string): Promise<Check> {
+/** The grade for a set of checked citations, by the rules `citationsResolve`
+ *  describes. */
+export function citationGrade(checks: CitationCheck[]): Grade {
+  if (checks.length === 0) {
+    return binary(false, "the answer cites no URL");
+  }
+  const lines = checks.map(describeCheck).join("\n");
+  if (checks.every((citation) => citation.verdict === "unchecked")) {
+    return binary(false, `none of the ${checks.length} cited URLs could be checked\n${lines}`);
+  }
+  const missing = checks.filter((citation) => citation.verdict === "missing").length;
+  return scalar(
+    1 - missing / checks.length,
+    `${checks.length} cited, ${missing} missing\n${lines}`,
+  );
+}
+
+function describeCheck(citation: CitationCheck): string {
+  return `${citation.verdict.toUpperCase().padEnd(VERDICT_COLUMN)} ${citation.url} (${citation.note})`;
+}
+
+/** Fetch one cited URL and say whether it exists. Only the status is read.
+ *  The body is cancelled, so its download does not keep the connection
+ *  open until the timeout. */
+export async function checkCitation(url: string): Promise<CitationCheck> {
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: "GET",
       redirect: "follow",
       signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       headers: { "user-agent": "agency-eval-citation-check" },
     });
-    const note = `HTTP ${response.status}`;
-    if (response.ok) return { url, verdict: "ok", note };
-    if (MISSING_STATUSES.includes(response.status)) return { url, verdict: "missing", note };
-    return { url, verdict: "unchecked", note };
   } catch (error) {
-    if (hostNotFound(error)) return { url, verdict: "missing", note: "host does not resolve" };
+    if (hostNotFound(error)) {
+      return { url, verdict: "missing", note: "host does not resolve" };
+    }
     const note = error instanceof Error ? error.message : String(error);
     return { url, verdict: "unchecked", note };
   }
+  await response.body?.cancel();
+  return { url, verdict: verdictFor(response), note: `HTTP ${response.status}` };
+}
+
+function verdictFor(response: Response): Verdict {
+  if (response.ok) {
+    return "ok";
+  }
+  if (MISSING_STATUSES.includes(response.status)) {
+    return "missing";
+  }
+  return "unchecked";
 }
 
 /** Node reports every "no such host" answer from the resolver as ENOTFOUND

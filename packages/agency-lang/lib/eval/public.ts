@@ -12,6 +12,8 @@ export {
 } from "./grading/graders/builtinGraders.js";
 export { LlmJudge } from "./grading/graders/llmJudge.js";
 export { ChecklistJudge } from "./grading/graders/checklistJudge.js";
+export { buildGraders } from "./gradersJson/build.js"; // the graders.json kinds, for a graders.ts
+export type { GraderSpec } from "./gradersJson/schema.js";
 export { AgencyTestGrader } from "./grading/agencyTestGrader.js";
 export { goalJudgeFile } from "./grading/goalJudgeFile.js"; // for users who want a custom judge but the bundled prompt
 export { rubricJudgeFile } from "./grading/rubricJudgeFile.js";

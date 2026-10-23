@@ -72,6 +72,8 @@ def fetchSummary(url: string): Result<string> {
 
 `retry` calls the body up to three times and stops at the first success. A decorator may call `block()` as many times as it likes.
 
+The block is typed `() -> any`, so `last = block()` stores a value of type `any` in a variable declared `Result<string>`. The type checker allows that, because `any` can be assigned to any type. It means `retry` trusts the body to return a `Result<string>`; see [Typing a reusable decorator](#typing-a-reusable-decorator) below.
+
 The tag's arguments are evaluated each time the function is called, inside the function. That means they can name the function's own parameters. You will see that in the budget example below.
 
 ## The `call` record

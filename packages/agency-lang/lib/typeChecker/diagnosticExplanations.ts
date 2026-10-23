@@ -829,6 +829,12 @@ A decorated function returns whatever its outermost decorator returns. A functio
 
 **How to fix:** declare the function's return type as the decorator's return type, or use a decorator that returns the function's type.`,
 
+  decoratorDraftType: `A \`saveDraft\` in a decorated function's body saves a value the decorator's block does not return.
+
+The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared \`def budgeted(cost: number, block: () -> string): Result<string>\`, the body saves a \`string\` draft, even though the function is declared to return \`Result<string>\`.
+
+**How to fix:** save a value of the type the decorator's block returns.`,
+
   raisesExceededViaDecorator: `A decorator raises an effect that the decorated function's \`raises\` clause does not list. This is the decorator form of AG3013.
 
 A decorated function's effects are its decorators' effects plus its body's, because the decorator's code runs every time the function is called. A \`@budgeted\` decorator written over \`guard\` raises \`std::guard\`, so a function it decorates raises \`std::guard\` too.

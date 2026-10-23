@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FunctionCall } from "../types.js";
-import { mismatchEntry, type MismatchSite } from "./mismatch.js";
+import { draftTarget, mismatchEntry, type MismatchSite } from "./mismatch.js";
 
 function call(name: string, decorator?: string): FunctionCall {
   return {
@@ -23,6 +23,7 @@ describe("mismatchEntry", () => {
     ["argument", "argNotAssignable", "decoratorArgType"],
     ["blockReturn", "typeNotAssignableInContext", "decoratorBodyReturn"],
     ["declaredReturn", "typeNotAssignableInContext", "decoratorReturnMismatch"],
+    ["draft", "typeNotAssignableInContext", "decoratorDraftType"],
   ];
 
   for (const [site, plain, decorated] of rows) {
@@ -63,5 +64,27 @@ describe("mismatchEntry", () => {
       params: PARAMS,
     });
     expect(entry.name).toBe("decoratorReturnMismatch");
+  });
+});
+
+describe("draftTarget", () => {
+  const STRING = { type: "primitiveType", value: "string" } as const;
+  const RESULT = { type: "resultType", successType: STRING, dataType: STRING } as const;
+  const SLOT = { type: "blockType", params: [], returnType: STRING } as const;
+
+  it("is the scope's return type outside any block, and in an ordinary call's block", () => {
+    expect(draftTarget(undefined, undefined, RESULT)).toBe(RESULT);
+    expect(draftTarget(call("map"), SLOT, RESULT)).toBe(RESULT);
+  });
+
+  it("is the block slot's return type in a decorator's block", () => {
+    expect(draftTarget(call("budgeted", "budgeted"), SLOT, RESULT)).toBe(STRING);
+  });
+
+  it("is any in a decorator's block with no typed slot", () => {
+    expect(draftTarget(call("logged", "logged"), undefined, RESULT)).toEqual({
+      type: "primitiveType",
+      value: "any",
+    });
   });
 });

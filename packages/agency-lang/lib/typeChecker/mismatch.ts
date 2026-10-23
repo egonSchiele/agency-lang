@@ -1,5 +1,7 @@
-import type { AgencyNode, FunctionCall } from "../types.js";
+import type { AgencyNode, FunctionCall, VariableType } from "../types.js";
+import type { BlockType } from "../types/typeHints.js";
 import type { DiagnosticName } from "./diagnostics.js";
+import { ANY_T } from "./primitives.js";
 
 /**
  * Which diagnostic a type mismatch becomes, at the three sites a decorated
@@ -14,6 +16,7 @@ import type { DiagnosticName } from "./diagnostics.js";
  *
  *     @budgeted(cost: "x")          argument:       decoratorArgType
  *     def f(): number {             declaredReturn: decoratorReturnMismatch
+ *       saveDraft(5)                draft:          decoratorDraftType
  *       return 5                    blockReturn:    decoratorBodyReturn
  *     }
  *
@@ -24,7 +27,7 @@ import type { DiagnosticName } from "./diagnostics.js";
  * The table only names the entry. The sites still decide whether there is a
  * mismatch and where it is reported.
  */
-export type MismatchSite = "argument" | "blockReturn" | "declaredReturn";
+export type MismatchSite = "argument" | "blockReturn" | "declaredReturn" | "draft";
 
 type MismatchForms = {
   plain: DiagnosticName;
@@ -40,12 +43,13 @@ const MISMATCH_FORMS: Record<MismatchSite, MismatchForms> = {
     stacked: "decoratorStackedReturn",
   },
   declaredReturn: { plain: "typeNotAssignableInContext", decorated: "decoratorReturnMismatch" },
+  draft: { plain: "typeNotAssignableInContext", decorated: "decoratorDraftType" },
 };
 
 export type MismatchInput = {
   site: MismatchSite;
-  /** argument: the call. blockReturn: the call that owns the block.
-   *  declaredReturn: the returned value, when it is a call. */
+  /** argument: the call. blockReturn and draft: the call that owns the
+   *  block. declaredReturn: the returned value, when it is a call. */
   owner: FunctionCall | undefined;
   /** The checked value. */
   value: AgencyNode;
@@ -74,4 +78,27 @@ export function mismatchEntry(input: MismatchInput): MismatchEntry {
     return { name: forms.stacked, params: { ...params, inner: inner.name } };
   }
   return { name: forms.decorated, params };
+}
+
+/**
+ * The type a `saveDraft(value)` must fit. A draft is the value of the frame
+ * it is saved in. A decorated body is the decorator's block, so its draft is
+ * the block's value and must fit the block slot's return type (`any` when
+ * the slot is untyped); the def's declared type is what the decorator
+ * returns, which is a different thing. Anywhere else, including the block of
+ * an ordinary call such as a guard, the draft fits the scope's return type,
+ * as a `return` does.
+ *
+ * `blockOwner` is the call that owns the innermost block around the draft,
+ * and `blockSlot` that call's block parameter type, if any.
+ */
+export function draftTarget(
+  blockOwner: FunctionCall | undefined,
+  blockSlot: BlockType | undefined,
+  scopeReturnType: VariableType | null | undefined,
+): VariableType | null | undefined {
+  if (blockOwner?.decorator === undefined) {
+    return scopeReturnType;
+  }
+  return blockSlot?.returnType ?? ANY_T;
 }

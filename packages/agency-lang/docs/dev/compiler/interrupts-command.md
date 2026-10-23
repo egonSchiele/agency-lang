@@ -106,7 +106,7 @@ type InterruptCallGraph = Record<QualifiedKey, CallGraphFunction>;
 Two fields record what blocks need, explained under "Blocks run under their callee's handlers" below:
 
 - `viaBlockOf` on a site or edge lists the callees whose block arguments enclose it, outermost first.
-- `blockCallHandlers` on a function lists the `handle` blocks around its own calls to its block parameter (the last parameter, when it takes a block).
+- `blockCallHandlers` on a function lists the `handle` blocks around every one of its own calls to its block parameter (the last parameter, when it takes a block).
 
 Every site and edge stays on the function it is written in, even inside a block. The platform check (`lib/typeChecker/platformCheck.ts`) reads `callEdges` to build its call path and relies on that.
 
@@ -162,6 +162,8 @@ An edge from `approving` to every block passed to it would not fix that: `approv
 `withBlockCallHandlers` runs after the per-file graphs are merged and before seeding. It returns a new graph in which each site's and each edge's `enclosingHandlers` also holds the `blockCallHandlers` of every key in its `viaBlockOf`. Running after the merge lets a decorator imported from another file contribute its handlers. A key with no entry in the graph, such as a builtin, adds nothing. The fixed point is unchanged.
 
 This applies to every block-taking function, not only decorators: `approving() as { ... }` gets the same listing.
+
+**Every call, not any call.** `blockCallHandlers` keeps only the handlers that enclose every call to the block. A retry that runs its first attempt under `handle { result = block() } with approve` and its second attempt bare does not list that handler: on the second attempt nothing answers the raise, and a listing that showed the handler would tell the reader the raise is covered. Over-reporting a handler is the unsafe direction for this command, so it under-reports instead.
 
 **Known gap.** A function that passes its block on to another function instead of calling it has no `blockCallHandlers`, so the handlers the other function puts around its own `block()` call are missed.
 

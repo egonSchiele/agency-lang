@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"555-0100\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A file's own type Call shadows the prelude's Call instead of crashing at load"
+    }
+  ]
+}

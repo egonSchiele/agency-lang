@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"f:1:x\",\"f:2:y\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The call record carries the name and the arguments, defaults included"
+    }
+  ]
+}

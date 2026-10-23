@@ -1,0 +1,9 @@
+// A decorator goes on a def. On a node it used to be dropped without a word.
+def logged(block: () -> any): any {
+  return block()
+}
+
+@logged
+node main() {
+  return "node body"
+}

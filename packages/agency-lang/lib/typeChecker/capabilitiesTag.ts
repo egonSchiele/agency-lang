@@ -1,4 +1,4 @@
-import type { Tag } from "../types/tag.js";
+import { positionalTagArguments, type Tag } from "../types/tag.js";
 import type { AgencyNode, Expression } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
 import type { GraphNodeDefinition } from "../types/graphNode.js";
@@ -43,7 +43,7 @@ function isIdentifier(argument: Expression): boolean {
 }
 
 function argumentNames(tag: Tag): string[] {
-  return tag.arguments
+  return positionalTagArguments(tag)
     .filter(isIdentifier)
     .map((argument) => (argument as { value: string }).value);
 }
@@ -79,7 +79,7 @@ export function readCapabilities(tags: Tag[] = []): CapabilitiesRead {
   const problems: CapabilitiesTagProblem[] = [];
   const capabilities: Capability[] = [];
   for (const tag of capabilityTags) {
-    if (!tag.arguments.every(isIdentifier)) {
+    if (!positionalTagArguments(tag).every(isIdentifier)) {
       problems.push({ kind: "badArgument", loc: tag.loc });
     }
     for (const name of argumentNames(tag)) {

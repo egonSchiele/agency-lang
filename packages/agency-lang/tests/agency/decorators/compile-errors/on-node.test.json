@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'@logged' is written on node 'main', but a decorator goes on a def.",
+  "description": "agency compile refuses a decorator written on a node"
+}

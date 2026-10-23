@@ -1,0 +1,28 @@
+// Stacked decorators nest, outermost first.
+let trace: string[] = []
+
+def outer(block: () -> any): any {
+  trace = [...trace, "outer:in"]
+  const result = block()
+  trace = [...trace, "outer:out"]
+  return result
+}
+
+def inner(block: () -> any): any {
+  trace = [...trace, "inner:in"]
+  const result = block()
+  trace = [...trace, "inner:out"]
+  return result
+}
+
+@outer
+@inner
+def work(): string {
+  trace = [...trace, "body"]
+  return "done"
+}
+
+node main() {
+  work()
+  return trace
+}

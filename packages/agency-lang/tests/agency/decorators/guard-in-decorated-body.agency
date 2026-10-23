@@ -1,0 +1,18 @@
+// A return-position guard inside a decorated body. Decorators lower before
+// guards, so this guard gets no yield stamp from the def; it still works.
+def logged(block: () -> any): any {
+  return block()
+}
+
+@logged
+def careful(): Result<string> {
+  return guard(cost: 1.00) {
+    return "ok"
+  }
+}
+
+node main() {
+  const r = careful()
+  if (isFailure(r)) { return "unexpected" }
+  return r.value
+}

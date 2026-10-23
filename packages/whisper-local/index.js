@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
 import { transcribe as transcribeImpl } from "./dist/src/transcribe.js";
 import { z } from "agency-lang/zod";
 import {
@@ -21,6 +21,7 @@ import {
   resumeFromCheckpoint as _resumeFromCheckpoint,
   resumeCliFromCheckpoint as _resumeCliFromCheckpoint,
   rewindFrom as _rewindFrom,
+  patchCheckpoint as _patchCheckpoint,
   runExportedFunction as _runExportedFunction,
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
@@ -92,17 +93,19 @@ function propagate() {
 function pass() {
   return { type: "pass" };
 }
-const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
-const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, metadata: opts?.metadata });
-const __resumeFromCheckpoint = (checkpoint2, overrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides });
+const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, edits: opts?.edits, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
+const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const __resumeFromCheckpoint = (checkpoint2, overrides, edits) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, edits });
+const patchCheckpoint = (checkpoint2, edits) => _patchCheckpoint(checkpoint2, edits, __globalCtx.host.settings);
 const __invokeFunction = (fn, namedArgs) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
 const __invokeFunctionForServe = (fn, namedArgs, invocation) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, invocation, initializeGlobals: __initializeGlobals });
 const __invokeNodeForServe = (nodeName, data, invocation) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, invocation, initializeGlobals: __initializeGlobals });
-const __respondToInterruptsForServe = (interrupts, responses, opts) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, invocation: opts?.invocation });
+const __respondToInterruptsForServe = (interrupts, responses, opts) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, edits: opts?.edits, at: opts?.at, metadata: opts?.metadata, invocation: opts?.invocation, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
 const __setDebugger = (dbg) => {
   __globalCtx.debuggerState = dbg;
 };
+const __getDebugger = () => __globalCtx.debuggerState;
 const __setTraceFile = (filePath) => {
   __globalCtx.traceConfig.traceFile = filePath;
 };
@@ -130,7 +133,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "037788f497a075adbc375bf6dbd21c4f9825db6e870ba8ef78a0b8b9d4f6a454");
+__registerModuleFingerprint("index.agency", "5abd8e4393ededa8724051cbfbfb05fb2b67a184b8ddfd4e4d35783a438707a0");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -162,6 +165,7 @@ __registerTool(flatten);
 __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
+__registerTool(Call);
 async function __initializeGlobals(__run) {
   const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("index.agency")) {
@@ -310,6 +314,7 @@ var stdin_default = graph;
 const __sourceMap = { "index.agency:transcribe": { "1": { "line": 30, "col": 2 } } };
 export {
   __getCheckpoints,
+  __getDebugger,
   __invokeFunction,
   __invokeFunctionForServe,
   __invokeNodeForServe,
@@ -326,6 +331,7 @@ export {
   isDebugger,
   isInterrupt,
   isPaused,
+  patchCheckpoint,
   reject,
   respondToInterrupts,
   resumeFromCheckpoint,

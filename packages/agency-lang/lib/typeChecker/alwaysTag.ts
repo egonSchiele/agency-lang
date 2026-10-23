@@ -1,4 +1,4 @@
-import type { Tag } from "../types/tag.js";
+import { positionalTagArguments, type Tag } from "../types/tag.js";
 import type { Expression } from "../types.js";
 import type { ScopedField } from "../runtime/alwaysScope.js";
 
@@ -28,7 +28,7 @@ function isIdentifier(argument: Expression): boolean {
 /** The field names a tag's arguments name. Non-identifier arguments are
  *  dropped here and reported by `readAlwaysScope`. */
 function fieldNames(tag: Tag): string[] {
-  return tag.arguments
+  return positionalTagArguments(tag)
     .filter(isIdentifier)
     .map((argument) => (argument as { value: string }).value);
 }
@@ -38,7 +38,7 @@ function problem(kind: AlwaysProblemKind, tag: Tag): AlwaysTagProblem {
 }
 
 function hasNonIdentifierArgument(tag: Tag): boolean {
-  return !tag.arguments.every(isIdentifier);
+  return !positionalTagArguments(tag).every(isIdentifier);
 }
 
 function countOf(name: string, names: string[]): number {

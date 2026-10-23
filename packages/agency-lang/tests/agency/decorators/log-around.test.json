@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"log\":[\"before\",\"body\",\"after\"],\"greeting\":\"hello ada\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A decorator wraps the body in its own code"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+// A JavaScript function cannot take a block, so it cannot be a decorator.
+// This used to compile and fail at runtime with "Cannot pass a trailing
+// block to non-Agency function 'wrap'".
+import { wrap } from "./wrap-helpers.js"
+
+@wrap
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

@@ -1,0 +1,11 @@
+// `Call` is in the prelude, for a decorator's call record. A file with its
+// own `type Call` must still load: the local type wins, as a local def wins
+// over a prelude function.
+type Call = {
+  phone: string
+}
+
+node main() {
+  const call: Call = { phone: "555-0100" }
+  return call.phone
+}

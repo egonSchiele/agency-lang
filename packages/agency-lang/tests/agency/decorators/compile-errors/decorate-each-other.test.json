@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Decorators call each other in a loop: a → b → a.",
+  "description": "agency compile refuses defs that decorate each other"
+}

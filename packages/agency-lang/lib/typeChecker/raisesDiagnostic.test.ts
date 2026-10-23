@@ -136,4 +136,25 @@ describe("raises must reference an effect set (not a plain type)", () => {
     );
     expect(errs.filter((e) => /not an effect set|raises effect/.test(e.message))).toHaveLength(0);
   });
+
+  describe("decorators", () => {
+    const BUDGETED =
+      "def budgeted(block: () -> any): Result<string> {\n" +
+      "  return guard(cost: 1.00) {\n    return block()\n  }\n}\n";
+
+    it("counts the decorator's effects against the decorated function's raises clause", () => {
+      const errs = typecheckSource(
+        BUDGETED + '@budgeted\ndef f(): Result<string> raises <std::read> {\n  return "x"\n}\n',
+      );
+      const raisesErr = errs.find((e) => /raises effect 'std::guard'/.test(e.message));
+      expect(raisesErr).toBeDefined();
+    });
+
+    it("is satisfied when the clause lists the decorator's effect", () => {
+      const errs = raisesErrors(
+        BUDGETED + '@budgeted\ndef f(): Result<string> raises <std::guard> {\n  return "x"\n}\n',
+      );
+      expect(errs).toHaveLength(0);
+    });
+  });
 });

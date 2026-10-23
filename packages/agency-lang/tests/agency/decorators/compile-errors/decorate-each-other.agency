@@ -1,0 +1,17 @@
+// `a` calls `b` to run its body, and `b` calls `a` to run its own: neither
+// call ever reaches a body.
+@b
+def a(block: () -> any): any {
+  return block()
+}
+
+@a
+def b(block: () -> any): any {
+  return block()
+}
+
+node main() {
+  return a() {
+    return 1
+  }
+}

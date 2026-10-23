@@ -1,0 +1,48 @@
+// Decorators: a `@name(...)` tag above a def lowers to a call to `name`
+// with the def's body as the block argument. This fixture pins the lowered
+// shape in generated code and the tool metadata of a decorated def, which
+// must match its undecorated twin.
+type Call = {
+  name: string;
+  args: object
+}
+
+def logged(call: Call, block: () -> any): any {
+  print("entering ${call.name}")
+  const result = block()
+  print("leaving ${call.name}")
+  return result
+}
+
+def retry(times: number, block: () -> any): any {
+  let last = null
+  for (i in range(0, times)) {
+    last = block()
+  }
+  return last
+}
+
+@logged
+def plainTwin(x: number): number {
+  return x + 1
+}
+
+def undecoratedTwin(x: number): number {
+  return x + 1
+}
+
+@logged
+@retry(3)
+export handoff def researcher(task: string, maxCost: number = 2.00): string {
+  return llm("research ${task} within ${maxCost}")
+}
+
+@retry(times: 2)
+def positionalAndNamed(a: string): string {
+  return a
+}
+
+node main() {
+  return plainTwin(1)
+}
+

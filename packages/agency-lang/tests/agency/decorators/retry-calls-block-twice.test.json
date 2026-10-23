@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"value\":\"won on attempt 2\",\"attempts\":2}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A retry decorator calls the body twice and the interrupt in the second attempt resumes",
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

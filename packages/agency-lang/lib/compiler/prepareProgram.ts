@@ -17,6 +17,7 @@ import { PRELUDE_NAMES } from "@/prelude.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { CallbackLiftError, liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { decoratorProblems } from "@/preprocessors/decoratorDesugar.js";
 import { prunePreludeShadows } from "@/preprocessors/prunePreludeShadows.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { SymbolTable } from "@/symbolTable.js";
@@ -41,8 +42,12 @@ export type ImportFailure = { stage: "imports"; error: unknown };
 /** A `callback("onX") { ... }` block the lifting pass refuses. */
 export type LiftFailure = { stage: "lift"; message: string; loc?: SourceLocation };
 
+/** A decorator tag that cannot lower: an unknown name, a def decorating
+ *  itself, or a tag on anything but a top-level def. */
+export type DecoratorFailure = { stage: "decorators"; message: string; loc?: SourceLocation };
+
 export type PipelineDiagnostic =
-  ParseFailure | VetFailure | SpliceFailure | ImportFailure | LiftFailure;
+  ParseFailure | VetFailure | SpliceFailure | ImportFailure | LiftFailure | DecoratorFailure;
 
 export type PrepareOptions = {
   /** Prepend the prelude import to the text before parsing. The editor
@@ -265,6 +270,22 @@ export function prepareProgram(
     diagnostics.push(failure);
   }
   const info = buildCompilationUnit(program, symbolTable, filePath, source);
+
+  // A decorator is reported here, not by the type checker, because the
+  // checker is off by default and a typo in a decorator name would
+  // otherwise surface as an undefined function at runtime. The lowering
+  // itself happens later (TypeChecker constructor, TypescriptPreprocessor)
+  // and lowers whatever it is given; this is the check that the names are
+  // real and the tags are on defs.
+  const decoratorFailures: DecoratorFailure[] = decoratorProblems(program, info).map((problem) => ({
+    stage: "decorators",
+    message: problem.message,
+    loc: problem.loc,
+  }));
+  if (decoratorFailures.length > 0 && !keepGoing) {
+    return failed(decoratorFailures[0]);
+  }
+  diagnostics.push(...decoratorFailures);
   return { ok: true, program, info, symbolTable, parsed, diagnostics };
 }
 

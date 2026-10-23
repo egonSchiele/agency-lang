@@ -1,0 +1,6 @@
+[
+  { "toolCall": { "name": "subagent", "args": { "question": "q1" } } },
+  { "toolCall": { "name": "lookup", "args": { "key": "k" } } },
+  { "return": "inner answer" },
+  { "return": "outer done" }
+]

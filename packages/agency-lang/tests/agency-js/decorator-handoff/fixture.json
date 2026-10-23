@@ -1,0 +1,26 @@
+{
+  "result": {
+    "answer": "outer done",
+    "trace": [
+      "enter:subagent:q1",
+      "leave:subagent"
+    ]
+  },
+  "requestCount": 4,
+  "toolStarts": [
+    "subagent",
+    "lookup"
+  ],
+  "toolsOfferedFirst": [
+    "subagent"
+  ],
+  "roles": [
+    "user",
+    "user",
+    "assistant",
+    "tool",
+    "assistant",
+    "user"
+  ],
+  "resumeCarriesResult": 1
+}

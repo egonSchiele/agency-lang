@@ -108,16 +108,16 @@ describe("tagParser", () => {
     expect(result.result.arguments[0].type).toBe("agencyObject");
   });
 
-  it("parses a tag with number / boolean / null literal arguments", () => {
-    const r1 = tagParser("@retry(3)");
+  it("parses a reserved tag with number / boolean / null literal arguments", () => {
+    const r1 = tagParser("@optimize(3)");
     expect(r1.success).toBe(true);
     if (r1.success) expect(r1.result.arguments[0].type).toBe("number");
 
-    const r2 = tagParser("@flag(true)");
+    const r2 = tagParser("@optimize(true)");
     expect(r2.success).toBe(true);
     if (r2.success) expect(r2.result.arguments[0].type).toBe("boolean");
 
-    const r3 = tagParser("@nullable(null)");
+    const r3 = tagParser("@optimize(null)");
     expect(r3.success).toBe(true);
     if (r3.success) expect(r3.result.arguments[0].type).toBe("null");
   });
@@ -181,7 +181,7 @@ describe("tagParser", () => {
     // Either the parser fails outright or the arg list contains only
     // the first literal and leaves `+ foo` unconsumed inside the parens
     // (which then makes the whole tag fail or fall back to zero-args).
-    const result = tagParser('@goal("hi" + foo)');
+    const result = tagParser('@optimize("hi" + foo)');
     if (result.success) {
       const arg = result.result.arguments[0];
       if (arg && arg.type === "string") {
@@ -190,5 +190,71 @@ describe("tagParser", () => {
         expect((arg as any).segments).toEqual([{ type: "text", value: "hi" }]);
       }
     }
+  });
+
+  describe("a decorator tag takes call arguments", () => {
+    it("parses named arguments", () => {
+      const result = tagParser("@budgeted(cost: maxCost, time: maxTime)");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments.map((argument) => argument.type)).toEqual([
+        "namedArgument",
+        "namedArgument",
+      ]);
+      expect(result.result.arguments[0]).toMatchObject({ name: "cost" });
+      expect(result.result.parentheses).toBe(true);
+    });
+
+    it("parses a positional literal", () => {
+      const result = tagParser("@retry(3)");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments[0]).toMatchObject({ type: "number" });
+    });
+
+    it("parses positional then named", () => {
+      const result = tagParser('@log("start", level: 2)');
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments.map((argument) => argument.type)).toEqual([
+        "string",
+        "namedArgument",
+      ]);
+    });
+
+    it("parses a call as an argument", () => {
+      const result = tagParser("@retry(times())");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments[0]).toMatchObject({ type: "functionCall" });
+    });
+
+    it("parses a bare decorator with no parentheses", () => {
+      const result = tagParser("@logged\n");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments).toEqual([]);
+      expect(result.result.parentheses).toBe(false);
+    });
+
+    it("refuses a splat", () => {
+      const result = tagParser("@retry(...opts)");
+      expect(result.success).toBe(false);
+    });
+
+    it("refuses an inline block", () => {
+      const result = tagParser("@retry(\\ -> 3)");
+      expect(result.success).toBe(false);
+    });
+
+    it("keeps a reserved tag on the static grammar", () => {
+      const result = tagParser("@capabilities(terminal)");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.result.arguments[0]).toMatchObject({ type: "variableName", value: "terminal" });
+      const refused = tagParser("@validate(cost: 3)");
+      // The reserved grammar stops at the name; the rest of the line is left over.
+      expect(refused.success && refused.rest.startsWith("(")).toBe(true);
+    });
   });
 });

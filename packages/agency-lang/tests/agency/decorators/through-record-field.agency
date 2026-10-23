@@ -1,0 +1,15 @@
+// A decorated function called through a record field.
+def doubled(block: () -> any): any {
+  return block() * 2
+}
+
+@doubled
+def f(n: number): number {
+  return n + 1
+}
+
+node main() {
+  const tools = { f: f }
+  const viaField = tools.f
+  return viaField(1)
+}

@@ -1,0 +1,20 @@
+// A destructive region inside a decorated body still marks the failure that
+// escapes the function.
+def logged(block: () -> any): any {
+  return block()
+}
+
+@logged
+def wipe(): Result {
+  destructive {
+    return failure("boom")
+  }
+}
+
+node main() {
+  const r = wipe()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

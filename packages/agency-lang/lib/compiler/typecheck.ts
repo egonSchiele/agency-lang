@@ -99,7 +99,11 @@ function failIfNotCheckable(
   sourcePath: string | undefined,
 ): void {
   for (const diagnostic of diagnostics) {
-    if (diagnostic.stage === "parse" || diagnostic.stage === "lift") {
+    if (
+      diagnostic.stage === "parse" ||
+      diagnostic.stage === "lift" ||
+      diagnostic.stage === "decorators"
+    ) {
       throw new Error(diagnostic.message);
     }
     if (diagnostic.stage === "splice" && diagnostic.splice.diagnostic === "spliceRefused") {

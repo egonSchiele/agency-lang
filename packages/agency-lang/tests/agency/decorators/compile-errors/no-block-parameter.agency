@@ -1,0 +1,15 @@
+// `tagged` takes no block, so it has nowhere to receive the body of
+// `greet`. Compiled anyway, `greet` would return `tagged`'s value and its
+// own body would never run.
+def tagged(label: string): string {
+  return "tagged ${label}"
+}
+
+@tagged("x")
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

@@ -9,7 +9,7 @@ import { hashFile } from "@/compiler/buildManifest.js";
 import { findRecursively } from "@/utils/findRecursively.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { AgencyMultiLineComment, AgencyProgram, Assignment } from "@/types.js";
-import type { Tag } from "@/types/tag.js";
+import { positionalTagArguments, type Tag } from "@/types/tag.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
@@ -639,7 +639,7 @@ function formatValidatorsAndSchema(tags: Tag[] | undefined): string | null {
   const validators: string[] = [];
   for (const t of tags) {
     if (t.name !== "validate") continue;
-    for (const arg of t.arguments) {
+    for (const arg of positionalTagArguments(t)) {
       validators.push("`" + generator.processNode(arg).trim() + "`");
     }
   }
@@ -649,7 +649,7 @@ function formatValidatorsAndSchema(tags: Tag[] | undefined): string | null {
 
   const jsonSchemaTag = tags.find((t) => t.name === "jsonSchema");
   if (jsonSchemaTag) {
-    const arg = jsonSchemaTag.arguments[0];
+    const arg = positionalTagArguments(jsonSchemaTag)[0];
     if (arg) {
       const rendered = generator.processNode(arg).trim();
       parts.push(`${bold("JSON Schema metadata:")}\n\n${codeFence(rendered, "agency")}`);

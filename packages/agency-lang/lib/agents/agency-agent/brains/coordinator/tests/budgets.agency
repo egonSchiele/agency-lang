@@ -1,17 +1,23 @@
 /*
- * budgeted(): a subagent that overruns its own guard comes back as a
- * failure naming the budget, even when the guard salvaged a draft. Fake
- * agents stand in for the stdlib ones; the guard label is what budgeted
+ * budgeted(): a subagent that overruns its own guard comes back as the
+ * rule in _budgetOutcome says. A completed answer that reached the guard is
+ * a success with a note; a trip before one is a failure naming the budget,
+ * with the in-flight draft in its data. Fake agents stand in for the stdlib
+ * ones, each shaped like a real one; the guard label is what budgeted
  * matches on.
  */
 import test { _advanceTime } from "std::date"
+import { Critique, revise } from "std::strategy"
 
 import { guardStopHandler } from "../../../lib/budget.agency"
 import { budgeted } from "../lib/budgets.agency"
 
+// Twice the 10s budget the fake agents use, in milliseconds.
+const PAST_THE_BUDGET = 20000
+
 def overrunWithDraft(): string {
   saveDraft("PARTIAL")
-  _advanceTime(20000)
+  _advanceTime(PAST_THE_BUDGET)
   return "FULL"
 
   finalize as draft {
@@ -19,9 +25,56 @@ def overrunWithDraft(): string {
   }
 }
 
+def overrunWithoutDraft(): string {
+  _advanceTime(PAST_THE_BUDGET)
+  return "FULL"
+}
+
+// Returns its callee in return position, so the callee's draft reaches the
+// guard. Used only where budgeted does not own the trip.
 def draftingAgent(): Result<string> {
   return guard(cost: $5, time: 10s, label: "fakeAgent") {
     return overrunWithDraft()
+  }
+}
+
+// Shaped like the explorer and the oracle: the callee's in-flight draft
+// stops at the assignment, so it never reaches the guard.
+def inFlightAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    let reply = ""
+    reply = overrunWithDraft()
+    return reply
+  }
+}
+
+def noDraftAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    let reply = ""
+    reply = overrunWithoutDraft()
+    return reply
+  }
+}
+
+def slowReview(answer: any): Critique {
+  _advanceTime(PAST_THE_BUDGET)
+  return {
+    accepted: true,
+    feedback: ""
+  }
+}
+
+def reviseLoop(): string {
+  return revise(maxAttempts: 1, check: slowReview) as critique {
+    return "FULL"
+  }
+}
+
+// Shaped like the researcher: the answer is finished, then its review
+// overruns the budget.
+def reviseAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    return reviseLoop()
   }
 }
 
@@ -37,6 +90,14 @@ def emptyAgent(): Result<string> {
   }
 }
 
+// A stop, with the draft budgeted put in its data.
+def describeStop(r: Result<string>): string {
+  if (isFailure(r)) {
+    return "failure:${r.error}|draft:${r.data.draft}"
+  }
+  return "success:${r.value}"
+}
+
 def describe(r: Result<string>): string {
   if (isFailure(r)) {
     return "failure:${r.error}"
@@ -44,12 +105,28 @@ def describe(r: Result<string>): string {
   return "success:${r.value}"
 }
 
-// The guard alone would return success("PARTIAL") here, which the tool
-// loop would announce as a finished answer.
+// The guard alone returns a plain failure here. budgeted names the budget
+// and keeps the in-flight draft, which the trip interrupt carried.
 node tripWithDraftIsAStop(): string {
   let out = ""
   handle {
-    out = describe(budgeted("fakeAgent") { return draftingAgent() })
+    out = describeStop(budgeted("fakeAgent") { return inFlightAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node tripWithoutAnswerIsAStop(): string {
+  let out = ""
+  handle {
+    out = describeStop(budgeted("fakeAgent") { return noDraftAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node tripWithRecoveredAnswerIsASuccess(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("fakeAgent") { return reviseAgent() })
   } with guardStopHandler
   return out
 }

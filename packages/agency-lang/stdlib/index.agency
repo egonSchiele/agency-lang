@@ -18,6 +18,7 @@ import {
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
 import { _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
+import { _formatDuration } from "agency-lang/stdlib-lib/date.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
@@ -661,4 +662,62 @@ export def _guard(
   const result = _runGuarded(ids, block)
   _popGuard(ids)
   return result
+}
+
+// The message for a budget stop: "its time budget of 30m ran out".
+def _describeTrip(trip: any): string {
+  if (trip.dimension == "time") {
+    return "its time budget of ${_formatDuration(trip.limit)} ran out"
+  }
+  return "its cost budget of $${trip.limit} ran out"
+}
+
+// Append the budget note to a string answer. Any other value, such as a
+// Feedback list or a record, cannot carry a sentence and is returned as is.
+def _withBudgetNote(value: any, name: string, trip: any): any {
+  if (!(value is string)) {
+    return value
+  }
+  return "${value}\n\n[${name}: the ${trip.dimension} budget ran out before this answer was accepted. This is the best answer so far.]"
+}
+
+/** Internal: what a budgeted agent call reports, given the Result its
+  guard returned and the guard's trip interrupt data (`null` when the guard
+  did not trip). The rule is written once here, for the coordinator's
+  `budgeted` and the `@guard` decorator:
+
+  1. No trip: the guard's Result, except that a finished `""` is a failure,
+     "it returned no answer".
+  2. A trip, and a completed answer reached the guard: the answer as a
+     success. A string answer gets one line saying the budget ran out
+     before it was accepted.
+  3. A trip, and nothing reached the guard: a failure naming the budget
+     ("its time budget of 30m ran out"), with `{ dimension, limit, draft }`
+     in its data. `draft` is the trip's `draftValue`: the innermost draft
+     saved anywhere on the stack when the guard tripped, of whatever type
+     the frame that saved it returns, or `null`.
+
+  Rule 2 is only safe when the agent lets nothing but completed answers
+  reach its guard. See docs/dev/agents/subagent-budgets.md. */
+export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
+  """
+  Internal: turn a budgeted agent's guard Result and trip into the Result
+  its caller reports. Use budgeted or @guard, not this function.
+  """
+  if (trip == null) {
+    if (isSuccess(guarded) && guarded.value == "") {
+      return failure("it returned no answer")
+    }
+    return guarded
+  }
+  if (isSuccess(guarded) && guarded.value != "" && guarded.value != null) {
+    return success(_withBudgetNote(guarded.value, name, trip))
+  }
+  // Built from the trip, never from `guarded`: a guard whose finalize
+  // returned an empty local hands back success(null), which has no error.
+  return failure(_describeTrip(trip), {
+    dimension: trip.dimension,
+    limit: trip.limit,
+    draft: trip.draftValue
+  })
 }

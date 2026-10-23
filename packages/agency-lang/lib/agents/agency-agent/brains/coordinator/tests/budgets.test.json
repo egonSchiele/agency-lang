@@ -4,7 +4,29 @@
       "nodeName": "tripWithDraftIsAStop",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"failure:its time budget of 10s ran out\"",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:PARTIAL\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "tripWithoutAnswerIsAStop",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "tripWithRecoveredAnswerIsASuccess",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:FULL\\n\\n[fakeAgent: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"

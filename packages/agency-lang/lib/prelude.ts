@@ -29,6 +29,7 @@ export const PRELUDE_NAMES: readonly string[] = [
   "sleep",
   "saveDraft",
   "_guard",
+  "_budgetOutcome",
   "_pairsOf",
   "read",
   "write",

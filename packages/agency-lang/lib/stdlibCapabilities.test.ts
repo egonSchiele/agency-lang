@@ -91,6 +91,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "docsToolFromEntries",
     "bundledDocsDir",
     "disableMemory",
+    "_budgetOutcome",
   ],
   "a guard: its trip is raised on the TypeScript side and needs no host": ["_guard"],
   "agents and strategies that assemble a prompt and hand on the tools they are given": [
@@ -114,6 +115,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "consensus",
     "retry",
     "retryWithFeedback",
+    "revise",
   ],
   "the clock and the system part, which every host has": [
     "now",

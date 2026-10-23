@@ -131,6 +131,10 @@ export type DecoratorOrigin = {
   name: string;
   tagLoc: SourceLocation | undefined;
   target: string;
+  /** Whether the lowering passed the `call` record as the first argument.
+   *  With the body, that is what the call has that the tag does not, so
+   *  the checker subtracts it from argument counts and names. */
+  passesCallRecord: boolean;
 };
 
 export type FunctionCall = BaseNode & {

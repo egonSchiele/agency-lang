@@ -67,6 +67,9 @@ export function checkUndefinedFunctions(scopes: ScopeInfo[], ctx: TypeCheckerCon
           if (typeof node.functionName === "string" && holeNameSet.includes(node.functionName))
             continue;
           if (!isResolvableBareCall(node, ancestors)) continue;
+          // A decorator's call that does not resolve is an unknown decorator,
+          // which prepareProgram already reported at the tag.
+          if (node.decorator !== undefined) continue;
           checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames, registry);
         } else if (node.type === "valueAccess") {
           checkAccessChain(node, info.scope, ctx, mode, shadowing, registry);

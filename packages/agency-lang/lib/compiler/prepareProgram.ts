@@ -310,7 +310,14 @@ export function describeDiagnostic(found: PipelineDiagnostic, filePath?: string)
     const error = asImportResolutionError(found.error);
     return formatImportResolutionError(error, filePath);
   }
-  return filePath === undefined ? found.message : `${filePath} - error: ${found.message}`;
+  if (filePath === undefined) {
+    return found.message;
+  }
+  // A lift or decorator failure knows where it is; say so the way a type
+  // error does (1-indexed, from the 0-indexed loc).
+  const loc = "loc" in found ? found.loc : undefined;
+  const where = loc === undefined ? filePath : `${filePath}:${loc.line + 1}:${loc.col + 1}`;
+  return `${where} - error: ${found.message}`;
 }
 
 function asImportResolutionError(error: unknown): ImportResolutionError {

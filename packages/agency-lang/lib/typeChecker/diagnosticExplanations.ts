@@ -805,4 +805,33 @@ Working out what a generator can reach means reading source code. Four things ca
 An empty effect list from a reading that could not see one of those is not evidence of safety, so it fails closed. The message names which one it hit and where.
 
 **How to fix:** fix the file that does not parse, or rewrite the reached function so the call is direct rather than through a parameter or a variable. If the generator does not need that helper at all, stop calling it — the check follows calls, so an unused helper in the same file is not a problem.`,
+  decoratorArgType: `An argument written in a decorator tag does not fit the decorator's parameter.
+
+A tag such as \`@budgeted(cost: "x")\` is a call to \`budgeted\` with the decorated function's body as its block, so its arguments are checked against the decorator's parameters like any call's. This is the decorator form of AG6019.
+
+**How to fix:** pass a value of the type the decorator's parameter declares, or change the decorator's parameter type.`,
+
+  decoratorBodyReturn: `A \`return\` in a decorated function's body does not fit the block the decorator takes.
+
+The body of a decorated function runs as the decorator's block, so its returns are checked against the block's return type, not against the function's own. For example, a decorator declared \`def budgeted(cost: number, block: () -> string): Result<string>\` takes a body that returns \`string\`.
+
+**How to fix:** return the type the decorator's block declares. A decorator meant for functions of any return type types its block \`() -> any\`.`,
+
+  decoratorStackedReturn: `Two stacked decorators disagree: the inner one returns a type the outer one's block does not take.
+
+\`@a @b def f\` nests \`b\` inside \`a\`, so what \`b\` returns is what \`a\`'s block returns. When \`b\` returns \`number\` and \`a\` takes \`() -> string\`, the two cannot be stacked in that order, whatever the body returns.
+
+**How to fix:** swap the order of the tags, change one decorator's types, or type the outer decorator's block \`() -> any\`.`,
+
+  decoratorReturnMismatch: `A decorator returns a type the decorated function is not declared to return.
+
+A decorated function returns whatever its outermost decorator returns. A function declared \`: number\` under a decorator that returns \`Result<string>\` would hand its callers a \`Result<string>\`.
+
+**How to fix:** declare the function's return type as the decorator's return type, or use a decorator that returns the function's type.`,
+
+  raisesExceededViaDecorator: `A decorator raises an effect that the decorated function's \`raises\` clause does not list. This is the decorator form of AG3013.
+
+A decorated function's effects are its decorators' effects plus its body's, because the decorator's code runs every time the function is called. A \`@budgeted\` decorator written over \`guard\` raises \`std::guard\`, so a function it decorates raises \`std::guard\` too.
+
+**How to fix:** add the effect to the clause.`,
 };

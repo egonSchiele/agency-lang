@@ -84,7 +84,7 @@ describe("loweredBody", () => {
     expect(call.functionName).toBe("plain");
     expect(call.arguments).toEqual([]);
     expect(call.block?.body).toBe(original);
-    expect(call.decorator).toMatchObject({ name: "plain", target: "f" });
+    expect(call.decorator).toMatchObject({ name: "plain", target: "f", passesCallRecord: false });
     expect(call.scope).toBeUndefined();
   });
 
@@ -92,6 +92,7 @@ describe("loweredBody", () => {
     const program = parse(`@withCall(3)\ndef f(a: number, b: string = "x"): number { return a }\n`);
     const def = defNamed(program, "f");
     const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
+    expect(call.decorator?.passesCallRecord).toBe(true);
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[0]).toMatchObject({
       type: "agencyObject",

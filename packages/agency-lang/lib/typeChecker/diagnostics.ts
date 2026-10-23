@@ -846,6 +846,38 @@ export const DIAGNOSTICS = {
     message:
       "`{file}` contains a splice, and generator execution was declined for this check, so `{name}` was not run.",
   },
+  // Decorator forms of the call and return mismatches. A decorator tag lowers
+  // to a call, so these sites are the ordinary ones (see mismatch.ts); the
+  // messages name the decorator and the def instead of the synthesized call.
+  decoratorArgType: {
+    code: "AG6041",
+    severity: "error",
+    message: "Decorator '{name}' on '{target}' expects '{param}: {expected}', got '{actual}'.",
+  },
+  decoratorBodyReturn: {
+    code: "AG2018",
+    severity: "error",
+    message:
+      "The body of '{target}' returns '{actual}', but decorator '{name}' takes a block returning '{expected}'.",
+  },
+  decoratorStackedReturn: {
+    code: "AG2019",
+    severity: "error",
+    message:
+      "Decorator '{inner}' returns '{actual}', but decorator '{name}' above it on '{target}' takes a block returning '{expected}'.",
+  },
+  decoratorReturnMismatch: {
+    code: "AG2020",
+    severity: "error",
+    message:
+      "'{target}' is declared to return '{declared}', but decorator '{name}' returns '{actual}'.",
+  },
+  raisesExceededViaDecorator: {
+    code: "AG3030",
+    severity: "error",
+    message:
+      "{kind} '{name}' raises effect '{effect}', which exceeds its declared 'raises {declared}'. It is raised by decorator '{decorator}'. Add '{effect}' to the clause.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

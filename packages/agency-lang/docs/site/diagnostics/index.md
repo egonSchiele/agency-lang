@@ -55,6 +55,9 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG2015](checking.md#ag2015) | This function declares '&#123;expected&#125;' as its failure data, so failure() needs a second argument. To allow a failure with no data, declare the return type as 'Result&lt;&#123;success&#125;, &#123;expected&#125; \| null&gt;'. |
 | [AG2016](checking.md#ag2016) | A Result's second type parameter is its failure data, and failure data must be an object. Got '&#123;actual&#125;' (&#123;context&#125;). A failure's message is always a string and is not named in the type. |
 | [AG2017](checking.md#ag2017) | failure() cannot take a splat. Codegen appends the checkpoint and function name to every failure() call by position, and a splat of unknown width would displace them. Pass the message and data directly. |
+| [AG2018](checking.md#ag2018) | The body of '&#123;target&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'. |
+| [AG2019](checking.md#ag2019) | Decorator '&#123;inner&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' above it on '&#123;target&#125;' takes a block returning '&#123;expected&#125;'. |
+| [AG2020](checking.md#ag2020) | '&#123;target&#125;' is declared to return '&#123;declared&#125;', but decorator '&#123;name&#125;' returns '&#123;actual&#125;'. |
 
 ## Interrupts, effects, and handlers
 
@@ -87,6 +90,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3026](effects.md#ag3026) | @capabilities appears more than once on '&#123;callable&#125;'. |
 | [AG3028](effects.md#ag3028) | @capabilities goes on a def or a node.&#123;hint&#125; |
 | [AG3029](effects.md#ag3029) | &#123;kind&#125; '&#123;name&#125;' needs the &#123;capability&#125; capability, which the &#123;platform&#125; platform does not have. &#123;path&#125; |
+| [AG3030](effects.md#ag3030) | &#123;kind&#125; '&#123;name&#125;' raises effect '&#123;effect&#125;', which exceeds its declared 'raises &#123;declared&#125;'. It is raised by decorator '&#123;decorator&#125;'. Add '&#123;effect&#125;' to the clause. |
 
 ## Names, scope, and reserved words
 
@@ -157,6 +161,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6038](tools.md#ag6038) | finalize yields a single value — the scope's saved draft. Use one binder: finalize as &#123;name&#125; &#123; ... &#125;. |
 | [AG6039](tools.md#ag6039) | Parameter '&#123;name&#125;' on '&#123;fn&#125;' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one. |
 | [AG6040](tools.md#ag6040) | '&#123;expr&#125;' is passed as a tool, but it is a value of type '&#123;actual&#125;', not a function.&#123;shadowHint&#125; |
+| [AG6041](tools.md#ag6041) | Decorator '&#123;name&#125;' on '&#123;target&#125;' expects '&#123;param&#125;: &#123;expected&#125;', got '&#123;actual&#125;'. |
 
 ## Static init, config, and imports
 

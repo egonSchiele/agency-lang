@@ -16,8 +16,9 @@ let browser: Browser;
 let bundle: string;
 const openAiKey = process.env.OPENAI_API_KEY ?? "";
 // The model the real call uses: a cheap one. The provider is named because
-// agency.json bakes a different one into the program.
-const model = "gpt-4.1-nano";
+// agency.json bakes a different one into the program. gpt-4.1-nano was
+// retired on 2026-10-23; smoltalk names gpt-5.6-luna as its replacement.
+const model = "gpt-5.6-luna";
 const provider = "openai";
 
 beforeAll(async () => {

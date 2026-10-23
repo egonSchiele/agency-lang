@@ -151,9 +151,8 @@ export handoff def oracleAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  // Returned directly: the decorator assigns the body's result before it
-  // reaches the guard, so the model's in-flight saveDraft stops there and a
-  // budget trip is a failure carrying it. See docs/dev/agents/subagent-budgets.md.
+  // Return position: a draft the model saved reaches the guard, which
+  // returns it as the backup answer if the budget runs out.
   return consider(
     question: question,
     context: context,

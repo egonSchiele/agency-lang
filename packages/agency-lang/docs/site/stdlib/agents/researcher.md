@@ -50,7 +50,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 ### researcherAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
+@guard(cost: maxCost, time: maxTime)
 researcherAgent(
   task: string,
   context: string = "",

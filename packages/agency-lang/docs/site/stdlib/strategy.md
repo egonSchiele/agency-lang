@@ -153,7 +153,9 @@ revise(
 Run a block until its result is accepted, up to maxAttempts times. Each
   rejected attempt passes its critique to the next one, which receives it as
   its argument (an empty string on the first attempt). Returns the first
-  accepted result, or the last result when every attempt is rejected.
+  accepted result, or the last result when every attempt is rejected. If a
+  guard's budget runs out partway, the guard gets the last completed
+  attempt, or the draft an unfinished first attempt saved.
 
   @param maxAttempts - Maximum number of attempts
   @param check - Judges a result and returns the critique to address next
@@ -193,7 +195,7 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L156))
 
 ### guard
 
@@ -203,45 +205,40 @@ guard(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  draftsAreAnswers: boolean = false,
   block: () -> any = null,
 ): Result raises <std::guard>
 ```
 
 Run the decorated function under a cost and time budget, labelled with
-  the function's name. A finished answer is the result, even if the budget
-  runs out just after. A budget that runs out before an answer is a failure
-  naming the budget, with the draft so far in its data.
+  the function's name. If the budget runs out, the draft the function saved
+  is the result, marked as possibly unfinished; with nothing saved, the
+  result is a failure naming the budget.
 
   @param cost - Spend cap in dollars, or null for none
   @param time - Working-time cap, or null for none
   @param label - The guard's label; the function's name when null
-  @param draftsAreAnswers - true only when every draft the body can send up
-    is a finished answer, such as the last attempt revise saved. Leave it
-    false when a model in the body can call saveDraft.
 
 The `@guard` decorator: the `guard` block put around a whole function,
-  with three rules added. A finished answer is the result, even if the
-  budget runs out just after. A budget that runs out before an answer is a
-  failure naming it ("its time budget of 30m ran out"), with the draft so
-  far in its data. A finished `""` is a failure, "it returned no answer".
+  with three rules added. If the body finishes, its result is the result
+  (a finished `""` is a failure, "it returned no answer"). If the budget
+  runs out, the best answer the body had is the result: what it saved with
+  `saveDraft`, or handed up through a `finalize`, with a line appended to
+  a string saying it may be unfinished. With nothing saved, the result is
+  a failure naming the budget, "its time budget of 30m ran out".
 
   ```ts
   import { guard } from "std::strategy"
 
   @guard(cost: $1.00, time: 5m)
   def summarize(text: string): Result<string> {
-    return llm("Summarize: ${text}")
+    return llm("Summarize: ${text}", { tools: [saveDraft] })
   }
   ```
 
-  A draft saved inside the body never reaches the guard as an answer: the
-  model can call `saveDraft` halfway through and the half-written text
-  would read as finished. `draftsAreAnswers: true` lets the body's draft
-  through, for a body whose only draft is a finished attempt, such as the
-  last one `revise` saved. The decorator answers its own budget trip, so a
-  caller cannot grant more budget; pass a larger limit instead. See
-  docs/dev/agents/subagent-budgets.md.
+  The body's draft reaches the guard the way any partial result does: by
+  return position, or through a `finalize`. The decorator answers its own
+  budget trip, so a caller cannot grant more budget; pass a larger limit
+  instead. See docs/dev/agents/subagent-budgets.md.
 
 **Parameters:**
 
@@ -251,11 +248,10 @@ The `@guard` decorator: the `guard` block put around a whole function,
 | cost | `number \| null` | null |
 | time | `number \| null` | null |
 | label | `string \| null` | null |
-| draftsAreAnswers | `boolean` | false |
 | block | `() => any` | null |
 
 **Returns:** `Result`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L201))

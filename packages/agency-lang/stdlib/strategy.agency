@@ -178,61 +178,51 @@ export def firstValid(
 }
 
 /** The `@guard` decorator: the `guard` block put around a whole function,
-  with three rules added. A finished answer is the result, even if the
-  budget runs out just after. A budget that runs out before an answer is a
-  failure naming it ("its time budget of 30m ran out"), with the draft so
-  far in its data. A finished `""` is a failure, "it returned no answer".
+  with three rules added. If the body finishes, its result is the result
+  (a finished `""` is a failure, "it returned no answer"). If the budget
+  runs out, the best answer the body had is the result: what it saved with
+  `saveDraft`, or handed up through a `finalize`, with a line appended to
+  a string saying it may be unfinished. With nothing saved, the result is
+  a failure naming the budget, "its time budget of 30m ran out".
 
   ```ts
   import { guard } from "std::strategy"
 
   @guard(cost: $1.00, time: 5m)
   def summarize(text: string): Result<string> {
-    return llm("Summarize: ${text}")
+    return llm("Summarize: ${text}", { tools: [saveDraft] })
   }
   ```
 
-  A draft saved inside the body never reaches the guard as an answer: the
-  model can call `saveDraft` halfway through and the half-written text
-  would read as finished. `draftsAreAnswers: true` lets the body's draft
-  through, for a body whose only draft is a finished attempt, such as the
-  last one `revise` saved. The decorator answers its own budget trip, so a
-  caller cannot grant more budget; pass a larger limit instead. See
-  docs/dev/agents/subagent-budgets.md. */
+  The body's draft reaches the guard the way any partial result does: by
+  return position, or through a `finalize`. The decorator answers its own
+  budget trip, so a caller cannot grant more budget; pass a larger limit
+  instead. See docs/dev/agents/subagent-budgets.md. */
 export def guard(
   call: Call,
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  draftsAreAnswers: boolean = false,
   block: () -> any = null,
 ): Result raises <std::guard> {
   """
   Run the decorated function under a cost and time budget, labelled with
-  the function's name. A finished answer is the result, even if the budget
-  runs out just after. A budget that runs out before an answer is a failure
-  naming the budget, with the draft so far in its data.
+  the function's name. If the budget runs out, the draft the function saved
+  is the result, marked as possibly unfinished; with nothing saved, the
+  result is a failure naming the budget.
 
   @param cost - Spend cap in dollars, or null for none
   @param time - Working-time cap, or null for none
   @param label - The guard's label; the function's name when null
-  @param draftsAreAnswers - true only when every draft the body can send up
-    is a finished answer, such as the last attempt revise saved. Leave it
-    false when a model in the body can call saveDraft.
   """
   const name = label ?? call.name
   let trip: any = null
   let result: Result = failure("${name} never ran")
   handle {
+    // Return position: a draft the body saved reaches the guard, which
+    // returns it as the backup answer when the budget runs out.
     result = guard(cost: cost, time: time, label: name) {
-      if (draftsAreAnswers) {
-        return block()
-      }
-      // An assignment, not a return: a draft saved inside the body stops
-      // here, so a trip is a failure carrying it as data, never an answer.
-      const answer = block()
-      saveDraft(answer)
-      return answer
+      return block()
     }
   } with (intr) {
     if (intr.effect != "std::guard" || intr.data.label != name) {

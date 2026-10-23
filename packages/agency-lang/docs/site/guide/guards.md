@@ -193,32 +193,21 @@ import { guard } from "std::strategy"
 
 @guard(cost: $1.00, time: 5m)
 def summarize(text: string): Result<string> {
-  return llm("Summarize this: ${text}")
+  return llm("Summarize this: ${text}", { tools: [saveDraft] })
 }
 ```
 
 The `guard` block and the `@guard` decorator share a name, but the decorator does more than wrap the body in the block. It labels the guard with the function's name (pass `label:` to choose another), answers its own trip, and applies three rules:
 
 - If the body finishes, its result is the result. A finished `""` is a failure, "it returned no answer".
-- If the budget runs out after a finished answer reached the guard, the answer is the result, with one line appended to a string answer saying the budget ran out before it was accepted.
-- If the budget runs out before that, the result is a failure naming the budget, such as "its time budget of 5m ran out", and its `data.draft` holds the most recent [saved draft](/guide/partial-results).
+- If the budget runs out and the body had saved a draft, the draft is the result, as a success. A string gets one line appended saying the budget ran out, so the answer may be unfinished or unchecked.
+- If the budget runs out with nothing saved, the result is a failure naming the budget, such as "its time budget of 5m ran out".
 
-A draft the body saves along the way never counts as a finished answer. If the model in `summarize` calls `saveDraft` halfway through and then the time runs out, you get the failure, with the half-written summary in `data.draft`. A body whose only drafts are finished attempts can say so with `draftsAreAnswers: true`. The usual case is [`revise`](/stdlib/strategy#revise), which saves each attempt it completes:
-
-```ts
-@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
-def research(question: string, maxCost: number, maxTime: number): Result<string> {
-  return revise(maxAttempts: 2, check: checkSources) as critique {
-    return llm("Answer ${question}. Fix: ${critique}")
-  }
-}
-```
-
-Leave `draftsAreAnswers` off whenever a model in the body can call `saveDraft`.
+So if the model in `summarize` calls `saveDraft` halfway through and then the time runs out, you get the half-written summary with the note. The draft reaches the guard the same way any [partial result](/guide/partial-results) does: by return position, or through a `finalize`.
 
 Because the decorator answers its own trip, the caller never sees a `std::guard` interrupt for it and cannot give it more budget. To allow more, pass a larger limit, as the standard library agents do with their `maxCost` and `maxTime` parameters.
 
-One gap: a time limit that runs out while the body is inside `sleep()` ends the sleep without raising the interrupt, so the decorator returns the guard's own failure ("Guard 'summarize' exceeded its time budget...") without `data.draft`.
+One gap: a time limit that runs out while the body is inside `sleep()` ends the sleep without raising the interrupt, so the decorator returns the guard's own result unchanged: a saved draft without the note, or the guard's own failure ("Guard 'summarize' exceeded its time budget...").
 
 ## Root budgets
 

@@ -4259,15 +4259,26 @@ export class TypeScriptBuilder {
         flushPart();
       }
 
-      const stepIndex = nextId();
-      this.steps.push(stepIndex);
       // Destructive-execution tracking: the pre-flip runs before the
       // statement, the post-flip after. See DestructiveTracking.statementFlips.
       const { pre, post } = this.tracking.statementFlips(stmt, this.scopes.inDestructiveFunction);
       if (pre) {
+        // The pre-flip is a step of its own, closed before the statement
+        // gets its step. A compound statement (handle, if, loop, thread)
+        // is pushed straight onto `result` below, past the open part, so a
+        // flip left in that part would run AFTER the statement and a
+        // `return` inside it would leave the function with the flag still
+        // false (ADI-56 review).
         if (!currentPart) currentPart = [];
         currentPart.push(pre);
+        this.steps.push(nextId());
+        this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+        this.steps.pop();
+        flushPart();
       }
+
+      const stepIndex = nextId();
+      this.steps.push(stepIndex);
       const processed = this.processStatement(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
         result.push(processed);

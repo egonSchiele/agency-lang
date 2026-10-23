@@ -267,6 +267,31 @@ destructive def rm(id: string): string {
     expect(plainOut).not.toContain("markers:");
   });
 
+  it("the conservative pre-flip is its own step, before a compound statement", () => {
+    const output = generateWithBuilder(`
+destructive def rm(id: string): string {
+  return id
+}
+def viaHandler(id: string): string {
+  handle {
+    return interrupt("go?")
+  } with (intr) {
+    const m = rm(id)
+    return reject()
+  }
+  return id
+}
+`);
+    const body = bodyOf(output, "viaHandler");
+    // The handler body is not walked statement by statement, so the only
+    // flip covering rm(id) is the one on the handle statement. It has to run
+    // before the handle, or the return inside leaves the flag false.
+    const flip = body.indexOf("__activation.__destructiveRan = true");
+    const handle = body.indexOf("runner.handle(");
+    expect(flip).toBeGreaterThan(-1);
+    expect(flip).toBeLessThan(handle);
+  });
+
   it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {
     const output = generateWithBuilder(`
 destructive def rm(id: string): string {

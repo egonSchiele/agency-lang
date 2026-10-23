@@ -56,8 +56,19 @@
       ]
     },
     {
-      "nodeName": "inParallelArm_",
-      "description": "a destructive call in a parallel arm marks the function",
+      "nodeName": "handlerDoesWork_",
+      "description": "a destructive call in a handler body marks the function even when the handler returns",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "inCondition_",
+      "description": "a destructive call in an if condition marks the function",
       "input": "",
       "expectedOutput": "[true]",
       "evaluationCriteria": [

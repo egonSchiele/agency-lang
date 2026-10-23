@@ -84,7 +84,7 @@ export function validateParallelBlock(pb: ParallelBlock): void {
   //    subtree, so a region nested in a `seq` arm is caught too.
   if (functionContainsDestructiveBlock(pb.body)) {
     throw new Error(
-      "A `destructive { }` region is not allowed inside a `parallel` block: it would run in a fork branch and could not commit its destructive work to the calling tool. Move the destructive region out of the `parallel` block.",
+      "A `destructive { }` region is not allowed inside a `parallel` block: what a failure from one arm should say about the destructive work of the arms running beside it has not been decided. Move the destructive region out of the `parallel` block.",
     );
   }
 

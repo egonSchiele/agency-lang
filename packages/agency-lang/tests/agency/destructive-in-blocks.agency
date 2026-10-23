@@ -102,17 +102,37 @@ node ranTwice_() {
   return "unexpected"
 }
 
-// A destructive call in a parallel arm. The arm is a fork branch with its own
-// frame; the mark still reaches the function.
-def inParallelArm(): Result {
-  parallel {
-    const a = burn()
-    const b = 2
+// A destructive call inside a handler body. The handler body is not walked
+// statement by statement; the conservative flip on the `handle` statement has
+// to run BEFORE it, or the `return` inside leaves the function with the flag
+// still false.
+def handlerDoesWork(): Result {
+  handle {
+    return interrupt("go?")
+  } with (intr) {
+    const m = burn()
+    return reject()
   }
-  return failure("later")
+  return failure("after")
 }
-node inParallelArm_() {
-  const r = inParallelArm()
+node handlerDoesWork_() {
+  const r = handlerDoesWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call in an `if` condition: the only flip that covers it is
+// the conservative one on the `if` statement.
+def inCondition(): Result {
+  if (burn() > 0) {
+    return failure("inside")
+  }
+  return failure("after")
+}
+node inCondition_() {
+  const r = inCondition()
   if (isFailure(r)) {
     return [r.destructiveRan]
   }

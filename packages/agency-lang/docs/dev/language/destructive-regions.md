@@ -16,13 +16,13 @@ A rejected interrupt here fails before the region, so the failure is clean and r
 
 ## Where the flag lives
 
-Every function and node activation carries one boolean, `__destructiveRan`, on its locals. It starts false and only ever flips to true. The generated code refers to it as `__activation.__destructiveRan`, and `DestructiveTracking` (`lib/backends/typescriptBuilder/destructiveTracking.ts`) is the one place that emits every read and write:
+Every function and node activation carries one boolean, `__destructiveRan`, on its locals. It starts false and only ever flips to true. The generated code refers to it as `__activation.__destructiveRan`, and `DestructiveTracking` (`lib/backends/typescriptBuilder/destructiveTracking.ts`) is the one place in codegen that spells the slot. The slot is written and read from five places:
 
 - **Init**, in step 0 of every function: `?? false` for an ordinary def, `true` for a `destructive def`. It runs after the `!` parameter checks so a refused argument leaves the flag false.
 - **Region entry**: a `destructive { }` region is a `seqBlock` the parallel desugar inlines into the surrounding statements, leaving a `markDestructiveRan` node at its start (`lib/types/markDestructiveRan.ts`). Codegen turns that node into the flip.
-- **Rule 2, calls to a destructive def**: when the call's result binds a plain local, a post-flip trusts the result (`isFailure(r) ? r.destructiveRan : true`), so a clean refusal from the callee does not poison the caller. Any other statement containing a destructive call gets a conservative pre-flip.
-- **Decision 8, a destructive tool inside `llm()`**: the `llm()` codegen hands `runPrompt` the activation as `destructiveSink`, and the tool loop writes the flag through it (`markDestructiveWork` in `lib/runtime/result.ts`).
-- **Exit stamp**: when the function halts with a failure, `stampFailureBoundary` ORs the flag into it. The catch path that turns a thrown error into a failure reads the same slot.
+- **Rule 2, calls to a destructive def**: when the call's result binds a plain local, a post-flip trusts the result (`isFailure(r) ? r.destructiveRan : true`), so a clean refusal from the callee does not poison the caller. Any other statement containing a destructive call gets a conservative pre-flip, emitted as a step of its own before the statement. That matters for a compound statement (`handle`, `if`, a loop, `thread`): its inner bodies get their own flips, but a destructive call in an `if` condition, a loop's iterable, or a handler body is covered only by the pre-flip, and the statement may `return` before any flip placed after it could run. `processBodyAsParts` in `lib/backends/typescriptBuilder.ts` closes the pre-flip's step before the statement's.
+- **Decision 8, a destructive tool inside `llm()`**: the `llm()` codegen in `lib/backends/typescriptBuilder.ts` hands `runPrompt` the activation as `destructiveSink`, and the tool loop writes the flag through it at runtime (`markDestructiveWork` in `lib/runtime/result.ts`).
+- **Exit stamp**: when the function halts with a failure, `stampFailureBoundary` ORs the flag into it. The catch path that turns a thrown error into a failure (`functionCatchFailure.mustache`) reads the same slot.
 
 The flag lives on the frame's locals so a checkpoint carries it: a function that resumes after an interrupt inside its region still knows the region was entered.
 
@@ -37,7 +37,9 @@ What this fixes, each pinned by `tests/agency/destructive-in-blocks.agency`:
 - a region inside a block argument, whether the failure escapes through the block or the function fails after the block returned;
 - a destructive call bound to a local inside a block;
 - regions two blocks deep, and a block run more than once;
-- a destructive call inside a `parallel` arm.
+- a destructive call in a handler body, and one in an `if` condition (the pre-flip ordering above).
+
+A destructive call inside a `parallel` arm already worked before this change: the `parallel` statement textually contains the call, so the function-level pre-flip fires before the fork. The arm's own post-flip now also lands on the function, but nothing depends on it.
 
 The decorator case is `tests/agency/decorators/destructive-region-in-body.agency`.
 

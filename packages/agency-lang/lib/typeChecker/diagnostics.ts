@@ -872,6 +872,12 @@ export const DIAGNOSTICS = {
     message:
       "'{target}' is declared to return '{declared}', but decorator '{name}' returns '{actual}'.",
   },
+  decoratorDraftType: {
+    code: "AG2021",
+    severity: "error",
+    message:
+      "The body of '{target}' saves a draft of type '{actual}', but decorator '{name}' takes a block returning '{expected}'.",
+  },
   raisesExceededViaDecorator: {
     code: "AG3030",
     severity: "error",

@@ -177,8 +177,10 @@ export handoff def researcherAgent(
   """
 
   return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
-    let answer = ""
-    answer = researchLoop(
+    // Return position passes a partial through. The only partial
+    // researchLoop can send up is a completed attempt that revise saved,
+    // because the model's own drafts stop at revise's assignment.
+    return researchLoop(
       task: task,
       context: context,
       history: history,
@@ -187,14 +189,6 @@ export handoff def researcherAgent(
       provider: provider,
       extraTools: extraTools,
     )
-    return answer
-
-    // Salvage the best-so-far answer (a completed attempt, or the model's
-    // in-flight saveDraft) if an outer budget guard trips; the assignment
-    // above would otherwise drop it.
-    finalize {
-      return answer
-    }
   }
 }
 

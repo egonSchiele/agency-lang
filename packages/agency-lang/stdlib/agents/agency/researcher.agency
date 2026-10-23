@@ -81,6 +81,11 @@ export handoff def agencyResearcherAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   return guard(cost: maxCost, time: maxTime, label: "agencyResearcherAgent") {
+    // The assignment is deliberate, and there is no finalize. The model's
+    // saveDraft lands in the callee's frame and stops here, so a budget trip
+    // is a failure, never an answer (the coordinator reads the draft off the
+    // trip interrupt). Returning the call directly would carry the draft to
+    // the guard as a success. See docs/dev/agents/subagent-budgets.md.
     let reply = ""
     reply = answer(
       question: question,
@@ -90,11 +95,5 @@ export handoff def agencyResearcherAgent(
       extraTools: extraTools,
     )
     return reply
-
-    // Salvage the model's best-so-far saveDraft if an outer budget guard
-    // trips mid-answer; the assignment above would otherwise drop it.
-    finalize {
-      return reply
-    }
   }
 }

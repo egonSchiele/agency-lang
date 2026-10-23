@@ -1,6 +1,6 @@
 # Parameter aliases: `def fetch(baseUrl | url: string)`
 
-An alias is a misspelling the tool forgives. It is not a second name for the parameter. Every decision below follows from those two sentences. The spec is `docs/superpowers/specs/2026-10-23-parameter-aliases.md`; the ticket is ADI-41.
+An alias is a misspelling the tool forgives. It is not a second name for the parameter. Every decision below follows from those two sentences. The ticket is ADI-41.
 
 ## Why
 
@@ -12,7 +12,7 @@ In trace wX5GvrUq a model called `fetch` with `url` instead of `baseUrl`, twice,
 def fetch(baseUrl | url | href: string | null, path: string = "")
 ```
 
-`baseUrl` is the parameter's name. `url` and `href` are aliases. After the colon, `|` is still a union type. The parser accepts aliases on `def` parameters only, including variadic ones (`...rest | items: string[]`); node parameters and the inline handler parameter in `with (intr) { }` use the plain parser, because nothing would ever forgive an alias there (a node is not an `AgencyFunction`, and `goto` is lowered at compile time).
+`baseUrl` is the parameter's name. `url` and `href` are aliases. After the colon, `|` is still a union type. The parser accepts aliases on `def` parameters only, including variadic ones (`...rest | items: string[]`); node parameters and the inline handler parameter in `with (intr) { }` use the plain parser, because nothing would ever forgive an alias there (a node is not an `AgencyFunction`, and `goto` is lowered at compile time). A `|` after a node or handler parameter name is a parse error that says so.
 
 Inside the body, `url` is not a variable. The tool schema lists `baseUrl`. The "Unknown named argument" message lists `baseUrl`. `@param` lines use `baseUrl`. `agency fmt` prints the aliases back, and `agency doc` shows them on the signature and as `baseUrl (also `url`)` in the parameter table, since a reader deciding whether to add one wants to see what exists.
 
@@ -33,7 +33,7 @@ So forgiveness is opt-in per call. The named descriptor has a `forgiveAliases` f
 | A model calling a tool | `prompt.ts`, the tool invoke |
 | Served HTTP, MCP, and `agency run` with arguments | `runExportedFunctionCore` in `lib/runtime/node.ts` |
 
-Generated code never sets the flag. For a call without it, an alias key is an error that names the parameter: `'url' is an alias of 'baseUrl'; use 'baseUrl' in call to 'fetch'.` The type checker reports the same mistake earlier, as AG6042, from `checkNamedArgStructure` in `checker.ts` and from the `.partial()` check in `synthesizer.ts`. `.partial()` at runtime binds by name only and never learns aliases.
+Generated code never sets the flag. For a call without it, an alias key is an error that names the parameter: `'url' is an alias of 'baseUrl' in call to 'fetch'; use 'baseUrl'.` The type checker reports the same mistake earlier, as AG6042, from `checkNamedArgStructure` in `checker.ts` and from the `.partial()` check in `synthesizer.ts`. `.partial()` at runtime binds by name only and never learns aliases.
 
 ## One helper, three callers
 
@@ -61,7 +61,7 @@ Two paths skip smoltalk. The plain OpenAI client sends the raw schema without `s
 
 ## Codegen
 
-The `params` metadata emitted by `buildFunction` in `typescriptBuilder.ts` carries `aliases` only when a parameter has some. Its neighbours (`variadic`, `isFunctionTyped`) are written on every parameter; the difference is a choice made on 2026-10-23 so the generated code of every existing program stays byte-identical and the fixtures under `tests/typescriptGenerator/` do not all change.
+The `params` metadata emitted by `buildFunction` in `typescriptBuilder.ts` carries `aliases` only when a parameter has some, so the generated code of a program without aliases is unchanged. Its neighbours (`variadic`, `isFunctionTyped`) are written on every parameter. An `AgencyFunction` works out once, in its constructor, whether any unbound parameter has aliases; a named call to a function without any skips the alias pass.
 
 ## Departures from the ticket
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ALIASES_ON_DEFS_ONLY,
   RESERVED_WORDS,
   functionParser,
   functionParameterParser,
@@ -3896,16 +3897,18 @@ describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
     expect("aliases" in param).toBe(false);
   });
 
-  it("refuses an alias on a node parameter", () => {
+  it("refuses an alias on a node parameter and says why", () => {
     const result = parseAgency("node main(a | b: string) {\n  return a\n}\n", {});
     expect(result.success).toBe(false);
+    if (!result.success) expect(result.message).toContain(ALIASES_ON_DEFS_ONLY);
   });
 
-  it("refuses an alias on an inline handler parameter", () => {
+  it("refuses an alias on an inline handler parameter and says why", () => {
     const result = parseAgency(
       "def f(a: string) {\n  handle {\n    return a\n  } with (intr | i) {\n    return approve()\n  }\n}\n",
       {},
     );
     expect(result.success).toBe(false);
+    if (!result.success) expect(result.message).toContain(ALIASES_ON_DEFS_ONLY);
   });
 });

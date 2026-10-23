@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
+import { zodToAnthropicTool, zodToOpenAIResponsesTool, zodToOpenAITool } from "smoltalk";
 import { readFileSync } from "fs";
 import { createRequire } from "module";
 import path from "path";
@@ -175,15 +177,38 @@ describe("apiKeysFromSettings", () => {
   });
 });
 
-describe("toSmolConfig — tools are never strict", () => {
-  // With strict off, smoltalk lets a provider accept an argument key that
-  // is not in the schema, which is what lets the runtime forgive a
-  // parameter alias (`url` for `baseUrl`). A strict tool would have the
-  // provider refuse the alias before Agency saw it.
-  it("passes tools through without a strict flag", () => {
-    const tool = { name: "fetch", description: "", schema: null };
-    const out = toSmolConfig({ messages: [], tools: [tool] } as any) as any;
-    expect(out.tools).toEqual([tool]);
-    expect(out.tools[0].strict).toBeUndefined();
+describe("toSmolConfig — messages and tools reach smoltalk", () => {
+  it("passes the messages through", () => {
+    const message = { role: "user", content: "hi" };
+    const out = toSmolConfig({ messages: [message], tools: [] } as any) as any;
+    expect(out.messages).toEqual([message]);
+  });
+});
+
+describe("tool schemas reach the provider non-strict", () => {
+  // The runtime forgives a parameter alias (`url` for `baseUrl`) only if the
+  // provider lets an argument key that is not in the schema through. Agency
+  // builds its tool schemas with z.object, which writes
+  // additionalProperties: false; these are the converters smoltalk's clients
+  // run every tool through before a request, with the options Agency passes
+  // (a description, no strict). If a smoltalk upgrade turned strict on,
+  // these fail.
+  const schema = z.object({ baseUrl: z.string() });
+
+  it("OpenAI: the top-level object is open and the tool is not strict", () => {
+    const tool = zodToOpenAITool("fetch", schema, { description: "" }) as any;
+    expect(tool.function.parameters.additionalProperties).not.toBe(false);
+    expect(tool.function.strict).not.toBe(true);
+  });
+
+  it("OpenAI Responses: the tool is not strict", () => {
+    const tool = zodToOpenAIResponsesTool("fetch", schema, { description: "" });
+    expect(tool.strict).toBe(false);
+    expect(tool.parameters.additionalProperties).not.toBe(false);
+  });
+
+  it("Anthropic: the schema carries no additionalProperties", () => {
+    const tool = zodToAnthropicTool("fetch", schema, { description: "" }) as any;
+    expect(tool.input_schema.additionalProperties).toBeUndefined();
   });
 });

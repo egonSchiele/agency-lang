@@ -92,4 +92,18 @@ describe("aliasHint", () => {
   it("names the alias and the canonical name", () => {
     expect(aliasHint("url", "baseUrl")).toBe("'url' is an alias of 'baseUrl'; use 'baseUrl'.");
   });
+
+  it("names the call when given the function", () => {
+    expect(aliasHint("url", "baseUrl", "fetch")).toBe(
+      "'url' is an alias of 'baseUrl' in call to 'fetch'; use 'baseUrl'.",
+    );
+  });
+});
+
+describe("canonicalKeys with a function name", () => {
+  it("names the call in the conflict", () => {
+    expect(canonicalKeys({ baseUrl: "a", url: "b" }, params, "fetch").conflict).toBe(
+      "Both 'baseUrl' and 'url' were given for parameter 'baseUrl' in call to 'fetch'. Pass one.",
+    );
+  });
 });

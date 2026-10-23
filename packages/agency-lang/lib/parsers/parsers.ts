@@ -7250,12 +7250,21 @@ const parameterAliasParser: Parser<string> = seq(
  */
 function parameterNameParser(allowAliases: boolean): Parser<any> {
   if (!allowAliases) {
-    return capture(identifierParser, "name");
+    return captureCaptures(seqC(capture(identifierParser, "name"), noAliasHere));
   }
   return captureCaptures(
     seqC(capture(identifierParser, "name"), capture(many(parameterAliasParser), "aliases")),
   );
 }
+
+export const ALIASES_ON_DEFS_ONLY =
+  "parameter aliases (`name | alias`) are only allowed on `def` parameters";
+
+/** After a node or handler parameter name, a `|` is a mistake worth
+ *  naming: the generic "expected `,` or `)`" error would not say why. */
+const noAliasHere: Parser<unknown> = optional(
+  seqR(optionalSpaces, peek(char("|")), parseError(ALIASES_ON_DEFS_ONLY, fail("alias"))),
+);
 
 /** Drop an empty alias list so a parameter without aliases has no
  *  `aliases` field, the way `variadic` is absent when false. */
@@ -7341,43 +7350,23 @@ export const defParameterParser: Parser<FunctionParameter> = makeFunctionParamet
   true,
 );
 
-// Parses: ...name, ...name: type
-function makeVariadicParameterParser(
-  memoName: string,
-  allowAliases: boolean,
-): Parser<FunctionParameter> {
-  return memo(
-    memoName,
-    map(
-      seqC(
-        set("type", "functionParameter"),
-        str("..."),
-        parameterNameParser(allowAliases),
-        optional(
-          captureCaptures(
-            seqC(
-              optionalSpaces,
-              char(":"),
-              optionalSpaces,
-              capture(variableTypeParser, "typeHint"),
-            ),
-          ),
+// Parses: ...name, ...name: type, ...name | alias: type. Only a def
+// parameter list has variadics, so there is one variant and it takes aliases.
+export const defVariadicParameterParser: Parser<FunctionParameter> = memo(
+  "defVariadicParameterParser",
+  map(
+    seqC(
+      set("type", "functionParameter"),
+      str("..."),
+      parameterNameParser(true),
+      optional(
+        captureCaptures(
+          seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
         ),
       ),
-      (result) => withoutEmptyAliases({ ...result, variadic: true } as FunctionParameter),
     ),
-  );
-}
-
-export const variadicParameterParser: Parser<FunctionParameter> = makeVariadicParameterParser(
-  "variadicParameterParser",
-  false,
-);
-
-/** A variadic `def` parameter: `...rest | items: string[]`. */
-export const defVariadicParameterParser: Parser<FunctionParameter> = makeVariadicParameterParser(
-  "defVariadicParameterParser",
-  true,
+    (result) => withoutEmptyAliases({ ...result, variadic: true } as FunctionParameter),
+  ),
 );
 
 export const functionReturnTypeParser: Parser<VariableType> = memo(

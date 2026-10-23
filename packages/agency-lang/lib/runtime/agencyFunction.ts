@@ -138,6 +138,9 @@ export class AgencyFunction {
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
+  /** Whether any unbound parameter has aliases. Almost none do, so a
+   *  named call skips the alias pass when this is false. */
+  private readonly _hasAliases: boolean;
   private readonly _isBound: boolean;
   private readonly _checksFailures: boolean;
   readonly exported: boolean;
@@ -168,6 +171,7 @@ export class AgencyFunction {
     this._hasVariadic =
       this._unboundParams.length > 0 &&
       this._unboundParams[this._unboundParams.length - 1].variadic;
+    this._hasAliases = this._unboundParams.some((p) => (p.aliases ?? []).length > 0);
     this._isBound = opts.params.some((p) => p.isBound);
     this._checksFailures = opts.params.some((p) => p.acceptsResult === false);
   }
@@ -426,7 +430,10 @@ export class AgencyFunction {
    * the invoke (for the repeat key) and `resolveNamed` calls it again.
    */
   canonicalizeNamedArgs(namedArgs: Record<string, unknown>): CanonicalKeysResult {
-    return canonicalKeys(namedArgs, this._unboundParams);
+    if (!this._hasAliases) {
+      return { args: namedArgs, corrections: [], conflict: null };
+    }
+    return canonicalKeys(namedArgs, this._unboundParams, this.name);
   }
 
   private resolveArgs(descriptor: CallType): unknown[] {
@@ -448,20 +455,19 @@ export class AgencyFunction {
     namedArgs: Record<string, unknown>;
     forgiveAliases?: boolean;
   }): Record<string, unknown> {
+    if (!this._hasAliases) {
+      return descriptor.namedArgs;
+    }
     const corrected = this.canonicalizeNamedArgs(descriptor.namedArgs);
     if (descriptor.forgiveAliases) {
       if (corrected.conflict !== null) {
-        throw new Error(
-          `${corrected.conflict.replace(". Pass one.", "")} in call to '${this.name}'. Pass one.`,
-        );
+        throw new Error(corrected.conflict);
       }
       return corrected.args;
     }
     const [firstCorrection] = corrected.corrections;
     if (firstCorrection) {
-      throw new Error(
-        `${aliasHint(firstCorrection.from, firstCorrection.to).slice(0, -1)} in call to '${this.name}'.`,
-      );
+      throw new Error(aliasHint(firstCorrection.from, firstCorrection.to, this.name));
     }
     return descriptor.namedArgs;
   }

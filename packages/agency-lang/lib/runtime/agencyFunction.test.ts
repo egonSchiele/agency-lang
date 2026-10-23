@@ -1,6 +1,7 @@
 import { describe, it as baseIt, expect } from "vitest";
 import { z } from "zod";
-import { AgencyFunction, UNSET } from "./agencyFunction.js";
+import { AgencyFunction, UNSET, type CallType } from "./agencyFunction.js";
+import { callFromOutside } from "./toolInvocation.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -915,17 +916,21 @@ describe("preapprove verdict shape", () => {
 
 describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
   // The alias is a misspelling the tool forgives for a caller whose
-  // arguments come from outside the program, never a second name. Spec:
-  // docs/superpowers/specs/2026-10-23-parameter-aliases.md.
+  // arguments come from outside the program. It is not a second name. See
+  // docs/dev/language/parameter-aliases.md.
   const fetchLike = () =>
     makeFunction([
       { name: "baseUrl", aliases: ["url", "href"] },
       { name: "path", hasDefault: true, defaultValue: "/" },
     ]);
-  const forgiven = (namedArgs: Record<string, unknown>) =>
-    ({ type: "named", positionalArgs: [], namedArgs, forgiveAliases: true }) as const;
-  const compiled = (namedArgs: Record<string, unknown>) =>
-    ({ type: "named", positionalArgs: [], namedArgs }) as const;
+  // The descriptor the tool loop and the served entry build.
+  const forgiven = callFromOutside;
+  // The descriptor compiled Agency code builds.
+  const compiled = (namedArgs: Record<string, unknown>): CallType => ({
+    type: "named",
+    positionalArgs: [],
+    namedArgs,
+  });
 
   describe("a forgiven caller", () => {
     it("receives the value under the parameter's name", async () => {
@@ -990,7 +995,7 @@ describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
   describe("a compiled Agency call (no forgiveAliases)", () => {
     it("treats the alias as an error that names the parameter", async () => {
       await expect(fetchLike().invoke(testRun(), compiled({ url: "a" }))).rejects.toThrow(
-        "'url' is an alias of 'baseUrl'; use 'baseUrl' in call to 'testFn'.",
+        "'url' is an alias of 'baseUrl' in call to 'testFn'; use 'baseUrl'.",
       );
     });
 

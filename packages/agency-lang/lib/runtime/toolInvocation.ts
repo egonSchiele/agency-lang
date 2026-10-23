@@ -171,6 +171,19 @@ export function capToolResultForLlm(result: any, cap: number): any {
  *  Params without a default keep their value untouched: a required arg passed
  *  `null` still surfaces its normal type error for the model to correct, and
  *  an intentionally-nullable param is left alone. */
+export function dropNullDefaultedArgs(
+  args: Record<string, any> | null | undefined,
+  params: readonly FuncParam[],
+): Record<string, any> {
+  const out: Record<string, any> = { ...args };
+  for (const param of params) {
+    if (param.hasDefault && out[param.name] === null) {
+      delete out[param.name];
+    }
+  }
+  return out;
+}
+
 /**
  * The model's arguments as the function will see them: alias keys renamed
  * to the parameter (`url` to `baseUrl`), then null-valued defaulted keys
@@ -200,19 +213,6 @@ export function toolArgumentsFor(
  *  parameter. A call compiled from Agency source never gets this. */
 export function callFromOutside(namedArgs: Record<string, unknown>): CallType {
   return { type: "named", positionalArgs: [], namedArgs, forgiveAliases: true };
-}
-
-export function dropNullDefaultedArgs(
-  args: Record<string, any> | null | undefined,
-  params: readonly FuncParam[],
-): Record<string, any> {
-  const out: Record<string, any> = { ...args };
-  for (const param of params) {
-    if (param.hasDefault && out[param.name] === null) {
-      delete out[param.name];
-    }
-  }
-  return out;
 }
 
 /** Provider APIs (Anthropic, OpenAI) reject an LLM request whose tool list

@@ -5,8 +5,8 @@
  * for the parameter. This module is the one place that answers "which
  * parameter does this key name, and did it get there through an alias?".
  * The type checker, the synthesizer, and the runtime all call it, so the
- * answer cannot drift between them. Spec:
- * `docs/superpowers/specs/2026-10-23-parameter-aliases.md`.
+ * answer cannot drift between them. See
+ * `docs/dev/language/parameter-aliases.md`.
  *
  * The functions here are pure and never throw. `resolveNamed` in
  * `lib/runtime/agencyFunction.ts` is the only place that decides what a
@@ -48,15 +48,26 @@ export function parameterForKey(
   return null;
 }
 
-/** The one sentence every layer uses when Agency code writes an alias. */
-export function aliasHint(key: string, canonical: string): string {
-  return `'${key}' is an alias of '${canonical}'; use '${canonical}'.`;
+/** The one sentence every layer uses when Agency code writes an alias.
+ *  With `fn`, the call is named: `'url' is an alias of 'baseUrl' in call
+ *  to 'fetch'; use 'baseUrl'.` */
+export function aliasHint(key: string, canonical: string, fn?: string): string {
+  return `'${key}' is an alias of '${canonical}'${inCallTo(fn)}; use '${canonical}'.`;
 }
 
 /** The conflict sentence when two keys land on one parameter. The keys
  *  are named in the order the caller wrote them. */
-export function aliasConflictMessage(first: string, second: string, canonical: string): string {
-  return `Both '${first}' and '${second}' were given for parameter '${canonical}'. Pass one.`;
+export function aliasConflictMessage(
+  first: string,
+  second: string,
+  canonical: string,
+  fn?: string,
+): string {
+  return `Both '${first}' and '${second}' were given for parameter '${canonical}'${inCallTo(fn)}. Pass one.`;
+}
+
+function inCallTo(fn: string | undefined): string {
+  return fn === undefined ? "" : ` in call to '${fn}'`;
 }
 
 /**
@@ -72,6 +83,7 @@ export function aliasConflictMessage(first: string, second: string, canonical: s
 export function canonicalKeys(
   args: Record<string, unknown>,
   params: readonly NamedParameter[],
+  fn?: string,
 ): CanonicalKeysResult {
   const renamed: Record<string, unknown> = {};
   const corrections: AliasCorrection[] = [];
@@ -86,7 +98,7 @@ export function canonicalKeys(
       return {
         args: { ...args },
         corrections: [],
-        conflict: aliasConflictMessage(keyThatFilled[target], key, target),
+        conflict: aliasConflictMessage(keyThatFilled[target], key, target, fn),
       };
     }
     keyThatFilled[target] = key;

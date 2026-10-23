@@ -2577,10 +2577,8 @@ export class TypeScriptBuilder {
     // from the tool schema (buildToolDefinition); the `isFunctionTyped`
     // flag is forwarded so the runtime backstop (validateForLLM) can
     // re-check tool arrays it cannot see statically.
-    // `aliases` is written only when a parameter has some, unlike its
-    // neighbours, which are written on every parameter. The maintainer
-    // chose that (2026-10-23) so the generated code of every existing
-    // program stays byte-identical and the fixtures do not all change.
+    // `aliases` is written only when a parameter has some, so the generated
+    // code of a program without aliases is unchanged.
     const paramNodes = parameters.map((p) => {
       const fields: Record<string, TsNode> = {
         name: ts.str(p.name),

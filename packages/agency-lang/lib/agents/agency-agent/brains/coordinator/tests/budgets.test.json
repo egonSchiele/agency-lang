@@ -1,10 +1,10 @@
 {
   "tests": [
     {
-      "nodeName": "tripWithDraftIsAStop",
+      "nodeName": "tripWithDraftIsASuccess",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:PARTIAL\"",
+      "expectedOutput": "\"success:PARTIAL\\n\\n[fakeAgent: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -26,7 +26,7 @@
       "nodeName": "tripWithRecoveredAnswerIsASuccess",
       "fakeClock": true,
       "input": "",
-      "expectedOutput": "\"success:FULL\\n\\n[fakeAgent: the time budget ran out before this answer was accepted. This is the best answer so far.]\"",
+      "expectedOutput": "\"success:FULL\\n\\n[fakeAgent: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]\"",
       "evaluationCriteria": [
         {
           "type": "exact"

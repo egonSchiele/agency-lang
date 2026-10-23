@@ -177,9 +177,8 @@ export handoff def researcherAgent(
   """
 
   return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
-    // Return position passes a partial through. The only partial
-    // researchLoop can send up is a completed attempt that revise saved,
-    // because the model's own drafts stop at revise's assignment.
+    // Return position passes a partial through, so the last completed
+    // attempt that revise saved becomes this guard's draft.
     return researchLoop(
       task: task,
       context: context,

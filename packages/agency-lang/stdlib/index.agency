@@ -678,7 +678,7 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
   if (!(value is string)) {
     return value
   }
-  return "${value}\n\n[${name}: the ${trip.dimension} budget ran out before this answer was accepted. This is the best answer so far.]"
+  return "${value}\n\n[${name}: the ${trip.dimension} budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]"
 }
 
 /** Internal: what a budgeted agent call reports, given the Result its
@@ -688,17 +688,17 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
 
   1. No trip: the guard's Result, except that a finished `""` is a failure,
      "it returned no answer".
-  2. A trip, and a completed answer reached the guard: the answer as a
-     success. A string answer gets one line saying the budget ran out
-     before it was accepted.
+  2. A trip, and a value reached the guard: that value as a success. It
+     is the best answer the agent had, whether a finished answer or a
+     draft it saved along the way. A string answer gets one line saying
+     the budget ran out, so it may be unfinished or unchecked.
   3. A trip, and nothing reached the guard: a failure naming the budget
      ("its time budget of 30m ran out"), with `{ dimension, limit, draft }`
      in its data. `draft` is the trip's `draftValue`: the innermost draft
      saved anywhere on the stack when the guard tripped, of whatever type
      the frame that saved it returns, or `null`.
 
-  Rule 2 is only safe when the agent lets nothing but completed answers
-  reach its guard. See docs/dev/agents/subagent-budgets.md. */
+  See docs/dev/agents/subagent-budgets.md. */
 export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
   """
   Internal: turn a budgeted agent's guard Result and trip into the Result

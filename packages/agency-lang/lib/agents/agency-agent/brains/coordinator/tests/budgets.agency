@@ -1,10 +1,10 @@
 /*
  * budgeted(): a subagent that overruns its own guard comes back as the
- * rule in _budgetOutcome says. A completed answer that reached the guard is
- * a success with a note; a trip before one is a failure naming the budget,
- * with the in-flight draft in its data. Fake agents stand in for the stdlib
- * ones, each shaped like a real one; the guard label is what budgeted
- * matches on.
+ * rule in _budgetOutcome says. Whatever value reached the guard, a
+ * finished answer or a saved draft, is a success with a note; a trip with
+ * nothing is a failure naming the budget. Fake agents stand in for the
+ * stdlib ones, each shaped like a real one; the guard label is what
+ * budgeted matches on.
  */
 import test { _advanceTime } from "std::date"
 import { Critique, revise } from "std::strategy"
@@ -38,21 +38,31 @@ def draftingAgent(): Result<string> {
   }
 }
 
-// Shaped like the explorer and the oracle: the callee's in-flight draft
-// stops at the assignment, so it never reaches the guard.
+// Shaped like the explorer and the oracle: the finalize hands the
+// callee's saved draft to the guard.
 def inFlightAgent(): Result<string> {
   return guard(cost: $5, time: 10s, label: "fakeAgent") {
     let reply = ""
     reply = overrunWithDraft()
     return reply
+
+    finalize {
+      return reply
+    }
   }
 }
 
+// The same shape with nothing saved: the finalize returns null, so the
+// guard hands back success(null).
 def noDraftAgent(): Result<string> {
   return guard(cost: $5, time: 10s, label: "fakeAgent") {
     let reply = ""
     reply = overrunWithoutDraft()
     return reply
+
+    finalize {
+      return reply
+    }
   }
 }
 
@@ -105,12 +115,11 @@ def describe(r: Result<string>): string {
   return "success:${r.value}"
 }
 
-// The guard alone returns a plain failure here. budgeted names the budget
-// and keeps the in-flight draft, which the trip interrupt carried.
-node tripWithDraftIsAStop(): string {
+// A draft that reaches the guard is the backup answer.
+node tripWithDraftIsASuccess(): string {
   let out = ""
   handle {
-    out = describeStop(budgeted("fakeAgent") { return inFlightAgent() })
+    out = describe(budgeted("fakeAgent") { return inFlightAgent() })
   } with guardStopHandler
   return out
 }

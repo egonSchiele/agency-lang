@@ -46,59 +46,30 @@ function in the prelude, so the rule is written once.
 
 1. **No trip.** The guard's Result, except that a finished `""` is a
    failure, "it returned no answer".
-2. **A trip, and a completed answer reached the guard.** The answer, as a
-   success. A string answer gets one line appended:
-   `[researcherAgent: the time budget ran out before this answer was accepted. This is the best answer so far.]`
-   The line says "accepted" and not "verified" because the trip can come
-   after a review that rejected the attempt.
+2. **A trip, and a value reached the guard.** That value, as a success.
+   A draft that reaches the guard is the backup answer: that is what
+   `saveDraft` is for, and the agent prompts promise it ("the most recent
+   draft is what the caller receives"). The value can be a finished
+   answer, such as the last attempt `revise` saved, or a draft the model
+   saved halfway through, which the explorer's and the oracle's
+   `finalize` hand to their guards. A string gets one line appended:
+   `[researcherAgent: the time budget ran out, so this answer may be unfinished or unchecked. It is the best answer so far.]`
 3. **A trip, and nothing reached the guard.** A failure naming the
    budget, "its time budget of 30m ran out", with
    `{ dimension, limit, draft }` in its data. `draft` is the trip's
    `draftValue`: the innermost draft saved anywhere on the stack when the
    guard tripped (`draftPreview`, `lib/runtime/guardTripInterrupt.ts`).
-   It can belong to a nested agent. When the researcher's guard trips
-   inside the `reviewAgent` call that checks its answer, `draft` is
-   whatever Feedback list the reviewer had saved.
+   It can belong to a nested agent, such as the reviewer inside the
+   researcher's check.
+
+Rule 2 returns a success, and not a failure carrying the draft, because a
+model calling the agent as a tool only sees a failure's message. The tool
+loop's `recordFailure` (`lib/runtime/prompt.ts`) shows `failed.error` and
+never `data`, so a draft in the data would be lost to the coordinator.
 
 The message in rule 3 is built from the trip, never from the guard's
 Result. A guard whose `finalize` returned an empty local hands back
 `success(null)`, which has no error to reuse.
-
-## How an agent keeps in-flight drafts away from its guard
-
-Rule 2 trusts that anything reaching the guard is a completed answer. The
-runtime cannot check that. A draft the model saves halfway through its
-work and a finished attempt look the same: both are `saveDraft` values,
-and both travel up the same two ways, by return position or through a
-`finalize` (`docs/dev/runtime/saveDraft.md`). So the agents `budgeted`
-wraps are written so that only completed answers can travel up.
-
-The rule: the model's draft must stop at an assignment in a scope with no
-`finalize`. When the model calls the `saveDraft` tool, the draft is filed
-on the frame running the `llm()` call
-(`tests/agency/guards/savedraft-tool-basic.agency`). If that frame's
-caller assigns the result and has no `finalize`, the draft is dropped
-there, and it reaches `budgeted` only as the trip's `draftValue`.
-
-The four agents `budgeted` wraps:
-
-- **The researcher** (`stdlib/agents/researcher.agency`) returns
-  `researchLoop(...)` in return position. The model's drafts land in the
-  `revise` block's frame and stop at `result = block(feedback)` inside
-  `revise`, which has no `finalize`. What `revise` sends up is its own
-  draft: it saves each completed attempt (`stdlib/strategy.agency`).
-- **The explorer, the oracle, and the Agency researcher** call a def that
-  returns `llm(...)` in return position, so the model's draft rides up to
-  the guard block. Each guard block assigns the result, `reply =
-  survey(...)`, and has no `finalize`, so the draft stops there. Each
-  carries a comment saying why. Changing one to `return survey(...)`
-  would carry the model's half-written notes to the guard, and rule 2
-  would report them as the answer.
-
-These three used to have `finalize { return reply }` to salvage the
-model's draft. A caller that uses one of them directly, without
-`budgeted`, now gets the guard's plain failure on a trip. The guard's
-failure data has no draft field, so that caller does not see the draft.
 
 ## Why the answer was lost (ADI-49)
 
@@ -126,12 +97,18 @@ Step 3 was the missing piece. `revise` now saves each completed attempt,
 so step 3 returns it, the researcher returns it in return position, the
 guard returns it as a success, and rule 2 reports it.
 
+A draft the researcher's model saves during its first attempt still does
+not reach the guard: it is filed on the `revise` block's frame, and
+`revise` assigns the block's result, so the draft stops there. Until an
+attempt completes, a trip is a failure.
+
 ## Tests
 
 - `lib/agents/agency-agent/brains/coordinator/tests/budgets.agency`:
-  `budgeted` with a fake agent per real agent shape: in-flight draft,
-  no draft, a recovered `revise` answer, a finished answer, an empty
-  answer, and another label's trip.
+  `budgeted` with a fake agent per real agent shape: a saved draft
+  through a `finalize`, the same shape with nothing saved, a recovered
+  `revise` answer, a finished answer, an empty answer, and another
+  label's trip.
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
   under a guard that trips in the check, in an attempt, or in a later
   attempt, and the `agencyCodingAgent` shape.

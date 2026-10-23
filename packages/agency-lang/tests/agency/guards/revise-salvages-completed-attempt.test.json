@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "nodeName": "completedAttemptSurvivesReviewTrip",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A completed attempt survives a guard trip during its review."
+    },
+    {
+      "nodeName": "tripDuringAttemptHasNoAnswer",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure|in-flight\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip before any attempt completes is a failure; the in-flight draft is on the trip."
+    },
+    {
+      "nodeName": "secondAttemptTripKeepsFirst",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:attempt()\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip in the second attempt returns the first, completed one."
+    },
+    {
+      "nodeName": "finishesUnderBudget",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Under budget, revise returns its accepted result."
+    },
+    {
+      "nodeName": "agencyCodingShapeKeepsLastAttempt",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The agencyCodingAgent shape salvages the last completed attempt through its finalize."
+    }
+  ]
+}

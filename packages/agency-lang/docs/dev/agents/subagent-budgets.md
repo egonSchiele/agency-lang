@@ -12,11 +12,11 @@ not guard the turn.
   be granted more.
 - `researchAgent`, `explorerAgent`, and `oracleAgent` take `maxSeconds`
   and `maxDollars`. The coordinator fills them in from the user's words.
-  Each wrapper (`brains/coordinator/subagents/*.agency`) converts them with
-  `timeBudget(maxSeconds, 30m)` and `costBudget(maxDollars, $50.00)`
-  (`brains/coordinator/lib/budgets.agency`) before it calls the stdlib
-  agent. Unset means the default the wrapper names, which is the stdlib
-  agent's own default.
+  Each wrapper (`brains/coordinator/subagents/*.agency`) passes
+  `maxTime: timeBudget(maxSeconds, 30m)` (`brains/coordinator/lib/budgets.agency`,
+  seconds to milliseconds) and `maxCost: maxDollars ?? $50.00` to the
+  stdlib agent. Unset means the default the wrapper names, which is the
+  stdlib agent's own default.
 
 `codeAgent` runs on fixed internal budgets and does not take the
 parameters yet.

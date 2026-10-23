@@ -119,6 +119,11 @@ export def revise(
   while (attempt < maxAttempts) {
     attempt = attempt + 1
     result = block(feedback)
+    // Keep this finished attempt as revise's own draft. Salvage is opt-in
+    // per level, so without it a guard that trips inside `check` or a
+    // later attempt would drop the attempt and return nothing. See
+    // docs/dev/runtime/saveDraft.md.
+    saveDraft(result)
     const critique = check(result)
     if (critique.accepted) {
       return result

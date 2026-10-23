@@ -143,6 +143,27 @@ Notice that the guard aborts multiple functions and thus triggers partial result
 
 If `main` didn't have a `finalize` or a saved draft, it would return a failure. It doesn't get to use `add`'s saved draft as its own.
 
+`revise` from `std::strategy` saves each attempt that finishes as its own draft. So a guard that trips while the check runs, or while a later attempt runs, returns the last finished attempt:
+
+```ts
+import { Critique, revise } from "std::strategy"
+
+def review(answer: any): Critique {
+  // a slow check, such as another agent
+}
+
+node main() {
+  const res = guard(time: 10m) {
+    return revise(maxAttempts: 2, check: review) as critique {
+      return llm("Answer the question. ${critique}")
+    }
+  }
+  print(res)
+}
+```
+
+If `review` is still running when the 10 minutes run out, `res` is a success holding the attempt it was reading. A draft the block saves before its attempt finishes stops at `revise`: `revise` assigns the block's result and has no `finalize`, so the block's own draft is dropped there.
+
 ## Partials in forks and races
 
 Concurrent work follows the same rule, per branch:

@@ -71,6 +71,7 @@ export default defineConfig({
           items: [
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
+            { text: "Decorators", link: "/guide/decorators" },
             { text: "List Comprehensions", link: "/guide/comprehensions" },
             { text: "Match Expressions", link: "/guide/match-expressions" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },

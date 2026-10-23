@@ -11,6 +11,7 @@ import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { visitTypes } from "./typeWalker.js";
+import type { MismatchEntry } from "./mismatch.js";
 
 /**
  * Look up the parameter list for a callable name across local defs, graph
@@ -147,6 +148,20 @@ function containsRegex(t: VariableType): boolean {
   return visitTypes(t, (n) => n.type === "primitiveType" && n.value === "regex");
 }
 
+/** Which registry entry an assignability mismatch is reported as, given the
+ *  formatted types and the context string. A site whose mismatch can come
+ *  from a decorator passes one built on `mismatchEntry` (mismatch.ts). */
+export type AssignabilityEntry = (types: {
+  actual: string;
+  expected: string;
+  context: string;
+}) => MismatchEntry;
+
+const plainAssignabilityEntry: AssignabilityEntry = (types) => ({
+  name: "typeNotAssignableInContext",
+  params: types,
+});
+
 /**
  * Check mode (top-down): verify that an expression is compatible with expectedType.
  * Shared by scopes.ts (assignment checking) and checker.ts (return type checking).
@@ -158,6 +173,7 @@ export function checkType(
   context: string,
   ctx: TypeCheckerContext,
   fallbackLoc?: SourceLocation,
+  entryFor: AssignabilityEntry = plainAssignabilityEntry,
 ): void {
   if (expr.type === "functionCall" && expr.functionName === "llm") {
     rejectRegexInLlmType(expectedType, expr.loc ?? fallbackLoc, context, ctx);
@@ -169,7 +185,15 @@ export function checkType(
 
   // Literal value nodes may carry no loc of their own; anchor on the
   // enclosing statement when the caller supplied one.
-  emitAssignabilityError(actualType, expectedType, expr.loc ?? fallbackLoc, context, ctx, expr);
+  emitAssignabilityError(
+    actualType,
+    expectedType,
+    expr.loc ?? fallbackLoc,
+    context,
+    ctx,
+    expr,
+    entryFor,
+  );
   if (expr.type === "agencyObject") {
     checkExcessObjectProperties(expr, expectedType, context, ctx);
   }
@@ -226,9 +250,9 @@ function reportFailureDataError(
 /**
  * The single "X is not assignable to Y" diagnostic construction site. No-op
  * when `actual` is `any` or already assignable to `expected`; otherwise pushes
- * the standard assignability error. Shared by `checkType` (assignment / return
- * checking) and the expression-match `matchExprSource` check in scopes.ts so
- * neither hand-rolls the message.
+ * the standard assignability error, or the entry `entryFor` picks. Shared by
+ * `checkType` (assignment / return checking) and the expression-match
+ * `matchExprSource` check in scopes.ts so neither hand-rolls the message.
  */
 export function emitAssignabilityError(
   actual: VariableType,
@@ -237,21 +261,17 @@ export function emitAssignabilityError(
   context: string,
   ctx: TypeCheckerContext,
   expr?: AgencyNode,
+  entryFor: AssignabilityEntry = plainAssignabilityEntry,
 ): void {
   if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
   if (reportFailureDataError(actual, expected, loc, ctx, expr)) return;
-  ctx.errors.push(
-    diagnostic(
-      "typeNotAssignableInContext",
-      {
-        actual: formatTypeHint(actual),
-        expected: formatTypeHint(expected),
-        context,
-      },
-      loc ?? null,
-    ),
-  );
+  const entry = entryFor({
+    actual: formatTypeHint(actual),
+    expected: formatTypeHint(expected),
+    context,
+  });
+  ctx.errors.push(diagnostic(entry.name, entry.params as never, loc ?? null));
 }
 
 /**

@@ -418,3 +418,15 @@ An entry in an `llm()` call's `tools` list is a plain value such as a string or 
 The usual cause is a local variable with the same name as an imported function. In `const summary: string = llm("...", tools: [summary])`, the name `summary` inside the list means the new local, not the import.
 
 **How to fix:** rename the local variable, or import the function under another name with `import { summary as summaryTool }`.
+
+<a id="ag6041"></a>
+
+## AG6041 — Decorator '&#123;name&#125;' on '&#123;target&#125;' expects '&#123;param&#125;: &#123;expected&#125;', got '&#123;actual&#125;'.
+
+*Default severity: error.*
+
+An argument written in a decorator tag does not fit the decorator's parameter.
+
+A tag such as `@budgeted(cost: "x")` is a call to `budgeted` with the decorated function's body as its block, so its arguments are checked against the decorator's parameters like any call's. This is the decorator form of AG6019.
+
+**How to fix:** pass a value of the type the decorator's parameter declares, or change the decorator's parameter type.

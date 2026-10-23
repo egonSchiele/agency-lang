@@ -101,8 +101,9 @@ describe("prepareProgram", () => {
         "Unknown decorator 'budgted' on 'f'",
       );
       expect(failure.stage === "decorators" && failure.loc).toBeDefined();
+      // The tag is on the first line, so the error says where it is.
       expect(describeDiagnostic(failure, "main.agency")).toContain(
-        "main.agency - error: Unknown decorator",
+        "main.agency:1:1 - error: Unknown decorator",
       );
     });
 

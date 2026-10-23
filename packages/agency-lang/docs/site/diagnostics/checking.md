@@ -240,3 +240,51 @@ def lookup(id: string): Result {
   return failure("no record for that id", { id: id })
 }
 ```
+
+<a id="ag2018"></a>
+
+## AG2018 — The body of '&#123;target&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'.
+
+*Default severity: error.*
+
+A `return` in a decorated function's body does not fit the block the decorator takes.
+
+The body of a decorated function runs as the decorator's block, so its returns are checked against the block's return type, not against the function's own. For example, a decorator declared `def budgeted(cost: number, block: () -> string): Result<string>` takes a body that returns `string`.
+
+**How to fix:** return the type the decorator's block declares. A decorator meant for functions of any return type types its block `() -> any`.
+
+<a id="ag2019"></a>
+
+## AG2019 — Decorator '&#123;inner&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' above it on '&#123;target&#125;' takes a block returning '&#123;expected&#125;'.
+
+*Default severity: error.*
+
+Two stacked decorators disagree: the inner one returns a type the outer one's block does not take.
+
+`@a @b def f` nests `b` inside `a`, so what `b` returns is what `a`'s block returns. When `b` returns `number` and `a` takes `() -> string`, the two cannot be stacked in that order, whatever the body returns.
+
+**How to fix:** swap the order of the tags, change one decorator's types, or type the outer decorator's block `() -> any`.
+
+<a id="ag2020"></a>
+
+## AG2020 — '&#123;target&#125;' is declared to return '&#123;declared&#125;', but decorator '&#123;name&#125;' returns '&#123;actual&#125;'.
+
+*Default severity: error.*
+
+A decorator returns a type the decorated function is not declared to return.
+
+A decorated function returns whatever its outermost decorator returns. A function declared `: number` under a decorator that returns `Result<string>` would hand its callers a `Result<string>`.
+
+**How to fix:** declare the function's return type as the decorator's return type, or use a decorator that returns the function's type.
+
+<a id="ag2021"></a>
+
+## AG2021 — The body of '&#123;target&#125;' saves a draft of type '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'.
+
+*Default severity: error.*
+
+A `saveDraft` in a decorated function's body saves a value the decorator's block does not return.
+
+The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared `def budgeted(cost: number, block: () -> string): Result<string>`, the body saves a `string` draft, even though the function is declared to return `Result<string>`.
+
+**How to fix:** save a value of the type the decorator's block returns.

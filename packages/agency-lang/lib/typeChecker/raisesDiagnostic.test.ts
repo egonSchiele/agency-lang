@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
 import { typecheckSource, raisesErrors } from "./testUtils.js";
+import { typeCheckSource } from "../compiler/typecheck.js";
+import { makeAgencyTempDir } from "../utils/agencyTempDir.js";
+import { safeDeleteDirectory } from "../utils.js";
 
 describe("raises subset diagnostic", () => {
   it("passes when inferred ⊆ declared", () => {
@@ -142,12 +147,53 @@ describe("raises must reference an effect set (not a plain type)", () => {
       "def budgeted(block: () -> any): Result<string> {\n" +
       "  return guard(cost: 1.00) {\n    return block()\n  }\n}\n";
 
-    it("counts the decorator's effects against the decorated function's raises clause", () => {
+    it("counts the decorator's effects against the clause, and names the decorator", () => {
       const errs = typecheckSource(
         BUDGETED + '@budgeted\ndef f(): Result<string> raises <std::read> {\n  return "x"\n}\n',
       );
       const raisesErr = errs.find((e) => /raises effect 'std::guard'/.test(e.message));
       expect(raisesErr).toBeDefined();
+      expect(raisesErr!.name).toBe("raisesExceededViaDecorator");
+      expect(raisesErr!.message).toContain("It is raised by decorator 'budgeted'.");
+    });
+
+    it("gives the plain message when the body raises the effect and the decorator does not", () => {
+      const errs = typecheckSource(
+        "def logged(block: () -> any): any {\n  return block()\n}\n" +
+          "@logged\ndef f(): number raises <std::read> {\n" +
+          '  raise std::write("m", {})\n  return 1\n}\n',
+      );
+      const raisesErr = errs.find((e) => /raises effect 'std::write'/.test(e.message));
+      expect(raisesErr?.name).toBe("raisesExceeded");
+    });
+
+    it("names the decorator when the body and the decorator both raise the effect", () => {
+      const errs = typecheckSource(
+        BUDGETED +
+          "@budgeted\ndef f(): Result<string> raises <std::read> {\n" +
+          '  return guard(cost: 2.00) {\n    return "x"\n  }\n}\n',
+      );
+      const raisesErr = errs.find((e) => /raises effect 'std::guard'/.test(e.message));
+      expect(raisesErr?.name).toBe("raisesExceededViaDecorator");
+    });
+
+    it("names an imported decorator, which the effect table keys by its local name", () => {
+      const dir = makeAgencyTempDir("raises-decorator");
+      try {
+        fs.writeFileSync(path.join(dir, "budget.agency"), "export " + BUDGETED, "utf-8");
+        const main = path.join(dir, "main.agency");
+        const source =
+          'import { budgeted as spend } from "./budget.agency"\n' +
+          '@spend\ndef f(): Result<string> raises <std::read> {\n  return "x"\n}\n';
+        fs.writeFileSync(main, source, "utf-8");
+        const { errors } = typeCheckSource(source, main);
+        const raisesErr = errors.find((e) => /raises effect 'std::guard'/.test(e.message));
+        // The report carries codes, not entry names; AG3030 is the via form.
+        expect(raisesErr?.code).toBe("AG3030");
+        expect(raisesErr?.message).toContain("decorator 'spend'");
+      } finally {
+        safeDeleteDirectory(dir, false);
+      }
     });
 
     it("is satisfied when the clause lists the decorator's effect", () => {

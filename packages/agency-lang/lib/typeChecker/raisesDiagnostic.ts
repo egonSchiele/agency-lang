@@ -2,7 +2,7 @@ import { diagnostic } from "./diagnostics.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { TypeCheckerContext } from "./types.js";
 import { resolveEffectSet } from "./effectSets.js";
-import type { VariableType } from "../types.js";
+import type { FunctionDefinition, VariableType } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 
 /**
@@ -31,6 +31,7 @@ export function checkRaisesDeclarations(
     raises: VariableType | undefined,
     loc: SourceLocation | undefined,
     kind: "Function" | "Node",
+    def?: FunctionDefinition,
   ): void => {
     if (!raises) return; // no clause = unconstrained
 
@@ -53,17 +54,39 @@ export function checkRaisesDeclarations(
 
     for (const effect of inferred) {
       if (!declared.labels.includes(effect)) {
+        const params = { kind, name, effect, declared: declaredStr };
+        const decorator = def
+          ? decoratorCarrying(def, effect, interruptEffectsByFunction)
+          : undefined;
         ctx.errors.push(
-          diagnostic("raisesExceeded", { kind, name, effect, declared: declaredStr }, loc ?? null),
+          decorator === undefined
+            ? diagnostic("raisesExceeded", params, loc ?? null)
+            : diagnostic("raisesExceededViaDecorator", { ...params, decorator }, loc ?? null),
         );
       }
     }
   };
 
   for (const [name, def] of Object.entries(ctx.functionDefs)) {
-    check(name, def.raises, def.loc, "Function");
+    check(name, def.raises, def.loc, "Function", def);
   }
   for (const [name, def] of Object.entries(ctx.nodeDefs)) {
     check(name, def.raises, def.loc, "Node");
   }
+}
+
+/** The first decorator on `def` that raises `effect`, by the name the file
+ *  calls it. The effect table is keyed by that name, imports included, so
+ *  the tag's name is the whole lookup. A decorated function's effects are
+ *  its decorators' plus its body's; when a decorator brings the effect, the
+ *  error names it, since the author did not write that raise in the body. */
+export function decoratorCarrying(
+  def: FunctionDefinition,
+  effect: string,
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+): string | undefined {
+  const tag = (def.decorators ?? []).find((decorator) =>
+    (interruptEffectsByFunction[decorator.name] ?? []).some((entry) => entry.effect === effect),
+  );
+  return tag?.name;
 }

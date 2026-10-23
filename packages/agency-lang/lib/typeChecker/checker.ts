@@ -31,6 +31,7 @@ import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import { lastParameterTakesBlock } from "../types/function.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
+import { draftTarget, mismatchEntry } from "./mismatch.js";
 
 /**
  * Derive arity bounds and per-position param types from a parameter list,
@@ -225,7 +226,7 @@ function checkFunctionCallsInScope(info: ScopeInfo, ctx: TypeCheckerContext): vo
       const parent = ancestors[ancestors.length - 1];
       if (parent?.type === "valueAccess") continue;
       checkSingleFunctionCall(node, info.scope, ctx);
-      checkSaveDraftCall(node, info, ctx);
+      checkSaveDraftCall(node, ancestors, info, ctx);
     }
   }
 }
@@ -237,7 +238,12 @@ function checkFunctionCallsInScope(info: ScopeInfo, ctx: TypeCheckerContext): vo
  *  Only a scope with no inferred/declared return type (`info.returnType`
  *  undefined) is skipped. Name-keyed: aliasing `saveDraft` (`const s = saveDraft;
  *  s(v)`) escapes the check (documented v1 limitation). */
-function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeCheckerContext): void {
+function checkSaveDraftCall(
+  call: FunctionCall,
+  ancestors: WalkAncestor[],
+  info: ScopeInfo,
+  ctx: TypeCheckerContext,
+): void {
   if (call.functionName !== "saveDraft") return;
   // Only the stdlib saveDraft carries the draft contract. Stand down when
   // the name resolves to anything the user wrote: a local def or node, or
@@ -256,7 +262,12 @@ function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeChecke
     ctx.errors.push(diagnostic("saveDraftAtTopLevel", {}, call.loc ?? null));
     return;
   }
-  if (!info.returnType) return; // no declared/inferred return type in scope
+  // The innermost block around the draft decides its target type: a
+  // decorator's block is the frame the draft belongs to (mismatch.ts).
+  const blockOwner = innermostBlockOwner(ancestors);
+  const blockSlot = blockOwner && getBlockSlot(blockOwner.functionName, ctx);
+  const expected = draftTarget(blockOwner, blockSlot, info.returnType);
+  if (!expected) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const first = call.arguments[0];
   // A splat's runtime expansion is unknowable here: the argument node
@@ -267,7 +278,9 @@ function checkSaveDraftCall(call: FunctionCall, info: ScopeInfo, ctx: TypeChecke
   // `saveDraft(value: x)` names the parameter but carries the same draft;
   // check the value it wraps so the named form cannot bypass the rule.
   const arg = first.type === "namedArgument" ? first.value : first;
-  checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
+  checkType(arg, expected, info.scope, "the saveDraft() draft value", ctx, call.loc, (types) =>
+    mismatchEntry({ site: "draft", owner: blockOwner, value: arg, params: types }),
+  );
 }
 
 /** True when an import's origin file is the stdlib prelude (or the
@@ -617,7 +630,7 @@ function checkNamedArgStructure(
           {
             name: arg.name,
             fn: displayFunctionName(call.functionName),
-            valid: validNamesSentence(params.map((p) => p.name)),
+            valid: validNamesSentence(writableParameterNames(call, params)),
           },
           call.loc ?? null,
         ),
@@ -682,18 +695,37 @@ function checkArity(
   // Count it so `f() as x { }` doesn't look like a 0-arg call.
   const argCount = call.arguments.length + (call.block ? 1 : 0);
   if (argCount >= minArgs && argCount <= maxArgs) return true;
-  const arity = { fn: displayFunctionName(call.functionName), count: argCount };
+  // A decorator tag's call has arguments the author never wrote: the body,
+  // and the `call` record when it was passed. Count only the tag's own.
+  const hidden = hiddenDecoratorArguments(call);
+  const arity = { fn: displayFunctionName(call.functionName), count: argCount - hidden };
+  const min = minArgs - hidden;
+  const max = maxArgs - hidden;
   const arityLoc = call.loc ?? null;
-  if (maxArgs === Infinity) {
-    ctx.errors.push(diagnostic("callArityAtLeast", { ...arity, min: minArgs }, arityLoc));
-  } else if (minArgs === maxArgs) {
-    ctx.errors.push(diagnostic("callArityExact", { ...arity, expected: minArgs }, arityLoc));
+  if (max === Infinity) {
+    ctx.errors.push(diagnostic("callArityAtLeast", { ...arity, min }, arityLoc));
+  } else if (min === max) {
+    ctx.errors.push(diagnostic("callArityExact", { ...arity, expected: min }, arityLoc));
   } else {
-    ctx.errors.push(
-      diagnostic("callArityRange", { ...arity, min: minArgs, max: maxArgs }, arityLoc),
-    );
+    ctx.errors.push(diagnostic("callArityRange", { ...arity, min, max }, arityLoc));
   }
   return false;
+}
+
+/** How many of a call's arguments the decorator lowering added: the body as
+ *  the block, and the `call` record when it was passed. 0 for any other call. */
+function hiddenDecoratorArguments(call: FunctionCall): number {
+  if (call.decorator === undefined) return 0;
+  return call.decorator.passesCallRecord ? 2 : 1;
+}
+
+/** The parameter names a call's author can write. For a decorator's call,
+ *  the `call` record and the block are the lowering's, so they are left out
+ *  of the names an unknown-argument error suggests. */
+function writableParameterNames(call: FunctionCall, params: FunctionParameter[]): string[] {
+  const names = params.map((param) => param.name);
+  if (call.decorator === undefined) return names;
+  return names.slice(call.decorator.passesCallRecord ? 1 : 0, -1);
 }
 
 /**
@@ -741,17 +773,18 @@ function checkArgsAgainstParams(
       continue;
     }
     if (!isAssignable(argType, paramType, typeAliases)) {
-      ctx.errors.push(
-        diagnostic(
-          "argNotAssignable",
-          {
-            actual: formatTypeHint(argType),
-            expected: formatTypeHint(paramType),
-            fn: displayFunctionName(call.functionName),
-          },
-          call.loc ?? null,
-        ),
-      );
+      const entry = mismatchEntry({
+        site: "argument",
+        owner: call,
+        value: innerArg,
+        params: {
+          actual: formatTypeHint(argType),
+          expected: formatTypeHint(paramType),
+          fn: displayFunctionName(call.functionName),
+          param: slot?.name ?? "",
+        },
+      });
+      ctx.errors.push(diagnostic(entry.name, entry.params as never, call.loc ?? null));
     }
     if (innerArg.type === "agencyObject") {
       checkExcessObjectProperties(innerArg, paramType, `call to '${call.functionName}'`, ctx);
@@ -828,7 +861,22 @@ function checkReturnTypesInScope(info: ScopeInfo, ctx: TypeCheckerContext): void
       checkMatchExprYields(matchId, info.returnType, `return in '${info.name}'`, ctx, node.loc);
       continue;
     }
-    checkType(node.value, info.returnType, info.scope, `return in '${info.name}'`, ctx);
+    const value = node.value;
+    checkType(
+      value,
+      info.returnType,
+      info.scope,
+      `return in '${info.name}'`,
+      ctx,
+      node.loc,
+      (types) =>
+        mismatchEntry({
+          site: "declaredReturn",
+          owner: value.type === "functionCall" ? value : undefined,
+          value,
+          params: types,
+        }),
+    );
   }
 }
 
@@ -840,21 +888,27 @@ function matchvalRefId(expr: AgencyNode): number | undefined {
 }
 
 /**
- * Find the `blockType` slot for the innermost enclosing block, if any.
- * `walkNodes` includes the `blockArgument` AST node in `ancestors` when
- * descending into a block body, so the innermost `blockArgument` ancestor
- * marks "we're inside a block" and the immediately preceding ancestor is
- * the call that received it.
+ * Find the `blockType` slot for the innermost enclosing block, if any, with
+ * the call that owns the block. `walkNodes` includes the `blockArgument` AST
+ * node in `ancestors` when descending into a block body, so the innermost
+ * `blockArgument` ancestor marks "we're inside a block" and the immediately
+ * preceding ancestor is the call that received it.
  */
 function findEnclosingBlockSlot(
   ancestors: WalkAncestor[],
   ctx: TypeCheckerContext,
-): BlockType | undefined {
+): { slot: BlockType; call: FunctionCall } | undefined {
+  const call = innermostBlockOwner(ancestors);
+  const slot = call && getBlockSlot(call.functionName, ctx);
+  return slot ? { slot, call } : undefined;
+}
+
+/** The call that owns the innermost block around a walked node, if any. */
+function innermostBlockOwner(ancestors: WalkAncestor[]): FunctionCall | undefined {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     if (ancestors[i].type !== "blockArgument") continue;
     const parent = ancestors[i - 1];
-    if (parent?.type !== "functionCall") return undefined;
-    return getBlockSlot(parent.functionName, ctx);
+    return parent?.type === "functionCall" ? parent : undefined;
   }
   return undefined;
 }
@@ -871,9 +925,20 @@ function checkExpressionsInScope(info: ScopeInfo, ctx: TypeCheckerContext): void
       // function. If the block fills a typed slot, check the return value
       // against the slot's declared return type. (Inference for the enclosing
       // function already excludes block returns — see inference.ts.)
-      const blockSlot = findEnclosingBlockSlot(ancestors, ctx);
-      if (blockSlot) {
-        checkType(node.value, blockSlot.returnType, info.scope, "block return", ctx);
+      const enclosing = findEnclosingBlockSlot(ancestors, ctx);
+      if (enclosing) {
+        const value = node.value;
+        // A literal carries no position of its own, so the return's is used.
+        checkType(
+          value,
+          enclosing.slot.returnType,
+          info.scope,
+          "block return",
+          ctx,
+          node.loc,
+          (types) =>
+            mismatchEntry({ site: "blockReturn", owner: enclosing.call, value, params: types }),
+        );
       } else {
         synthType(node.value, info.scope, ctx);
       }

@@ -120,7 +120,12 @@ function decoratorCall(
 ): FunctionCall {
   const signature = lookup(tag.name);
   const takesCallRecord = signature?.parameters[0]?.name === "call";
-  const origin: DecoratorOrigin = { name: tag.name, tagLoc: tag.loc, target };
+  const origin: DecoratorOrigin = {
+    name: tag.name,
+    tagLoc: tag.loc,
+    target,
+    passesCallRecord: takesCallRecord,
+  };
   const call: FunctionCall = {
     type: "functionCall",
     functionName: tag.name,

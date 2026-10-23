@@ -313,3 +313,15 @@ effect app::shell { command: string }
 The program is being compiled for a platform (`--platform`, or `platform` in agency.json) that lacks a capability one of its functions needs. A function needs what its own `@capabilities` tag names and what the functions it calls need. The lines after the message show the calls from the node or exported function to the function whose tag carries the capability. The browser platform, for example, has no `fileRead`, so a node that calls `read` cannot run there. A handler does not help: approving the read would not make the browser able to do it.
 
 **How to fix:** take the call out of the program for that platform, or compile for a platform that has the capability.
+
+<a id="ag3030"></a>
+
+## AG3030 — &#123;kind&#125; '&#123;name&#125;' raises effect '&#123;effect&#125;', which exceeds its declared 'raises &#123;declared&#125;'. It is raised by decorator '&#123;decorator&#125;'. Add '&#123;effect&#125;' to the clause.
+
+*Default severity: error.*
+
+A decorator raises an effect that the decorated function's `raises` clause does not list. This is the decorator form of AG3013.
+
+A decorated function's effects are its decorators' effects plus its body's, because the decorator's code runs every time the function is called. A `@budgeted` decorator written over `guard` raises `std::guard`, so a function it decorates raises `std::guard` too.
+
+**How to fix:** add the effect to the clause.

@@ -999,13 +999,13 @@ claimFrameForScope(__bstack, "__block_2", "decorators.agency", __run.log);
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_2", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __bstack.locals.__promptVar = await runPrompt(__run, {
       prompt: `research ${__stack.args.task} within ${__stack.args.maxCost}`,
       messages: __run.threads.getOrCreateActive(),
       clientConfig: {},
       maxToolCallRounds: 10,
-      removedTools: __self.__removedTools,
+      removedTools: __activation.__removedTools,
       destructiveSink: __activation,
       checkpointInfo: runner.getCheckpointInfo()
     });

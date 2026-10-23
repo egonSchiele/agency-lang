@@ -95,7 +95,7 @@ describe("validateParallelBlock", () => {
     expect(() => validateParallelBlock(findParallelBlock(body))).not.toThrow();
   });
 
-  it("rejects a `destructive { }` region as a direct parallel arm (fail-open guard)", () => {
+  it("accepts a `destructive { }` region as a direct parallel arm", () => {
     const body = getMainBody(`
       node main() {
         parallel {
@@ -104,12 +104,10 @@ describe("validateParallelBlock", () => {
         }
       }
     `);
-    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
-      /`destructive \{ \}` region is not allowed inside a `parallel` block/,
-    );
+    expect(() => validateParallelBlock(findParallelBlock(body))).not.toThrow();
   });
 
-  it("rejects a `destructive { }` region nested inside a `seq` arm", () => {
+  it("accepts a `destructive { }` region nested inside a `seq` arm", () => {
     const body = getMainBody(`
       node main() {
         parallel {
@@ -120,9 +118,7 @@ describe("validateParallelBlock", () => {
         }
       }
     `);
-    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
-      /`destructive \{ \}` region is not allowed inside a `parallel` block/,
-    );
+    expect(() => validateParallelBlock(findParallelBlock(body))).not.toThrow();
   });
 
   it("rejects cross-arm references", () => {
@@ -312,6 +308,59 @@ describe("desugarParallelInBody", () => {
 
     const third = main.body[2] as any;
     expect(third.variableName).toBe("b");
+  });
+
+  /** The statements of arm `index` after desugaring: the body of the
+   *  `if (__arm == "arm_<index>")` branch inside the fork's block. */
+  function armBody(main: GraphNodeDefinition, index: number): AgencyNode[] {
+    const forkAssign = main.body[0] as any;
+    const branch = forkAssign.value.block.body[index];
+    expect(branch.type).toBe("ifElse");
+    return branch.thenBody;
+  }
+
+  it("keeps the flip of a `destructive { }` region written directly as an arm", () => {
+    const src = `
+      def rm(): string { return "r" }
+      node main() {
+        parallel {
+          destructive { rm() }
+          let b = rm()
+        }
+      }
+    `;
+    const program = parse(src);
+    const main = program.nodes.find(
+      (n) => n.type === "graphNode" && n.nodeName === "main",
+    ) as GraphNodeDefinition;
+    main.body = desugarParallelInBody(main.body);
+    const first = armBody(main, 0);
+    expect(first[0].type).toBe("markDestructiveRan");
+    expect(first[1].type).toBe("functionCall");
+    const second = armBody(main, 1);
+    expect(second.some((n) => n.type === "markDestructiveRan")).toBe(false);
+  });
+
+  it("keeps the flip of a `destructive { }` region nested in a `seq` arm", () => {
+    const src = `
+      def rm(): string { return "r" }
+      node main() {
+        parallel {
+          seq {
+            let a = rm()
+            destructive { rm() }
+          }
+        }
+      }
+    `;
+    const program = parse(src);
+    const main = program.nodes.find(
+      (n) => n.type === "graphNode" && n.nodeName === "main",
+    ) as GraphNodeDefinition;
+    main.body = desugarParallelInBody(main.body);
+    const stmts = armBody(main, 0);
+    expect(stmts[0].type).toBe("assignment");
+    expect(stmts[1].type).toBe("markDestructiveRan");
   });
 
   it("inlines a seq block at the top level of a body", () => {

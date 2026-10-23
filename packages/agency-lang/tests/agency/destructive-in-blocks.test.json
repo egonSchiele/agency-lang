@@ -78,6 +78,39 @@
       ]
     },
     {
+      "nodeName": "regionInParallelArm_",
+      "description": "a destructive region inside a parallel arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "regionInSeqArm_",
+      "description": "a destructive region nested in a seq arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "destructiveCallInParallelArm_",
+      "description": "a destructive call bound in a parallel arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "cleanBlock_",
       "description": "a block with no destructive work leaves the flag false",
       "input": "",

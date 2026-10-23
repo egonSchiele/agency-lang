@@ -185,6 +185,21 @@ const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
   "runnerThread",
 ]);
 
+/** The statement types that `processStatement` turns into one of the
+ *  COMPOUND_RUNNER_KINDS (outside a handler body, where they become plain
+ *  nodes). `processBodyAsParts` consults this BEFORE processing a statement,
+ *  to decide whether a destructive pre-flip needs a step of its own, and
+ *  throws after processing if the two sets disagree. */
+const COMPOUND_STATEMENT_TYPES: AgencyNode["type"][] = [
+  "handleBlock",
+  "withModifier",
+  "ifElse",
+  "forLoop",
+  "whileLoop",
+  "matchBlock",
+  "messageThread",
+];
+
 /**
  * Recursively walk a TsNode tree and flip `topLevel: true` on every
  * `scopedVar` node. Used by the tool-description docstring emission
@@ -3802,12 +3817,17 @@ export class TypeScriptBuilder {
       }
     }
     runPromptEntries.maxToolCallRounds = ts.num(this.agencyConfig.maxToolCallRounds || 10);
-    runPromptEntries.removedTools = ts.self("__removedTools");
+    // Both of these live on the ACTIVATION, not `__self`. An llm() call
+    // inside a block argument (a decorated body, a retry block) runs with the
+    // block frame's `__self`, which is dropped when the block returns. A list
+    // of removed tools kept there would come back empty on the next run of
+    // the block, so a tool removed for failing destructively would be offered
+    // to the model again. The activation is the enclosing function's frame
+    // and outlives every block (docs/dev/language/destructive-regions.md).
+    runPromptEntries.removedTools = this.removedToolsSlot();
     // Decision 8: hand runPrompt this function's activation so a
     // destructive tool executed inside the call marks OUR `__destructiveRan`,
-    // which our exit stamp reads. By-reference, like `removedTools`. The
-    // activation, not `__self`: an llm() call inside a block argument still
-    // belongs to the function (docs/dev/language/destructive-regions.md).
+    // which our exit stamp reads. By-reference, like `removedTools`.
     runPromptEntries.destructiveSink = ts.runtime.activation;
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
@@ -3817,7 +3837,7 @@ export class TypeScriptBuilder {
 
     const varRef = ts.scopedVar(variableName, scope, this.moduleId);
     const stmts: TsNode[] = [
-      ts.assign(ts.self("__removedTools"), ts.binOp(ts.self("__removedTools"), "||", ts.arr([]))),
+      ts.assign(this.removedToolsSlot(), ts.binOp(this.removedToolsSlot(), "||", ts.arr([]))),
     ];
 
     if (node.async) {
@@ -4210,6 +4230,13 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
+  /** `__activation.__removedTools`: the tool loop's list of tools removed from
+   *  the conversation, kept on the enclosing function's frame so a block
+   *  argument that runs llm() more than once sees the same list each time. */
+  private removedToolsSlot(): TsNode {
+    return ts.prop(ts.runtime.activation, "__removedTools");
+  }
+
   // ── Body processing ──
 
   private processBodyAsParts(body: AgencyNode[], startId = 0): TsNode[] {
@@ -4262,25 +4289,37 @@ export class TypeScriptBuilder {
       // Destructive-execution tracking: the pre-flip runs before the
       // statement, the post-flip after. See DestructiveTracking.statementFlips.
       const { pre, post } = this.tracking.statementFlips(stmt, this.scopes.inDestructiveFunction);
+      const preNeedsOwnStep = pre !== undefined && COMPOUND_STATEMENT_TYPES.includes(stmt.type);
       if (pre) {
-        // The pre-flip is a step of its own, closed before the statement
-        // gets its step. A compound statement (handle, if, loop, thread)
-        // is pushed straight onto `result` below, past the open part, so a
-        // flip left in that part would run AFTER the statement and a
-        // `return` inside it would leave the function with the flag still
-        // false (ADI-56 review).
         if (!currentPart) currentPart = [];
         currentPart.push(pre);
-        this.steps.push(nextId());
-        this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
-        this.steps.pop();
-        flushPart();
+        if (preNeedsOwnStep) {
+          // A compound statement (handle, if, loop, match, thread) is pushed
+          // straight onto `result` below, past the open part, so a flip left
+          // in that part would run AFTER the statement and a `return` inside
+          // it would leave the function with the flag still false (ADI-56
+          // review). Close the pre-flip's step before the statement gets
+          // its own. A plain statement joins the same part as its pre-flip,
+          // which already runs first, so it costs no extra step.
+          this.steps.push(nextId());
+          this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+          this.steps.pop();
+          flushPart();
+        }
       }
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
       const processed = this.processStatement(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
+        if (pre && !preNeedsOwnStep) {
+          // The pre-flip is sitting in the open part, which would flush after
+          // this node. COMPOUND_STATEMENT_TYPES has to name every statement
+          // type that produces a compound runner node, or the flip runs late.
+          throw new Error(
+            `Internal error: statement type \`${stmt.type}\` produced a ${processed.kind} but is missing from COMPOUND_STATEMENT_TYPES`,
+          );
+        }
         result.push(processed);
       } else {
         if (!currentPart) currentPart = [];

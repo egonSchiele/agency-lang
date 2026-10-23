@@ -347,8 +347,6 @@ await callHook(__run, {
         });
         await runner.step(1, __run, async (runner, __run) => {
 __activation.__destructiveRan = true;
-        });
-        await runner.step(2, __run, async (runner, __run) => {
 runner.halt({
             messages: __run.threads,
             data: await __call(__run, f, {
@@ -360,7 +358,7 @@ return;
         });
       })
       if (runner.halted) return runner.haltResult;
-      await runner.hook(3, __run, async (__run) => {
+      await runner.hook(2, __run, async (__run) => {
 await callHook(__run, {
           name: "onNodeEnd",
           data: {
@@ -452,4 +450,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"destructiveNested.agency:f":{"2":{"line":2,"col":4}},"destructiveNested.agency:main":{"1":{"line":7,"col":2},"2":{"line":7,"col":2}}};
+export const __sourceMap = {"destructiveNested.agency:f":{"2":{"line":2,"col":4}},"destructiveNested.agency:main":{"1":{"line":7,"col":2}}};

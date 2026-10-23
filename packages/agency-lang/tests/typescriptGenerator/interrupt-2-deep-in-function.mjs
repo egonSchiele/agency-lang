@@ -438,13 +438,13 @@ await __call(__run, print, {
         }) + greet
       });
       await runner.step(2, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.response = await runPrompt(__run, {
           prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
           messages: __run.threads.getOrCreateActive(),
           clientConfig: {},
           maxToolCallRounds: 10,
-          removedTools: __self.__removedTools,
+          removedTools: __activation.__removedTools,
           destructiveSink: __activation,
           checkpointInfo: runner.getCheckpointInfo()
         });

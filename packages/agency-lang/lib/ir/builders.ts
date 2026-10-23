@@ -826,8 +826,10 @@ export const ts = {
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
     /** The enclosing function or node activation: the same object as that
-     *  body's `__self`, under a name no block or fork branch shadows. Only
-     *  the destructive-tracking codegen reads it. */
+     *  body's `__self`, under a name no block or fork branch shadows. Read
+     *  by the destructive-tracking codegen (`__destructiveRan`), by the
+     *  `llm()` codegen for `removedTools` and `destructiveSink`, and by the
+     *  thrown-error path in `functionCatchFailure.mustache`. */
     activation: { kind: "identifier", name: "__activation" } as TsIdentifier,
     /** The run the enclosing body runs under. Every function, node, block,
      *  and body the runtime calls back declares it as a parameter, so the

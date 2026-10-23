@@ -211,7 +211,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.numbers = await runPrompt(__run, {
             prompt: `the first 5 prime numbers`,
             messages: __run.threads.getOrCreateActive(),
@@ -220,7 +220,7 @@ __stack.locals.numbers = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -252,7 +252,7 @@ if (isAborted(__funcResult)) {
           }
         });
         await runner.step(3, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.greetings = await runPrompt(__run, {
             prompt: `a list of 3 common greetings in different languages`,
             messages: __run.threads.getOrCreateActive(),
@@ -261,7 +261,7 @@ __stack.locals.greetings = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });

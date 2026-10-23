@@ -15,7 +15,6 @@ import {
 } from "@/types.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { BlockArgument } from "@/types/blockArgument.js";
-import { functionContainsDestructiveBlock } from "@/backends/functionContainsDestructiveBlock.js";
 
 /**
  * Statement allowlist enforcement and cross-arm reference checks for `parallel`
@@ -75,18 +74,10 @@ function isAssignmentDecl(node: AgencyNode): node is Assignment {
  * then check cross-arm references. Throws on violation.
  */
 export function validateParallelBlock(pb: ParallelBlock): void {
-  // 0. A `destructive { }` region cannot live inside a `parallel` block. The
-  //    flip itself would now land on the calling function (the tracking codegen
-  //    writes `__activation`, which a fork branch reaches lexically; see
-  //    docs/dev/language/destructive-regions.md), but what a failure from one
-  //    arm should say about the destructive work of the arms running beside it
-  //    has not been decided, so the refusal stays. This walks the whole
-  //    subtree, so a region nested in a `seq` arm is caught too.
-  if (functionContainsDestructiveBlock(pb.body)) {
-    throw new Error(
-      "A `destructive { }` region is not allowed inside a `parallel` block: what a failure from one arm should say about the destructive work of the arms running beside it has not been decided. Move the destructive region out of the `parallel` block.",
-    );
-  }
+  // A `destructive { }` region inside an arm is allowed. Its flip is written
+  // to `__activation`, which a fork branch reaches lexically, so it marks the
+  // calling function the same way a bare destructive call in an arm does
+  // (docs/dev/language/destructive-regions.md).
 
   // 1. Allowlist check.
   for (const child of pb.body) {
@@ -431,9 +422,8 @@ export function desugarParallelInBody(body: AgencyNode[]): AgencyNode[] {
     } else if (node.type === "seqBlock") {
       // Outside a parallel context, a seq block has no runtime effect; inline
       // its body after recursively desugaring. A `destructive` seqBlock also
-      // commits: prepend the flip so it runs on the ENCLOSING function's
-      // `__self` (this inlining is exactly why `__self` is the function, not a
-      // block frame — the fail-open guard).
+      // commits: prepend the flip, which codegen writes to the enclosing
+      // function's activation (docs/dev/language/destructive-regions.md).
       if (node.destructive) {
         result.push({ type: "markDestructiveRan" } as AgencyNode);
       }
@@ -516,6 +506,12 @@ function desugarOneParallel(pb: ParallelBlock): AgencyNode[] {
     let armStmts: AgencyNode[];
     if (arm.type === "seqBlock") {
       armStmts = desugarParallelInBody([...arm.body]);
+      // A `destructive { }` region written directly as an arm: the seq
+      // wrapper is dropped here, so its flip has to be kept by hand. A region
+      // nested deeper in the arm is handled by desugarParallelInBody.
+      if (arm.destructive) {
+        armStmts.unshift({ type: "markDestructiveRan" } as AgencyNode);
+      }
     } else {
       armStmts = desugarParallelInBody([arm]);
     }

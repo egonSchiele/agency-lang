@@ -211,7 +211,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.response = await runPrompt(__run, {
             prompt: `Generate a response word by word`,
             messages: __run.threads.getOrCreateActive(),
@@ -219,7 +219,7 @@ __stack.locals.response = await runPrompt(__run, {
               "stream": true
             },
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -251,7 +251,7 @@ if (isAborted(__funcResult)) {
           }
         });
         await runner.step(3, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.response2 = await runPrompt(__run, {
             prompt: `Generate a response word by word, but with a different model`,
             messages: __run.threads.getOrCreateActive(),
@@ -260,7 +260,7 @@ __stack.locals.response2 = await runPrompt(__run, {
               "stream": true
             },
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });

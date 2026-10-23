@@ -211,7 +211,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.count = await runPrompt(__run, {
             prompt: `the number 42`,
             messages: __run.threads.getOrCreateActive(),
@@ -220,7 +220,7 @@ __stack.locals.count = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -235,13 +235,13 @@ if (hasInterrupts(__stack.locals.count)) {
           }
         });
         await runner.step(2, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.message = await runPrompt(__run, {
             prompt: `a greeting message`,
             messages: __run.threads.getOrCreateActive(),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });

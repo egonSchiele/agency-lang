@@ -662,8 +662,6 @@ await callHook(__run, {
         });
         await runner.step(1, __run, async (runner, __run) => {
 __activation.__destructiveRan = true;
-        });
-        await runner.step(2, __run, async (runner, __run) => {
 runner.halt({
             messages: __run.threads,
             data: await __call(__run, writeThing, {
@@ -675,7 +673,7 @@ return;
         });
       })
       if (runner.halted) return runner.haltResult;
-      await runner.hook(3, __run, async (__run) => {
+      await runner.hook(2, __run, async (__run) => {
 await callHook(__run, {
           name: "onNodeEnd",
           data: {
@@ -767,4 +765,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"destructiveBlock.agency:prep":{"1":{"line":1,"col":2}},"destructiveBlock.agency:_doWrite":{"1":{"line":5,"col":2}},"destructiveBlock.agency:writeThing":{"1":{"line":9,"col":2},"3":{"line":11,"col":4}},"destructiveBlock.agency:main":{"1":{"line":16,"col":2},"2":{"line":16,"col":2}}};
+export const __sourceMap = {"destructiveBlock.agency:prep":{"1":{"line":1,"col":2}},"destructiveBlock.agency:_doWrite":{"1":{"line":5,"col":2}},"destructiveBlock.agency:writeThing":{"1":{"line":9,"col":2},"3":{"line":11,"col":4}},"destructiveBlock.agency:main":{"1":{"line":16,"col":2}}};

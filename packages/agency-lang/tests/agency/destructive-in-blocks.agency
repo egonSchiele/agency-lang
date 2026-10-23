@@ -139,6 +139,65 @@ node inCondition_() {
   return "unexpected"
 }
 
+// A region inside a `parallel` arm. The arm runs as a fork branch with its
+// own `__self`; the region's flip is the only destructive thing here, so no
+// function-level pre-flip covers it. Only the activation write reaches the
+// function.
+def regionInParallelArm(): Result {
+  parallel {
+    destructive {
+      print("arm")
+    }
+    const other = 1
+  }
+  return failure("later")
+}
+node regionInParallelArm_() {
+  const r = regionInParallelArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The same region nested in a `seq` arm.
+def regionInSeqArm(): Result {
+  parallel {
+    seq {
+      const a = 1
+      destructive {
+        print("seq arm")
+      }
+    }
+    const other = 2
+  }
+  return failure("later")
+}
+node regionInSeqArm_() {
+  const r = regionInSeqArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call bound to a local inside an arm. The post-flip for the
+// binding is emitted inside the fork branch; it has to land on the function.
+def destructiveCallInParallelArm(): Result {
+  parallel {
+    const n = burn()
+    const other = 1
+  }
+  return failure("later")
+}
+node destructiveCallInParallelArm_() {
+  const r = destructiveCallInParallelArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
 // The negative: no destructive work in the block, so the flag stays false.
 def cleanBlock(): Result {
   run() {

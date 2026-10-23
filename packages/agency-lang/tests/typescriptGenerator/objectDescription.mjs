@@ -211,7 +211,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.url = await runPrompt(__run, {
             prompt: `extract the hostname and port from 'https://example.com:8080'`,
             messages: __run.threads.getOrCreateActive(),
@@ -220,7 +220,7 @@ __stack.locals.url = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
+            removedTools: __activation.__removedTools,
             destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });

@@ -49,8 +49,8 @@ export type FuncParam = {
    * Other names a caller from outside the program may use for this
    * parameter, from `def fetch(baseUrl | url: string)`. Only a call whose
    * descriptor sets `forgiveAliases` gets them renamed; for everyone else
-   * an alias is an unknown argument. Absent when there are none. Spec:
-   * `docs/superpowers/specs/2026-10-23-parameter-aliases.md`.
+   * an alias is an unknown argument. Absent when there are none. See
+   * `docs/dev/language/parameter-aliases.md`.
    */
   aliases?: string[];
   boundValue?: unknown;
@@ -294,7 +294,7 @@ export class AgencyFunction {
     // type checker rejects shape mismatches earlier.
     for (const name of Object.keys(bindings)) {
       // By canonical name only: `.partial()` is Agency code, and an alias
-      // is for a caller that guessed. Spec: parameter-aliases.
+      // is for a caller that guessed. See docs/dev/language/parameter-aliases.md.
       const param = this.params.find((p) => p.name === name);
       if (!param) {
         throw new Error(`Unknown parameter '${name}' in .partial() call`);

@@ -1110,7 +1110,7 @@ function validateAgencyFunctionMethod(
       const match = parameterForKey(params, arg.name);
       if (match?.viaAlias) {
         // `.partial()` is Agency code, so it binds by the parameter's
-        // name, never by an alias. Spec: parameter-aliases.
+        // name and never by an alias. See docs/dev/language/parameter-aliases.md.
         ctx.errors.push(
           diagnostic(
             "namedArgumentIsAlias",

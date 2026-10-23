@@ -189,10 +189,11 @@ describe("tool schemas reach the provider non-strict", () => {
   // The runtime forgives a parameter alias (`url` for `baseUrl`) only if the
   // provider lets an argument key that is not in the schema through. Agency
   // builds its tool schemas with z.object, which writes
-  // additionalProperties: false; these are the converters smoltalk's clients
-  // run every tool through before a request, with the options Agency passes
-  // (a description, no strict). If a smoltalk upgrade turned strict on,
-  // these fail.
+  // additionalProperties: false. These are the converters smoltalk's clients
+  // run every tool through before a request, called with the options those
+  // clients pass today (a description, no strict). This catches a smoltalk
+  // upgrade that changes the converters' default. It would not catch one
+  // where the clients start passing strict: true themselves.
   const schema = z.object({ baseUrl: z.string() });
 
   it("OpenAI: the top-level object is open and the tool is not strict", () => {

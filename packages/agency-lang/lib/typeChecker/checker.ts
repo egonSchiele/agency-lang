@@ -626,7 +626,7 @@ function checkNamedArgStructure(
     const match = parameterForKey(params, arg.name);
     if (match?.viaAlias) {
       // Agency code uses a parameter's name, never an alias; the alias is
-      // for a runtime caller that guessed. Spec: parameter-aliases.
+      // for a runtime caller that guessed. See docs/dev/language/parameter-aliases.md.
       pushErr(
         diagnostic(
           "namedArgumentIsAlias",

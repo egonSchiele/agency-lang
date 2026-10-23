@@ -100,7 +100,7 @@ fetch(url: "https://example.com")
 // error AG6042: 'url' is an alias of parameter 'baseUrl' of 'fetch'. In Agency code, use 'baseUrl'.
 ```
 
-The type checker is off unless `typechecker.enabled` is set, and then the same call compiles and fails when it runs, with the runtime's error: `'url' is an alias of 'baseUrl' in call to 'fetch'; use 'baseUrl'.` Either way the alias is refused. The same goes for `fetch.partial(url: ...)`. Aliases go on `def` parameters only; a node's parameters cannot carry them, because nothing would ever forgive them there.
+The type checker is off unless `typechecker.enabled` is set. With it off, the same call compiles and fails when it runs, with the runtime's error: `'url' is an alias of 'baseUrl' in call to 'fetch'; use 'baseUrl'.` Either way the alias is refused. The same goes for `fetch.partial(url: ...)`. Aliases go on `def` parameters only; a node's parameters cannot carry them, because nothing would ever forgive them there.
 
 ## Blocks
 

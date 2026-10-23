@@ -7,6 +7,12 @@
 - **The unknown-named-argument error lists the valid names:** `Unknown named argument 'url' in call to 'fetch'. Valid names: baseUrl, allowedDomains, headers.` A model can fix its call without guessing as to what the correct arg name is.
 - `x += y` and `i++` statements now have a source location, so the debugger highlights them.
 
+### Language
+
+- **Parameters can carry aliases: `def fetch(baseUrl | url: string)`.** A model that calls a tool with a guessed name (`url` for `baseUrl`) gets the call instead of a wasted round. An alias is a misspelling the tool forgives and is not a second name. The body sees `baseUrl`, the tool schema lists `baseUrl`, and Agency code that writes `fetch(url: x)` or `fetch.partial(url: x)` gets AG6042 naming the parameter. Only a call whose arguments come from outside the program (a model, an HTTP body, the command line) is forgiven; passing both spellings in one call is a failure naming both. Names and aliases in one signature must be distinct (AG2022), and aliases go on `def` parameters only. `std::http`'s `fetch`, `fetchJSON`, and `fetchMarkdown` accept `url` for `baseUrl`.
+- **Tool-call records show the call the function saw.** The `toolCallStart` and `toolCall` log events, and the `onToolCallStart` and `onToolCallEnd` callbacks, carry the arguments with alias keys renamed, and the log events gain `argCorrections` (`[{ from: "url", to: "baseUrl" }]`) when a key was renamed. The repeated-call and already-rejected guards treat the two spellings as one call.
+- **The MCP `tools/list` schema no longer says `additionalProperties: false`.** An MCP client that validated arguments against it would have refused a parameter alias before the call reached the server.
+
 ### Debugger
 
 - **Debugger updated!** Hadn't been touched in months so it was behind a ton of features we've added. It is up to speed now.

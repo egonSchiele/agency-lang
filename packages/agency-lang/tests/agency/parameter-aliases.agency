@@ -1,0 +1,49 @@
+// Parameter aliases: `def fetchLike(baseUrl | url: string)`. A model that
+// calls the tool with `url` gets the call; the function sees `baseUrl`.
+// The thread reader shows what the model saw as each tool result.
+import { getThread } from "std::thread"
+
+def fetchLike(baseUrl | url: string): string {
+  """
+  Fetch a page by its base URL.
+  """
+  return "fetched " + baseUrl
+}
+
+def conversationText(): string {
+  let collected = ""
+  for (tid in ["t0", "t1", "t2", "t3"]) {
+    const messages = getThread(tid, 0, 200)
+    if (isSuccess(messages)) {
+      for (message in messages.value) {
+        collected = collected + "<" + message.role + "> " + message.content + "\n"
+      }
+    }
+  }
+  return collected
+}
+
+// The mock calls the tool with `url`; the tool runs and returns the value.
+node aliasIsForgiven(): string {
+  const reply = llm("fetch a", { tools: [fetchLike] })
+  const convo = conversationText()
+  return "${reply}|${convo.includes("fetched https://a")}"
+}
+
+// The mock sends both spellings; the model gets a failure naming both,
+// and the llm() call goes on to its final answer.
+node bothSpellingsIsAFailure(): string {
+  const reply = llm("fetch b", { tools: [fetchLike] })
+  const convo = conversationText()
+  const named = convo.includes("were given for parameter 'baseUrl'")
+  const ran = convo.includes("fetched ")
+  return "${reply}|${named}|${ran}"
+}
+
+// Three identical calls, mixing the two spellings, trip the repeated-call
+// refusal on the fourth: the alias and the name are one call to the gate.
+node spellingsAreOneRepeatedCall(): string {
+  const reply = llm("fetch c", { tools: [fetchLike] })
+  const convo = conversationText()
+  return "${reply}|${convo.includes("with exactly these arguments")}"
+}

@@ -878,6 +878,18 @@ export const DIAGNOSTICS = {
     message:
       "The body of '{target}' saves a draft of type '{actual}', but decorator '{name}' takes a block returning '{expected}'.",
   },
+  parameterAliasCollision: {
+    code: "AG2022",
+    severity: "error",
+    message:
+      "Parameter '{param}' of '{fn}' has alias '{alias}', which is already the name or an alias of parameter '{other}'.",
+  },
+  namedArgumentIsAlias: {
+    code: "AG6042",
+    severity: "error",
+    message:
+      "'{name}' is an alias of parameter '{param}' of '{fn}'. In Agency code, use '{param}'.",
+  },
   raisesExceededViaDecorator: {
     code: "AG3030",
     severity: "error",

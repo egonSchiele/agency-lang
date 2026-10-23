@@ -1,4 +1,5 @@
 import { MessageJSON } from "smoltalk";
+import { callFromOutside } from "./toolInvocation.js";
 import {
   currentRunOrNone,
   freshState,
@@ -322,7 +323,7 @@ async function runExportedFunctionCore({
         // The store was made before the run existed. From here its thread
         // events belong to the run.
         threadStore.setStatelogClient(run.log);
-        const result = await fn.invoke(run, { type: "named", positionalArgs: [], namedArgs });
+        const result = await fn.invoke(run, callFromOutside(namedArgs));
         // Drain any async work the function spawned (async calls, pending
         // promises) before returning, mirroring runNode's awaitAll.
         await execCtx.pendingPromises.awaitAll();

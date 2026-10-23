@@ -166,6 +166,29 @@ function captureStderr(run: () => void): string[] {
 }
 
 describe("generateDoc", () => {
+  it("shows a parameter's aliases on the signature and in the parameter table", () => {
+    const inputDir = path.join(tmpDir, "input-aliases");
+    const outputDir = path.join(tmpDir, "output-aliases");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "http.agency"),
+      `/** @module
+ * Fetching.
+ */
+export def fetch(baseUrl | url: string, path: string = ""): string {
+  return baseUrl + path
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "http.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "http.md"), "utf-8");
+
+    expect(output).toContain("baseUrl | url: string");
+    expect(output).toContain("| baseUrl (also `url`) | `string` |");
+    expect(output).toContain("| path | `string` |");
+  });
+
   it("keeps a bullet list written inside a JSDoc-style module comment", () => {
     const inputDir = path.join(tmpDir, "input-jsdoc-bullets");
     const outputDir = path.join(tmpDir, "output-jsdoc-bullets");

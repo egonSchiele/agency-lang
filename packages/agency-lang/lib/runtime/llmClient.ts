@@ -475,6 +475,11 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
   return {
     ...metadata,
     messages,
+    // Never `strict`. With smoltalk's default of strict off, a provider
+    // accepts an argument key that is not in the schema, and the runtime
+    // renames a parameter alias (`url` for `baseUrl`) to the parameter.
+    // A strict schema would have the provider refuse the alias first.
+    // See docs/dev/language/parameter-aliases.md.
     tools,
     responseFormat,
     abortSignal,

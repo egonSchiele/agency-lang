@@ -1,0 +1,40 @@
+{
+  "tests": [
+    {
+      "nodeName": "aliasIsForgiven",
+      "input": "",
+      "expectedOutput": "\"done|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "fetchLike", "args": { "url": "https://a" } }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "bothSpellingsIsAFailure",
+      "input": "",
+      "expectedOutput": "\"done|true|false\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "fetchLike", "args": { "url": "https://b", "baseUrl": "https://b" } }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "spellingsAreOneRepeatedCall",
+      "input": "",
+      "expectedOutput": "\"done|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "fetchLike", "args": { "url": "https://c" } }] },
+        { "toolCalls": [{ "name": "fetchLike", "args": { "baseUrl": "https://c" } }] },
+        { "toolCalls": [{ "name": "fetchLike", "args": { "url": "https://c" } }] },
+        { "toolCalls": [{ "name": "fetchLike", "args": { "baseUrl": "https://c" } }] },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

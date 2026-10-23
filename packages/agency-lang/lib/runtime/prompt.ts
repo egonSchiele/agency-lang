@@ -102,6 +102,8 @@ import {
   stringifyToolResult,
   TIER_SUFFIX,
   unwrapToolResultForLlm,
+  toolArgumentsFor,
+  callFromOutside,
 } from "./toolInvocation.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
@@ -1040,7 +1042,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       try {
         const invokeAsTool = (threadRun: Run) =>
           runAsToolInvocation(threadRun, branchStack, (toolRun) =>
-            handler.invoke(toolRun, { type: "named", positionalArgs: [], namedArgs }),
+            handler.invoke(toolRun, callFromOutside(namedArgs)),
           );
         // A handoff continues this prompt's conversation: the body's llm()
         // calls append to `messages`, the thread that carries the marker.
@@ -1400,12 +1402,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           agencyFunctions.find((fn) => fn.name === toolCall.name) ?? null;
         const gateInputFor = (toolCall: smoltalk.ToolCallJSON) => {
           const handler = handlerFor(toolCall);
-          const namedArgs = handler
-            ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
-            : {};
+          const { namedArgs, argCorrections } = toolArgumentsFor(handler, toolCall);
           const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
           const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
-          return { toolCall, handler, namedArgs, markupArg, callKey };
+          return { toolCall, handler, namedArgs, argCorrections, markupArg, callKey };
         };
         const gateState = (): GateState => ({
           removedTools,
@@ -1509,7 +1509,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           // stale verdict.
           const invocationKey = invocationKeyFor({ toolCall, index });
 
-          const { handler, namedArgs, callKey } = gateInputFor(toolCall);
+          const { handler, namedArgs, argCorrections, callKey } = gateInputFor(toolCall);
           const gateCall = gateCallFor({ toolCall, index });
           await b.step(`${invocationKey}.gate`, async () => {
             self.runnerState.gateVerdicts[invocationKey] ??= computeGateVerdict(
@@ -1624,6 +1624,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
               branchRun.log.toolCallStart({
                 toolName: handler.name,
                 args: namedArgs,
+                argCorrections,
                 model: JSON.stringify(clientConfig.model),
                 threadId: branchRun.threads.activeId() ?? null,
               });
@@ -1697,6 +1698,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
               branchRun.log.toolCall({
                 toolName: handler.name,
                 args: namedArgs,
+                argCorrections,
                 output: toolResult,
                 model: JSON.stringify(clientConfig.model),
                 timeTaken,

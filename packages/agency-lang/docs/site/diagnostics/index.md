@@ -59,6 +59,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG2019](checking.md#ag2019) | Decorator '&#123;inner&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' above it on '&#123;target&#125;' takes a block returning '&#123;expected&#125;'. |
 | [AG2020](checking.md#ag2020) | '&#123;target&#125;' is declared to return '&#123;declared&#125;', but decorator '&#123;name&#125;' returns '&#123;actual&#125;'. |
 | [AG2021](checking.md#ag2021) | The body of '&#123;target&#125;' saves a draft of type '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'. |
+| [AG2022](checking.md#ag2022) | Parameter '&#123;param&#125;' of '&#123;fn&#125;' has alias '&#123;alias&#125;', which is already the name or an alias of parameter '&#123;other&#125;'. |
 
 ## Interrupts, effects, and handlers
 
@@ -163,6 +164,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6039](tools.md#ag6039) | Parameter '&#123;name&#125;' on '&#123;fn&#125;' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one. |
 | [AG6040](tools.md#ag6040) | '&#123;expr&#125;' is passed as a tool, but it is a value of type '&#123;actual&#125;', not a function.&#123;shadowHint&#125; |
 | [AG6041](tools.md#ag6041) | Decorator '&#123;name&#125;' on '&#123;target&#125;' expects '&#123;param&#125;: &#123;expected&#125;', got '&#123;actual&#125;'. |
+| [AG6042](tools.md#ag6042) | '&#123;name&#125;' is an alias of parameter '&#123;param&#125;' of '&#123;fn&#125;'. In Agency code, use '&#123;param&#125;'. |
 
 ## Static init, config, and imports
 

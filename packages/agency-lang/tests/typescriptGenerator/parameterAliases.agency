@@ -1,0 +1,8 @@
+// A def parameter with aliases: `url` is a key a model may use for
+// `baseUrl`. The params metadata carries the aliases; the tool schema and
+// the call descriptor for an Agency call do not mention them.
+def fetchLike(baseUrl | url: string, path: string = ""): string {
+  return baseUrl + path
+}
+
+fetchLike(baseUrl: "https://a")

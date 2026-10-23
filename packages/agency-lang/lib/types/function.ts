@@ -17,6 +17,11 @@ import { Tag } from "./tag.js";
 export type FunctionParameter = {
   type: "functionParameter";
   name: string;
+  /** Other names a runtime caller from outside the program (a model, an
+   *  HTTP body, the command line) may use for this parameter, written
+   *  `baseUrl | url: string`. The body never binds an alias, and Agency
+   *  code that writes one gets an error. Absent when there are none. */
+  aliases?: string[];
   typeHint?: VariableType;
   validated?: boolean;
   variadic?: boolean;

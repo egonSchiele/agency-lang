@@ -555,11 +555,21 @@ function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
 function generateParamTable(params: FunctionParameter[], ctx: DocContext): string | null {
   if (params.length === 0) return null;
   const rows = params.map((p) => [
-    p.name,
+    paramNameCell(p),
     p.typeHint ? formatTypeLinked(p.typeHint, ctx) : "",
     formatDefaultValue(p.defaultValue),
   ]);
   return `${bold("Parameters:")}\n\n${markdownTable(["Name", "Type", "Default"], rows)}`;
+}
+
+/** The Name cell: the parameter's name, then the aliases a caller from
+ *  outside the program may use, as `baseUrl (also \`url\`)`. */
+function paramNameCell(param: FunctionParameter): string {
+  if (!param.aliases || param.aliases.length === 0) {
+    return param.name;
+  }
+  const aliases = param.aliases.map((alias) => `\`${alias}\``).join(", ");
+  return `${param.name} (also ${aliases})`;
 }
 
 function formatDocComment(comment: AgencyMultiLineComment): string {

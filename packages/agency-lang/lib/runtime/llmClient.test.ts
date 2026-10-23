@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
+import { zodToAnthropicTool, zodToOpenAIResponsesTool, zodToOpenAITool } from "smoltalk";
 import { readFileSync } from "fs";
 import { createRequire } from "module";
 import path from "path";
@@ -172,5 +174,42 @@ describe("apiKeysFromSettings", () => {
     }
     expect(Object.keys(pairs).length).toBeGreaterThan(0);
     expect(PROVIDER_KEY_VARIABLES).toEqual(pairs);
+  });
+});
+
+describe("toSmolConfig — messages and tools reach smoltalk", () => {
+  it("passes the messages through", () => {
+    const message = { role: "user", content: "hi" };
+    const out = toSmolConfig({ messages: [message], tools: [] } as any) as any;
+    expect(out.messages).toEqual([message]);
+  });
+});
+
+describe("tool schemas reach the provider non-strict", () => {
+  // The runtime forgives a parameter alias (`url` for `baseUrl`) only if the
+  // provider lets an argument key that is not in the schema through. Agency
+  // builds its tool schemas with z.object, which writes
+  // additionalProperties: false. These are the converters smoltalk's clients
+  // run every tool through before a request, called with the options those
+  // clients pass today (a description, no strict). This catches a smoltalk
+  // upgrade that changes the converters' default. It would not catch one
+  // where the clients start passing strict: true themselves.
+  const schema = z.object({ baseUrl: z.string() });
+
+  it("OpenAI: the top-level object is open and the tool is not strict", () => {
+    const tool = zodToOpenAITool("fetch", schema, { description: "" }) as any;
+    expect(tool.function.parameters.additionalProperties).not.toBe(false);
+    expect(tool.function.strict).not.toBe(true);
+  });
+
+  it("OpenAI Responses: the tool is not strict", () => {
+    const tool = zodToOpenAIResponsesTool("fetch", schema, { description: "" });
+    expect(tool.strict).toBe(false);
+    expect(tool.parameters.additionalProperties).not.toBe(false);
+  });
+
+  it("Anthropic: the schema carries no additionalProperties", () => {
+    const tool = zodToAnthropicTool("fetch", schema, { description: "" }) as any;
+    expect(tool.input_schema.additionalProperties).toBeUndefined();
   });
 });

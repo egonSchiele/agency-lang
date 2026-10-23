@@ -430,3 +430,15 @@ An argument written in a decorator tag does not fit the decorator's parameter.
 A tag such as `@budgeted(cost: "x")` is a call to `budgeted` with the decorated function's body as its block, so its arguments are checked against the decorator's parameters like any call's. This is the decorator form of AG6019.
 
 **How to fix:** pass a value of the type the decorator's parameter declares, or change the decorator's parameter type.
+
+<a id="ag6042"></a>
+
+## AG6042 — '&#123;name&#125;' is an alias of parameter '&#123;param&#125;' of '&#123;fn&#125;'. In Agency code, use '&#123;param&#125;'.
+
+*Default severity: error.*
+
+A named argument, or a `.partial()` binding, uses one of a parameter's aliases instead of its name.
+
+An alias forgives a caller that guesses the name at runtime, usually a model calling the function as a tool. Code you write knows the name, so it uses the first one. That keeps every reference to a parameter spelled one way. In `def fetch(baseUrl | url: string)`, a call written as `fetch(url: x)` is this error.
+
+**How to fix:** use the parameter's name, the one before the first `|`.

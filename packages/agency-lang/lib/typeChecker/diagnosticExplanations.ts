@@ -835,6 +835,18 @@ The body of a decorated function runs as the decorator's block, so a draft saved
 
 **How to fix:** save a value of the type the decorator's block returns.`,
 
+  parameterAliasCollision: `A \`def\` parameter has an alias that is already taken by another parameter, as its name or as one of its aliases, or that repeats the parameter's own name.
+
+An alias is a key a caller from outside the program may use for the parameter, written \`def fetch(baseUrl | url: string)\`. Every name and alias in one signature has to be distinct, otherwise a key would name two parameters.
+
+**How to fix:** remove or rename the alias.`,
+
+  namedArgumentIsAlias: `A named argument, or a \`.partial()\` binding, uses one of a parameter's aliases instead of its name.
+
+An alias forgives a caller that guesses the name at runtime, usually a model calling the function as a tool. Code you write knows the name, so it uses the first one. That keeps every reference to a parameter spelled one way. In \`def fetch(baseUrl | url: string)\`, a call written as \`fetch(url: x)\` is this error.
+
+**How to fix:** use the parameter's name, the one before the first \`|\`.`,
+
   raisesExceededViaDecorator: `A decorator raises an effect that the decorated function's \`raises\` clause does not list. This is the decorator form of AG3013.
 
 A decorated function's effects are its decorators' effects plus its body's, because the decorator's code runs every time the function is called. A \`@budgeted\` decorator written over \`guard\` raises \`std::guard\`, so a function it decorates raises \`std::guard\` too.

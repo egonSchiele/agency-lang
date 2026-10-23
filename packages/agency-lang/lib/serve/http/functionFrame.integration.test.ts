@@ -41,6 +41,10 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
     '  return "${GREETING}, ${name}!"',
     "}",
     "",
+    "export def fetchLike(baseUrl | url: string): string {",
+    "  return baseUrl",
+    "}",
+    "",
     "export def needsApproval(): string {",
     '  raise app::confirm("proceed?")',
     '  return "done"',
@@ -92,6 +96,14 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
     const result = await handler("POST", "/function/greet", { name: "foo" });
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: true, value: "Hello, foo!" });
+  });
+
+  // A served request's arguments come from outside the program, so a
+  // parameter alias in the body is renamed to the parameter.
+  it("POST /function/fetchLike accepts a parameter alias in the body", async () => {
+    const result = await handler("POST", "/function/fetchLike", { url: "https://a" });
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ success: true, value: "https://a" });
   });
 
   it("lists greet as an exported function", async () => {

@@ -2,6 +2,7 @@ import { ANY_T } from "./primitives.js";
 import { checkToolElementTypes } from "./toolElementTypes.js";
 import { diagnostic } from "./diagnostics.js";
 import { validNamesSentence } from "../utils/validNames.js";
+import { parameterForKey } from "../utils/parameterAliases.js";
 import { AgencyNode, FunctionCall, FunctionParameter, VariableType } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { parseMatchValId } from "../matchVal.js";
@@ -622,7 +623,20 @@ function checkNamedArgStructure(
       continue;
     }
     seen.add(arg.name);
-    const paramIdx = params.findIndex((p) => p.name === arg.name);
+    const match = parameterForKey(params, arg.name);
+    if (match?.viaAlias) {
+      // Agency code uses a parameter's name, never an alias; the alias is
+      // for a runtime caller that guessed. See docs/dev/language/parameter-aliases.md.
+      pushErr(
+        diagnostic(
+          "namedArgumentIsAlias",
+          { name: arg.name, param: match.param.name, fn: displayFunctionName(call.functionName) },
+          call.loc ?? null,
+        ),
+      );
+      continue;
+    }
+    const paramIdx = match ? params.indexOf(match.param as FunctionParameter) : -1;
     if (paramIdx < 0) {
       pushErr(
         diagnostic(

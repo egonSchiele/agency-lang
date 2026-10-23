@@ -288,3 +288,15 @@ A `saveDraft` in a decorated function's body saves a value the decorator's block
 The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared `def budgeted(cost: number, block: () -> string): Result<string>`, the body saves a `string` draft, even though the function is declared to return `Result<string>`.
 
 **How to fix:** save a value of the type the decorator's block returns.
+
+<a id="ag2022"></a>
+
+## AG2022 — Parameter '&#123;param&#125;' of '&#123;fn&#125;' has alias '&#123;alias&#125;', which is already the name or an alias of parameter '&#123;other&#125;'.
+
+*Default severity: error.*
+
+A `def` parameter has an alias that is already taken by another parameter, as its name or as one of its aliases, or that repeats the parameter's own name.
+
+An alias is a key a caller from outside the program may use for the parameter, written `def fetch(baseUrl | url: string)`. Every name and alias in one signature has to be distinct, otherwise a key would name two parameters.
+
+**How to fix:** remove or rename the alias.

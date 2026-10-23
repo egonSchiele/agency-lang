@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ALIASES_ON_DEFS_ONLY,
   RESERVED_WORDS,
   functionParser,
   functionParameterParser,
@@ -3821,5 +3822,93 @@ describe("declaration names with spaces", () => {
     if (parsed.success) {
       expect(parsed.result.functionName).toBe("foo");
     }
+  });
+});
+
+describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
+  function defParams(src: string) {
+    const result = functionParser(src);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error(result.message);
+    return (result.result as { parameters: unknown[] }).parameters;
+  }
+
+  it("parses one alias", () => {
+    expect(defParams("def fetch(baseUrl | url: string) { return baseUrl }")).toEqualWithoutLoc([
+      {
+        type: "functionParameter",
+        name: "baseUrl",
+        aliases: ["url"],
+        typeHint: { type: "primitiveType", value: "string" },
+      },
+    ]);
+  });
+
+  it("parses several aliases and keeps a union type after the colon", () => {
+    const [param] = defParams("def f(baseUrl | url | href: string | null) { return baseUrl }") as [
+      { aliases: string[]; typeHint: unknown },
+    ];
+    expect(param.aliases).toEqual(["url", "href"]);
+    expect(param.typeHint).toEqualWithoutLoc({
+      type: "unionType",
+      types: [
+        { type: "primitiveType", value: "string" },
+        { type: "primitiveType", value: "null" },
+      ],
+    });
+  });
+
+  it("parses an alias on a variadic parameter", () => {
+    expect(defParams("def f(...rest | items: string[]) { return rest }")).toEqualWithoutLoc([
+      {
+        type: "functionParameter",
+        name: "rest",
+        aliases: ["items"],
+        variadic: true,
+        typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } },
+      },
+    ]);
+  });
+
+  it("parses an alias with no type hint", () => {
+    expect(defParams("def f(a | b) { return a }")).toEqualWithoutLoc([
+      { type: "functionParameter", name: "a", aliases: ["b"] },
+    ]);
+  });
+
+  it("puts the optional marker after the last alias", () => {
+    const [param] = defParams("def f(a | b?: string) { return a }") as [
+      { aliases: string[]; defaultValue: unknown },
+    ];
+    expect(param.aliases).toEqual(["b"]);
+    expect(param.defaultValue).toEqualWithoutLoc({ type: "null" });
+  });
+
+  it("parses an alias with a default value", () => {
+    const [param] = defParams('def f(a | b = "x") { return a }') as [
+      { aliases: string[]; defaultValue: { type: string } },
+    ];
+    expect(param.aliases).toEqual(["b"]);
+    expect(param.defaultValue.type).toBe("string");
+  });
+
+  it("leaves the aliases field off a parameter without aliases", () => {
+    const [param] = defParams("def f(a: string) { return a }") as [Record<string, unknown>];
+    expect("aliases" in param).toBe(false);
+  });
+
+  it("refuses an alias on a node parameter and says why", () => {
+    const result = parseAgency("node main(a | b: string) {\n  return a\n}\n", {});
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.message).toContain(ALIASES_ON_DEFS_ONLY);
+  });
+
+  it("refuses an alias on an inline handler parameter and says why", () => {
+    const result = parseAgency(
+      "def f(a: string) {\n  handle {\n    return a\n  } with (intr | i) {\n    return approve()\n  }\n}\n",
+      {},
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.message).toContain(ALIASES_ON_DEFS_ONLY);
   });
 });

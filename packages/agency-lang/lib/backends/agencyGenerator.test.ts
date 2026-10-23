@@ -1591,3 +1591,34 @@ describe("effect declaration tags", () => {
     );
   });
 });
+
+describe("parameter aliases", () => {
+  // `agency fmt` prints the aliases back as written: the name, then each
+  // alias after ` | `, before the colon. After the colon `|` is still a
+  // union type.
+  it("prints aliases on def parameters, variadic ones included", () => {
+    const source = [
+      "def fetch(baseUrl | url | href: string | null, ...rest | items: string[]): string {",
+      "  return baseUrl",
+      "}",
+    ].join("\n");
+    const parseResult = parseAgency(source, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+
+    const output = new AgencyGenerator().generate(parseResult.result).output;
+    expect(output).toContain("baseUrl | url | href: string | null");
+    expect(output).toContain("...rest | items: string[]");
+  });
+
+  it("prints an alias with an optional marker and a default", () => {
+    const source = 'def opt(a | b?: string, c | d = "x") {\n  return a\n}';
+    const parseResult = parseAgency(source, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+
+    const output = new AgencyGenerator().generate(parseResult.result).output;
+    expect(output).toContain("a | b: string | null = null");
+    expect(output).toContain('c | d = "x"');
+  });
+});

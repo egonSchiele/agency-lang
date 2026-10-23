@@ -1,23 +1,57 @@
-## Unreleased
+## Oct 23 2026 — v0.32.0
+
+### Language
+
+- **Decorators.** Agency now has decorators!
+- **A `destructive { }` region inside a block now marks the function it is in.** The mark used to be lost when the block returned, so a failure escaping the function said no destructive work had run, and the tool loop kept a tool it should have removed.
+- **The unknown-named-argument error lists the valid names:** `Unknown named argument 'url' in call to 'fetch'. Valid names: baseUrl, allowedDomains, headers.` A model can fix its call without guessing as to what the correct arg name is.
+- `x += y` and `i++` statements now have a source location, so the debugger highlights them.
 
 ### Debugger
 
-- **A debugger can be installed on a program something else is running.** The runtime answers debug stops before any of its entry points returns, so a TypeScript caller, `agency run`, or a serve never sees one, and a caller's policy, callbacks, cancel signal, and usage figure are the same with the debugger as without it.
-- **`agency debug --attach [pid]` attaches the debugger to a running program.** With no pid it lists the programs that can take one. The debugger opens stopped at the program's next statement; `q` detaches and the program runs on. Nothing has to be planned in advance: no flag, no trace mode.
-- **The debugger says what the program is waiting on.** While the program runs, the bottom bar names the model request or the tool call it is in and how long it has been there, `▶ running · in llm() at story.agency:11 · 4s · round 1, waiting on model`, and the source pane marks the `llm()` line. Attaching in the middle of a long call shows that call at once, with the time it has already run. The spinner's random phrases are gone, and so is the "Current line not available" line the activity log repeated on every redraw.
-- **`s` or `n` while the program runs stops it at its next statement.** A model call in flight is not interrupted; the stop comes when it returns, and the bar says `pausing at the next statement` until then. Other keys pressed while the program runs still wait for the next stop, and Ctrl-C while it runs exits the debugger as it does at a stop.
-- **A running program opens a debug socket on `SIGUSR2`.** Every program run on Node (not a serve or an IPC child) writes a record under `~/.agency/debug-sessions` and listens for the signal; the socket takes one debugger at a time. A failure on the debugger's side ends the session and the program runs on.
+- **Debugger updated!** Hadn't been touched in months so it was behind a ton of features we've added. It is up to speed now.
+- **Debugger steps through tool calls!** Earlier, everything inside an llm call was a black box. You couldn't step through it or debug it in any way. Now you can.
+- **Better status line for llm calls in the debugger** – eg `▶ running · in llm() at story.agency:11 · 4s · round 1, waiting on model`.
+- **A debugger can connect to an already running Agency agent.** `agency debug --attach [pid]` attaches the debugger to a running program.**
+- **The call stack is read from the checkpoint,** so it is correct after a rewind and inside a tool call.
+- **Responding to a batch of interrupts.** Users can respond to more than one interrupt.
+- **Edit a paused program.** At a stop you can send the model a message from the threads pane, change a local, remove a tool, change or disarm a guard's budget, or give a branch its result. `Ctrl+K` lists every edit you can make.
+- **`agency debug session` lets an agent drive a debugger.** 
+- **`agency debug` takes the run flags** (`--policy`, `--max-cost`, `--model`, and the rest)
 
 ### Runtime
 
-- **`input()` is answered through the invocation, not a process global.** A TypeScript caller that scripted answers by setting `globalThis.__agencyInputOverride` now passes `inputOverride` in the options object that follows the node's own arguments: `main(args, { inputOverride: async (prompt) => "yes" })`, or `main({ inputOverride })` for a node with no parameters. The old global is no longer read, so a caller still setting it falls back to the terminal.
+- **`input()` is answered through the invocation, not a process global.**
+- **`patchCheckpoint` edits a paused program.** It applies a list of named edits (`appendMessage`, `setLocal`, `setArg`, `setGlobal`, `removeTool`, `setGuard`, `setBranchResult`) to a checkpoint and re-signs it, and every resume path takes `edits`. It is exported from every compiled module and from `agency-lang/runtime`.
+- **A local override on a checkpoint taken inside a tool call lands on the tool's frame.** It used to land on the last frame of the root stack.
+- **Serving takes `allowEdits`,** off by default. With it on, a `/resume` request can carry `edits`; with it off, such a request is refused with a 400.
+- The runtime logs a `turnStart` event each time a person sends a message, and `turnStart` in `std::statelog` logs one from your own code. The logs viewer uses it to split a session into turns.
 
 ### Standard Library
 
-- **`@guard` puts a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is the result, with a line saying it may be unfinished; with nothing saved, the result is a failure naming the budget, "its time budget of 5m ran out".
-- **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, review, verifier, TypeScript review, Agency review, Agency verifier, Agency coding, writing review, and writing rewrite agents. A reviewer or verifier that runs out of budget returns the findings it saved so far. The writing reviewer now runs its cuts and tics passes before its main pass instead of beside it, so the main pass's saved findings survive a trip. `writingRewriteAgent` returns "it returned no answer" for an empty text, like every other `@guard` function.
+- **`@guard` is the first stdli decorator. It sets a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is returned as the result.
+- **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, review, verifier, TypeScript review, Agency review, Agency verifier, Agency coding, writing review, and writing rewrite agents.
 - **`reviewAgent` takes `failOpen`,** like `writingReviewAgent`. The researcher's grounding check passes `failOpen: false`, so a review that ran out of budget before saving any findings rejects the answer instead of accepting it as reviewed.
-- **A caller can no longer give a stdlib agent more budget mid-run.** The agent answers its own budget interrupt, so a handler that approves it, or `agency run --interactive`, is never asked. Pass a larger `maxTime` or `maxCost` instead.
+- **Breaking — `std::ui` is deleted.** All the legacy curses code is gone. The terminal prompts (`select`, `autocomplete`, `prompt`, `confirm`, `chooseOption`, `pushMessage`) moved to `std::ui/cli`. In the agent, `/clear` now clears the screen.
+- **`std::http` fetches time out after 30 seconds.** `fetch`, `fetchJSON`, and `fetchMarkdown` take a `timeout` in milliseconds, where `0` means no limit.
+- **`exists` and `stat` report a symlink below `dir` as missing again,** instead of throwing. When `AGENTS.md` was a symlink, the throw made the agent start with no project instructions.
+
+### CLI
+
+- **`agency resume --edit <json>` and `--edits <file>`** apply the same edits as `patchCheckpoint` before the program resumes.
+
+### Logs viewer
+
+- **Comments and addresses.** `c` leaves a comment on a row, and `A` copies the row address.
+- `agency logs <file> --trace-id <id>` opens the viewer on one trace.
+- **`agency logs session`** lets an agent connect to the logs view, read rows and comments, and move the open viewer.
+- Various other improvements to the logs viewer UI.
+
+### Evals
+
+- **`agency eval new <suite-dir>`** and **`agency eval edit <test-dir>`** - TUIs for creating or editing eval tests.
+- **`graders.json`** - you can now specify some built-in graders using JSON instead of TS code, and we also have nice TUIs for creating those graders.
+- **A must-pass grader that returns a score needs a threshold.** Without one, a must-pass judge used to pass a score of 0.
 
 ### Formatter
 

@@ -1,18 +1,18 @@
 import { systemMessage } from "std::thread"
 
 node main() {
-  systemMessage(
-    "If anyone asks for your name, say 'the amazing Agency language'.",
+  let story = ""
+  let response = llm(
+    "Write the first line of a story about a talking cat."
   )
-  const response = llm(
-    "What's your name?",
-    messages: [{
-      role: "user",
-      content: "You are a helpful assistant."
-    }],
-  )
-  subthread {
-    llm("What's your favorite color?")
+  story += response
+  for (i in range(20)) {
+    print(i)
+    response = llm(
+      "Write the next line of the story about the talking cat."
+    )
+    story += response
   }
-  print(response)
+  print(story)
+  return story
 }

@@ -109,8 +109,8 @@ export def reviewAgent(
 
 // The guarded half of reviewAgent. It is its own def because reviewAgent
 // post-processes the guard's Result, and the decorator's return is the
-// def's return. A trip is a failure (the model's partial findings stop at
-// the decorator), which failOpenFeedback turns into no findings.
+// def's return. Return position: when the budget runs out, the findings
+// the model saved reach the guard and come back as the result.
 @guard(cost: maxCost, time: maxTime, label: "reviewAgent")
 def reviewUnderBudget(
   work: string,

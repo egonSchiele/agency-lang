@@ -133,9 +133,32 @@ inside a `thread` block:
   attempt, or, before any attempt completes, the draft the unfinished
   attempt saved (`stdlib/strategy.agency`).
 
+- **The reviewers and verifiers** (`reviewAgent`, `typescriptReviewAgent`,
+  `agencyReviewAgent`, `verifierAgent`, `agencyVerifierAgent`) return
+  their judge call from inside the thread in their inner def, so the
+  findings the model saved come back after a trip. Their prompts tell the
+  model to save its findings as it goes for this reason.
+- **`agencyCodingAgent`** returns `generateLoop(...)`, which returns
+  `revise(...)`, from inside its thread.
+- **The writing reviewer** runs its cuts and tics passes first, in a
+  `parallel` block, then the main pass on its own, with a `finalize` that
+  hands up the main pass's saved findings and the side passes' findings.
+  The main pass cannot run inside the `parallel` block: a `parallel` arm is
+  a `fork` branch, which drops its partial result, and a trip inside an arm
+  also skips the enclosing def's `finalize`
+  (`tests/agency/guards/guard-decorator.agency`,
+  `writingReviewTripReturnsSavedFindings`).
+
 An agent that assigns its model's result without a `finalize` drops the
 draft there, and a trip becomes a failure. Writing a new agent, return the
 call, or assign it and hand the local back through a `finalize`.
+
+The seven agents that post-process their guarded result keep their
+exported def and move the guarded part into a non-exported inner def named
+`<agent>UnderBudget`, which carries the tag with the agent's own label.
+The writing rewrite needed no inner def: it returns the reviewer's failure
+from inside its loop, and the decorator passes a failure the body returns
+through unchanged.
 
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the
@@ -182,7 +205,8 @@ rule 2 reports it.
   trip (the draft is the answer), a trip with nothing saved, a recovered
   `revise` answer with and without a thread, an outer budget that runs
   out inside an inner decorated call, a label override, a finished
-  answer, an empty answer, an empty list, and a failure the body returns.
+  answer, an empty answer, an empty list, a failure the body returns, and
+  the reviewer and writing-reviewer shapes returning their saved findings.
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
   under a guard that trips in the check, in a first attempt with and
   without a saved draft, or in a later attempt, and the

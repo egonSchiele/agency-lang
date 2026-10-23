@@ -72,9 +72,9 @@ def runAndJudge(
   if (ran is failure(err)) {
     return [{ error: true, feedback: "The program failed to run: ${err}" }]
   }
-  let items: Feedback[] = []
+  // Return position, so the findings the model saves reach the guard.
   thread(label: "agencyVerifierAgent", session: session) {
-    items = judgeResult(
+    return judgeResult(
       task: task,
       data: ran.value,
       model: model,
@@ -82,7 +82,6 @@ def runAndJudge(
       extraTools: extraTools,
     )
   }
-  return items
 }
 
 export def agencyVerifierAgent(
@@ -124,8 +123,9 @@ export def agencyVerifierAgent(
 }
 
 // The guarded half of agencyVerifierAgent, a def of its own because the
-// exported def post-processes the guard's Result. A trip is a failure,
-// which failOpenFeedback turns into no findings.
+// exported def post-processes the guard's Result. Return position: when
+// the budget runs out, the findings the model saved reach the guard and
+// come back as the result.
 @guard(cost: maxCost, time: maxTime, label: "agencyVerifierAgent")
 def agencyVerifyUnderBudget(
   source: string,

@@ -190,8 +190,9 @@ export def typescriptReviewAgent(
 }
 
 // The guarded half of typescriptReviewAgent, a def of its own because the
-// exported def post-processes the guard's Result. A trip is a failure,
-// which failOpenFeedback turns into no findings.
+// exported def post-processes the guard's Result. Return position: when
+// the budget runs out, the findings the model saved reach the guard and
+// come back as the result.
 @guard(cost: maxCost, time: maxTime, label: "typescriptReviewAgent")
 def typescriptReviewUnderBudget(
   work: string,

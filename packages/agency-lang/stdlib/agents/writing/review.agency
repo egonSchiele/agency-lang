@@ -481,8 +481,13 @@ export def writingReviewAgent(
 }
 
 // The guarded half of writingReviewAgent, a def of its own because the
-// exported def decides what a failed review returns. A trip is a failure:
-// the model's partial findings stop at the decorator.
+// exported def decides what a failed review returns. The cuts and tics
+// passes run first, in parallel, each with its own short prompt, so the
+// main prompt carries misreadings only. The main pass runs after them and
+// on its own: a draft saved inside a parallel arm never reaches the guard,
+// and a trip inside one skips this def's finalize. Here the assignment
+// binds the findings the model saved into `items`, and the finalize hands
+// them up when the budget runs out.
 @guard(cost: maxCost, time: maxTime, label: "writingReviewAgent")
 def writingReviewUnderBudget(
   text: string,
@@ -496,23 +501,7 @@ def writingReviewUnderBudget(
   maxCost: number,
   maxTime: number,
 ): Result<Feedback[]> {
-  let items: Feedback[] = []
-  // The cuts and tics passes run beside the main review, each with its
-  // own short prompt, so the main prompt carries misreadings only.
   parallel {
-    seq {
-      thread(label: "writingReviewAgent", session: session) {
-        items = judgeText(
-          text: text,
-          task: task,
-          guidelines: guidelines,
-          context: context,
-          model: model,
-          provider: provider,
-          extraTools: extraTools,
-        )
-      }
-    }
     let cuts = cutsOrNothing(
       text: text,
       task: task,
@@ -530,7 +519,29 @@ def writingReviewUnderBudget(
       provider: provider,
     )
   }
+  let items: Feedback[] = []
+  thread(label: "writingReviewAgent", session: session) {
+    items = judgeText(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
+  }
   return [...items, ...cuts, ...tics]
+
+  // The budget ran out during the main pass: the findings the model saved,
+  // with the side passes' findings. Null when it saved none, so the guard
+  // reports the stop.
+  finalize {
+    if (items == null) {
+      return null
+    }
+    return [...items, ...cuts, ...tics]
+  }
 }
 
 /** What an eval hands the reviewer: the task the text was written for, and

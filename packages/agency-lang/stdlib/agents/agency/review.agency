@@ -261,8 +261,9 @@ export def agencyReviewAgent(
 }
 
 // The guarded half of agencyReviewAgent: only the model's judgment runs
-// under the budget, so the parse and typecheck findings always arrive. A
-// trip is a failure, which failOpenFeedback turns into no findings.
+// under the budget, so the parse and typecheck findings always arrive.
+// Return position: when the budget runs out, the findings the model saved
+// reach the guard and come back as the result.
 @guard(cost: maxCost, time: maxTime, label: "agencyReviewAgent")
 def agencyReviewUnderBudget(
   source: string,

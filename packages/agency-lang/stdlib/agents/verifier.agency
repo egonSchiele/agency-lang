@@ -108,8 +108,9 @@ export def verifierAgent(
 }
 
 // The guarded half of verifierAgent, a def of its own because the exported
-// def post-processes the guard's Result. A trip is a failure, which
-// failOpenFeedback turns into no findings.
+// def post-processes the guard's Result. Return position: when the budget
+// runs out, the findings the model saved reach the guard and come back as
+// the result.
 @guard(cost: maxCost, time: maxTime, label: "verifierAgent")
 def verifyUnderBudget(
   task: string,

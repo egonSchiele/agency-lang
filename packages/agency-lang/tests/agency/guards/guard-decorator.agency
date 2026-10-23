@@ -141,8 +141,8 @@ def failsFromLoop(): Result<string> {
 
 // The reviewer's shape: the guarded part is an inner def that carries the
 // tag with the agent's label, and the exported def post-processes its
-// Result. The model's partial findings stop at the decorator's assignment,
-// so the trip is a failure, which the outer def maps to no findings.
+// Result. The findings the model saved reach the guard by return position,
+// so the trip returns them.
 def savesFindingsThenTrips(): string[] {
   saveDraft(["half a finding"])
   _advanceTime(PAST_THE_BUDGET)
@@ -162,6 +162,33 @@ def reviewerShape(): Result<string[]> {
     return success([])
   }
   return reviewed
+}
+
+// The writing reviewer's shape: side passes in a parallel block first,
+// then the main pass on its own with a finalize, because a draft saved
+// inside a parallel arm never reaches the guard.
+def sidePass(): string[] {
+  return ["side"]
+}
+
+@guard(cost: $5, time: 10s, label: "writingReviewShape")
+def writingReviewShape(): Result<string[]> {
+  parallel {
+    let cuts = sidePass()
+    let tics = sidePass()
+  }
+  let items: string[] = []
+  thread(label: "writingReviewShape", session: "") {
+    items = savesFindingsThenTrips()
+  }
+  return [...items, ...cuts, ...tics]
+
+  finalize {
+    if (items == null) {
+      return null
+    }
+    return [...items, ...cuts, ...tics]
+  }
 }
 
 node finishesUnderBudget(): string {
@@ -212,10 +239,18 @@ node bodyFailurePassesThrough(): string {
   return describe(failsFromLoop())
 }
 
-node reviewerTripFailsOpen(): string {
+node reviewerTripReturnsSavedFindings(): string {
   const r = reviewerShape()
   if (isFailure(r)) {
     return "failure:${r.error}"
   }
-  return "success:${r.value.length}"
+  return "success:${r.value}"
+}
+
+node writingReviewTripReturnsSavedFindings(): string {
+  const r = writingReviewShape()
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value}"
 }

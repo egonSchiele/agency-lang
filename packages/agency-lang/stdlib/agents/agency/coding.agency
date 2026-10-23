@@ -484,11 +484,10 @@ export def agencyCodingAgent(
 }
 
 // The guarded half of agencyCodingAgent, a def of its own because the
-// exported def reports failures as a WriteFailure. draftsAreAnswers: the
-// only draft generateLoop sends up is the last attempt revise saved, a
-// finished WriteOutcome even when it is invalid; the model's own drafts
-// stop at revise's assignment. See docs/dev/agents/subagent-budgets.md.
-@guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent", draftsAreAnswers: true)
+// exported def reports failures as a WriteFailure. Return position: when
+// the budget runs out, the last attempt revise has (a WriteOutcome, valid
+// or not) reaches the guard and comes back as the result.
+@guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent")
 def agencyCodingUnderBudget(
   task: string,
   context: string,

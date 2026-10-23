@@ -16,7 +16,7 @@ def greet(name: string): string {
 }
 ```
 
-Spec: `docs/superpowers/specs/2026-10-22-decorators.md`. Plan and review: `docs/superpowers/plans/2026-10-22-decorators.md` and `2026-10-22-decorators-review.md`. Tickets ADI-39 (this part) and ADI-40 (diagnostics, `agency doc`, the guide page).
+Spec: `docs/superpowers/specs/2026-10-22-decorators.md`. Plan and review: `docs/superpowers/plans/2026-10-22-decorators.md` and `2026-10-22-decorators-review.md`. Tickets ADI-39 (the lowering) and ADI-40 (diagnostics, `agency interrupts`, `agency doc`, and the guide page `docs/site/guide/decorators.md`).
 
 ## What the compiler does
 
@@ -79,13 +79,13 @@ The mistakes:
 - a decorator imported from JavaScript: "'wrap' is imported from JavaScript, so it cannot decorate 'greet'." A JavaScript function cannot take a block, so this would fail on every call.
 - a def that decorates itself, or defs that decorate each other: "Decorators call each other in a loop: a → b → a." Either would recurse until the call-depth limit. Only the file's own defs are followed; a loop that runs through another file still ends at the runtime's limit.
 
-`decoratorProblems` reads tags wherever they are at the moment (standalone, attached, or already lowered), so it works before or after the lowering. The LSP gives the stage a range from the tag's location; `failIfNotCheckable` in `lib/compiler/typecheck.ts` treats the stage like a lift failure. When the editor keeps going past the failure, the checker's generic undefined-function warning may also fire on the lowered call; part 2 can suppress it.
+`decoratorProblems` reads tags wherever they are at the moment (standalone, attached, or already lowered), so it works before or after the lowering. The LSP gives the stage a range from the tag's location; `failIfNotCheckable` in `lib/compiler/typecheck.ts` treats the stage like a lift failure. The editor and `agency typecheck` keep going past the failure and run the checker, which skips the undefined-function warning on a call that carries `decorator` (`undefinedFunctionDiagnostic.ts`), so an unknown decorator is reported once. `describeDiagnostic` prints the failure's line, as a type error does.
 
-Type mismatches (a tag argument of the wrong type, a body return that does not fit the block, a decorator whose return does not fit the def) are reported by the checker today through the ordinary call checks, anchored on the lowered call. Part 2 makes them point at the tag and name the decorator through `call.decorator` (`DecoratorOrigin` in `lib/types/function.ts`), which the lowering sets on every call it synthesizes.
+Type mismatches are reported by the checker through the ordinary call and return checks, and named for the decorator through `call.decorator`. See "Diagnostics and doc output" below.
 
 ## How effects reach a decorated function
 
-The symbol table's effect walk (`lib/analysis/effects.ts`) runs over raw parse trees, before any lowering, and builds call edges from bodies. A decorated body never calls its decorator, so `summariesForFile` adds each decorator tag above a def as a callee of that def (`decoratorNamesByDef`). This is the same arrangement as `_guard` in `bodyFacts.ts`. All three views share it, so a `@budgeted` function carries `std::guard` in `agency doc`, in `agency policy gen`, in the static-init safety check, and in its host capabilities, and a `raises` clause that omits it is AG3013 (`lib/typeChecker/raisesDiagnostic.test.ts`). The type checker sees the lowered tree and finds the same edge on its own; `lib/analysis/effectsOracle.test.ts` compares the two.
+The symbol table's effect walk (`lib/analysis/effects.ts`) runs over raw parse trees, before any lowering, and builds call edges from bodies. A decorated body never calls its decorator, so `summariesForFile` adds each decorator tag above a def as a callee of that def (`decoratorNamesByDef`). This is the same arrangement as `_guard` in `bodyFacts.ts`. All three views share it, so a `@budgeted` function carries `std::guard` in `agency doc`, in `agency policy gen`, in the static-init safety check, and in its host capabilities, and a `raises` clause that omits it is AG3030, the decorator form of AG3013 (`lib/typeChecker/raisesDiagnostic.test.ts`). The type checker sees the lowered tree and finds the same edge on its own; `lib/analysis/effectsOracle.test.ts` compares the two.
 
 The walk cannot credit a handler the decorator installs around `block()`. For
 
@@ -124,10 +124,49 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 - `lib/compiler/buildSession.ts`: `checkDecoratorsOrExit`, the same check for `agency run` and `agency compile`.
 - `lib/preprocessors/prunePreludeShadows.ts`: a local type or an import shadows a prelude name such as `Call`.
 - `lib/analysis/effects.ts`: `decoratorNamesByDef`.
-- `lib/backends/agencyGenerator.ts`: `formatTag`.
+- `lib/backends/agencyGenerator.ts`: `formatTag`, `decoratorLines`.
+- `lib/typeChecker/mismatch.ts`: which entry a mismatch becomes; `lib/typeChecker/decoratorChecks.test.ts` pins each message.
+- `lib/typeChecker/raisesDiagnostic.ts`: `decoratorCarrying`.
+- `lib/typeChecker/interruptAnalysis.ts` and `lib/analysis/interrupts.ts`: `viaBlockOf`, `blockCallHandlers`, `withBlockCallHandlers`.
 - `stdlib/index.agency` and `lib/prelude.ts`: `type Call`.
 - Tests: `tests/agency/decorators/` (with `compile-errors/` for the checks through the CLI), `tests/agency-js/decorator-handoff/`, `tests/typescriptGenerator/decorators.agency`.
 
-## Not in this part
+## Diagnostics and doc output
 
-Diagnostics that point at the tag, the `raises` message that names the decorator, decorator tags in `agency doc` output (read them from `fn.decorators`, since `agency doc` runs `typeCheck` and so lowers), the `agency interrupts` listing, and the guide page are ADI-40. Decorators on nodes, decorators that replace the function, and decorators that change tool metadata are out of scope by design.
+This is ADI-40. None of it changes generated code.
+
+### Mismatches name the decorator
+
+The lowering gives the synthesized call and the `return` around it the tag's `loc`, so errors on them already land on the tag's line. What changes is the wording. `lib/typeChecker/mismatch.ts` holds a table with one row per site, and each site asks it which entry to push:
+
+| Site | Plain entry | Decorator entry |
+|---|---|---|
+| argument (`checkArgsAgainstParams`) | AG6019 `argNotAssignable` | AG6041 `decoratorArgType` |
+| block return (`checkExpressionsInScope`) | AG2001 `typeNotAssignableInContext` | AG2018 `decoratorBodyReturn`, or AG2019 `decoratorStackedReturn` |
+| declared return (`checkReturnTypesInScope`) | AG2001 `typeNotAssignableInContext` | AG2020 `decoratorReturnMismatch` |
+
+The decorator entry is used when the owning call carries `decorator`. The stacked entry covers `@a @b def f`: `return b(...)` sits in `a`'s block, so a block return whose value is itself a decorator's call is the two decorators disagreeing, and the message names both.
+
+The return sites still go through `checkType`. `checkType` and `emitAssignabilityError` take the entry to push as their last argument, so `rejectRegexInLlmType`, `reportFailureDataError` (`failureNeedsData`), and `checkExcessObjectProperties` run as before. Both return sites now pass the `return` statement's `loc` as the fallback, so a mismatch on a literal, which has no position of its own, gets a line. That fixed plain block returns too.
+
+A plain block-taking function's block body was already checked against its block type; `decoratorChecks.test.ts` pins it.
+
+### Counts on a tag
+
+The lowering adds the body and, when the decorator's first parameter is named `call`, the `call` record. It records the second on `DecoratorOrigin.passesCallRecord`. `checkArity` subtracts both before printing a count, so `@budgeted` with no arguments says "Expected 1 argument(s) for 'budgeted', but got 0." The unknown-named-argument error leaves `call` and the block parameter out of its list of valid names.
+
+### `raises`
+
+`decoratorCarrying` in `raisesDiagnostic.ts` finds the first decorator on the def whose effects include the offending one, by tag name. The effect table is keyed by the name the file uses, imports and aliases included. When it finds one, the error is AG3030 and ends "It is raised by decorator 'budgeted'."
+
+### `agency interrupts`
+
+A block runs inside the handlers its callee puts around `block()`. The call graph records that, and a decorator's handler is listed for a raise in the body; `docs/dev/compiler/interrupts-command.md`, "Blocks run under their callee's handlers", has the rule and its one known gap. The effect walk above is a different analysis and still over-reports.
+
+### `agency doc`
+
+`generateFunctionSection` prints `AgencyGenerator.decoratorLines(fn)` above the signature, in the same fence. It reads `fn.decorators` and any decorator tags still on `fn.tags`, since `agency doc` lowers through `typeCheck` but carries on with an unlowered tree if `typeCheck` throws.
+
+### Not done
+
+Decorators on nodes, decorators that replace the function, and decorators that change tool metadata are out of scope by design.

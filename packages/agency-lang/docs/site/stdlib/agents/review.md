@@ -41,6 +41,7 @@ reviewAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  failOpen: boolean = true,
 ): Result<Feedback[]>
 ```
 
@@ -56,6 +57,10 @@ Review a work product against a task and return findings. error=true marks
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param failOpen - When true, a review that could not run (budget with
+    nothing saved, policy, model error) returns no findings instead of a
+    failure. Pass false to get the failure, for callers that must not
+    mistake a failed review for a clean one
 
 **Parameters:**
 
@@ -70,6 +75,7 @@ Review a work product against a task and return findings. error=true marks
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
+| failOpen | `boolean` | true |
 
 **Returns:** `Result<Feedback[]>`
 

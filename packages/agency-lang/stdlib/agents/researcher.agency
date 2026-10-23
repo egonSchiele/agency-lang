@@ -74,7 +74,21 @@ def checkGrounding(task: string, startedAt: number, answer: any): Critique {
     context: groundingInstruction,
     maxCost: $1.00,
     maxTime: reviewTime,
+    failOpen: false,
   )
+  // A review that could not run (its budget ran out with no findings
+  // saved, or the model failed) is not a clean pass. Accepting the answer
+  // would report it as checked when nothing checked it.
+  if (reviewed is failure(err)) {
+    return {
+      accepted: false,
+      feedback: """
+The review of your answer could not finish (${err}), so nothing confirmed your sources.
+
+Check that every claim is backed by a source you fetched, cite it, and fix any claim you cannot back.
+"""
+    }
+  }
   if (!feedbackHasErrors(reviewed)) {
     return {
       accepted: true,

@@ -16,6 +16,7 @@
 
 - **`@guard` puts a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is the result, with a line saying it may be unfinished; with nothing saved, the result is a failure naming the budget, "its time budget of 5m ran out".
 - **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, review, verifier, TypeScript review, Agency review, Agency verifier, Agency coding, writing review, and writing rewrite agents. A reviewer or verifier that runs out of budget returns the findings it saved so far. The writing reviewer now runs its cuts and tics passes before its main pass instead of beside it, so the main pass's saved findings survive a trip. `writingRewriteAgent` returns "it returned no answer" for an empty text, like every other `@guard` function.
+- **`reviewAgent` takes `failOpen`,** like `writingReviewAgent`. The researcher's grounding check passes `failOpen: false`, so a review that ran out of budget before saving any findings rejects the answer instead of accepting it as reviewed.
 - **A caller can no longer give a stdlib agent more budget mid-run.** The agent answers its own budget interrupt, so a handler that approves it, or `agency run --interactive`, is never asked. Pass a larger `maxTime` or `maxCost` instead.
 
 ### Formatter

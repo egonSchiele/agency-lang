@@ -160,6 +160,17 @@ The writing rewrite needed no inner def: it returns the reviewer's failure
 from inside its loop, and the decorator passes a failure the body returns
 through unchanged.
 
+**A review with nothing saved is not a clean pass.** The reviewers fail
+open by default: a review that could not run, including one whose budget
+ran out before the model saved any findings, returns no findings. A check
+that reads "no findings" as "accepted" would then report an unreviewed
+answer as reviewed. So the two loops that act on a review call it with
+`failOpen: false`: the writing rewrite (`docs/dev/agents/writing-rewrite-agent.md`)
+and the researcher's grounding check (`checkGrounding`,
+`stdlib/agents/researcher.agency`), which turns the failure into a
+rejection telling the model its sources were not confirmed. `revise` then
+runs another attempt, or returns the last one when attempts run out.
+
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the
 sleep directly, and no handler sees a `std::guard` interrupt. The

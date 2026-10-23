@@ -5,10 +5,67 @@
       "description": "the judge's error finding surfaces through reviewAgent",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": [{ "error": true, "feedback": "1+1 is 2, not 3" }] }
+        {
+          "return": [
+            {
+              "error": true,
+              "feedback": "1+1 is 2, not 3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nodeName": "trippedReviewIsAFailureWhenNotFailOpen",
+      "description": "a review whose budget runs out with nothing saved is a failure with failOpen: false",
+      "input": "",
+      "expectedOutput": "\"failure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            {
+              "error": true,
+              "feedback": "never seen"
+            }
+          ],
+          "delayMs": 60000
+        }
+      ]
+    },
+    {
+      "nodeName": "trippedReviewFailsOpenByDefault",
+      "description": "the same review fails open to no findings by default",
+      "input": "",
+      "expectedOutput": "\"success:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            {
+              "error": true,
+              "feedback": "never seen"
+            }
+          ],
+          "delayMs": 60000
+        }
       ]
     }
   ]

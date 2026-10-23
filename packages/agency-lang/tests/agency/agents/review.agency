@@ -6,3 +6,23 @@ node errorFindingSurfaces(): boolean {
   const findings = reviewAgent("the answer is 3", "compute 1+1")
   return feedbackHasErrors(findings)
 }
+
+// The judge runs past the review's budget and saves nothing. With failOpen:
+// false that is a failure, so a caller such as the researcher's grounding
+// check does not read it as a clean review.
+node trippedReviewIsAFailureWhenNotFailOpen(): string {
+  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms, failOpen: false)
+  if (isFailure(findings)) {
+    return "failure"
+  }
+  return "success:${findings.value.length}"
+}
+
+// The same review with the default failOpen: no findings.
+node trippedReviewFailsOpenByDefault(): string {
+  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms)
+  if (isFailure(findings)) {
+    return "failure"
+  }
+  return "success:${findings.value.length}"
+}

@@ -65,6 +65,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "emptyListIsNotNoAnswer",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -164,3 +164,13 @@ node otherLabelIsNotOurs(): string {
   } with guardStopHandler
   return out
 }
+
+// Only "" counts as no answer. An empty list, such as a review that found
+// no problems, is a finished answer. `==` is strict, so `[] == ""` is false.
+node emptyListIsNotNoAnswer(): string {
+  const r = _budgetOutcome("fakeAgent", success([]), null)
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value.length}"
+}

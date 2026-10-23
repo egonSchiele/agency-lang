@@ -151,12 +151,17 @@ The lowering gives the synthesized call and the `return` around it the tag's `lo
 | argument (`checkArgsAgainstParams`) | AG6019 `argNotAssignable` | AG6041 `decoratorArgType` |
 | block return (`checkExpressionsInScope`) | AG2001 `typeNotAssignableInContext` | AG2018 `decoratorBodyReturn`, or AG2019 `decoratorStackedReturn` |
 | declared return (`checkReturnTypesInScope`) | AG2001 `typeNotAssignableInContext` | AG2020 `decoratorReturnMismatch` |
+| draft (`checkSaveDraftCall`) | AG2001 `typeNotAssignableInContext` | AG2021 `decoratorDraftType` |
 
 The decorator entry is used when the owning call carries `decorator`. The stacked entry covers `@a @b def f`: `return b(...)` sits in `a`'s block, so a block return whose value is itself a decorator's call is the two decorators disagreeing, and the message names both.
 
 The return sites still go through `checkType`. `checkType` and `emitAssignabilityError` take the entry to push as their last argument, so `rejectRegexInLlmType`, `reportFailureDataError` (`failureNeedsData`), and `checkExcessObjectProperties` run as before. Both return sites now pass the `return` statement's `loc` as the fallback, so a mismatch on a literal, which has no position of its own, gets a line. That fixed plain block returns too.
 
 A plain block-taking function's block body was already checked against its block type; `decoratorChecks.test.ts` pins it.
+
+### Drafts in a decorated body
+
+A `saveDraft(value)` is the value of the frame it is saved in. A decorated body is the decorator's block, so its draft must fit the block slot's return type (`any` when the slot is untyped), not the def's declared type: in a `Result<string>` def under a decorator whose block returns `string`, `saveDraft("partial")` is right and `saveDraft(42)` is AG2021. `draftTarget` in `mismatch.ts` picks the type from the innermost block around the draft. A draft in an ordinary call's block, such as a `guard` block, is still checked against the scope's return type, as before; block bodies share their enclosing scope in the checker, and changing that for every block is a separate decision.
 
 ### Counts on a tag
 
@@ -168,7 +173,7 @@ The lowering adds the body and, when the decorator's first parameter is named `c
 
 ### `agency interrupts`
 
-A block runs inside the handlers its callee puts around `block()`. The call graph records that, and a decorator's handler is listed for a raise in the body; `docs/dev/compiler/interrupts-command.md`, "Blocks run under their callee's handlers", has the rule and its one known gap. The effect walk above is a different analysis and still over-reports.
+A block runs inside the handlers its callee puts around `block()`. The call graph records that, and a decorator's handler is listed for a raise in the body when it encloses every `block()` call in the decorator; `docs/dev/compiler/interrupts-command.md`, "Blocks run under their callee's handlers", has the rule and its one known gap. The effect walk above is a different analysis and still over-reports.
 
 ### `agency doc`
 

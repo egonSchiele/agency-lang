@@ -58,6 +58,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG2018](checking.md#ag2018) | The body of '&#123;target&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'. |
 | [AG2019](checking.md#ag2019) | Decorator '&#123;inner&#125;' returns '&#123;actual&#125;', but decorator '&#123;name&#125;' above it on '&#123;target&#125;' takes a block returning '&#123;expected&#125;'. |
 | [AG2020](checking.md#ag2020) | '&#123;target&#125;' is declared to return '&#123;declared&#125;', but decorator '&#123;name&#125;' returns '&#123;actual&#125;'. |
+| [AG2021](checking.md#ag2021) | The body of '&#123;target&#125;' saves a draft of type '&#123;actual&#125;', but decorator '&#123;name&#125;' takes a block returning '&#123;expected&#125;'. |
 
 ## Interrupts, effects, and handlers
 

@@ -22,6 +22,7 @@ import {
 } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
+import { guard } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review TypeScript code for readability and architecture.
@@ -174,29 +175,47 @@ export def typescriptReviewAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  const captured = guard(cost: maxCost, time: maxTime, label: "typescriptReviewAgent") {
-    let items: Feedback[] = []
-    thread(label: "typescriptReviewAgent", session: session) {
-      items = judgeCode(
-        work: work,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
-    return items
+  return failOpenFeedback(typescriptReviewUnderBudget(
+    work: work,
+    task: task,
+    guidelines: guidelines,
+    context: context,
+    model: model,
+    provider: provider,
+    session: session,
+    extraTools: extraTools,
+    maxCost: maxCost,
+    maxTime: maxTime,
+  ))
+}
 
-    // Salvage the model's partial findings if an outer budget guard trips
-    // mid-review; the assignment above would otherwise drop them.
-    finalize {
-      return items
-    }
+// The guarded half of typescriptReviewAgent, a def of its own because the
+// exported def post-processes the guard's Result. A trip is a failure,
+// which failOpenFeedback turns into no findings.
+@guard(cost: maxCost, time: maxTime, label: "typescriptReviewAgent")
+def typescriptReviewUnderBudget(
+  work: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+  session: string,
+  extraTools: any[],
+  maxCost: number,
+  maxTime: number,
+): Result<Feedback[]> {
+  thread(label: "typescriptReviewAgent", session: session) {
+    return judgeCode(
+      work: work,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
   }
-
-  return failOpenFeedback(captured)
 }
 
 /** What an eval hands the reviewer: the task the code was written for, and

@@ -18,6 +18,7 @@ The writing reviewer (`std::agents/writing/review`) returns a list of
 ### writingRewriteAgent
 
 ```ts
+@guard(cost: maxCost, time: maxTime)
 writingRewriteAgent(
   text: string,
   task: string = "",
@@ -79,4 +80,4 @@ const rewritten = writingRewriteAgent(
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L87))

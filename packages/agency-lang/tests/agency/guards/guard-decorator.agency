@@ -139,6 +139,31 @@ def failsFromLoop(): Result<string> {
   return "never"
 }
 
+// The reviewer's shape: the guarded part is an inner def that carries the
+// tag with the agent's label, and the exported def post-processes its
+// Result. The model's partial findings stop at the decorator's assignment,
+// so the trip is a failure, which the outer def maps to no findings.
+def savesFindingsThenTrips(): string[] {
+  saveDraft(["half a finding"])
+  _advanceTime(PAST_THE_BUDGET)
+  return ["finding"]
+}
+
+@guard(cost: $5, time: 10s, label: "reviewerShape")
+def reviewUnderBudget(): Result<string[]> {
+  thread(label: "reviewerShape", session: "") {
+    return savesFindingsThenTrips()
+  }
+}
+
+def reviewerShape(): Result<string[]> {
+  const reviewed = reviewUnderBudget()
+  if (isFailure(reviewed)) {
+    return success([])
+  }
+  return reviewed
+}
+
 node finishesUnderBudget(): string {
   return describe(finishes("x"))
 }
@@ -185,4 +210,12 @@ node emptyListIsNotNoAnswer(): string {
 
 node bodyFailurePassesThrough(): string {
   return describe(failsFromLoop())
+}
+
+node reviewerTripFailsOpen(): string {
+  const r = reviewerShape()
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value.length}"
 }

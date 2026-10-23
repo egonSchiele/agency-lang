@@ -30,7 +30,7 @@ Convert a typecheck report into findings: one error item per error,
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L129))
 
 ### buildTools
 
@@ -43,7 +43,7 @@ Return the Agency reviewer's lookup tools: the bundled language
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L144))
 
 ### agencyReviewAgent
 
@@ -101,4 +101,4 @@ Review Agency source code and return findings. Always includes parse and
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L208))

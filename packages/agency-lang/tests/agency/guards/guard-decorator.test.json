@@ -131,6 +131,18 @@
         }
       ],
       "description": "A failure the body returns passes through unchanged."
+    },
+    {
+      "nodeName": "reviewerTripFailsOpen",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A reviewer's partial findings stop at the decorator; the trip fails open to no findings."
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { spawnSync } from "child_process";
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -198,31 +198,67 @@ type CommandRun = {
   timeoutSec: number;
 };
 
-function runCommand(command: string, run: CommandRun): Grade {
+async function runCommand(command: string, run: CommandRun): Promise<Grade> {
   if (run.workdir === "") {
     return binary(false, "no working directory was captured");
   }
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grader-output-"));
-  const outputFile = path.join(outputDir, "output.txt");
-  fs.writeFileSync(outputFile, asJudgeText(run.output));
   try {
-    const result = spawnSync("sh", ["-c", command], {
+    const outputFile = path.join(outputDir, "output.txt");
+    fs.writeFileSync(outputFile, asJudgeText(run.output));
+    const result = await runShell(command, {
       cwd: run.workdir,
       env: { ...process.env, [GRADER_FILES_ENV]: run.graderFiles, [OUTPUT_ENV]: outputFile },
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: Math.ceil(run.timeoutSec * MS_PER_SECOND),
-      killSignal: "SIGKILL",
-      maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
+      timeoutMs: Math.ceil(run.timeoutSec * MS_PER_SECOND),
     });
-    if ((result.error as { code?: string } | undefined)?.code === "ETIMEDOUT") {
+    if (result.timedOut) {
       return binary(false, `timed out after ${run.timeoutSec}s`);
     }
-    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    return binary(result.status === 0, cut(output));
+    return binary(result.status === 0, cut(result.output));
   } finally {
     fs.rmSync(outputDir, { recursive: true, force: true });
   }
+}
+
+type ShellResult = { status: number | null; output: string; timedOut: boolean };
+
+/** Run `sh -c command` without blocking the event loop, so the LLM judges
+ *  grading beside it keep receiving their responses while it runs. Output
+ *  is stdout then stderr as they arrive, cut at the byte cap. At the
+ *  timeout the shell is killed and the result is settled at once, so a
+ *  grandchild still holding the output pipe cannot keep the grader
+ *  waiting. */
+function runShell(
+  command: string,
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
+): Promise<ShellResult> {
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const collect = (chunk: Buffer): void => {
+      if (output.length < COMMAND_OUTPUT_MAX_BYTES) {
+        output += chunk.toString("utf8");
+      }
+    };
+    child.stdout.on("data", collect);
+    child.stderr.on("data", collect);
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve({ status: null, output, timedOut: true });
+    }, options.timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ status: null, output: error.message, timedOut: false });
+    });
+    child.on("close", (status) => {
+      clearTimeout(timer);
+      resolve({ status, output, timedOut: false });
+    });
+  });
 }
 
 function cut(text: string): string {

@@ -9,7 +9,7 @@ review (`agency eval grade <run> --suite evals/researcher`). Reproduce
 the numbers with a run and `agency eval grade` before and after each fix
 in milestone M3.
 
-## Score 0.650
+## Score 0.791
 
 | grader               | score | note                                        |
 | -------------------- | ----- | ------------------------------------------- |
@@ -19,8 +19,8 @@ in milestone M3.
 | llm-calls            | 0.813 | 14 calls                                    |
 | wall-seconds         | 0.000 | 360 s, the whole six-minute budget          |
 | cost-usd             | 0.984 | $0.29, of which $0.22 is hosted search      |
-| no-repeated-<tool>   | pass  | one fetch in the whole run, seven graders   |
-| citations-resolve    | fail  | 11 URLs cited; an Abingdon School PDF is 404 |
+| no-repeated-retrieval | pass | one fetch in the whole run                  |
+| citations-resolve    | 0.909 | 11 cited, one missing: an Abingdon School PDF is 404 |
 
 ## What the trace shows
 
@@ -48,7 +48,7 @@ An earlier version of this file said the review overran and no second
 attempt ran. That was a misreading of the trace; the review's own guard
 behaved as the code says.
 
-Two things to know when reading the sourcing scores:
+Three things to know when reading the sourcing scores:
 
 - The hosted search tool leaves no `toolCallStart` rows. The answer
   cites eleven URLs but the trace shows one fetch, so ten citations came
@@ -74,5 +74,5 @@ the second attempt off at 95 seconds. What did reproduce: a review that
 costs more calls than the research (11 against 3), a second attempt that
 starts the research over instead of patching the first answer, and a
 final answer quoting almost nothing. ADI-46, ADI-47, and ADI-48 should
-move the review and second-attempt numbers; ADI-45 is pinned by the
-no-repeat graders, with the limits the suite README lists.
+move the review and second-attempt numbers; ADI-45 is pinned by
+`no-repeated-retrieval`, with the limits the suite README lists.

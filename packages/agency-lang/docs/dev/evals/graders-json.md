@@ -54,8 +54,9 @@ Each kind answers one question about a run.
   `$AGENCY_GRADER_FILES`, empty when the test has none. The agent's answer
   (the test's output) is in the file `$AGENCY_OUTPUT` names, a string as
   it is and anything else as JSON, so a command can check the answer and
-  not only the files the agent wrote. `evals/researcher` uses this to
-  fetch every URL an answer cites.
+  not only the files the agent wrote. The command runs without blocking
+  the grading pass, so the LLM judges grading beside it go on receiving
+  their responses while it runs.
 
 Every kind has `name`, `weight` (default 1), and `mustPass` (default
 false). Names are unique within a file, because score rows are keyed by

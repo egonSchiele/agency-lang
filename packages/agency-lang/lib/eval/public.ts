@@ -11,6 +11,7 @@ export {
   SimilarityGrader as Similarity,
 } from "./grading/graders/builtinGraders.js";
 export { LlmJudge } from "./grading/graders/llmJudge.js";
+export { ChecklistJudge } from "./grading/graders/checklistJudge.js";
 export { AgencyTestGrader } from "./grading/agencyTestGrader.js";
 export { goalJudgeFile } from "./grading/goalJudgeFile.js"; // for users who want a custom judge but the bundled prompt
 export { rubricJudgeFile } from "./grading/rubricJudgeFile.js";

@@ -48,7 +48,7 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
 ## The rules
 
-1. **The `call` record.** A decorator whose first parameter is named `call` receives `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). The record is passed as the first positional argument, before the tag's own arguments, so `@retry(3)` works as well as `@budgeted(cost: maxCost)`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`). The rule goes by the parameter's name, not its type: a decorator written as `def tagWith(call: string, block: () -> any)` still receives the record in `call`, and `@tagWith("x")` then passes `"x"` where the block goes. Name the first parameter something else unless it is the record.
+1. **The `call` record.** A decorator whose first parameter is named `call` receives `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). The record is passed as the first positional argument, before the tag's own arguments, so `@retry(3)` works as well as `@guard(cost: maxCost)`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`). The rule goes by the parameter's name, not its type: a decorator written as `def tagWith(call: string, block: () -> any)` still receives the record in `call`, and `@tagWith("x")` then passes `"x"` where the block goes. Name the first parameter something else unless it is the record.
 
    Because `Call` is a prelude name, a file's own `type Call`, or a `Call` it imports from another file, must win over it. `prunePreludeShadows` drops a prelude name a type or an import shadows, as it already did for a def, a node, or a global; without that, the prelude's `Call` and the file's are two bindings of one name and the module fails to load (`tests/agency/decorators/local-call-type.agency`).
 2. **The tag's arguments are evaluated on every call**, in the decorated function's scope, so they can name its parameters.
@@ -85,7 +85,7 @@ Type mismatches are reported by the checker through the ordinary call and return
 
 ## How effects reach a decorated function
 
-The symbol table's effect walk (`lib/analysis/effects.ts`) runs over raw parse trees, before any lowering, and builds call edges from bodies. A decorated body never calls its decorator, so `summariesForFile` adds each decorator tag above a def as a callee of that def (`decoratorNamesByDef`). This is the same arrangement as `_guard` in `bodyFacts.ts`. All three views share it, so a `@budgeted` function carries `std::guard` in `agency doc`, in `agency policy gen`, in the static-init safety check, and in its host capabilities, and a `raises` clause that omits it is AG3030, the decorator form of AG3013 (`lib/typeChecker/raisesDiagnostic.test.ts`). The type checker sees the lowered tree and finds the same edge on its own; `lib/analysis/effectsOracle.test.ts` compares the two.
+The symbol table's effect walk (`lib/analysis/effects.ts`) runs over raw parse trees, before any lowering, and builds call edges from bodies. A decorated body never calls its decorator, so `summariesForFile` adds each decorator tag above a def as a callee of that def (`decoratorNamesByDef`). This is the same arrangement as `_guard` in `bodyFacts.ts`. All three views share it, so a function under the stdlib `@guard` carries `std::guard` in `agency doc`, in `agency policy gen`, in the static-init safety check, and in its host capabilities, and a `raises` clause that omits it is AG3030, the decorator form of AG3013 (`lib/typeChecker/raisesDiagnostic.test.ts`). The type checker sees the lowered tree and finds the same edge on its own; `lib/analysis/effectsOracle.test.ts` compares the two.
 
 The walk cannot credit a handler the decorator installs around `block()`. For
 
@@ -112,6 +112,13 @@ The body is a block argument, and blocks already resume through step counters, a
 ## A gap this work found, since fixed
 
 Part 1 found that a `destructive { }` region inside a block argument lost its `destructiveRan` mark when the block exited, so a failure escaping a decorated function read `false` and the tool loop's removal of a destructive tool failed open. ADI-56 fixed it in the tracking codegen: the flag is written through `__activation`, which a block reaches lexically. `tests/agency/decorators/destructive-region-in-body.agency` pins the decorator case; `docs/dev/language/destructive-regions.md` has the design.
+
+## The stdlib decorator: `@guard`
+
+`std::strategy` ships one decorator, `@guard(cost:, time:, label:, draftsAreAnswers:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and why it assigns the body's result before returning it, is in `docs/dev/agents/subagent-budgets.md`. Two things about it belong here:
+
+- **It cannot be called with a block.** `guard(...) {` is always the guard block (`guardBlockParser`), so `guard(record, cost: 1) { ... }` parses as the block with a stray argument, not a call to the decorator. An agent that needs to post-process its guarded result moves the guarded part into a hidden inner def that carries the tag. This is the cost of sharing the block's name.
+- **A lowered `@guard` must never be printed as text.** The lowered body, `return guard({ name: ..., args: ... }, cost: ...) { ... }`, would re-parse as the guard block. Nothing prints a lowered tree today: `agency fmt` prints the raw tree, and `agency doc` prints signatures and tags, not bodies. A feature that prints a lowered tree has to print the tag instead.
 
 ## Files
 

@@ -136,6 +136,8 @@ In this example:
 - The tag uses `maxCost`, one of `research`'s parameters. Each caller can pass a different budget.
 - The body returns a `string`, because it is the block, and `budgeted`'s block returns `string`. The function is declared to return `Result<string>`, because that is what `budgeted` returns.
 
+The standard library ships a finished version of this decorator as `@guard` in `std::strategy`. It also labels the guard with the function's name, answers its own budget trip, and keeps a half-written draft from being reported as the answer. See [Guarding a whole function](/guide/guards#guarding-a-whole-function).
+
 ## The rules
 
 - A decorator calls its block. It never stores the block in a variable or returns it.

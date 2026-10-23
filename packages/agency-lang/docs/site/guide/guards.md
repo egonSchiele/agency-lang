@@ -184,6 +184,42 @@ guard(cost: $5.0, label: "outer") {
 
 If you give the inner guard more budget, it does not give the outer guard more budget. The outer guard is still limited to $5.0, and if it trips, it will raise its own interrupt.
 
+## Guarding a whole function
+
+To put a guard around a whole function, use the `@guard` decorator from `std::strategy`:
+
+```ts
+import { guard } from "std::strategy"
+
+@guard(cost: $1.00, time: 5m)
+def summarize(text: string): Result<string> {
+  return llm("Summarize this: ${text}")
+}
+```
+
+The `guard` block and the `@guard` decorator share a name, but the decorator does more than wrap the body in the block. It labels the guard with the function's name (pass `label:` to choose another), answers its own trip, and applies three rules:
+
+- If the body finishes, its result is the result. A finished `""` is a failure, "it returned no answer".
+- If the budget runs out after a finished answer reached the guard, the answer is the result, with one line appended to a string answer saying the budget ran out before it was accepted.
+- If the budget runs out before that, the result is a failure naming the budget, such as "its time budget of 5m ran out", and its `data.draft` holds the most recent [saved draft](/guide/partial-results).
+
+A draft the body saves along the way never counts as a finished answer. If the model in `summarize` calls `saveDraft` halfway through and then the time runs out, you get the failure, with the half-written summary in `data.draft`. A body whose only drafts are finished attempts can say so with `draftsAreAnswers: true`. The usual case is [`revise`](/stdlib/strategy#revise), which saves each attempt it completes:
+
+```ts
+@guard(cost: maxCost, time: maxTime, draftsAreAnswers: true)
+def research(question: string, maxCost: number, maxTime: number): Result<string> {
+  return revise(maxAttempts: 2, check: checkSources) as critique {
+    return llm("Answer ${question}. Fix: ${critique}")
+  }
+}
+```
+
+Leave `draftsAreAnswers` off whenever a model in the body can call `saveDraft`.
+
+Because the decorator answers its own trip, the caller never sees a `std::guard` interrupt for it and cannot give it more budget. To allow more, pass a larger limit, as the standard library agents do with their `maxCost` and `maxTime` parameters.
+
+One gap: a time limit that runs out while the body is inside `sleep()` ends the sleep without raising the interrupt, so the decorator returns the guard's own failure ("Guard 'summarize' exceeded its time budget...") without `data.draft`.
+
 ## Root budgets
 
 You can also set a hard limit when you run an Agency agent on the command line:

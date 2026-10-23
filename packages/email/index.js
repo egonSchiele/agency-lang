@@ -134,7 +134,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "b261ee914c626047b322e0d07d7a66e8f6f5722be5e2379185cbd56e6ccc9f2d");
+__registerModuleFingerprint("index.agency", "30a9a676d4534f3fdcc9b6f5422748b1fb9b99d6f1354587f68ac82637ef8a8b");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -185,6 +185,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -231,7 +232,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -284,7 +285,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -309,7 +310,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "sendEmail",
       args: __stack.args
     });

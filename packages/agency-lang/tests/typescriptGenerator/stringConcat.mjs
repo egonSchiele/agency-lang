@@ -189,6 +189,7 @@ graph.node("foo", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;

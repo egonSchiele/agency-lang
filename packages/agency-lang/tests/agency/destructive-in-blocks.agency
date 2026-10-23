@@ -1,0 +1,214 @@
+// The destructive flag belongs to the function, not to the block frame the
+// region happens to run in. Every case here puts destructive work inside a
+// block argument and checks that a failure leaving the FUNCTION still says
+// destructiveRan: true (ADI-56).
+
+def run(block: () -> any): any {
+  return block()
+}
+
+def twice(block: () -> any): any {
+  block()
+  return block()
+}
+
+destructive def burn(): number {
+  return 1
+}
+
+// A region inside a block whose failure escapes through the block.
+def regionInBlock(): Result {
+  return run() {
+    destructive {
+      return failure("boom")
+    }
+  }
+}
+node regionInBlock_() {
+  const r = regionInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A region inside a block that SUCCEEDS; the function fails afterwards. The
+// mark has to outlive the block.
+def regionThenFail(): Result {
+  run() {
+    destructive {
+      print("burning")
+    }
+  }
+  return failure("later")
+}
+node regionThenFail_() {
+  const r = regionThenFail()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Rule 2 inside a block: a call to a destructive def binds a local in the
+// block, then the function fails after the block.
+def destructiveCallInBlock(): Result {
+  run() {
+    const n = burn()
+  }
+  return failure("later")
+}
+node destructiveCallInBlock_() {
+  const r = destructiveCallInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Two blocks deep.
+def nested(): Result {
+  run() {
+    run() {
+      destructive {
+        print("deep")
+      }
+    }
+  }
+  return failure("later")
+}
+node nested_() {
+  const r = nested()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A block that runs more than once: the mark is sticky across runs.
+def ranTwice(): Result {
+  twice() {
+    destructive {
+      print("again")
+    }
+  }
+  return failure("later")
+}
+node ranTwice_() {
+  const r = ranTwice()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call inside a handler body. The handler body is not walked
+// statement by statement; the conservative flip on the `handle` statement has
+// to run BEFORE it, or the `return` inside leaves the function with the flag
+// still false.
+def handlerDoesWork(): Result {
+  handle {
+    return interrupt("go?")
+  } with (intr) {
+    const m = burn()
+    return reject()
+  }
+  return failure("after")
+}
+node handlerDoesWork_() {
+  const r = handlerDoesWork()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call in an `if` condition: the only flip that covers it is
+// the conservative one on the `if` statement.
+def inCondition(): Result {
+  if (burn() > 0) {
+    return failure("inside")
+  }
+  return failure("after")
+}
+node inCondition_() {
+  const r = inCondition()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A region inside a `parallel` arm. The arm runs as a fork branch with its
+// own `__self`; the region's flip is the only destructive thing here, so no
+// function-level pre-flip covers it. Only the activation write reaches the
+// function.
+def regionInParallelArm(): Result {
+  parallel {
+    destructive {
+      print("arm")
+    }
+    const other = 1
+  }
+  return failure("later")
+}
+node regionInParallelArm_() {
+  const r = regionInParallelArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The same region nested in a `seq` arm.
+def regionInSeqArm(): Result {
+  parallel {
+    seq {
+      const a = 1
+      destructive {
+        print("seq arm")
+      }
+    }
+    const other = 2
+  }
+  return failure("later")
+}
+node regionInSeqArm_() {
+  const r = regionInSeqArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive call bound to a local inside an arm. The post-flip for the
+// binding is emitted inside the fork branch; it has to land on the function.
+def destructiveCallInParallelArm(): Result {
+  parallel {
+    const n = burn()
+    const other = 1
+  }
+  return failure("later")
+}
+node destructiveCallInParallelArm_() {
+  const r = destructiveCallInParallelArm()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The negative: no destructive work in the block, so the flag stays false.
+def cleanBlock(): Result {
+  run() {
+    print("harmless")
+  }
+  return failure("later")
+}
+node cleanBlock_() {
+  const r = cleanBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

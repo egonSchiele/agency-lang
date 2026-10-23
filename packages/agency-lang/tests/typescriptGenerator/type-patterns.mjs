@@ -188,6 +188,7 @@ async function __describe_impl(__run: __Run, value: any) {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
@@ -224,7 +225,7 @@ let __resultCheckpointId = -1;
       threads: __setupData.threads
     }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
-__self.__destructiveRan = __self.__destructiveRan ?? false;
+__activation.__destructiveRan = __activation.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -366,7 +367,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }
@@ -409,7 +410,7 @@ if (__error instanceof AgencyAbort) {
 }
 return runtimeFailure(__error, {
   checkpoint: __run.ctx.getResultCheckpoint(),
-  destructiveRan: __self.__destructiveRan,
+  destructiveRan: __activation.__destructiveRan,
   functionName: "describe",
   args: __stack.args,
 });
@@ -454,6 +455,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;

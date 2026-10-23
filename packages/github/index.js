@@ -145,7 +145,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "f169b5d1fb587e598a426f4a03835633565cb31fc8482ccb1aa1052852ca4f1b");
+__registerModuleFingerprint("index.agency", "1d9f25b8d086f7fcd22cfa2aed977421724d4fdff4aec7cac0042e23311e1286");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -196,6 +196,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -226,7 +227,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -259,7 +260,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -284,7 +285,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "createBranch",
       args: __stack.args
     });
@@ -353,6 +354,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -381,7 +383,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -412,7 +414,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -437,7 +439,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "deleteBranch",
       args: __stack.args
     });
@@ -499,6 +501,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -527,7 +530,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -558,7 +561,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -583,7 +586,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "branchExists",
       args: __stack.args
     });
@@ -645,6 +648,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -677,7 +681,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -712,7 +716,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -737,7 +741,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "commitFiles",
       args: __stack.args
     });
@@ -813,6 +817,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -851,7 +856,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -892,7 +897,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -917,7 +922,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "openPullRequest",
       args: __stack.args
     });
@@ -1014,6 +1019,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1046,7 +1052,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1081,7 +1087,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1106,7 +1112,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "listPullRequests",
       args: __stack.args
     });
@@ -1182,6 +1188,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1212,7 +1219,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1245,7 +1252,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1270,7 +1277,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "commentOnPullRequest",
       args: __stack.args
     });
@@ -1339,6 +1346,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1369,7 +1377,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1402,7 +1410,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1427,7 +1435,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "addLabel",
       args: __stack.args
     });
@@ -1496,6 +1504,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1528,7 +1537,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1563,7 +1572,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1588,7 +1597,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "requestReview",
       args: __stack.args
     });
@@ -1664,6 +1673,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1694,7 +1704,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1727,7 +1737,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1752,7 +1762,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "listIssues",
       args: __stack.args
     });
@@ -1821,6 +1831,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -1851,7 +1862,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -1884,7 +1895,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -1909,7 +1920,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "commentOnIssue",
       args: __stack.args
     });
@@ -1978,6 +1989,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -2010,7 +2022,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -2045,7 +2057,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -2070,7 +2082,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "createIssue",
       args: __stack.args
     });
@@ -2146,6 +2158,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -2172,7 +2185,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -2201,7 +2214,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -2226,7 +2239,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "defaultBranch",
       args: __stack.args
     });

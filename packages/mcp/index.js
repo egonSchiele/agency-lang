@@ -133,7 +133,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "095ef01c6726b74994d8c57e7a1620d65ee18d2f03a01a046285dacbbded01db");
+__registerModuleFingerprint("index.agency", "97c5daad809ffd59ea37148747385dec8e9e32538a2c69b472fe6347cb9feb21");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -184,6 +184,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
   const __stack = __setupData.stack;
   const __step = __setupData.step;
   const __self = __setupData.self;
+  const __activation = __self;
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
@@ -208,7 +209,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
       threads: __setupData.threads
     }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
-        __self.__destructiveRan = __self.__destructiveRan ?? false;
+        __activation.__destructiveRan = __activation.__destructiveRan ?? false;
         await callHook(__run3, {
           name: "onFunctionStart",
           data: {
@@ -232,7 +233,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
     });
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false);
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false);
       }
       return runner.haltResult;
     }
@@ -257,7 +258,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
     }
     return runtimeFailure(__error, {
       checkpoint: __run.ctx.getResultCheckpoint(),
-      destructiveRan: __self.__destructiveRan,
+      destructiveRan: __activation.__destructiveRan,
       functionName: "mcp",
       args: __stack.args
     });

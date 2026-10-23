@@ -189,6 +189,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
@@ -213,7 +214,7 @@ await callHook(__run, {
           })
         });
         await runner.step(1, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.mood = await runPrompt(__run, {
             prompt: `Categorize: ${__stack.args.message}`,
             messages: __run.threads.getOrCreateActive(),
@@ -222,8 +223,8 @@ __stack.locals.mood = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
-            destructiveSink: __self,
+            removedTools: __activation.__removedTools,
+            destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt

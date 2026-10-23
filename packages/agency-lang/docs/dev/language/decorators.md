@@ -109,9 +109,9 @@ One consequence worth knowing: a `Result<T>` function returns a success by writi
 
 The body is a block argument, and blocks already resume through step counters, already carry handlers on the chain, and already run more than once under `revise`. `tests/agency/decorators/interrupt-resumes`, `retry-calls-block-twice`, and `handler-in-decorator` pin each of these. `handler-in-decorator` also pins that a decorator's `approve` does not outrank its caller: a caller that rejects still gets a rejection, because every handler on the chain is consulted. This matters because a decorator from a package can install a handler that is invisible where the def is written. The runtime did not change.
 
-## A gap this work found
+## A gap this work found, since fixed
 
-`tests/agency/decorators/destructive-region-in-body.test.json` is skipped. A `destructive { }` region inside a block argument loses its `destructiveRan` mark when the block exits, so a failure that escapes the decorated function reads `destructiveRan: false`. Today the tool loop uses that mark to remove a tool after a destructive failure, so a `@budgeted` decorator over a function with a destructive region would make that protection fail open. The test keeps the correct expectation and says so in its description; unskip it when regions inside blocks carry the mark. The fix belongs to the destructive-region code, not here, and is tracked as ADI-56.
+Part 1 found that a `destructive { }` region inside a block argument lost its `destructiveRan` mark when the block exited, so a failure escaping a decorated function read `false` and the tool loop's removal of a destructive tool failed open. ADI-56 fixed it in the tracking codegen: the flag is written through `__activation`, which a block reaches lexically. `tests/agency/decorators/destructive-region-in-body.agency` pins the decorator case; `docs/dev/language/destructive-regions.md` has the design.
 
 ## Files
 

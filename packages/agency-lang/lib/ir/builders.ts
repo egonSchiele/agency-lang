@@ -620,6 +620,13 @@ export const ts = {
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
+      // The activation the destructive flag lives on. A block or fork
+      // branch inside this body declares its own `__self` for its own
+      // frame, but a `destructive { }` region or destructive call in it
+      // still belongs to this function, so the tracking codegen writes
+      // `__activation`, which the branch reaches lexically. See
+      // docs/dev/language/destructive-regions.md.
+      ts.constDeclId(ts.runtime.activation, ts.runtime.self),
       // `ts.runtime.ctx` is now the `__ctx()` accessor; the const-decl
       // target must be the literal identifier `__ctx`. The local stays
       // because pre-wrap code (Runner ctor, withAlsFrame seed,
@@ -818,6 +825,12 @@ export const ts = {
    *  `ts.id("__ctx")` directly to reach the setupEnv local. */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
+    /** The enclosing function or node activation: the same object as that
+     *  body's `__self`, under a name no block or fork branch shadows. Read
+     *  by the destructive-tracking codegen (`__destructiveRan`), by the
+     *  `llm()` codegen for `removedTools` and `destructiveSink`, and by the
+     *  thrown-error path in `functionCatchFailure.mustache`. */
+    activation: { kind: "identifier", name: "__activation" } as TsIdentifier,
     /** The run the enclosing body runs under. Every function, node, block,
      *  and body the runtime calls back declares it as a parameter, so the
      *  name always means the innermost run. */

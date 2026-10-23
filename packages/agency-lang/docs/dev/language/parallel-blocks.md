@@ -82,11 +82,10 @@ The grammar of statements *directly* inside a `parallel` block is restricted to 
 - Reassignment to outer-scope variables (`x = expr`). Wrap in `seq`.
 - `return`, `break`, `continue`, `throw`.
 - Function or type declarations.
-- A `destructive { ... }` region anywhere in the subtree. Each arm runs in its
-  own fork branch, so the region's `__destructiveRan` flip would land on the
-  branch frame instead of the calling tool's activation, and the tool could
-  never be removed on failure. `validateParallelBlock` refuses it up front
-  rather than accept broken commit semantics.
+
+A `destructive { ... }` region is allowed, as an arm or inside a `seq` arm. It
+marks the calling function the same way a destructive call in an arm does
+(see `docs/dev/language/destructive-regions.md`).
 
 The `seq` block has **no** grammar restrictions — it accepts the full Agency statement grammar. So users who want control flow inside a parallel block just put it inside `seq`:
 
@@ -243,9 +242,11 @@ top-level `seq` leak to the enclosing scope. That is what "no runtime effect
 outside parallel" means in practice.
 
 `destructive { ... }` parses as the same `seqBlock` node with `destructive:
-true`. When it is inlined outside a `parallel`, the desugaring prepends a
-`markDestructiveRan` node so the flip runs on the enclosing function's `__self`.
-Inside a `parallel` it is refused, as described under the statement allowlist.
+true`. Wherever it is inlined, the desugaring prepends a `markDestructiveRan`
+node so the flip runs on the enclosing function's activation (`__activation`,
+see `docs/dev/language/destructive-regions.md`). When the region is itself an
+arm, `desugarOneParallel` drops the `seq` wrapper and puts the flip at the
+start of the arm's statements.
 
 ### What this assumes about `fork`
 

@@ -16,14 +16,21 @@ import type { NameClassifier } from "./nameClassifier.js";
  * unit-tested directly — feed it a statement, assert the emitted nodes.
  *
  * How the flag works: every function activation carries a boolean
- * `__self.__destructiveRan`. It starts false and is only ever flipped to true
- * (sticky). It is set at ENTRY for a `destructive def` (init(true)), or at
- * region entry for a `destructive { }` region. The function exit folds it into
- * any departing failure via `stampFailureBoundary`, so a failure reports whether
- * execution entered a destructive region. NOTE: because a `destructive { }`
- * region is inlined into the function body before codegen, its flip lands on the
- * function's `__self` — never a block frame — which is what keeps a failure
- * escaping the function from carrying a false (fail-open) flag.
+ * `__destructiveRan` on its locals, written as `__activation.__destructiveRan`.
+ * It starts false and is only ever flipped to true (sticky). It is set at
+ * ENTRY for a `destructive def` (init(true)), or at region entry for a
+ * `destructive { }` region. The function exit folds it into any departing
+ * failure via `stampFailureBoundary`, so a failure reports whether execution
+ * entered a destructive region.
+ *
+ * Why `__activation` and not `__self`: a block argument and a fork branch each
+ * declare their own `__self` for their own frame. A region or destructive call
+ * inside one of them still belongs to the enclosing function, whose exit stamp
+ * is the only place the flag is read. Writing the block's `__self` lost the
+ * flag when the block returned, so a failure escaping a decorated or
+ * block-wrapped function read `destructiveRan: false` (ADI-56). `__activation`
+ * is declared once per function and node, next to `__self`, and a block or
+ * branch reaches it lexically. docs/dev/language/destructive-regions.md.
  */
 export class DestructiveTracking {
   constructor(
@@ -31,7 +38,17 @@ export class DestructiveTracking {
     private readonly compilationUnit: Pick<CompilationUnit, "destructiveFunctions">,
   ) {}
 
-  /** `__self.__destructiveRan = __self.__destructiveRan ?? false` — emitted
+  /** `__activation.__destructiveRan`: the flag on the enclosing function or
+   *  node activation. Not `ts.self(...)`: inside a block argument or a fork
+   *  branch `__self` is that frame's locals, which are dropped when it
+   *  returns, and a flip written there never reaches the function's exit
+   *  stamp (ADI-56). `__activation` is declared once per function and node
+   *  by `ts.setupEnv` and is never shadowed. */
+  private slot(): TsNode {
+    return ts.prop(ts.runtime.activation, "__destructiveRan");
+  }
+
+  /** `__activation.__destructiveRan = __activation.__destructiveRan ?? false` — emitted
    *  UNCONDITIONALLY in every function. Decision 8 sets this at runtime (a
    *  destructive tool inside an llm() call), which the builder cannot see
    *  statically; the unconditional boolean init keeps the exit stamp from
@@ -44,14 +61,12 @@ export class DestructiveTracking {
     // default so an externally set value (decision-8, or a `destructive { }`
     // region's flip) is preserved.
     return ts.assign(
-      ts.self("__destructiveRan"),
-      inDestructiveFunction
-        ? ts.bool(true)
-        : ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
+      this.slot(),
+      inDestructiveFunction ? ts.bool(true) : ts.binOp(this.slot(), "??", ts.bool(false)),
     );
   }
 
-  /** `stampFailureBoundary(runner.haltResult, __self.__destructiveRan)` — the
+  /** `stampFailureBoundary(runner.haltResult, __activation.__destructiveRan)` — the
    *  expression the function-exit halt check embeds to fold this activation's
    *  flag into a departing failure. */
   exitStamp(): TsNode {
@@ -59,7 +74,7 @@ export class DestructiveTracking {
     // the slot can be unset here.
     return ts.call(ts.id("stampFailureBoundary"), [
       ts.prop(ts.id("runner"), "haltResult"),
-      ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
+      ts.binOp(this.slot(), "??", ts.bool(false)),
     ]);
   }
 
@@ -86,24 +101,24 @@ export class DestructiveTracking {
     return this.names.containsDestructiveCall(stmt) ? { pre: this.markDestructiveRan() } : {};
   }
 
-  /** `__self.__destructiveRan = true` — sets the activation's destructive-ran
+  /** `__activation.__destructiveRan = true` — sets the activation's destructive-ran
    *  flag. Emitted at a `destructive { }` region entry (via the
    *  `markDestructiveRan` node) and as the Rule-2 conservative pre-flip. */
   markDestructiveRan(): TsNode {
-    return ts.assign(ts.self("__destructiveRan"), ts.bool(true));
+    return ts.assign(this.slot(), ts.bool(true));
   }
 
-  /** `__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.v)
-   *  ? __self.v.destructiveRan : true)`. The destructive callee's result is
+  /** `__activation.__destructiveRan = __activation.__destructiveRan ||
+   *  (isFailure(__self.v) ? __self.v.destructiveRan : true)`. The destructive callee's result is
    *  bound at `__self.<var>`; OR its outcome into the activation. The ternary
    *  printer parenthesizes itself, which is exactly what precedence needs here
    *  (`||` binds tighter than `?:`), so no explicit paren option is required. */
   private outcomeFlip(varName: string): TsNode {
     const bound = ts.self(varName);
     return ts.assign(
-      ts.self("__destructiveRan"),
+      this.slot(),
       ts.binOp(
-        ts.self("__destructiveRan"),
+        this.slot(),
         "||",
         ts.ternary(
           ts.call(ts.id("isFailure"), [bound]),

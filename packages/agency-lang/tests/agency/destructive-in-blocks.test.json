@@ -1,0 +1,125 @@
+{
+  "tests": [
+    {
+      "nodeName": "regionInBlock_",
+      "description": "a destructive region inside a block argument marks the failure escaping the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "regionThenFail_",
+      "description": "a region in a block that succeeded still marks a later failure of the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "destructiveCallInBlock_",
+      "description": "a destructive call bound to a local inside a block marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nested_",
+      "description": "a region two blocks deep marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ranTwice_",
+      "description": "a block run twice keeps the mark",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "handlerDoesWork_",
+      "description": "a destructive call in a handler body marks the function even when the handler returns",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "inCondition_",
+      "description": "a destructive call in an if condition marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "regionInParallelArm_",
+      "description": "a destructive region inside a parallel arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "regionInSeqArm_",
+      "description": "a destructive region nested in a seq arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "destructiveCallInParallelArm_",
+      "description": "a destructive call bound in a parallel arm marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cleanBlock_",
+      "description": "a block with no destructive work leaves the flag false",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

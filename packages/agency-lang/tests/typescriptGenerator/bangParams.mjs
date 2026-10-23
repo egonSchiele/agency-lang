@@ -192,6 +192,7 @@ async function __process_impl(__run: __Run, data: number) {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
@@ -234,7 +235,7 @@ await __checkParams(__run, runner, __stack, "process", __process_paramChecks, ["
 if (runner.halted) {
           return;
         }
-__self.__destructiveRan = __self.__destructiveRan ?? false;
+__activation.__destructiveRan = __activation.__destructiveRan ?? false;
 await callHook(__run, {
           name: "onFunctionStart",
           data: {
@@ -269,7 +270,7 @@ return;
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)
+        stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false)
       }
       return runner.haltResult;
     }
@@ -312,7 +313,7 @@ if (__error instanceof AgencyAbort) {
 }
 return runtimeFailure(__error, {
   checkpoint: __run.ctx.getResultCheckpoint(),
-  destructiveRan: __self.__destructiveRan,
+  destructiveRan: __activation.__destructiveRan,
   functionName: "process",
   args: __stack.args,
 });
@@ -357,6 +358,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;

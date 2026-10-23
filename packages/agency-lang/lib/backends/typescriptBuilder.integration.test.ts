@@ -233,9 +233,11 @@ def plain(id: string): string {
     const body = bodyOf(output, "plain");
     // Unconditional per function: the tool loop can set the flag at runtime
     // in any llm()-calling function, so both must always be present.
-    expect(body).toContain("__self.__destructiveRan = __self.__destructiveRan ?? false");
     expect(body).toContain(
-      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)",
+      "__activation.__destructiveRan = __activation.__destructiveRan ?? false",
+    );
+    expect(body).toContain(
+      "stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false)",
     );
     // The old machinery is gone.
     expect(body).not.toContain("__retryable");
@@ -251,7 +253,7 @@ destructive def rm(id: string): string {
 }
 `);
     const body = bodyOf(output, "rm");
-    expect(body).toContain("__self.__destructiveRan = true");
+    expect(body).toContain("__activation.__destructiveRan = true");
   });
 
   it("emits markers into the AgencyFunction registration", () => {
@@ -263,6 +265,31 @@ destructive def rm(id: string): string {
     expect(hOut).toMatch(/markers:\s*\{\s*handoff:\s*true/);
     const plainOut = generateWithBuilder(`def plain(id: string): string { return id }`);
     expect(plainOut).not.toContain("markers:");
+  });
+
+  it("the conservative pre-flip is its own step, before a compound statement", () => {
+    const output = generateWithBuilder(`
+destructive def rm(id: string): string {
+  return id
+}
+def viaHandler(id: string): string {
+  handle {
+    return interrupt("go?")
+  } with (intr) {
+    const m = rm(id)
+    return reject()
+  }
+  return id
+}
+`);
+    const body = bodyOf(output, "viaHandler");
+    // The handler body is not walked statement by statement, so the only
+    // flip covering rm(id) is the one on the handle statement. It has to run
+    // before the handle, or the return inside leaves the flag false.
+    const flip = body.indexOf("__activation.__destructiveRan = true");
+    const handle = body.indexOf("runner.handle(");
+    expect(flip).toBeGreaterThan(-1);
+    expect(flip).toBeLessThan(handle);
   });
 
   it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {
@@ -281,7 +308,7 @@ def caller(id: string): string {
     // ternary printer parenthesizes each arm); the compile pipeline's
     // formatter collapses the redundant parens in the emitted .js.
     expect(body).toContain(
-      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true))",
+      "__activation.__destructiveRan = __activation.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true))",
     );
   });
 });

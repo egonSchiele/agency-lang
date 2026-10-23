@@ -43,23 +43,23 @@ const flips = (t: DestructiveTracking, stmt: AgencyNode, inDestructive: boolean)
 describe("DestructiveTracking", () => {
   it("init(false) is the `?? false` default for a non-destructive function", () => {
     expect(printTs(bareTracker().init(false)).trim()).toBe(
-      "__self.__destructiveRan = __self.__destructiveRan ?? false;",
+      "__activation.__destructiveRan = __activation.__destructiveRan ?? false;",
     );
   });
 
   it("init(true) commits at entry for a `destructive def`", () => {
-    expect(printTs(bareTracker().init(true)).trim()).toBe("__self.__destructiveRan = true;");
+    expect(printTs(bareTracker().init(true)).trim()).toBe("__activation.__destructiveRan = true;");
   });
 
   it("markDestructiveRan() sets the flag true (destructive { } region entry)", () => {
     expect(printTs(bareTracker().markDestructiveRan()).trim()).toBe(
-      "__self.__destructiveRan = true;",
+      "__activation.__destructiveRan = true;",
     );
   });
 
   it("exitStamp() folds the flag into the halt result, false when step 0 never set it", () => {
     expect(printTs(bareTracker().exitStamp()).trim()).toBe(
-      "stampFailureBoundary(runner.haltResult, __self.__destructiveRan ?? false)",
+      "stampFailureBoundary(runner.haltResult, __activation.__destructiveRan ?? false)",
     );
   });
 
@@ -73,7 +73,7 @@ describe("DestructiveTracking", () => {
     // The ternary printer parenthesizes the ternary and each arm; the outer
     // group is what precedence needs (`||` binds tighter than `?:`).
     expect(f.post).toBe(
-      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true));",
+      "__activation.__destructiveRan = __activation.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true));",
     );
   });
 
@@ -86,7 +86,7 @@ describe("DestructiveTracking", () => {
     const f = flips(tracking, body[0], false);
     expect(f.pre).toBeUndefined();
     expect(f.post).toBe(
-      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true));",
+      "__activation.__destructiveRan = __activation.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true));",
     );
   });
 
@@ -101,7 +101,7 @@ describe("DestructiveTracking", () => {
       "caller",
     );
     const f = flips(tracking, body[0], false);
-    expect(f.pre).toBe("__self.__destructiveRan = true;");
+    expect(f.pre).toBe("__activation.__destructiveRan = true;");
     expect(f.post).toBeUndefined();
   });
 
@@ -125,7 +125,7 @@ describe("DestructiveTracking", () => {
       "caller",
     );
     const f = flips(tracking, body[0], false);
-    expect(f.pre).toBe("__self.__destructiveRan = true;");
+    expect(f.pre).toBe("__activation.__destructiveRan = true;");
     expect(f.post).toBeUndefined();
   });
 

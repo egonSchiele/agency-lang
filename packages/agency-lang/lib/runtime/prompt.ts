@@ -447,7 +447,9 @@ type RunPromptArgs = {
   maxToolCallRounds?: number;
   removedTools?: string[];
   /** The CALLING function's locals object, threaded in by the `llm()` codegen
-   *  as `destructiveSink: __self`. The codegen passes the whole `__self`, but
+   *  as `destructiveSink: __activation` (the function's own `__self`, under
+   *  the name a block argument does not shadow). The codegen passes the whole
+   *  object, but
    *  runPrompt only ever writes ONE key on it, `__destructiveRan`, so the type
    *  narrows to exactly that field. When a tool does destructive work,
    *  decision 8 sets `destructiveSink.__destructiveRan = true`, and the
@@ -1114,7 +1116,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         ? toolResult.destructiveRan
         : !!handler.markers?.destructive;
       if (toolDidDestructiveWork && destructiveSink) {
-        // Mark the CALLER's `__self` (threaded in as `destructiveSink`), NOT
+        // Mark the CALLER's activation (threaded in as `destructiveSink`), NOT
         // `stack` — `stack` is runPrompt's own frame from setupFunction(),
         // which is thrown away when runPrompt returns, so the caller would
         // never see it. The caller's exit stamp reads

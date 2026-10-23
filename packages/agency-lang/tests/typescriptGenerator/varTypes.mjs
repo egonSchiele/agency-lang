@@ -189,6 +189,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
+const __activation = __self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
@@ -216,7 +217,7 @@ __stack.locals.person = {
           };
         });
         await runner.step(2, __run, async (runner, __run) => {
-__self.__removedTools = __self.__removedTools || [];
+__activation.__removedTools = __activation.__removedTools || [];
 __stack.locals.response = await runPrompt(__run, {
             prompt: `Say hi to ${__stack.locals.person.name}, who is ${__stack.locals.person.age} years old.`,
             messages: __run.threads.getOrCreateActive(),
@@ -225,8 +226,8 @@ __stack.locals.response = await runPrompt(__run, {
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            removedTools: __self.__removedTools,
-            destructiveSink: __self,
+            removedTools: __activation.__removedTools,
+            destructiveSink: __activation,
             checkpointInfo: runner.getCheckpointInfo()
           });
 // halt if this is an interrupt

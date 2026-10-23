@@ -2,8 +2,9 @@ import test { _advanceTime } from "std::date"
 import { Critique, revise } from "std::strategy"
 
 // A completed `revise` attempt survives a guard trip that strikes after it:
-// during the check, or during a later attempt. A trip before any attempt
-// completes stays a failure. See docs/dev/runtime/saveDraft.md.
+// during the check, or during a later attempt. Before any attempt
+// completes, a draft the block saved is handed back instead, and with no
+// draft either the guard fails. See docs/dev/runtime/saveDraft.md.
 
 // Twice the 10s budget every guard below uses, in milliseconds, so one
 // advance is always enough to trip it.
@@ -51,9 +52,8 @@ node completedAttemptSurvivesReviewTrip(): string {
 }
 
 // The trip strikes inside the first attempt, after the model saved an
-// in-flight draft. No attempt completed, so the guard fails; the draft is
-// only visible on the trip interrupt.
-node tripDuringAttemptHasNoAnswer(): string {
+// in-flight draft. No attempt completed, so that draft is the backup answer.
+node tripDuringAttemptReturnsDraft(): string {
   let seenDraft: any = null
   handle {
     const r = guard(cost: $5, time: 10s) {
@@ -70,6 +70,47 @@ node tripDuringAttemptHasNoAnswer(): string {
       return reject()
     }
     return pass()
+  }
+}
+
+// The trip strikes inside the first attempt before anything was saved.
+// There is nothing to hand back, so the guard fails as it always has.
+node tripBeforeAnyDraftIsAFailure(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: slowReview) as critique {
+        _advanceTime(PAST_THE_BUDGET)
+        return "ANSWER"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// The first attempt completes and is rejected; the second saves a draft of
+// its fix, then trips. The completed attempt wins over the unfinished one.
+node completedAttemptBeatsLaterDraft(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: rejectAll) as critique {
+        if (critique != "") {
+          saveDraft("draft(${critique})")
+          _advanceTime(PAST_THE_BUDGET)
+        }
+        return "attempt(${critique})"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
 }
 

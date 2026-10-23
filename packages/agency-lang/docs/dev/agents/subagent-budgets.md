@@ -93,14 +93,18 @@ Before the fix, the salvage went like this:
 6. `budgeted` saw the trip and returned "its time budget of 30m ran out".
    The coordinator wrote a recap instead of the answer.
 
-Step 3 was the missing piece. `revise` now saves each completed attempt,
-so step 3 returns it, the researcher returns it in return position, the
-guard returns it as a success, and rule 2 reports it.
+Step 3 was the missing piece. `revise` now has a `finalize` that hands
+back the last completed attempt, so step 3 returns it, the researcher
+returns it in return position, the guard returns it as a success, and
+rule 2 reports it.
 
-A draft the researcher's model saves during its first attempt still does
-not reach the guard: it is filed on the `revise` block's frame, and
-`revise` assigns the block's result, so the draft stops there. Until an
-attempt completes, a trip is a failure.
+Before any attempt completes, the same `finalize` hands back the draft
+the researcher's model saved during its first attempt. The draft is filed
+on the `revise` block's frame, and the post-call check binds it into the
+local `revise` was assigning (`latest`), where the `finalize` reads it.
+When both exist, the completed attempt wins over a later attempt's
+unfinished draft. With neither, the `finalize` returns nothing, and the
+guard fails.
 
 ## Tests
 
@@ -110,8 +114,9 @@ attempt completes, a trip is a failure.
   `revise` answer, a finished answer, an empty answer, and another
   label's trip.
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
-  under a guard that trips in the check, in an attempt, or in a later
-  attempt, and the `agencyCodingAgent` shape.
+  under a guard that trips in the check, in a first attempt with and
+  without a saved draft, or in a later attempt (with and without a draft
+  of its own), and the `agencyCodingAgent` shape.
 - `lib/agents/agency-agent/tests/turn.agency`:
   `budgetTripIsHardStopAndBrainContinues`.
 - `tests/agency/guards/unowned-guard-rejected.agency`: `guardStopHandler`.

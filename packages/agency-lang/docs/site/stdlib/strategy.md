@@ -152,7 +152,9 @@ revise(
 Run a block until its result is accepted, up to maxAttempts times. Each
   rejected attempt passes its critique to the next one, which receives it as
   its argument (an empty string on the first attempt). Returns the first
-  accepted result, or the last result when every attempt is rejected.
+  accepted result, or the last result when every attempt is rejected. If a
+  guard's budget runs out partway, the guard gets the last completed
+  attempt, or the draft an unfinished first attempt saved.
 
   @param maxAttempts - Maximum number of attempts
   @param check - Judges a result and returns the critique to address next
@@ -192,4 +194,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L155))

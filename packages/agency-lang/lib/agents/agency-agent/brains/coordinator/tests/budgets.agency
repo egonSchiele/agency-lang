@@ -1,17 +1,23 @@
 /*
- * budgeted(): a subagent that overruns its own guard comes back as a
- * failure naming the budget, even when the guard salvaged a draft. Fake
- * agents stand in for the stdlib ones; the guard label is what budgeted
- * matches on.
+ * budgeted(): a subagent that overruns its own guard comes back as the
+ * rule in _budgetOutcome says. Whatever value reached the guard, a
+ * finished answer or a saved draft, is a success with a note; a trip with
+ * nothing is a failure naming the budget. Fake agents stand in for the
+ * stdlib ones, each shaped like a real one; the guard label is what
+ * budgeted matches on.
  */
 import test { _advanceTime } from "std::date"
+import { Critique, revise } from "std::strategy"
 
 import { guardStopHandler } from "../../../lib/budget.agency"
 import { budgeted } from "../lib/budgets.agency"
 
+// Twice the 10s budget the fake agents use, in milliseconds.
+const PAST_THE_BUDGET = 20000
+
 def overrunWithDraft(): string {
   saveDraft("PARTIAL")
-  _advanceTime(20000)
+  _advanceTime(PAST_THE_BUDGET)
   return "FULL"
 
   finalize as draft {
@@ -19,9 +25,66 @@ def overrunWithDraft(): string {
   }
 }
 
+def overrunWithoutDraft(): string {
+  _advanceTime(PAST_THE_BUDGET)
+  return "FULL"
+}
+
+// Returns its callee in return position, so the callee's draft reaches the
+// guard. Used only where budgeted does not own the trip.
 def draftingAgent(): Result<string> {
   return guard(cost: $5, time: 10s, label: "fakeAgent") {
     return overrunWithDraft()
+  }
+}
+
+// Shaped like the explorer and the oracle: the finalize hands the
+// callee's saved draft to the guard.
+def inFlightAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    let reply = ""
+    reply = overrunWithDraft()
+    return reply
+
+    finalize {
+      return reply
+    }
+  }
+}
+
+// The same shape with nothing saved: the finalize returns null, so the
+// guard hands back success(null).
+def noDraftAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    let reply = ""
+    reply = overrunWithoutDraft()
+    return reply
+
+    finalize {
+      return reply
+    }
+  }
+}
+
+def slowReview(answer: any): Critique {
+  _advanceTime(PAST_THE_BUDGET)
+  return {
+    accepted: true,
+    feedback: ""
+  }
+}
+
+def reviseLoop(): string {
+  return revise(maxAttempts: 1, check: slowReview) as critique {
+    return "FULL"
+  }
+}
+
+// Shaped like the researcher: the answer is finished, then its review
+// overruns the budget.
+def reviseAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    return reviseLoop()
   }
 }
 
@@ -37,6 +100,14 @@ def emptyAgent(): Result<string> {
   }
 }
 
+// A stop, with the draft budgeted put in its data.
+def describeStop(r: Result<string>): string {
+  if (isFailure(r)) {
+    return "failure:${r.error}|draft:${r.data.draft}"
+  }
+  return "success:${r.value}"
+}
+
 def describe(r: Result<string>): string {
   if (isFailure(r)) {
     return "failure:${r.error}"
@@ -44,12 +115,27 @@ def describe(r: Result<string>): string {
   return "success:${r.value}"
 }
 
-// The guard alone would return success("PARTIAL") here, which the tool
-// loop would announce as a finished answer.
-node tripWithDraftIsAStop(): string {
+// A draft that reaches the guard is the backup answer.
+node tripWithDraftIsASuccess(): string {
   let out = ""
   handle {
-    out = describe(budgeted("fakeAgent") { return draftingAgent() })
+    out = describe(budgeted("fakeAgent") { return inFlightAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node tripWithoutAnswerIsAStop(): string {
+  let out = ""
+  handle {
+    out = describeStop(budgeted("fakeAgent") { return noDraftAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node tripWithRecoveredAnswerIsASuccess(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("fakeAgent") { return reviseAgent() })
   } with guardStopHandler
   return out
 }
@@ -77,4 +163,14 @@ node otherLabelIsNotOurs(): string {
     out = describe(budgeted("someOtherAgent") { return draftingAgent() })
   } with guardStopHandler
   return out
+}
+
+// Only "" counts as no answer. An empty list, such as a review that found
+// no problems, is a finished answer. `==` is strict, so `[] == ""` is false.
+node emptyListIsNotNoAnswer(): string {
+  const r = _budgetOutcome("fakeAgent", success([]), null)
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value.length}"
 }

@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, saveDraft, _guard, _budgetOutcome, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
 import { _realTarget } from "agency-lang/stdlib-lib/fs.js";
 import { _speak, _download, _modelStatus, _validateSpeakArgs, _voices } from "./dist/src/agency.js";
 import { z } from "agency-lang/zod";
@@ -140,13 +140,14 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "da575cf5d41f5ce2156a64613eb4f60ad2be05e9b981574a5679145b7af6aceb");
+__registerModuleFingerprint("index.agency", "6466729263316e9b4f895ac60450e0c261b1c787a61a8bd738440415c451888b");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(saveDraft);
 __registerTool(_guard);
+__registerTool(_budgetOutcome);
 __registerTool(_pairsOf);
 __registerTool(read);
 __registerTool(write);

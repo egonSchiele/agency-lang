@@ -107,18 +107,27 @@ export def revise(
   Run a block until its result is accepted, up to maxAttempts times. Each
   rejected attempt passes its critique to the next one, which receives it as
   its argument (an empty string on the first attempt). Returns the first
-  accepted result, or the last result when every attempt is rejected.
+  accepted result, or the last result when every attempt is rejected. If a
+  guard's budget runs out partway, the guard gets the last completed
+  attempt, or the draft an unfinished first attempt saved.
 
   @param maxAttempts - Maximum number of attempts
   @param check - Judges a result and returns the critique to address next
   @param block - The work, receiving the previous critique
   """
+  // `result` is the last completed attempt. `latest` is the attempt in
+  // progress: when a guard trip stops the block, the block's saved draft,
+  // if any, is bound into it.
   let result = null
+  let latest = null
+  let completed = false
   let feedback = ""
   let attempt = 0
   while (attempt < maxAttempts) {
     attempt = attempt + 1
-    result = block(feedback)
+    latest = block(feedback)
+    result = latest
+    completed = true
     const critique = check(result)
     if (critique.accepted) {
       return result
@@ -128,6 +137,19 @@ export def revise(
   // Every attempt was rejected. The last one is still the best available
   // answer, and it is more useful to the caller than nothing.
   return result
+
+  // A guard trip stops revise. Hand back the best answer so far: the last
+  // completed attempt, or else the draft the unfinished attempt saved. With
+  // neither, return nothing, so the guard fails as it would without revise.
+  // See docs/dev/runtime/saveDraft.md.
+  finalize {
+    if (completed) {
+      return result
+    }
+    if (latest != null) {
+      return latest
+    }
+  }
 }
 
 export def firstValid(

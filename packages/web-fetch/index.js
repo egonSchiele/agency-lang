@@ -1,4 +1,4 @@
-import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
+import { print, printJSON, input, sleep, saveDraft, _guard, _budgetOutcome, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd, Call } from "agency-lang/stdlib/index.js";
 import { fetchPage as fetchPageImpl } from "./dist/src/fetchPage.js";
 import { z } from "agency-lang/zod";
 import {
@@ -133,13 +133,14 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "04ce149152e7a9ac7a6e9041079455b5e623f7b41b9ff34022b43ac462a9a24f");
+__registerModuleFingerprint("index.agency", "94b15e9be434b602f52a94481145f5f9625068f8a4ab3a933de6c8ba4abf6234");
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(saveDraft);
 __registerTool(_guard);
+__registerTool(_budgetOutcome);
 __registerTool(_pairsOf);
 __registerTool(read);
 __registerTool(write);

@@ -1,0 +1,203 @@
+import test { _advanceTime } from "std::date"
+import { Critique, revise } from "std::strategy"
+
+// A completed `revise` attempt survives a guard trip that strikes after it:
+// during the check, or during a later attempt. Before any attempt
+// completes, a draft the block saved is handed back instead, and with no
+// draft either the guard fails. See docs/dev/runtime/saveDraft.md.
+
+// Twice the 10s budget every guard below uses, in milliseconds, so one
+// advance is always enough to trip it.
+const PAST_THE_BUDGET = 20000
+
+// A review that takes longer than the whole budget, then accepts.
+def slowReview(answer: any): Critique {
+  _advanceTime(PAST_THE_BUDGET)
+  return {
+    accepted: true,
+    feedback: ""
+  }
+}
+
+// A quick review that rejects every attempt.
+def rejectAll(answer: any): Critique {
+  return {
+    accepted: false,
+    feedback: "fix"
+  }
+}
+
+def describe(r: Result): string {
+  if (isFailure(r)) {
+    return "failure"
+  }
+  return "success:${r.value}"
+}
+
+// The trace from ADI-49: the answer is finished, then the review overruns.
+node completedAttemptSurvivesReviewTrip(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: slowReview) as critique {
+        return "ANSWER"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// The trip strikes inside the first attempt, after the model saved an
+// in-flight draft. No attempt completed, so that draft is the backup answer.
+node tripDuringAttemptReturnsDraft(): string {
+  let seenDraft: any = null
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: slowReview) as critique {
+        saveDraft("in-flight")
+        _advanceTime(PAST_THE_BUDGET)
+        return "ANSWER"
+      }
+    }
+    return "${describe(r)}|${seenDraft}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      seenDraft = i.data.draftValue
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// The trip strikes inside the first attempt before anything was saved.
+// There is nothing to hand back, so the guard fails as it always has.
+node tripBeforeAnyDraftIsAFailure(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: slowReview) as critique {
+        _advanceTime(PAST_THE_BUDGET)
+        return "ANSWER"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// The first attempt completes and is rejected; the second saves a draft of
+// its fix, then trips. The completed attempt wins over the unfinished one.
+node completedAttemptBeatsLaterDraft(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: rejectAll) as critique {
+        if (critique != "") {
+          saveDraft("draft(${critique})")
+          _advanceTime(PAST_THE_BUDGET)
+        }
+        return "attempt(${critique})"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// The first attempt completes and is rejected; the trip strikes inside the
+// second. The first attempt is still the best answer there is.
+node secondAttemptTripKeepsFirst(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      return revise(maxAttempts: 2, check: rejectAll) as critique {
+        if (critique != "") {
+          _advanceTime(PAST_THE_BUDGET)
+        }
+        return "attempt(${critique})"
+      }
+    }
+    return describe(r)
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+def acceptAll(answer: any): Critique {
+  return {
+    accepted: true,
+    feedback: ""
+  }
+}
+
+node finishesUnderBudget(): string {
+  const r = guard(cost: $5, time: 10s) {
+    return revise(maxAttempts: 2, check: acceptAll) as critique {
+      return "ANSWER"
+    }
+  }
+  return describe(r)
+}
+
+type Outcome = {
+  valid: boolean;
+  source: string
+}
+
+def codingLoop(): Outcome {
+  return revise(maxAttempts: 2, check: slowReview) as critique {
+    const outcome: Outcome = {
+      valid: true,
+      source: "ANSWER"
+    }
+    saveDraft(outcome)
+    return outcome
+  }
+}
+
+// The shape of agencyCodingAgent (stdlib/agents/agency/coding.agency): the
+// loop's result is assigned inside a thread block, and the guard block's
+// finalize returns it.
+node agencyCodingShapeKeepsLastAttempt(): string {
+  handle {
+    const r = guard(cost: $5, time: 10s) {
+      let outcome: Outcome = {
+        valid: false,
+        source: ""
+      }
+      thread {
+        outcome = codingLoop()
+      }
+      return outcome
+
+      finalize {
+        return outcome
+      }
+    }
+    if (isFailure(r)) {
+      return "failure"
+    }
+    // Before revise saved its attempts, the finalize returned null here.
+    if (r.value == null) {
+      return "success:null"
+    }
+    return "success:${r.value.source}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}

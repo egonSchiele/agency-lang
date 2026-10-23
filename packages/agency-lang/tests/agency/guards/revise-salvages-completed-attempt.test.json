@@ -1,0 +1,88 @@
+{
+  "tests": [
+    {
+      "nodeName": "completedAttemptSurvivesReviewTrip",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A completed attempt survives a guard trip during its review."
+    },
+    {
+      "nodeName": "tripDuringAttemptReturnsDraft",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:in-flight|in-flight\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip before any attempt completes returns the draft the attempt saved."
+    },
+    {
+      "nodeName": "tripBeforeAnyDraftIsAFailure",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip before any attempt completes or saves a draft is a failure."
+    },
+    {
+      "nodeName": "completedAttemptBeatsLaterDraft",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:attempt()\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A completed attempt wins over a later attempt's unfinished draft."
+    },
+    {
+      "nodeName": "secondAttemptTripKeepsFirst",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:attempt()\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A trip in the second attempt returns the first, completed one."
+    },
+    {
+      "nodeName": "finishesUnderBudget",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Under budget, revise returns its accepted result."
+    },
+    {
+      "nodeName": "agencyCodingShapeKeepsLastAttempt",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:ANSWER\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The agencyCodingAgent shape salvages the last completed attempt through its finalize."
+    }
+  ]
+}

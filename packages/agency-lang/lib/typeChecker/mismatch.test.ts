@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FunctionCall } from "../types.js";
+import type { BlockType } from "../types/typeHints.js";
 import { draftTarget, mismatchEntry, type MismatchSite } from "./mismatch.js";
 
 function call(name: string, decorator?: string): FunctionCall {
@@ -70,7 +71,7 @@ describe("mismatchEntry", () => {
 describe("draftTarget", () => {
   const STRING = { type: "primitiveType", value: "string" } as const;
   const RESULT = { type: "resultType", successType: STRING, dataType: STRING } as const;
-  const SLOT = { type: "blockType", params: [], returnType: STRING } as const;
+  const SLOT: BlockType = { type: "blockType", params: [], returnType: STRING };
 
   it("is the scope's return type outside any block, and in an ordinary call's block", () => {
     expect(draftTarget(undefined, undefined, RESULT)).toBe(RESULT);

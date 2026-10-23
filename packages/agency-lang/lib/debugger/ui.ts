@@ -195,6 +195,10 @@ export class DebuggerUI implements DebuggerIO {
    *  (`agency debug --attach`): what the run said about itself, for the
    *  status line. */
   private attached: Hello | null = null;
+  /** When the handshake came, and the redraw that ticks the figure, while
+   *  the run has reported no stop and no wait yet. */
+  private attachedAt: number | null = null;
+  private connectingInterval: ReturnType<typeof setInterval> | null = null;
   private quitListeners: (() => void)[] = [];
   private pauseListeners: (() => void)[] = [];
   /** Set from the pause key until the next stop, for the bar. */
@@ -248,7 +252,7 @@ export class DebuggerUI implements DebuggerIO {
       {
         name: "source",
         color: "cyan",
-        label: ` source: ${escapeStyleTags(moduleId)} `,
+        label: this.connecting() ? " source " : ` source: ${escapeStyleTags(moduleId)} `,
         content: () => this.buildSourceContent(),
       },
     ];
@@ -277,7 +281,9 @@ export class DebuggerUI implements DebuggerIO {
       {
         name: "globals",
         color: "green",
-        label: ` globals: ${escapeStyleTags(this.state.getGlobalsModuleId())} `,
+        label: this.connecting()
+          ? " globals "
+          : ` globals: ${escapeStyleTags(this.state.getGlobalsModuleId())} `,
         content: () => this.buildGlobalsContent(),
       },
       {
@@ -324,6 +330,7 @@ export class DebuggerUI implements DebuggerIO {
   // --- Content builders ---
 
   private buildSourceContent(): string {
+    if (this.connecting()) return this.buildConnectingContent();
     const moduleId = this.state.getModuleId();
     const currentLine = this.state.getCurrentLine();
     const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
@@ -365,6 +372,29 @@ export class DebuggerUI implements DebuggerIO {
         return `  ${numStr}  ${lineText}`;
       })
       .join("\n");
+  }
+
+  /** Attached, and the run has not yet said where it is: no stop and no
+   *  wait. The source pane has nothing to show until it does. */
+  private connecting(): boolean {
+    return (
+      this.attached !== null &&
+      this.state.getLocation() === undefined &&
+      this.state.getBusy().length === 0
+    );
+  }
+
+  /** The source pane between the handshake and the first stop. The socket
+   *  is open; the program reports its next statement when it reaches one,
+   *  which can take a while inside a long model call, so the pane says so
+   *  rather than showing a source it does not have yet. */
+  private buildConnectingContent(): string {
+    const attached = this.attached!;
+    const elapsed = formatElapsed(this.now() - (this.attachedAt ?? this.now()));
+    return [
+      `  Connected to pid ${attached.pid} ${escapeStyleTags(attached.program)}.`,
+      `  {gray-fg}waiting for the program to reach its next statement\u2026 ${elapsed}{/gray-fg}`,
+    ].join("\n");
   }
 
   /** The open waits in `moduleId` whose line the UI knows, the one that
@@ -831,7 +861,21 @@ export class DebuggerUI implements DebuggerIO {
    *  tells `onQuit` listeners first. */
   attachedTo(hello: Hello): void {
     this.attached = hello;
+    this.attachedAt = this.now();
+    this.connectingInterval = setInterval(() => {
+      if (this.connecting()) {
+        this.renderUI();
+      } else {
+        this.stopConnectingTicks();
+      }
+    }, 250);
     this.renderUI();
+  }
+
+  private stopConnectingTicks(): void {
+    if (this.connectingInterval === null) return;
+    clearInterval(this.connectingInterval);
+    this.connectingInterval = null;
   }
 
   onQuit(listener: () => void): void {
@@ -1334,6 +1378,7 @@ export class DebuggerUI implements DebuggerIO {
 
   destroy(): void {
     this.stopSpinner();
+    this.stopConnectingTicks();
     this.screen.destroy();
   }
 }

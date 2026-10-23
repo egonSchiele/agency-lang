@@ -131,6 +131,30 @@
         }
       ],
       "description": "A failure the body returns passes through unchanged."
+    },
+    {
+      "nodeName": "reviewerTripReturnsSavedFindings",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:half a finding\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A reviewer's saved findings reach the guard through its inner def and come back when the budget runs out."
+    },
+    {
+      "nodeName": "writingReviewTripReturnsSavedFindings",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:half a finding,side,side\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "The writing reviewer's main pass, run after its parallel side passes, hands its saved findings and the side findings to the guard."
     }
   ]
 }

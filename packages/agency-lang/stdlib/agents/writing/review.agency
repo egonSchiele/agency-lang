@@ -24,6 +24,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
+import { guard } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
@@ -461,54 +462,86 @@ export def writingReviewAgent(
     model error) returns no findings instead of a failure. Pass false to get
     the failure, for callers that must not mistake a failed review for a clean one
   """
-  const captured = guard(cost: maxCost, time: maxTime, label: "writingReviewAgent") {
-    let items: Feedback[] = []
-    // The cuts and tics passes run beside the main review, each with its
-    // own short prompt, so the main prompt carries misreadings only.
-    parallel {
-      seq {
-        thread(label: "writingReviewAgent", session: session) {
-          items = judgeText(
-            text: text,
-            task: task,
-            guidelines: guidelines,
-            context: context,
-            model: model,
-            provider: provider,
-            extraTools: extraTools,
-          )
-        }
-      }
-      let cuts = cutsOrNothing(
-        text: text,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        model: model,
-        provider: provider,
-      )
-      let tics = verbalTicsOrNothing(
-        text: text,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        model: model,
-        provider: provider,
-      )
-    }
-    return [...items, ...cuts, ...tics]
-
-    // Salvage the model's partial findings if an outer budget guard trips
-    // mid-review; the assignment above would otherwise drop them.
-    finalize {
-      return items
-    }
-  }
-
+  const captured = writingReviewUnderBudget(
+    text: text,
+    task: task,
+    guidelines: guidelines,
+    context: context,
+    model: model,
+    provider: provider,
+    session: session,
+    extraTools: extraTools,
+    maxCost: maxCost,
+    maxTime: maxTime,
+  )
   if (failOpen) {
     return failOpenFeedback(captured)
   }
   return captured
+}
+
+// The guarded half of writingReviewAgent, a def of its own because the
+// exported def decides what a failed review returns. The cuts and tics
+// passes run first, in parallel, each with its own short prompt, so the
+// main prompt carries misreadings only. The main pass runs after them and
+// on its own: a draft saved inside a parallel arm never reaches the guard,
+// and a trip inside one skips this def's finalize. Here the assignment
+// binds the findings the model saved into `items`, and the finalize hands
+// them up when the budget runs out.
+@guard(cost: maxCost, time: maxTime, label: "writingReviewAgent")
+def writingReviewUnderBudget(
+  text: string,
+  task: string,
+  guidelines: string,
+  context: string,
+  model: string,
+  provider: string,
+  session: string,
+  extraTools: any[],
+  maxCost: number,
+  maxTime: number,
+): Result<Feedback[]> {
+  parallel {
+    let cuts = cutsOrNothing(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+    )
+    let tics = verbalTicsOrNothing(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+    )
+  }
+  let items: Feedback[] = []
+  thread(label: "writingReviewAgent", session: session) {
+    items = judgeText(
+      text: text,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
+  }
+  return [...items, ...cuts, ...tics]
+
+  // The budget ran out during the main pass: the findings the model saved,
+  // with the side passes' findings. Null when it saved none, so the guard
+  // reports the stop.
+  finalize {
+    if (items == null) {
+      return null
+    }
+    return [...items, ...cuts, ...tics]
+  }
 }
 
 /** What an eval hands the reviewer: the task the text was written for, and

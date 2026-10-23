@@ -23,7 +23,7 @@ import {
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { agentPrompt, agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { Critique, revise } from "std::strategy"
+import { Critique, guard, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found
@@ -447,34 +447,21 @@ export def agencyCodingAgent(
       problems: [problem]
     })
   }
-  const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
-    let outcome: WriteOutcome = {
-      valid: false,
-      source: "",
-      problems: ["generation never ran"]
-    }
-    thread(label: "agencyCodingAgent", session: session) {
-      outcome = generateLoop(
-        task: task,
-        context: context,
-        maxAttempts: maxAttempts,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-        requireMain: requireMain,
-        dir: dir,
-        strict: strict,
-        projectTools: projectTools,
-      )
-    }
-    return outcome
-
-    // Salvage the last completed attempt (generateLoop saveDrafts each one)
-    // if an outer budget guard trips; the assignment above would drop it.
-    finalize {
-      return outcome
-    }
-  }
+  const captured = agencyCodingUnderBudget(
+    task: task,
+    context: context,
+    maxAttempts: maxAttempts,
+    model: model,
+    provider: provider,
+    session: session,
+    extraTools: extraTools,
+    requireMain: requireMain,
+    dir: dir,
+    strict: strict,
+    projectTools: projectTools,
+    maxCost: maxCost,
+    maxTime: maxTime,
+  )
   // The guard Result cannot pass straight through here: this agent reports
   // failures as a WriteFailure carrying the last source. isFailure, not
   // match, because a match inside a resumed block evaluates to null (see
@@ -490,10 +477,46 @@ export def agencyCodingAgent(
       },
     )
   }
-  // A rejected trip with a saved draft arrives success-shaped carrying the
-  // draft, which has the same WriteOutcome shape as a normal return, so
+  // A trip after an attempt completed arrives success-shaped carrying that
+  // attempt, which has the same WriteOutcome shape as a normal return, so
   // this covers both.
   return outcomeToResult(outcome: captured.value)
+}
+
+// The guarded half of agencyCodingAgent, a def of its own because the
+// exported def reports failures as a WriteFailure. Return position: when
+// the budget runs out, the last attempt revise has (a WriteOutcome, valid
+// or not) reaches the guard and comes back as the result.
+@guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent")
+def agencyCodingUnderBudget(
+  task: string,
+  context: string,
+  maxAttempts: number,
+  model: string,
+  provider: string,
+  session: string,
+  extraTools: any[],
+  requireMain: boolean,
+  dir: string,
+  strict: boolean,
+  projectTools: boolean,
+  maxCost: number,
+  maxTime: number,
+): Result<WriteOutcome> {
+  thread(label: "agencyCodingAgent", session: session) {
+    return generateLoop(
+      task: task,
+      context: context,
+      maxAttempts: maxAttempts,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+      requireMain: requireMain,
+      dir: dir,
+      strict: strict,
+      projectTools: projectTools,
+    )
+  }
 }
 
 /** What an eval hands the writer: the assignment, and the file to save the

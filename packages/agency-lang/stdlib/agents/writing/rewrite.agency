@@ -20,6 +20,7 @@ import {
   WritingReviewEvalInput,
  } from "std::agents/writing/review"
 import { evalValue, setAgentName } from "std::statelog"
+import { guard } from "std::strategy"
 
 static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
 
@@ -82,6 +83,7 @@ ${text}
  * )
  * ```
  */
+@guard(cost: maxCost, time: maxTime)
 export def writingRewriteAgent(
   text: string,
   task: string = "",
@@ -110,48 +112,43 @@ export def writingRewriteAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   """
-  let reviewFailure = ""
-  const captured = guard(cost: maxCost, time: maxTime, label: "writingRewriteAgent") {
-    let current = text
-    let remaining = passes
-    while (remaining > 0 && reviewFailure == "") {
-      remaining = remaining - 1
-      const reviewed = writingReviewAgent(
-        text: current,
-        task: task,
-        guidelines: guidelines,
-        context: context,
-        maxCost: maxCost,
-        maxTime: maxTime,
-        model: model,
-        provider: provider,
-        failOpen: false,
-      )
-      if (reviewed is failure(err)) {
-        reviewFailure = "${err}"
-      }
-      if (reviewed is success(findings)) {
-        if (findings.length == 0) {
-          remaining = 0
-        } else {
-          current = applyFindings(
-            text: current,
-            task: task,
-            guidelines: guidelines,
-            context: context,
-            findings: findings,
-            model: model,
-            provider: provider,
-          )
-        }
+  let current = text
+  let remaining = passes
+  while (remaining > 0) {
+    remaining = remaining - 1
+    const reviewed = writingReviewAgent(
+      text: current,
+      task: task,
+      guidelines: guidelines,
+      context: context,
+      maxCost: maxCost,
+      maxTime: maxTime,
+      model: model,
+      provider: provider,
+      failOpen: false,
+    )
+    // A review that could not run is not a clean pass: report it, rather
+    // than returning the text as if nothing needed fixing.
+    if (reviewed is failure(err)) {
+      return failure("the writing reviewer failed: ${err}")
+    }
+    if (reviewed is success(findings)) {
+      if (findings.length == 0) {
+        remaining = 0
+      } else {
+        current = applyFindings(
+          text: current,
+          task: task,
+          guidelines: guidelines,
+          context: context,
+          findings: findings,
+          model: model,
+          provider: provider,
+        )
       }
     }
-    return current
   }
-  if (reviewFailure != "") {
-    return failure("the writing reviewer failed: ${reviewFailure}")
-  }
-  return captured
+  return current
 }
 
 /** Eval entry point: `agency eval run stdlib/agents/writing/rewrite.agency:evalMain

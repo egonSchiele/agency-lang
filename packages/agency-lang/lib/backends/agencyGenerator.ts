@@ -90,7 +90,7 @@ import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { FinalizeBlock } from "@/types/finalizeBlock.js";
 import { GuardBlock } from "@/types/guardBlock.js";
-import { Tag } from "@/types/tag.js";
+import { Tag, isDecoratorTag } from "@/types/tag.js";
 import { NewExpression } from "@/types/newExpression.js";
 import {
   ArrayPattern,
@@ -2216,6 +2216,15 @@ export class AgencyGenerator {
     }
     const args = this.renderArgList(tag.arguments, undefined, tag.argumentTrivia);
     return this.indentStr(`@${tag.name}${args}`);
+  }
+
+  /** A def's decorator tags, one line each, as the author wrote them. Reads
+   *  `decorators` (where the lowering moves them) and any decorator tags
+   *  still on `tags`, so an unlowered tree prints the same lines. `agency
+   *  doc` puts these above the signature. */
+  decoratorLines(fn: FunctionDefinition): string[] {
+    const tags = [...(fn.decorators ?? []), ...(fn.tags ?? []).filter(isDecoratorTag)];
+    return tags.map((tag) => this.formatTag(tag).trim());
   }
 
   protected formatAttachedTags(node: { tags?: Tag[] }): string {

@@ -724,7 +724,7 @@ function generateFunctionSection(
     const sig = generator.signatureOf(fn);
     return section(
       heading(3, declaredName(fn.functionName)),
-      codeFence(sig),
+      codeFence([...generator.decoratorLines(fn), sig].join("\n")),
       fn.docString ? docStringText(fn.docString) : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters, ctx),

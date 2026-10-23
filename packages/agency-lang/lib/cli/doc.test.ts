@@ -423,6 +423,40 @@ export node main() {
     expect(output).not.toContain("## Functions");
   });
 
+  it("prints a function's decorators above its signature, and still hides a @hidden one", () => {
+    const inputDir = path.join(tmpDir, "input-decorated");
+    const outputDir = path.join(tmpDir, "output-decorated");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "decorated.agency"),
+      `
+def budgeted(cost: number, time: number, block: () -> any): any {
+  return block()
+}
+
+@budgeted(cost: maxCost, time: maxTime)
+export def research(task: string, maxCost: number, maxTime: number): string {
+  return task
+}
+
+@hidden
+@budgeted(cost: 1, time: 2)
+export def scaffolding(): string {
+  return "x"
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "decorated.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "decorated.md"), "utf-8");
+
+    expect(output).toContain(
+      "```ts\n@budgeted(cost: maxCost, time: maxTime)\nresearch(task: string, maxCost: number, maxTime: number): string\n```",
+    );
+    expect(output).not.toContain("### scaffolding");
+  });
+
   it("omits @hidden declarations but keeps their plain siblings", () => {
     const inputDir = path.join(tmpDir, "input-hidden");
     const outputDir = path.join(tmpDir, "output-hidden");

@@ -26,6 +26,13 @@ sourcing checklist asks for at least two of them.
      all I need to know.'"
    - "'The National Anthem,' on Kid A, is based on a riff that Yorke wrote
      when he was sixteen."
+   - On making Kid A: "'I thought chords were boring,' he snaps. 'If anyone
+     was playing a straight beat on a snare drum, I was like, "Fuck
+     this."'"
+   - Colin Greenwood on "Like Spinning Plates": "Thom learned to sing the
+     backward melody forward."
+   - "Jonny left Oxford Polytechnic in his first year when the band signed
+     to EMI in late '91."
 
 2. The Observer (on theguardian.com), "All messed up", Craig McLean,
    18 June 2006.
@@ -71,7 +78,13 @@ sourcing checklist asks for at least two of them.
    2019.
    https://www.bbc.co.uk/programmes/articles/b7zfNZjlKBK3r8s9t9ldhx/ten-things-we-learned-from-thom-yorkes-desert-island-discs
    - "The music school and the art school was my sanctuary."
-   - He credits two teachers at his school with setting him on his path.
+   - He credits two teachers at his school with setting him on his path:
+     "Two of these teachers - the head of the art department and the head
+     of the music department - saw something in me and were incredibly
+     supportive."
+   - On his art degree: "the art college thing just blew my mind and
+     without those three years I wouldn't have been creatively prepared
+     for what happened after".
    - On his eye: "When I was born, the left eye was shut: there was no
      muscle that would open it."
 
@@ -82,11 +95,24 @@ sourcing checklist asks for at least two of them.
      Stanley Donwood at Exeter. A good answer may use it, but the sourcing
      checklist requires at least one source beyond it.
 
+7. Wikipedia, "Jonny Greenwood".
+   https://en.wikipedia.org/wiki/Jonny_Greenwood
+   - "Greenwood's first instrument was a recorder given to him at age four
+     or five. He played baroque music in recorder groups as a teenager".
+   - "He played the viola in the Thames Vale youth orchestra, which he
+     described as a formative experience".
+   - "He enrolled at Oxford Brookes University to study psychology and
+     music, but left after his first term after On a Friday signed a record
+     contract deal with EMI."
+
 ## Facts the checklist expects
 
 - Degree: English (literature) and art at the University of Exeter. Not
   music. (Sources 1, 2, 6.)
-- First guitar around age seven, after seeing Brian May. (Sources 1, 2.)
+- Got a guitar as a child, inspired by Brian May. The Observer says he was
+  seven when he got the guitar; Rolling Stone says he was eight when he saw
+  May on TV and decided to be a rock star. Either age is fine. (Sources 1,
+  2.)
 - Classical guitar lessons at Abingdon School, where he met Colin
   Greenwood. (Source 1.)
 - Says he cannot read music; his school music director called that a
@@ -95,8 +121,20 @@ sourcing checklist asks for at least two of them.
 - Turn to electronic music around Kid A under Warp Records influence
   (Autechre, Aphex Twin); later solo work written to beats on a laptop.
   (Sources 2, 3.)
-- Jonny Greenwood is the bandmate with the formal musical knowledge.
-  (Source 4; Jonny Greenwood's own Wikipedia page covers his training.)
+- Jonny Greenwood is the bandmate with the formal musical knowledge: a
+  recorder player and youth-orchestra violist who enrolled to study music
+  at Oxford Brookes, and the one his school's music director held up
+  against Yorke. (Sources 1, 4, 7.)
+- Where his strengths lie. No source ranks them, so the point passes when
+  the answer takes a position and grounds it, whatever the position. What
+  the sources offer: his school music director on his voice, "He said he
+  couldn't sing, but he has a great way of using his voice" (source 4);
+  his own turn from chords and straight beats on Kid A (source 1) and to
+  "writing to" beats on a laptop for The Eraser (source 2); the band
+  working "like programmers" on Kid A (source 3); Colin Greenwood on his
+  ear, "Thom learned to sing the backward melody forward" (source 1); and
+  the arrangement and theory side resting with Jonny Greenwood (sources 4,
+  7). An answer that skips the question fails the point.
 
 ## Pages that do not load for a fetch tool
 

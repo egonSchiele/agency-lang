@@ -51,7 +51,11 @@ Each kind answers one question about a run.
 - **command**: a shell command run in the agent's working directory. Exit 0
   passes. What it printed is the feedback. The test's grader-only files are
   stored apart from the workdir, so the command reaches them through
-  `$AGENCY_GRADER_FILES`, empty when the test has none.
+  `$AGENCY_GRADER_FILES`, empty when the test has none. The agent's answer
+  (the test's output) is in the file `$AGENCY_OUTPUT` names, a string as
+  it is and anything else as JSON, so a command can check the answer and
+  not only the files the agent wrote. `evals/researcher` uses this to
+  fetch every URL an answer cites.
 
 Every kind has `name`, `weight` (default 1), and `mustPass` (default
 false). Names are unique within a file, because score rows are keyed by
@@ -100,7 +104,9 @@ grader's name.
 - A command grader runs inside the run directory's stored workdir, the same
   place the agent suite's pytest runner runs. Whatever it writes
   (`__pycache__`, `.pytest_cache`) lands there, so a command must not depend
-  on a clean workdir. stdin is closed, so a command that reads it sees end
+  on a clean workdir. The `$AGENCY_OUTPUT` file lives in a temporary
+  folder that is removed when the command returns, so a command that
+  wants to keep the answer copies it. stdin is closed, so a command that reads it sees end
   of file. A command that outlives `timeoutSec` (default 600) is killed with
   SIGKILL and fails with "timed out after Ns"; a process the command started
   that still holds its output pipe can keep the grader waiting past that.

@@ -1,10 +1,14 @@
 import { spawnSync } from "child_process";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { BaseGrader } from "../grading/baseGrader.js";
 import { grader } from "../grading/functionGrader.js";
 import { binary, scalar } from "../grading/grade.js";
+import { asJudgeText } from "../grading/goalJudgeFile.js";
 import { formatUsd } from "../grading/gradeBreakdown.js";
 import { ChecklistJudge } from "../grading/graders/checklistJudge.js";
 import { LlmJudge } from "../grading/graders/llmJudge.js";
@@ -167,6 +171,13 @@ const FEEDBACK_MAX_CHARS = 2000;
  *  through. Those files are stored apart from the agent's workdir. */
 const GRADER_FILES_ENV = "AGENCY_GRADER_FILES";
 
+/** The environment variable that names a file holding the agent's answer,
+ *  the test's output, so a command can check the answer and not only the
+ *  files the agent wrote. A string answer is written as it is, anything
+ *  else as JSON. The file lives in a temporary folder for the command's
+ *  run and is removed afterwards. */
+const OUTPUT_ENV = "AGENCY_OUTPUT";
+
 /** Run a shell command in the agent's working directory. Exit 0 passes.
  *  stdin is closed so a command that reads it sees end of file. At the
  *  timeout the shell is killed outright, since a command may ignore a
@@ -174,34 +185,44 @@ const GRADER_FILES_ENV = "AGENCY_GRADER_FILES";
 function commandGrader(spec: CommandSpec): BaseGrader {
   const timeoutSec = spec.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
   return grader(
-    ({ workdir, graderFiles }) => runCommand(spec.command, workdir, graderFiles, timeoutSec),
+    ({ output, workdir, graderFiles }) =>
+      runCommand(spec.command, { output, workdir, graderFiles, timeoutSec }),
     optionsOf(spec),
   );
 }
 
-function runCommand(
-  command: string,
-  workdir: string,
-  graderFiles: string,
-  timeoutSec: number,
-): Grade {
-  if (workdir === "") {
+type CommandRun = {
+  output: unknown;
+  workdir: string;
+  graderFiles: string;
+  timeoutSec: number;
+};
+
+function runCommand(command: string, run: CommandRun): Grade {
+  if (run.workdir === "") {
     return binary(false, "no working directory was captured");
   }
-  const result = spawnSync("sh", ["-c", command], {
-    cwd: workdir,
-    env: { ...process.env, [GRADER_FILES_ENV]: graderFiles },
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: Math.ceil(timeoutSec * MS_PER_SECOND),
-    killSignal: "SIGKILL",
-    maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
-  });
-  if ((result.error as { code?: string } | undefined)?.code === "ETIMEDOUT") {
-    return binary(false, `timed out after ${timeoutSec}s`);
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grader-output-"));
+  const outputFile = path.join(outputDir, "output.txt");
+  fs.writeFileSync(outputFile, asJudgeText(run.output));
+  try {
+    const result = spawnSync("sh", ["-c", command], {
+      cwd: run.workdir,
+      env: { ...process.env, [GRADER_FILES_ENV]: run.graderFiles, [OUTPUT_ENV]: outputFile },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: Math.ceil(run.timeoutSec * MS_PER_SECOND),
+      killSignal: "SIGKILL",
+      maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
+    });
+    if ((result.error as { code?: string } | undefined)?.code === "ETIMEDOUT") {
+      return binary(false, `timed out after ${run.timeoutSec}s`);
+    }
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+    return binary(result.status === 0, cut(output));
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
   }
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  return binary(result.status === 0, cut(output));
 }
 
 function cut(text: string): string {

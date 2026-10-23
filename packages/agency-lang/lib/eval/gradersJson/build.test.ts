@@ -230,6 +230,33 @@ describe("command graders", () => {
     expect(without.feedback).toBe("[]\n");
   });
 
+  it("names a file holding the answer in AGENCY_OUTPUT, a string as it is and anything else as JSON", async () => {
+    const [grader] = buildGraders([
+      { kind: "command", name: "c", command: 'cat "$AGENCY_OUTPUT"' },
+    ]);
+    const asString = await grader.run({
+      ...input(EMPTY_RECORD, workdir),
+      run: { output: "the answer", traceId: "trace", workdir, record: EMPTY_RECORD },
+    });
+    expect(asString.feedback).toBe("the answer");
+    const asObject = await grader.run({
+      ...input(EMPTY_RECORD, workdir),
+      run: { output: { cited: 2 }, traceId: "trace", workdir, record: EMPTY_RECORD },
+    });
+    expect(asObject.feedback).toBe('{"cited":2}');
+  });
+
+  it("removes the answer file after the command", async () => {
+    const [grader] = buildGraders([
+      { kind: "command", name: "c", command: 'echo "$AGENCY_OUTPUT"' },
+    ]);
+    const grade = await grader.run({
+      ...input(EMPTY_RECORD, workdir),
+      run: { output: "gone", traceId: "trace", workdir, record: EMPTY_RECORD },
+    });
+    expect(fs.existsSync(grade.feedback.trim())).toBe(false);
+  });
+
   it("a fractional timeout still runs the command", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "echo hi", timeoutSec: 1.001 },

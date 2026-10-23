@@ -194,10 +194,9 @@ export class DebuggerUI implements DebuggerIO {
   /** Set when this UI drives a program in another process
    *  (`agency debug --attach`): what the run said about itself, for the
    *  status line. */
-  private attached: Hello | null = null;
-  /** When the handshake came, and the redraw that ticks the figure, while
-   *  the run has reported no stop and no wait yet. */
-  private attachedAt: number | null = null;
+  private attached: { hello: Hello; since: number } | null = null;
+  /** The redraw that ticks the connecting figure, from the handshake to
+   *  the first stop. */
   private connectingInterval: ReturnType<typeof setInterval> | null = null;
   private quitListeners: (() => void)[] = [];
   private pauseListeners: (() => void)[] = [];
@@ -252,7 +251,7 @@ export class DebuggerUI implements DebuggerIO {
       {
         name: "source",
         color: "cyan",
-        label: this.connecting() ? " source " : ` source: ${escapeStyleTags(moduleId)} `,
+        label: this.connecting() !== null ? " source " : ` source: ${escapeStyleTags(moduleId)} `,
         content: () => this.buildSourceContent(),
       },
     ];
@@ -281,9 +280,10 @@ export class DebuggerUI implements DebuggerIO {
       {
         name: "globals",
         color: "green",
-        label: this.connecting()
-          ? " globals "
-          : ` globals: ${escapeStyleTags(this.state.getGlobalsModuleId())} `,
+        label:
+          this.connecting() !== null
+            ? " globals "
+            : ` globals: ${escapeStyleTags(this.state.getGlobalsModuleId())} `,
         content: () => this.buildGlobalsContent(),
       },
       {
@@ -330,7 +330,8 @@ export class DebuggerUI implements DebuggerIO {
   // --- Content builders ---
 
   private buildSourceContent(): string {
-    if (this.connecting()) return this.buildConnectingContent();
+    const connecting = this.connecting();
+    if (connecting !== null) return this.buildConnectingContent(connecting);
     const moduleId = this.state.getModuleId();
     const currentLine = this.state.getCurrentLine();
     const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
@@ -375,24 +376,23 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   /** Attached, and the run has not yet said where it is: no stop and no
-   *  wait. The source pane has nothing to show until it does. */
-  private connecting(): boolean {
-    return (
-      this.attached !== null &&
-      this.state.getLocation() === undefined &&
-      this.state.getBusy().length === 0
-    );
+   *  wait open. The source pane has nothing to show until it does. A wait
+   *  that opened and closed before the first stop puts the pane back in
+   *  this state, so it is read on every draw rather than kept. */
+  private connecting(): { hello: Hello; since: number } | null {
+    if (this.attached === null) return null;
+    if (this.state.getLocation() !== undefined || this.state.getBusy().length > 0) return null;
+    return this.attached;
   }
 
   /** The source pane between the handshake and the first stop. The socket
    *  is open; the program reports its next statement when it reaches one,
    *  which can take a while inside a long model call, so the pane says so
    *  rather than showing a source it does not have yet. */
-  private buildConnectingContent(): string {
-    const attached = this.attached!;
-    const elapsed = formatElapsed(this.now() - (this.attachedAt ?? this.now()));
+  private buildConnectingContent(connecting: { hello: Hello; since: number }): string {
+    const elapsed = formatElapsed(this.now() - connecting.since);
     return [
-      `  Connected to pid ${attached.pid} ${escapeStyleTags(attached.program)}.`,
+      `  Connected to pid ${connecting.hello.pid} ${escapeStyleTags(connecting.hello.program)}.`,
       `  {gray-fg}waiting for the program to reach its next statement\u2026 ${elapsed}{/gray-fg}`,
     ].join("\n");
   }
@@ -576,7 +576,7 @@ export class DebuggerUI implements DebuggerIO {
     const where =
       this.attached === null
         ? ""
-        : ` | attached to ${this.attached.pid} ${escapeStyleTags(this.attached.program)}`;
+        : ` | attached to ${this.attached.hello.pid} ${escapeStyleTags(this.attached.hello.program)}`;
     const beside =
       this.attached !== null && this.parties?.cli ? " | with agency debug session" : "";
     return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}${where}${beside}{/gray-fg}`;
@@ -860,10 +860,12 @@ export class DebuggerUI implements DebuggerIO {
    *  only `q` quits (`escape` would detach by accident), and quitting
    *  tells `onQuit` listeners first. */
   attachedTo(hello: Hello): void {
-    this.attached = hello;
-    this.attachedAt = this.now();
+    this.attached = { hello, since: this.now() };
+    // Ticks until the first stop, not until the first wait: a wait can
+    // close before any stop and bring the connecting screen back, and
+    // its figure must still count then.
     this.connectingInterval = setInterval(() => {
-      if (this.connecting()) {
+      if (this.state.getLocation() === undefined) {
         this.renderUI();
       } else {
         this.stopConnectingTicks();

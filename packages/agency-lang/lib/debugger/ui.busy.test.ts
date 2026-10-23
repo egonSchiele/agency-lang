@@ -361,6 +361,13 @@ describe("the UI between attaching and the first stop", () => {
       ui.setBusy([entry]);
       const busy = await untilFrame(recorder, "llm-after-step.agency:5");
       expect(busy).not.toContain("waiting for the program to reach its next statement");
+
+      // The wait closes before any stop: the connecting screen comes
+      // back and its figure keeps counting.
+      ui.setBusy([]);
+      clock.now += 2_000;
+      const back = await untilFrame(recorder, "statement\u2026 5s");
+      expect(back).toContain("Connected to pid 12345 research-agent.js");
     } finally {
       ui.destroy();
     }

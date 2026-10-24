@@ -29,7 +29,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -262,7 +262,7 @@ if (isAborted(__funcResult)) {
       await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.result = await __call(__run, __stack.args.block, {
           type: "positional",
-          args: []
+          args: [__stack.args.call.args]
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __run.ctx.pendingPromises.awaitAll()
@@ -384,7 +384,7 @@ export const logged = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __retry_impl(__run: __Run, times: number, block: () => any) {
+async function __retry_impl(__run: __Run, times: number, call: Call, block: () => any) {
   const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
@@ -399,10 +399,12 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __stack.args["times"] = times;
+  __stack.args["call"] = call;
   __stack.args["block"] = block;
-  const __overridden = __takeArgOverrides(__ctx, __stack, ["times", "block"]);
+  const __overridden = __takeArgOverrides(__ctx, __stack, ["times", "call", "block"]);
   if (__overridden !== undefined) {
     times = __stack.args["times"];
+    call = __stack.args["call"];
     block = __stack.args["block"];
   }
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "decorators.agency", scopeName: "retry", stack: __run.stack, threads: __setupData.threads });
@@ -435,6 +437,7 @@ await callHook(__run, {
             functionName: "retry",
             args: {
               times: times,
+              call: call,
               block: block
             },
             moduleId: "decorators.agency"
@@ -463,7 +466,7 @@ if (isAborted(__stack.locals.__hoist_0)) {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.last = await __call(__run, __stack.args.block, {
             type: "positional",
-            args: []
+            args: [__stack.args.call.args]
           });
 if (hasInterrupts(__stack.locals.last)) {
             await __run.ctx.pendingPromises.awaitAll()
@@ -557,6 +560,13 @@ export const retry = __AgencyFunction.create({
     isFunctionTyped: false,
     acceptsResult: false
   }, {
+    name: "call",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }, {
     name: "block",
     hasDefault: false,
     defaultValue: undefined,
@@ -567,7 +577,7 @@ export const retry = __AgencyFunction.create({
   toolDefinition: {
     name: "retry",
     description: "No description provided.",
-    schema: z.object({"times": z.number(), })
+    schema: z.object({"times": z.number(), "call": Call, })
   },
   exported: false
 }, __toolRegistry);
@@ -585,7 +595,9 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __stack.args["x"] = x;
+  if (!Object.hasOwn(__stack.args, "x")) {
+    __stack.args["x"] = x;
+  }
   const __overridden = __takeArgOverrides(__ctx, __stack, ["x"]);
   if (__overridden !== undefined) {
     x = __stack.args["x"];
@@ -626,17 +638,22 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `plainTwin`,
+          "args": {
+            "x": __stack.args.x
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, logged, {
           type: "named",
-          positionalArgs: [{
-            "name": `plainTwin`,
-            "args": {
-              "x": __stack.args.x
-            }
-          }],
-          namedArgs: {},
-          blockArg: __AgencyFunction.create({ name: "__block_0", module: "decorators.agency", fn: async (__run: __Run) => {
+          positionalArgs: [],
+          namedArgs: {
+            call: __stack.locals.__call_0
+          },
+          blockArg: __AgencyFunction.create({ name: "__block_0", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -645,9 +662,20 @@ const __bframe___block_0 = __bstack;
 // mismatched claim on resume replay is a frame desync and throws.
 claimFrameForScope(__bstack, "__block_0", "decorators.agency", __run.log);
 
+__bstack.args["__args"] = __args;
+
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_0", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:plainTwin"], __bstack.args["__args"], {}, [{
+      name: "x",
+      checked: false
+    }], null)
+if (runner.halted) {
+      return;
+    }
+  });
+await runner.step(1, __run, async (runner, __run) => {
 runner.halt(__stack.args.x + 1)
 return;
   });
@@ -673,7 +701,7 @@ throw __blockError;
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
 __bsetup.stateStack.pop();
 }
-          }, params: [], toolDefinition: null }, __toolRegistry)
+          }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
 return;
       });
@@ -916,8 +944,12 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __stack.args["task"] = task;
-  __stack.args["maxCost"] = (maxCost === __UNSET ? (2) : (maxCost));
+  if (!Object.hasOwn(__stack.args, "task")) {
+    __stack.args["task"] = task;
+  }
+  if (!Object.hasOwn(__stack.args, "maxCost")) {
+    __stack.args["maxCost"] = (maxCost === __UNSET ? (2) : (maxCost));
+  }
   const __overridden = __takeArgOverrides(__ctx, __stack, ["task", "maxCost"]);
   if (__overridden !== undefined) {
     task = __stack.args["task"];
@@ -960,18 +992,23 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `researcher`,
+          "args": {
+            "task": __stack.args.task,
+            "maxCost": __stack.args.maxCost
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, logged, {
           type: "named",
-          positionalArgs: [{
-            "name": `researcher`,
-            "args": {
-              "task": __stack.args.task,
-              "maxCost": __stack.args.maxCost
-            }
-          }],
-          namedArgs: {},
-          blockArg: __AgencyFunction.create({ name: "__block_1", module: "decorators.agency", fn: async (__run: __Run) => {
+          positionalArgs: [],
+          namedArgs: {
+            call: __stack.locals.__call_0
+          },
+          blockArg: __AgencyFunction.create({ name: "__block_1", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -980,14 +1017,40 @@ const __bframe___block_1 = __bstack;
 // mismatched claim on resume replay is a frame desync and throws.
 claimFrameForScope(__bstack, "__block_1", "decorators.agency", __run.log);
 
+__bstack.args["__args"] = __args;
+
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_1", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:researcher"], __bstack.args["__args"], {}, [{
+      name: "task",
+      checked: false
+    }, {
+      name: "maxCost",
+      checked: false,
+      defaultValue: () => 2
+    }], null)
+if (runner.halted) {
+      return;
+    }
+  });
+await runner.step(1, __run, async (runner, __run) => {
+__bstack.locals.__call_1 = {
+      "name": `researcher`,
+      "args": {
+        "task": __stack.args.task,
+        "maxCost": __stack.args.maxCost
+      }
+    };
+  });
+await runner.step(2, __run, async (runner, __run) => {
 runner.halt(await __call(__run, retry, {
       type: "named",
       positionalArgs: [3],
-      namedArgs: {},
-      blockArg: __AgencyFunction.create({ name: "__block_2", module: "decorators.agency", fn: async (__run: __Run) => {
+      namedArgs: {
+        call: __bstack.locals.__call_1
+      },
+      blockArg: __AgencyFunction.create({ name: "__block_2", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
         const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -996,9 +1059,24 @@ const __bframe___block_2 = __bstack;
 // mismatched claim on resume replay is a frame desync and throws.
 claimFrameForScope(__bstack, "__block_2", "decorators.agency", __run.log);
 
+__bstack.args["__args"] = __args;
+
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_2", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:researcher"], __bstack.args["__args"], {}, [{
+      name: "task",
+      checked: false
+    }, {
+      name: "maxCost",
+      checked: false,
+      defaultValue: () => 2
+    }], null)
+if (runner.halted) {
+      return;
+    }
+  });
+await runner.step(1, __run, async (runner, __run) => {
 __activation.__removedTools = __activation.__removedTools || [];
 __bstack.locals.__promptVar = await runPrompt(__run, {
       prompt: `research ${__stack.args.task} within ${__stack.args.maxCost}`,
@@ -1040,7 +1118,7 @@ throw __blockError;
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
 __bsetup.stateStack.pop();
 }
-      }, params: [], toolDefinition: null }, __toolRegistry)
+      }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
     }))
 return;
   });
@@ -1066,7 +1144,7 @@ throw __blockError;
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
 __bsetup.stateStack.pop();
 }
-          }, params: [], toolDefinition: null }, __toolRegistry)
+          }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
 return;
       });
@@ -1177,7 +1255,9 @@ let __functionCompleted = false;
     await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
-  __stack.args["a"] = a;
+  if (!Object.hasOwn(__stack.args, "a")) {
+    __stack.args["a"] = a;
+  }
   const __overridden = __takeArgOverrides(__ctx, __stack, ["a"]);
   if (__overridden !== undefined) {
     a = __stack.args["a"];
@@ -1218,14 +1298,23 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `positionalAndNamed`,
+          "args": {
+            "a": __stack.args.a
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, retry, {
           type: "named",
           positionalArgs: [],
           namedArgs: {
-            times: 2
+            times: 2,
+            call: __stack.locals.__call_0
           },
-          blockArg: __AgencyFunction.create({ name: "__block_3", module: "decorators.agency", fn: async (__run: __Run) => {
+          blockArg: __AgencyFunction.create({ name: "__block_3", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -1234,9 +1323,20 @@ const __bframe___block_3 = __bstack;
 // mismatched claim on resume replay is a frame desync and throws.
 claimFrameForScope(__bstack, "__block_3", "decorators.agency", __run.log);
 
+__bstack.args["__args"] = __args;
+
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_3", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:positionalAndNamed"], __bstack.args["__args"], {}, [{
+      name: "a",
+      checked: false
+    }], null)
+if (runner.halted) {
+      return;
+    }
+  });
+await runner.step(1, __run, async (runner, __run) => {
 runner.halt(__stack.args.a)
 return;
   });
@@ -1262,7 +1362,7 @@ throw __blockError;
 // "Cannot read properties of undefined (reading 'getOrCreateBranch')").
 __bsetup.stateStack.pop();
 }
-          }, params: [], toolDefinition: null }, __toolRegistry)
+          }, params: [{ name: "__args", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         }))
 return;
       });
@@ -1482,4 +1582,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"decorators.agency:logged":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2},"4":{"line":13,"col":2}},"decorators.agency:retry":{"1":{"line":17,"col":2},"2":{"line":18,"col":12},"3":{"line":18,"col":2},"4":{"line":21,"col":2},"3.0":{"line":19,"col":4}},"decorators.agency:plainTwin":{"1":{"line":24,"col":0}},"decorators.agency:__block_0":{"0":{"line":26,"col":2}},"decorators.agency:undecoratedTwin":{"1":{"line":30,"col":2}},"decorators.agency:researcher":{"1":{"line":33,"col":0}},"decorators.agency:__block_1":{"0":{"line":34,"col":0}},"decorators.agency:__block_2":{"0":{"line":36,"col":2}},"decorators.agency:positionalAndNamed":{"1":{"line":39,"col":0}},"decorators.agency:__block_3":{"0":{"line":41,"col":2}},"decorators.agency:main":{"1":{"line":45,"col":2}}};
+export const __sourceMap = {"decorators.agency:logged":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2},"4":{"line":13,"col":2}},"decorators.agency:retry":{"1":{"line":17,"col":2},"2":{"line":18,"col":12},"3":{"line":18,"col":2},"4":{"line":21,"col":2},"3.0":{"line":19,"col":4}},"decorators.agency:plainTwin":{"1":{"line":24,"col":0},"2":{"line":24,"col":0}},"decorators.agency:__block_0":{"0":{"line":24,"col":0},"1":{"line":26,"col":2}},"decorators.agency:undecoratedTwin":{"1":{"line":30,"col":2}},"decorators.agency:researcher":{"1":{"line":33,"col":0},"2":{"line":33,"col":0}},"decorators.agency:__block_1":{"0":{"line":33,"col":0},"1":{"line":34,"col":0},"2":{"line":34,"col":0}},"decorators.agency:__block_2":{"0":{"line":34,"col":0},"1":{"line":36,"col":2}},"decorators.agency:positionalAndNamed":{"1":{"line":39,"col":0},"2":{"line":39,"col":0}},"decorators.agency:__block_3":{"0":{"line":39,"col":0},"1":{"line":41,"col":2}},"decorators.agency:main":{"1":{"line":45,"col":2}}};

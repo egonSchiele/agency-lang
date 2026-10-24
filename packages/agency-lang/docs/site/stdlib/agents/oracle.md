@@ -33,7 +33,7 @@ Return the oracle's tools. Read-only by design: it inspects, consults, and
 ### oracleAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 oracleAgent(
   question: string,
   context: string = "",

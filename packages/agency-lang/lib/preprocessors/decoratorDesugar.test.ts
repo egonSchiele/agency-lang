@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
-import type { AgencyProgram } from "../types.js";
+import type { AgencyProgram, Assignment } from "../types.js";
 import type { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import type { ReturnStatement } from "../types/returnStatement.js";
 import {
@@ -33,26 +33,72 @@ function parameter(name: string): FunctionParameter {
   return { type: "functionParameter", name };
 }
 
-/** A stub lookup: `withCall` takes the call record, `plain` does not,
- *  `fromAway` is imported. Anything else is unknown. */
+/** A stub lookup: `withCall` takes one argument of its own before `call`
+ *  and the block, `plain` takes only those two, `fromAway` is imported.
+ *  Anything else is unknown. */
 const lookup: DecoratorLookup = (name) => {
   if (name === "withCall") {
-    return { parameters: [parameter("call"), parameter("block")], imported: false };
+    return {
+      parameters: [parameter("times"), parameter("call"), parameter("block")],
+      imported: false,
+    };
   }
   if (name === "plain") {
-    return { parameters: [parameter("block")], imported: false };
+    return { parameters: [parameter("call"), parameter("block")], imported: false };
   }
   if (name === "fromAway") {
-    return { parameters: [parameter("block")], imported: true };
+    return { parameters: [parameter("call"), parameter("block")], imported: true };
   }
   return undefined;
 };
 
+/** A lowered def body: the outermost decorator's record in its own const,
+ *  then one `return` of the call. */
 function outermostCall(body: ReturnType<typeof loweredBody>): FunctionCall {
-  expect(body).toHaveLength(1);
-  const statement = body[0] as ReturnStatement;
+  expect(body).toHaveLength(2);
+  expect(body[0]).toMatchObject({
+    type: "assignment",
+    declKind: "const",
+    variableName: "__call_0",
+  });
+  const statement = body[1] as ReturnStatement;
   expect(statement.type).toBe("returnStatement");
   return statement.value as FunctionCall;
+}
+
+/** The call inside a lowered block: the block starts with the rebind, then
+ *  the next decorator's record, then its call. */
+function innerCall(body: ReturnType<typeof loweredBody>): FunctionCall {
+  expect(body).toHaveLength(3);
+  expect(body[0].type).toBe("rebindParameters");
+  expect(body[1]).toMatchObject({
+    type: "assignment",
+    declKind: "const",
+    variableName: "__call_1",
+  });
+  const statement = body[2] as ReturnStatement;
+  expect(statement.type).toBe("returnStatement");
+  return statement.value as FunctionCall;
+}
+
+/** The `call:` record a lowered call passes last: the call names the const
+ *  declared beside it, and this returns that const's value. */
+function callRecordOf(
+  body: ReturnType<typeof loweredBody>,
+  call: FunctionCall,
+): { entries: { key: string; value: unknown }[] } {
+  const last = call.arguments[call.arguments.length - 1] as {
+    type: string;
+    name: string;
+    value: { type: string; value: string };
+  };
+  expect(last).toMatchObject({ type: "namedArgument", name: "call" });
+  expect(last.value).toMatchObject({ type: "variableName" });
+  const declaration = body.find(
+    (node) => node.type === "assignment" && (node as Assignment).variableName === last.value.value,
+  ) as Assignment | undefined;
+  expect(declaration).toBeDefined();
+  return declaration!.value as { entries: { key: string; value: unknown }[] };
 }
 
 describe("decoratorsAbove", () => {
@@ -80,21 +126,35 @@ describe("loweredBody", () => {
     const program = parse(`@plain\ndef f(a: number): number { return a }\n`);
     const def = defNamed(program, "f");
     const original = def.body;
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
     expect(call.functionName).toBe("plain");
-    expect(call.arguments).toEqual([]);
-    expect(call.block?.body).toBe(original);
-    expect(call.decorator).toMatchObject({ name: "plain", target: "f", passesCallRecord: false });
+    expect(call.arguments).toHaveLength(1);
+    expect(callRecordOf(body, call).entries[0]).toMatchObject({ key: "name" });
+    // The block takes the record, starts with the rebind, and then runs the
+    // body's own statements.
+    expect(call.block?.params.map((param) => param.name)).toEqual(["__args"]);
+    expect(call.block?.body[0]).toMatchObject({
+      type: "rebindParameters",
+      functionName: "f",
+      blockParameters: [],
+      record: "__args",
+      parameters: [{ name: "a" }],
+    });
+    expect(call.block?.body.slice(1)).toEqual(original);
+    expect(call.block?.body[1]).toBe(original[0]);
+    expect(call.decorator).toMatchObject({ name: "plain", target: "f" });
     expect(call.scope).toBeUndefined();
   });
 
-  it("passes the call record first when the decorator's first parameter is call", () => {
+  it("passes the tag's arguments first and the call record by name after them", () => {
     const program = parse(`@withCall(3)\ndef f(a: number, b: string = "x"): number { return a }\n`);
     const def = defNamed(program, "f");
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
-    expect(call.decorator?.passesCallRecord).toBe(true);
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
     expect(call.arguments).toHaveLength(2);
-    expect(call.arguments[0]).toMatchObject({
+    expect(call.arguments[0]).toMatchObject({ type: "number" });
+    expect(callRecordOf(body, call)).toMatchObject({
       type: "agencyObject",
       entries: [
         { key: "name", value: { type: "string", segments: [{ type: "text", value: "f" }] } },
@@ -110,19 +170,24 @@ describe("loweredBody", () => {
         },
       ],
     });
-    expect(call.arguments[1]).toMatchObject({ type: "number" });
   });
 
-  it("leaves a block-typed parameter out of the call record", () => {
+  it("leaves a block-typed parameter out of the call record and the rebind", () => {
     const program = parse(
       `@withCall\ndef each(xs: number[], block: (number) -> number): number[] { return xs }\n`,
     );
     const def = defNamed(program, "each");
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
-    const record = call.arguments[0] as {
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
+    const record = callRecordOf(body, call) as {
       entries: { key: string; value: { entries: unknown[] } }[];
     };
     expect(record.entries[1].value.entries).toHaveLength(1);
+    expect(call.block?.body[0]).toMatchObject({
+      type: "rebindParameters",
+      parameters: [{ name: "xs" }],
+      blockParameters: ["block"],
+    });
   });
 
   it("nests stacked decorators outermost first", () => {
@@ -131,11 +196,11 @@ describe("loweredBody", () => {
     const original = def.body;
     const outer = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
     expect(outer.functionName).toBe("plain");
-    const inner = outermostCall(outer.block?.body ?? []);
+    const inner = innerCall(outer.block?.body ?? []);
     expect(inner.functionName).toBe("fromAway");
     expect(inner.scope).toBe("imported");
     expect(inner.arguments[0]).toMatchObject({ type: "namedArgument", name: "cost" });
-    expect(inner.block?.body).toBe(original);
+    expect(inner.block?.body.slice(1)).toEqual(original);
   });
 
   it("does not write to the def", () => {
@@ -189,7 +254,9 @@ describe("desugarDecorators", () => {
 describe("decoratorProblems", () => {
   const scope = {
     functionDefinitions: {},
-    importedFunctions: { plain: { parameters: [parameter("block")], returnType: null } },
+    importedFunctions: {
+      plain: { parameters: [parameter("call"), parameter("block")], returnType: null },
+    },
   };
 
   it("reports nothing for a program whose decorators resolve", () => {
@@ -250,7 +317,7 @@ describe("decoratorProblems", () => {
 
   it("allows a chain of decorators that does not loop back", () => {
     const program = parse(
-      `@plain\ndef a(block: () -> any): any { return block() }\n@a\ndef b(): string { return "x" }\n`,
+      `@plain\ndef a(call: Call, block: () -> any): any { return block() }\n@a\ndef b(): string { return "x" }\n`,
     );
     const chain = {
       ...scope,
@@ -280,7 +347,7 @@ describe("decoratorProblems", () => {
 
   it("accepts a last parameter typed any or left untyped, as the type checker does", () => {
     const program = parse(
-      `def loose(block: any): any { return block() }\ndef bare(block): any { return block() }\n@loose\n@bare\ndef f(): string { return "x" }\n`,
+      `def loose(call: Call, block: any): any { return block() }\ndef bare(call, block): any { return block() }\n@loose\n@bare\ndef f(): string { return "x" }\n`,
     );
     const both = {
       ...scope,
@@ -292,5 +359,36 @@ describe("decoratorProblems", () => {
   it("ignores reserved tags wherever they are", () => {
     const program = parse(`@capabilities(terminal)\nnode main() { return "x" }\n`);
     expect(decoratorProblems(program, scope)).toEqual([]);
+  });
+
+  it("refuses a decorator whose call parameter is not right before the block", () => {
+    const program = parse(
+      `def logged(call: Call, tag: string, block: () -> any): any { return block() }\n@logged("t")\ndef f(): string { return "x" }\n`,
+    );
+    const withLogged = { ...scope, functionDefinitions: { logged: defNamed(program, "logged") } };
+    expect(decoratorProblems(program, withLogged).map((problem) => problem.message)).toEqual([
+      expect.stringContaining(
+        "'logged' cannot decorate 'f': a decorator's last two parameters are `call: Call` and a block, so `call` must come right before the block. Found 'tag' there.",
+      ),
+    ]);
+  });
+
+  it("refuses a default on call or the block", () => {
+    const program = parse(
+      `def d(call: Call, block: () -> any = null): any { return block() }\n@d\ndef f(): string { return "x" }\n`,
+    );
+    const withD = { ...scope, functionDefinitions: { d: defNamed(program, "d") } };
+    expect(decoratorProblems(program, withD).map((problem) => problem.message)).toEqual([
+      expect.stringContaining(
+        "'block' has a default, but a decorator always receives `call` and the block.",
+      ),
+    ]);
+  });
+
+  it("describes the shape in the unknown-decorator message", () => {
+    const program = parse(`@budgted\ndef f(): string { return "x" }\n`);
+    expect(decoratorProblems(program, scope)[0].message).toBe(
+      "Unknown decorator 'budgted' on 'f'. A decorator is a def whose last two parameters are `call: Call` and a block; declare or import 'budgted'.",
+    );
   });
 });

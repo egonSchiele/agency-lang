@@ -1,0 +1,18 @@
+// call.args is the arguments the decorator was handed, before and after a
+// real pause: a rebind must not leak into it when the program resumes.
+def rebinding(call: Call, block: (args: object) -> any): any {
+  const before = call.args.n
+  const first = block({ n: 5 })
+  const second = block(call.args)
+  return "${before} ${call.args.n} ${first} ${second}"
+}
+
+@rebinding
+def f(n: number): number {
+  interrupt("go?")
+  return n
+}
+
+node main() {
+  return f(1)
+}

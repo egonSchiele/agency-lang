@@ -22,7 +22,7 @@ import {
 } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review TypeScript code for readability and architecture.
@@ -193,7 +193,7 @@ export def typescriptReviewAgent(
 // exported def post-processes the guard's Result. Return position: when
 // the budget runs out, the findings the model saved reach the guard and
 // come back as the result.
-@guard(cost: maxCost, time: maxTime, label: "typescriptReviewAgent")
+@guarded(cost: maxCost, time: maxTime, label: "typescriptReviewAgent")
 def typescriptReviewUnderBudget(
   work: string,
   task: string,

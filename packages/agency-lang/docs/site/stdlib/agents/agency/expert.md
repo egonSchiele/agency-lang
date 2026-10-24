@@ -34,7 +34,7 @@ Return the Agency expert's tools: the bundled language documentation and
 ### agencyExpertAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 agencyExpertAgent(
   task: string,
   context: string = "",

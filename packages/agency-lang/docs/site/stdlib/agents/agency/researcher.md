@@ -31,7 +31,7 @@ Return the Agency researcher's tools: the bundled documentation, read-only
 ### agencyResearcherAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 agencyResearcherAgent(
   question: string,
   context: string = "",

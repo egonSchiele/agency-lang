@@ -20,7 +20,7 @@ import {
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("oracle")
@@ -122,7 +122,7 @@ def consider(
 /** Called from code, this runs on the caller's thread like any function:
  *  the system prompt, the reads, and the answer stay there. Wrap the call
  *  in `thread { ... }` for an isolated consult. */
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export handoff def oracleAgent(
   question: string,
   context: string = "",

@@ -1,0 +1,24 @@
+// With stacked decorators, the inner one's call record is built from the
+// parameters as the outer one rebound them, before and after a pause.
+let seen: number[] = []
+
+def outer(call: Call, block: (args: object) -> any): any {
+  return block({ n: 2 })
+}
+
+def inner(call: Call, block: (args: object) -> any): any {
+  seen = [...seen, call.args.n]
+  return block(call.args)
+}
+
+@outer
+@inner
+def f(n: number): number {
+  interrupt("go?")
+  return n
+}
+
+node main() {
+  const result = f(1)
+  return { result: result, seen: seen }
+}

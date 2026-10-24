@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Missing required argument 'a' in call to 'f'\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a record that leaves out a required parameter is the call's missing-argument failure"
+    }
+  ]
+}

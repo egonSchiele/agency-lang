@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"handled\", \"handled\", \"handled\", [\"failure\", \"failure\", \"failure\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a missing key, an unknown key, and a failed ! check each come back as the value of block()"
+    }
+  ]
+}

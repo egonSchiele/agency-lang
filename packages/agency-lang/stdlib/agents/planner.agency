@@ -14,7 +14,7 @@ import { readOnlyFileTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/l
 import { verifierAgent } from "std::agents/verifier"
 import { getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 
 import { communicationTools } from "./lib/toolkits.agency"
 
@@ -222,7 +222,7 @@ def planStep(
   }
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export def plannerAgent(
   task: string,
   context: string = "",

@@ -1,0 +1,18 @@
+// A key that names no parameter is the same failure a call with an unknown
+// named argument gets.
+def bogus(call: Call, block: (args: object) -> any): any {
+  return block({ ...call.args, bogus: 1 })
+}
+
+@bogus
+def f(a: number): Result<number> {
+  return success(a)
+}
+
+node main() {
+  const r = f(1)
+  if (isFailure(r)) {
+    return r.error
+  }
+  return "unexpected"
+}

@@ -97,6 +97,7 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   blockArgument: false,
   awaitPending: false,
   markDestructiveRan: false,
+  rebindParameters: false,
   rawCode: false,
   objectPattern: false,
   arrayPattern: false,

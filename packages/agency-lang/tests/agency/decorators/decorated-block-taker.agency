@@ -1,7 +1,7 @@
 // A decorated function that itself takes a block. The block parameter is
 // left out of the call record and is still usable inside the body.
 def named(call: Call, block: () -> any): any {
-  const result = block()
+  const result = block(call.args)
   return [call.args.xs, result]
 }
 

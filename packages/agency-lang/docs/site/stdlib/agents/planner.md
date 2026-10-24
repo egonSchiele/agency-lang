@@ -118,7 +118,7 @@ Gate generated code behind user approval, then run it: shows the plan,
 ### plannerAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 plannerAgent(
   task: string,
   context: string = "",

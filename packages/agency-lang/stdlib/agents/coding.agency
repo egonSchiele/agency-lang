@@ -30,7 +30,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -106,7 +106,7 @@ ${finalizeReminder}
   )
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export def codingAgent(
   task: string,
   context: string = "",

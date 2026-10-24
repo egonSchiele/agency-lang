@@ -1,0 +1,42 @@
+// A failing rebind is the value block() returns, so a decorator can inspect
+// it. None of the decorated functions returns Result, so a thrown error
+// could not be turned into a failure by the function's own catch.
+def isPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("must be positive")
+}
+
+@validate(isPositive)
+type Positive = number
+
+let seen: string[] = []
+
+def inspecting(record: object, call: Call, block: (args: object) -> any): string {
+  const r = block(record)
+  if (isFailure(r)) {
+    seen = [...seen, "failure"]
+    return "handled"
+  }
+  return "ran"
+}
+
+@inspecting({})
+def missing(a: number): string {
+  return "body"
+}
+
+@inspecting({ a: 1, bogus: 2 })
+def unknown(a: number): string {
+  return "body"
+}
+
+@inspecting({ n: -1 })
+def checked(n: Positive!): string {
+  return "body"
+}
+
+node main() {
+  return [missing(1), unknown(1), checked(3), seen]
+}

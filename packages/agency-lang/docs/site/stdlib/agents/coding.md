@@ -37,7 +37,7 @@ Return the coding agent's tools. Exported so a caller can inspect what the
 ### codingAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 codingAgent(
   task: string,
   context: string = "",

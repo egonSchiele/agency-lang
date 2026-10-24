@@ -1,0 +1,20 @@
+// A record that names the decorated function's block parameter is refused
+// with a message about that parameter.
+def naming(call: Call, block: (args: object) -> any): any {
+  return block({ ...call.args, body: null })
+}
+
+@naming
+def f(n: number, body: () -> number): Result<number> {
+  return success(n + body())
+}
+
+node main() {
+  const r = f(1) {
+    return 1
+  }
+  if (isFailure(r)) {
+    return r.error
+  }
+  return "unexpected"
+}

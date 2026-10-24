@@ -32,7 +32,7 @@ Return the explorer's tools. Read-only by design: it surveys and
 ### explorerAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 explorerAgent(
   question: string,
   context: string = "",

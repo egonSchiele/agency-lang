@@ -24,7 +24,7 @@ import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { Critique, guard, revise } from "std::strategy"
+import { Critique, guarded, revise } from "std::strategy"
 import {
   ThreadMessage,
   assistantMessage,
@@ -268,7 +268,7 @@ def researchLoop(
   }
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export handoff def researcherAgent(
   task: string,
   context: string = "",

@@ -9,7 +9,7 @@ import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, readOnlyGitTools, shellTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You judge whether a program's actual result satisfies a task.
@@ -126,7 +126,7 @@ export def agencyVerifierAgent(
 // exported def post-processes the guard's Result. Return position: when
 // the budget runs out, the findings the model saved reach the guard and
 // come back as the result.
-@guard(cost: maxCost, time: maxTime, label: "agencyVerifierAgent")
+@guarded(cost: maxCost, time: maxTime, label: "agencyVerifierAgent")
 def agencyVerifyUnderBudget(
   source: string,
   task: string,

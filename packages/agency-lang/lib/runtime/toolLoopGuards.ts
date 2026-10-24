@@ -3,6 +3,7 @@
  * a tool call before it runs, and the text each refusal sends the model.
  * See docs/dev/agents/tool-loop-guards.md.
  */
+import { DEFAULT_TOOL_RESULT_CHARS } from "./toolInvocation.js";
 import { sha256Text } from "../utils/hash.js";
 import type * as smoltalk from "smoltalk";
 import type { AgencyFunction, FuncParam } from "./agencyFunction.js";
@@ -246,6 +247,18 @@ export function refusalMessage(
     case "repeated":
       return repeatedCallMessage(name, repeatsBefore(state.repeatStreak, call.callKey));
   }
+}
+
+/** The result cap of one `llm()` call: per-call `maxToolResultChars`, else
+ *  the branch default (setLlmOptions), else agency.json, else the default.
+ *  `0` disables. What happens to a result over the cap is `overCapFor`
+ *  in toolInvocation.ts. */
+export function resultCap(
+  perCall: number | undefined,
+  branch: number | undefined,
+  baked: { maxToolResultChars?: number },
+): number {
+  return perCall ?? branch ?? baked.maxToolResultChars ?? DEFAULT_TOOL_RESULT_CHARS;
 }
 
 /** The round cap of one `llm()` call. The call's own value and the branch

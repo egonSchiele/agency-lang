@@ -274,7 +274,7 @@ The functions that raise nothing and touch the host carry their own tag:
 | `std::index` | `print`, `printJSON`, `input`: `terminal`. |
 | `std::auth/keyring`, `std::auth/oauth`, `std::calendar` | `isKeyringAvailable`: `subprocess`. `isAuthorized`, `isCalendarAuthorized`: `fileRead`. |
 | `std::skills` | the scans (`docsSkill`, `agentSkill`, `agentPrompt`, `scanEntries`, `checkSkillInputs`): `fileRead`. |
-| `std::toolbox`, `std::speech`, `std::spill`, `std::thread` | the private readers (`expandRoot`, `moduleFacts`, `metaFacts`, `realOutput`) and `spillDir`, `attachToReply`: `fileRead`. |
+| `std::toolbox`, `std::speech`, `std::thread` | the private readers (`expandRoot`, `moduleFacts`, `metaFacts`, `realOutput`) and `attachToReply`: `fileRead`. |
 | `std::memory` | `memory`, the block that persists its frame: `fileRead, fileWrite`. |
 | `std::policy`, `std::safeBash` | `writePolicyFile`, `addPolicyRules`, `runWrite`: `fileRead, fileWrite`. `missingPolicyRules`, `prepareRedirectWrite`: `fileRead`. |
 | `std::mcp` | `readProjectMcpConfig`: `fileRead`. `loadMcpTools`, `loadMcpToolsWithStatus`: `fileRead, fileWrite, subprocess, network`. |

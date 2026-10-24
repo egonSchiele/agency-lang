@@ -69,9 +69,10 @@ effect std::writeBinary {
 export type WriteMode = "overwrite" | "append" | "create-only"
 
 /** What a decorator learns about the function it wraps. Every decorator
-  receives one of these in `call`, its second-to-last parameter: `name` is
-  the decorated function's name and `args` holds its parameters by name,
-  block parameters left out. See the Decorators guide page. */
+  receives one of these in its second-to-last parameter, whatever that
+  parameter is called: `name` is the decorated function's name and `args`
+  holds its parameters by name, block parameters left out. See the
+  Decorators guide page. */
 export type Call = { name: string, args: object }
 
 @capabilities(terminal)

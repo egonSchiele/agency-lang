@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'tagged' is declared as a decorator, but a decorator takes at least two parameters",
+  "description": "agency compile refuses a decorator with one parameter"
+}

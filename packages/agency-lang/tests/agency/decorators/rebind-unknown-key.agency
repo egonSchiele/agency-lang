@@ -1,6 +1,6 @@
 // A key that names no parameter is the same failure a call with an unknown
 // named argument gets.
-def bogus(call: Call, block: (args: object) -> any): any {
+decorator def bogus(call: Call, block: (args: object) -> any): any {
   return block({ ...call.args, bogus: 1 })
 }
 

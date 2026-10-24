@@ -54,7 +54,7 @@ describe("the two analyses agree on effects that arise in one file", () => {
       // The decorator lowers to a call in the TypeChecker constructor; the
       // symbol table reads the tag instead. Both must land on std::read.
       label: "a decorator whose body raises",
-      source: `export def deco(call: Call, block: () -> any): any {\n  read("x")\n  return block()\n}\n@deco\nexport def caller(): string {\n  return "y"\n}\n`,
+      source: `export decorator def deco(call: Call, block: () -> any): any {\n  read("x")\n  return block()\n}\n@deco\nexport def caller(): string {\n  return "y"\n}\n`,
     },
   ];
 
@@ -95,7 +95,7 @@ describe("the new pass agrees with the type-check-everything analysis", () => {
   it("finds the effect of a decorator imported from another file", () => {
     fs.writeFileSync(
       path.join(dir, "deco.agency"),
-      `export def logged(call: Call, block: () -> any): any {\n  read("log.txt")\n  return block()\n}\n`,
+      `export decorator def logged(call: Call, block: () -> any): any {\n  read("log.txt")\n  return block()\n}\n`,
       "utf-8",
     );
     const main = path.join(dir, "main.agency");

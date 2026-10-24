@@ -1392,6 +1392,15 @@ describe("AgencyGenerator - destructive/idempotent markers", () => {
     );
   });
 
+  it("round-trips decorator defs, export first, decorator before def", () => {
+    expect(roundTrip("decorator export def d(call, block) {\n  return block()\n}")).toContain(
+      "export decorator def d(call, block)",
+    );
+    expect(roundTrip("handoff decorator def d(call, block) {\n  return block()\n}")).toContain(
+      "handoff decorator def d",
+    );
+  });
+
   it("a call to a function named handoff is still a call", () => {
     // The modifier loop must fail and fall through when `handoff` is not
     // followed by a def, so a plain call keeps parsing as a call.

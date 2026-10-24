@@ -1,7 +1,7 @@
-// `tagged` takes no block, so it has nowhere to receive the body of
+// `tagged` ends in a number, so it has nowhere to receive the body of
 // `greet`. Compiled anyway, `greet` would return `tagged`'s value and its
 // own body would never run.
-def tagged(label: string): string {
+decorator def tagged(label: string, call, x: number): string {
   return "tagged ${label}"
 }
 

@@ -1,4 +1,5 @@
 import { declaredName } from "./types/hole.js";
+import { withDecoratorTypes } from "./types/function.js";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
@@ -469,7 +470,10 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           loc: node.loc,
           markers: node.markers,
           exported: !!node.exported,
-          parameters: node.parameters,
+          // A decorator's untyped slots are typed here, so a signature read
+          // from the table (an import, hover, `agency doc`) shows the same
+          // `Call` and block types the checker and codegen use.
+          parameters: withDecoratorTypes(node),
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           interruptEffects: collectDirectInterruptEffects(

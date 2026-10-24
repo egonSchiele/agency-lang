@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'tagged' is not a decorator, so '@tagged' cannot go on 'greet'",
+  "description": "agency compile refuses a tag on a def that does not say decorator"
+}

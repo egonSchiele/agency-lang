@@ -1,0 +1,20 @@
+// A decorator can itself be decorated. Its untyped block slot is typed
+// before its own call record is built, so the block stays out of the
+// record the outer decorator receives.
+decorator def outer(call, block) {
+  return "outer:${block(call.args)}"
+}
+
+@outer
+decorator def inner(call, block) {
+  return "inner:${block(call.args)}"
+}
+
+@inner
+def f(a: number): string {
+  return "f=${a}"
+}
+
+node main() {
+  return f(1)
+}

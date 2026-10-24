@@ -155,7 +155,7 @@ import {
   ValueParam,
 } from "../types.js";
 import { isReservedTagName } from "../types/tag.js";
-import { callerSuppliedParameters } from "../types/function.js";
+import { orderCheckedParameters, requiredParameterAfterDefault } from "../types/function.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { Hole } from "../types/hole.js";
 import { CodeLiteral } from "../types/codeLiteral.js";
@@ -7526,7 +7526,10 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   // Validate parameter ordering: required → optional (with defaults) → variadic.
   // A decorator's trailing `call` and block are supplied by the compiler on
   // every call, so they may follow a defaulted parameter and are left out of
-  // the default-order check (docs/dev/language/decorators.md).
+  // the default-order check. So are they on a def that is a decorator in
+  // all but the keyword: the decorator stage reports the missing keyword
+  // (AG6045), which a parse failure here would hide
+  // (docs/dev/language/decorators.md).
   const params = result.parameters;
   const variadicIndex = params.findIndex((param) => param.variadic);
   if (variadicIndex !== -1 && variadicIndex !== params.length - 1) {
@@ -7535,16 +7538,12 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
       input,
     );
   }
-  let seenOptional = false;
-  for (const param of callerSuppliedParameters(params)) {
-    if (param.variadic) {
-      continue;
-    }
-    if (param.defaultValue) {
-      seenOptional = true;
-    } else if (seenOptional) {
-      return failure(`Required parameter '${param.name}' cannot follow optional parameter`, input);
-    }
+  const misplaced = requiredParameterAfterDefault(orderCheckedParameters(result));
+  if (misplaced !== null) {
+    return failure(
+      `Required parameter '${misplaced.name}' cannot follow optional parameter`,
+      input,
+    );
   }
 
   return { ...baseResult, result };

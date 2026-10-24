@@ -25,13 +25,36 @@ describe("runDiagnostics", () => {
     // The decorator stage and the checker both find this; the editor
     // shows the stage's report and drops the checker's copy.
     const doc = makeDoc(
-      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+      "decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
         '@logged("t")\n' +
         'def f(): string { return "x" }\n',
     );
     const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
-    const shape = diagnostics.filter((d) => d.message.includes("'logged' cannot decorate 'f'"));
+    const shape = diagnostics.filter((d) =>
+      d.message.includes("'logged' is declared as a decorator"),
+    );
     expect(shape).toHaveLength(1);
+  });
+
+  it("reports a tag on a plain def once", () => {
+    const doc = makeDoc(
+      "def logged(call: Call, block: () -> any): any { return block() }\n" +
+        "@logged\n" +
+        'def f(): string { return "x" }\n',
+    );
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const found = diagnostics.filter((d) => d.message.includes("is not a decorator"));
+    expect(found).toHaveLength(1);
+  });
+
+  it("reports a decorator missing its keyword once", () => {
+    const doc = makeDoc(
+      "def logged(tag: string | null = null, call: Call, block: () -> any): any { return block() }\n",
+    );
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const found = diagnostics.filter((d) => d.message.includes("has a decorator's parameters"));
+    expect(found).toHaveLength(1);
+    expect(diagnostics.filter((d) => d.message.includes("AG6039"))).toHaveLength(0);
   });
 
   it("returns a diagnostic with range for a parse error", () => {

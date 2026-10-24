@@ -1,6 +1,6 @@
 // A decorator's own parameters may have defaults ahead of call and the
 // block, which the compiler always supplies.
-def tagged(label: string = "none", call: Call, block: (args: object) -> any): string {
+decorator def tagged(label: string = "none", call: Call, block: (args: object) -> any): string {
   return "${label}:${block(call.args)}"
 }
 

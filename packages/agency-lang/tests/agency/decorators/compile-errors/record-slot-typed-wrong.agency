@@ -1,0 +1,13 @@
+// The record slot takes the call record, so its type is Call or left off.
+decorator def logged(call: Call, tag: string, block: () -> any): any {
+  return block()
+}
+
+@logged("t")
+def f(): string {
+  return "x"
+}
+
+node main() {
+  return f()
+}

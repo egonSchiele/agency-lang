@@ -1,4 +1,11 @@
-import type { AgencyNode, AgencyProgram, Assignment, Expression, SourceLocation } from "@/types.js";
+import type {
+  AgencyNode,
+  AgencyProgram,
+  Assignment,
+  Expression,
+  SourceLocation,
+  TypeAliasEntry,
+} from "@/types.js";
 import type { AgencyObject, AgencyObjectKV, NamedArgument } from "@/types/dataStructures.js";
 import type {
   DecoratorOrigin,
@@ -6,7 +13,17 @@ import type {
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
-import { decoratorShapeProblem, isBlockParameter } from "@/types/function.js";
+import {
+  decoratorShapeProblem,
+  isBlockParameter,
+  isDecoratorDef,
+  isDecoratorMissingKeyword,
+  recordSlotName,
+  withDecoratorTypes,
+} from "@/types/function.js";
+import type { AliasResolver } from "@/types/function.js";
+import { diagnostic } from "@/typeChecker/diagnostics.js";
+import type { TypeCheckError } from "@/typeChecker/types.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
@@ -15,6 +32,7 @@ import { isDecoratorTag } from "@/types/tag.js";
 import { declaredName } from "@/types/hole.js";
 import { tagsAbove } from "@/utils/tagsAbove.js";
 import type { ImportedFunctionSignature } from "@/compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, ScopedTypeAliases } from "@/compilationUnit.js";
 
 /**
  * Lower a decorator tag on a def into a call with the def's body as the
@@ -58,9 +76,14 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  */
 
 /** What the lowering and the checks need to know about a decorator: its
- *  parameters (for the shape check) and whether it is imported (so the call
- *  carries the scope the resolver expects). */
-export type DecoratorSignature = { parameters: FunctionParameter[]; imported: boolean };
+ *  parameters (for the shape check), whether it is imported (so the call
+ *  carries the scope the resolver expects), and whether it is declared
+ *  `decorator def` at all. */
+export type DecoratorSignature = {
+  parameters: FunctionParameter[];
+  imported: boolean;
+  decorator: boolean;
+};
 export type DecoratorLookup = (name: string) => DecoratorSignature | undefined;
 
 /** The one lookup both callers use, built from the two tables every caller
@@ -71,10 +94,16 @@ export function decoratorLookup(
 ): DecoratorLookup {
   return (name) => {
     if (Object.hasOwn(functionDefinitions, name)) {
-      return { parameters: functionDefinitions[name].parameters, imported: false };
+      const def = functionDefinitions[name];
+      return { parameters: def.parameters, imported: false, decorator: isDecoratorDef(def) };
     }
     if (Object.hasOwn(importedFunctions, name)) {
-      return { parameters: importedFunctions[name].parameters, imported: true };
+      const signature = importedFunctions[name];
+      return {
+        parameters: signature.parameters,
+        imported: true,
+        decorator: isDecoratorDef(signature),
+      };
     }
     return undefined;
   };
@@ -155,7 +184,7 @@ function decoratorCall(
   const origin: DecoratorOrigin = { name: tag.name, tagLoc: tag.loc, target };
   const record: NamedArgument = {
     type: "namedArgument",
-    name: "call",
+    name: recordSlotName(signature?.parameters ?? []),
     value: { type: "variableName", value: recordName, loc: tag.loc },
   };
   const call: FunctionCall = {
@@ -231,8 +260,17 @@ function callRecord(
   };
 }
 
-/** The one function that writes. */
+/** The one function that writes. Every decorator def gets its slots typed
+ *  first (`withDecoratorTypes`), then each decorated def gets its lowered
+ *  body. The order matters: a decorated decorator's own call record leaves
+ *  block-typed parameters out, so its block slot must be typed before the
+ *  record is built. */
 export function desugarDecorators(program: AgencyProgram, lookup: DecoratorLookup): AgencyProgram {
+  for (const node of program.nodes) {
+    if (node.type === "function") {
+      node.parameters = withDecoratorTypes(node);
+    }
+  }
   const decorated = decoratorsAbove(program.nodes);
   for (const { def, tags } of decorated) {
     def.body = loweredBody(def, tags, lookup);
@@ -268,7 +306,25 @@ function placePhrase(node: AgencyNode | null): string {
 export type DecoratorScope = {
   functionDefinitions: Record<string, FunctionDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  /** The program's type aliases, so a record slot typed with an alias of
+   *  `Call` (`type Ctx = Call`) is accepted. Left out, only the name
+   *  `Call` is. */
+  typeAliases?: ScopedTypeAliases;
 };
+
+/** An alias resolver over `aliases`, for the record-slot check. */
+export function aliasResolver(aliases: Record<string, TypeAliasEntry>): AliasResolver {
+  return (name) => aliases[name]?.body;
+}
+
+/** The three mistakes the decorator stage and the checker both report,
+ *  by the checker's diagnostic name. A caller that ran the stage drops
+ *  the checker's copy of each (the editor, `agency typecheck`). */
+export function repeatsDecoratorStage(name: string): boolean {
+  return (
+    name === "decoratorShape" || name === "notADecorator" || name === "decoratorMissingKeyword"
+  );
+}
 
 /**
  * Everything wrong with a program's decorators, before or after the
@@ -279,10 +335,16 @@ export type DecoratorScope = {
  * - defs that decorate each other in a loop (`@b def a` and `@a def b`),
  * - a decorator imported from JavaScript, which cannot take a block,
  * - a decorator name that is neither declared nor imported,
- * - a decorator without the decorator shape: its own parameters, then
- *   `call: Call`, then a block, the last two without defaults.
+ * - a tag naming a def that is not declared `decorator def`,
+ * - a `decorator def` in the wrong shape (`decoratorShapeProblem`): a
+ *   local one at the def, an imported one at the tag,
+ * - a def that is a decorator in all but the keyword
+ *   (`isDecoratorMissingKeyword`), at the def.
  *
- * Pure; prepareProgram and the CLI build turn the list into errors.
+ * The last three render through the diagnostic registry (`decoratorShape`,
+ * `notADecorator`, `decoratorMissingKeyword`), so the checker's copies say
+ * the same thing. Pure; prepareProgram and the CLI build turn the list
+ * into errors.
  */
 export function decoratorProblems(
   program: AgencyProgram,
@@ -299,20 +361,84 @@ export function decoratorProblems(
   const onDefs = decoratorTagsOnDefs(program.nodes);
   const lookup = decoratorLookup(scope.functionDefinitions, scope.importedFunctions);
   const fromJavaScript = javaScriptImportNames(program.nodes);
+  const resolve = aliasResolver(scope.typeAliases?.visibleIn(GLOBAL_SCOPE_KEY) ?? {});
   const problems = onDefs.flatMap(({ def, tag }) => {
     const problem = problemWithTag(declaredName(def.functionName), tag.name, {
       lookup,
       fromJavaScript,
       onDefs,
+      resolve,
     });
     return problem === null ? [] : [{ message: problem, loc: tag.loc }];
   });
-  return [...misplaced, ...problems];
+  const badDefs = decoratorDefProblems(program.nodes, resolve).map((found) => {
+    const rendered = decoratorDefDiagnostic(found);
+    return { message: rendered.message, loc: found.loc };
+  });
+  return [...misplaced, ...badDefs, ...problems];
+}
+
+/** A def that is wrong as a decorator: a `decorator def` whose parameters
+ *  are not a decorator's, or a plain def that is a decorator in all but
+ *  the keyword. */
+export type DecoratorDefProblem =
+  | { kind: "shape"; name: string; problem: string; loc: SourceLocation | undefined }
+  | { kind: "missingKeyword"; name: string; loc: SourceLocation | undefined };
+
+/** Every def among `nodes` that is wrong as a decorator, as data: the
+ *  decorator stage and the checker each render it with
+ *  `decoratorDefDiagnostic`. */
+export function decoratorDefProblems(
+  nodes: AgencyNode[],
+  resolve?: AliasResolver,
+): DecoratorDefProblem[] {
+  return nodes.flatMap((node): DecoratorDefProblem[] => {
+    if (node.type !== "function") {
+      return [];
+    }
+    const name = declaredName(node.functionName);
+    if (isDecoratorMissingKeyword(node)) {
+      return [{ kind: "missingKeyword", name, loc: node.loc }];
+    }
+    if (!isDecoratorDef(node)) {
+      return [];
+    }
+    const problem = decoratorShapeProblem(node.parameters, resolve);
+    return problem === null ? [] : [{ kind: "shape", name, problem, loc: node.loc }];
+  });
+}
+
+/** The one rendering of a `DecoratorDefProblem`: AG6043 for the shape,
+ *  AG6045 for the missing keyword. */
+export function decoratorDefDiagnostic(found: DecoratorDefProblem): TypeCheckError {
+  const loc = found.loc ?? null;
+  if (found.kind === "missingKeyword") {
+    return diagnostic("decoratorMissingKeyword", { name: found.name }, loc);
+  }
+  return diagnostic("decoratorShape", { name: found.name, problem: found.problem }, loc);
+}
+
+/** What is wrong with a tag that resolved to `signature`, as data: the def
+ *  is not a decorator, or it is an imported decorator in the wrong shape.
+ *  A local decorator's shape is reported at the def by
+ *  `decoratorDefProblems`, so a tag on it is not reported again. */
+export type TagProblem = { kind: "notADecorator" } | { kind: "shape"; problem: string };
+
+export function tagProblem(
+  signature: DecoratorSignature,
+  resolve?: AliasResolver,
+): TagProblem | null {
+  if (!signature.decorator) {
+    return { kind: "notADecorator" };
+  }
+  const problem = signature.imported ? decoratorShapeProblem(signature.parameters, resolve) : null;
+  return problem === null ? null : { kind: "shape", problem };
 }
 
 type TagContext = {
   lookup: DecoratorLookup;
   fromJavaScript: string[];
+  resolve: AliasResolver;
   onDefs: TagOnDef[];
 };
 
@@ -331,13 +457,16 @@ function problemWithTag(target: string, decorator: string, context: TagContext):
     return `'${decorator}' is imported from JavaScript, so it cannot decorate '${target}'. A decorator receives the body as a block, and only an Agency def can take a block.`;
   }
   if (signature === undefined) {
-    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a def whose last two parameters are \`call: Call\` and a block; declare or import '${decorator}'.`;
+    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a \`decorator def\` whose last two parameters are the call record and a block; declare or import '${decorator}'.`;
   }
-  const shapeProblem = decoratorShapeProblem(signature.parameters);
-  if (shapeProblem !== null) {
-    return `'${decorator}' cannot decorate '${target}': ${shapeProblem}`;
+  const found = tagProblem(signature, context.resolve);
+  if (found === null) {
+    return null;
   }
-  return null;
+  if (found.kind === "notADecorator") {
+    return diagnostic("notADecorator", { name: decorator, target }, null).message;
+  }
+  return diagnostic("decoratorShape", { name: decorator, problem: found.problem }, null).message;
 }
 
 /** The names a program imports from JavaScript or TypeScript files. */

@@ -97,6 +97,7 @@ import { parseTarget } from "@/agentTarget.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js";
+import { repeatsDecoratorStage } from "@/preprocessors/decoratorDesugar.js";
 import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
@@ -1794,7 +1795,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
             return;
           }
           const { program: parsedProgram, info } = prepared;
-          const checked = typeCheck(parsedProgram, config, info).errors;
+          // The decorator stage was reported above; the checker repeats its
+          // three decorator mistakes, and printing them again would be the
+          // same error twice.
+          const stageReported = prepared.diagnostics.some((found) => found.stage === "decorators");
+          const checked = typeCheck(parsedProgram, config, info).errors.filter(
+            (error) => !(stageReported && repeatsDecoratorStage(error.name)),
+          );
           // Stdin was checked at a temporary path, which is gone by now, and
           // which no relative import could ever resolve against. Reporting one
           // would fail a file that passes when named on the command line.
@@ -1814,7 +1821,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             if (errors.some((e) => e.severity === "error")) {
               hasErrors = true;
             }
-          } else {
+          } else if (problems.length === 0) {
             console.log("No type errors found.");
           }
         };

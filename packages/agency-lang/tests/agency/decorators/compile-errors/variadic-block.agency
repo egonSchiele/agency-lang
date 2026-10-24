@@ -1,0 +1,13 @@
+// The block slot is one argument, never a rest parameter.
+decorator def tagged(call, ...block) {
+  return "x"
+}
+
+@tagged
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

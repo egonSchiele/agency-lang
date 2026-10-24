@@ -382,7 +382,10 @@ export const logged = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"call": Call, })
   },
-  exported: false
+  exported: false,
+  markers: {
+    decorator: true
+  }
 }, __toolRegistry);
 async function __retry_impl(__run: __Run, times: number, call: Call, block: () => any) {
   const __setupData = setupFunction(__run);
@@ -579,7 +582,10 @@ export const retry = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"times": z.number(), "call": Call, })
   },
-  exported: false
+  exported: false,
+  markers: {
+    decorator: true
+  }
 }, __toolRegistry);
 async function __plainTwin_impl(__run: __Run, x: number) {
   const __setupData = setupFunction(__run);

@@ -445,12 +445,36 @@ An alias forgives a caller that guesses the name at runtime, usually a model cal
 
 <a id="ag6043"></a>
 
-## AG6043 — '&#123;name&#125;' cannot decorate '&#123;target&#125;': &#123;problem&#125;
+## AG6043 — '&#123;name&#125;' is declared as a decorator, but &#123;problem&#125;
 
 *Default severity: error.*
 
-A tag names a def that does not have the shape of a decorator.
+A `decorator def` does not have the parameters a decorator needs.
 
-A decorator's last two parameters are `call: Call` and a block, in that order and neither with a default: `def logged(tag: string, call: Call, block: () -> any): any`. The message says which of those slots is wrong. The decorator stage reports this mistake before the checker runs; the checker repeats it here so a program checked on its own is not accepted by mistake.
+A decorator's last two parameters receive the call record and the decorated body as a block, in that order: `decorator def logged(tag: string, call, block)`. They can have any names. Left untyped, the compiler types them `Call` and `(args: object) -> any`; a written type on the record slot must be `Call` or `any`, and the block slot must be a block type. Neither slot takes a default or is variadic. The message says which rule the def breaks. A local decorator is reported at its def; an imported one at the tag that uses it.
 
-**How to fix:** move `call: Call` right before the block, give the decorator a block as its last parameter, or remove the default from `call` or the block.
+**How to fix:** give the decorator at least two parameters, make the last one a block, leave the record slot untyped or type it `Call`, and remove any default or `...` from those two.
+
+<a id="ag6044"></a>
+
+## AG6044 — '&#123;name&#125;' is not a decorator, so '@&#123;name&#125;' cannot go on '&#123;target&#125;'. Declare it as `decorator def &#123;name&#125;(...)`.
+
+*Default severity: error.*
+
+A tag names a def that is not declared `decorator def`.
+
+Only a def that says `decorator` can be used as a tag, whatever its parameters look like. The keyword is what tells the compiler to pass the call record and the body as a block, and to leave those two slots out of the checks a normal call gets. A plain def with a `call` parameter and a block parameter is still a plain def.
+
+**How to fix:** write `decorator def logged(tag: string, call, block)` on the def the tag names, or remove the tag.
+
+<a id="ag6045"></a>
+
+## AG6045 — '&#123;name&#125;' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def &#123;name&#125;(...)`, or put the defaulted parameter last.
+
+*Default severity: error.*
+
+A plain def has a decorator's parameters and breaks the parameter-order rule in the one way a decorator is allowed to.
+
+A parameter without a default may not follow one with a default, because arguments bind by position and an omitted argument can only be a trailing one. A decorator is the exception: its last two parameters, the call record and the block, are filled in by the compiler on every call, so they may come after a default. `def logged(tag: string | null = null, call: Call, block: () -> any)` has exactly that shape, which means it was almost certainly meant to be a decorator and is missing the keyword. Without the keyword it is a plain def, and a plain def with these parameters cannot be called correctly.
+
+**How to fix:** write `decorator def logged(tag: string | null = null, call, block)` if it is a decorator. If it is an ordinary function, move the defaulted parameter after the others.

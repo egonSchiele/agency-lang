@@ -102,6 +102,11 @@ export type ImportedFunctionSignature = {
    *  interrupt call-graph analysis to build a stable cross-file identity
    *  (`${originFile}:${originalName}`) for resolved call edges. */
   originalName?: string;
+  /** The origin def's markers, so `isDecoratorDef` answers for an import
+   *  the way it does for a local def. Markers that describe a call site
+   *  (destructive, idempotent) also go into the unit's registries through
+   *  `registerMarkers`. */
+  markers?: FunctionMarkers;
 };
 
 /**
@@ -180,8 +185,10 @@ export function scopeKey(scope: Scope): string {
 
 /** Record a local name's retry-safety markers into the unit's registries.
  *  One chokepoint for all three feed paths (local defs, destructive
- *  imports, resolved Agency imports) so a future marker is a one-field
- *  change here rather than another parallel-mirror pass. */
+ *  imports, resolved Agency imports) so a future marker that describes a
+ *  call site is a one-field change here rather than another
+ *  parallel-mirror pass. A marker that describes the signature itself
+ *  (`decorator`) rides on `ImportedFunctionSignature.markers` instead. */
 function registerMarkers(
   unit: CompilationUnit,
   localName: string,
@@ -310,6 +317,7 @@ export function buildCompilationUnit(
             returnType,
             originFile: r.file,
             originalName: r.originalName,
+            markers: r.symbol.kind === "function" ? r.symbol.markers : undefined,
           };
           for (const p of r.symbol.parameters) {
             // eslint-disable-next-line max-depth -- collecting alias seeds from imported function params

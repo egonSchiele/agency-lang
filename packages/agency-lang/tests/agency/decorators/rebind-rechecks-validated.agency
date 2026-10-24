@@ -13,7 +13,7 @@ type Positive = number
 
 let ran = false
 
-def negate(call: Call, block: (args: object) -> any): any {
+decorator def negate(call: Call, block: (args: object) -> any): any {
   return block({ n: -1 })
 }
 

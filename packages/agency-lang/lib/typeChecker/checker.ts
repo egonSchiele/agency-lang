@@ -31,10 +31,11 @@ import { checkMatchExprYields } from "./matchExprTypes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import {
-  callerSuppliedParameters,
+  DECORATOR_SLOT_COUNT,
   decoratorShapeProblem,
   lastParameterTakesBlock,
 } from "../types/function.js";
+import { aliasResolver, decoratorLookup, tagProblem } from "../preprocessors/decoratorDesugar.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 import { draftTarget, mismatchEntry } from "./mismatch.js";
 
@@ -318,15 +319,27 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    // A decorator call whose target lacks the decorator shape: say so and
-    // stop, since checking its arguments against the wrong slots would add
-    // a misleading error. The decorator stage reports the same mistake when
-    // it runs first; the editor drops this copy then (lib/lsp/diagnostics.ts).
+    // A tag on a def that is not a decorator (AG6044), or on a decorator in
+    // the wrong shape: stop either way, since checking the call's arguments
+    // against the wrong slots would add a misleading error. An imported
+    // decorator's shape is reported here (AG6043); a local one is reported
+    // at its def by checkDecoratorDefs. The decorator stage reports the
+    // same mistakes from the same data, and the editor drops these copies
+    // when it has (lib/lsp/diagnostics.ts).
     if (call.decorator !== undefined) {
-      const problem = decoratorShapeProblem(params);
-      if (problem !== null) {
+      const signature = decoratorLookup(ctx.functionDefs, ctx.importedFunctions)(call.functionName);
+      if (signature === undefined) return;
+      const resolve = aliasResolver(ctx.scopedTypeAliases.visibleIn(ctx.currentScopeKey));
+      const found = tagProblem(signature, resolve);
+      if (found === null && decoratorShapeProblem(signature.parameters, resolve) !== null) return;
+      if (found !== null) {
         const { name, target } = call.decorator;
-        ctx.errors.push(diagnostic("decoratorShape", { name, target, problem }, call.loc ?? null));
+        const loc = call.loc ?? null;
+        if (found.kind === "notADecorator") {
+          ctx.errors.push(diagnostic("notADecorator", { name, target }, loc));
+        } else {
+          ctx.errors.push(diagnostic("decoratorShape", { name, problem: found.problem }, loc));
+        }
         return;
       }
     }
@@ -728,7 +741,7 @@ function checkArity(
   if (argCount >= minArgs && argCount <= maxArgs) return true;
   // A decorator tag's call has arguments the author never wrote: the body
   // and the `call` record. Count only the tag's own.
-  const hidden = hiddenDecoratorArguments(call, params);
+  const hidden = hiddenDecoratorArguments(call);
   const arity = { fn: displayFunctionName(call.functionName), count: argCount - hidden };
   const min = minArgs - hidden;
   const max = maxArgs - hidden;
@@ -745,16 +758,15 @@ function checkArity(
 
 /** How many of a call's arguments the decorator lowering added: the `call`
  *  record and the body as the block. 0 for any other call. */
-function hiddenDecoratorArguments(call: FunctionCall, params: FunctionParameter[]): number {
-  if (call.decorator === undefined) return 0;
-  return params.length - callerSuppliedParameters(params).length;
+function hiddenDecoratorArguments(call: FunctionCall): number {
+  return call.decorator === undefined ? 0 : DECORATOR_SLOT_COUNT;
 }
 
 /** The parameter names a call's author can write. For a decorator's call,
  *  the `call` record and the block are the lowering's, so they are left out
  *  of the names an unknown-argument error suggests. */
 function writableParameterNames(call: FunctionCall, params: FunctionParameter[]): string[] {
-  const written = call.decorator === undefined ? params : callerSuppliedParameters(params);
+  const written = params.slice(0, params.length - hiddenDecoratorArguments(call));
   return written.map((param) => param.name);
 }
 

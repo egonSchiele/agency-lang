@@ -1,6 +1,6 @@
 // An interrupt raised inside a decorated body pauses the program and, once
 // approved, resumes at the next statement. Each side of the pause runs once.
-def logged(call: Call, block: () -> any): any {
+decorator def logged(call: Call, block: () -> any): any {
   return block(call.args)
 }
 

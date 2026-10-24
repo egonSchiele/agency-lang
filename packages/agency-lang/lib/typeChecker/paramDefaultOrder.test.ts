@@ -34,7 +34,8 @@ describe("required parameter after a defaulted one (AG6039)", () => {
   });
 
   it("allows defaulted parameters before `call` and the block on a decorator", () => {
-    const src = "def d(cost: number = 1, call: Call, block: () -> any) { return block() }";
+    const src =
+      "decorator def d(cost: number = 1, call: Call, block: () -> any) { return block() }";
     expect(orderError(src)).toBeUndefined();
   });
 

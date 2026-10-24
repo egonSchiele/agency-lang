@@ -1,16 +1,16 @@
 ---
 name: Decorators
-description: Explains decorators, written `@name(args)` above a def, which run the function's body as a block passed to another function, with the `call` record, changing the arguments the body runs with, stacking, the rules, and the error messages.
+description: Explains decorators, written `@name(args)` above a def, which run the function's body as a block passed to a `decorator def`, with the `call` record, changing the arguments the body runs with, stacking, calling a decorator directly, the rules, and the error messages.
 ---
 
 # Decorators
 
-A decorator is a function that runs around the body of another function. You write it as an ordinary `def` whose last two parameters are `call: Call` and a [block](/guide/blocks), then put `@` and its name above the function you want to wrap.
+A decorator is a function that runs around the body of another function. You write it as a `decorator def` whose last two parameters receive a record about the call and the body as a [block](/guide/blocks), then put `@` and its name above the function you want to wrap.
 
 ## A first decorator
 
 ```ts
-def logged(call: Call, block: (args: object) -> any): any {
+decorator def logged(call, block) {
   print("entering ${call.name}")
   const result = block(call.args)
   print("leaving ${call.name}")
@@ -47,12 +47,14 @@ def greet(name: string): string {
 
 So `greet` returns whatever `logged` returns, and the body only runs when `logged` calls its block.
 
+The two parameters of `logged` have no types. The compiler knows what a decorator receives, so it types them for you: `call` is `Call` and `block` is `(args: object) -> any`. You can call them anything you like; `call` and `block` are the names this guide uses. You can also type them yourself, which the [budget decorator](#a-budget-decorator) below does.
+
 ## Passing arguments
 
-A decorator can take arguments of its own. They go before `call` and the block, and you write them in the tag the way you would write them in a call:
+A decorator can take arguments of its own. They go before the last two parameters, and you write them in the tag the way you would write them in a call:
 
 ```ts
-def retry(times: number, call: Call, block: (args: object) -> any): Result<string> {
+decorator def retry(times: number, call, block): Result<string> {
   let last: Result<string> = failure("never ran")
   for (i in range(0, times)) {
     last = block(call.args)
@@ -70,7 +72,7 @@ def fetchSummary(url: string): Result<string> {
 }
 ```
 
-`retry` calls the body up to three times and stops at the first success. A decorator may call its block as many times as it likes. Your own parameters may have defaults, even though `call` and the block after them do not: the compiler always supplies those two.
+`retry` calls the body up to three times and stops at the first success. A decorator may call its block as many times as it likes. Your own parameters may have defaults, even though the last two do not: the compiler always supplies those two.
 
 The block is typed `(args: object) -> any`, so `last = block(call.args)` stores a value of type `any` in a variable declared `Result<string>`. The type checker allows that, because `any` can be assigned to any type. It means `retry` trusts the body to return a `Result<string>`; see [Typing a reusable decorator](#typing-a-reusable-decorator) below.
 
@@ -78,13 +80,13 @@ The tag's arguments are evaluated each time the function is called, inside the f
 
 ## The `call` record
 
-Every decorator receives a record describing the call it wraps, in the parameter named `call`, right before the block:
+Every decorator receives a record describing the call it wraps, in its second-to-last parameter:
 
 - `call.name` is the decorated function's name.
 - `call.args` holds the function's arguments, keyed by parameter name. Block-typed parameters are left out, since a block cannot be stored in a record.
 
 ```ts
-def tagged(label: string, call: Call, block: (args: object) -> any): any {
+decorator def tagged(label: string, call, block) {
   print("${label}: ${call.name}")
   print(call.args)
   return block(call.args)
@@ -97,8 +99,6 @@ def lookUp(topic: string): string {
 ```
 
 Calling `lookUp("owls")` prints `research: lookUp`, then `{ topic: 'owls' }`.
-
-The compiler passes `call` by name. If you ever call a decorator directly, as a function, write `call:` by name too.
 
 ## Changing the arguments
 
@@ -130,12 +130,32 @@ def careful(url: string): Result<string> {
 
 This becomes `logged(call: …) { return retry(2, call: …) { ...body... } }`, so `logged` runs once around both attempts. When the outer decorator changes the arguments, the inner one sees the changed ones: its `call.args`, and any tag argument that names a parameter, are read after the outer rebind.
 
+A decorator can itself be decorated. Put the tag above the `decorator def` as you would above any def.
+
+## Calling a decorator directly
+
+A `decorator def` is still a function. To call it yourself, pass a record for the call slot by name and give it a block:
+
+```ts
+decorator def tagged(tag: string, call, block) {
+  return "${tag}:${call.name}:${block()}"
+}
+
+node main() {
+  return tagged("t", call: { name: "direct", args: {} }) {
+    return "body"
+  }
+}
+```
+
+`Call` is `{ name: string, args: object }`, so an object literal is all the slot needs. A direct call is checked like any other call, so leaving the record out is a missing argument.
+
 ## A budget decorator
 
 [Guards](/guide/guards) cap what a block of work may spend. A decorator can put a guard around a whole function:
 
 ```ts
-def budgeted(cost: number, call: Call, block: (args: object) -> string): Result<string> {
+decorator def budgeted(cost: number, call: Call, block: (args: object) -> string): Result<string> {
   return guard(cost: cost) {
     return block(call.args)
   }
@@ -151,12 +171,15 @@ In this example:
 
 - The tag uses `maxCost`, one of `research`'s parameters. Each caller can pass a different budget.
 - The body returns a `string`, because it is the block, and `budgeted`'s block returns `string`. The function is declared to return `Result<string>`, because that is what `budgeted` returns.
+- The block is typed by hand, as `(args: object) -> string`, so the type checker checks the body's returns against `string`.
 
 The standard library ships a finished version of this decorator as `@guarded` in `std::strategy`. It also labels the guard with the function's name, answers its own budget trip, and returns a saved draft as the answer when the budget runs out. See [Guarding a whole function](/guide/guards#guarding-a-whole-function).
 
 ## The rules
 
-- A decorator's last two parameters are `call: Call` and a block, in that order, with no defaults. Its own parameters come before them.
+- A decorator says `decorator def`. A plain def is never a decorator, whatever its parameters look like.
+- Its last two parameters are the call record and the block, in that order, with no defaults. Its own parameters come before them. Name the two as you like; the compiler types them `Call` and `(args: object) -> any` unless you type them yourself.
+- A decorator can be called directly, with a record literal for the call slot and a block.
 - A decorator calls its block. It never stores the block in a variable or returns it.
 - Decorators go on a `def` only. A decorator tag on a node, a type, or a statement is an error.
 - The model never sees a decorator. When a decorated function is used as a tool, its name, docstring, parameters, and schema are the function's own. So are the `handoff`, `destructive`, and `idempotent` markers.
@@ -166,7 +189,7 @@ The standard library ships a finished version of this decorator as `@guarded` in
 
 Agency has no generics, so a decorator's block has one return type. A decorator meant for one kind of function, like `budgeted`, can name that type, and the type checker then checks the body's returns against it.
 
-A decorator meant for any function, like `logged` and `retry`, types its block `(args: object) -> any`. The body's returns are then not checked against anything. That is the trade-off for one decorator that fits every function.
+A decorator meant for any function, like `logged` and `retry`, leaves its block untyped, which means `(args: object) -> any`. The body's returns are then not checked against anything. That is the trade-off for one decorator that fits every function.
 
 ## Mistakes and what they say
 
@@ -180,10 +203,22 @@ def one(topic: string): string {
 ```
 
 ```
-error: Unknown decorator 'budgted' on 'one'. A decorator is a def whose last two parameters are `call: Call` and a block; declare or import 'budgted'.
+error: Unknown decorator 'budgted' on 'one'. A decorator is a `decorator def` whose last two parameters are the call record and a block; declare or import 'budgted'.
 ```
 
-A decorator with the wrong shape is reported the same way. `def logged(call: Call, tag: string, block: () -> any)` gives `'logged' cannot decorate 'one': a decorator's last two parameters are `call: Call` and a block, so `call` must come right before the block. Found 'tag' there.` A default on `call` or the block gives `'block' has a default, but a decorator always receives `call` and the block. Remove the default.` The same goes for a decorator on a node (`'@logged' is written on node 'main', but a decorator goes on a def.`), a decorator whose last parameter cannot take a block, a decorator imported from JavaScript, and decorators that decorate each other in a loop.
+A tag on a def that does not say `decorator` gives `'logged' is not a decorator, so '@logged' cannot go on 'one'. Declare it as `decorator def logged(...)`.`
+
+A `decorator def` in the wrong shape is reported at the def, whether or not a tag uses it. Each message starts `'logged' is declared as a decorator, but` and ends with the rule it breaks:
+
+| You wrote | The rest of the message |
+| --- | --- |
+| `decorator def logged(block)` | `a decorator takes at least two parameters: the call record and the body as a block.` |
+| `decorator def logged(call, x: number)` | `its last parameter must take the body as a block, such as `block: (args: object) -> any`. Found 'x: number'.` |
+| `decorator def logged(call: Call, tag: string, block)` | `'tag' receives the call record, so its type must be `Call` or left off.` |
+| `decorator def logged(call, block = null)` | `'block' has a default, and a decorator always receives the call record and the block. Remove the default.` |
+| `decorator def logged(call, ...block)` | `'block' is variadic, but the call record and the block are one argument each.` |
+
+The same goes for a decorator on a node (`'@logged' is written on node 'main', but a decorator goes on a def.`), a decorator imported from JavaScript, and decorators that decorate each other in a loop.
 
 The rest come from the type checker. `agency typecheck` always runs it. `agency run` and `agency compile` run it when `typechecker.enabled` is `true` in your [`agency.json`](/guide/agency-config-file#type-checking). With the `budgeted` decorator above:
 

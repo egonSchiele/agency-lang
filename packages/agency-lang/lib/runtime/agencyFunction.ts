@@ -98,6 +98,9 @@ export type ToolMarkers = {
   /** Called as a tool, this function continues the caller's conversation.
    *  Read by the tool loop in prompt.ts. */
   handoff?: boolean;
+  /** Declared `decorator def`. Carried for completeness; the runtime does
+   *  nothing with it. */
+  decorator?: boolean;
 };
 
 /**

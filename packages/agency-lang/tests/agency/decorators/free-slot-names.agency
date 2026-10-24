@@ -1,0 +1,16 @@
+// The two slots can have any names and no types; body() runs with defaults.
+decorator def twice(ctx, body) {
+  const first = body(ctx.args)
+  const second = body({ ...ctx.args, n: ctx.args.n + 1 })
+  const third = body()
+  return "${ctx.name}:${first}:${second}:${third}"
+}
+
+@twice
+def g(n: number = 5): string {
+  return "n=${n}"
+}
+
+node main() {
+  return g(1)
+}

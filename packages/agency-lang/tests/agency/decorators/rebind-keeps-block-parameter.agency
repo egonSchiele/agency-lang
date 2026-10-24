@@ -1,6 +1,6 @@
 // The decorated function's own block parameter is not in call.args and a
 // rebind leaves it alone: the body can still call it.
-def ten(call: Call, block: (args: object) -> any): any {
+decorator def ten(call: Call, block: (args: object) -> any): any {
   return block({ n: 10 })
 }
 

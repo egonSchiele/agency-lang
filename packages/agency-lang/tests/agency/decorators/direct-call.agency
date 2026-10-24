@@ -1,0 +1,11 @@
+// A decorator is still a function: call it with a record for the call
+// slot and a block for the block slot.
+decorator def tagged(tag: string, call, block) {
+  return "${tag}:${call.name}:${block()}"
+}
+
+node main() {
+  return tagged("t", call: { name: "direct", args: {} }) {
+    return "body"
+  }
+}

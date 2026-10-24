@@ -587,17 +587,17 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
   // Once the cap is reached, a request carries only the intrinsic tools
-  // (saveDraft), which the cap never applied to. The model has just been
-  // told its calls were refused and to answer now; with nothing else to
-  // call, it can only answer, so the cap ends the loop within one more
-  // request instead of refusing round after round while the model keeps
-  // trying. Read from the frame's counter, so a resumed pass offers the
-  // same list the first pass did.
+  // (saveDraft), which the cap never applied to, and no provider-hosted
+  // tools, which travel in the config rather than the tool list. The
+  // model has just been told its calls were refused and to answer now;
+  // with nothing to call or search, it can only answer, so the cap ends
+  // the loop within one more request instead of refusing round after
+  // round while the model keeps trying. Both read the frame's counter, so
+  // a resumed pass offers what the first pass offered.
   const intrinsicNames = exposedFunctions.filter((fn) => findIntrinsic(fn)).map((fn) => fn.name);
+  const atRoundCap = () => self.toolCallRound >= effectiveMaxToolCallRounds;
   const offeredTools = () =>
-    self.toolCallRound >= effectiveMaxToolCallRounds
-      ? tools.filter((tool) => intrinsicNames.includes(tool.name))
-      : tools;
+    atRoundCap() ? tools.filter((tool) => intrinsicNames.includes(tool.name)) : tools;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing
   // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
@@ -669,15 +669,21 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   } = stackDefaults;
   const maxRepeatedToolCalls =
     ccMaxRepeatedToolCalls ?? stackMaxRepeatedToolCalls ?? DEFAULT_MAX_REPEATED_TOOL_CALLS;
-  // maxToolCallRounds precedence, the same as every other option: the
-  // call's own `llm(..., { maxToolCallRounds })` wins, then a branch
-  // default (setLlmOptions), then the baked value (agency.json → codegen
-  // literal, default 10). The per-call value used to be left in
-  // clientConfig and never read, so an agent's branch-wide cap of 50
-  // silently replaced the 30 a stdlib agent asked for (ADI-46). Kept out
-  // of stackSmolDefaults above — it isn't a smoltalk config field.
+  // maxToolCallRounds: the call's own `llm(..., { maxToolCallRounds })`
+  // and the branch default (setLlmOptions) are both ceilings, so when
+  // both are set the smaller wins; with neither, the baked value
+  // (agency.json → codegen literal, default 10). A branch default is how
+  // the agent's --max-tool-call-rounds flag and a preset reach every call
+  // in a run, and "an explicit flag always wins" (resolveMaxToolCallRounds
+  // in the agent) only holds if a call cannot raise its cap above it. The
+  // per-call value used to be left in clientConfig and never read, so the
+  // agent's branch-wide cap of 50 silently replaced the 30 a stdlib agent
+  // asked for (ADI-46). Kept out of stackSmolDefaults above — it isn't a
+  // smoltalk config field.
   const effectiveMaxToolCallRounds =
-    ccMaxToolCallRounds ?? stackMaxToolCallRounds ?? maxToolCallRounds;
+    ccMaxToolCallRounds !== undefined && stackMaxToolCallRounds !== undefined
+      ? Math.min(ccMaxToolCallRounds, stackMaxToolCallRounds)
+      : (ccMaxToolCallRounds ?? stackMaxToolCallRounds ?? maxToolCallRounds);
   // A local model gets the choices a hosted provider makes on its own
   // (the temperature, and how the thinking option reaches the server).
   // The reply limits combine field by field across the branch default and
@@ -694,6 +700,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // or the call wins. See `withHostKeys`.
   const hosted = withLocalDefaults(merged, ctx.getSmoltalkConfig().model);
   const clientConfig = withHostKeys(ctx.host.settings, hosted);
+  const requestConfig = () => {
+    if (!atRoundCap()) return clientConfig;
+    const { hostedTools: _droppedAtCap, ...withoutHosted } = clientConfig;
+    return withoutHosted;
+  };
 
   // Cap on characters of a single tool result fed back to the LLM. The
   // full result is still cached for Agency code via `setResultOnBranch`;
@@ -914,7 +925,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           tools: offeredTools(),
           prompt,
           responseFormat,
-          clientConfig,
+          clientConfig: requestConfig(),
           stateStack,
           retryPolicy,
           callLabel,
@@ -1877,7 +1888,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             tools: offeredTools(),
             prompt,
             responseFormat,
-            clientConfig,
+            clientConfig: requestConfig(),
             stateStack,
             retryPolicy,
             callLabel,
@@ -1981,7 +1992,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           tools: offeredTools(),
           prompt,
           responseFormat,
-          clientConfig,
+          clientConfig: requestConfig(),
           stateStack,
           retryPolicy,
           callLabel,

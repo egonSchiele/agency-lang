@@ -28,23 +28,30 @@ function makeCtx(): RuntimeContext<any> {
   });
 }
 
-/** A deterministic client that also records which tools each request
- *  offered, so a test can see the request after the cap carry none. */
+/** A deterministic client that also records which tools, and which
+ *  hosted tools, each request offered, so a test can see the request
+ *  after the cap carry none of either. */
 class RecordingClient implements LLMClient {
   readonly offered: string[][] = [];
+  readonly hosted: string[][] = [];
   private readonly inner: DeterministicClient;
 
   constructor(mocks: LLMMock[]) {
     this.inner = new DeterministicClient(mocks);
   }
 
-  async text(config: PromptConfig): Promise<Result<PromptResult>> {
+  private record(config: PromptConfig): void {
     this.offered.push((config.tools ?? []).map((tool) => tool.name));
+    this.hosted.push(config.hostedTools ?? []);
+  }
+
+  async text(config: PromptConfig): Promise<Result<PromptResult>> {
+    this.record(config);
     return this.inner.text(config);
   }
 
   textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    this.offered.push((config.tools ?? []).map((tool) => tool.name));
+    this.record(config);
     return this.inner.textStream(config);
   }
 
@@ -115,6 +122,7 @@ function call(
     // same result, and the cap is what is under test.
     clientConfig: {
       tools: [s.ping],
+      hostedTools: ["web_search"],
       maxToolCallRounds: opts.perCall,
       maxRepeatedToolCalls: 0,
     } as any,
@@ -130,7 +138,7 @@ function refusals(thread: MessageThread): string[] {
 }
 
 describe("the round cap", () => {
-  it("refuses the fourth round at a cap of 3, names the cap, and offers no tools after it", async () => {
+  it("refuses the fourth round at a cap of 3, names the cap, and offers no tools after it, hosted ones included", async () => {
     const s = setup(pingMocks(4));
     const thread = new MessageThread();
     const result = await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
@@ -145,6 +153,8 @@ describe("the round cap", () => {
     // Five requests: the first, one after each of the three rounds that
     // ran, and one after the refused round. Only the last carries no tools.
     expect(s.client.offered).toEqual([["ping"], ["ping"], ["ping"], ["ping"], []]);
+    const search = ["web_search"];
+    expect(s.client.hosted).toEqual([search, search, search, search, []]);
   });
 
   it("counts rounds per llm() call: a second call in the same frame gets its own cap", async () => {
@@ -160,15 +170,27 @@ describe("the round cap", () => {
     expect(refusals(second)).toHaveLength(1);
   });
 
-  it("the call's own value beats a branch default set with setLlmOptions", async () => {
-    const s = setup(pingMocks(4));
-    const thread = new MessageThread();
-    await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, async (run) => {
+  it("the call's own value and a branch default are both ceilings: the smaller wins", async () => {
+    // The trace case: the agent's branch-wide 50 must not replace the
+    // researcher's 30.
+    const lower = setup(pingMocks(4));
+    const lowerThread = new MessageThread();
+    await runInTestContext(lower.ctx, lower.ctx.stateStack, lower.threads, async (run) => {
       _setLlmOptions({ maxToolCallRounds: 10 });
-      await call(run, s, thread, { perCall: 3, baked: 10 });
+      await call(run, lower, lowerThread, { perCall: 3, baked: 10 });
     });
-    expect(s.runs()).toBe(3);
-    expect(refusals(thread)).toHaveLength(1);
+    expect(lower.runs()).toBe(3);
+    expect(refusals(lowerThread)[0]).toMatch(/\(3\) exceeded/);
+    // The flag case: --max-tool-call-rounds 2 must bound a call that asks
+    // for more.
+    const higher = setup(pingMocks(4));
+    const higherThread = new MessageThread();
+    await runInTestContext(higher.ctx, higher.ctx.stateStack, higher.threads, async (run) => {
+      _setLlmOptions({ maxToolCallRounds: 2 });
+      await call(run, higher, higherThread, { perCall: 10, baked: 10 });
+    });
+    expect(higher.runs()).toBe(2);
+    expect(refusals(higherThread)[0]).toMatch(/\(2\) exceeded/);
   });
 
   it("a branch default beats the baked value", async () => {

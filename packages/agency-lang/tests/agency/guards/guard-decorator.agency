@@ -1,5 +1,6 @@
 import test { _advanceTime } from "std::date"
-import { Critique, guarded, revise } from "std::strategy"
+import { guarded } from "std::decorators"
+import { Critique, revise } from "std::strategy"
 
 // The @guard decorator: a finished answer is the result; when the budget
 // runs out, a draft the body saved is the backup answer, with a note; with

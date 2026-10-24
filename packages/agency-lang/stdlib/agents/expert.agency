@@ -18,7 +18,7 @@ import { hostedSearchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, spillTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const skills = agentSkill("expert")

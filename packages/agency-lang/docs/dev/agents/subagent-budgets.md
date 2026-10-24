@@ -1,7 +1,7 @@
 # Subagent budgets
 
 A budget is a parameter on the subagent tool call, enforced by the
-stdlib agent's own `@guarded` decorator (`std::strategy`). The harness does
+stdlib agent's own `@guarded` decorator (`std::decorators`). The harness does
 not guard the turn.
 
 ## Where a budget comes from
@@ -26,7 +26,7 @@ parameters yet.
 Every stdlib agent with a budget carries the decorator:
 
 ```
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 
 @guarded(cost: maxCost, time: maxTime)
 export handoff def oracleAgent(question: string, maxCost: number = $20.00, maxTime: number = 15m, ...): Result<string> {

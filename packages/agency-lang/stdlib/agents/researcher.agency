@@ -24,7 +24,8 @@ import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { Critique, guarded, revise } from "std::strategy"
+import { guarded } from "std::decorators"
+import { Critique, revise } from "std::strategy"
 import {
   ThreadMessage,
   assistantMessage,

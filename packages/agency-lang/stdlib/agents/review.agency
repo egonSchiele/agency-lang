@@ -13,7 +13,7 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, spillTools, githubReadTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"

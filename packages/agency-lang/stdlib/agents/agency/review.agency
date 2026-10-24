@@ -13,7 +13,7 @@ import { llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared
 import { agencyDocTools, webTools, spillTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 import { ensureSystemMessage } from "std::thread"
 
 static const systemPrompt = """You review code written in the Agency language. Agency compiles to

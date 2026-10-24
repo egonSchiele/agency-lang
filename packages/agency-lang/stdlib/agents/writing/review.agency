@@ -24,7 +24,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 import { systemMessage, threadIsNew } from "std::thread"
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.

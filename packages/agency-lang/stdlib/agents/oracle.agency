@@ -21,7 +21,7 @@ import {
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("oracle")

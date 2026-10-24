@@ -684,8 +684,8 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
 
 /** Internal: what a budgeted agent call reports, given the Result its
   guard returned and the guard's trip interrupt data (`null` when the guard
-  did not trip). The rule is written once here, for the `@guard`
-  decorator in `std::strategy`:
+  did not trip). The rule is written once here, for the `@guarded`
+  decorator in `std::decorators`:
 
   1. No trip: the guard's Result, except that a finished `""` is a failure,
      "it returned no answer".

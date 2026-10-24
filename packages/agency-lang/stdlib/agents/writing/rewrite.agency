@@ -20,7 +20,7 @@ import {
   WritingReviewEvalInput,
  } from "std::agents/writing/review"
 import { evalValue, setAgentName } from "std::statelog"
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 
 static const rewritePrompt = """You rewrite prose to apply a reviewer's findings. You get the text, the task it was written for, and the findings. Return the rewritten text and nothing else: no preamble, no notes, no list of what you changed.
 

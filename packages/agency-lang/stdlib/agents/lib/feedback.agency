@@ -3,9 +3,13 @@
   to merge, flatten, render, and inspect feedback lists.
 */
 
+/** One finding. `source` is the URL of the page the reviewer checked the
+  point against, when it checked one, so the agent being reviewed can
+  cite it instead of finding it again. */
 export type Feedback = {
   error: boolean;
-  feedback: string
+  feedback: string;
+  source?: string
 }
 
 export def mergeFeedback(
@@ -45,11 +49,14 @@ export def flattenFeedback(feedback: Result<Feedback[]>[]): Result<Feedback[]> {
 }
 
 def feedbackToString(f: Feedback): string {
+  let line = `Feedback: ${f.feedback}`
   if (f.error) {
-    return `Error: ${f.feedback}`
-  } else {
-    return `Feedback: ${f.feedback}`
+    line = `Error: ${f.feedback}`
   }
+  if (f.source != null && f.source != "") {
+    line = "${line} (source: ${f.source})"
+  }
+  return line
 }
 
 export def renderFeedback(feedback: Result<Feedback[]>): string {

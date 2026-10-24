@@ -5,6 +5,16 @@
   The grounding loop is this agent's own contract: a grounded, cited answer
   is what it produces. Checking that answer against a wider task is the
   caller's job, via reviewAgent.
+
+  Two rules of the loop live here and not in `revise` (`std::strategy`),
+  which other agents use for other work. An empty answer is never
+  reviewed: the model is asked once more, with no tools, to write its
+  answer from what it read, and a second empty reply is a failure naming
+  the cause. And a rejected answer is fixed, not redone: the next attempt
+  gets the answer and the findings, patches the gaps in a subthread under
+  a small round cap, and uses a fact the review already gives with its
+  source instead of looking it up again. See
+  docs/dev/agents/research-loop.md.
 */
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
@@ -54,9 +64,68 @@ export def buildTools(): any[] {
   ]
 }
 
-static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered."
+static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered. When you verified a point against a page, put that page's URL in `source`."
+
+// A first reply shorter than this is treated as no answer: an empty
+// string, or a few words where a cited answer was asked for. Reviewing it
+// wastes the review, which in trace wX5GvrUq did the research itself and
+// reported seven gaps against nothing. The floor applies to the first
+// reply only: a short reply to the follow-up is an answer the model gave
+// twice, and the review judges it.
+static const MIN_ANSWER_CHARS = 20
+
+static const NO_ANSWER_FOLLOWUP = "You returned no answer. Write your answer now from what you have read, citing sources."
+
+// Tool rounds a fix attempt may use. It starts from an answer and a list
+// of gaps, so it needs a few fetches at most, where the first attempt
+// needs thirty.
+static const FIX_ROUNDS = 8
+
+def answerIsBlank(answer: any): boolean {
+  if (answer == null) {
+    return true
+  }
+  const text: string = "${answer}"
+  return text.trim().length == 0
+}
+
+def answerIsEmpty(answer: any): boolean {
+  if (answer == null) {
+    return true
+  }
+  const text: string = "${answer}"
+  return text.trim().length < MIN_ANSWER_CHARS
+}
+
+/** The brief for a fix attempt: the answer so far and the findings,
+  with the instruction to patch the gaps and keep the rest. */
+def fixPrompt(answer: string, critique: string): string {
+  return """Your answer so far:
+
+<answer>
+${answer}
+</answer>
+
+A review found these gaps:
+
+<review>
+${critique}
+</review>
+
+Patch these specific gaps and keep everything else as it is. Where a finding already gives the fact and the source that backs it, use them as given and cite that source; do not look it up again. Fetch only what the review does not give you, and only for a gap it names. Return the complete, corrected answer.
+"""
+}
 
 def checkGrounding(task: string, startedAt: number, answer: any): Critique {
+  // An attempt that could not produce an answer is reported, not
+  // reviewed: accepting it ends the loop, and the failure reaches the
+  // caller with its cause.
+  if (isFailure(answer)) {
+    return {
+      accepted: true,
+      feedback: ""
+    }
+  }
   // Verification effort scales with the work: the review gets half the
   // time the answer took to produce, clamped between 20s and 2m. A
   // 70-second answer gets a 35-second check instead of a 2-minute one;
@@ -95,14 +164,15 @@ Check that every claim is backed by a source you fetched, cite it, and fix any c
       feedback: ""
     }
   }
+  // The findings alone. The fix attempt's brief (fixPrompt) says what to
+  // do with them; an instruction here to retrieve more would contradict
+  // it, and re-fetching is what the fix attempt exists to avoid.
   return {
     accepted: false,
     feedback: """
 Your answer has gaps:
 
 ${renderFeedback(reviewed)}
-
-Retrieve more and fix them.
 """
   }
 }
@@ -134,28 +204,65 @@ def researchLoop(
   }
   const question = withContext(task: task, context: context)
   const startedAt = now()
+  const tools = [...researchTools, ...extraTools, saveDraft]
+  const hostedTools = hostedSearchTools(model, provider)
+  // The last attempt's answer, for the fix attempt that follows a
+  // rejection. The block writes it; revise only hands the next attempt
+  // the critique.
+  let lastAnswer = ""
   return revise(
     maxAttempts: maxAttempts,
     check: checkGrounding.partial(task: task, startedAt: startedAt),
   ) as critique {
-
-    let msg = critique
+    let answer: any = null
     if (critique == "") {
-      msg = question
+      answer = llm(
+        question,
+        llmOptions(
+          model: model,
+          provider: provider,
+          tools: tools,
+          hostedTools: hostedTools,
+          // A research run is many searches and fetches; the default ten
+          // rounds end it before the sources are in.
+          maxToolCallRounds: 30
+        ),
+      )
+      if (answerIsEmpty(answer)) {
+        // The model read its sources and then wrote nothing (its reply
+        // went to thinking, or it stopped). Ask once more on the same
+        // thread, with no tools, so the only thing it can do is answer.
+        // Any non-blank reply is the attempt, however short: the review
+        // judges it. Two blank replies are a failure the caller sees.
+        answer = llm(NO_ANSWER_FOLLOWUP, llmOptions(model: model, provider: provider))
+        if (answerIsBlank(answer)) {
+          return failure("the model returned no answer twice")
+        }
+      }
+    } else {
+      // A fix, not a redo: the answer plus the findings, in a subthread
+      // so the research thread does not grow by a second attempt, under
+      // a round cap sized for patching. A fix that comes back empty
+      // keeps the answer it was given, which is still the best one; the
+      // check then reviews that answer again, which revise gives no way
+      // to skip.
+      subthread {
+        answer = llm(
+          fixPrompt(lastAnswer, critique),
+          llmOptions(
+            model: model,
+            provider: provider,
+            tools: tools,
+            hostedTools: hostedTools,
+            maxToolCallRounds: FIX_ROUNDS
+          ),
+        )
+      }
+      if (answerIsEmpty(answer)) {
+        answer = lastAnswer
+      }
     }
-
-    const answer = llm(
-      msg,
-      llmOptions(
-        model: model,
-        provider: provider,
-        tools: [...researchTools, ...extraTools, saveDraft],
-        hostedTools: hostedSearchTools(model, provider),
-        // A research run is many searches and fetches; the default ten
-        // rounds end it before the sources are in.
-        maxToolCallRounds: 30
-      ),
-    )
+    lastAnswer = answer
     saveDraft(answer)
     return answer
   }
@@ -165,7 +272,7 @@ def researchLoop(
 export handoff def researcherAgent(
   task: string,
   context: string = "",
-  maxAttempts: number = 2,
+  maxAttempts: number = 3,
   maxCost: number = $50.00,
   maxTime: number = 30m,
   model: string = "",
@@ -182,7 +289,8 @@ export handoff def researcherAgent(
   @param context - Extra material folded into the prompt, or ""
   @param history - The conversation before the question, oldest first, so
     the question is read in its context; [] for none
-  @param maxAttempts - Answer-and-fix attempts before returning
+  @param maxAttempts - Attempts before returning: one research pass, then
+    fix passes that patch the review's findings
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model

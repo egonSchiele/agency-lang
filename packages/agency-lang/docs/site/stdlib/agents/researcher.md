@@ -11,6 +11,16 @@ a cited answer, retrying until every claim is grounded.
   is what it produces. Checking that answer against a wider task is the
   caller's job, via reviewAgent.
 
+  Two rules of the loop live here and not in `revise` (`std::strategy`),
+  which other agents use for other work. An empty answer is never
+  reviewed: the model is asked once more, with no tools, to write its
+  answer from what it read, and a second empty reply is a failure naming
+  the cause. And a rejected answer is fixed, not redone: the next attempt
+  gets the answer and the findings, patches the gaps in a subthread under
+  a small round cap, and uses a fact the review already gives with its
+  source instead of looking it up again. See
+  docs/dev/agents/research-loop.md.
+
 ## Types
 
 ### ResearchEvalInput
@@ -29,7 +39,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L336))
 
 ## Functions
 
@@ -45,7 +55,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L52))
 
 ### researcherAgent
 
@@ -54,7 +64,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 researcherAgent(
   task: string,
   context: string = "",
-  maxAttempts: number = 2,
+  maxAttempts: number = 3,
   maxCost: number = $50.00,
   maxTime: number = 30m,
   model: string = "",
@@ -72,7 +82,8 @@ Answer a research question from web and Wikipedia sources and return a
   @param context - Extra material folded into the prompt, or ""
   @param history - The conversation before the question, oldest first, so
     the question is read in its context; [] for none
-  @param maxAttempts - Answer-and-fix attempts before returning
+  @param maxAttempts - Attempts before returning: one research pass, then
+    fix passes that patch the review's findings
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model
@@ -86,7 +97,7 @@ Answer a research question from web and Wikipedia sources and return a
 |---|---|---|
 | task | `string` |  |
 | context | `string` | "" |
-| maxAttempts | `number` | 2 |
+| maxAttempts | `number` | 3 |
 | maxCost | `number` | $50.00 |
 | maxTime | `number` | 30m |
 | model | `string` | "" |
@@ -99,4 +110,4 @@ Answer a research question from web and Wikipedia sources and return a
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L272))

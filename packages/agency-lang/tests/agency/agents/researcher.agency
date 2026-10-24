@@ -1,7 +1,62 @@
+// The researcher's loop under a scripted model: an empty first answer is
+// asked for again and never reviewed, two empty answers are a failure
+// naming the cause, and a rejected answer is fixed from the review's own
+// facts in one short call on a subthread. See
+// docs/dev/agents/research-loop.md. The mocks are scoped by module:
+// "researcher" is this agent's calls and "review" the grounding check's.
 import { researcherAgent } from "std::agents/researcher"
+import { currentThreadId, getThread } from "std::thread"
+
+def rejectEverything(intr) {
+  return reject()
+}
+
+def research(task: string): Result<string> {
+  handle {
+    return researcherAgent(task: task, maxCost: $1.00, maxTime: 1m)
+  } with rejectEverything
+}
+
+node emptyFirstAnswerIsAskedAgain(): string {
+  const answer = research("what did he study")
+  if (answer is failure(err)) {
+    return "failed: ${err}"
+  }
+  return answer.value
+}
+
+node twoEmptyAnswersAreAFailure(): string {
+  const answer = research("what did he study")
+  if (answer is failure(err)) {
+    return "failed: ${err}"
+  }
+  return "answered: ${answer.value}"
+}
+
+/** The fix attempt's brief and reply stay off the research thread. */
+def fixStayedOnASubthread(): boolean {
+  const messages = getThread(currentThreadId(), 0, 100)
+  if (messages is failure(_)) {
+    return false
+  }
+  return !some(messages.value, \m -> m.content.includes("A review found these gaps"))
+}
+
+node rejectedAnswerIsFixedNotRedone(): string {
+  const answer = research("what did he study")
+  if (answer is failure(err)) {
+    return "failed: ${err}"
+  }
+  if (!fixStayedOnASubthread()) {
+    return "the fix ran on the research thread"
+  }
+  return answer.value
+}
 
 // The grounding loop retries on review error findings, then returns the
-// revised answer once the review comes back clean.
+// revised answer once the review comes back clean. The mocks are one
+// ordered list, so the interleaving of the agent's and the check's
+// calls is spelled out: answer, review, fix, review.
 node retriesUntilGrounded(): string {
   const result = researcherAgent("what is the boiling point of water")
   if (isFailure(result)) { return "failed" }

@@ -11,14 +11,22 @@ to merge, flatten, render, and inspect feedback lists.
 
 ### Feedback
 
+One finding. `source` is the URL of the page the reviewer checked the
+  point against, when it checked one, so the agent being reviewed can
+  cite it instead of finding it again.
+
 ```ts
+/** One finding. `source` is the URL of the page the reviewer checked the
+  point against, when it checked one, so the agent being reviewed can
+  cite it instead of finding it again. */
 export type Feedback = {
   error: boolean;
-  feedback: string
+  feedback: string;
+  source?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L6))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L9))
 
 ## Functions
 
@@ -43,7 +51,7 @@ Merge two feedback Results by concatenating their success arrays or
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L15))
 
 ### flattenFeedback
 
@@ -63,7 +71,7 @@ Flatten an array of feedback Results into a single Result.
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L38))
 
 ### renderFeedback
 
@@ -83,7 +91,7 @@ Render a feedback Result as human-readable text, one line per finding.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L62))
 
 ### feedbackHasErrors
 
@@ -104,7 +112,7 @@ True when any finding is an error, or when the feedback Result itself
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L74))
 
 ### failOpenFeedback
 
@@ -124,4 +132,4 @@ Pass a successful feedback list through unchanged; map any failure to
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L88))

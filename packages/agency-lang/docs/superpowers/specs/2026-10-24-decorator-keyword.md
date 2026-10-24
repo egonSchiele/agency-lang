@@ -1,6 +1,6 @@
 # The `decorator` keyword — Spec
 
-Status: settled 2026-10-24 in discussion with the maintainer; revised after the plan review. Follows `2026-10-23-decorator-shape-and-arguments.md`, which shipped in PR #1269. Plan: `docs/superpowers/plans/2026-10-24-decorator-keyword.md`.
+Status: shipped 2026-10-24 on branch `adit/decorator-keyword`; settled in discussion with the maintainer and revised after the plan review. Follows `2026-10-23-decorator-shape-and-arguments.md`, which shipped in PR #1269. Plan: `docs/superpowers/plans/2026-10-24-decorator-keyword.md`.
 
 ## Why
 

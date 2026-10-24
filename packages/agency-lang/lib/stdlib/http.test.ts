@@ -78,6 +78,15 @@ describe("checkAllowedDomains", () => {
     expect(result).toContain("Invalid URL");
   });
 
+  it("treats a host and its www subdomain as one site, either way round", () => {
+    expect(checkAllowedDomains("https://www.example.com/a", ["example.com"])).toBeNull();
+    expect(checkAllowedDomains("https://example.com/a", ["www.example.com"])).toBeNull();
+    // Any other subdomain is another host.
+    expect(checkAllowedDomains("https://api.example.com/a", ["example.com"])).toContain(
+      "not in allowedDomains",
+    );
+  });
+
   it("allows any of multiple domains", () => {
     expect(checkAllowedDomains("https://b.com/data", ["a.com", "b.com", "c.com"])).toBeNull();
   });

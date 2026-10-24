@@ -335,6 +335,36 @@ at any step.
 agent home, by name (`settingsReadRule`). The tree-searching effects
 carry no `filename`, so a rule that names one cannot match them.
 
+## Why `recommended` approves a GET fetch
+
+`std::http::fetch`, `fetchJSON`, and `fetchMarkdown` each get one rule
+in `recommended`: approve when the effect's `method` is `GET` or `HEAD`
+(`webReadRules` in `lib/runtime/builtinPolicies.ts`). A request with any
+other method sends something, so it has no rule and prompts.
+`with-writes` is `recommended` plus writes, so it carries the rule;
+`minimal` does not.
+
+The reason is trace wX5GvrUq. The researcher offered three fetch tools,
+each with its own effect. The user's saved policy approved two of them,
+the model used the third, and every fetch waited on a prompt: 26 of the
+run's 57 minutes. `recommended` approved no `std::http` effect at all,
+so a fresh policy would have prompted on every fetch. A GET of a public
+page is the same class of action as the web searches and Wikipedia
+lookups the policy already approves, and it is what the research agent
+does on every source, so it belongs with them. The agent now offers one
+fetch tool (`webTools` in `stdlib/agents/lib/toolkits.agency`), but the
+rule covers all three effects so a program or an older tool list is
+covered too.
+
+What this widens, honestly: text injected into one page can already have
+the agent put what it found into a search query, which `recommended`
+approves. A GET lets it choose the host as well, by putting the text in
+a URL. That is the same class of leak to a different recipient, and the
+read-scope rules above (nothing outside the project, nothing from the
+agent home's conversations) are what bound what there is to leak. A
+saved policy from before this change has no rule and keeps prompting;
+`/policy` offers the missing rules.
+
 ## Why `recommended` has no `std::write` rule
 
 It approves no file write at all. `std::mkdir` has one, for the agent home

@@ -316,6 +316,21 @@ export class ThreadStore {
     return this.restoreBranchView([id], log);
   }
 
+  /** The ids of `thread` and its ancestors, nearest first: the threads
+   *  whose messages are in `thread`'s conversation, since a subthread
+   *  starts with its parent's. The thread is registered if it was not
+   *  yet. The fetch cache keeps these for a tool call, which runs on a
+   *  store of its own and cannot walk this one (lib/runtime/fetchCache.ts). */
+  lineageOf(thread: MessageThread): MessageThreadID[] {
+    const lineage: MessageThreadID[] = [];
+    let current: MessageThreadID | null = this.idOf(thread) ?? this.register(thread);
+    while (current !== null && !lineage.includes(current)) {
+      lineage.push(current);
+      current = this.threads[current]?.parentId ?? null;
+    }
+    return lineage;
+  }
+
   private idOf(thread: MessageThread): MessageThreadID | undefined {
     return Object.keys(this.threads).find((id) => this.threads[id] === thread);
   }

@@ -1,6 +1,28 @@
 {
   "tests": [
     {
+      "nodeName": "webToolsHaveOneFetch",
+      "description": "webTools offers fetchMarkdown and no other fetch",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "recommendedApprovesTheResearcherFetch",
+      "description": "recommended approves a GET through the researcher's fetch tool and not a POST",
+      "input": "",
+      "expectedOutput": "\"approve propagate\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "everyBundleHasTools",
       "description": "every bundle returns tools",
       "input": "",

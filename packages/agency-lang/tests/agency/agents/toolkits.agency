@@ -1,3 +1,4 @@
+import { builtinPolicy, checkPolicy } from "std::policy"
 import {
   readOnlyFileTools,
   writableFileTools,
@@ -139,4 +140,30 @@ node wikipediaToolsAreRenamed(): boolean {
 node docsToolsHaveStableNames(): boolean {
   const names = map(agencyDocTools(), \tool -> tool.name)
   return names.includes("agencyGuide") && names.includes("agencyDiagnostics")
+}
+
+// The researcher gets one fetch tool, so one policy rule covers every
+// fetch it makes. Three fetch tools with three effects is how trace
+// wX5GvrUq spent 26 minutes on approval prompts (ADI-44).
+node webToolsHaveOneFetch(): boolean {
+  const names = map(webTools(), \tool -> tool.name)
+  const fetches = filter(names, \name -> name == "fetch" || name == "fetchJSON" || name == "fetchMarkdown")
+  return fetches.length == 1 && fetches[0] == "fetchMarkdown"
+}
+
+def fetchDecision(method: string): string {
+  const policy = builtinPolicy("recommended", ".")
+  const decision = checkPolicy(policy, {
+    effect: "std::http::fetchMarkdown",
+    message: "Allow a ${method} request to this URL?",
+    data: { baseUrl: "https://example.com", path: "/about", method: method },
+    origin: ""
+  })
+  return decision.type
+}
+
+// The recommended policy approves the researcher's fetch tool for a read
+// and leaves a request that sends a body to the prompt.
+node recommendedApprovesTheResearcherFetch(): string {
+  return "${fetchDecision("GET")} ${fetchDecision("POST")}"
 }

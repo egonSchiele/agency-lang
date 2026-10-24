@@ -4,8 +4,9 @@ import {
   isTimeoutError,
   readCause,
 } from "../runtime/errors.js";
-import { currentRun } from "../runtime/asyncContext.js";
-import { failure, type ResultFailure } from "../runtime/result.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { fetchCacheNote, recordFetch } from "../runtime/fetchCache.js";
+import { failure, isFailure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -288,6 +289,41 @@ export async function __internal_fetch(
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
 }
 
+/**
+ * The note a fetch tool returns instead of fetching, when this
+ * conversation already fetched the URL, or null when the fetch should
+ * run. Called by the Agency fetch functions before they raise their
+ * interrupt, so a cache hit asks no one. `tool` is the function's name,
+ * for the record. See lib/runtime/fetchCache.ts.
+ */
+export function _fetchCacheNote(
+  baseUrl: string,
+  urlPath: string,
+  method: string,
+  body: unknown,
+  refresh: boolean,
+  tool: string,
+): string | null {
+  const run = currentRun();
+  return fetchCacheNote(run, { url: resolveUrl(baseUrl, urlPath), method, body, tool }, refresh);
+}
+
+/** Record a completed fetch in the run's fetch cache. A failure is not a
+ *  fetch, so it is not recorded. */
+function remember(
+  run: Run,
+  result: unknown,
+  request: { baseUrl: string; urlPath: string; method: string; body: unknown; tool: string },
+): void {
+  if (isFailure(result)) return;
+  recordFetch(run, {
+    url: resolveUrl(request.baseUrl, request.urlPath),
+    method: request.method,
+    body: request.body,
+    tool: request.tool,
+  });
+}
+
 /** ALS-reading replacement for `__internal_fetch`. */
 export async function _fetch(
   baseUrl: string,
@@ -298,8 +334,21 @@ export async function _fetch(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = currentRun();
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetch" });
+  return result;
 }
 
 async function fetchJSONImpl(
@@ -369,8 +418,9 @@ export async function _fetchJSON(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<any> {
-  const { ctx, stack } = currentRun();
-  return fetchJSONImpl(
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchJSONImpl(
     ctx,
     stack,
     baseUrl,
@@ -381,6 +431,8 @@ export async function _fetchJSON(
     body,
     timeoutMs,
   );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchJSON" });
+  return result;
 }
 
 async function fetchMarkdownImpl(
@@ -450,8 +502,9 @@ export async function _fetchMarkdown(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = currentRun();
-  return fetchMarkdownImpl(
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchMarkdownImpl(
     ctx,
     stack,
     baseUrl,
@@ -462,6 +515,8 @@ export async function _fetchMarkdown(
     body,
     timeoutMs,
   );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchMarkdown" });
+  return result;
 }
 
 function htmlToMarkdown(html: string): string {
@@ -521,12 +576,21 @@ export function resolveUrl(baseUrl: string, path: string): string {
   return base + p;
 }
 
+/** A host and the same host without its `www.`: `www.example.com` and
+ *  `example.com` are one site to anyone writing an allow list. A model
+ *  given `https://www.3blue1brown.com` listed `3blue1brown.com` three
+ *  times in a row and was refused each time (ADI-44). Any other subdomain
+ *  is a different host and must be listed. */
+function withoutWww(host: string): string {
+  return host.replace(/^www\./, "");
+}
+
 export function checkAllowedDomains(url: string, allowedDomains: string[]): string | null {
   if (allowedDomains.length === 0) return null;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    const allowed = allowedDomains.map((d) => d.toLowerCase());
-    if (!allowed.includes(hostname)) {
+    const allowed = allowedDomains.map((d) => withoutWww(d.toLowerCase()));
+    if (!allowed.includes(withoutWww(hostname))) {
       return `Domain "${hostname}" is not in allowedDomains.`;
     }
     return null;

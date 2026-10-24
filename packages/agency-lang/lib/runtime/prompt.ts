@@ -50,6 +50,7 @@ import {
 } from "./promptRunner.js";
 import { withCallDepth } from "./callDepth.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
+import { recordToolCall } from "./fetchCache.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
 import {
@@ -1040,6 +1041,15 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       let toolResult: any;
       ctx.enterToolCall();
       try {
+        // For the fetch cache: the conversation this call's result goes
+        // to, and which function the model called. The body runs on a
+        // thread store of its own and cannot see `messages`, so the loop
+        // records both on the stack the body reads as
+        // `run.toolInvocationStack`.
+        recordToolCall(branchStack, {
+          conversation: args.run.threads.lineageOf(messages),
+          tool: { module: handler.module, registeredName: handler.registeredName },
+        });
         const invokeAsTool = (threadRun: Run) =>
           runAsToolInvocation(threadRun, branchStack, (toolRun) =>
             handler.invoke(toolRun, callFromOutside(namedArgs)),

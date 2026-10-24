@@ -53,7 +53,7 @@ import {
   ghIssueClose,
   ghIssueLabel,
  } from "std::github"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
 import { safeBash } from "std::safeBash"
 import { ls, glob, grep, exec } from "std::shell"
@@ -240,13 +240,18 @@ export def githubTools(): any[] {
 
 export def webTools(): any[] {
   """
-  Return tools that retrieve a named web resource: HTTP fetches and Wikipedia
-  lookups. These retrieve something you can already name; to discover a
-  source you cannot name yet, add a search tool as well.
+  Return tools that retrieve a named web resource: one HTTP fetch and the
+  Wikipedia lookups. These retrieve something you can already name; to
+  discover a source you cannot name yet, add a search tool as well.
+
+  One fetch, not three. fetchMarkdown returns an HTML page as text the
+  model can read and any other body (JSON included) as it came, so it
+  covers what fetch and fetchJSON did. Three fetch tools meant three
+  effects for a policy to cover: in trace wX5GvrUq the user's policy
+  approved two of them, the model used the third, and 26 of 57 minutes
+  went to approval prompts (ADI-44).
   """
   return [
-    fetch,
-    fetchJSON,
     fetchMarkdown,
     wikipediaSearch.rename("wikipedia_search"),
     wikipediaSummary.rename("wikipedia_summary"),

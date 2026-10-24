@@ -1,3 +1,9 @@
+## Unreleased
+
+### Breaking
+
+- **The budget decorator is now `@guarded` in `std::decorators`.** Change `import { guard } from "std::strategy"` to `import { guarded } from "std::decorators"`, and `@guard(...)` to `@guarded(...)`. The name changed in #1269 (so the decorator can be called as a function, since `guard(...) {` always parses as the block), and the module changed in #1271: `std::decorators` is where every decorator the standard library ships now lives.
+
 ## Oct 23 2026 — v0.32.0
 
 ### Language
@@ -35,7 +41,7 @@
 
 ### Standard Library
 
-- **`@guard` is the first stdli decorator. It sets a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is returned as the result.
+- **`@guard` is the first stdlib decorator. It sets a budget on a whole function.** `import { guard } from "std::strategy"`, then `@guard(cost: $1.00, time: 5m)` above a `def`. If the budget runs out, whatever the body saved with `saveDraft` (or handed up through a `finalize`) is returned as the result.
 - **The stdlib agents use `@guard`.** The researcher, oracle, explorer, Agency researcher, coding, data, expert, Agency expert, planner, review, verifier, TypeScript review, Agency review, Agency verifier, Agency coding, writing review, and writing rewrite agents.
 - **`reviewAgent` takes `failOpen`,** like `writingReviewAgent`. The researcher's grounding check passes `failOpen: false`, so a review that ran out of budget before saving any findings rejects the answer instead of accepting it as reviewed.
 - **Breaking — `std::ui` is deleted.** All the legacy curses code is gone. The terminal prompts (`select`, `autocomplete`, `prompt`, `confirm`, `chooseOption`, `pushMessage`) moved to `std::ui/cli`. In the agent, `/clear` now clears the screen.

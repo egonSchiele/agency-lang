@@ -1,7 +1,8 @@
 import test { _advanceTime } from "std::date"
-import { Critique, guarded, revise } from "std::strategy"
+import { guarded } from "std::decorators"
+import { Critique, revise } from "std::strategy"
 
-// The @guard decorator: a finished answer is the result; when the budget
+// The @guarded decorator: a finished answer is the result; when the budget
 // runs out, a draft the body saved is the backup answer, with a note; with
 // nothing saved, the trip is a failure naming the budget. No node has a
 // handler: the decorator answers its own trip. See

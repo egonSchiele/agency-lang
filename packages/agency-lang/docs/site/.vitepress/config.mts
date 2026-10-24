@@ -416,6 +416,7 @@ export default defineConfig({
               ],
             },
             { text: "date", link: "/stdlib/date" },
+            { text: "decorators", link: "/stdlib/decorators" },
             { text: "effectSets", link: "/stdlib/effectSets" },
             { text: "embedding", link: "/stdlib/embedding" },
             { text: "fs", link: "/stdlib/fs" },

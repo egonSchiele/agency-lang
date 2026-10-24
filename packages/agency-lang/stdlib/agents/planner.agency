@@ -12,9 +12,9 @@ import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { readOnlyFileTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { verifierAgent } from "std::agents/verifier"
+import { guarded } from "std::decorators"
 import { getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
 
 import { communicationTools } from "./lib/toolkits.agency"
 

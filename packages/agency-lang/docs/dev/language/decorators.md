@@ -144,7 +144,7 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 
 ## The stdlib decorator: `@guarded`
 
-`std::strategy` ships one decorator, `@guarded(cost:, time:, label:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. Its name differs from the `guard { }` block's on purpose: `guard(...) {` always parses as the block, so a decorator named `guard` could not be called as a function. The agents that post-process their guarded result still keep the guarded part in an inner def, because a decorator wraps a whole def and the post-processing wants to sit outside the wrap.
+`std::decorators` ships one decorator, `@guarded(cost:, time:, label:)` (moved there from `std::strategy` so every stdlib decorator has one home), which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. Its name differs from the `guard { }` block's on purpose: `guard(...) {` always parses as the block, so a decorator named `guard` could not be called as a function. The agents that post-process their guarded result still keep the guarded part in an inner def, because a decorator wraps a whole def and the post-processing wants to sit outside the wrap.
 
 ## Files
 

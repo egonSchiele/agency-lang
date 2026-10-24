@@ -8,8 +8,8 @@ import { runCode } from "std::agency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, readOnlyGitTools, shellTools } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You judge whether a program's actual result satisfies a task.

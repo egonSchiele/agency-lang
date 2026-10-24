@@ -19,8 +19,8 @@ import {
   SAVE_DRAFT_HINT,
   ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"

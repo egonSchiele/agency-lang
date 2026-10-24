@@ -186,10 +186,10 @@ If you give the inner guard more budget, it does not give the outer guard more b
 
 ## Guarding a whole function
 
-To put a guard around a whole function, use the `@guarded` decorator from `std::strategy`:
+To put a guard around a whole function, use the `@guarded` decorator from `std::decorators`:
 
 ```ts
-import { guarded } from "std::strategy"
+import { guarded } from "std::decorators"
 
 @guarded(cost: $1.00, time: 5m)
 def summarize(text: string): Result<string> {

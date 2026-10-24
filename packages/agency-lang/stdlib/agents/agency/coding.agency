@@ -20,10 +20,11 @@ import {
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { agentPrompt, agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { Critique, guarded, revise } from "std::strategy"
+import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found

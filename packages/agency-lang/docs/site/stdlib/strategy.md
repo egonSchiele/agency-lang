@@ -8,7 +8,8 @@ description: "Run a block several times and combine the results."
 Run a block several times and combine the results. `sample` collects
 every result, `consensus` takes the majority vote, and `retry` /
 `retryWithFeedback` re-run a block until one result passes a test. The
-`@guard` decorator runs a whole function under a cost and time budget.
+`@guarded` decorator, which runs a whole function under a budget, lives
+in `std::decorators`.
 
 ```ts
 import { consensus } from "std::strategy"
@@ -40,7 +41,7 @@ export type Critique = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L98))
 
 ## Functions
 
@@ -64,7 +65,7 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L30))
 
 ### consensus
 
@@ -86,7 +87,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L42))
 
 ### retry
 
@@ -110,7 +111,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L53))
 
 ### retryWithFeedback
 
@@ -138,7 +139,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L71))
 
 ### revise
 
@@ -171,7 +172,7 @@ Run a block until its result is accepted, up to maxAttempts times. Each
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L103))
 
 ### firstValid
 
@@ -195,64 +196,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L156))
-
-### guarded
-
-```ts
-guarded(
-  cost: number | null = null,
-  time: number | null = null,
-  label: string | null = null,
-  call: Call,
-  block: (args: object) -> any,
-): Result raises <std::guard>
-```
-
-Run the decorated function under a cost and time budget, labelled with
-  the function's name. If the budget runs out, the draft the function saved
-  is the result, marked as possibly unfinished; with nothing saved, the
-  result is a failure naming the budget.
-
-  @param cost - Spend cap in dollars, or null for none
-  @param time - Working-time cap, or null for none
-  @param label - The guard's label; the function's name when null
-
-The `@guarded` decorator: the `guard` block put around a whole function,
-  with three rules added. If the body finishes, its result is the result
-  (a finished `""` is a failure, "it returned no answer"). If the budget
-  runs out, the best answer the body had is the result: what it saved with
-  `saveDraft`, or handed up through a `finalize`, with a line appended to
-  a string saying it may be unfinished. With nothing saved, the result is
-  a failure naming the budget, "its time budget of 30m ran out".
-
-  ```ts
-  import { guarded } from "std::strategy"
-
-  @guarded(cost: $1.00, time: 5m)
-  def summarize(text: string): Result<string> {
-    return llm("Summarize: ${text}", { tools: [saveDraft] })
-  }
-  ```
-
-  The body runs with the arguments as passed (`block(call.args)`). Its draft
-  reaches the guard the way any partial result does: by return position, or
-  through a `finalize`. The decorator answers its own budget trip, so a
-  caller cannot grant more budget; pass a larger limit instead. See
-  docs/dev/agents/subagent-budgets.md.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| cost | `number \| null` | null |
-| time | `number \| null` | null |
-| label | `string \| null` | null |
-| call | [Call](index.md#call) |  |
-| block | `(args: Record<string, any>) => any` |  |
-
-**Returns:** `Result`
-
-**Throws:** `std::guard`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L157))

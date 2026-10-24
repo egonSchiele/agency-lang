@@ -16,6 +16,8 @@ import {
   readBodyBytesCapped,
   resolveUrl,
   runHttp,
+  _fetchTarget,
+  networkOf,
 } from "./http.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../constants.js";
 
@@ -51,6 +53,53 @@ describe("resolveUrl", () => {
 
   it("handles both trailing and leading slashes", () => {
     expect(resolveUrl("https://api.github.com/", "repos")).toBe("https://api.github.com/repos");
+  });
+});
+
+describe("_fetchTarget and networkOf", () => {
+  it("names the scheme and calls a public host public", () => {
+    expect(_fetchTarget("https://example.com", "/about")).toEqual({
+      scheme: "https",
+      network: "public",
+    });
+    expect(_fetchTarget("http://example.com", "")).toEqual({ scheme: "http", network: "public" });
+  });
+
+  it("calls loopback, private, link-local, and local names local", () => {
+    for (const host of [
+      "localhost",
+      "LOCALHOST",
+      "dev.localhost",
+      "printer.local",
+      "127.0.0.1",
+      "127.1.2.3",
+      "0.0.0.0",
+      "10.0.0.5",
+      "192.168.1.4",
+      "172.16.0.1",
+      "172.31.255.255",
+      "169.254.169.254",
+      "[::1]",
+      "[::]",
+      "[fd12:3456::1]",
+      "[fe80::1]",
+      "[::ffff:10.0.0.1]",
+    ]) {
+      expect(networkOf(host), host).toBe("local");
+    }
+    for (const host of [
+      "example.com",
+      "172.32.0.1",
+      "11.0.0.1",
+      "localhost.example.com",
+      "[2606:4700::1]",
+    ]) {
+      expect(networkOf(host), host).toBe("public");
+    }
+  });
+
+  it("says unknown for something that is not a URL", () => {
+    expect(_fetchTarget("not a url", "")).toEqual({ scheme: "", network: "unknown" });
   });
 });
 

@@ -1041,15 +1041,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       let toolResult: any;
       ctx.enterToolCall();
       try {
-        // For the fetch cache: the conversation this call's result goes
-        // to, and which function the model called. The body runs on a
-        // thread store of its own and cannot see `messages`, so the loop
-        // records both on the stack the body reads as
-        // `run.toolInvocationStack`.
-        recordToolCall(branchStack, {
-          conversation: args.run.threads.lineageOf(messages),
-          tool: { module: handler.module, registeredName: handler.registeredName },
-        });
+        // For the fetch cache: which function the model called, and the
+        // conversation the result goes to. The body runs on a thread store
+        // of its own and cannot see `messages`, so the loop records both
+        // on the stack the body reads as `run.toolInvocationStack`.
+        recordToolCall(branchStack, handler, args.run.threads.lineageOf(messages));
         const invokeAsTool = (threadRun: Run) =>
           runAsToolInvocation(threadRun, branchStack, (toolRun) =>
             handler.invoke(toolRun, callFromOutside(namedArgs)),

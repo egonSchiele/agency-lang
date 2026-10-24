@@ -28,14 +28,15 @@ import {
   _fetchCacheNote,
   _fetchJSON,
   _fetchMarkdown,
+  _fetchTarget,
 } from "agency-lang/stdlib-lib/http.js"
 
 @always(method, baseUrl)
-effect std::http::fetch { baseUrl: string, path: string, method: string }
+effect std::http::fetch { baseUrl: string, path: string, method: string, scheme: string, network: string }
 @always(method, baseUrl)
-effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
+effect std::http::fetchJSON { baseUrl: string, path: string, method: string, scheme: string, network: string }
 @always(method, baseUrl)
-effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
+effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string, scheme: string, network: string }
 
 /** An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not. */
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -74,10 +75,15 @@ export def fetch(
   if (alreadyFetched != null) {
     return success(alreadyFetched)
   }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetch("Allow a ${method} request to this URL?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetch(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }
@@ -116,10 +122,15 @@ export def fetchJSON(
   if (alreadyFetched != null) {
     return success(alreadyFetched)
   }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetchJSON("Allow a ${method} request to this URL and parse the response as JSON?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetchJSON(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }
@@ -158,10 +169,15 @@ export def fetchMarkdown(
   if (alreadyFetched != null) {
     return success(alreadyFetched)
   }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetchMarkdown("Allow a ${method} request to this URL?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetchMarkdown(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }

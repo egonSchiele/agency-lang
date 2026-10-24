@@ -576,6 +576,47 @@ export function resolveUrl(baseUrl: string, path: string): string {
   return base + p;
 }
 
+/** Where a request goes, as two plain words a policy rule can match:
+ *  the URL's scheme, and whether the host is on the public internet or
+ *  on this machine or its network. `network` is "local" for loopback,
+ *  unspecified, link-local, and private addresses (IPv4 and IPv6) and
+ *  for `localhost`, `.localhost`, and `.local` names; "public" for any
+ *  other host; "unknown" when the string is not a URL. A rule that
+ *  approves a read of the web says `scheme: "https", network: "public"`,
+ *  which keeps a local admin page or the cloud metadata address out of
+ *  its reach (docs/dev/agents/approval-policies.md). Names are judged as
+ *  written, not resolved: a public name that resolves to a private
+ *  address is not caught here. */
+export type FetchTarget = {
+  scheme: string;
+  network: "public" | "local" | "unknown";
+};
+
+export function _fetchTarget(baseUrl: string, urlPath: string): FetchTarget {
+  try {
+    const url = new URL(resolveUrl(baseUrl, urlPath));
+    return { scheme: url.protocol.replace(/:$/, ""), network: networkOf(url.hostname) };
+  } catch {
+    return { scheme: "", network: "unknown" };
+  }
+}
+
+const LOCAL_V4 = [/^127\./, /^10\./, /^192\.168\./, /^169\.254\./, /^172\.(1[6-9]|2[0-9]|3[01])\./];
+const LOCAL_V6 = [/^f[cd][0-9a-f]{2}:/, /^fe[89ab][0-9a-f]:/];
+
+export function networkOf(hostname: string): "public" | "local" {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
+    return "local";
+  }
+  if (host === "0.0.0.0" || host === "::" || host === "::1") return "local";
+  // An IPv4 address carried inside IPv6 is judged as the IPv4 address.
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
+  if (mapped) return networkOf(mapped[1]);
+  if ([...LOCAL_V4, ...LOCAL_V6].some((pattern) => pattern.test(host))) return "local";
+  return "public";
+}
+
 /** A host and the same host without its `www.`: `www.example.com` and
  *  `example.com` are one site to anyone writing an allow list. A model
  *  given `https://www.3blue1brown.com` listed `3blue1brown.com` three

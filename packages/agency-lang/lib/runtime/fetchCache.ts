@@ -79,9 +79,18 @@ export type ToolCallRecord = {
   tool: { module: string; registeredName: string };
 };
 
-/** Record a tool call on its branch stack. The tool loop calls this
+/** Record a tool call on its branch stack: the function the model called
+ *  and the conversation its result goes to. The tool loop calls this
  *  before it invokes the tool. */
-export function recordToolCall(branchStack: StateStack, record: ToolCallRecord): void {
+export function recordToolCall(
+  branchStack: StateStack,
+  tool: { module: string; registeredName: string },
+  conversation: string[],
+): void {
+  const record: ToolCallRecord = {
+    conversation,
+    tool: { module: tool.module, registeredName: tool.registeredName },
+  };
   branchStack.other[TOOL_CALL_KEY] = record;
 }
 
@@ -130,10 +139,12 @@ export function fetchCacheNote(run: Run, request: FetchRequest, refresh: boolean
   if (key === null) return null;
   const entry = readCache(run).entries[key];
   if (entry === undefined || !fetchedInConversation(call.conversation, entry.threadId)) return null;
+  // The note says when, not where: with memory on, compaction may have
+  // summarized the earlier result, so "above" is not always true.
   return (
     `Already fetched this URL earlier in this conversation (${entry.tool} call ${entry.ordinal}, ` +
-    `as ${entry.url}); its content is in the conversation above. Fetch it again only if you ` +
-    `expect it to have changed, by passing \`refresh: true\`.`
+    `as ${entry.url}). Use what it returned then. Fetch it again only if you expect it to ` +
+    `have changed, by passing \`refresh: true\`.`
   );
 }
 

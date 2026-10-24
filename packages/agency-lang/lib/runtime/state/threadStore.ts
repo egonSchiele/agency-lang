@@ -318,12 +318,14 @@ export class ThreadStore {
 
   /** The ids of `thread` and its ancestors, nearest first: the threads
    *  whose messages are in `thread`'s conversation, since a subthread
-   *  starts with its parent's. The thread is registered if it was not
-   *  yet. The fetch cache keeps these for a tool call, which runs on a
-   *  store of its own and cannot walk this one (lib/runtime/fetchCache.ts). */
+   *  starts with its parent's. Empty when the thread is not in this
+   *  store; it is a lookup and registers nothing, since it runs before
+   *  every tool call and the store is saved in every checkpoint. The
+   *  fetch cache keeps these for a tool call, which runs on a store of
+   *  its own and cannot walk this one (lib/runtime/fetchCache.ts). */
   lineageOf(thread: MessageThread): MessageThreadID[] {
     const lineage: MessageThreadID[] = [];
-    let current: MessageThreadID | null = this.idOf(thread) ?? this.register(thread);
+    let current: MessageThreadID | null = this.idOf(thread) ?? null;
     while (current !== null && !lineage.includes(current)) {
       lineage.push(current);
       current = this.threads[current]?.parentId ?? null;

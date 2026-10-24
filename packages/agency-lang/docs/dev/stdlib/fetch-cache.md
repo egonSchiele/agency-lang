@@ -9,18 +9,21 @@ model tool call GETs a URL that the same conversation already fetched, the
 tool returns this instead of the page:
 
 > Already fetched this URL earlier in this conversation (fetchMarkdown
-> call 2, as https://www.3blue1brown.com/about); its content is in the
-> conversation above. Fetch it again only if you expect it to have
-> changed, by passing `refresh: true`.
+> call 2, as https://www.3blue1brown.com/about). Use what it returned
+> then. Fetch it again only if you expect it to have changed, by passing
+> `refresh: true`.
 
 The note is short on purpose: the page is already in the model's context,
-and a second copy is what cost the tokens.
+and a second copy is what cost the tokens. It says when the page was
+fetched, not where it is: with memory on, compaction may have summarized
+the earlier result, and "in the conversation above" would then be wrong.
+`refresh: true` is the way out either way.
 
 ## Where it is
 
 - `lib/runtime/fetchCache.ts`: `normalizeFetchUrl`, `fetchCacheNote`,
-  `recordFetch`, and `fetchedInThisConversation`. Pure functions over the
-  run, with no Node import, so they run in a browser.
+  `recordFetch`, `recordToolCall`, and `fetchedInConversation`. Pure
+  functions over the run, with no Node import, so they run in a browser.
 - `lib/stdlib/http.ts`: `_fetchCacheNote`, which the Agency functions
   call, and `remember`, which the three `_fetch*` helpers call after a
   fetch that did not fail.
@@ -73,12 +76,20 @@ A tool body cannot find that thread by itself: the tool loop runs every
 body on a fresh, empty thread store (`invokeOnFreshThreadStore`), so that
 an `llm()` call inside a tool does not append to the prompt's thread. So
 the loop records the conversation for it. `runInvokeStep` in `prompt.ts`
-calls `recordToolCall` with `ThreadStore.lineageOf(messages)`, the
-prompt's thread and its ancestors nearest first, and the tool's module
-and registered name, on the call's branch stack, which the body reads as
-`run.toolInvocationStack`. `recordFetch` files an entry under the first
-id; `fetchCacheNote` hits when the entry's thread is anywhere in the
-list.
+calls `recordToolCall` with the tool and `ThreadStore.lineageOf(messages)`,
+the prompt's thread and its ancestors nearest first, on the call's branch
+stack, which the body reads as `run.toolInvocationStack`. `lineageOf` is
+a lookup and registers nothing: it runs before every tool call and the
+store is saved in every checkpoint, so a thread the store does not know
+(an `llm()` call given its own `messages`) gets an empty lineage and the
+cache misses. `recordFetch` files an entry under the first id;
+`fetchCacheNote` hits when the entry's thread is anywhere in the list.
+
+The record is written on every pass through `runInvokeStep`, so a fetch
+that pauses on its approval interrupt and resumes from outside finds it
+again: `remember` then runs on the resumed pass, and the next call for
+the URL gets the note. `tests/agency-js/fetch-cache-resume` is that path,
+the one the trace's prompts took.
 
 **A hit asks no one.** The Agency function checks the cache before it
 raises `std::http::fetchMarkdown`. Nothing is fetched on a hit, so there
@@ -109,6 +120,9 @@ have the sharing and serialization it needs.
   parent's fetch and its own; a second node fetches from code twice and
   gets the page both times. The tool results are read back from the
   thread with `getThread`.
+- `tests/agency-js/fetch-cache-resume`: the first fetch has no handler,
+  so it pauses on its interrupt; the test approves it from TypeScript and
+  resumes, and the second call for the same page gets the note.
 - `evals/researcher/thom-yorke-how-he-learned` has a `no-repeated-retrieval`
   grader that counts tool calls, so a cache hit still counts there as a
   call; it is the floor under this cache, as its README says.

@@ -13,9 +13,9 @@
     },
     {
       "nodeName": "recommendedApprovesTheResearcherFetch",
-      "description": "recommended approves a GET through the researcher's fetch tool and not a POST",
+      "description": "recommended approves a public https GET through the researcher's fetch tool, and not a POST, plain http, or a local host",
       "input": "",
-      "expectedOutput": "\"approve propagate\"",
+      "expectedOutput": "\"approve propagate propagate propagate\"",
       "evaluationCriteria": [
         {
           "type": "exact"

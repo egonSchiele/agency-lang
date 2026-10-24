@@ -335,14 +335,32 @@ at any step.
 agent home, by name (`settingsReadRule`). The tree-searching effects
 carry no `filename`, so a rule that names one cannot match them.
 
-## Why `recommended` approves a GET fetch
+## Why `recommended` approves a GET fetch, and which ones
 
 `std::http::fetch`, `fetchJSON`, and `fetchMarkdown` each get one rule
-in `recommended`: approve when the effect's `method` is `GET` or `HEAD`
-(`webReadRules` in `lib/runtime/builtinPolicies.ts`). A request with any
-other method sends something, so it has no rule and prompts.
-`with-writes` is `recommended` plus writes, so it carries the rule;
-`minimal` does not.
+in `recommended` (`webReadRules` in `lib/runtime/builtinPolicies.ts`):
+approve when the effect's `method` is `GET` or `HEAD`, its `scheme` is
+`https`, and its `network` is `public`. Anything else prompts: a request
+with another method sends something; plain http is where local dev
+servers and the cloud metadata address (`169.254.169.254`) live; and a
+`local` host is one on this machine or its network. `with-writes` is
+`recommended` plus writes, so it carries the rule; `minimal` does not.
+
+`scheme` and `network` are two fields the three effects carry beside
+`baseUrl`, `path`, and `method`, computed by `_fetchTarget` in
+`lib/stdlib/http.ts` before the interrupt is raised. `network` is
+`local` for loopback, unspecified, link-local, and private addresses in
+IPv4 and IPv6, and for `localhost`, `.localhost`, and `.local` names;
+`public` for any other host; `unknown` when the string is not a URL. They
+exist because a rule cannot say this with a glob on `baseUrl`: the glob
+matcher is path-segment aware, so `https://!(localhost)*` fails on the
+first slash of a path, and a host exclusion list in a glob is unreadable
+anyway. Two plain words match cleanly and read in a saved policy file.
+
+The host is judged as written, not resolved. A public name that resolves
+to a private address (DNS rebinding) is not caught by the rule; that is
+the containment process's job (`docs/dev/security/goal.md`), not the
+policy's.
 
 The reason is trace wX5GvrUq. The researcher offered three fetch tools,
 each with its own effect. The user's saved policy approved two of them,
@@ -358,12 +376,16 @@ covered too.
 
 What this widens, honestly: text injected into one page can already have
 the agent put what it found into a search query, which `recommended`
-approves. A GET lets it choose the host as well, by putting the text in
-a URL. That is the same class of leak to a different recipient, and the
-read-scope rules above (nothing outside the project, nothing from the
-agent home's conversations) are what bound what there is to leak. A
-saved policy from before this change has no rule and keeps prompting;
-`/policy` offers the missing rules.
+approves. A GET lets it choose the recipient as well, by putting the text
+in a URL or, since the effect's data does not carry `headers`, in a
+request header. That is the same class of leak to a different recipient,
+and the read-scope rules above (nothing outside the project, nothing from
+the agent home's conversations) are what bound what there is to leak.
+What it does not widen, because of `scheme` and `network`: a GET to an
+admin page on `localhost` that acts on the request, or to the metadata
+address, which would hand the conversation credentials to send on with
+the next approved GET. A saved policy from before this change has no
+rule and keeps prompting; `/policy` offers the missing rules.
 
 ## Why `recommended` has no `std::write` rule
 

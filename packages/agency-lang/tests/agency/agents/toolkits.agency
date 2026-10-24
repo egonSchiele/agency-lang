@@ -151,19 +151,30 @@ node webToolsHaveOneFetch(): boolean {
   return fetches.length == 1 && fetches[0] == "fetchMarkdown"
 }
 
-def fetchDecision(method: string): string {
+def fetchDecision(method: string, scheme: string, network: string): string {
   const policy = builtinPolicy("recommended", ".")
   const decision = checkPolicy(policy, {
     effect: "std::http::fetchMarkdown",
     message: "Allow a ${method} request to this URL?",
-    data: { baseUrl: "https://example.com", path: "/about", method: method },
+    data: {
+      baseUrl: "${scheme}://example.com",
+      path: "/about",
+      method: method,
+      scheme: scheme,
+      network: network
+    },
     origin: ""
   })
   return decision.type
 }
 
 // The recommended policy approves the researcher's fetch tool for a read
-// and leaves a request that sends a body to the prompt.
+// of a public https page, and leaves a request that sends a body, a plain
+// http request, and a host on this machine or its network to the prompt.
 node recommendedApprovesTheResearcherFetch(): string {
-  return "${fetchDecision("GET")} ${fetchDecision("POST")}"
+  const approved = fetchDecision("GET", "https", "public")
+  const sendsABody = fetchDecision("POST", "https", "public")
+  const plainHttp = fetchDecision("GET", "http", "public")
+  const local = fetchDecision("GET", "https", "local")
+  return "${approved} ${sendsABody} ${plainHttp} ${local}"
 }

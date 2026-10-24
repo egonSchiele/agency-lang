@@ -38,7 +38,7 @@ function inToolCall<T>(
     registeredName: "fetchMarkdown",
   },
 ): Promise<T> {
-  recordToolCall(run.stack, { conversation: run.threads.lineageOf(thread), tool });
+  recordToolCall(run.stack, tool, run.threads.lineageOf(thread));
   return runAsToolInvocation(run, run.stack, fn);
 }
 
@@ -74,6 +74,7 @@ describe("fetchCacheNote and recordFetch", () => {
       await inToolCall(run, thread, async (run) => {
         const note = fetchCacheNote(run, get("https://example.com/about/#x"), false);
         expect(note).toContain("Already fetched this URL earlier in this conversation");
+        expect(note).toContain("Use what it returned then");
         expect(note).toContain("fetchMarkdown call 1, as https://www.example.com/about");
         expect(note).toContain("refresh: true");
       });
@@ -138,6 +139,14 @@ describe("fetchCacheNote and recordFetch", () => {
       const other = run.threads.createAndReturnThread();
       await inToolCall(run, other, async (run) => {
         expect(fetchCacheNote(run, get("https://example.com/parent"), false)).toBeNull();
+      });
+      // A thread the store does not know has no lineage, so the cache
+      // misses and records nothing the next call could hit.
+      const unknown = new MessageThread();
+      expect(run.threads.lineageOf(unknown)).toEqual([]);
+      await inToolCall(run, unknown, async (run) => {
+        recordFetch(run, get("https://example.com/unknown"));
+        expect(fetchCacheNote(run, get("https://example.com/unknown"), false)).toBeNull();
       });
     });
   });

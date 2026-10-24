@@ -33,13 +33,17 @@ node twoEmptyAnswersAreAFailure(): string {
   return "answered: ${answer.value}"
 }
 
-/** The fix attempt's brief and reply stay off the research thread. */
+/** The research thread holds the first answer, and the fix attempt's
+  brief stays off it. Both halves matter: the second alone would pass if
+  the research had never run on this thread. */
 def fixStayedOnASubthread(): boolean {
   const messages = getThread(currentThreadId(), 0, 100)
   if (messages is failure(_)) {
     return false
   }
-  return !some(messages.value, \m -> m.content.includes("A review found these gaps"))
+  const researchedHere = some(messages.value, \m -> m.role == "assistant" && m.content.includes("He is self-taught"))
+  const fixElsewhere = !some(messages.value, \m -> m.content.includes("A review found these gaps"))
+  return researchedHere && fixElsewhere
 }
 
 node rejectedAnswerIsFixedNotRedone(): string {

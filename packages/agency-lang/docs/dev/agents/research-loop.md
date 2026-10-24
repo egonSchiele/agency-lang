@@ -20,15 +20,17 @@ URLs; the second attempt spent 43 calls re-finding them.
 
 ## Rule 1: an empty answer is never reviewed
 
-`answerIsEmpty` is true for `null`, and for any answer under
+`answerIsEmpty` is true for `null`, and for a first reply under
 `MIN_ANSWER_CHARS` (20) once trimmed: an empty string, or a few words
 where a cited answer was asked for. When the first attempt's answer is
 empty, the block asks once more on the same thread, with no tools
 (`NO_ANSWER_FOLLOWUP`: "You returned no answer. Write your answer now from
 what you have read, citing sources."). The model has its sources in
-context and nothing else it can do, so it answers. That reply is the
-attempt. A second empty reply is `failure("the model returned no answer
-twice")`.
+context and nothing else it can do, so it answers. Any non-blank reply is
+the attempt, however short: `Yes (https://x.io).` is 19 characters and a
+real answer, and the review judges it. Only a blank second reply is
+`failure("the model returned no answer twice")`, so the message is true
+about what happened.
 
 The failure has to end the loop rather than be reviewed, so
 `checkGrounding` accepts a failure as it stands. `revise` returns it,
@@ -43,10 +45,21 @@ The block keeps the last attempt's answer in `lastAnswer`, a local of
 only the critique. A later attempt sends `fixPrompt(lastAnswer,
 critique)`: the answer, the findings, and the instruction to patch those
 gaps and keep everything else, using a fact the review gives with its
-source as given and fetching only what the review does not give. It runs
-in a `subthread`, so the research thread does not grow by the attempt,
-under `FIX_ROUNDS` (8) tool rounds, where the first attempt has thirty. A
-fix that comes back empty keeps the answer it was given.
+source as given and fetching only what the review does not give. The
+critique `checkGrounding` writes is the findings alone; it used to end
+with "Retrieve more and fix them", which inside this brief told the model
+the opposite of what the brief says. It runs in a `subthread`, so the
+research thread does not grow by the attempt, under `FIX_ROUNDS` (8) tool
+rounds, where the first attempt has thirty. A fix that comes back empty
+keeps the answer it was given; the check then reviews that same answer
+again, up to two minutes and a dollar for the same findings, because
+`revise` gives the block no way to skip the check. That is accepted for
+now and noted here.
+
+`FIX_ROUNDS` binds only once #1264 is in: before it, a branch default
+from `setLlmOptions` replaced a call's own `maxToolCallRounds`, and under
+`agency agent` that default is 50. With #1264 both are ceilings and the
+smaller wins, so 8 holds.
 
 For the review's facts to be usable, a finding can carry where it was
 checked: `Feedback` in `std::agents/lib/feedback` has `source?: string`,

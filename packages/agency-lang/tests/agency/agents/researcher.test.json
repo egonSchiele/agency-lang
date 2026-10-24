@@ -34,7 +34,7 @@
     },
     {
       "nodeName": "twoEmptyAnswersAreAFailure",
-      "description": "two empty answers are a failure naming the cause, and the reviewer is never called",
+      "description": "two blank answers are a failure naming the cause, and the reviewer is never called",
       "input": "",
       "expectedOutput": "\"failed: the model returned no answer twice\"",
       "evaluationCriteria": [
@@ -53,6 +53,38 @@
           }
         ],
         "review": []
+      }
+    },
+    {
+      "nodeName": "emptyFirstAnswerIsAskedAgain",
+      "description": "a short reply to the follow-up is an answer, not a second empty one: the review judges it",
+      "input": "",
+      "expectedOutput": "\"Yes (https://x.io).\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "researcher": [
+          {
+            "return": ""
+          },
+          {
+            "return": "Yes (https://x.io)."
+          }
+        ],
+        "review": [
+          {
+            "return": [
+              {
+                "error": false,
+                "feedback": "grounded and cited"
+              }
+            ]
+          }
+        ]
       }
     },
     {

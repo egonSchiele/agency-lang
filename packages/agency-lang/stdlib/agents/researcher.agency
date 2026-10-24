@@ -66,10 +66,12 @@ export def buildTools(): any[] {
 
 static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered. When you verified a point against a page, put that page's URL in `source`."
 
-// An answer shorter than this is no answer: an empty string, or a few
-// words where a cited answer was asked for. Reviewing it wastes the
-// review, which in trace wX5GvrUq did the research itself and reported
-// seven gaps against nothing.
+// A first reply shorter than this is treated as no answer: an empty
+// string, or a few words where a cited answer was asked for. Reviewing it
+// wastes the review, which in trace wX5GvrUq did the research itself and
+// reported seven gaps against nothing. The floor applies to the first
+// reply only: a short reply to the follow-up is an answer the model gave
+// twice, and the review judges it.
 static const MIN_ANSWER_CHARS = 20
 
 static const NO_ANSWER_FOLLOWUP = "You returned no answer. Write your answer now from what you have read, citing sources."
@@ -78,6 +80,14 @@ static const NO_ANSWER_FOLLOWUP = "You returned no answer. Write your answer now
 // of gaps, so it needs a few fetches at most, where the first attempt
 // needs thirty.
 static const FIX_ROUNDS = 8
+
+def answerIsBlank(answer: any): boolean {
+  if (answer == null) {
+    return true
+  }
+  const text: string = "${answer}"
+  return text.trim().length == 0
+}
 
 def answerIsEmpty(answer: any): boolean {
   if (answer == null) {
@@ -154,14 +164,15 @@ Check that every claim is backed by a source you fetched, cite it, and fix any c
       feedback: ""
     }
   }
+  // The findings alone. The fix attempt's brief (fixPrompt) says what to
+  // do with them; an instruction here to retrieve more would contradict
+  // it, and re-fetching is what the fix attempt exists to avoid.
   return {
     accepted: false,
     feedback: """
 Your answer has gaps:
 
 ${renderFeedback(reviewed)}
-
-Retrieve more and fix them.
 """
   }
 }
@@ -221,8 +232,10 @@ def researchLoop(
         // The model read its sources and then wrote nothing (its reply
         // went to thinking, or it stopped). Ask once more on the same
         // thread, with no tools, so the only thing it can do is answer.
+        // Any non-blank reply is the attempt, however short: the review
+        // judges it. Two blank replies are a failure the caller sees.
         answer = llm(NO_ANSWER_FOLLOWUP, llmOptions(model: model, provider: provider))
-        if (answerIsEmpty(answer)) {
+        if (answerIsBlank(answer)) {
           return failure("the model returned no answer twice")
         }
       }
@@ -230,7 +243,9 @@ def researchLoop(
       // A fix, not a redo: the answer plus the findings, in a subthread
       // so the research thread does not grow by a second attempt, under
       // a round cap sized for patching. A fix that comes back empty
-      // keeps the answer it was given, which is still the best one.
+      // keeps the answer it was given, which is still the best one; the
+      // check then reviews that answer again, which revise gives no way
+      // to skip.
       subthread {
         answer = llm(
           fixPrompt(lastAnswer, critique),

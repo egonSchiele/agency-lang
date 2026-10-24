@@ -130,11 +130,6 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A sandboxed subprocess: the code it runs raises its own effects back
   // through this same policy, so approving the launch grants nothing more.
   "std::run": approve,
-  // Long command output, saved to and read back from the spill directory
-  // (`std::spill`). The write goes to one fixed place the model cannot
-  // choose, and the read tools take a file name, never a path.
-  "std::spill::write": approve,
-  "std::spill::read": approve,
   // `writeSettingsFile` creates the agent home when it is missing. An
   // empty directory decides nothing, and the write into it still asks.
   "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],

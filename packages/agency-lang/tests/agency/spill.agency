@@ -1,0 +1,140 @@
+// std::spill keeps long tool output in the run's globals, so it is per
+// run, in every checkpoint, and back after a restore. These pin the
+// store's rules without a shell: eviction, a missing name, the checkpoint
+// round trip, and the tool loop saving an over-cap result.
+import { keepOutput, readSpill, grepSpill } from "std::spill"
+import { getThread, currentThreadId } from "std::thread"
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
+
+def big(fill: string): string {
+  return [fill for i in range(300000)].join("")
+}
+
+def spilledName(notice: string): string {
+  const after = notice.split("full output saved as ")[1]
+  return after.split(" ")[0]
+}
+
+def matchCount(found: Result): number {
+  if (found is success(matches)) {
+    return matches.length
+  }
+  return -1
+}
+
+def lengthOf(found: Result): number {
+  if (found is success(text)) {
+    return text.length
+  }
+  return -1
+}
+
+node evictionDropsTheOldest() {
+  // The store holds a million characters. Four saves of 300,000 push the
+  // first one out, and the fourth is still whole.
+  const first = spilledName(keepOutput(big("a"), 0))
+  keepOutput(big("b"), 0)
+  keepOutput(big("c"), 0)
+  const fourth = spilledName(keepOutput(big("d"), 0))
+  const gone = readSpill(first)
+  let why = ""
+  if (gone is failure(reason)) {
+    why = reason
+  }
+  return [why.includes("no longer available"), lengthOf(readSpill(fourth))]
+}
+
+node missingNameIsAFailure() {
+  const found = readSpill("2020-01-01T00-00-00-000Z-ffffff.log")
+  const searched = grepSpill("x", filename: "2020-01-01T00-00-00-000Z-ffffff.log")
+  return [isFailure(found), isFailure(searched)]
+}
+
+node survivesACheckpoint() {
+  // Save one output and take a checkpoint. Then evict it from the live
+  // store with four more saves, and restore. The entry is only there
+  // afterwards if the checkpoint carried the store. The pass counter
+  // lives in TypeScript because an Agency counter is rolled back too.
+  const name = spilledName(keepOutput(big("a"), 0))
+  const cp = checkpoint()
+  const pass = getMutable("spillPass", 0)
+  setMutable("spillPass", pass + 1)
+  if (pass == 0) {
+    keepOutput(big("b"), 0)
+    keepOutput(big("c"), 0)
+    keepOutput(big("d"), 0)
+    keepOutput(big("e"), 0)
+    const evicted = isFailure(readSpill(name))
+    setMutable("spillEvicted", evicted)
+    restore(cp, { maxRestores: 1 })
+  }
+  return [getMutable("spillEvicted", false), lengthOf(readSpill(name))]
+}
+
+def longPage(): string {
+  """
+  A tool whose result is longer than the cap the call sets.
+  """
+  return [["line ", "${i}", "\n"].join("") for i in range(4000)].join("")
+}
+
+/** The notice the loop sent the model for the long page, found by
+  scanning the current thread's tool messages. */
+def noticeInThread(): string {
+  const messages = getThread(currentThreadId(), 0, 50)
+  if (isFailure(messages)) {
+    return ""
+  }
+  for (message in messages.value) {
+    if (message.role == "tool" && message.content.includes("full output saved as")) {
+      return message.content
+    }
+  }
+  return ""
+}
+
+node overCapToolResultIsKept() {
+  // The mock calls longPage, which returns about 38,000 characters against
+  // a 20,000 cap. The loop saves it whole and the model gets a notice. The
+  // node then reads the saved text back by the name in that notice, which
+  // is what the model would do with readSpill.
+  llm("read the page", {
+    tools: [longPage, readSpill, grepSpill],
+    maxToolResultChars: 20000
+  })
+  const notice = noticeInThread()
+  const name = spilledName(notice)
+  return [
+    notice.includes("readSpill(filename: \"${name}\")"),
+    lengthOf(readSpill(name)),
+    matchCount(grepSpill("^line 3999$", filename: name)),
+  ]
+}
+
+/** The first tool message in the current thread, or "" if there is none. */
+def toolMessageInThread(): string {
+  const messages = getThread(currentThreadId(), 0, 50)
+  if (isFailure(messages)) {
+    return ""
+  }
+  for (message in messages.value) {
+    if (message.role == "tool") {
+      return message.content
+    }
+  }
+  return ""
+}
+
+node overCapResultWithoutReadersIsCut() {
+  // With no readSpill offered, nothing saved could be read back, so the
+  // loop cuts the result at the cap.
+  llm("read the page", {
+    tools: [longPage],
+    maxToolResultChars: 20000
+  })
+  const content = toolMessageInThread()
+  return [
+    content.includes("[tool result truncated: showing 20000 of"),
+    content.includes("full output saved as"),
+  ]
+}

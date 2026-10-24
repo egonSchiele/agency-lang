@@ -371,7 +371,7 @@ Which directory a command runs in: the caller's, or the agent's when the
 safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard, std::spill::write>
+): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard>
 ```
 
 Run a shell command, asking the narrowest question that describes it.
@@ -389,8 +389,8 @@ Run a shell command, asking the narrowest question that describes it.
   command's stdout. A non-zero exit is a failure whose message carries
   the exit code, stdout, and stderr. There is no need to echo `$?` or
   re-run a command to learn how it exited. Output longer than a couple of
-  thousand characters is saved to a file and replaced by a preview that
-  names the file; read it with readSpill or grepSpill, not with bash.
+  thousand characters is saved and replaced by a preview that names it;
+  read it with readSpill or grepSpill, not with bash.
 
   @param command - One or more bash commands
   @param cwd - Working directory. Defaults to the agent working directory.
@@ -404,7 +404,7 @@ Run a shell command, asking the narrowest question that describes it.
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::bash`, `std::write`, `std::git::status`, `std::git::log`, `std::git::diff`, `std::spill::write`, `std::read`, `std::guard`, `std::run`
+**Throws:** `std::bash`, `std::write`, `std::git::status`, `std::git::log`, `std::git::diff`, `std::read`, `std::guard`, `std::run`
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 

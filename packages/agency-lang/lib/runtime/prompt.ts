@@ -68,6 +68,7 @@ import {
   type GateState,
   type GateVerdict,
   type RepeatStreak,
+  resultCap,
 } from "./toolLoopGuards.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { initLoopFrame } from "./loopFrame.js";
@@ -93,7 +94,6 @@ import { isAborted } from "./abortedResult.js";
 import {
   assertUniqueToolNames,
   capToolResultForLlm,
-  DEFAULT_TOOL_RESULT_CHARS,
   dropNullDefaultedArgs,
   failureTier,
   invokeOnFreshThreadStore,
@@ -108,7 +108,9 @@ import {
   unwrapToolResultForLlm,
   toolArgumentsFor,
   callFromOutside,
+  overCapFor,
 } from "./toolInvocation.js";
+import { spillReaders } from "./toolOutputStore.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -685,17 +687,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const hosted = withLocalDefaults(merged, ctx.getSmoltalkConfig().model);
   const clientConfig = withHostKeys(ctx.host.settings, hosted);
 
-  // Cap on characters of a single tool result fed back to the LLM. The
-  // full result is still cached for Agency code via `setResultOnBranch`;
-  // only what the model sees is truncated. Resolution precedence:
-  // per-call `llm(..., { maxToolResultChars })` > runtime
-  // `setLlmOptions` (active stack) > agency.json (`ctx.maxToolResultChars`)
-  // > default. `0`/non-finite disables.
-  const toolResultCap =
-    callMaxToolResultChars ??
-    stackMaxToolResultChars ??
-    ctx.maxToolResultChars ??
-    DEFAULT_TOOL_RESULT_CHARS;
+  const toolResultCap = resultCap(callMaxToolResultChars, stackMaxToolResultChars, ctx);
+  const readers = spillReaders(exposedFunctions);
+  const capForLlm = (value: any, tool: AgencyFunction) =>
+    capToolResultForLlm(value, toolResultCap, overCapFor(run, readers, tool));
 
   // Restore or initialize messages.
   //
@@ -961,7 +956,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       reason: string,
     ): { toolResult: any; invokeOutcome: "rejected" } => {
       const { handler, toolCall, log, callKey, branchKey, marks, toolResult } = call;
-      const capped = String(capToolResultForLlm(reason, toolResultCap));
+      const capped = String(capForLlm(reason, handler));
       if (!rejectedCalls.includes(callKey)) {
         rejectedCalls.push(callKey);
       }
@@ -991,7 +986,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       const { handler, toolCall, log, branchKey, marks, toolResult } = call;
       const errorMessage = failed.error;
       // Cap only what the LLM sees; statelog keeps the full message.
-      const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
+      const cappedError = String(capForLlm(errorMessage, handler));
       toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
       log.error({
         errorType: "toolError",
@@ -1324,7 +1319,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         toolName: handler.name,
       });
       const content = appendReplyMarker(
-        capToolResultForLlm(unwrapToolResultForLlm(toolResult, handler.name), toolResultCap),
+        capForLlm(unwrapToolResultForLlm(toolResult, handler.name), handler),
         replyMarker,
         stringifyToolResult,
       );

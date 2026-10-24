@@ -23,6 +23,17 @@
       ]
     },
     {
+      "nodeName": "everyAgentCarriesTheReadersOnce",
+      "description": "each stdlib agent that runs commands or fetches pages offers readSpill and grepSpill exactly once, with no duplicate tool names",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "everyBundleHasTools",
       "description": "every bundle returns tools",
       "input": "",

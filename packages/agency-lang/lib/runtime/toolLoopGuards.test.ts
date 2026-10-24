@@ -10,6 +10,7 @@ import {
   repeatKey,
   repeatsBefore,
   resetRepeat,
+  resultCap,
   runnableHandoffs,
   type GateCall,
   type GateState,
@@ -256,5 +257,18 @@ describe("parameter aliases in the gate", () => {
       runnableHandoffs: [],
     };
     expect(computeGateVerdict(state, call)).toBe("priorRejected");
+  });
+});
+
+describe("resultCap", () => {
+  it("takes the per-call value, then the branch default, then agency.json, then the default", () => {
+    expect(resultCap(500, 20_000, { maxToolResultChars: 80_000 })).toBe(500);
+    expect(resultCap(undefined, 20_000, { maxToolResultChars: 80_000 })).toBe(20_000);
+    expect(resultCap(undefined, undefined, { maxToolResultChars: 80_000 })).toBe(80_000);
+    expect(resultCap(undefined, undefined, {})).toBe(100_000);
+  });
+
+  it("keeps a per-call 0, which disables the cap", () => {
+    expect(resultCap(0, 20_000, { maxToolResultChars: 80_000 })).toBe(0);
   });
 });

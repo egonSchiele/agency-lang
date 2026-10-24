@@ -17,6 +17,7 @@ import {
   agencyCodeTools,
   agencyDocTools,
   webTools,
+  spillTools,
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
@@ -93,6 +94,7 @@ export def buildTools(): any[] {
     ...agencyCodeTools(),
     ...agencyDocTools(),
     ...webTools(),
+    ...spillTools(),
     ...searchTools(),
     skills,
   ]

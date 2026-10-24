@@ -258,6 +258,8 @@ the developer's program:
 
 - The checkpoint carries values out. A secret the program read into a
   variable before pausing, or anything the LLM was told, is in the response.
+  So is the full text of every long tool output the run saved for the model
+  (`std::spill`), where the conversation itself holds only the previews.
 - The checkpoint is not signed. The values are checked for shape
   (`lib/runtime/state/schemas.ts`), not for authenticity, so a caller can
   change `{ amount: 5 }` to `{ amount: 5000 }` before approving.

@@ -7,6 +7,7 @@ import { sha256Text } from "../utils/hash.js";
 import type * as smoltalk from "smoltalk";
 import type { AgencyFunction, FuncParam } from "./agencyFunction.js";
 import { tooManyHandoffsMessage } from "./handoff.js";
+import { findIntrinsic } from "./intrinsicTools.js";
 
 /** A call is refused once the same tool, with the same arguments, has
  *  returned the same result this many times in a row, with no other call in
@@ -245,4 +246,44 @@ export function refusalMessage(
     case "repeated":
       return repeatedCallMessage(name, repeatsBefore(state.repeatStreak, call.callKey));
   }
+}
+
+/** The round cap of one `llm()` call. The call's own value and the branch
+ *  default (setLlmOptions) are both ceilings, so when both are set the
+ *  smaller wins; with neither, the baked value from agency.json. See
+ *  "The round cap" in docs/dev/agents/tool-loop-guards.md for the two
+ *  cases that decide this. */
+export function roundCap(
+  perCall: number | undefined,
+  branch: number | undefined,
+  baked: number,
+): number {
+  if (perCall !== undefined && branch !== undefined) return Math.min(perCall, branch);
+  return perCall ?? branch ?? baked;
+}
+
+/** The tools a request may offer. Below the cap, all of them. At the
+ *  cap, only the intrinsic tools (saveDraft), which the cap never applied
+ *  to: the model has just been told its calls were refused and to answer
+ *  now, and with nothing else to call it can only answer, so the cap ends
+ *  the loop within one more request instead of refusing round after round
+ *  while the model keeps trying. `functions` are the tools' functions, for
+ *  telling an intrinsic one. */
+export function toolsOffered<T extends { name: string }>(
+  tools: T[],
+  functions: AgencyFunction[],
+  atCap: boolean,
+): T[] {
+  if (!atCap) return tools;
+  const intrinsicNames = functions.filter((fn) => findIntrinsic(fn)).map((fn) => fn.name);
+  return tools.filter((tool) => intrinsicNames.includes(tool.name));
+}
+
+/** The request config at the cap: provider-hosted tools dropped, since
+ *  they travel in the config rather than the tool list and a model could
+ *  otherwise keep searching inside the last request. Unchanged below it. */
+export function configOffered<T extends { hostedTools?: unknown }>(config: T, atCap: boolean): T {
+  if (!atCap) return config;
+  const { hostedTools: _dropped, ...rest } = config;
+  return rest as T;
 }

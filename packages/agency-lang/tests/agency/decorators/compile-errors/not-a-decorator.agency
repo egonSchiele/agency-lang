@@ -1,0 +1,13 @@
+// A plain def is never a decorator, even with the right parameters.
+def tagged(call: Call, block: () -> any): any {
+  return block()
+}
+
+@tagged
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

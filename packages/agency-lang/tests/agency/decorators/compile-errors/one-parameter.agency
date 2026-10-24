@@ -1,0 +1,13 @@
+// A decorator needs a slot for the call record and one for the block.
+decorator def tagged(block) {
+  return block()
+}
+
+@tagged
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ada")
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'tagged' is declared as a decorator, but 'block' is variadic",
+  "description": "agency compile refuses a decorator whose block slot is variadic"
+}

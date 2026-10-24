@@ -805,11 +805,17 @@ Working out what a generator can reach means reading source code. Four things ca
 An empty effect list from a reading that could not see one of those is not evidence of safety, so it fails closed. The message names which one it hit and where.
 
 **How to fix:** fix the file that does not parse, or rewrite the reached function so the call is direct rather than through a parameter or a variable. If the generator does not need that helper at all, stop calling it — the check follows calls, so an unused helper in the same file is not a problem.`,
-  decoratorShape: `A tag names a def that does not have the shape of a decorator.
+  decoratorShape: `A \`decorator def\` does not have the parameters a decorator needs.
 
-A decorator's last two parameters are \`call: Call\` and a block, in that order and neither with a default: \`def logged(tag: string, call: Call, block: () -> any): any\`. The message says which of those slots is wrong. The decorator stage reports this mistake before the checker runs; the checker repeats it here so a program checked on its own is not accepted by mistake.
+A decorator's last two parameters receive the call record and the decorated body as a block, in that order: \`decorator def logged(tag: string, call, block)\`. They can have any names. Left untyped, the compiler types them \`Call\` and \`(args: object) -> any\`; a written type on the record slot must be \`Call\` or \`any\`, and the block slot must be a block type. Neither slot takes a default or is variadic. The message says which rule the def breaks. A local decorator is reported at its def; an imported one at the tag that uses it.
 
-**How to fix:** move \`call: Call\` right before the block, give the decorator a block as its last parameter, or remove the default from \`call\` or the block.`,
+**How to fix:** give the decorator at least two parameters, make the last one a block, leave the record slot untyped or type it \`Call\`, and remove any default or \`...\` from those two.`,
+
+  notADecorator: `A tag names a def that is not declared \`decorator def\`.
+
+Only a def that says \`decorator\` can be used as a tag, whatever its parameters look like. The keyword is what tells the compiler to pass the call record and the body as a block, and to leave those two slots out of the checks a normal call gets. A plain def with a \`call\` parameter and a block parameter is still a plain def.
+
+**How to fix:** write \`decorator def logged(tag: string, call, block)\` on the def the tag names, or remove the tag.`,
 
   decoratorArgType: `An argument written in a decorator tag does not fit the decorator's parameter.
 

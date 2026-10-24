@@ -6,7 +6,14 @@ import type {
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
-import { decoratorShapeProblem, isBlockParameter, isDecoratorDef } from "@/types/function.js";
+import {
+  decoratorShapeProblem,
+  isBlockParameter,
+  isDecoratorDef,
+  recordSlotName,
+  withDecoratorTypes,
+} from "@/types/function.js";
+import { diagnostic } from "@/typeChecker/diagnostics.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
@@ -166,7 +173,7 @@ function decoratorCall(
   const origin: DecoratorOrigin = { name: tag.name, tagLoc: tag.loc, target };
   const record: NamedArgument = {
     type: "namedArgument",
-    name: "call",
+    name: recordSlotName(signature?.parameters ?? []),
     value: { type: "variableName", value: recordName, loc: tag.loc },
   };
   const call: FunctionCall = {
@@ -242,8 +249,17 @@ function callRecord(
   };
 }
 
-/** The one function that writes. */
+/** The one function that writes. Every decorator def gets its slots typed
+ *  first (`withDecoratorTypes`), then each decorated def gets its lowered
+ *  body. The order matters: a decorated decorator's own call record leaves
+ *  block-typed parameters out, so its block slot must be typed before the
+ *  record is built. */
 export function desugarDecorators(program: AgencyProgram, lookup: DecoratorLookup): AgencyProgram {
+  for (const node of program.nodes) {
+    if (node.type === "function") {
+      node.parameters = withDecoratorTypes(node);
+    }
+  }
   const decorated = decoratorsAbove(program.nodes);
   for (const { def, tags } of decorated) {
     def.body = loweredBody(def, tags, lookup);
@@ -290,10 +306,13 @@ export type DecoratorScope = {
  * - defs that decorate each other in a loop (`@b def a` and `@a def b`),
  * - a decorator imported from JavaScript, which cannot take a block,
  * - a decorator name that is neither declared nor imported,
- * - a decorator without the decorator shape: its own parameters, then
- *   `call: Call`, then a block, the last two without defaults.
+ * - a tag naming a def that is not declared `decorator def`,
+ * - a `decorator def` in the wrong shape (`decoratorShapeProblem`): a
+ *   local one at the def, an imported one at the tag.
  *
- * Pure; prepareProgram and the CLI build turn the list into errors.
+ * The last two render through the diagnostic registry (`decoratorShape`,
+ * `notADecorator`), so the checker's copies say the same thing. Pure;
+ * prepareProgram and the CLI build turn the list into errors.
  */
 export function decoratorProblems(
   program: AgencyProgram,
@@ -318,7 +337,47 @@ export function decoratorProblems(
     });
     return problem === null ? [] : [{ message: problem, loc: tag.loc }];
   });
-  return [...misplaced, ...problems];
+  const badDefs = decoratorDefProblems(program.nodes).map(({ name, problem, loc }) => ({
+    message: diagnostic("decoratorShape", { name, problem }, loc ?? null).message,
+    loc,
+  }));
+  return [...misplaced, ...badDefs, ...problems];
+}
+
+/** A `decorator def` whose parameters are not a decorator's. */
+export type DecoratorDefProblem = {
+  name: string;
+  problem: string;
+  loc: SourceLocation | undefined;
+};
+
+/** Every `decorator def` among `nodes` in the wrong shape, as data: the
+ *  decorator stage and the checker each render it through the
+ *  `decoratorShape` entry. */
+export function decoratorDefProblems(nodes: AgencyNode[]): DecoratorDefProblem[] {
+  return nodes.flatMap((node) => {
+    if (node.type !== "function" || !isDecoratorDef(node)) {
+      return [];
+    }
+    const problem = decoratorShapeProblem(node.parameters);
+    return problem === null
+      ? []
+      : [{ name: declaredName(node.functionName), problem, loc: node.loc }];
+  });
+}
+
+/** What is wrong with a tag that resolved to `signature`, as data: the def
+ *  is not a decorator, or it is an imported decorator in the wrong shape.
+ *  A local decorator's shape is reported at the def by
+ *  `decoratorDefProblems`, so a tag on it is not reported again. */
+export type TagProblem = { kind: "notADecorator" } | { kind: "shape"; problem: string };
+
+export function tagProblem(signature: DecoratorSignature): TagProblem | null {
+  if (!signature.decorator) {
+    return { kind: "notADecorator" };
+  }
+  const problem = signature.imported ? decoratorShapeProblem(signature.parameters) : null;
+  return problem === null ? null : { kind: "shape", problem };
 }
 
 type TagContext = {
@@ -342,13 +401,16 @@ function problemWithTag(target: string, decorator: string, context: TagContext):
     return `'${decorator}' is imported from JavaScript, so it cannot decorate '${target}'. A decorator receives the body as a block, and only an Agency def can take a block.`;
   }
   if (signature === undefined) {
-    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a def whose last two parameters are \`call: Call\` and a block; declare or import '${decorator}'.`;
+    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a \`decorator def\` whose last two parameters are the call record and a block; declare or import '${decorator}'.`;
   }
-  const shapeProblem = decoratorShapeProblem(signature.parameters);
-  if (shapeProblem !== null) {
-    return `'${decorator}' cannot decorate '${target}': ${shapeProblem}`;
+  const found = tagProblem(signature);
+  if (found === null) {
+    return null;
   }
-  return null;
+  if (found.kind === "notADecorator") {
+    return diagnostic("notADecorator", { name: decorator, target }, null).message;
+  }
+  return diagnostic("decoratorShape", { name: decorator, problem: found.problem }, null).message;
 }
 
 /** The names a program imports from JavaScript or TypeScript files. */

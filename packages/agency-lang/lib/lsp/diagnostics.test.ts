@@ -30,7 +30,9 @@ describe("runDiagnostics", () => {
         'def f(): string { return "x" }\n',
     );
     const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
-    const shape = diagnostics.filter((d) => d.message.includes("'logged' cannot decorate 'f'"));
+    const shape = diagnostics.filter((d) =>
+      d.message.includes("'logged' is declared as a decorator"),
+    );
     expect(shape).toHaveLength(1);
   });
 

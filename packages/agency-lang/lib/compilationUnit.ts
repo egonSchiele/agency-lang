@@ -1,4 +1,5 @@
 import { declaredName } from "./types/hole.js";
+import { withDecoratorTypes } from "./types/function.js";
 import type {
   AgencyProgram,
   FunctionDefinition,
@@ -313,7 +314,7 @@ export function buildCompilationUnit(
             ? resultTypeForValidation(r.symbol.returnType, r.symbol.returnTypeValidated)
             : r.symbol.returnType;
           unit.importedFunctions[r.localName] = {
-            parameters: r.symbol.parameters,
+            parameters: withDecoratorTypes(r.symbol),
             returnType,
             originFile: r.file,
             originalName: r.originalName,

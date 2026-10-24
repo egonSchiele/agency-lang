@@ -852,7 +852,13 @@ export const DIAGNOSTICS = {
   decoratorShape: {
     code: "AG6043",
     severity: "error",
-    message: "'{name}' cannot decorate '{target}': {problem}",
+    message: "'{name}' is declared as a decorator, but {problem}",
+  },
+  notADecorator: {
+    code: "AG6044",
+    severity: "error",
+    message:
+      "'{name}' is not a decorator, so '@{name}' cannot go on '{target}'. Declare it as `decorator def {name}(...)`.",
   },
   decoratorArgType: {
     code: "AG6041",

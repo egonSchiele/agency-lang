@@ -4,6 +4,12 @@
   in 30 seconds, headers and body together, fails with a message naming the
   URL and the limit; `timeout` raises the limit per call, and `0` removes it.
 
+  When a model calls one of these as a tool, a GET of a URL the same
+  conversation already fetched is not fetched again: the tool returns a
+  short note saying the content is in the conversation above, and
+  `refresh: true` fetches anyway. Fetches from Agency code are never
+  cached. See docs/dev/stdlib/fetch-cache.md.
+
   ```ts
   import { fetch, fetchJSON } from "std::http"
 
@@ -19,16 +25,18 @@
 // migration window.
 import {
   _fetch,
+  _fetchCacheNote,
   _fetchJSON,
   _fetchMarkdown,
+  _fetchTarget,
 } from "agency-lang/stdlib-lib/http.js"
 
 @always(method, baseUrl)
-effect std::http::fetch { baseUrl: string, path: string, method: string }
+effect std::http::fetch { baseUrl: string, path: string, method: string, scheme: string, network: string }
 @always(method, baseUrl)
-effect std::http::fetchJSON { baseUrl: string, path: string, method: string }
+effect std::http::fetchJSON { baseUrl: string, path: string, method: string, scheme: string, network: string }
 @always(method, baseUrl)
-effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string }
+effect std::http::fetchMarkdown { baseUrl: string, path: string, method: string, scheme: string, network: string }
 
 /** An HTTP request method. POST/PUT/PATCH/DELETE may carry a body; GET/HEAD do not. */
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -47,6 +55,7 @@ export def fetch(
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
+  refresh: boolean = false,
 ): Result {
   """
   Fetch a URL and return the response as text.
@@ -58,11 +67,23 @@ export def fetch(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
+  @param refresh - Fetch again even if this conversation already fetched this URL
   """
+  // A GET this conversation already made comes back as a note, before
+  // any interrupt: nothing is fetched, so there is nothing to approve.
+  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetch")
+  if (alreadyFetched != null) {
+    return success(alreadyFetched)
+  }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetch("Allow a ${method} request to this URL?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetch(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }
@@ -81,6 +102,7 @@ export def fetchJSON(
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
+  refresh: boolean = false,
 ): Result {
   """
   Fetch a URL and return the response parsed as JSON.
@@ -92,11 +114,23 @@ export def fetchJSON(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
+  @param refresh - Fetch again even if this conversation already fetched this URL
   """
+  // A GET this conversation already made comes back as a note, before
+  // any interrupt: nothing is fetched, so there is nothing to approve.
+  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetchJSON")
+  if (alreadyFetched != null) {
+    return success(alreadyFetched)
+  }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetchJSON("Allow a ${method} request to this URL and parse the response as JSON?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetchJSON(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }
@@ -115,6 +149,7 @@ export def fetchMarkdown(
   method: HttpMethod = "GET",
   body: Record<string, any> | string | null = null,
   timeout: number = 30000,
+  refresh: boolean = false,
 ): Result {
   """
   Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Good for extracting page content for an LLM. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
@@ -126,11 +161,23 @@ export def fetchMarkdown(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
+  @param refresh - Fetch again even if this conversation already fetched this URL
   """
+  // A GET this conversation already made comes back as a note, before
+  // any interrupt: nothing is fetched, so there is nothing to approve.
+  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetchMarkdown")
+  if (alreadyFetched != null) {
+    return success(alreadyFetched)
+  }
+  // Where the request goes, as words a policy rule can match: the scheme,
+  // and whether the host is public or on this machine or its network.
+  const target = _fetchTarget(baseUrl, path)
   return interrupt std::http::fetchMarkdown("Allow a ${method} request to this URL?", {
     baseUrl: baseUrl,
     path: path,
-    method: method
+    method: method,
+    scheme: target.scheme,
+    network: target.network
   })
   return try _fetchMarkdown(baseUrl, path, headers, allowedDomains, method, body, timeout)
 }

@@ -1,0 +1,3 @@
+[
+  { "url": "https://example.com/*", "return": "<html><body>a page</body></html>", "headers": { "content-type": "text/html" } }
+]

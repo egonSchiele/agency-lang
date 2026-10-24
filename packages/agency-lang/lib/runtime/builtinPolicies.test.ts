@@ -40,6 +40,30 @@ describe("builtinPolicy", () => {
     expect(p!["std::edit"]).toBeUndefined();
   });
 
+  it("approves a public https GET or HEAD through std::http under 'recommended' and nothing else", () => {
+    const p = builtinPolicy("recommended", "/tmp/base")!;
+    for (const effect of ["std::http::fetch", "std::http::fetchJSON", "std::http::fetchMarkdown"]) {
+      const rules = p[effect];
+      expect(rules).toHaveLength(1);
+      const { method, scheme, network } = rules[0].match!;
+      expect(rules[0].action).toBe("approve");
+      expect(picomatch.isMatch("GET", method!)).toBe(true);
+      expect(picomatch.isMatch("HEAD", method!)).toBe(true);
+      for (const sends of ["POST", "PUT", "PATCH", "DELETE"]) {
+        expect(picomatch.isMatch(sends, method!)).toBe(false);
+      }
+      // Plain http and a host on this machine or its network still ask.
+      expect(scheme).toBe("https");
+      expect(network).toBe("public");
+    }
+    // The rule is recommended's, not minimal's.
+    expect(builtinPolicy("minimal", "/tmp/base")!["std::http::fetchMarkdown"]).toBeUndefined();
+    // with-writes is recommended plus writes, so it carries the rule too.
+    expect(builtinPolicy("with-writes", "/tmp/base")!["std::http::fetchMarkdown"]).toEqual(
+      p["std::http::fetchMarkdown"],
+    );
+  });
+
   it("reads the agent's own settings file and nothing else beside it", () => {
     const read = builtinPolicy("recommended", "/tmp/base")!["std::read"];
     const rule = read[read.length - 1].match!;

@@ -4,8 +4,9 @@ import {
   isTimeoutError,
   readCause,
 } from "../runtime/errors.js";
-import { currentRun } from "../runtime/asyncContext.js";
-import { failure, type ResultFailure } from "../runtime/result.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { fetchCacheNote, recordFetch } from "../runtime/fetchCache.js";
+import { failure, isFailure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -288,6 +289,41 @@ export async function __internal_fetch(
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
 }
 
+/**
+ * The note a fetch tool returns instead of fetching, when this
+ * conversation already fetched the URL, or null when the fetch should
+ * run. Called by the Agency fetch functions before they raise their
+ * interrupt, so a cache hit asks no one. `tool` is the function's name,
+ * for the record. See lib/runtime/fetchCache.ts.
+ */
+export function _fetchCacheNote(
+  baseUrl: string,
+  urlPath: string,
+  method: string,
+  body: unknown,
+  refresh: boolean,
+  tool: string,
+): string | null {
+  const run = currentRun();
+  return fetchCacheNote(run, { url: resolveUrl(baseUrl, urlPath), method, body, tool }, refresh);
+}
+
+/** Record a completed fetch in the run's fetch cache. A failure is not a
+ *  fetch, so it is not recorded. */
+function remember(
+  run: Run,
+  result: unknown,
+  request: { baseUrl: string; urlPath: string; method: string; body: unknown; tool: string },
+): void {
+  if (isFailure(result)) return;
+  recordFetch(run, {
+    url: resolveUrl(request.baseUrl, request.urlPath),
+    method: request.method,
+    body: request.body,
+    tool: request.tool,
+  });
+}
+
 /** ALS-reading replacement for `__internal_fetch`. */
 export async function _fetch(
   baseUrl: string,
@@ -298,8 +334,21 @@ export async function _fetch(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = currentRun();
-  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body, timeoutMs);
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchImpl(
+    ctx,
+    stack,
+    baseUrl,
+    urlPath,
+    headers,
+    allowedDomains,
+    method,
+    body,
+    timeoutMs,
+  );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetch" });
+  return result;
 }
 
 async function fetchJSONImpl(
@@ -369,8 +418,9 @@ export async function _fetchJSON(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<any> {
-  const { ctx, stack } = currentRun();
-  return fetchJSONImpl(
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchJSONImpl(
     ctx,
     stack,
     baseUrl,
@@ -381,6 +431,8 @@ export async function _fetchJSON(
     body,
     timeoutMs,
   );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchJSON" });
+  return result;
 }
 
 async function fetchMarkdownImpl(
@@ -450,8 +502,9 @@ export async function _fetchMarkdown(
   body: any,
   timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
 ): Promise<string | ResultFailure> {
-  const { ctx, stack } = currentRun();
-  return fetchMarkdownImpl(
+  const run = currentRun();
+  const { ctx, stack } = run;
+  const result = await fetchMarkdownImpl(
     ctx,
     stack,
     baseUrl,
@@ -462,6 +515,8 @@ export async function _fetchMarkdown(
     body,
     timeoutMs,
   );
+  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchMarkdown" });
+  return result;
 }
 
 function htmlToMarkdown(html: string): string {
@@ -521,12 +576,86 @@ export function resolveUrl(baseUrl: string, path: string): string {
   return base + p;
 }
 
+/** Where a request goes, as two plain words a policy rule can match:
+ *  the URL's scheme, and whether the host is on the public internet or
+ *  on this machine or its network. `network` is "local" for loopback,
+ *  unspecified, link-local, private, and carrier-grade NAT addresses
+ *  (IPv4 and IPv6, an IPv4 address inside IPv6 included) and for
+ *  `localhost`, `.localhost`, and `.local` names, with or without a
+ *  trailing dot; "public" for any
+ *  other host; "unknown" when the string is not a URL. A rule that
+ *  approves a read of the web says `scheme: "https", network: "public"`,
+ *  which keeps a local admin page or the cloud metadata address out of
+ *  its reach (docs/dev/agents/approval-policies.md). Names are judged as
+ *  written, not resolved: a public name that resolves to a private
+ *  address is not caught here. */
+export type FetchTarget = {
+  scheme: string;
+  network: "public" | "local" | "unknown";
+};
+
+export function _fetchTarget(baseUrl: string, urlPath: string): FetchTarget {
+  try {
+    const url = new URL(resolveUrl(baseUrl, urlPath));
+    return { scheme: url.protocol.replace(/:$/, ""), network: networkOf(url.hostname) };
+  } catch {
+    return { scheme: "", network: "unknown" };
+  }
+}
+
+// 100.64.0.0/10 is carrier-grade NAT, which Tailscale uses for every
+// machine on a tailnet.
+const LOCAL_V4 = [
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^172\.(1[6-9]|2[0-9]|3[01])\./,
+  /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./,
+];
+const LOCAL_V6 = [/^f[cd][0-9a-f]{2}:/, /^fe[89ab][0-9a-f]:/];
+
+export function networkOf(hostname: string): "public" | "local" {
+  // `localhost.` is the same machine as `localhost`: a trailing dot only
+  // marks the name as fully qualified.
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
+    return "local";
+  }
+  if (host === "0.0.0.0" || host === "::" || host === "::1") return "local";
+  // An IPv4 address carried inside IPv6 is judged as the IPv4 address.
+  // The URL parser writes it in hex (`[::ffff:127.0.0.1]` becomes
+  // `[::ffff:7f00:1]`), so both spellings are read.
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
+  if (mapped) return networkOf(mapped[1]);
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (mappedHex) {
+    const high = parseInt(mappedHex[1], 16);
+    const low = parseInt(mappedHex[2], 16);
+    return networkOf(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+  }
+  if ([...LOCAL_V4, ...LOCAL_V6].some((pattern) => pattern.test(host))) return "local";
+  return "public";
+}
+
+/** A host and the same host without its `www.`: `www.example.com` and
+ *  `example.com` are one site to anyone writing an allow list. A model
+ *  given `https://www.3blue1brown.com` listed `3blue1brown.com` three
+ *  times in a row and was refused each time (ADI-44). Any other subdomain
+ *  is a different host and must be listed. */
+function withoutWww(host: string): string {
+  return host.replace(/^www\./, "");
+}
+
 export function checkAllowedDomains(url: string, allowedDomains: string[]): string | null {
   if (allowedDomains.length === 0) return null;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    const allowed = allowedDomains.map((d) => d.toLowerCase());
-    if (!allowed.includes(hostname)) {
+    const allowed = allowedDomains.map((d) => withoutWww(d.toLowerCase()));
+    if (!allowed.includes(withoutWww(hostname))) {
       return `Domain "${hostname}" is not in allowedDomains.`;
     }
     return null;

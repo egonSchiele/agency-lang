@@ -1,0 +1,29 @@
+// The fetch cache across a pause and resume (docs/dev/stdlib/fetch-cache.md).
+// No handler answers the fetch's interrupt here, so the first fetch pauses
+// the run; test.js approves it from TypeScript and resumes. The second call
+// for the same page, on the resumed pass, must get the note: the record the
+// tool loop leaves for the cache is written on every pass, and the fetch is
+// remembered when it completes after the approval. The tool results are
+// read back from the thread.
+import { fetchMarkdown } from "std::http"
+import { currentThreadId, getThread } from "std::thread"
+
+def kindOf(text: string): string {
+  if (text.startsWith("Already fetched")) {
+    return "note"
+  }
+  if (text.includes("a page")) {
+    return "page"
+  }
+  return "other: ${text}"
+}
+
+node main(): string[] {
+  llm("fetch the page twice", { tools: [fetchMarkdown] })
+  const messages = getThread(currentThreadId(), 0, 100)
+  if (messages is failure(err)) {
+    return ["could not read the thread: ${err}"]
+  }
+  const tools = filter(messages.value, \m -> m.role == "tool")
+  return map(tools, \m -> kindOf(m.content))
+}

@@ -1,0 +1,55 @@
+// The per-run fetch cache (docs/dev/stdlib/fetch-cache.md). The scripted
+// replies in llmMocks.json have the model call fetchMarkdown on the same
+// page in two spellings, then with refresh, then on another page; then a
+// fork branch fetches the parent's page and a page of its own, twice.
+// The tool results are read back from each conversation's thread: the
+// page, or the note that stands in for it. The branch runs on a subthread,
+// which starts with the parent's messages, so its list repeats the
+// parent's four results before its own three.
+import { fetchMarkdown } from "std::http"
+import { currentThreadId, getThread, ThreadMessage } from "std::thread"
+
+def kindOf(text: string): string {
+  if (text.startsWith("Already fetched")) {
+    return "note"
+  }
+  if (text.includes("a page")) {
+    return "page"
+  }
+  return "other: ${text}"
+}
+
+/** The kind of every tool result on the active thread, in order. */
+def toolKinds(): string[] {
+  const messages = getThread(currentThreadId(), 0, 100)
+  if (messages is failure(err)) {
+    return ["could not read the thread: ${err}"]
+  }
+  const tools = filter(messages.value, \m -> m.role == "tool")
+  return map(tools, \m -> kindOf(m.content))
+}
+
+node main(): string[] {
+  llm("fetch the pages", { tools: [fetchMarkdown] }) with approve
+  const parent = toolKinds()
+  const branch = fork([1]) as n {
+    llm("fetch the pages again", { tools: [fetchMarkdown] }) with approve
+    return toolKinds()
+  }
+  return [...parent, "branch:", ...branch[0]]
+}
+
+// Fetching the same URL from code, outside any tool call, is never cached:
+// a program that polls a page gets it every time.
+def resultKind(result: Result): string {
+  if (result is success(text)) {
+    return kindOf(text)
+  }
+  return "failure: ${result.error}"
+}
+
+node fromCode(): string[] {
+  const first = fetchMarkdown("https://example.com/status") with approve
+  const second = fetchMarkdown("https://example.com/status") with approve
+  return [resultKind(first), resultKind(second)]
+}

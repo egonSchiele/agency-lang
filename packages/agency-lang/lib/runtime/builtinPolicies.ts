@@ -109,6 +109,22 @@ export const minimalAutoApprovePolicy: Policy = {
   "std::exec": agencyExecApproveRules(),
 };
 
+// A GET of a public https page through std::http reads the web, the same
+// class of action as the web searches and Wikipedia lookups below, and
+// the one the research agent needs on every source. Three fields of the
+// effect bound it: a POST, PUT, PATCH, or DELETE sends something; plain
+// http is where local dev servers and the cloud metadata address live;
+// and `network` is "local" for loopback, private, link-local, and
+// carrier-grade NAT hosts (`networkOf` in lib/stdlib/http.ts), which a
+// search could never reach, so neither should an approved fetch. Anything else still asks.
+// docs/dev/agents/approval-policies.md says what this does and does not
+// widen.
+function webReadRules(): PolicyRule[] {
+  return [
+    { match: { method: "{GET,HEAD}", scheme: "https", network: "public" }, action: "approve" },
+  ];
+}
+
 export const recommendedAutoApprovePolicy: Policy = {
   ...minimalAutoApprovePolicy,
   // A sandboxed subprocess: the code it runs raises its own effects back
@@ -130,6 +146,9 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::wikipedia::search": approve,
   "std::wikipedia::summary": approve,
   "std::wikipedia::article": approve,
+  "std::http::fetch": webReadRules(),
+  "std::http::fetchJSON": webReadRules(),
+  "std::http::fetchMarkdown": webReadRules(),
   "std::weather": approve,
   "std::search": approve,
   "std::tavilySearch": approve,
@@ -220,7 +239,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search, and the agent reading its own settings.json; prompt for reads elsewhere, every write, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search and GET fetches, and the agent reading its own settings.json; prompt for reads elsewhere, every write, shell, git changes, and any HTTP request that sends a body.",
   },
   {
     name: "minimal",

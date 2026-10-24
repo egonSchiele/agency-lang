@@ -1,0 +1,49 @@
+{
+  "tests": [
+    {
+      "nodeName": "evictionDropsTheOldest",
+      "description": "the store drops its oldest output when the next save would pass a million characters, and the name of a dropped output reads back as no longer available",
+      "input": "",
+      "expectedOutput": "[true,300000]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "missingNameIsAFailure",
+      "description": "a well-formed name the store never issued is a Result failure from both readers, not an error",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "survivesACheckpoint",
+      "description": "an output evicted from the live store after a checkpoint is back after restoring that checkpoint, so the store rides in the checkpoint",
+      "input": "",
+      "expectedOutput": "[true,300000]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "overCapToolResultIsKept",
+      "description": "a tool result over maxToolResultChars is saved whole and the model gets a notice naming readSpill; the saved text reads back by that name, whole and by grep",
+      "input": "",
+      "expectedOutput": "[true,38890,1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "longPage" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "overCapResultWithoutReadersSaysSo",
+      "description": "when the model has no readSpill tool the notice says the rest cannot be read from here, instead of naming a tool the model lacks",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "longPage" }] },
+        { "return": "done" }
+      ]
+    }
+  ]
+}

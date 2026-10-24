@@ -1,66 +1,57 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { safeDeleteDirectoryWithin } from "../utils.js";
-import { _grepSpill, _readSpill, _spillName, _spillOutput } from "./spill.js";
+import { describe, expect, it } from "vitest";
+import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
+import type { Run } from "../runtime/asyncContext.js";
+import { _grepSpill, _keepOutput, _readSpill, MAX_STDOUT_LEN } from "./spill.js";
+
+function withRun<T>(fn: (run: Run) => T): T {
+  const ctx = makeMockCtx();
+  return inFrameOf(ctx, ctx.stateStack, fn);
+}
 
 describe("spill", () => {
-  const scratch: string[] = [];
-  const savedEnv = process.env.AGENCY_TOOL_OUTPUT_DIR;
-
-  function spillAt(dir: string): void {
-    process.env.AGENCY_TOOL_OUTPUT_DIR = dir;
-  }
-
-  afterEach(() => {
-    if (savedEnv === undefined) delete process.env.AGENCY_TOOL_OUTPUT_DIR;
-    else process.env.AGENCY_TOOL_OUTPUT_DIR = savedEnv;
-    for (const dir of scratch.splice(0)) safeDeleteDirectoryWithin(tmpdir(), dir);
+  it("returns short output as printed", () => {
+    withRun(() => {
+      expect(_keepOutput("hello\n", 0)).toBe("hello\n");
+    });
   });
 
-  function base(): string {
-    const dir = mkdtempSync(join(tmpdir(), "spill-"));
-    scratch.push(dir);
-    return dir;
-  }
-
-  it("writes under the spill directory and reads the file back", async () => {
-    const dir = join(base(), "out");
-    spillAt(dir);
-    const name = _spillName();
-    await _spillOutput(name, "one\ntwo\nthree\n");
-    expect(await _readSpill(name, 0, 0)).toBe("one\ntwo\nthree\n");
-    expect(await _readSpill(name, 2, 1)).toContain("two");
-    expect(await _grepSpill("t", name, 10)).toEqual([
-      { file: name, line: 2, text: "two" },
-      { file: name, line: 3, text: "three" },
-    ]);
+  it("saves long output and reads it back by the name in the notice", () => {
+    withRun(() => {
+      const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+      expect(text.length).toBeGreaterThan(MAX_STDOUT_LEN);
+      const notice = _keepOutput(text, 3);
+      expect(notice).toContain("Command exited with code 3");
+      const name = /full output saved as (\S+) ---/.exec(notice)![1];
+      expect(_readSpill(name, 0, 0)).toBe(text);
+      expect(_readSpill(name, 2, 1)).toContain("line 1");
+      expect(_grepSpill("line 49.$", name, 10)).toEqual([
+        { file: name, line: 491, text: "line 490" },
+        { file: name, line: 492, text: "line 491" },
+        { file: name, line: 493, text: "line 492" },
+        { file: name, line: 494, text: "line 493" },
+        { file: name, line: 495, text: "line 494" },
+        { file: name, line: 496, text: "line 495" },
+        { file: name, line: 497, text: "line 496" },
+        { file: name, line: 498, text: "line 497" },
+        { file: name, line: 499, text: "line 498" },
+        { file: name, line: 500, text: "line 499" },
+      ]);
+    });
   });
 
-  it("refuses a name that is not a saved file name", async () => {
-    spillAt(join(base(), "out"));
-    for (const bad of ["../x.log", "/etc/passwd", ".hidden.log", "notes.txt", "a/b.log"]) {
-      await expect(_readSpill(bad, 0, 0)).rejects.toThrow("not a saved output file name");
-    }
+  it("refuses a name that is not a saved output name", () => {
+    withRun(() => {
+      for (const bad of ["../x.log", "/etc/passwd", ".hidden.log", "notes.txt", "a/b.log"]) {
+        expect(() => _readSpill(bad, 0, 0)).toThrow("not a saved output name");
+      }
+    });
   });
 
-  it("refuses a symlink where a saved file is expected", async () => {
-    const root = base();
-    const dir = join(root, "out");
-    mkdirSync(dir);
-    writeFileSync(join(root, "secret.txt"), "secret");
-    symlinkSync(join(root, "secret.txt"), join(dir, "planted.log"));
-    spillAt(dir);
-    await expect(_readSpill("planted.log", 0, 0)).rejects.toThrow();
-    await expect(_grepSpill("secret", "planted.log", 10)).rejects.toThrow();
-  });
-
-  it("refuses a spill directory that is a symlink", async () => {
-    const root = base();
-    mkdirSync(join(root, "elsewhere"));
-    symlinkSync(join(root, "elsewhere"), join(root, "out"));
-    spillAt(join(root, "out"));
-    await expect(_spillOutput(_spillName(), "x")).rejects.toThrow("is a symlink");
+  it("says a name it never saved is no longer available", () => {
+    withRun(() => {
+      expect(() => _grepSpill("x", "2026-01-01T00-00-00-000Z-ffffff.log", 10)).toThrow(
+        "no longer available",
+      );
+    });
   });
 });

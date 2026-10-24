@@ -10,7 +10,20 @@ import {
   agencyCodeTools,
   memoryTools,
   planningTools,
+  spillTools,
  } from "std::agents/lib/toolkits"
+import { buildTools as codingTools } from "std::agents/coding"
+import { buildTools as researcherTools } from "std::agents/researcher"
+import { buildTools as oracleTools } from "std::agents/oracle"
+import { buildTools as expertTools } from "std::agents/expert"
+import { buildTools as reviewTools } from "std::agents/review"
+import { buildTools as verifierTools } from "std::agents/verifier"
+import { buildTools as dataTools } from "std::agents/data"
+import { buildTools as typescriptReviewTools } from "std::agents/typescript/review"
+import { buildTools as composableResearcherTools } from "std::agents/composable/researcher"
+import { buildTools as explorerTools } from "std::agents/explorer"
+import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
+import { buildTools as agencyReviewTools } from "std::agents/agency/review"
 
 def allBundles(): any[] {
   return [
@@ -24,7 +37,43 @@ def allBundles(): any[] {
     agencyCodeTools(),
     memoryTools(),
     planningTools(),
+    spillTools(),
   ]
+}
+
+// Every agent that runs commands or fetches pages can get a long result
+// back as a notice naming readSpill, so each carries the two readers, and
+// each carries them once: a provider rejects a duplicate tool name before
+// the request is sent.
+def agentToolLists(): any[] {
+  return [
+    codingTools(),
+    researcherTools(),
+    oracleTools(),
+    expertTools(),
+    reviewTools(),
+    verifierTools(),
+    dataTools(),
+    typescriptReviewTools(),
+    composableResearcherTools(),
+    explorerTools(),
+    agencyVerifierTools(),
+    agencyReviewTools(),
+  ]
+}
+
+node everyAgentCarriesTheReadersOnce(): boolean {
+  for (tools in agentToolLists()) {
+    const names = map(tools, \tool -> tool.name)
+    const readers = filter(names, \name -> name == "readSpill" || name == "grepSpill")
+    if (readers.length != 2) {
+      return false
+    }
+    if (unique(names, \name -> name).length != names.length) {
+      return false
+    }
+  }
+  return true
 }
 
 node everyBundleHasTools(): boolean {
@@ -95,9 +144,8 @@ def isCwdBound(tool: any): boolean {
 node fileAndShellToolsAreCwdBound(): boolean {
   // safeBash is exempt: it has no useAgentCwd parameter — its empty cwd
   // default already resolves to the agent working directory (resolveCwd in
-  // std::safeBash), so there is nothing to bind. readSpill and grepSpill
-  // take a file name in one fixed directory, so they have no cwd either.
-  const unbound = ["safeBash", "readSpill", "grepSpill"]
+  // std::safeBash), so there is nothing to bind.
+  const unbound = ["safeBash"]
   const shouldBeBound = filter(
     [...writableFileTools(), ...shellTools()],
     \tool -> !unbound.includes(tool.name),

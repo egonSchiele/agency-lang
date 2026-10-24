@@ -177,6 +177,15 @@ tell which tools are handoffs, so the text names the handoff tools the
 round called and tells the model to call one of them again in a new
 response.
 
+## A result over the cap
+
+A tool result longer than `maxToolResultChars` is not cut. The loop saves
+the whole text in the run's output store and sends the model the same
+preview `safeBash` gives for long command output: a few lines from each
+end and a name to read the rest with `readSpill`. When the model's tool
+list has no `readSpill`, the notice says the rest cannot be read from here.
+The store, its cap, and the readers are in `docs/dev/stdlib/spill.md`.
+
 ## Tests
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,

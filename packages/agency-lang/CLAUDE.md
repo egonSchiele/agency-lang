@@ -333,7 +333,7 @@ Other process docs:
 - `docs/dev/stdlib/github.md` — `std::github`: why it speaks REST directly, the three-source credential chain, why the token never becomes an Agency value, and the deliberate departures in its effect vocabulary.
 - `docs/dev/stdlib/ocr.md` — `std::ocr` and `viewFile`: the three effects and why they are separate, the before/after-approval split and where each function reads its bytes, the osascript bridge with a temp copy, the Vision y flip, why local never falls back to cloud, and why `viewFile` says "queued".
 - `docs/dev/stdlib/skills-write.md` — The `std::skills` write half: writeSkill's save gate, designSkill's review-and-redraft loop over it, the subdir scan's path-segment validation, and the frontmatter round-trip contract.
-- `docs/dev/stdlib/spill.md` — `std::spill`: long tool output saved to one fixed directory outside every project, the two effects and two name-only tools that read it back, and why the preview is bounded by characters.
+- `docs/dev/stdlib/spill.md` — `std::spill`: long tool output kept in the run's globals beside the fetch cache, so it is per run and rides in every checkpoint; the two name-only tools that read it back and the `spillTools()` bundle every agent carries; the cap, bounded by the hosted resume limit, and the "no longer available" rule; why the loop's result cap saves through the same store; and why there are no effects.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
 - `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the designTool pipeline and the plain writeTool, the save gate both publish through, and runTool.
 

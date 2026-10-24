@@ -4,6 +4,7 @@
  * constants that decide when a tool is removed. prompt.ts decides when
  * to call them.
  */
+import { outputNotice, storeOutput } from "./toolOutputStore.js";
 import type { FuncParam, CallType } from "./agencyFunction.js";
 import type { AliasCorrection, CanonicalKeysResult } from "../utils/parameterAliases.js";
 import { withChildRun, type Run } from "./asyncContext.js";
@@ -148,17 +149,18 @@ export function stringifyToolResult(result: any): string {
   }
 }
 
-/** Truncate a tool result for the LLM if its serialized form exceeds
- *  `cap` characters. Returns the ORIGINAL value untouched when within
- *  the cap (so smoltalk serializes it exactly as before) or when the cap
- *  is disabled (`cap <= 0` or non-finite). Over the cap, returns the
- *  first `cap` characters plus a marker noting the original length, so
- *  the model knows it was cut. */
-export function capToolResultForLlm(result: any, cap: number): any {
+/** Cap a tool result for the LLM. Returns the ORIGINAL value untouched
+ *  when its serialized form is within `cap` characters (so smoltalk
+ *  serializes it exactly as before) or when the cap is disabled (`cap <= 0`
+ *  or non-finite). Over the cap, the whole text is saved in the run's
+ *  output store and the model gets a preview naming it, the same notice
+ *  `safeBash` gives for long command output. `canRead` says whether the
+ *  model has the `readSpill` tool, which decides how the notice ends. */
+export function capToolResultForLlm(result: any, cap: number, run: Run, canRead: boolean): any {
   if (!Number.isFinite(cap) || cap <= 0) return result;
   const text = stringifyToolResult(result);
   if (text.length <= cap) return result;
-  return text.slice(0, cap) + `\n\n[tool result truncated: showing ${cap} of ${text.length} chars]`;
+  return outputNotice(text, storeOutput(run, text), null, canRead);
 }
 
 /** LLMs routinely emit an explicit `null` for an optional tool argument

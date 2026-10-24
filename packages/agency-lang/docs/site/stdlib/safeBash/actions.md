@@ -235,9 +235,7 @@ Run a command string through bash and return what it printed.
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::spill::write`
-
-**Needs:** `fileRead`, `subprocess`, `fileWrite`
+**Needs:** `fileRead`, `subprocess`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
 

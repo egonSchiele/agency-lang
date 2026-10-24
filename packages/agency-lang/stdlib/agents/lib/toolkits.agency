@@ -145,11 +145,23 @@ export def shellTools(): any[] {
   (a recognized write raises std::write, a git read raises its git
   effect), so a policy can pre-approve what raw bash never could. It
   needs no useAgentCwd binding — its empty cwd already resolves to the
-  agent working directory (resolveCwd in std::safeBash). readSpill and
-  grepSpill read back the output safeBash saved to a file when a command
-  printed too much to return inline.
+  agent working directory (resolveCwd in std::safeBash). Long output is
+  saved and the result names it; add spillTools() so the model can read
+  it back.
   """
-  return [safeBash, exec.partial(useAgentCwd: true), readSpill, grepSpill]
+  return [safeBash, exec.partial(useAgentCwd: true)]
+}
+
+export def spillTools(): any[] {
+  """
+  Return the two tools that read saved tool output back: readSpill for the
+  whole text or a slice of lines, grepSpill to search it. A long command
+  output or a long fetched page is saved in the run and the model gets a
+  preview naming it (std::spill), so every agent that carries shellTools()
+  or webTools() carries these too, once. They raise no interrupt: the
+  output was already in the conversation the name arrived in.
+  """
+  return [readSpill, grepSpill]
 }
 
 export def readOnlyGitTools(): any[] {

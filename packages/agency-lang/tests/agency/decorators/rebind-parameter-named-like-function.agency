@@ -1,0 +1,14 @@
+// A parameter with the function's own name must not shadow the function
+// the rebind reaches for.
+def passThrough(call: Call, block: (args: object) -> any): any {
+  return block(call.args)
+}
+
+@passThrough
+def count(count: number): number {
+  return count + 1
+}
+
+node main() {
+  return count(1)
+}

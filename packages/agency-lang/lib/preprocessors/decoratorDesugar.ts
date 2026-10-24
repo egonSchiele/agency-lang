@@ -1,4 +1,4 @@
-import type { AgencyNode, AgencyProgram, Expression, SourceLocation } from "@/types.js";
+import type { AgencyNode, AgencyProgram, Assignment, Expression, SourceLocation } from "@/types.js";
 import type { AgencyObject, AgencyObjectKV, NamedArgument } from "@/types/dataStructures.js";
 import type {
   DecoratorOrigin,
@@ -26,7 +26,8 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  * becomes
  *
  *     def research(task: string, maxCost: number): Result<string> {
- *       return budgeted(cost: maxCost, call: { name: "research", args: { task: task, maxCost: maxCost } }) {
+ *       const __call_0 = { name: "research", args: { task: task, maxCost: maxCost } }
+ *       return budgeted(cost: maxCost, call: __call_0) {
  *         <rebindParameters>
  *         BODY
  *       }
@@ -34,11 +35,14 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  *
  * The tag's own arguments come first, as written; the `call` record is
  * passed by name after them, so it never competes with a positional tag
- * argument for a slot. The block takes one parameter, `__args`, the record
- * a decorator may call it with, and starts with a `rebindParameters`
+ * argument for a slot. The record is built in its own statement, so it is
+ * its own step: a resume re-runs the step that calls the decorator, and
+ * rebuilding the record there would read parameters the decorator has
+ * since rebound. The block takes one parameter, `__args`, the record a
+ * decorator may call it with, and starts with a `rebindParameters`
  * statement that stores the def's parameters from it (lib/runtime/rebind.ts).
  * Stacked tags nest, outermost first: `@a @b def f` becomes
- * `a(...) { rebind; return b(...) { rebind; BODY } }`.
+ * `const __call_0 = ...; return a(...) { rebind; const __call_1 = ...; return b(...) { rebind; BODY } }`.
  *
  * MUTATES IN PLACE, for the reason guardDesugar.ts gives: the compilation
  * unit built before the TypeChecker constructor runs already holds the def
@@ -95,10 +99,10 @@ export function decoratorsAbove(nodes: AgencyNode[]): DecoratedDef[] {
     .filter((entry) => entry.tags.length > 0);
 }
 
-/** The body a decorated def gets: one `return` of the outermost decorator
- *  call, each block starting with the rebind and holding the next call as
- *  its other statement, and the def's original statements after the rebind
- *  in the innermost block. Pure: the def is read, never written. */
+/** The body a decorated def gets: the outermost decorator's record and one
+ *  `return` of its call; each block starting with the rebind, then the next
+ *  decorator's record and call; and the def's original statements after
+ *  the rebind in the innermost block. Pure: the def is read, never written. */
 export function loweredBody(
   def: FunctionDefinition,
   tags: Tag[],
@@ -106,10 +110,14 @@ export function loweredBody(
 ): AgencyNode[] {
   const target = declaredName(def.functionName);
   const innermostFirst = [...tags].reverse();
-  const outermost = innermostFirst.reduce<AgencyNode[]>(
-    (body, tag) => [returning(decoratorCall(tag, target, def.parameters, body, lookup), tag.loc)],
-    def.body,
-  );
+  const outermost = innermostFirst.reduce<AgencyNode[]>((body, tag, index) => {
+    const depth = innermostFirst.length - 1 - index;
+    const recordName = `${RECORD_LOCAL}${depth}`;
+    return [
+      recordDeclaration(recordName, target, def.parameters, tag.loc),
+      returning(decoratorCall(tag, target, recordName, def.parameters, body, lookup), tag.loc),
+    ];
+  }, def.body);
   return outermost;
 }
 
@@ -117,9 +125,27 @@ function returning(value: Expression, loc: SourceLocation | undefined): ReturnSt
   return { type: "returnStatement", value, loc };
 }
 
+/** `const __call_N = { name: "<def>", args: { ... } }`, the record the
+ *  decorator at depth N receives, built once in its own step. */
+function recordDeclaration(
+  name: string,
+  target: string,
+  parameters: FunctionParameter[],
+  loc: SourceLocation | undefined,
+): Assignment {
+  return {
+    type: "assignment",
+    declKind: "const",
+    variableName: name,
+    value: callRecord(target, parameters, loc),
+    loc,
+  } as Assignment;
+}
+
 function decoratorCall(
   tag: Tag,
   target: string,
+  recordName: string,
   parameters: FunctionParameter[],
   body: AgencyNode[],
   lookup: DecoratorLookup,
@@ -129,7 +155,7 @@ function decoratorCall(
   const record: NamedArgument = {
     type: "namedArgument",
     name: "call",
-    value: callRecord(target, parameters, tag.loc),
+    value: { type: "variableName", value: recordName, loc: tag.loc },
   };
   const call: FunctionCall = {
     type: "functionCall",
@@ -155,6 +181,10 @@ function decoratorCall(
  *  the lowering adds is allowed (docs/dev/language/reserved-names.md). */
 const RECORD_PARAMETER = "__args";
 
+/** The local that holds a decorator's `call` record, suffixed with the
+ *  decorator's depth in the stack: `__call_0` for the outermost. */
+const RECORD_LOCAL = "__call_";
+
 function isBlockParameter(parameter: FunctionParameter): boolean {
   return parameter.typeHint?.type === "blockType";
 }
@@ -170,7 +200,7 @@ function rebindStatement(
     type: "rebindParameters",
     functionName: target,
     parameters: parameters.filter((parameter) => !isBlockParameter(parameter)),
-    blockParameter: parameters.find(isBlockParameter)?.name ?? null,
+    blockParameters: parameters.filter(isBlockParameter).map((parameter) => parameter.name),
     record: RECORD_PARAMETER,
     loc,
   };

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
-import type { AgencyProgram } from "../types.js";
+import type { AgencyProgram, Assignment } from "../types.js";
 import type { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import type { ReturnStatement } from "../types/returnStatement.js";
 import {
@@ -52,32 +52,53 @@ const lookup: DecoratorLookup = (name) => {
   return undefined;
 };
 
+/** A lowered def body: the outermost decorator's record in its own const,
+ *  then one `return` of the call. */
 function outermostCall(body: ReturnType<typeof loweredBody>): FunctionCall {
-  expect(body).toHaveLength(1);
-  const statement = body[0] as ReturnStatement;
-  expect(statement.type).toBe("returnStatement");
-  return statement.value as FunctionCall;
-}
-
-/** The call inside a lowered block: the block starts with the rebind, then
- *  the next decorator's call. */
-function innerCall(body: ReturnType<typeof loweredBody>): FunctionCall {
   expect(body).toHaveLength(2);
-  expect(body[0].type).toBe("rebindParameters");
+  expect(body[0]).toMatchObject({
+    type: "assignment",
+    declKind: "const",
+    variableName: "__call_0",
+  });
   const statement = body[1] as ReturnStatement;
   expect(statement.type).toBe("returnStatement");
   return statement.value as FunctionCall;
 }
 
-/** The `call:` record a lowered call passes last. */
-function callRecordOf(call: FunctionCall): { entries: { key: string; value: unknown }[] } {
+/** The call inside a lowered block: the block starts with the rebind, then
+ *  the next decorator's record, then its call. */
+function innerCall(body: ReturnType<typeof loweredBody>): FunctionCall {
+  expect(body).toHaveLength(3);
+  expect(body[0].type).toBe("rebindParameters");
+  expect(body[1]).toMatchObject({
+    type: "assignment",
+    declKind: "const",
+    variableName: "__call_1",
+  });
+  const statement = body[2] as ReturnStatement;
+  expect(statement.type).toBe("returnStatement");
+  return statement.value as FunctionCall;
+}
+
+/** The `call:` record a lowered call passes last: the call names the const
+ *  declared beside it, and this returns that const's value. */
+function callRecordOf(
+  body: ReturnType<typeof loweredBody>,
+  call: FunctionCall,
+): { entries: { key: string; value: unknown }[] } {
   const last = call.arguments[call.arguments.length - 1] as {
     type: string;
     name: string;
-    value: unknown;
+    value: { type: string; value: string };
   };
   expect(last).toMatchObject({ type: "namedArgument", name: "call" });
-  return last.value as { entries: { key: string; value: unknown }[] };
+  expect(last.value).toMatchObject({ type: "variableName" });
+  const declaration = body.find(
+    (node) => node.type === "assignment" && (node as Assignment).variableName === last.value.value,
+  ) as Assignment | undefined;
+  expect(declaration).toBeDefined();
+  return declaration!.value as { entries: { key: string; value: unknown }[] };
 }
 
 describe("decoratorsAbove", () => {
@@ -105,17 +126,18 @@ describe("loweredBody", () => {
     const program = parse(`@plain\ndef f(a: number): number { return a }\n`);
     const def = defNamed(program, "f");
     const original = def.body;
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
     expect(call.functionName).toBe("plain");
     expect(call.arguments).toHaveLength(1);
-    expect(callRecordOf(call).entries[0]).toMatchObject({ key: "name" });
+    expect(callRecordOf(body, call).entries[0]).toMatchObject({ key: "name" });
     // The block takes the record, starts with the rebind, and then runs the
     // body's own statements.
     expect(call.block?.params.map((param) => param.name)).toEqual(["__args"]);
     expect(call.block?.body[0]).toMatchObject({
       type: "rebindParameters",
       functionName: "f",
-      blockParameter: null,
+      blockParameters: [],
       record: "__args",
       parameters: [{ name: "a" }],
     });
@@ -128,10 +150,11 @@ describe("loweredBody", () => {
   it("passes the tag's arguments first and the call record by name after them", () => {
     const program = parse(`@withCall(3)\ndef f(a: number, b: string = "x"): number { return a }\n`);
     const def = defNamed(program, "f");
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[0]).toMatchObject({ type: "number" });
-    expect(callRecordOf(call)).toMatchObject({
+    expect(callRecordOf(body, call)).toMatchObject({
       type: "agencyObject",
       entries: [
         { key: "name", value: { type: "string", segments: [{ type: "text", value: "f" }] } },
@@ -154,15 +177,16 @@ describe("loweredBody", () => {
       `@withCall\ndef each(xs: number[], block: (number) -> number): number[] { return xs }\n`,
     );
     const def = defNamed(program, "each");
-    const call = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
-    const record = callRecordOf(call) as {
+    const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
+    const call = outermostCall(body);
+    const record = callRecordOf(body, call) as {
       entries: { key: string; value: { entries: unknown[] } }[];
     };
     expect(record.entries[1].value.entries).toHaveLength(1);
     expect(call.block?.body[0]).toMatchObject({
       type: "rebindParameters",
       parameters: [{ name: "xs" }],
-      blockParameter: "block",
+      blockParameters: ["block"],
     });
   });
 

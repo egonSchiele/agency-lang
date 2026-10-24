@@ -288,26 +288,31 @@ export class AgencyFunction {
   /**
    * The value of every unbound parameter for a call that passes `record`
    * by name and nothing by position: the record's value, UNSET for an
-   * absent defaulted parameter, [] for an absent variadic. `blockArg` is
-   * the value of the block-typed parameter, when the function has one,
-   * since a record cannot carry a block. Throws what a call throws: an
-   * unknown name, a missing required argument. Null and undefined are the
-   * empty record; any other non-object is refused.
+   * absent defaulted parameter, [] for an absent variadic. `keep` holds the
+   * current values of the parameters a record cannot carry (the function's
+   * block-typed ones), by name; a record that names one of them is refused.
+   * Throws what a call throws: an unknown name, a missing required
+   * argument. Null and undefined are the empty record; any other
+   * non-object is refused.
    *
    * This is how a decorator's block rebinds the decorated function's
    * parameters (lib/runtime/rebind.ts). That function's module-level
    * constant is never partially applied, so `_unboundParams` is all of its
    * parameters.
    */
-  bindRecord(record: unknown, blockArg?: unknown): Record<string, unknown> {
+  bindRecord(record: unknown, keep: Record<string, unknown> = {}): Record<string, unknown> {
     const isRecord = typeof record === "object" && !Array.isArray(record);
     if (record !== null && record !== undefined && !isRecord) {
       throw new Error(
         `block() in '${this.name}' takes a record of arguments, got ${JSON.stringify(record)}`,
       );
     }
-    const namedArgs: Record<string, unknown> = { ...(record ?? {}) };
-    const values = this.resolveNamed([], namedArgs, blockArg);
+    const given: Record<string, unknown> = { ...(record ?? {}) };
+    const kept = Object.keys(keep).find((name) => Object.hasOwn(given, name));
+    if (kept !== undefined) {
+      throw new Error(`'${kept}' is a block parameter of '${this.name}' and cannot be rebound`);
+    }
+    const values = this.resolveNamed([], { ...given, ...keep });
     const bound: Record<string, unknown> = {};
     this._unboundParams.forEach((param, index) => {
       bound[param.name] = values[index];

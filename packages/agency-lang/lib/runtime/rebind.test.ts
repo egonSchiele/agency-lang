@@ -59,7 +59,7 @@ describe("__rebindParameters", () => {
   it("stores bound values and calls the default thunk for an absent key", async () => {
     const frame = { args: {} };
     const runner = stubRunner();
-    await __rebindParameters(run, runner, frame, fn, { a: 1 }, undefined, spec, null);
+    await __rebindParameters(run, runner, frame, fn, { a: 1 }, {}, spec, null);
     expect(frame.args).toEqual({ a: 1, b: "dflt" });
     expect(runner.state.halted).toBe(false);
   });
@@ -67,7 +67,7 @@ describe("__rebindParameters", () => {
   it("halts the runner with the bind failure instead of throwing", async () => {
     const frame = { args: {} };
     const runner = stubRunner();
-    await __rebindParameters(run, runner, frame, fn, { a: 1, c: 2 }, undefined, spec, null);
+    await __rebindParameters(run, runner, frame, fn, { a: 1, c: 2 }, {}, spec, null);
     expect(runner.state.halted).toBe(true);
     expect(failureMessage(runner.state.haltResult)).toContain("Unknown named argument 'c'");
   });
@@ -75,14 +75,14 @@ describe("__rebindParameters", () => {
   it("halts on a missing required key", async () => {
     const frame = { args: {} };
     const runner = stubRunner();
-    await __rebindParameters(run, runner, frame, fn, {}, undefined, spec, null);
+    await __rebindParameters(run, runner, frame, fn, {}, {}, spec, null);
     expect(failureMessage(runner.state.haltResult)).toContain("Missing required argument 'a'");
   });
 
   it("leaves the frame untouched when binding fails", async () => {
     const frame = { args: { a: "before" } };
     const runner = stubRunner();
-    await __rebindParameters(run, runner, frame, fn, { a: 1, c: 2 }, undefined, spec, null);
+    await __rebindParameters(run, runner, frame, fn, { a: 1, c: 2 }, {}, spec, null);
     expect(frame.args).toEqual({ a: "before" });
   });
 
@@ -96,7 +96,7 @@ describe("__rebindParameters", () => {
       frame,
       checked,
       { n: -1 },
-      undefined,
+      {},
       [{ name: "n", checked: true }],
       positive,
     );
@@ -114,7 +114,7 @@ describe("__rebindParameters", () => {
       frame,
       checked,
       { n: 3 },
-      undefined,
+      {},
       [{ name: "n", checked: true }],
       positive,
     );

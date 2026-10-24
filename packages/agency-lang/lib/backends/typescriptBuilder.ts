@@ -2291,7 +2291,8 @@ export class TypeScriptBuilder {
   /** The rebind statement a decorated body's block starts with: one
    *  `__rebindParameters` call over a table of the function's parameters,
    *  each default as a thunk compiled here so it sees the function's scope,
-   *  then the halt check every parameter check ends with. */
+   *  then the halt check every parameter check ends with. The function's
+   *  block-typed parameters are passed by name as values to keep. */
   private processRebindParameters(node: RebindParameters): TsNode {
     const spec = ts.arr(
       node.parameters.map((param) => {
@@ -2308,19 +2309,24 @@ export class TypeScriptBuilder {
     const checks = node.parameters.some(isCheckedParam)
       ? ts.id(this.paramChecksName(node.functionName))
       : ts.id("null");
-    const blockArg =
-      node.blockParameter === null
-        ? ts.id("undefined")
-        : $(ts.stack("args")).index(ts.str(node.blockParameter)).done();
+    const kept: Record<string, TsNode> = {};
+    for (const name of node.blockParameters) {
+      kept[name] = $(ts.stack("args")).index(ts.str(name)).done();
+    }
     const record = $(ts.id("__bstack")).prop("args").index(ts.str(node.record)).done();
+    // The function by its registry key, which a parameter of the same name
+    // cannot shadow the way the module-level constant can.
+    const fn = $(ts.id("__toolRegistry"))
+      .index(ts.str(`${this.moduleId}:${node.functionName}`))
+      .done();
     return ts.statements([
       ts.awaitCall(ts.id("__rebindParameters"), [
         ts.runtime.run,
         ts.id("runner"),
         ts.id("__stack"),
-        ts.id(node.functionName),
+        fn,
         record,
-        blockArg,
+        ts.obj(kept),
         spec,
         checks,
       ]),

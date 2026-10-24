@@ -262,7 +262,7 @@ if (isAborted(__funcResult)) {
       await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.result = await __call(__run, __stack.args.block, {
           type: "positional",
-          args: []
+          args: [__stack.args.call.args]
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __run.ctx.pendingPromises.awaitAll()
@@ -466,7 +466,7 @@ if (isAborted(__stack.locals.__hoist_0)) {
 await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.last = await __call(__run, __stack.args.block, {
             type: "positional",
-            args: []
+            args: [__stack.args.call.args]
           });
 if (hasInterrupts(__stack.locals.last)) {
             await __run.ctx.pendingPromises.awaitAll()
@@ -638,17 +638,20 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `plainTwin`,
+          "args": {
+            "x": __stack.args.x
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, logged, {
           type: "named",
           positionalArgs: [],
           namedArgs: {
-            call: {
-              "name": `plainTwin`,
-              "args": {
-                "x": __stack.args.x
-              }
-            }
+            call: __stack.locals.__call_0
           },
           blockArg: __AgencyFunction.create({ name: "__block_0", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
@@ -664,7 +667,7 @@ __bstack.args["__args"] = __args;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_0", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
-await __rebindParameters(__run, runner, __stack, plainTwin, __bstack.args["__args"], undefined, [{
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:plainTwin"], __bstack.args["__args"], {}, [{
       name: "x",
       checked: false
     }], null)
@@ -989,18 +992,21 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `researcher`,
+          "args": {
+            "task": __stack.args.task,
+            "maxCost": __stack.args.maxCost
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, logged, {
           type: "named",
           positionalArgs: [],
           namedArgs: {
-            call: {
-              "name": `researcher`,
-              "args": {
-                "task": __stack.args.task,
-                "maxCost": __stack.args.maxCost
-              }
-            }
+            call: __stack.locals.__call_0
           },
           blockArg: __AgencyFunction.create({ name: "__block_1", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
@@ -1016,7 +1022,7 @@ __bstack.args["__args"] = __args;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_1", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
-await __rebindParameters(__run, runner, __stack, researcher, __bstack.args["__args"], undefined, [{
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:researcher"], __bstack.args["__args"], {}, [{
       name: "task",
       checked: false
     }, {
@@ -1029,17 +1035,20 @@ if (runner.halted) {
     }
   });
 await runner.step(1, __run, async (runner, __run) => {
+__bstack.locals.__call_1 = {
+      "name": `researcher`,
+      "args": {
+        "task": __stack.args.task,
+        "maxCost": __stack.args.maxCost
+      }
+    };
+  });
+await runner.step(2, __run, async (runner, __run) => {
 runner.halt(await __call(__run, retry, {
       type: "named",
       positionalArgs: [3],
       namedArgs: {
-        call: {
-          "name": `researcher`,
-          "args": {
-            "task": __stack.args.task,
-            "maxCost": __stack.args.maxCost
-          }
-        }
+        call: __bstack.locals.__call_1
       },
       blockArg: __AgencyFunction.create({ name: "__block_2", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
         const __bsetup = setupFunction(__run);
@@ -1055,7 +1064,7 @@ __bstack.args["__args"] = __args;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_2", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
-await __rebindParameters(__run, runner, __stack, researcher, __bstack.args["__args"], undefined, [{
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:researcher"], __bstack.args["__args"], {}, [{
       name: "task",
       checked: false
     }, {
@@ -1289,18 +1298,21 @@ await callHook(__run, {
         })
       });
       await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__call_0 = {
+          "name": `positionalAndNamed`,
+          "args": {
+            "a": __stack.args.a
+          }
+        };
+      });
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await __call(__run, retry, {
           type: "named",
           positionalArgs: [],
           namedArgs: {
             times: 2,
-            call: {
-              "name": `positionalAndNamed`,
-              "args": {
-                "a": __stack.args.a
-              }
-            }
+            call: __stack.locals.__call_0
           },
           blockArg: __AgencyFunction.create({ name: "__block_3", module: "decorators.agency", fn: async (__run: __Run, __args: any) => {
             const __bsetup = setupFunction(__run);
@@ -1316,7 +1328,7 @@ __bstack.args["__args"] = __args;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "decorators.agency", scopeName: "__block_3", stack: __run.stack, threads: __run.threads });
 try {
 await runner.step(0, __run, async (runner, __run) => {
-await __rebindParameters(__run, runner, __stack, positionalAndNamed, __bstack.args["__args"], undefined, [{
+await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:positionalAndNamed"], __bstack.args["__args"], {}, [{
       name: "a",
       checked: false
     }], null)
@@ -1570,4 +1582,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"decorators.agency:logged":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2},"4":{"line":13,"col":2}},"decorators.agency:retry":{"1":{"line":17,"col":2},"2":{"line":18,"col":12},"3":{"line":18,"col":2},"4":{"line":21,"col":2},"3.0":{"line":19,"col":4}},"decorators.agency:plainTwin":{"1":{"line":24,"col":0}},"decorators.agency:__block_0":{"0":{"line":24,"col":0},"1":{"line":26,"col":2}},"decorators.agency:undecoratedTwin":{"1":{"line":30,"col":2}},"decorators.agency:researcher":{"1":{"line":33,"col":0}},"decorators.agency:__block_1":{"0":{"line":33,"col":0},"1":{"line":34,"col":0}},"decorators.agency:__block_2":{"0":{"line":34,"col":0},"1":{"line":36,"col":2}},"decorators.agency:positionalAndNamed":{"1":{"line":39,"col":0}},"decorators.agency:__block_3":{"0":{"line":39,"col":0},"1":{"line":41,"col":2}},"decorators.agency:main":{"1":{"line":45,"col":2}}};
+export const __sourceMap = {"decorators.agency:logged":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2},"4":{"line":13,"col":2}},"decorators.agency:retry":{"1":{"line":17,"col":2},"2":{"line":18,"col":12},"3":{"line":18,"col":2},"4":{"line":21,"col":2},"3.0":{"line":19,"col":4}},"decorators.agency:plainTwin":{"1":{"line":24,"col":0},"2":{"line":24,"col":0}},"decorators.agency:__block_0":{"0":{"line":24,"col":0},"1":{"line":26,"col":2}},"decorators.agency:undecoratedTwin":{"1":{"line":30,"col":2}},"decorators.agency:researcher":{"1":{"line":33,"col":0},"2":{"line":33,"col":0}},"decorators.agency:__block_1":{"0":{"line":33,"col":0},"1":{"line":34,"col":0},"2":{"line":34,"col":0}},"decorators.agency:__block_2":{"0":{"line":34,"col":0},"1":{"line":36,"col":2}},"decorators.agency:positionalAndNamed":{"1":{"line":39,"col":0},"2":{"line":39,"col":0}},"decorators.agency:__block_3":{"0":{"line":39,"col":0},"1":{"line":41,"col":2}},"decorators.agency:main":{"1":{"line":45,"col":2}}};

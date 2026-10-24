@@ -1078,9 +1078,16 @@ describe("bindRecord (the decorator rebind)", () => {
     );
   });
 
-  it("passes the block argument to the block parameter", () => {
+  it("keeps the values it is given for parameters a record cannot carry, wherever they sit", () => {
+    const withCallback = makeFunction([{ name: "fn", isFunctionTyped: true }, { name: "n" }]);
+    const callback = () => 1;
+    expect(withCallback.bindRecord({ n: 1 }, { fn: callback })).toEqual({ fn: callback, n: 1 });
+  });
+
+  it("refuses a record that names a kept parameter", () => {
     const withBlock = makeFunction([{ name: "n" }, { name: "body", isFunctionTyped: true }]);
-    const theBlock = () => 1;
-    expect(withBlock.bindRecord({ n: 1 }, theBlock)).toEqual({ n: 1, body: theBlock });
+    expect(() => withBlock.bindRecord({ n: 1, body: null }, { body: () => 1 })).toThrow(
+      "'body' is a block parameter of 'testFn' and cannot be rebound",
+    );
   });
 });

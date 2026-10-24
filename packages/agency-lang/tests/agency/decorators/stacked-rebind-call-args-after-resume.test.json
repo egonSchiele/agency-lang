@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"2 20\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the inner decorator's call.args survives a resume unchanged",
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+// In a stack, the inner decorator's call.args after a resume is what the
+// outer one passed, not what the inner one rebound.
+def outer(call: Call, block: (args: object) -> any): any {
+  return block({ n: 2 })
+}
+
+def inner(call: Call, block: (args: object) -> any): any {
+  const r = block({ n: call.args.n * 10 })
+  return "${call.args.n} ${r}"
+}
+
+@outer
+@inner
+def f(n: number): number {
+  interrupt("go?")
+  return n
+}
+
+node main() {
+  return f(1)
+}

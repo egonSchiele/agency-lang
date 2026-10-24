@@ -22,8 +22,10 @@ export type RebindSpec = {
 
 /**
  * The rebind statement a decorated body's block starts with. Binds `record`
- * with `fn.bindRecord`, so unknown keys, missing arguments, defaults, and
- * variadics follow the rules of a call and carry its messages; stores each
+ * with `fn.bindRecord` (`keep` is the function's block-typed parameters,
+ * which a record cannot carry), so unknown keys, missing arguments,
+ * defaults, and variadics follow the rules of a call and carry its
+ * messages; stores each
  * spec entry on the frame, calling `defaultValue` where the bound value is
  * UNSET; then runs the `!` checks over the checked entries. A failure to
  * bind halts the runner with a failure instead of throwing, so `block()`
@@ -35,13 +37,13 @@ export async function __rebindParameters(
   frame: ArgFrame,
   fn: AgencyFunction,
   record: unknown,
-  blockArg: unknown,
+  keep: Record<string, unknown>,
   spec: RebindSpec[],
   checks: ParamChecks | null,
 ): Promise<void> {
   let bound: Record<string, unknown>;
   try {
-    bound = fn.bindRecord(record, blockArg);
+    bound = fn.bindRecord(record, keep);
   } catch (error) {
     runner.halt(failure(error instanceof Error ? error.message : String(error)));
     return;

@@ -1,0 +1,18 @@
+// A function-typed parameter that is not the last parameter is kept as is
+// by a rebind, and does not collide with the record.
+def passThrough(call: Call, block: (args: object) -> any): any {
+  return block(call.args)
+}
+
+def double(x: number): number {
+  return x * 2
+}
+
+@passThrough
+def apply(fn: (x: number) -> number, n: number): number {
+  return fn(n)
+}
+
+node main() {
+  return apply(double, 3)
+}

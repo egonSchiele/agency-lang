@@ -17,9 +17,10 @@ export type RebindParameters = BaseNode & {
   functionName: string;
   /** The def's non-block parameters, in order. */
   parameters: FunctionParameter[];
-  /** The def's block-typed parameter, when it has one. A record cannot
-   *  carry a block, so the rebind passes the current value through. */
-  blockParameter: string | null;
+  /** The def's block-typed parameters. A record cannot carry a block, so
+   *  the rebind keeps their current values and refuses a record that names
+   *  one of them. */
+  blockParameters: string[];
   /** The block parameter that holds the record: `__args`. */
   record: string;
 };

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { VALID_CALLBACK_NAMES } from "./function.js";
+import {
+  VALID_CALLBACK_NAMES,
+  callerSuppliedParameters,
+  decoratorShapeProblem,
+  hasDecoratorShape,
+  type FunctionParameter,
+} from "./function.js";
 
 describe("VALID_CALLBACK_NAMES", () => {
   it("includes the LLM resilience hooks so the runtime accepts them", () => {
@@ -10,13 +16,6 @@ describe("VALID_CALLBACK_NAMES", () => {
     expect(VALID_CALLBACK_NAMES).toContain("onLLMTimeout");
   });
 });
-
-import {
-  callerSuppliedParameters,
-  decoratorShapeProblem,
-  hasDecoratorShape,
-  type FunctionParameter,
-} from "./function.js";
 
 describe("decorator shape", () => {
   const param = (name: string, extra: Partial<FunctionParameter> = {}): FunctionParameter => ({

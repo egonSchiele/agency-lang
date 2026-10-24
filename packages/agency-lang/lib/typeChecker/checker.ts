@@ -319,9 +319,10 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
 
   if (params) {
     // A decorator call whose target lacks the decorator shape is already
-    // reported by the decorator stage (lib/preprocessors/decoratorDesugar.ts);
-    // checking its arguments against the wrong slots would add a second,
-    // misleading error.
+    // reported by the decorator stage (`decoratorProblems`, run by
+    // prepareProgram and the CLI build); checking its arguments against the
+    // wrong slots would add a second, misleading error. This skip relies on
+    // that stage always running before the checker.
     if (call.decorator !== undefined && !hasDecoratorShape(params)) return;
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;

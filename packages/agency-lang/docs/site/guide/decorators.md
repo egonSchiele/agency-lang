@@ -112,7 +112,9 @@ block()                                   // no arguments at all
 
 `block()` means every parameter is unset, as on a call that passes nothing: a parameter with a default takes its default, and one with no default is a missing argument. The record follows the rules of a call. A key that names no parameter is an error, a parameter written `name: T!` is checked again against the new value, and a variadic parameter takes an array. A failing rebind is the value `block()` returns, a failure the decorator can inspect with `isFailure`, and the body does not run.
 
-`call.args` does not change when you rebind, so `block(call.args)` always means the arguments the decorator was handed, even after an earlier `block({ ... })` in the same call.
+`call.args` does not change when you rebind, so `block(call.args)` always means the arguments the decorator was handed, even after an earlier `block({ ... })` in the same call. The function's own block-typed parameters stay as they were; a record that names one is refused.
+
+Call the block from one place at a time. The rebound values live on the function's frame, so a decorator that calls `block` from several `fork` or `parallel` branches with different records would have the branches read each other's arguments.
 
 ## Stacking decorators
 

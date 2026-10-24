@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"'body' is a block parameter of 'f' and cannot be rebound\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a record key naming a block parameter is refused by name"
+    }
+  ]
+}

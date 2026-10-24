@@ -20,10 +20,10 @@ import {
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { agentPrompt, agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guarded } from "std::decorators"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 

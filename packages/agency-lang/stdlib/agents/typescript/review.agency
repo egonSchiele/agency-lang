@@ -21,9 +21,9 @@ import {
   SAVE_DRAFT_HINT,
   ASK_USER_HINT,
 } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guarded } from "std::decorators"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review TypeScript code for readability and architecture.

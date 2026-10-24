@@ -2,20 +2,14 @@
 The decorators the standard library ships. A decorator is a `decorator
 def` written above another def as `@name(...)`; it receives the call and
 the body as a block, and decides what to run. This module is where every
-stdlib decorator lives, so `import { ... } from "std::decorators"` is the
-one line to look for. Today it holds `@guarded`, which runs a whole
-function under a cost and time budget.
+stdlib decorator lives, so there is one import line to look for:
 
 ```ts
 import { guarded } from "std::decorators"
-
-@guarded(cost: $1.00, time: 5m)
-def summarize(text: string): Result<string> {
-  return llm("Summarize: ${text}", { tools: [saveDraft] })
-}
 ```
 
-See the guide page on decorators for writing your own.
+Today it holds `@guarded`, which runs a whole function under a cost and
+time budget. To write your own, see [Decorators](/guide/decorators).
 */
 
 /** The `@guarded` decorator: the `guard` block put around a whole function,

@@ -28,9 +28,9 @@ import {
   webTools,
   ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
+import { guarded } from "std::decorators"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
-import { guarded } from "std::decorators"
 import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"

@@ -14,8 +14,8 @@ import {
   agencyDocTools,
   readOnlyFileTools,
  } from "std::agents/lib/toolkits"
-import { agentSkill } from "std::skills"
 import { guarded } from "std::decorators"
+import { agentSkill } from "std::skills"
 import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("agency/researcher")

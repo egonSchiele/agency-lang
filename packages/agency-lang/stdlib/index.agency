@@ -703,7 +703,7 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
 export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
   """
   Internal: turn a budgeted agent's guard Result and trip into the Result
-  its caller reports. Use the @guard decorator, not this function.
+  its caller reports. Use the @guarded decorator, not this function.
   """
   if (trip == null) {
     if (isSuccess(guarded) && guarded.value == "") {

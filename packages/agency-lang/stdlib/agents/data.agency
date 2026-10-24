@@ -29,8 +29,8 @@ import {
   wikidataEntity,
   wikidataQuery,
  } from "std::data/wikidata"
-import { agentSkill } from "std::skills"
 import { guarded } from "std::decorators"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You answer questions using structured public-data APIs.

@@ -35,9 +35,7 @@ import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 import { oracleAgent } from "./oracle.agency"
-import {
-  reviewWrittenFiles,
- } from "./review.agency"
+import { reviewWrittenFiles } from "../lib/autoReview.agency"
 import {
   brainstormApproaches,
   renderChosen,

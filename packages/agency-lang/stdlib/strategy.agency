@@ -199,11 +199,11 @@ export def firstValid(
   budget trip, so a caller cannot grant more budget; pass a larger limit
   instead. See docs/dev/agents/subagent-budgets.md. */
 export def guard(
-  call: Call,
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  block: () -> any = null,
+  call: Call,
+  block: (args: object) -> any,
 ): Result raises <std::guard> {
   """
   Run the decorated function under a cost and time budget, labelled with
@@ -222,7 +222,7 @@ export def guard(
     // Return position: a draft the body saved reaches the guard, which
     // returns it as the backup answer when the budget runs out.
     result = guard(cost: cost, time: time, label: name) {
-      return block()
+      return block(call.args)
     }
   } with (intr) {
     if (intr.effect != "std::guard" || intr.data.label != name) {

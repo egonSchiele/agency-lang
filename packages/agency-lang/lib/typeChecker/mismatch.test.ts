@@ -11,7 +11,7 @@ function call(name: string, decorator?: string): FunctionCall {
     ...(decorator === undefined
       ? {}
       : {
-          decorator: { name: decorator, tagLoc: undefined, target: "f", passesCallRecord: false },
+          decorator: { name: decorator, tagLoc: undefined, target: "f" },
         }),
   };
 }

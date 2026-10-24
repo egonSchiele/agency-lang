@@ -144,7 +144,7 @@ describe("raises must reference an effect set (not a plain type)", () => {
 
   describe("decorators", () => {
     const BUDGETED =
-      "def budgeted(block: () -> any): Result<string> {\n" +
+      "def budgeted(call: Call, block: () -> any): Result<string> {\n" +
       "  return guard(cost: 1.00) {\n    return block()\n  }\n}\n";
 
     it("counts the decorator's effects against the clause, and names the decorator", () => {
@@ -159,7 +159,7 @@ describe("raises must reference an effect set (not a plain type)", () => {
 
     it("gives the plain message when the body raises the effect and the decorator does not", () => {
       const errs = typecheckSource(
-        "def logged(block: () -> any): any {\n  return block()\n}\n" +
+        "def logged(call: Call, block: () -> any): any {\n  return block()\n}\n" +
           "@logged\ndef f(): number raises <std::read> {\n" +
           '  raise std::write("m", {})\n  return 1\n}\n',
       );

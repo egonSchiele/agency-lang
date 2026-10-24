@@ -14,7 +14,7 @@ def logged(call: Call, block: () -> any): any {
   return result
 }
 
-def retry(times: number, block: () -> any): any {
+def retry(times: number, call: Call, block: () -> any): any {
   let last = null
   for (i in range(0, times)) {
     last = block()

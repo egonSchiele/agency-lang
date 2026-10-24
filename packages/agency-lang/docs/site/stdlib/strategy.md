@@ -201,11 +201,11 @@ Run a block for each variant in parallel, then return the first result that pass
 
 ```ts
 guard(
-  call: Call,
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  block: () -> any = null,
+  call: Call,
+  block: (args: object) -> any,
 ): Result raises <std::guard>
 ```
 
@@ -244,11 +244,11 @@ The `@guard` decorator: the `guard` block put around a whole function,
 
 | Name | Type | Default |
 |---|---|---|
-| call | [Call](index.md#call) |  |
 | cost | `number \| null` | null |
 | time | `number \| null` | null |
 | label | `string \| null` | null |
-| block | `() => any` | null |
+| call | [Call](index.md#call) |  |
+| block | `(args: Record<string, any>) => any` |  |
 
 **Returns:** `Result`
 

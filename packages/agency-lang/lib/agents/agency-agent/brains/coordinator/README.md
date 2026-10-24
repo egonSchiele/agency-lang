@@ -77,8 +77,9 @@ and an inner `with approve` cannot get past an outer policy.
 
 Most specialists are thin wrappers over an agent that ships in the standard
 library, so users get the same agent in their own programs. A wrapper holds
-only what is the agency agent's business: the `handoff def` with the
-parameters the coordinator fills in (`userMsg`, `maxSeconds`, `maxDollars`,
+only what is the agency agent's business: the function the coordinator
+calls (a `handoff def` for the researcher, the oracle, and the explorer)
+with the parameters the model fills in (`userMsg`, `maxSeconds`, `maxDollars`,
 and a routing flag such as `agencyTopic`), the docstring the coordinator
 reads to decide when to call it, `announce`, `setMemoryId`, the model slot
 from `shared.agency`, the session name, the seconds-to-milliseconds line

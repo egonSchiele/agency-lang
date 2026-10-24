@@ -1,18 +1,17 @@
 /** @module
   @summary The code subagent's auto-review: review the .agency files it
   wrote, never the chat reply.
+
+  Feeding a Python or shell chat reply to the Agency parser crashed and
+  showed up as "your code has errors", which thrashed the agent and
+  shadowed the `verify` step. Reviewing the .agency files on disk means the
+  parser only ever sees Agency source, so a non-Agency task is a clean
+  no-op (no findings) and the loop falls through to `verify`.
 */
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { Feedback, mergeFeedback } from "std::agents/lib/feedback"
 import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
-
-// ---- The code agent's auto-review: review the .agency FILES it wrote, not
-// the model's chat reply. Feeding a Python/shell chat reply to the Agency
-// parser crashed and mis-fired as "your code has errors", which thrashed the
-// agent and shadowed the `verify` step. Reviewing on-disk .agency files means
-// the parser only ever sees Agency source, so a non-Agency task is a clean
-// no-op (empty findings) and the loop falls through to `verify`.
 
 /** Keep only the .agency files from a list of paths. */
 export def filterAgencyPaths(paths: string[]): string[] {

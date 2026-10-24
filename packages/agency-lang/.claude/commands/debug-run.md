@@ -3,4 +3,4 @@ description: Look at a running Agency program with the debugger, through agency 
 argument-hint: [pid]
 ---
 
-Run `agency skills show debug-run` and follow what it prints. The pid, if I gave one: $ARGUMENTS
+Read `skills/debug-run/SKILL.md` and follow it. The pid, if I gave one: $ARGUMENTS

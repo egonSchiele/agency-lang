@@ -14,10 +14,12 @@ export type ShippedSkill = {
   body: string;
 };
 
-/** A line `install` puts in every file it writes. A file without it was
- *  written by someone else, so `install` leaves it alone. */
-export const INSTALL_MARKER =
-  "<!-- Written by `agency skills install`. Run it again to refresh this file. -->";
+/** The start of a line `install` puts in every file it writes. A file
+ *  without it was written by someone else, so `install` leaves it alone.
+ *  Never change this text: files written by older versions are recognized
+ *  by it. The rest of the line can change. */
+export const INSTALL_MARKER_PREFIX = "<!-- Written by `agency skills install`.";
+const INSTALL_MARKER = `${INSTALL_MARKER_PREFIX} Run it again to refresh this file. -->`;
 
 export type InstallTargetFlags = {
   claude?: boolean;
@@ -47,7 +49,9 @@ export function listSkills(dir: string = shippedSkillsDir()): ShippedSkill[] {
   const skills: ShippedSkill[] = [];
   for (const folder of folders) {
     const file = path.join(dir, folder, "SKILL.md");
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     skills.push(readSkill(folder, file));
   }
   return skills;
@@ -93,11 +97,9 @@ export function findSkills(
 }
 
 /**
- * What `install` writes. By default it is a stub: the frontmatter, so the
- * agent knows when to use the skill, and one line telling it to print the
- * instructions from the installed `agency`. The instructions name exact
- * commands and flags, so a copy goes stale when the CLI changes; the stub
- * never does. `full` writes the whole text instead.
+ * What `install` writes: the frontmatter and a line telling the agent to
+ * run `agency skills show`, or with `full`, the whole skill. See
+ * docs/dev/cli/skills-command.md for why the stub is the default.
  *
  * The description is written as a JSON string, which is also a valid YAML
  * string, so a colon or quote in it cannot break another agent's parser.
@@ -107,7 +109,9 @@ export function renderInstalledFile(skill: ShippedSkill, full: boolean): string 
   const body = full
     ? skill.body
     : `Run \`agency skills show ${skill.name}\` and follow what it prints. ` +
-      "It prints the instructions that match the agency you have installed.\n";
+      "It prints the instructions that match the agency you have installed. " +
+      "If `agency` is not on your PATH, run it through the project's package manager, " +
+      `such as \`npx agency skills show ${skill.name}\`.\n`;
   return `${frontmatter}\n${INSTALL_MARKER}\n\n${body}`;
 }
 
@@ -126,21 +130,31 @@ export function resolveInstallDir(
         "--project (.claude/skills in this directory), or --dir <path>.",
     };
   }
-  if (flags.claude) return { ok: true, dir: path.join(homeDir, ".claude", "skills") };
-  if (flags.project) return { ok: true, dir: path.join(cwd, ".claude", "skills") };
+  if (flags.claude) {
+    return { ok: true, dir: path.join(homeDir, ".claude", "skills") };
+  }
+  if (flags.project) {
+    return { ok: true, dir: path.join(cwd, ".claude", "skills") };
+  }
   return { ok: true, dir: path.resolve(cwd, flags.dir!) };
+}
+
+function skillPaths(dir: string, name: string): { skillDir: string; file: string } {
+  const skillDir = path.join(dir, name);
+  return { skillDir, file: path.join(skillDir, "SKILL.md") };
 }
 
 /**
  * Writes `<dir>/<name>/SKILL.md`. It refuses a symlink at the skill's
  * folder or file, and refuses to overwrite a file that does not carry
- * INSTALL_MARKER, since someone else wrote that one.
+ * the install marker, since someone else wrote that one.
  */
 export function installSkill(skill: ShippedSkill, dir: string, full: boolean): Outcome {
-  const skillDir = path.join(dir, skill.name);
-  const file = path.join(skillDir, "SKILL.md");
-  const refusal = refuseTarget(skillDir, file);
-  if (refusal !== null) return { ok: false, text: refusal };
+  const refusal = refuseTarget(dir, skill.name);
+  if (refusal !== null) {
+    return { ok: false, text: refusal };
+  }
+  const { skillDir, file } = skillPaths(dir, skill.name);
   fs.mkdirSync(skillDir, { recursive: true });
   // O_NOFOLLOW so a symlink planted after the check is refused, not followed.
   const flag =
@@ -154,43 +168,76 @@ export function installSkill(skill: ShippedSkill, dir: string, full: boolean): O
   return { ok: true, text: `Installed ${skill.name} at ${file}` };
 }
 
-function refuseTarget(skillDir: string, file: string): string | null {
+/** Why `install` must not write this skill into `dir`, or null if it may. */
+function refuseTarget(dir: string, name: string): string | null {
+  const { skillDir, file } = skillPaths(dir, name);
   const dirStat = lstatOrNull(skillDir);
-  if (dirStat?.isSymbolicLink())
+  if (dirStat?.isSymbolicLink()) {
     return `${skillDir} is a symlink. Remove it, or install somewhere else.`;
-  if (dirStat && !dirStat.isDirectory()) return `${skillDir} exists and is not a folder.`;
+  }
+  if (dirStat && !dirStat.isDirectory()) {
+    return `${skillDir} exists and is not a folder.`;
+  }
   const fileStat = lstatOrNull(file);
-  if (fileStat === null) return null;
-  if (fileStat.isSymbolicLink())
+  if (fileStat === null) {
+    return null;
+  }
+  if (fileStat.isSymbolicLink()) {
     return `${file} is a symlink. Remove it, or install somewhere else.`;
-  if (!fs.readFileSync(file, "utf8").includes(INSTALL_MARKER)) {
+  }
+  if (!fileStat.isFile()) {
+    return `${file} exists and is not a file.`;
+  }
+  if (!fs.readFileSync(file, "utf8").includes(INSTALL_MARKER_PREFIX)) {
     return `${file} already exists and was not written by agency skills install. Remove it first if you want to replace it.`;
   }
   return null;
 }
 
+/** The path's own stats, or null when nothing is there. Any other error,
+ *  such as a permission error, is thrown. */
 function lstatOrNull(p: string): fs.Stats | null {
   try {
     return fs.lstatSync(p);
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
   }
 }
 
-/** `agency skills install`: checks every name and the target before writing anything. */
+/**
+ * `agency skills install`. It checks the target flags, every name, and
+ * every skill's target before writing anything, and reports every refusal
+ * at once, so a refusal never leaves some skills installed and others not.
+ */
 export function runInstall(
   names: string[],
   flags: InstallTargetFlags & { full?: boolean },
+  skills: ShippedSkill[] = listSkills(),
 ): Outcome {
   const target = resolveInstallDir(flags);
-  if (!target.ok) return target;
-  const lookup = findSkills(names, listSkills());
-  if (!lookup.ok) return lookup;
+  if (!target.ok) {
+    return target;
+  }
+  const lookup = findSkills(names, skills);
+  if (!lookup.ok) {
+    return lookup;
+  }
+  const refusals = lookup.found
+    .map((skill) => refuseTarget(target.dir, skill.name))
+    .filter((refusal) => refusal !== null);
+  if (refusals.length > 0) {
+    return { ok: false, text: refusals.join("\n") };
+  }
   const lines: string[] = [];
   for (const skill of lookup.found) {
     const outcome = installSkill(skill, target.dir, flags.full ?? false);
     lines.push(outcome.text);
-    if (!outcome.ok) return { ok: false, text: lines.join("\n") };
+    if (!outcome.ok) {
+      return { ok: false, text: lines.join("\n") };
+    }
   }
   return { ok: true, text: lines.join("\n") };
 }

@@ -4,13 +4,14 @@ import * as os from "os";
 import * as path from "path";
 import { frontmatterParser } from "tarsec/parsers/markdown";
 import {
-  INSTALL_MARKER,
+  INSTALL_MARKER_PREFIX,
   findSkills,
   installSkill,
   listSkills,
   renderInstalledFile,
   renderSkillList,
   resolveInstallDir,
+  runInstall,
   type ShippedSkill,
 } from "./skills.js";
 
@@ -103,14 +104,15 @@ describe("findSkills", () => {
 describe("renderInstalledFile", () => {
   it("writes a stub that points at agency skills show", () => {
     const text = renderInstalledFile(debugRun, false);
-    expect(text).toContain(INSTALL_MARKER);
+    expect(text).toContain(INSTALL_MARKER_PREFIX);
     expect(text).toContain("Run `agency skills show debug-run` and follow what it prints.");
+    expect(text).toContain("npx agency skills show debug-run");
     expect(text).not.toContain("Step one.");
   });
 
   it("writes the whole body with full", () => {
     const text = renderInstalledFile(debugRun, true);
-    expect(text).toContain(INSTALL_MARKER);
+    expect(text).toContain(INSTALL_MARKER_PREFIX);
     expect(text.endsWith("Step one.\n")).toBe(true);
   });
 
@@ -160,6 +162,29 @@ describe("installSkill", () => {
     expect(fs.readFileSync(installed(), "utf8")).toContain("Step one.");
   });
 
+  it("replaces a file an older version wrote with different wording after the marker", () => {
+    writeSkill(tmp, "debug-run", `${INSTALL_MARKER_PREFIX} Old hint. -->\n\nOld body\n`);
+    expect(installSkill(debugRun, tmp, false).ok).toBe(true);
+    expect(fs.readFileSync(installed(), "utf8")).toBe(renderInstalledFile(debugRun, false));
+  });
+
+  it("refuses a SKILL.md that is a folder", () => {
+    fs.mkdirSync(installed(), { recursive: true });
+    const outcome = installSkill(debugRun, tmp, false);
+    expect(outcome).toEqual({ ok: false, text: `${installed()} exists and is not a file.` });
+  });
+
+  it("throws a permission error instead of treating it as nothing there", () => {
+    const locked = path.join(tmp, "locked");
+    fs.mkdirSync(locked);
+    fs.chmodSync(locked, 0o000);
+    try {
+      expect(() => installSkill(debugRun, path.join(locked, "skills"), false)).toThrow(/EACCES/);
+    } finally {
+      fs.chmodSync(locked, 0o755);
+    }
+  });
+
   it("leaves alone a file someone else wrote", () => {
     writeSkill(tmp, "debug-run", "my own notes\n");
     const outcome = installSkill(debugRun, tmp, false);
@@ -186,5 +211,41 @@ describe("installSkill", () => {
     expect(outcome.ok).toBe(false);
     expect(outcome.text).toContain("is a symlink");
     expect(fs.readFileSync(real, "utf8")).not.toContain("Step one.");
+  });
+});
+
+describe("runInstall", () => {
+  const debugLogs = { ...debugRun, name: "debug-logs" };
+
+  it("installs every named skill into --dir", () => {
+    const outcome = runInstall(["debug-run", "debug-logs"], { dir: tmp }, [debugRun, debugLogs]);
+    expect(outcome.ok).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "debug-run", "SKILL.md"))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "debug-logs", "SKILL.md"))).toBe(true);
+  });
+
+  it("writes nothing when any skill's target is refused, and reports every refusal", () => {
+    writeSkill(tmp, "debug-logs", "my own notes\n");
+    fs.mkdirSync(path.join(tmp, "other"));
+    fs.symlinkSync(path.join(tmp, "other"), path.join(tmp, "third"));
+    const third = { ...debugRun, name: "third" };
+    const outcome = runInstall(["debug-run", "debug-logs", "third"], { dir: tmp }, [
+      debugRun,
+      debugLogs,
+      third,
+    ]);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.text.split("\n")).toEqual([
+      `${path.join(tmp, "debug-logs", "SKILL.md")} already exists and was not written by agency skills install. Remove it first if you want to replace it.`,
+      `${path.join(tmp, "third")} is a symlink. Remove it, or install somewhere else.`,
+    ]);
+    expect(fs.existsSync(path.join(tmp, "debug-run"))).toBe(false);
+  });
+
+  it("refuses an unknown name before checking any target", () => {
+    expect(runInstall(["nope"], { dir: tmp }, [debugRun])).toEqual({
+      ok: false,
+      text: "No skill named nope. The skills are: debug-run.",
+    });
   });
 });

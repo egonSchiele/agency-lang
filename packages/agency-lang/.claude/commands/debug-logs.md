@@ -3,4 +3,4 @@ description: Review an agent run's log by the rows the person pointed at, throug
 argument-hint: [address]
 ---
 
-Run `agency skills show debug-logs` and follow what it prints. The address, if I gave one: $ARGUMENTS
+Read `skills/debug-logs/SKILL.md` and follow it. The address, if I gave one: $ARGUMENTS

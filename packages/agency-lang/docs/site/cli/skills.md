@@ -44,11 +44,11 @@ description: "Look at a running Agency program with the debugger, through agency
 
 <!-- Written by `agency skills install`. Run it again to refresh this file. -->
 
-Run `agency skills show debug-run` and follow what it prints. It prints the instructions that match the agency you have installed.
+Run `agency skills show debug-run` and follow what it prints. It prints the instructions that match the agency you have installed. If `agency` is not on your PATH, run it through the project's package manager, such as `npx agency skills show debug-run`.
 ```
 
-The description tells the agent when to use the skill. The instructions come from `agency skills show`, so they always match the commands and flags of the `agency` you have installed. A copied skill would keep naming a flag after a new version renamed it. The stub needs `agency` on the agent's `PATH`, which the skill's commands need anyway.
+The description tells the agent when to use the skill. The instructions come from `agency skills show`, so they always match the commands and flags of the `agency` you have installed. A copied skill would keep naming a flag after a new version renamed it.
 
 `--full` writes the whole skill instead of the stub. Use it when the agent runs somewhere `agency skills show` cannot, and run `install` again after you upgrade.
 
-Running `install` again replaces a file it wrote before. It does not overwrite a `SKILL.md` that someone else wrote: it stops and asks you to remove that file first. It also refuses to write through a symlink at the skill's folder or file.
+Running `install` again replaces a file it wrote before. It does not overwrite a `SKILL.md` that someone else wrote, and it refuses to write through a symlink at the skill's folder or file. When any skill you named is refused, `install` writes none of them and lists every refusal, so you can fix them all and run it once more.

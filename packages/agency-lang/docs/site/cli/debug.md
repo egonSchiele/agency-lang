@@ -119,7 +119,7 @@ A move the debugger could not do, `back` at the earliest checkpoint, or a `save`
 
 A person can be on the same run at `agency debug --attach`. Both see every stop, and whichever answers first moves the program. A move the person got to first is refused: `the stop you saw was answered by the terminal (continue); run \`where\` and decide again`. The person's moves show up in `where` as `since   terminal: continue`, and `where` says `a terminal debugger is attached too`. The program's own interrupts go to its caller, as they do for the terminal debugger; neither party answers them.
 
-An agent such as Claude Code can drive this for you: the `/debug-run` command in this repository's `.claude/commands` teaches it when to attach, what to look at first, to ask before stopping a program you are watching, and to leave the run's state alone unless you say so.
+An agent such as Claude Code can drive this for you: the `debug-run` skill teaches it when to attach, what to look at first, to ask before stopping a program you are watching, and to leave the run's state alone unless you say so. [`agency skills install debug-run`](/cli/skills) adds the skill to Claude Code or another agent.
 
 ## Options
 

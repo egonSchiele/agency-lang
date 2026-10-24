@@ -364,6 +364,7 @@ Other process docs:
 - `docs/dev/cli/effects-command.md` — `agency effects`, which lists the effect sets and built-in policies the approval flags accept, and where its data comes from.
 - `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, follow mode, row IDs as a contract and addresses, comments as marks with the one comments source, and the session a CLI talks to over a socket.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
+- `docs/dev/cli/skills-command.md` — `agency skills`: where the shipped skills live and how they reach the npm package, why `install` writes a stub that runs `agency skills show`, why the repo's own commands read the file instead, the marker prefix that keeps it from overwriting a hand-written skill, the all-or-nothing check, and the symlink refusal.
 - `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
 - `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the logs viewer, `eval new`, `label`, and the runs explorer are built on.
 - `docs/dev/cli/tui/dev/elements-and-builders.md` — The element tree and the builder functions that produce it.

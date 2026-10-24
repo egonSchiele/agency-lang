@@ -77,6 +77,7 @@ import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
+import { findSkills, listSkills, renderSkillList, runInstall } from "@/cli/skills.js";
 import {
   AgencyConfig,
   applyCliFlags,
@@ -1907,6 +1908,56 @@ export function createProgram(deps: CliDependencies = {}): Command {
         process.exit(1);
       }
     });
+
+  const skillsCmd = program
+    .command("skills")
+    .description(
+      "List, print, and install the skills that teach an agent to use agency's debugging tools",
+    );
+
+  skillsCmd
+    .command("list")
+    .description("List the skills, each with its description")
+    .action(() => {
+      console.log(renderSkillList(listSkills()));
+    });
+
+  skillsCmd
+    .command("show")
+    .description("Print a skill's markdown")
+    .argument("<name>", "A skill name from agency skills list")
+    .action((name: string) => {
+      const lookup = findSkills([name], listSkills());
+      if (!lookup.ok) {
+        console.error(lookup.text);
+        process.exit(1);
+      }
+      process.stdout.write(lookup.found[0].text);
+    });
+
+  skillsCmd
+    .command("install")
+    .description(
+      "Write a skill file that tells an agent to run `agency skills show <name>`, so it always matches this agency",
+    )
+    .argument("<names...>", "Skill names from agency skills list")
+    .option("--claude", "Install into ~/.claude/skills")
+    .option("--project", "Install into .claude/skills in the current directory")
+    .option("--dir <path>", "Install into this skills directory")
+    .option("--full", "Write the whole skill instead of a stub (it goes stale when agency changes)")
+    .action(
+      (
+        names: string[],
+        opts: { claude?: boolean; project?: boolean; dir?: string; full?: boolean },
+      ) => {
+        const outcome = runInstall(names, opts);
+        if (!outcome.ok) {
+          console.error(outcome.text);
+          process.exit(1);
+        }
+        console.log(outcome.text);
+      },
+    );
 
   program
     .command("lint")

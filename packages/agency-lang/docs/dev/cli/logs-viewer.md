@@ -240,7 +240,7 @@ notice instead of a server.
 Imperative code lives in four places here: `server.ts` and `client.ts`
 (sockets), `registry.ts` (files), and the wiring in `run.ts`. Everything
 else in `session/` is a type or a pure function. To remove the feature:
-delete `session/`, `lib/cli/logsSession/`, the `/debug-logs` command's
+delete `session/`, `lib/cli/logsSession/`, the `debug-logs` skill's
 session steps, and the `session` option with its call sites in `run.ts`
 and the two CLI routes. Comments, addresses, and `A` stay.
 

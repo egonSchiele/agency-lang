@@ -1,6 +1,6 @@
 ---
 name: agency-cli-docs
-description: Developer docs for the Agency CLI and terminal UI: command line argument handling, the vendored commander fork, the agency doc cache, the sandbox flags for untrusted code, the interactive debugger, the logs viewer and cross-run explorer, and the TUI toolkit. Use when changing a CLI command or anything that draws in the terminal.
+description: Developer docs for the Agency CLI and terminal UI: command line argument handling, the vendored commander fork, the agency doc cache, the sandbox flags for untrusted code, the interactive debugger, the logs viewer and cross-run explorer, the `agency skills` command, and the TUI toolkit. Use when changing a CLI command or anything that draws in the terminal.
 ---
 
 # Cli developer docs
@@ -19,6 +19,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
 - `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, follow mode, row IDs as a contract and addresses, comments as marks with the one comments source, and the session a CLI talks to over a socket.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
+- `docs/dev/cli/skills-command.md` — `agency skills`: where the shipped skills live and how they reach the npm package, why `install` writes a stub that runs `agency skills show`, the marker that keeps it from overwriting a hand-written skill, and the symlink refusal.
 - `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the logs viewer, `eval new`, `label`, and the runs explorer are built on.
 - `docs/dev/cli/tui/guide/getting-started.md` — Writing a first TUI screen, and the builders available.
 - `docs/dev/cli/tui/guide/terminal-usage.md` — Running a TUI against a real terminal: input, signals, and resizing.

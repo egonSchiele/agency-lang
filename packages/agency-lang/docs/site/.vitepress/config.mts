@@ -281,6 +281,7 @@ export default defineConfig({
             { text: "run", link: "/cli/run" },
             { text: "schedule", link: "/cli/schedule" },
             { text: "serve", link: "/cli/serve" },
+            { text: "skills", link: "/cli/skills" },
             { text: "test", link: "/cli/test" },
             { text: "trace", link: "/cli/trace-and-bundle" },
             { text: "typecheck", link: "/cli/typecheck" },

@@ -145,7 +145,7 @@ viewer.
 A bare row id needs `--trace <id>`; an address carries its trace. The viewer
 registers itself under the agent home (`~/.agency-agent/log-sessions/`) and
 removes the record when it quits; nothing runs in the background on its
-own. The `/debug-logs` command in this repo teaches the agent these steps.
+own. The `debug-logs` skill teaches an agent these steps; [`agency skills install debug-logs`](/cli/skills) adds it to Claude Code or another agent.
 
 ## CSV export
 

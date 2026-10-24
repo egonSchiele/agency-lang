@@ -1961,6 +1961,11 @@ export class TypeScriptBuilder {
 
     const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
 
+    // A decorated body's block ends the claim its rebind made on the
+    // function's frame (lib/runtime/rebind.ts).
+    const rebind = block.body[0];
+    const rebindRelease =
+      rebind?.type === "rebindParameters" ? `__releaseRebind(__stack, ${rebind.depth});\n` : "";
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
         paramName: p.name,
@@ -1972,6 +1977,7 @@ export class TypeScriptBuilder {
       body: bodyStr,
       finalizeDecl: compiledFinalize.declText,
       abortReturn: compiledFinalize.abortReturn,
+      rebindRelease,
     });
 
     // A block takes the run it is called under first, like a function.
@@ -2027,6 +2033,7 @@ export class TypeScriptBuilder {
       body: bodyStr,
       finalizeDecl: compiledFinalize.declText,
       abortReturn: compiledFinalize.abortReturn,
+      rebindRelease: "",
     });
 
     // A block takes the run it is called under first, like a function.
@@ -2329,6 +2336,7 @@ export class TypeScriptBuilder {
         ts.obj(kept),
         spec,
         checks,
+        ts.num(node.depth),
       ]),
       ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
     ]);

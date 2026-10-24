@@ -1069,6 +1069,17 @@ describe("bindRecord (the decorator rebind)", () => {
     );
   });
 
+  it("says to pass call.args when given the call record itself", () => {
+    expect(() => fn.bindRecord({ name: "testFn", args: { a: 1 } })).toThrow(
+      "block() in 'testFn' was given the call record itself. Pass its arguments: block(call.args).",
+    );
+  });
+
+  it("keeps the call's message when the record only resembles a call record", () => {
+    // Keys name and args, but a number where the arguments would be.
+    expect(() => fn.bindRecord({ name: "x", args: 1 })).toThrow("Unknown named argument");
+  });
+
   it("refuses a record that is not an object", () => {
     expect(() => fn.bindRecord(5)).toThrow(
       "block() in 'testFn' takes a record of arguments, got 5",

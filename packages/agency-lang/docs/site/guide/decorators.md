@@ -114,7 +114,7 @@ block()                                   // no arguments at all
 
 `call.args` does not change when you rebind, so `block(call.args)` always means the arguments the decorator was handed, even after an earlier `block({ ... })` in the same call. The function's own block-typed parameters stay as they were; a record that names one is refused.
 
-Call the block from one place at a time. The rebound values live on the function's frame, so a decorator that calls `block` from several `fork` or `parallel` branches with different records would have the branches read each other's arguments.
+Call the block from one place at a time. The rebound values live on the function's frame, so a decorator that called `block` from several `fork` or `parallel` branches with different records would have the branches read each other's arguments. A second call to `block` while an earlier one is still running is refused: it returns a failure that says so, and the body does not run.
 
 ## Stacking decorators
 

@@ -32,7 +32,7 @@ import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import {
   callerSuppliedParameters,
-  hasDecoratorShape,
+  decoratorShapeProblem,
   lastParameterTakesBlock,
 } from "../types/function.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
@@ -318,12 +318,18 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    // A decorator call whose target lacks the decorator shape is already
-    // reported by the decorator stage (`decoratorProblems`, run by
-    // prepareProgram and the CLI build); checking its arguments against the
-    // wrong slots would add a second, misleading error. This skip relies on
-    // that stage always running before the checker.
-    if (call.decorator !== undefined && !hasDecoratorShape(params)) return;
+    // A decorator call whose target lacks the decorator shape: say so and
+    // stop, since checking its arguments against the wrong slots would add
+    // a misleading error. The decorator stage reports the same mistake when
+    // it runs first; the editor drops this copy then (lib/lsp/diagnostics.ts).
+    if (call.decorator !== undefined) {
+      const problem = decoratorShapeProblem(params);
+      if (problem !== null) {
+        const { name, target } = call.decorator;
+        ctx.errors.push(diagnostic("decoratorShape", { name, target, problem }, call.loc ?? null));
+        return;
+      }
+    }
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;
     const sig = paramListSignature(params, call.arguments.length);

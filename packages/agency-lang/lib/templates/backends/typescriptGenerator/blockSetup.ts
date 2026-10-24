@@ -27,7 +27,7 @@ if (__blockError instanceof AgencyAbort) {
 }
 throw __blockError;
 } finally {
-// Pop the SAME stack \`setupFunction\` pushed onto (the ALS-current
+{{{rebindRelease}}}// Pop the SAME stack \`setupFunction\` pushed onto (the ALS-current
 // stack via \`__bsetup.stateStack\`), NOT \`__ctx.stateStack\`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
 // fired from \`onToolCallEnd\` during runPrompt's tool dispatch), the
@@ -50,6 +50,7 @@ export type TemplateType = {
   finalizeDecl: string | boolean | number;
   body: string | boolean | number;
   abortReturn: string | boolean | number;
+  rebindRelease: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

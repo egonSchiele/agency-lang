@@ -312,7 +312,17 @@ export class AgencyFunction {
     if (kept !== undefined) {
       throw new Error(`'${kept}' is a block parameter of '${this.name}' and cannot be rebound`);
     }
-    const values = this.resolveNamed([], { ...given, ...keep });
+    let values: unknown[];
+    try {
+      values = this.resolveNamed([], { ...given, ...keep });
+    } catch (error) {
+      if (isCallRecord(given)) {
+        throw new Error(
+          `block() in '${this.name}' was given the call record itself. Pass its arguments: block(call.args).`,
+        );
+      }
+      throw error;
+    }
     const bound: Record<string, unknown> = {};
     this._unboundParams.forEach((param, index) => {
       bound[param.name] = values[index];
@@ -689,4 +699,18 @@ function buildReducedSchema(originalSchema: any, unboundParams: FuncParam[]): an
     }
   }
   return z.object(reducedShape);
+}
+
+/** Whether `record` is a decorator's `call` value, `{ name, args }`, which
+ *  a decorator passes by mistake as `block(call)` instead of `block(call.args)`. */
+function isCallRecord(record: Record<string, unknown>): boolean {
+  const keys = Object.keys(record).sort();
+  return (
+    keys.length === 2 &&
+    keys[0] === "args" &&
+    keys[1] === "name" &&
+    typeof record.name === "string" &&
+    typeof record.args === "object" &&
+    record.args !== null
+  );
 }

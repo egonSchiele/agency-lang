@@ -46,6 +46,12 @@ export function lastParameterTakesBlock(parameters: FunctionParameter[]): boolea
   );
 }
 
+/** Whether a parameter is declared with a block type, `b: () -> T`. The
+ *  lowering, the preprocessor, and the splice generator all ask this. */
+export function isBlockParameter(parameter: FunctionParameter): boolean {
+  return parameter.typeHint?.type === "blockType";
+}
+
 /** Whether these parameters are a decorator's: the second-to-last is named
  *  `call` and the last takes a block (docs/dev/language/decorators.md).
  *  Defaults are ignored here; `decoratorShapeProblem` reports them. */

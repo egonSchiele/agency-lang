@@ -23,4 +23,7 @@ export type RebindParameters = BaseNode & {
   blockParameters: string[];
   /** The block parameter that holds the record: `__args`. */
   record: string;
+  /** The decorator's depth in the stack, 0 for the outermost. The runtime
+   *  keys its one-running-block-per-decorator claim on it. */
+  depth: number;
 };

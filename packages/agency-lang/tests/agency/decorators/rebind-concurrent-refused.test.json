@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"n=1\",\"block() in 'g' was called while an earlier block() was still running. The arguments live on the one frame of 'g', so call block from one place at a time, not from several fork or parallel branches.\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a second concurrent call to block is refused with a failure, not crossed arguments"
+    }
+  ]
+}

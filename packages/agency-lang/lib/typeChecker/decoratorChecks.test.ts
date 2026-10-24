@@ -25,6 +25,22 @@ function withCode(errors: TypeCheckError[], name: string): TypeCheckError[] {
   return errors.filter((error) => error.name === name);
 }
 
+describe("decorator shape in the checker", () => {
+  it("reports a decorator of the wrong shape when the checker runs on its own", () => {
+    // typecheckSource runs the checker without the decorator stage, the
+    // case the checker's own AG6043 exists for.
+    const src =
+      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+      '@logged("t")\n' +
+      'def f(): string { return "x" }\n';
+    const [error] = withCode(typecheckSource(src), "decoratorShape");
+    expect(error.code).toBe("AG6043");
+    expect(error.message).toContain("'logged' cannot decorate 'f'");
+    expect(error.message).toContain("Found 'tag' there");
+    expect(error.loc?.line).toBe(lineOf(src, "@logged"));
+  });
+});
+
 describe("decorator mismatch diagnostics", () => {
   it("names the decorator when a tag argument has the wrong type", () => {
     const src = BUDGETED + '@budgeted(cost: "x")\ndef one(): Result<string> {\n  return "a"\n}\n';
@@ -196,7 +212,9 @@ describe("a typo in a decorator name", () => {
     expect(withCode(errors, "undefinedFunction")).toEqual([]);
   });
 
-  it("reports a wrong-shape decorator once, with no second error from the checker", () => {
+  it("reports a wrong-shape decorator from the stage and as AG6043, and nothing else", () => {
+    // The checker adds no argument-count error against the wrong slots; its
+    // one error is the same shape report, which the editor drops.
     const src =
       "def d(call: Call, tag: string, block: () -> any): any {\n  return block()\n}\n" +
       '@d("t")\ndef f(): string {\n  return "a"\n}\n';
@@ -211,6 +229,8 @@ describe("a typo in a decorator name", () => {
       ),
     ).toEqual([expect.stringContaining("Found 'tag' there")]);
     const errors = typeCheck(prepared.program, {}, prepared.info).errors;
-    expect(errors.filter((error) => error.severity === "error")).toEqual([]);
+    expect(errors.filter((error) => error.severity === "error").map((error) => error.code)).toEqual(
+      ["AG6043"],
+    );
   });
 });

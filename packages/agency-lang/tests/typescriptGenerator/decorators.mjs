@@ -29,7 +29,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest, __checkParams, __schemaCheck, __descriptorCheck, __takeArgOverrides, __rebindParameters, __releaseRebind,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
@@ -670,7 +670,7 @@ await runner.step(0, __run, async (runner, __run) => {
 await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:plainTwin"], __bstack.args["__args"], {}, [{
       name: "x",
       checked: false
-    }], null)
+    }], null, 0)
 if (runner.halted) {
       return;
     }
@@ -690,6 +690,7 @@ if (__blockError instanceof AgencyAbort) {
 }
 throw __blockError;
 } finally {
+__releaseRebind(__stack, 0);
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
@@ -1029,7 +1030,7 @@ await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agen
       name: "maxCost",
       checked: false,
       defaultValue: () => 2
-    }], null)
+    }], null, 0)
 if (runner.halted) {
       return;
     }
@@ -1071,7 +1072,7 @@ await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agen
       name: "maxCost",
       checked: false,
       defaultValue: () => 2
-    }], null)
+    }], null, 1)
 if (runner.halted) {
       return;
     }
@@ -1107,6 +1108,7 @@ if (__blockError instanceof AgencyAbort) {
 }
 throw __blockError;
 } finally {
+__releaseRebind(__stack, 1);
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
@@ -1133,6 +1135,7 @@ if (__blockError instanceof AgencyAbort) {
 }
 throw __blockError;
 } finally {
+__releaseRebind(__stack, 0);
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback
@@ -1331,7 +1334,7 @@ await runner.step(0, __run, async (runner, __run) => {
 await __rebindParameters(__run, runner, __stack, __toolRegistry["decorators.agency:positionalAndNamed"], __bstack.args["__args"], {}, [{
       name: "a",
       checked: false
-    }], null)
+    }], null, 0)
 if (runner.halted) {
       return;
     }
@@ -1351,6 +1354,7 @@ if (__blockError instanceof AgencyAbort) {
 }
 throw __blockError;
 } finally {
+__releaseRebind(__stack, 0);
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
 // block runs inside a parallel/fork/race branch (e.g. as a callback

@@ -6,7 +6,7 @@ import type {
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
-import { decoratorShapeProblem } from "@/types/function.js";
+import { decoratorShapeProblem, isBlockParameter } from "@/types/function.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
@@ -115,7 +115,7 @@ export function loweredBody(
     const recordName = `${RECORD_LOCAL}${depth}`;
     return [
       recordDeclaration(recordName, target, def.parameters, tag.loc),
-      returning(decoratorCall(tag, target, recordName, def.parameters, body, lookup), tag.loc),
+      returning(decoratorCall(tag, target, depth, def.parameters, body, lookup), tag.loc),
     ];
   }, def.body);
   return outermost;
@@ -139,17 +139,18 @@ function recordDeclaration(
     variableName: name,
     value: callRecord(target, parameters, loc),
     loc,
-  } as Assignment;
+  };
 }
 
 function decoratorCall(
   tag: Tag,
   target: string,
-  recordName: string,
+  depth: number,
   parameters: FunctionParameter[],
   body: AgencyNode[],
   lookup: DecoratorLookup,
 ): FunctionCall {
+  const recordName = `${RECORD_LOCAL}${depth}`;
   const signature = lookup(tag.name);
   const origin: DecoratorOrigin = { name: tag.name, tagLoc: tag.loc, target };
   const record: NamedArgument = {
@@ -165,7 +166,7 @@ function decoratorCall(
       type: "blockArgument",
       inline: false,
       params: [{ type: "functionParameter", name: RECORD_PARAMETER }],
-      body: [rebindStatement(target, parameters, tag.loc), ...body],
+      body: [rebindStatement(target, parameters, depth, tag.loc), ...body],
     },
     loc: tag.loc,
     decorator: origin,
@@ -185,20 +186,18 @@ const RECORD_PARAMETER = "__args";
  *  decorator's depth in the stack: `__call_0` for the outermost. */
 const RECORD_LOCAL = "__call_";
 
-function isBlockParameter(parameter: FunctionParameter): boolean {
-  return parameter.typeHint?.type === "blockType";
-}
-
 /** The block's first statement: store the def's parameters from the record
  *  (docs/dev/language/decorators.md, "The block takes the arguments"). */
 function rebindStatement(
   target: string,
   parameters: FunctionParameter[],
+  depth: number,
   loc: SourceLocation | undefined,
 ): RebindParameters {
   return {
     type: "rebindParameters",
     functionName: target,
+    depth,
     parameters: parameters.filter((parameter) => !isBlockParameter(parameter)),
     blockParameters: parameters.filter(isBlockParameter).map((parameter) => parameter.name),
     record: RECORD_PARAMETER,

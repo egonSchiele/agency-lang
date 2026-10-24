@@ -15,7 +15,7 @@ import { closureFiles, importEdgesOf, isAgencyFilePath, parseFileOrNull } from "
 import type { AgencyConfig } from "../../config/config.js";
 import type { AgencyProgram } from "../../types.js";
 import type { Hole } from "../../types/hole.js";
-import type { FunctionDefinition } from "../../types/function.js";
+import { isBlockParameter, type FunctionDefinition } from "../../types/function.js";
 import type { GraphNodeDefinition } from "../../types/graphNode.js";
 import type { SpliceDiagnostic } from "./types.js";
 
@@ -198,7 +198,7 @@ function callableNames(
 ): string[] {
   const symbols = callableNamesIn(table, program, file);
   const functionParameters = (declaration.parameters ?? [])
-    .filter((parameter) => parameter.typeHint?.type === "blockType")
+    .filter(isBlockParameter)
     .map((parameter) => parameter.name);
   return [...symbols, ...functionParameters];
 }

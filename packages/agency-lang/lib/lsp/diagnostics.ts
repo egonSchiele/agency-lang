@@ -124,7 +124,11 @@ export function runDiagnostics(
 
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);
 
+  // The decorator stage already reported a decorator of the wrong shape at
+  // its tag; the checker's AG6043 for it would be the same error twice.
+  const shapeReported = prepared.diagnostics.some((found) => found.stage === "decorators");
   for (const err of errors) {
+    if (shapeReported && err.name === "decoratorShape") continue;
     const range = err.loc
       ? {
           start: { line: err.loc.line, character: err.loc.col },

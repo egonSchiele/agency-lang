@@ -45,7 +45,7 @@ The module has three pure functions and one that writes:
 - `decoratorProblems(program, scope)` returns everything wrong with the program's decorators (below).
 - `desugarDecorators(program, lookup)` assigns `def.body`, `def.decorators`, `def.tags`, and filters the tag nodes out of `program.nodes`.
 
-The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, importedFunctions)`, so the two cannot drift. It answers two questions: does the decorator's first parameter have the name `call`, and is the decorator imported (the call then carries `scope: "imported"`, as `_guard`'s does).
+The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, importedFunctions)`, so the two cannot drift. It answers two questions: what the decorator's parameters are, which `decoratorShapeProblem` checks for the shape below, and whether the decorator is imported (the call then carries `scope: "imported"`, as `_guard`'s does).
 
 ## The rules
 
@@ -59,7 +59,7 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
    **A rebind survives a pause.** A function stores every parameter on its frame on every entry, and a resume re-enters it with the caller's original arguments, which would overwrite the rebound slots. A decorated def therefore stores its parameters on first entry only (`firstEntryParamStore`, the store a `!` parameter already used), so a restored frame keeps what the rebind wrote, and the rebind step itself is skipped on resume like any completed step. `tests/agency/decorators/rebind-resumes.agency` pins this with a real pause.
 
-   **One rebind at a time.** The rebound values live on the function's frame, which every call to `block` from the same decorator shares. A decorator that calls `block` from concurrent branches (`fork`, `parallel`) with different records gets crossed arguments: each branch's body reads whichever rebind ran last. Call `block` from one branch at a time, or give each variant its own decorated function. Per-branch parameter frames would be the fix, and are not built.
+   **One running block per decorator.** The rebound values live on the function's frame, which every call to `block` from the same decorator shares. If a decorator called `block` from concurrent branches (`fork`, `parallel`) with different records, each branch's body would read whichever rebind ran last. So the rebind claims the frame: `__rebindParameters` records the decorator's depth in the frame's live-only `rebinding` list, and refuses, with a failure as the value of `block()`, while that depth is already listed. The block's `finally` calls `__releaseRebind` to end the claim, whether the body returned, failed, or was unwound by a pause. The claim is keyed by depth so that stacked decorators, whose blocks nest on the same frame, do not refuse each other. A frame restored from a checkpoint has no claims, which is right: the block in progress at the pause re-enters without running its rebind step. `tests/agency/decorators/rebind-concurrent-refused.agency` pins the refusal; per-branch parameter frames would let both branches run, and are not built.
 
    **Block-typed parameters are kept, not rebound.** A record cannot carry a block, so the function's block-typed parameters are left out of `call.args` and the rebind table, and the rebind passes their current values to `bindRecord` by name, wherever they sit in the parameter list. A record that names one is refused: "'body' is a block parameter of 'f' and cannot be rebound".
 
@@ -94,7 +94,7 @@ The mistakes:
 - a decorator imported from JavaScript: "'wrap' is imported from JavaScript, so it cannot decorate 'greet'." A JavaScript function cannot take a block, so this would fail on every call.
 - a def that decorates itself, or defs that decorate each other: "Decorators call each other in a loop: a → b → a." Either would recurse until the call-depth limit. Only the file's own defs are followed; a loop that runs through another file still ends at the runtime's limit.
 
-`decoratorProblems` reads tags wherever they are at the moment (standalone, attached, or already lowered), so it works before or after the lowering. The LSP gives the stage a range from the tag's location; `failIfNotCheckable` in `lib/compiler/typecheck.ts` treats the stage like a lift failure. The editor and `agency typecheck` keep going past the failure and run the checker, which skips the undefined-function warning on a call that carries `decorator` (`undefinedFunctionDiagnostic.ts`), so an unknown decorator is reported once. `describeDiagnostic` prints the failure's line, as a type error does.
+`decoratorProblems` reads tags wherever they are at the moment (standalone, attached, or already lowered), so it works before or after the lowering. The LSP gives the stage a range from the tag's location; `failIfNotCheckable` in `lib/compiler/typecheck.ts` treats the stage like a lift failure. The editor and `agency typecheck` keep going past the failure and run the checker, which skips the undefined-function warning on a call that carries `decorator` (`undefinedFunctionDiagnostic.ts`), so an unknown decorator is reported once. A decorator of the wrong shape is the one mistake the checker also reports on its own, as AG6043, so a program checked without the stage (unit tests call `typeCheck` directly) is not accepted by mistake; the editor drops that copy when the stage has already reported (`lib/lsp/diagnostics.ts`). `describeDiagnostic` prints the failure's line, as a type error does.
 
 Type mismatches are reported by the checker through the ordinary call and return checks, and named for the decorator through `call.decorator`. See "Diagnostics and doc output" below.
 
@@ -138,7 +138,7 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 - `lib/parsers/parsers.ts`: `_tagParserInner`, `reservedTagArguments`, `decoratorTagArguments`.
 - `lib/preprocessors/decoratorDesugar.ts` and its test.
 - `lib/types/function.ts`: `FunctionDefinition.decorators`, `DecoratorOrigin`, `FunctionCall.decorator`, and the shape: `hasDecoratorShape`, `decoratorShapeProblem`, `callerSuppliedParameters`.
-- `lib/types/rebindParameters.ts`: the synthetic statement; `lib/runtime/rebind.ts`: `__rebindParameters`; `lib/runtime/agencyFunction.ts`: `bindRecord`.
+- `lib/types/rebindParameters.ts`: the synthetic statement; `lib/runtime/rebind.ts`: `__rebindParameters` and `__releaseRebind`, over the live-only `rebinding` list on `State` (`lib/runtime/state/stateStack.ts`); `lib/runtime/agencyFunction.ts`: `bindRecord`, and the `block(call)` hint it throws when the record is the call record itself.
 - `lib/backends/typescriptBuilder.ts`: `processRebindParameters` (the function is reached through `__toolRegistry` by its module key, which a parameter named like the function cannot shadow), `firstEntryParamStore`, the `storeOnFirstEntry` option of `buildFunctionBody`.
 - `lib/parsers/parsers.ts` and `lib/typeChecker/paramDefaultOrder.ts`: the ordering check over `callerSuppliedParameters`.
 - `lib/typeChecker/index.ts`, `lib/preprocessors/typescriptPreprocessor.ts`: the two call sites.

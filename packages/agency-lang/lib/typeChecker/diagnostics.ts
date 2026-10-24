@@ -849,6 +849,11 @@ export const DIAGNOSTICS = {
   // Decorator forms of the call and return mismatches. A decorator tag lowers
   // to a call, so these sites are the ordinary ones (see mismatch.ts); the
   // messages name the decorator and the def instead of the synthesized call.
+  decoratorShape: {
+    code: "AG6043",
+    severity: "error",
+    message: "'{name}' cannot decorate '{target}': {problem}",
+  },
   decoratorArgType: {
     code: "AG6041",
     severity: "error",

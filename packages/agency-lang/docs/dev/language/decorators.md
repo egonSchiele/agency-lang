@@ -1,11 +1,11 @@
 # User-defined decorators
 
-A decorator is an ordinary `def` whose last parameter is a block. Writing `@name(args)` above a function means "run my body as the block passed to `name`". Nothing else about the function changes: its name, docstring, parameters, tool schema, and `handoff`, `destructive`, and `idempotent` markers all stay on the `def`. The model never sees a decorator.
+A decorator is an ordinary `def` whose last two parameters are `call: Call` and a block, with its own parameters in front of them. Writing `@name(args)` above a function means "run my body as the block passed to `name`". Nothing else about the function changes: its name, docstring, parameters, tool schema, and `handoff`, `destructive`, and `idempotent` markers all stay on the `def`. The model never sees a decorator.
 
 ```
-def logged(call: Call, block: () -> any): any {
+def logged(call: Call, block: (args: object) -> any): any {
   print("entering ${call.name}")
-  const result = block()
+  const result = block(call.args)
   print("leaving ${call.name}")
   return result
 }
@@ -16,15 +16,16 @@ def greet(name: string): string {
 }
 ```
 
-Spec: `docs/superpowers/specs/2026-10-22-decorators.md`. Plan and review: `docs/superpowers/plans/2026-10-22-decorators.md` and `2026-10-22-decorators-review.md`. Tickets ADI-39 (the lowering) and ADI-40 (diagnostics, `agency interrupts`, `agency doc`, and the guide page `docs/site/guide/decorators.md`).
+Specs: `docs/superpowers/specs/2026-10-22-decorators.md` (the feature) and `docs/superpowers/specs/2026-10-23-decorator-shape-and-arguments.md` (the fixed shape, `block(record)`, and the `@guarded` rename). Plan and review: `docs/superpowers/plans/2026-10-22-decorators.md` and `2026-10-22-decorators-review.md`. Tickets ADI-39 (the lowering) and ADI-40 (diagnostics, `agency interrupts`, `agency doc`, and the guide page `docs/site/guide/decorators.md`).
 
 ## What the compiler does
 
-The tag lowers to a call with the body as the block argument. `greet` above becomes:
+The tag lowers to a call with the body as the block argument. The tag's own arguments come first, as written; the `call` record is passed by name after them; the block takes one parameter, `__args`, and starts with a `rebindParameters` statement. `greet` above becomes:
 
 ```
 def greet(name: string): string {
-  return logged({ name: "greet", args: { name: name } }) {
+  return logged(call: { name: "greet", args: { name: name } }) {
+    <rebindParameters>
     return "hello ${name}"
   }
 }
@@ -48,7 +49,17 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
 ## The rules
 
-1. **The `call` record.** A decorator whose first parameter is named `call` receives `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). The record is passed as the first positional argument, before the tag's own arguments, so `@retry(3)` works as well as `@guard(cost: maxCost)`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`). The rule goes by the parameter's name, not its type: a decorator written as `def tagWith(call: string, block: () -> any)` still receives the record in `call`, and `@tagWith("x")` then passes `"x"` where the block goes. Name the first parameter something else unless it is the record.
+1. **The shape.** A decorator's second-to-last parameter is named `call` and its last takes a block (`lastParameterTakesBlock`: block-typed, untyped, or `any`); neither has a default. `hasDecoratorShape`, `decoratorShapeProblem`, and `callerSuppliedParameters` in `lib/types/function.ts` are the one place that knows this, and the parser's ordering check, AG6039, the lowering's checks, and the checker's argument counts all go through them. A def of any other shape named in a tag is a compile error that says which slot is wrong.
+
+   The first version of this feature made `call` optional and recognized it by being the first parameter. A decorator written `def logged(tag: string, call: Call, block)` then silently received no record, and one with an ordinary first parameter that happened to be called `call` silently received one. One required shape, checked at the tag, replaced that. Two other layouts were weighed and set aside: `call` first would put tag arguments one slot off from the parameter list; `call` and the block first would break the rule that a block binds to the last parameter.
+
+   **The `call` record** is `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). It is passed by name, `call: {...}`, after the tag's own arguments, so it never competes with a positional tag argument for a slot. It is built when the decorator is called, from the parameters as they are at that moment. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`).
+
+   **The block takes the arguments.** The decorator chooses what the body runs with: `block(call.args)` runs it with the arguments as passed, `block({ ...call.args, name: "x" })` with one changed, `block()` with none (defaults apply; a parameter with no default is a missing argument). The block's first statement is the synthetic `rebindParameters` node (`lib/types/rebindParameters.ts`), which compiles to one `__rebindParameters` call (`lib/runtime/rebind.ts`) over a table of the function's parameters, each default a thunk compiled where the function's scope is visible. The runtime binds the record with `AgencyFunction.bindRecord`, a public method over the private `resolveNamed`, so unknown keys, missing arguments, variadics, and aliases follow the rules of a call and produce its messages; it stores the values on the enclosing function's frame (`__stack.args`, reached lexically from the block); then it runs the `!` checks over the rebound parameters, so a decorator cannot route a value around a validator. Any failure halts the block's runner, so `block()` returns a failure value and nothing propagates through the decorator.
+
+   **A rebind survives a pause.** A function stores every parameter on its frame on every entry, and a resume re-enters it with the caller's original arguments, which would overwrite the rebound slots. A decorated def therefore stores its parameters on first entry only (`firstEntryParamStore`, the store a `!` parameter already used), so a restored frame keeps what the rebind wrote, and the rebind step itself is skipped on resume like any completed step. `tests/agency/decorators/rebind-resumes.agency` pins this with a real pause.
+
+   **Stacking rebinds in turn.** `@outer @inner def f` lowers to `outer(call: …) { rebind; return inner(call: …) { rebind; body } }`. `inner`'s record is built after `outer`'s rebind ran, so `inner`, and the tag arguments written on it, see the arguments `outer` passed.
 
    Because `Call` is a prelude name, a file's own `type Call`, or a `Call` it imports from another file, must win over it. `prunePreludeShadows` drops a prelude name a type or an import shadows, as it already did for a def, a node, or a global; without that, the prelude's `Call` and the file's are two bindings of one name and the module fails to load (`tests/agency/decorators/local-call-type.agency`).
 2. **The tag's arguments are evaluated on every call**, in the decorated function's scope, so they can name its parameters.
@@ -113,19 +124,19 @@ The body is a block argument, and blocks already resume through step counters, a
 
 Part 1 found that a `destructive { }` region inside a block argument lost its `destructiveRan` mark when the block exited, so a failure escaping a decorated function read `false` and the tool loop's removal of a destructive tool failed open. ADI-56 fixed it in the tracking codegen: the flag is written through `__activation`, which a block reaches lexically. `tests/agency/decorators/destructive-region-in-body.agency` pins the decorator case; `docs/dev/language/destructive-regions.md` has the design.
 
-## The stdlib decorator: `@guard`
+## The stdlib decorator: `@guarded`
 
-`std::strategy` ships one decorator, `@guard(cost:, time:, label:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. Two things about it belong here:
-
-- **It cannot be called with a block.** `guard(...) {` is always the guard block (`guardBlockParser`), so `guard(record, cost: 1) { ... }` parses as the block with a stray argument, not a call to the decorator. An agent that needs to post-process its guarded result moves the guarded part into a non-exported inner def that carries the tag. This is the cost of sharing the block's name.
-- **A lowered `@guard` must never be printed as text.** The lowered body, `return guard({ name: ..., args: ... }, cost: ...) { ... }`, would re-parse as the guard block. Nothing prints a lowered tree today: `agency fmt` prints the raw tree, and `agency doc` prints signatures and tags, not bodies. A feature that prints a lowered tree has to print the tag instead.
+`std::strategy` ships one decorator, `@guarded(cost:, time:, label:)`, which every budgeted stdlib agent carries. What it does with a budget trip, and how a draft the body saved reaches its guard, is in `docs/dev/agents/subagent-budgets.md`. It was called `@guard` at first, which shared its name with the `guard { }` block: `guard(...) {` always parses as the block, so the decorator could not be called as a function. The rename removed that. The agents that post-process their guarded result still keep the guarded part in an inner def, because a decorator wraps a whole def and the post-processing wants to sit outside the wrap.
 
 ## Files
 
 - `lib/types/tag.ts`: `RESERVED_TAG_NAMES`, `isDecoratorTag`, `positionalTagArguments`, the widened `Tag.arguments`.
 - `lib/parsers/parsers.ts`: `_tagParserInner`, `reservedTagArguments`, `decoratorTagArguments`.
 - `lib/preprocessors/decoratorDesugar.ts` and its test.
-- `lib/types/function.ts`: `FunctionDefinition.decorators`, `DecoratorOrigin`, `FunctionCall.decorator`.
+- `lib/types/function.ts`: `FunctionDefinition.decorators`, `DecoratorOrigin`, `FunctionCall.decorator`, and the shape: `hasDecoratorShape`, `decoratorShapeProblem`, `callerSuppliedParameters`.
+- `lib/types/rebindParameters.ts`: the synthetic statement; `lib/runtime/rebind.ts`: `__rebindParameters`; `lib/runtime/agencyFunction.ts`: `bindRecord`.
+- `lib/backends/typescriptBuilder.ts`: `processRebindParameters`, `firstEntryParamStore`, the `storeOnFirstEntry` option of `buildFunctionBody`.
+- `lib/parsers/parsers.ts` and `lib/typeChecker/paramDefaultOrder.ts`: the ordering check over `callerSuppliedParameters`.
 - `lib/typeChecker/index.ts`, `lib/preprocessors/typescriptPreprocessor.ts`: the two call sites.
 - `lib/compiler/prepareProgram.ts`: `DecoratorFailure` and the check; `lib/lsp/diagnostics.ts`, `lib/compiler/typecheck.ts`.
 - `lib/compiler/buildSession.ts`: `checkDecoratorsOrExit`, the same check for `agency run` and `agency compile`.
@@ -165,7 +176,7 @@ A `saveDraft(value)` is the value of the frame it is saved in. A decorated body 
 
 ### Counts on a tag
 
-The lowering adds the body and, when the decorator's first parameter is named `call`, the `call` record. It records the second on `DecoratorOrigin.passesCallRecord`. `checkArity` subtracts both before printing a count, so `@budgeted` with no arguments says "Expected 1 argument(s) for 'budgeted', but got 0." The unknown-named-argument error leaves `call` and the block parameter out of its list of valid names.
+The lowering adds the `call` record and the body. `checkArity` subtracts both (`params.length - callerSuppliedParameters(params).length`) before printing a count, so `@budgeted` with no arguments says "Expected 1 argument(s) for 'budgeted', but got 0." The unknown-named-argument error lists only `callerSuppliedParameters`. A decorator call whose target lacks the shape skips the argument checks entirely: the shape error from the decorator stage already covers it, and checking against the wrong slots would add a second, misleading error.
 
 ### `raises`
 

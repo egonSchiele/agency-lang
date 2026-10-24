@@ -1,7 +1,7 @@
 # Subagent budgets
 
 A budget is a parameter on the subagent tool call, enforced by the
-stdlib agent's own `@guard` decorator (`std::strategy`). The harness does
+stdlib agent's own `@guarded` decorator (`std::strategy`). The harness does
 not guard the turn.
 
 ## Where a budget comes from
@@ -26,9 +26,9 @@ parameters yet.
 Every stdlib agent with a budget carries the decorator:
 
 ```
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export handoff def oracleAgent(question: string, maxCost: number = $20.00, maxTime: number = 15m, ...): Result<string> {
   return consider(question: question, ...)
 }
@@ -43,10 +43,10 @@ not in the prelude. Every file that uses it says so in an import line, so
 a file's own `def guard` cannot silently replace it, and the prelude does
 not grow a name only the agents use.
 
-An agent that post-processes its guarded result cannot call the decorator
-inline: `guard(...) {` is always the block form. Such an agent puts the
-guarded part in a non-exported inner def that carries the tag, with an
-explicit `label:` so the guard keeps the agent's name.
+An agent that post-processes its guarded result puts the guarded part in a
+non-exported inner def that carries the tag, with an explicit `label:` so
+the guard keeps the agent's name. A decorator wraps a whole def, and the
+post-processing wants to sit outside the wrap.
 
 ## When a budget runs out
 
@@ -110,7 +110,7 @@ Result. A guard whose `finalize` returned an empty local hands back
 
 ## How a draft reaches the guard
 
-The decorator's guard block is `return block()`, so the body's partial
+The decorator's guard block is `return block(call.args)`, so the body's partial
 result travels to the guard by the ordinary salvage rules
 (`docs/dev/runtime/saveDraft.md`): return position passes a callee's draft
 through, a `finalize` hands its return value up, and an assignment without

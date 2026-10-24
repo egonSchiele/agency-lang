@@ -235,7 +235,7 @@ export function refusalMessage(
     case "tooManyHandoffs":
       return tooManyHandoffsMessage(name, call.runnableHandoffs);
     case "tooManyRounds":
-      return `Error: Maximum number of tool call rounds (${state.maxToolCallRounds}) exceeded. This tool call will not be executed.`;
+      return `Error: Maximum number of tool call rounds (${state.maxToolCallRounds}) exceeded. This tool call will not be executed, and no more tools will be offered. Write your answer now from what you have.`;
     case "markup":
       // markupArg is non-null whenever the verdict says markup: both
       // derive from the same replay-stable inputs.

@@ -1,17 +1,57 @@
-# Tool-loop guards: repeated calls, markup arguments, rejected calls, and handoffs beside other calls
+# Tool-loop guards: the round cap, repeated calls, markup arguments, rejected calls, and handoffs beside other calls
 
-Four refusals in `runPrompt`'s tool loop that stop a model from wasting
-rounds: a repeated call, a markup argument, a RETRY of an
-already-rejected call (the first rejected call runs normally up to its
-interrupt; only the identical retry is refused), and a handoff call that
-shares a round with another call. The repeat and markup helpers live in
-`lib/runtime/toolLoopGuards.ts`; the rejection bookkeeping lives in
-`prompt.ts` itself; the handoff text lives in `lib/runtime/handoff.ts`.
-All four refusals happen
-before the tool's `onToolCallStart` hook, so a refused call never runs,
-never fires hooks, and never counts toward `MAX_TOOL_FAILURES`. The
-model sees the refusal as an ordinary tool message, which is where it
-reads results.
+Five refusals in `runPrompt`'s tool loop that stop a model from wasting
+rounds: a call past the round cap, a repeated call, a markup argument, a
+RETRY of an already-rejected call (the first rejected call runs normally
+up to its interrupt; only the identical retry is refused), and a handoff
+call that shares a round with another call. The cap, repeat, and markup
+helpers live in `lib/runtime/toolLoopGuards.ts`; the rejection
+bookkeeping lives in `prompt.ts` itself; the handoff text lives in
+`lib/runtime/handoff.ts`. All five refusals happen before the tool's
+`onToolCallStart` hook, so a refused call never runs, never fires hooks,
+and never counts toward `MAX_TOOL_FAILURES`. The model sees the refusal
+as an ordinary tool message, which is where it reads results.
+
+## The round cap
+
+A round is one model reply that asked for at least one tool call this
+loop dispatches. `self.toolCallRound` on the runPrompt frame counts the
+rounds that have run; it goes up inside the `nextLlmCall` step, after the
+request that follows a round, so a resume after an interrupt in a round
+re-enters the same round. The count is per `llm()` call: a block that
+calls `llm()` twice gives each call its own count, so `revise` with two
+attempts of thirty rounds each is sixty rounds, not thirty.
+
+What the count leaves out: a provider-hosted tool round (a search the
+provider ran inside one request) never comes through this loop, so it is
+not a round; a validation retry re-sends the same turn and is counted by
+`validationRetries` instead; and an intrinsic call (`saveDraft`) is
+handled inline and ignores the cap.
+
+Where the cap comes from, highest first, like every other `llm()` option:
+the call's own `llm(..., { maxToolCallRounds })`, then a branch default
+from `setLlmOptions` (a fork or tool branch inherits its parent's), then
+`maxToolCallRounds` in `agency.json`, which the codegen bakes into every
+call (default 10). The per-call value used to ride into the provider
+config unread, so the branch default always won. That is how trace
+wX5GvrUq ran 43 rounds under a researcher that asked for 30: the agent
+had set a branch-wide cap of 50 (`applyToolLimits`), and 43 is under 50
+(ADI-46).
+
+At the cap, every call in the round gets the `tooManyRounds` verdict and
+this message:
+
+> Error: Maximum number of tool call rounds (30) exceeded. This tool call
+> will not be executed, and no more tools will be offered. Write your
+> answer now from what you have.
+
+and every request from then on carries only the intrinsic tools
+(`offeredTools` in `prompt.ts`). Refusing alone did not end the loop: a
+model that kept calling tools was refused round after round, each
+refusal costing a request, until a budget stopped it. With nothing to
+call, the model can only answer, so the loop ends within one request of
+the cap. The list is derived from the frame's counter, so a resumed pass
+offers what the first pass offered.
 
 ## Repeated calls
 
@@ -129,6 +169,13 @@ response.
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
   `repeatKey`, `noteRepeat`).
+- The round cap: `lib/runtime/prompt.toolRounds.test.ts` runs the loop
+  against a scripted client with a cap of 3 and checks the fourth round
+  is refused with the message above, the request after it offers no
+  tools, a second `llm()` call in the same frame counts from zero, and
+  the three sources of the cap rank as stated. `tests/agency-js/
+  max-tool-call-rounds` and `subagent-inherits-tool-rounds` cover the
+  branch default through compiled code.
 - Handoffs: `tests/agency-js/handoff` scripts a handoff beside other
   calls (`notAlone`, `siblingPause`, `handoffWithDraft`), two handoffs
   in one round (`twoHandoffs`), a guard between the batches

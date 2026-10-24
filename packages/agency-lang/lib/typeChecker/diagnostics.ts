@@ -860,6 +860,12 @@ export const DIAGNOSTICS = {
     message:
       "'{name}' is not a decorator, so '@{name}' cannot go on '{target}'. Declare it as `decorator def {name}(...)`.",
   },
+  decoratorMissingKeyword: {
+    code: "AG6045",
+    severity: "error",
+    message:
+      "'{name}' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def {name}(...)`, or put the defaulted parameter last.",
+  },
   decoratorArgType: {
     code: "AG6041",
     severity: "error",

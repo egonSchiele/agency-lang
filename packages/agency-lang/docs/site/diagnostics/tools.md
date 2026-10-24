@@ -466,3 +466,15 @@ A tag names a def that is not declared `decorator def`.
 Only a def that says `decorator` can be used as a tag, whatever its parameters look like. The keyword is what tells the compiler to pass the call record and the body as a block, and to leave those two slots out of the checks a normal call gets. A plain def with a `call` parameter and a block parameter is still a plain def.
 
 **How to fix:** write `decorator def logged(tag: string, call, block)` on the def the tag names, or remove the tag.
+
+<a id="ag6045"></a>
+
+## AG6045 — '&#123;name&#125;' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def &#123;name&#125;(...)`, or put the defaulted parameter last.
+
+*Default severity: error.*
+
+A plain def has a decorator's parameters and breaks the parameter-order rule in the one way a decorator is allowed to.
+
+A parameter without a default may not follow one with a default, because arguments bind by position and an omitted argument can only be a trailing one. A decorator is the exception: its last two parameters, the call record and the block, are filled in by the compiler on every call, so they may come after a default. `def logged(tag: string | null = null, call: Call, block: () -> any)` has exactly that shape, which means it was almost certainly meant to be a decorator and is missing the keyword. Without the keyword it is a plain def, and a plain def with these parameters cannot be called correctly.
+
+**How to fix:** write `decorator def logged(tag: string | null = null, call, block)` if it is a decorator. If it is an ordinary function, move the defaulted parameter after the others.

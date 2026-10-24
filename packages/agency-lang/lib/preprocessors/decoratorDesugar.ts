@@ -1,4 +1,11 @@
-import type { AgencyNode, AgencyProgram, Assignment, Expression, SourceLocation } from "@/types.js";
+import type {
+  AgencyNode,
+  AgencyProgram,
+  Assignment,
+  Expression,
+  SourceLocation,
+  TypeAliasEntry,
+} from "@/types.js";
 import type { AgencyObject, AgencyObjectKV, NamedArgument } from "@/types/dataStructures.js";
 import type {
   DecoratorOrigin,
@@ -10,10 +17,13 @@ import {
   decoratorShapeProblem,
   isBlockParameter,
   isDecoratorDef,
+  isDecoratorMissingKeyword,
   recordSlotName,
   withDecoratorTypes,
 } from "@/types/function.js";
+import type { AliasResolver } from "@/types/function.js";
 import { diagnostic } from "@/typeChecker/diagnostics.js";
+import type { TypeCheckError } from "@/typeChecker/types.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
@@ -22,6 +32,7 @@ import { isDecoratorTag } from "@/types/tag.js";
 import { declaredName } from "@/types/hole.js";
 import { tagsAbove } from "@/utils/tagsAbove.js";
 import type { ImportedFunctionSignature } from "@/compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, ScopedTypeAliases } from "@/compilationUnit.js";
 
 /**
  * Lower a decorator tag on a def into a call with the def's body as the
@@ -295,7 +306,25 @@ function placePhrase(node: AgencyNode | null): string {
 export type DecoratorScope = {
   functionDefinitions: Record<string, FunctionDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  /** The program's type aliases, so a record slot typed with an alias of
+   *  `Call` (`type Ctx = Call`) is accepted. Left out, only the name
+   *  `Call` is. */
+  typeAliases?: ScopedTypeAliases;
 };
+
+/** An alias resolver over `aliases`, for the record-slot check. */
+export function aliasResolver(aliases: Record<string, TypeAliasEntry>): AliasResolver {
+  return (name) => aliases[name]?.body;
+}
+
+/** The three mistakes the decorator stage and the checker both report,
+ *  by the checker's diagnostic name. A caller that ran the stage drops
+ *  the checker's copy of each (the editor, `agency typecheck`). */
+export function repeatsDecoratorStage(name: string): boolean {
+  return (
+    name === "decoratorShape" || name === "notADecorator" || name === "decoratorMissingKeyword"
+  );
+}
 
 /**
  * Everything wrong with a program's decorators, before or after the
@@ -308,11 +337,14 @@ export type DecoratorScope = {
  * - a decorator name that is neither declared nor imported,
  * - a tag naming a def that is not declared `decorator def`,
  * - a `decorator def` in the wrong shape (`decoratorShapeProblem`): a
- *   local one at the def, an imported one at the tag.
+ *   local one at the def, an imported one at the tag,
+ * - a def that is a decorator in all but the keyword
+ *   (`isDecoratorMissingKeyword`), at the def.
  *
- * The last two render through the diagnostic registry (`decoratorShape`,
- * `notADecorator`), so the checker's copies say the same thing. Pure;
- * prepareProgram and the CLI build turn the list into errors.
+ * The last three render through the diagnostic registry (`decoratorShape`,
+ * `notADecorator`, `decoratorMissingKeyword`), so the checker's copies say
+ * the same thing. Pure; prepareProgram and the CLI build turn the list
+ * into errors.
  */
 export function decoratorProblems(
   program: AgencyProgram,
@@ -329,41 +361,61 @@ export function decoratorProblems(
   const onDefs = decoratorTagsOnDefs(program.nodes);
   const lookup = decoratorLookup(scope.functionDefinitions, scope.importedFunctions);
   const fromJavaScript = javaScriptImportNames(program.nodes);
+  const resolve = aliasResolver(scope.typeAliases?.visibleIn(GLOBAL_SCOPE_KEY) ?? {});
   const problems = onDefs.flatMap(({ def, tag }) => {
     const problem = problemWithTag(declaredName(def.functionName), tag.name, {
       lookup,
       fromJavaScript,
       onDefs,
+      resolve,
     });
     return problem === null ? [] : [{ message: problem, loc: tag.loc }];
   });
-  const badDefs = decoratorDefProblems(program.nodes).map(({ name, problem, loc }) => ({
-    message: diagnostic("decoratorShape", { name, problem }, loc ?? null).message,
-    loc,
-  }));
+  const badDefs = decoratorDefProblems(program.nodes, resolve).map((found) => {
+    const rendered = decoratorDefDiagnostic(found);
+    return { message: rendered.message, loc: found.loc };
+  });
   return [...misplaced, ...badDefs, ...problems];
 }
 
-/** A `decorator def` whose parameters are not a decorator's. */
-export type DecoratorDefProblem = {
-  name: string;
-  problem: string;
-  loc: SourceLocation | undefined;
-};
+/** A def that is wrong as a decorator: a `decorator def` whose parameters
+ *  are not a decorator's, or a plain def that is a decorator in all but
+ *  the keyword. */
+export type DecoratorDefProblem =
+  | { kind: "shape"; name: string; problem: string; loc: SourceLocation | undefined }
+  | { kind: "missingKeyword"; name: string; loc: SourceLocation | undefined };
 
-/** Every `decorator def` among `nodes` in the wrong shape, as data: the
- *  decorator stage and the checker each render it through the
- *  `decoratorShape` entry. */
-export function decoratorDefProblems(nodes: AgencyNode[]): DecoratorDefProblem[] {
-  return nodes.flatMap((node) => {
-    if (node.type !== "function" || !isDecoratorDef(node)) {
+/** Every def among `nodes` that is wrong as a decorator, as data: the
+ *  decorator stage and the checker each render it with
+ *  `decoratorDefDiagnostic`. */
+export function decoratorDefProblems(
+  nodes: AgencyNode[],
+  resolve?: AliasResolver,
+): DecoratorDefProblem[] {
+  return nodes.flatMap((node): DecoratorDefProblem[] => {
+    if (node.type !== "function") {
       return [];
     }
-    const problem = decoratorShapeProblem(node.parameters);
-    return problem === null
-      ? []
-      : [{ name: declaredName(node.functionName), problem, loc: node.loc }];
+    const name = declaredName(node.functionName);
+    if (isDecoratorMissingKeyword(node)) {
+      return [{ kind: "missingKeyword", name, loc: node.loc }];
+    }
+    if (!isDecoratorDef(node)) {
+      return [];
+    }
+    const problem = decoratorShapeProblem(node.parameters, resolve);
+    return problem === null ? [] : [{ kind: "shape", name, problem, loc: node.loc }];
   });
+}
+
+/** The one rendering of a `DecoratorDefProblem`: AG6043 for the shape,
+ *  AG6045 for the missing keyword. */
+export function decoratorDefDiagnostic(found: DecoratorDefProblem): TypeCheckError {
+  const loc = found.loc ?? null;
+  if (found.kind === "missingKeyword") {
+    return diagnostic("decoratorMissingKeyword", { name: found.name }, loc);
+  }
+  return diagnostic("decoratorShape", { name: found.name, problem: found.problem }, loc);
 }
 
 /** What is wrong with a tag that resolved to `signature`, as data: the def
@@ -372,17 +424,21 @@ export function decoratorDefProblems(nodes: AgencyNode[]): DecoratorDefProblem[]
  *  `decoratorDefProblems`, so a tag on it is not reported again. */
 export type TagProblem = { kind: "notADecorator" } | { kind: "shape"; problem: string };
 
-export function tagProblem(signature: DecoratorSignature): TagProblem | null {
+export function tagProblem(
+  signature: DecoratorSignature,
+  resolve?: AliasResolver,
+): TagProblem | null {
   if (!signature.decorator) {
     return { kind: "notADecorator" };
   }
-  const problem = signature.imported ? decoratorShapeProblem(signature.parameters) : null;
+  const problem = signature.imported ? decoratorShapeProblem(signature.parameters, resolve) : null;
   return problem === null ? null : { kind: "shape", problem };
 }
 
 type TagContext = {
   lookup: DecoratorLookup;
   fromJavaScript: string[];
+  resolve: AliasResolver;
   onDefs: TagOnDef[];
 };
 
@@ -403,7 +459,7 @@ function problemWithTag(target: string, decorator: string, context: TagContext):
   if (signature === undefined) {
     return `Unknown decorator '${decorator}' on '${target}'. A decorator is a \`decorator def\` whose last two parameters are the call record and a block; declare or import '${decorator}'.`;
   }
-  const found = tagProblem(signature);
+  const found = tagProblem(signature, context.resolve);
   if (found === null) {
     return null;
   }

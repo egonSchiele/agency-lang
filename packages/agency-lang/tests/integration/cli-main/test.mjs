@@ -552,6 +552,36 @@ try {
   assertIncludes(strictError, "no type annotation");
   assertIncludes(strictError, "strict mode");
 
+  // tc: a mistake the decorator stage and the checker both find is printed
+  // once, and the success line is not printed under it.
+  const tcDecoratorDir = join(dir, "tc-decorator");
+  mkdirSync(tcDecoratorDir, { recursive: true });
+  writeFileSync(
+    join(tcDecoratorDir, "plain.agency"),
+    `def plain(call, block) {
+  return block()
+}
+@plain
+def f(): string {
+  return "x"
+}
+`,
+  );
+  const tcDecorator = stripAnsi(
+    runAgency("28b-tc-decorator-once", ["tc", "tc-decorator/plain.agency"], {
+      expectedStatus: 1,
+      combined: true,
+    }),
+  );
+  assert(
+    (tcDecorator.match(/'plain' is not a decorator/g) || []).length === 1,
+    "tc should print a decorator mistake once, not from the stage and the checker both",
+  );
+  assert(
+    !tcDecorator.includes("No type errors found."),
+    "tc should not report success under a decorator mistake",
+  );
+
   // tc: directories and '-' stdin (#438)
   const tcDir = join(dir, "tc-clean");
   mkdirSync(tcDir, { recursive: true });

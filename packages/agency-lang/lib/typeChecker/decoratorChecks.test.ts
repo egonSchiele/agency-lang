@@ -45,6 +45,20 @@ describe("decorators in the checker", () => {
     expect(errors.map((e) => [e.code, e.loc?.line])).toEqual([["AG6043", 0]]);
   });
 
+  it("reports AG6045, and not AG6039, at a def that is a decorator in all but the keyword", () => {
+    const src =
+      "def logged(tag: string | null = null, call: Call, block: () -> any): any {\n" +
+      "  return block()\n}\n";
+    const errors = typecheckSource(src).filter((e) => e.severity === "error");
+    expect(errors.map((e) => [e.code, e.loc?.line])).toEqual([["AG6045", 0]]);
+  });
+
+  it("accepts a record slot typed with an alias of Call", () => {
+    const aliased =
+      "type Ctx = Call\ndecorator def d(call: Ctx, block: () -> any): any { return block() }\n";
+    expect(typecheckSource(aliased).filter((e) => e.severity === "error")).toEqual([]);
+  });
+
   it("types untyped slots so the body checks: call.name is a string and block() is allowed", () => {
     const src =
       "decorator def d(call, block) {\n  const n: string = call.name\n  return block()\n}\n";
@@ -234,6 +248,27 @@ describe("a typo in a decorator name", () => {
     expect(prepared.diagnostics.map((found) => found.stage)).toEqual(["decorators"]);
     const errors = typeCheck(prepared.program, {}, prepared.info).errors;
     expect(withCode(errors, "undefinedFunction")).toEqual([]);
+  });
+
+  it("refuses a record slot typed with a Call the file redefined, from the stage and as AG6043", () => {
+    // The decorator would be typed against a record it never receives.
+    const src =
+      "type Call = { foo: number }\n" +
+      "decorator def d(call: Call, block: () -> any): any {\n  return block()\n}\n";
+    const file = path.join(dir, "redefined.agency");
+    fs.writeFileSync(file, src);
+    const prepared = prepareProgram(src, file, {}, { keepGoing: true });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    expect(
+      prepared.diagnostics.map((found) =>
+        found.stage === "decorators" ? found.message : found.stage,
+      ),
+    ).toEqual([expect.stringContaining("its type must be `Call` or left off")]);
+    const errors = typeCheck(prepared.program, {}, prepared.info).errors;
+    expect(errors.filter((error) => error.severity === "error").map((error) => error.code)).toEqual(
+      ["AG6043"],
+    );
   });
 
   it("reports a wrong-shape decorator from the stage and as AG6043, and nothing else", () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
+import { buildCompilationUnit } from "../compilationUnit.js";
 import type { AgencyProgram, Assignment } from "../types.js";
 import type { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import type { ReturnStatement } from "../types/returnStatement.js";
@@ -465,6 +466,30 @@ describe("decoratorProblems", () => {
       "'bad' is declared as a decorator, but a decorator takes at least two parameters: the call record and the body as a block.",
     ]);
     expect(problems[0].loc).toEqual(program.nodes[0].loc);
+  });
+
+  it("reports a def that is a decorator in all but the keyword, at the def", () => {
+    const program = parse(
+      `def logged(tag: string | null = null, call: Call, block: () -> any): any { return block() }\n`,
+    );
+    const withLogged = { ...scope, functionDefinitions: { logged: defNamed(program, "logged") } };
+    const problems = decoratorProblems(program, withLogged);
+    expect(problems.map((problem) => problem.message)).toEqual([
+      "'logged' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def logged(...)`, or put the defaulted parameter last.",
+    ]);
+    expect(problems[0].loc).toEqual(defNamed(program, "logged").loc);
+  });
+
+  it("accepts a record slot typed with an alias of Call when it can see the aliases", () => {
+    const program = parse(
+      `type Ctx = Call\ndecorator def d(call: Ctx, block: () -> any): any { return block() }\n`,
+    );
+    const withD = { ...scope, functionDefinitions: { d: defNamed(program, "d") } };
+    expect(decoratorProblems(program, withD).map((problem) => problem.message)).toEqual([
+      "'d' is declared as a decorator, but 'call' receives the call record, so its type must be `Call` or left off.",
+    ]);
+    const unit = buildCompilationUnit(program);
+    expect(decoratorProblems(program, { ...withD, typeAliases: unit.typeAliases })).toEqual([]);
   });
 
   it("refuses a default on call or the block", () => {

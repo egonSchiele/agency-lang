@@ -71,12 +71,22 @@ export function isDecoratorDef(def: Decoratable): boolean {
  *  and the body as a block, the last two. */
 export const DECORATOR_SLOT_COUNT = 2;
 
-const RECORD_SLOT_TYPE: VariableType = { type: "typeAliasVariable", aliasName: "Call" };
-const BLOCK_SLOT_TYPE: VariableType = {
-  type: "blockType",
-  params: [{ name: "args", typeAnnotation: { type: "primitiveType", value: "object" } }],
-  returnType: { type: "primitiveType", value: "any" },
-};
+/** The record slot's type, `Call`. A fresh node each time: a type hint is
+ *  spliced into a def's parameters, and a pass that annotates a hint in
+ *  place must not write through to every decorator in the program. */
+function recordSlotType(): VariableType {
+  return { type: "typeAliasVariable", aliasName: "Call" };
+}
+
+/** The block slot's type, `(args: object) -> any`. Fresh for the same
+ *  reason as `recordSlotType`. */
+function blockSlotType(): VariableType {
+  return {
+    type: "blockType",
+    params: [{ name: "args", typeAnnotation: { type: "primitiveType", value: "object" } }],
+    returnType: { type: "primitiveType", value: "any" },
+  };
+}
 
 /** The name of the parameter that receives the call record: the
  *  second-to-last. `call` when there is no such slot, so a lowering over a
@@ -87,11 +97,14 @@ export function recordSlotName(parameters: FunctionParameter[]): string {
 
 /** A decorator's parameters as the compiler sees them: an untyped record
  *  slot is `Call` and an untyped block slot is `(args: object) -> any`. A
- *  written type is kept. A plain def's parameters come back as they are.
+ *  written type is kept. A plain def's parameters, and a decorator's that
+ *  are too few to hold both slots (AG6043 says so), come back as they are.
  *  Never mutates: the parse tree the formatter prints keeps the user's
- *  text. */
+ *  text. The symbol table stores the result for every def, and
+ *  `desugarDecorators` puts it on the def itself, so every reader of a
+ *  decorator's signature sees the same filled slots. */
 export function withDecoratorTypes(def: Decoratable): FunctionParameter[] {
-  if (!isDecoratorDef(def)) {
+  if (!isDecoratorDef(def) || def.parameters.length < DECORATOR_SLOT_COUNT) {
     return def.parameters;
   }
   const recordIndex = def.parameters.length - DECORATOR_SLOT_COUNT;
@@ -101,29 +114,66 @@ export function withDecoratorTypes(def: Decoratable): FunctionParameter[] {
       return parameter;
     }
     if (index === recordIndex) {
-      return { ...parameter, typeHint: RECORD_SLOT_TYPE };
+      return { ...parameter, typeHint: recordSlotType() };
     }
     if (index === blockIndex) {
-      return { ...parameter, typeHint: BLOCK_SLOT_TYPE };
+      return { ...parameter, typeHint: blockSlotType() };
     }
     return parameter;
   });
 }
 
-function isRecordSlotType(hint: VariableType | undefined): boolean {
-  return (
-    hint === undefined ||
-    (hint.type === "typeAliasVariable" && hint.aliasName === "Call") ||
-    (hint.type === "primitiveType" && hint.value === "any")
-  );
+/** The body an alias name stands for, or undefined when the name is not
+ *  an alias the caller can see. The checker passes its visible aliases; a
+ *  caller with none passes nothing, and only the name `Call` is accepted. */
+export type AliasResolver = (name: string) => VariableType | undefined;
+
+const NO_ALIASES: AliasResolver = () => undefined;
+
+/** The record a decorator receives, as its type is written in the prelude
+ *  (`stdlib/index.agency`). The record slot's written type must resolve to
+ *  this, so a file that redefines `Call` is refused: the decorator would
+ *  be typed against a record it never receives. */
+const CALL_RECORD_TYPE = "{ name: string, args: object }";
+
+/** Whether `hint` is a type the record slot may carry: left off, `any`,
+ *  the prelude's `Call`, or an alias of it (`type Ctx = Call`). Aliases
+ *  are followed through `resolve`; an alias it cannot see is accepted only
+ *  when it is named `Call`, because a program checked with no prelude
+ *  loaded has nothing to resolve the name to. */
+function isRecordSlotType(hint: VariableType | undefined, resolve: AliasResolver): boolean {
+  if (hint === undefined) {
+    return true;
+  }
+  const seen: string[] = [];
+  let current = hint;
+  while (current.type === "typeAliasVariable") {
+    if (seen.includes(current.aliasName)) {
+      return false;
+    }
+    seen.push(current.aliasName);
+    const body = resolve(current.aliasName);
+    if (body === undefined) {
+      return current.aliasName === "Call";
+    }
+    current = body;
+  }
+  if (current.type === "primitiveType" && current.value === "any") {
+    return true;
+  }
+  return formatTypeHint(current) === CALL_RECORD_TYPE;
 }
 
 /** What is wrong with a decorator's parameters, as the clause after
  *  "'d' is declared as a decorator, but ", or null when they are in shape:
  *  at least two, the last takes a block, the second-to-last is untyped or
  *  `Call` or `any`, and neither of the two has a default or is variadic.
- *  Names are free. */
-export function decoratorShapeProblem(parameters: FunctionParameter[]): string | null {
+ *  Names are free. `resolve` answers what an alias on the record slot
+ *  stands for (see `isRecordSlotType`). */
+export function decoratorShapeProblem(
+  parameters: FunctionParameter[],
+  resolve: AliasResolver = NO_ALIASES,
+): string | null {
   if (parameters.length < DECORATOR_SLOT_COUNT) {
     return "a decorator takes at least two parameters: the call record and the body as a block.";
   }
@@ -132,7 +182,7 @@ export function decoratorShapeProblem(parameters: FunctionParameter[]): string |
     const written = blockSlot.typeHint ? `: ${formatTypeHint(blockSlot.typeHint)}` : "";
     return `its last parameter must take the body as a block, such as \`block: (args: object) -> any\`. Found '${blockSlot.name}${written}'.`;
   }
-  if (!isRecordSlotType(recordSlot.typeHint)) {
+  if (!isRecordSlotType(recordSlot.typeHint, resolve)) {
     return `'${recordSlot.name}' receives the call record, so its type must be \`Call\` or left off.`;
   }
   const defaulted = [recordSlot, blockSlot].find((slot) => slot.defaultValue !== undefined);
@@ -147,10 +197,63 @@ export function decoratorShapeProblem(parameters: FunctionParameter[]): string |
 }
 
 /** The parameters a caller writes: all of them, or all but the trailing
- *  slots the compiler supplies when `def` is a decorator. The parser's
- *  ordering check and AG6039 go through this. */
+ *  slots the compiler supplies when `def` is a decorator. AG6039 goes
+ *  through this. */
 export function callerSuppliedParameters(def: Decoratable): FunctionParameter[] {
   return isDecoratorDef(def) ? def.parameters.slice(0, -DECORATOR_SLOT_COUNT) : def.parameters;
+}
+
+/** The first parameter without a default that comes after one with a
+ *  default, or null when defaults are last. Variadic parameters never
+ *  count: `...rest` after a default is fine. Arguments bind positionally,
+ *  so an omitted argument can only ever be a trailing one; this is the
+ *  rule the parser enforces and AG6039 reports. */
+export function requiredParameterAfterDefault(
+  parameters: FunctionParameter[],
+): FunctionParameter | null {
+  let seenDefault = false;
+  for (const parameter of parameters) {
+    if (parameter.variadic) {
+      continue;
+    }
+    if (parameter.defaultValue !== undefined) {
+      seenDefault = true;
+    } else if (seenDefault) {
+      return parameter;
+    }
+  }
+  return null;
+}
+
+/** Whether a plain def is a decorator missing its keyword: its parameters
+ *  are in a decorator's shape, and they break the default-order rule only
+ *  because the two trailing slots follow a defaulted parameter, which is
+ *  exactly what `decorator def` allows. `def logged(tag: string | null =
+ *  null, call: Call, block: () -> any)` is one. The parser lets such a def
+ *  through so the decorator stage can say which keyword is missing
+ *  (AG6045) instead of failing the parse with a message about parameter
+ *  order. */
+export function isDecoratorMissingKeyword(def: Decoratable): boolean {
+  if (isDecoratorDef(def)) {
+    return false;
+  }
+  const ownParameters = def.parameters.slice(0, -DECORATOR_SLOT_COUNT);
+  return (
+    requiredParameterAfterDefault(def.parameters) !== null &&
+    requiredParameterAfterDefault(ownParameters) === null &&
+    decoratorShapeProblem(def.parameters) === null
+  );
+}
+
+/** The parameters the default-order rule is checked over: the caller's
+ *  own, treating a decorator missing its keyword as the decorator it is so
+ *  AG6045 is the one error it gets. The parser's check and AG6039 both
+ *  go through this. */
+export function orderCheckedParameters(def: Decoratable): FunctionParameter[] {
+  if (isDecoratorMissingKeyword(def)) {
+    return def.parameters.slice(0, -DECORATOR_SLOT_COUNT);
+  }
+  return callerSuppliedParameters(def);
 }
 
 export const VALID_CALLBACK_NAMES = [

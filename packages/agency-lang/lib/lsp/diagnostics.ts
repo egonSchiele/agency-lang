@@ -17,6 +17,7 @@ import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { EDITOR_WALL_CLOCK_MS } from "../compiler/splice/runGenerator.js";
 import { prepareProgram, type PipelineDiagnostic } from "../compiler/prepareProgram.js";
+import { repeatsDecoratorStage } from "../preprocessors/decoratorDesugar.js";
 import { ImportResolutionError } from "../importResolutionError.js";
 import { toTypeCheckError } from "../compiler/splice/report.js";
 
@@ -124,13 +125,12 @@ export function runDiagnostics(
 
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);
 
-  // The decorator stage already reported a decorator in the wrong shape and
-  // a tag on a plain def; the checker's AG6043 and AG6044 for them would be
-  // the same errors twice.
+  // The decorator stage already reported a decorator in the wrong shape, a
+  // tag on a plain def, and a decorator missing its keyword; the checker's
+  // copies of them would be the same errors twice.
   const stageReported = prepared.diagnostics.some((found) => found.stage === "decorators");
-  const repeatsTheStage = (name: string) => name === "decoratorShape" || name === "notADecorator";
   for (const err of errors) {
-    if (stageReported && repeatsTheStage(err.name)) continue;
+    if (stageReported && repeatsDecoratorStage(err.name)) continue;
     const range = err.loc
       ? {
           start: { line: err.loc.line, character: err.loc.col },

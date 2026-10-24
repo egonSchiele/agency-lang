@@ -167,6 +167,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6042](tools.md#ag6042) | '&#123;name&#125;' is an alias of parameter '&#123;param&#125;' of '&#123;fn&#125;'. In Agency code, use '&#123;param&#125;'. |
 | [AG6043](tools.md#ag6043) | '&#123;name&#125;' is declared as a decorator, but &#123;problem&#125; |
 | [AG6044](tools.md#ag6044) | '&#123;name&#125;' is not a decorator, so '@&#123;name&#125;' cannot go on '&#123;target&#125;'. Declare it as `decorator def &#123;name&#125;(...)`. |
+| [AG6045](tools.md#ag6045) | '&#123;name&#125;' has a decorator's parameters but is not declared as one: a parameter with a default comes before its last two, which only the call record and the block may follow. Declare it as `decorator def &#123;name&#125;(...)`, or put the defaulted parameter last. |
 
 ## Static init, config, and imports
 

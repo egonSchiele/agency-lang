@@ -38,6 +38,21 @@ def add(a: number, b: number) {
     expect(add.parameters).toHaveLength(2);
   });
 
+  it("types a decorator's untyped slots, so an import or a hover shows what the checker uses", () => {
+    const symbols = parseAndClassify(`
+decorator def logged(tag: string, call, block) {
+  return block()
+}
+`);
+    const logged = symbols.logged;
+    if (logged.kind !== "function") throw new Error("expected function");
+    expect(logged.parameters.map((p) => p.typeHint?.type)).toEqual([
+      "primitiveType",
+      "typeAliasVariable",
+      "blockType",
+    ]);
+  });
+
   it("classifies type aliases", () => {
     const symbols = parseAndClassify(`
 type Greeting = string

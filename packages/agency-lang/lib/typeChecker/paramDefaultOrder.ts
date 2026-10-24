@@ -1,4 +1,4 @@
-import { callerSuppliedParameters } from "../types/function.js";
+import { orderCheckedParameters } from "../types/function.js";
 import { declaredName } from "../types/hole.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
@@ -19,9 +19,10 @@ export function checkParamDefaultOrder(ctx: TypeCheckerContext): void {
     const fn =
       node.type === "function" ? declaredName(node.functionName) : declaredName(node.nodeName);
     // A decorator's trailing `call` and block are supplied by the compiler,
-    // so they may follow a defaulted parameter.
+    // so they may follow a defaulted parameter. A def that is a decorator
+    // in all but the keyword gets AG6045 from checkDecoratorDefs instead.
     const checked =
-      node.type === "function" ? callerSuppliedParameters(node) : (node.parameters ?? []);
+      node.type === "function" ? orderCheckedParameters(node) : (node.parameters ?? []);
     let sawDefault = false;
     for (const param of checked) {
       if (param.defaultValue) {

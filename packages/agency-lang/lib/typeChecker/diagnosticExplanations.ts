@@ -817,6 +817,12 @@ Only a def that says \`decorator\` can be used as a tag, whatever its parameters
 
 **How to fix:** write \`decorator def logged(tag: string, call, block)\` on the def the tag names, or remove the tag.`,
 
+  decoratorMissingKeyword: `A plain def has a decorator's parameters and breaks the parameter-order rule in the one way a decorator is allowed to.
+
+A parameter without a default may not follow one with a default, because arguments bind by position and an omitted argument can only be a trailing one. A decorator is the exception: its last two parameters, the call record and the block, are filled in by the compiler on every call, so they may come after a default. \`def logged(tag: string | null = null, call: Call, block: () -> any)\` has exactly that shape, which means it was almost certainly meant to be a decorator and is missing the keyword. Without the keyword it is a plain def, and a plain def with these parameters cannot be called correctly.
+
+**How to fix:** write \`decorator def logged(tag: string | null = null, call, block)\` if it is a decorator. If it is an ordinary function, move the defaulted parameter after the others.`,
+
   decoratorArgType: `An argument written in a decorator tag does not fit the decorator's parameter.
 
 A tag such as \`@budgeted(cost: "x")\` is a call to \`budgeted\` with the decorated function's body as its block, so its arguments are checked against the decorator's parameters like any call's. This is the decorator form of AG6019.

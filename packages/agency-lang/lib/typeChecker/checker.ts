@@ -35,7 +35,7 @@ import {
   decoratorShapeProblem,
   lastParameterTakesBlock,
 } from "../types/function.js";
-import { decoratorLookup, tagProblem } from "../preprocessors/decoratorDesugar.js";
+import { aliasResolver, decoratorLookup, tagProblem } from "../preprocessors/decoratorDesugar.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 import { draftTarget, mismatchEntry } from "./mismatch.js";
 
@@ -329,8 +329,9 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
     if (call.decorator !== undefined) {
       const signature = decoratorLookup(ctx.functionDefs, ctx.importedFunctions)(call.functionName);
       if (signature === undefined) return;
-      const found = tagProblem(signature);
-      if (found === null && decoratorShapeProblem(signature.parameters) !== null) return;
+      const resolve = aliasResolver(ctx.scopedTypeAliases.visibleIn(ctx.currentScopeKey));
+      const found = tagProblem(signature, resolve);
+      if (found === null && decoratorShapeProblem(signature.parameters, resolve) !== null) return;
       if (found !== null) {
         const { name, target } = call.decorator;
         const loc = call.loc ?? null;

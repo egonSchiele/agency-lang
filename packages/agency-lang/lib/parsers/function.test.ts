@@ -2220,6 +2220,25 @@ describe("functionParser with destructive/idempotent markers", () => {
     }
   });
 
+  it("parses a def that is a decorator in all but the keyword, for AG6045 to report", () => {
+    // Failing the parse here would hide the hint to add the keyword.
+    const parsed = functionParser(
+      "def logged(tag: string | null = null, call: Call, block: () -> any) { return block() }",
+    );
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result.markers).toBeUndefined();
+    }
+  });
+
+  it("still refuses a required parameter after a default on a plain def", () => {
+    const parsed = functionParser("def f(a: number = 1, b: string) { return b }");
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.message).toContain("Required parameter 'b' cannot follow optional parameter");
+    }
+  });
+
   it("parses handoff def", () => {
     const parsed = functionParser("handoff def explorer(q: string): string { return q }");
     expect(parsed.success).toBe(true);

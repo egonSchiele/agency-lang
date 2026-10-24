@@ -5,8 +5,12 @@ import {
   callerSuppliedParameters,
   decoratorShapeProblem,
   isDecoratorDef,
+  isDecoratorMissingKeyword,
+  orderCheckedParameters,
   recordSlotName,
+  requiredParameterAfterDefault,
   withDecoratorTypes,
+  type AliasResolver,
   type Decoratable,
   type FunctionParameter,
 } from "./function.js";
@@ -69,6 +73,31 @@ describe("decoratorShapeProblem", () => {
     expect(decoratorShapeProblem([anyCall, blockParam()])).toBeNull();
   });
 
+  it("follows an alias to Call, and refuses a Call that is not the prelude's", () => {
+    const aliases: Record<string, string> = {
+      Ctx: "Call",
+      Twice: "Ctx",
+      Call: "{ name: string, args: object }",
+    };
+    const resolve: AliasResolver = (name) =>
+      aliases[name] === undefined ? undefined : typeOf(aliases[name]);
+    const slot = (type: string) => [param("call", { typeHint: typeOf(type) }), blockParam()];
+    expect(decoratorShapeProblem(slot("Ctx"), resolve)).toBeNull();
+    expect(decoratorShapeProblem(slot("Twice"), resolve)).toBeNull();
+    expect(decoratorShapeProblem(slot("Call"), resolve)).toBeNull();
+    expect(decoratorShapeProblem(slot("{ name: string, args: object }"), resolve)).toBeNull();
+    // Without a resolver only the name is known, and `Call` is the prelude's.
+    expect(decoratorShapeProblem(slot("Call"))).toBeNull();
+    expect(decoratorShapeProblem(slot("Ctx"))).toContain("must be `Call` or left off");
+    // A file that redefines Call types the slot against a record it never gets.
+    const redefined: AliasResolver = (name) =>
+      name === "Call" ? typeOf("{ foo: number }") : undefined;
+    expect(decoratorShapeProblem(slot("Call"), redefined)).toContain("must be `Call`");
+    // An alias loop is not Call.
+    const loop: AliasResolver = (name) => typeOf(name === "A" ? "B" : "A");
+    expect(decoratorShapeProblem(slot("A"), loop)).toContain("must be `Call`");
+  });
+
   it("needs two parameters", () => {
     expect(decoratorShapeProblem([blockParam()])).toBe(
       "a decorator takes at least two parameters: the call record and the body as a block.",
@@ -123,6 +152,21 @@ describe("withDecoratorTypes", () => {
     expect(block.typeHint).toEqual(typeOf("() -> string"));
   });
 
+  it("leaves a decorator with fewer than two parameters alone", () => {
+    const input = [param("block")];
+    expect(withDecoratorTypes(decorator(input))).toBe(input);
+    expect(input[0].typeHint).toBeUndefined();
+  });
+
+  it("builds a fresh type node for every slot it fills", () => {
+    // The hints are spliced into defs across the program; a pass that
+    // annotates one in place must not reach every decorator.
+    const [first] = withDecoratorTypes(decorator([param("call"), param("block")]));
+    const [second] = withDecoratorTypes(decorator([param("call"), param("block")]));
+    expect(first.typeHint).toEqual(second.typeHint);
+    expect(first.typeHint).not.toBe(second.typeHint);
+  });
+
   it("leaves a plain def alone and never mutates", () => {
     const input = [param("call"), param("block")];
     expect(withDecoratorTypes({ parameters: input })).toBe(input);
@@ -137,6 +181,53 @@ describe("callerSuppliedParameters", () => {
     const parameters = [param("a"), param("call"), blockParam()];
     expect(callerSuppliedParameters(decorator(parameters)).map((p) => p.name)).toEqual(["a"]);
     expect(callerSuppliedParameters({ parameters }).map((p) => p.name)).toEqual([
+      "a",
+      "call",
+      "block",
+    ]);
+  });
+});
+
+describe("requiredParameterAfterDefault", () => {
+  const defaulted = (name: string) => param(name, { defaultValue: { type: "null" } as never });
+
+  it("is the first parameter without a default after one with a default", () => {
+    expect(requiredParameterAfterDefault([param("a"), defaulted("b")])).toBeNull();
+    expect(requiredParameterAfterDefault([defaulted("a"), param("b"), param("c")])?.name).toBe("b");
+  });
+
+  it("lets a variadic parameter follow a default", () => {
+    const rest = param("rest", { variadic: true });
+    expect(requiredParameterAfterDefault([defaulted("a"), rest])).toBeNull();
+  });
+});
+
+describe("isDecoratorMissingKeyword", () => {
+  const defaulted = (name: string) => param(name, { defaultValue: { type: "null" } as never });
+  const shaped = [defaulted("tag"), param("call", { typeHint: typeOf("Call") }), blockParam()];
+
+  it("is a plain def whose only order problem is the two trailing slots", () => {
+    expect(isDecoratorMissingKeyword({ parameters: shaped })).toBe(true);
+  });
+
+  it("is not a declared decorator, a def whose own parameters are out of order, or a def in the wrong shape", () => {
+    expect(isDecoratorMissingKeyword(decorator(shaped))).toBe(false);
+    expect(isDecoratorMissingKeyword({ parameters: [defaulted("a"), param("b"), ...shaped] })).toBe(
+      false,
+    );
+    const notABlock = param("last", { typeHint: typeOf("string") });
+    expect(isDecoratorMissingKeyword({ parameters: [defaulted("a"), param("b"), notABlock] })).toBe(
+      false,
+    );
+    // Defaults last is fine on any def.
+    expect(isDecoratorMissingKeyword({ parameters: [param("call"), blockParam()] })).toBe(false);
+  });
+
+  it("is what the order check leaves out", () => {
+    expect(orderCheckedParameters({ parameters: shaped }).map((p) => p.name)).toEqual(["tag"]);
+    expect(orderCheckedParameters(decorator(shaped)).map((p) => p.name)).toEqual(["tag"]);
+    const plain = [param("a"), param("call"), blockParam()];
+    expect(orderCheckedParameters({ parameters: plain }).map((p) => p.name)).toEqual([
       "a",
       "call",
       "block",

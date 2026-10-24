@@ -180,7 +180,7 @@ Safety guards that stop a program from running away.
 | Option | Description |
 | --- | --- |
 | `maxCallDepth` | The runaway-recursion guard. Default `2048`; raise it for legitimately deep recursion. |
-| `maxToolCallRounds` | How many times the LLM can loop between calling tools and reacting to their output before Agency halts it. Default `10`. |
+| `maxToolCallRounds` | How many times the LLM can loop between calling tools and reacting to their output. Default `10`. At the cap, the pending tool calls are refused with a message telling the model to answer, and later requests offer no tools. A call's own `llm(..., { maxToolCallRounds })` and a `setLlmOptions` default from `std::llm` both override it; when both are set, the smaller wins. |
 | `checkpoints.maxRestores` | Cap on how often one checkpoint can be restored before it errors out. Default `100`. |
 
 ## Testing and coverage

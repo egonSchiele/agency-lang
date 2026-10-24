@@ -61,6 +61,9 @@ import {
   runnableHandoffs,
   repeatKey,
   resetRepeat,
+  configOffered,
+  roundCap,
+  toolsOffered,
   type GateState,
   type GateVerdict,
   type RepeatStreak,
@@ -586,6 +589,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   assertUniqueToolNames(tools);
   warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
+  // At the round cap a request offers only the intrinsic tools and no
+  // hosted ones (toolsOffered, configOffered). Both read the frame's
+  // counter, so a resumed pass offers what the first pass offered.
+  const atRoundCap = () => self.toolCallRound >= roundLimit;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing
   // to smoltalk. `tools` is consumed above. `memory` is a runtime directive
@@ -599,6 +606,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
     maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
+    maxToolCallRounds: ccMaxToolCallRounds,
     retries: ccRetries,
     timeout: ccTimeout,
     backoff: ccBackoff,
@@ -614,6 +622,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       replyLimits?: ReplyLimits;
       maxToolResultChars?: number;
       maxRepeatedToolCalls?: number;
+      maxToolCallRounds?: number;
       label?: string;
     };
 
@@ -655,10 +664,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   } = stackDefaults;
   const maxRepeatedToolCalls =
     ccMaxRepeatedToolCalls ?? stackMaxRepeatedToolCalls ?? DEFAULT_MAX_REPEATED_TOOL_CALLS;
-  // maxToolCallRounds precedence: a branch default (setLlmOptions) overrides the
-  // baked per-call value (agency.json → codegen literal, default 10). Kept out
-  // of stackSmolDefaults above — it isn't a smoltalk config field.
-  const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
+  // maxToolCallRounds is kept out of stackSmolDefaults above: not a
+  // smoltalk field. See roundCap for how the three sources combine.
+  const roundLimit = roundCap(ccMaxToolCallRounds, stackMaxToolCallRounds, maxToolCallRounds);
   // A local model gets the choices a hosted provider makes on its own
   // (the temperature, and how the thinking option reaches the server).
   // The reply limits combine field by field across the branch default and
@@ -892,10 +900,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         const result = await _runPrompt({
           run,
           messages,
-          tools: tools || [],
+          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
           prompt,
           responseFormat,
-          clientConfig,
+          clientConfig: configOffered(clientConfig, atRoundCap()),
           stateStack,
           retryPolicy,
           callLabel,
@@ -1412,7 +1420,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           rejectedCalls,
           repeatStreak,
           toolCallRound: self.toolCallRound,
-          maxToolCallRounds: effectiveMaxToolCallRounds,
+          maxToolCallRounds: roundLimit,
           maxRepeatedToolCalls,
         });
         await pr.step(`round.${round}.runnableHandoffs`, async () => {
@@ -1855,10 +1863,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           const nextResult = await _runPrompt({
             run,
             messages,
-            tools: tools || [],
+            tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
             prompt,
             responseFormat,
-            clientConfig,
+            clientConfig: configOffered(clientConfig, atRoundCap()),
             stateStack,
             retryPolicy,
             callLabel,
@@ -1959,10 +1967,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         const nextResult = await _runPrompt({
           run,
           messages,
-          tools: tools || [],
+          tools: toolsOffered(tools, exposedFunctions, atRoundCap()),
           prompt,
           responseFormat,
-          clientConfig,
+          clientConfig: configOffered(clientConfig, atRoundCap()),
           stateStack,
           retryPolicy,
           callLabel,

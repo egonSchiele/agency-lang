@@ -85,6 +85,11 @@ export class State {
    *  it names, since a loop can bring the same key and id round again as
    *  a fresh statement. A rewind sets none: it replays the statement. */
   restoredCounters?: Record<string, number>;
+  /** Live-only: the decorator depths whose block is running on this
+   *  frame, kept by `__rebindParameters` and `__releaseRebind`
+   *  (lib/runtime/rebind.ts) so a second concurrent call to a decorator's
+   *  block is refused instead of crossing arguments. */
+  rebinding?: number[];
   private branches?: Record<string, BranchState>;
   private deletedBranches?: Set<string>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;

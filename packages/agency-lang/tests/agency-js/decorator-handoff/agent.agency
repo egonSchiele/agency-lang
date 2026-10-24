@@ -5,7 +5,7 @@ let trace: string[] = []
 
 def logged(call: Call, block: () -> any): any {
   trace = [...trace, "enter:${call.name}:${call.args.question}"]
-  const result = block()
+  const result = block(call.args)
   trace = [...trace, "leave:${call.name}"]
   return result
 }

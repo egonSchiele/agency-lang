@@ -1,0 +1,18 @@
+// block() on a function with a parameter that has no default fails the way a
+// call that leaves the argument out fails, and the body does not run.
+def bare(call: Call, block: (args: object) -> any): any {
+  return block()
+}
+
+@bare
+def f(a: number): Result<number> {
+  return success(a)
+}
+
+node main() {
+  const r = f(1)
+  if (isFailure(r)) {
+    return r.error
+  }
+  return "unexpected"
+}

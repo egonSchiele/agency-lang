@@ -21,7 +21,7 @@ import {
 import { BlockArgument } from "@/types/blockArgument.js";
 import { EffectDeclaration } from "@/types/effectDeclaration.js";
 import { BlockType } from "@/types/typeHints.js";
-import { FunctionParameter } from "@/types/function.js";
+import { FunctionParameter, isBlockParameter } from "@/types/function.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
@@ -293,7 +293,7 @@ export class TypescriptPreprocessor {
     const fnDef = this.functionDefinitions[functionName];
     const params = fnDef?.parameters ?? this.importedFunctions[functionName]?.parameters;
     if (!params) return null;
-    const blockParam = params.find((p) => p.typeHint?.type === "blockType");
+    const blockParam = params.find(isBlockParameter);
     return (blockParam?.typeHint as BlockType) ?? null;
   }
 

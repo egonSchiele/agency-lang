@@ -2,9 +2,9 @@
 // is typed `any` so one `logged` fits a function of any return type.
 let log: string[] = []
 
-def logged(block: () -> any): any {
+def logged(call: Call, block: () -> any): any {
   log = [...log, "before"]
-  let result = block()
+  let result = block(call.args)
   log = [...log, "after"]
   return result
 }

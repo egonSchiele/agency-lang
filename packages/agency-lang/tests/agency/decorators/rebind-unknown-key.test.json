@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Unknown named argument 'bogus' in call to 'f'. Valid names: a.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "an unknown key in the record is the call's unknown-named-argument failure"
+    }
+  ]
+}

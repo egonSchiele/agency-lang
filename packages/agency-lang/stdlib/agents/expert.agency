@@ -18,7 +18,7 @@ import { hostedSearchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const skills = agentSkill("expert")
@@ -66,7 +66,7 @@ def consult(
   )
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export def expertAgent(
   task: string,
   context: string = "",

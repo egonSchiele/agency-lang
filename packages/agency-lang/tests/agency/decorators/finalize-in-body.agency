@@ -1,9 +1,9 @@
 // A budgeting decorator over guard. The guard trips (the test rejects the
 // budget interrupt), and the body's finalize provides the draft that comes
 // back through the decorator's Result.
-def budgeted(call: Call, cost: number, block: () -> any): Result<string> {
+def budgeted(cost: number, call: Call, block: () -> any): Result<string> {
   return guard(cost: cost, label: call.name) {
-    return block()
+    return block(call.args)
   }
 }
 

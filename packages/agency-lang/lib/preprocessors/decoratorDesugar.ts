@@ -1,12 +1,13 @@
-import type { AgencyNode, AgencyProgram, Expression, SourceLocation } from "@/types.js";
-import type { AgencyObject, AgencyObjectKV } from "@/types/dataStructures.js";
+import type { AgencyNode, AgencyProgram, Assignment, Expression, SourceLocation } from "@/types.js";
+import type { AgencyObject, AgencyObjectKV, NamedArgument } from "@/types/dataStructures.js";
 import type {
   DecoratorOrigin,
   FunctionCall,
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
-import { lastParameterTakesBlock } from "@/types/function.js";
+import { decoratorShapeProblem, isBlockParameter } from "@/types/function.js";
+import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
 import type { Tag } from "@/types/tag.js";
@@ -25,19 +26,28 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  * becomes
  *
  *     def research(task: string, maxCost: number): Result<string> {
- *       return budgeted({ name: "research", args: { task: task, maxCost: maxCost } }, cost: maxCost) {
+ *       const __call_0 = { name: "research", args: { task: task, maxCost: maxCost } }
+ *       return budgeted(cost: maxCost, call: __call_0) {
+ *         <rebindParameters>
  *         BODY
  *       }
  *     }
  *
- * The `call` record is passed only when the decorator's first parameter is
- * named `call`. Stacked tags nest, outermost first: `@a @b def f` becomes
- * `a(...) { return b(...) { BODY } }`.
+ * The tag's own arguments come first, as written; the `call` record is
+ * passed by name after them, so it never competes with a positional tag
+ * argument for a slot. The record is built in its own statement, so it is
+ * its own step: a resume re-runs the step that calls the decorator, and
+ * rebuilding the record there would read parameters the decorator has
+ * since rebound. The block takes one parameter, `__args`, the record a
+ * decorator may call it with, and starts with a `rebindParameters`
+ * statement that stores the def's parameters from it (lib/runtime/rebind.ts).
+ * Stacked tags nest, outermost first: `@a @b def f` becomes
+ * `const __call_0 = ...; return a(...) { rebind; const __call_1 = ...; return b(...) { rebind; BODY } }`.
  *
  * MUTATES IN PLACE, for the reason guardDesugar.ts gives: the compilation
  * unit built before the TypeChecker constructor runs already holds the def
  * objects, so a copying rewrite would leave it pointing at undecorated
- * bodies. The innermost block reuses the def's own body array, so no
+ * bodies. The innermost block holds the def's own statement objects, so no
  * reference into the body goes stale either. Idempotent: the tags move from
  * `def.tags` and the top-level list onto `def.decorators`, and a second run
  * finds nothing above or on the def.
@@ -47,8 +57,8 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  * its answer. The desugar lowers the tag whatever the name resolves to.
  */
 
-/** What the lowering needs to know about a decorator: its parameters (to
- *  see whether the first is `call`) and whether it is imported (so the call
+/** What the lowering and the checks need to know about a decorator: its
+ *  parameters (for the shape check) and whether it is imported (so the call
  *  carries the scope the resolver expects). */
 export type DecoratorSignature = { parameters: FunctionParameter[]; imported: boolean };
 export type DecoratorLookup = (name: string) => DecoratorSignature | undefined;
@@ -89,10 +99,10 @@ export function decoratorsAbove(nodes: AgencyNode[]): DecoratedDef[] {
     .filter((entry) => entry.tags.length > 0);
 }
 
-/** The body a decorated def gets: one `return` of the outermost decorator
- *  call, each call holding the next as the only statement of its block, and
- *  the def's original body array as the innermost block. Pure: the def is
- *  read, never written. */
+/** The body a decorated def gets: the outermost decorator's record and one
+ *  `return` of its call; each block starting with the rebind, then the next
+ *  decorator's record and call; and the def's original statements after
+ *  the rebind in the innermost block. Pure: the def is read, never written. */
 export function loweredBody(
   def: FunctionDefinition,
   tags: Tag[],
@@ -100,10 +110,14 @@ export function loweredBody(
 ): AgencyNode[] {
   const target = declaredName(def.functionName);
   const innermostFirst = [...tags].reverse();
-  const outermost = innermostFirst.reduce<AgencyNode[]>(
-    (body, tag) => [returning(decoratorCall(tag, target, def.parameters, body, lookup), tag.loc)],
-    def.body,
-  );
+  const outermost = innermostFirst.reduce<AgencyNode[]>((body, tag, index) => {
+    const depth = innermostFirst.length - 1 - index;
+    const recordName = `${RECORD_LOCAL}${depth}`;
+    return [
+      recordDeclaration(recordName, target, def.parameters, tag.loc),
+      returning(decoratorCall(tag, target, depth, def.parameters, body, lookup), tag.loc),
+    ];
+  }, def.body);
   return outermost;
 }
 
@@ -111,29 +125,49 @@ function returning(value: Expression, loc: SourceLocation | undefined): ReturnSt
   return { type: "returnStatement", value, loc };
 }
 
+/** `const __call_N = { name: "<def>", args: { ... } }`, the record the
+ *  decorator at depth N receives, built once in its own step. */
+function recordDeclaration(
+  name: string,
+  target: string,
+  parameters: FunctionParameter[],
+  loc: SourceLocation | undefined,
+): Assignment {
+  return {
+    type: "assignment",
+    declKind: "const",
+    variableName: name,
+    value: callRecord(target, parameters, loc),
+    loc,
+  };
+}
+
 function decoratorCall(
   tag: Tag,
   target: string,
+  depth: number,
   parameters: FunctionParameter[],
   body: AgencyNode[],
   lookup: DecoratorLookup,
 ): FunctionCall {
+  const recordName = `${RECORD_LOCAL}${depth}`;
   const signature = lookup(tag.name);
-  const takesCallRecord = signature?.parameters[0]?.name === "call";
-  const origin: DecoratorOrigin = {
-    name: tag.name,
-    tagLoc: tag.loc,
-    target,
-    passesCallRecord: takesCallRecord,
+  const origin: DecoratorOrigin = { name: tag.name, tagLoc: tag.loc, target };
+  const record: NamedArgument = {
+    type: "namedArgument",
+    name: "call",
+    value: { type: "variableName", value: recordName, loc: tag.loc },
   };
   const call: FunctionCall = {
     type: "functionCall",
     functionName: tag.name,
-    arguments: [
-      ...(takesCallRecord ? [callRecord(target, parameters, tag.loc)] : []),
-      ...tag.arguments,
-    ],
-    block: { type: "blockArgument", inline: false, params: [], body },
+    arguments: [...tag.arguments, record],
+    block: {
+      type: "blockArgument",
+      inline: false,
+      params: [{ type: "functionParameter", name: RECORD_PARAMETER }],
+      body: [rebindStatement(target, parameters, depth, tag.loc), ...body],
+    },
     loc: tag.loc,
     decorator: origin,
   };
@@ -143,6 +177,34 @@ function decoratorCall(
   return call;
 }
 
+/** The block parameter that holds the record a decorator calls the block
+ *  with. The `__` check is in the parser and sees only user text, so a name
+ *  the lowering adds is allowed (docs/dev/language/reserved-names.md). */
+const RECORD_PARAMETER = "__args";
+
+/** The local that holds a decorator's `call` record, suffixed with the
+ *  decorator's depth in the stack: `__call_0` for the outermost. */
+const RECORD_LOCAL = "__call_";
+
+/** The block's first statement: store the def's parameters from the record
+ *  (docs/dev/language/decorators.md, "The block takes the arguments"). */
+function rebindStatement(
+  target: string,
+  parameters: FunctionParameter[],
+  depth: number,
+  loc: SourceLocation | undefined,
+): RebindParameters {
+  return {
+    type: "rebindParameters",
+    functionName: target,
+    depth,
+    parameters: parameters.filter((parameter) => !isBlockParameter(parameter)),
+    blockParameters: parameters.filter(isBlockParameter).map((parameter) => parameter.name),
+    record: RECORD_PARAMETER,
+    loc,
+  };
+}
+
 /** `{ name: "<def>", args: { a: a, b: b } }` over the def's parameters,
  *  block-typed ones left out: a block cannot be stored in a record. */
 function callRecord(
@@ -150,7 +212,7 @@ function callRecord(
   parameters: FunctionParameter[],
   loc: SourceLocation | undefined,
 ): AgencyObject {
-  const named = parameters.filter((parameter) => parameter.typeHint?.type !== "blockType");
+  const named = parameters.filter((parameter) => !isBlockParameter(parameter));
   const args: AgencyObject = {
     type: "agencyObject",
     entries: named.map((parameter): AgencyObjectKV => ({
@@ -217,7 +279,8 @@ export type DecoratorScope = {
  * - defs that decorate each other in a loop (`@b def a` and `@a def b`),
  * - a decorator imported from JavaScript, which cannot take a block,
  * - a decorator name that is neither declared nor imported,
- * - a decorator whose last parameter cannot take the body as a block.
+ * - a decorator without the decorator shape: its own parameters, then
+ *   `call: Call`, then a block, the last two without defaults.
  *
  * Pure; prepareProgram and the CLI build turn the list into errors.
  */
@@ -268,10 +331,11 @@ function problemWithTag(target: string, decorator: string, context: TagContext):
     return `'${decorator}' is imported from JavaScript, so it cannot decorate '${target}'. A decorator receives the body as a block, and only an Agency def can take a block.`;
   }
   if (signature === undefined) {
-    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a def whose last parameter is a block; declare or import '${decorator}'.`;
+    return `Unknown decorator '${decorator}' on '${target}'. A decorator is a def whose last two parameters are \`call: Call\` and a block; declare or import '${decorator}'.`;
   }
-  if (!lastParameterTakesBlock(signature.parameters)) {
-    return `'${decorator}' cannot decorate '${target}': a decorator receives the body of the function it decorates as a block, so its last parameter must be a block, such as \`block: () -> any\`.`;
+  const shapeProblem = decoratorShapeProblem(signature.parameters);
+  if (shapeProblem !== null) {
+    return `'${decorator}' cannot decorate '${target}': ${shapeProblem}`;
   }
   return null;
 }

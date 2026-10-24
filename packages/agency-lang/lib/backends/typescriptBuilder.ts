@@ -34,6 +34,7 @@ import {
 } from "@/config/config.js";
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { BlockArgument } from "@/types/blockArgument.js";
+import type { RebindParameters } from "@/types/rebindParameters.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { TypeTestExpression } from "@/types/pattern.js";
@@ -687,6 +688,8 @@ export class TypeScriptBuilder {
         // the enclosing function's activation, so a region inside a block
         // argument counts for the function (docs/dev/language/destructive-regions.md).
         return this.tracking.markDestructiveRan();
+      case "rebindParameters":
+        return this.processRebindParameters(node);
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
@@ -1958,6 +1961,11 @@ export class TypeScriptBuilder {
 
     const bodyStr = compiledFinalize.bodyCode.map((n) => printTs(n, 1)).join("\n");
 
+    // A decorated body's block ends the claim its rebind made on the
+    // function's frame (lib/runtime/rebind.ts).
+    const rebind = block.body[0];
+    const rebindRelease =
+      rebind?.type === "rebindParameters" ? `__releaseRebind(__stack, ${rebind.depth});\n` : "";
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
         paramName: p.name,
@@ -1969,6 +1977,7 @@ export class TypeScriptBuilder {
       body: bodyStr,
       finalizeDecl: compiledFinalize.declText,
       abortReturn: compiledFinalize.abortReturn,
+      rebindRelease,
     });
 
     // A block takes the run it is called under first, like a function.
@@ -2024,6 +2033,7 @@ export class TypeScriptBuilder {
       body: bodyStr,
       finalizeDecl: compiledFinalize.declText,
       abortReturn: compiledFinalize.abortReturn,
+      rebindRelease: "",
     });
 
     // A block takes the run it is called under first, like a function.
@@ -2221,13 +2231,15 @@ export class TypeScriptBuilder {
    * For Result-returning functions: emit a pinned checkpoint at function entry
    * and a preamble that applies arg overrides on restore (for result.retry()).
    */
-  /** The preamble store of a `!` parameter: `paramStore`, skipped when the
-   *  frame already holds the slot. A fresh frame is empty, so the first
-   *  entry stores the argument as given and step 0 replaces it with the
-   *  checked value. A resume re-enters with the saved frame, and the saved
-   *  slot holds the checked value, which the argument as given must not
-   *  overwrite: a zod check drops unknown keys, so the two can differ. */
-  private checkedParamStore(param: FunctionParameter): TsNode {
+  /** `paramStore`, skipped when the frame already holds the slot. A fresh
+   *  frame is empty, so the first entry stores the argument as given. A
+   *  resume re-enters with the saved frame, whose slot may hold something
+   *  else that the argument as given must not overwrite: for a `!`
+   *  parameter, the checked value step 0 wrote (a zod check drops unknown
+   *  keys, so the two can differ); for every parameter of a decorated
+   *  function, the value its decorator rebound with `block(record)`
+   *  (docs/dev/language/decorators.md). */
+  private firstEntryParamStore(param: FunctionParameter): TsNode {
     const hasSlot = ts.methodCall(ts.id("Object"), "hasOwn", [
       ts.stack("args"),
       ts.str(param.name),
@@ -2283,6 +2295,53 @@ export class TypeScriptBuilder {
 
   /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
    *  followed by the halted return. */
+  /** The rebind statement a decorated body's block starts with: one
+   *  `__rebindParameters` call over a table of the function's parameters,
+   *  each default as a thunk compiled here so it sees the function's scope,
+   *  then the halt check every parameter check ends with. The function's
+   *  block-typed parameters are passed by name as values to keep. */
+  private processRebindParameters(node: RebindParameters): TsNode {
+    const spec = ts.arr(
+      node.parameters.map((param) => {
+        const fields: Record<string, TsNode> = {
+          name: ts.str(param.name),
+          checked: ts.bool(isCheckedParam(param)),
+        };
+        if (param.defaultValue) {
+          fields.defaultValue = ts.arrowFn([], this.processNode(param.defaultValue));
+        }
+        return ts.obj(fields);
+      }),
+    );
+    const checks = node.parameters.some(isCheckedParam)
+      ? ts.id(this.paramChecksName(node.functionName))
+      : ts.id("null");
+    const kept: Record<string, TsNode> = {};
+    for (const name of node.blockParameters) {
+      kept[name] = $(ts.stack("args")).index(ts.str(name)).done();
+    }
+    const record = $(ts.id("__bstack")).prop("args").index(ts.str(node.record)).done();
+    // The function by its registry key, which a parameter of the same name
+    // cannot shadow the way the module-level constant can.
+    const fn = $(ts.id("__toolRegistry"))
+      .index(ts.str(`${this.moduleId}:${node.functionName}`))
+      .done();
+    return ts.statements([
+      ts.awaitCall(ts.id("__rebindParameters"), [
+        ts.runtime.run,
+        ts.id("runner"),
+        ts.id("__stack"),
+        fn,
+        record,
+        ts.obj(kept),
+        spec,
+        checks,
+        ts.num(node.depth),
+      ]),
+      ts.if(ts.prop(ts.id("runner"), "halted"), ts.return()),
+    ]);
+  }
+
   private checkParamsCall(functionName: string, names: string[]): TsNode[] {
     return [
       ts.awaitCall(ts.id("__checkParams"), [
@@ -2340,6 +2399,9 @@ export class TypeScriptBuilder {
     bodyCode: TsNode[];
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
+    /** True for a decorated def: every parameter is stored on first entry
+     *  only, so a resume keeps what the decorator rebound. */
+    storeOnFirstEntry?: boolean;
     /** The def's compiled finalize (FinalizeCodegen.compileScope). The
      *  closure declaration goes in the setup so the catch (and the
      *  post-call guards inside the body) can call it; the abort return
@@ -2404,7 +2466,9 @@ export class TypeScriptBuilder {
     // keeps the checked value the frame was saved with.
     for (const param of parameters) {
       setupStmts.push(
-        isCheckedParam(param) ? this.checkedParamStore(param) : this.paramStore(param),
+        isCheckedParam(param) || opts.storeOnFirstEntry
+          ? this.firstEntryParamStore(param)
+          : this.paramStore(param),
       );
     }
     setupStmts.push(...this.takeArgOverrides(parameters));
@@ -2563,6 +2627,7 @@ export class TypeScriptBuilder {
       bodyCode: compiledFinalize.bodyCode,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
+      storeOnFirstEntry: (node.decorators ?? []).length > 0,
       finalize: compiledFinalize,
     });
 

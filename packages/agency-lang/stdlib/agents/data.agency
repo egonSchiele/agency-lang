@@ -30,7 +30,7 @@ import {
   wikidataQuery,
  } from "std::data/wikidata"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You answer questions using structured public-data APIs.
@@ -105,7 +105,7 @@ def answer(
   )
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export def dataAgent(
   task: string,
   context: string = "",

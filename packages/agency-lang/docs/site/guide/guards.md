@@ -186,18 +186,18 @@ If you give the inner guard more budget, it does not give the outer guard more b
 
 ## Guarding a whole function
 
-To put a guard around a whole function, use the `@guard` decorator from `std::strategy`:
+To put a guard around a whole function, use the `@guarded` decorator from `std::strategy`:
 
 ```ts
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 
-@guard(cost: $1.00, time: 5m)
+@guarded(cost: $1.00, time: 5m)
 def summarize(text: string): Result<string> {
   return llm("Summarize this: ${text}", { tools: [saveDraft] })
 }
 ```
 
-The `guard` block and the `@guard` decorator share a name, but the decorator does more than wrap the body in the block. It labels the guard with the function's name (pass `label:` to choose another), answers its own trip, and applies three rules:
+The decorator does more than wrap the body in a `guard` block. It labels the guard with the function's name (pass `label:` to choose another), answers its own trip, and applies three rules:
 
 - If the body finishes, its result is the result. A finished `""` is a failure, "it returned no answer".
 - If the budget runs out and the body had saved a draft, the draft is the result, as a success. A string gets one line appended saying the budget ran out, so the answer may be unfinished or unchecked.

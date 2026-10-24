@@ -11,7 +11,7 @@ import type { TypeCheckError } from "./types.js";
 // The decorator every case below uses: it takes the `call` record, one
 // argument of its own, and a block returning string.
 const BUDGETED =
-  "def budgeted(call: Call, cost: number, block: () -> string): Result<string> {\n" +
+  "def budgeted(cost: number, call: Call, block: () -> string): Result<string> {\n" +
   "  return success(block())\n" +
   "}\n";
 
@@ -24,6 +24,22 @@ function lineOf(src: string, text: string): number {
 function withCode(errors: TypeCheckError[], name: string): TypeCheckError[] {
   return errors.filter((error) => error.name === name);
 }
+
+describe("decorator shape in the checker", () => {
+  it("reports a decorator of the wrong shape when the checker runs on its own", () => {
+    // typecheckSource runs the checker without the decorator stage, the
+    // case the checker's own AG6043 exists for.
+    const src =
+      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+      '@logged("t")\n' +
+      'def f(): string { return "x" }\n';
+    const [error] = withCode(typecheckSource(src), "decoratorShape");
+    expect(error.code).toBe("AG6043");
+    expect(error.message).toContain("'logged' cannot decorate 'f'");
+    expect(error.message).toContain("Found 'tag' there");
+    expect(error.loc?.line).toBe(lineOf(src, "@logged"));
+  });
+});
 
 describe("decorator mismatch diagnostics", () => {
   it("names the decorator when a tag argument has the wrong type", () => {
@@ -56,7 +72,7 @@ describe("decorator mismatch diagnostics", () => {
   it("blames the inner decorator, not the body, when stacked decorators disagree", () => {
     const src =
       BUDGETED +
-      "def inner(block: () -> number): number {\n  return block()\n}\n" +
+      "def inner(call: Call, block: () -> number): number {\n  return block()\n}\n" +
       "@budgeted(cost: 1)\n@inner\ndef five(): Result<string> {\n  return 1\n}\n";
     const errors = typecheckSource(src);
     const [error] = withCode(errors, "decoratorStackedReturn");
@@ -80,6 +96,13 @@ describe("decorator mismatch diagnostics", () => {
     const [error] = withCode(typecheckSource(src), "unknownNamedArg");
     expect(error).toBeDefined();
     expect(error.message).toContain("Valid names: cost.");
+  });
+
+  it("accepts block(call.args) against a block typed () -> any", () => {
+    const src =
+      "def d(call: Call, block: () -> any): any {\n  return block(call.args)\n}\n" +
+      "@d\ndef f(a: number): number {\n  return a\n}\n";
+    expect(typecheckSource(src).filter((error) => error.severity === "error")).toEqual([]);
   });
 
   it("checks a plain block-taking call's block body, and gives the error a line", () => {
@@ -130,11 +153,11 @@ describe("a saveDraft in a decorated body", () => {
 });
 
 describe("the checks checkType does besides assignability still run on a decorated def", () => {
-  const ANY_DECORATOR = "def wrapped(block: () -> any): any {\n  return block()\n}\n";
+  const ANY_DECORATOR = "def wrapped(call: Call, block: () -> any): any {\n  return block()\n}\n";
 
   it("rejects a regex in a decorated llm() return type", () => {
     const src =
-      "def deco(block: () -> regex): regex {\n  return block()\n}\n" +
+      "def deco(call: Call, block: () -> regex): regex {\n  return block()\n}\n" +
       '@deco\ndef f(): regex {\n  return llm("pick a pattern")\n}\n';
     expect(withCode(typecheckSource(src), "regexInStructuredOutput")).toHaveLength(1);
   });
@@ -187,5 +210,27 @@ describe("a typo in a decorator name", () => {
     expect(prepared.diagnostics.map((found) => found.stage)).toEqual(["decorators"]);
     const errors = typeCheck(prepared.program, {}, prepared.info).errors;
     expect(withCode(errors, "undefinedFunction")).toEqual([]);
+  });
+
+  it("reports a wrong-shape decorator from the stage and as AG6043, and nothing else", () => {
+    // The checker adds no argument-count error against the wrong slots; its
+    // one error is the same shape report, which the editor drops.
+    const src =
+      "def d(call: Call, tag: string, block: () -> any): any {\n  return block()\n}\n" +
+      '@d("t")\ndef f(): string {\n  return "a"\n}\n';
+    const file = path.join(dir, "shape.agency");
+    fs.writeFileSync(file, src);
+    const prepared = prepareProgram(src, file, {}, { keepGoing: true });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    expect(
+      prepared.diagnostics.map((found) =>
+        found.stage === "decorators" ? found.message : found.stage,
+      ),
+    ).toEqual([expect.stringContaining("Found 'tag' there")]);
+    const errors = typeCheck(prepared.program, {}, prepared.info).errors;
+    expect(errors.filter((error) => error.severity === "error").map((error) => error.code)).toEqual(
+      ["AG6043"],
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { callerSuppliedParameters } from "../types/function.js";
 import { declaredName } from "../types/hole.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
@@ -17,8 +18,14 @@ export function checkParamDefaultOrder(ctx: TypeCheckerContext): void {
     if (node.type !== "function" && node.type !== "graphNode") continue;
     const fn =
       node.type === "function" ? declaredName(node.functionName) : declaredName(node.nodeName);
+    // A decorator's trailing `call` and block are supplied by the compiler,
+    // so they may follow a defaulted parameter.
+    const checked =
+      node.type === "function"
+        ? callerSuppliedParameters(node.parameters ?? [])
+        : (node.parameters ?? []);
     let sawDefault = false;
-    for (const param of node.parameters ?? []) {
+    for (const param of checked) {
       if (param.defaultValue) {
         sawDefault = true;
       } else if (sawDefault && !param.variadic) {

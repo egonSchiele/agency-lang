@@ -1,7 +1,7 @@
 // A value-producing match inside a decorated body reads back its value
 // (the #928 shape, reached through a decorator).
-def logged(block: () -> any): any {
-  return block()
+def logged(call: Call, block: () -> any): any {
+  return block(call.args)
 }
 
 @logged

@@ -13,7 +13,7 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, githubReadTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -120,7 +120,7 @@ export def reviewAgent(
 // post-processes the guard's Result, and the decorator's return is the
 // def's return. Return position: when the budget runs out, the findings
 // the model saved reach the guard and come back as the result.
-@guard(cost: maxCost, time: maxTime, label: "reviewAgent")
+@guarded(cost: maxCost, time: maxTime, label: "reviewAgent")
 def reviewUnderBudget(
   work: string,
   task: string,

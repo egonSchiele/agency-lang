@@ -177,7 +177,7 @@ export def firstValid(
   return null
 }
 
-/** The `@guard` decorator: the `guard` block put around a whole function,
+/** The `@guarded` decorator: the `guard` block put around a whole function,
   with three rules added. If the body finishes, its result is the result
   (a finished `""` is a failure, "it returned no answer"). If the budget
   runs out, the best answer the body had is the result: what it saved with
@@ -186,24 +186,25 @@ export def firstValid(
   a failure naming the budget, "its time budget of 30m ran out".
 
   ```ts
-  import { guard } from "std::strategy"
+  import { guarded } from "std::strategy"
 
-  @guard(cost: $1.00, time: 5m)
+  @guarded(cost: $1.00, time: 5m)
   def summarize(text: string): Result<string> {
     return llm("Summarize: ${text}", { tools: [saveDraft] })
   }
   ```
 
-  The body's draft reaches the guard the way any partial result does: by
-  return position, or through a `finalize`. The decorator answers its own
-  budget trip, so a caller cannot grant more budget; pass a larger limit
-  instead. See docs/dev/agents/subagent-budgets.md. */
-export def guard(
-  call: Call,
+  The body runs with the arguments as passed (`block(call.args)`). Its draft
+  reaches the guard the way any partial result does: by return position, or
+  through a `finalize`. The decorator answers its own budget trip, so a
+  caller cannot grant more budget; pass a larger limit instead. See
+  docs/dev/agents/subagent-budgets.md. */
+export def guarded(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  block: () -> any = null,
+  call: Call,
+  block: (args: object) -> any,
 ): Result raises <std::guard> {
   """
   Run the decorated function under a cost and time budget, labelled with
@@ -222,7 +223,7 @@ export def guard(
     // Return position: a draft the body saved reaches the guard, which
     // returns it as the backup answer when the budget runs out.
     result = guard(cost: cost, time: time, label: name) {
-      return block()
+      return block(call.args)
     }
   } with (intr) {
     if (intr.effect != "std::guard" || intr.data.label != name) {

@@ -2,18 +2,18 @@
 // body raises: one decorator approves, the other rejects. A decorator's
 // approve does not outrank its caller: when the caller rejects, the interrupt
 // is rejected, as with any nested handlers.
-def approving(block: () -> any): any {
+def approving(call: Call, block: () -> any): any {
   let result = null
   handle {
-    result = block()
+    result = block(call.args)
   } with approve
   return result
 }
 
-def rejecting(block: () -> any): any {
+def rejecting(call: Call, block: () -> any): any {
   let result = null
   handle {
-    result = block()
+    result = block(call.args)
   } with reject
   return result
 }

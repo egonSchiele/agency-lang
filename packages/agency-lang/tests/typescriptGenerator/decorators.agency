@@ -9,15 +9,15 @@ type Call = {
 
 def logged(call: Call, block: () -> any): any {
   print("entering ${call.name}")
-  const result = block()
+  const result = block(call.args)
   print("leaving ${call.name}")
   return result
 }
 
-def retry(times: number, block: () -> any): any {
+def retry(times: number, call: Call, block: () -> any): any {
   let last = null
   for (i in range(0, times)) {
-    last = block()
+    last = block(call.args)
   }
   return last
 }

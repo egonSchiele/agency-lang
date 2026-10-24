@@ -1,5 +1,5 @@
 import test { _advanceTime } from "std::date"
-import { Critique, guard, revise } from "std::strategy"
+import { Critique, guarded, revise } from "std::strategy"
 
 // The @guard decorator: a finished answer is the result; when the budget
 // runs out, a draft the body saved is the backup answer, with a note; with
@@ -48,31 +48,31 @@ def describeStop(r: Result): string {
   return "success:${r.value}"
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def finishes(task: string): Result<string> {
   return "DONE ${task}"
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def returnsNothing(): Result<string> {
   return ""
 }
 
 // The oracle's shape: the body returns its inner call directly.
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def oracleShape(): Result<string> {
   return savesThenTrips()
 }
 
 // The coding agent's shape: the body returns from inside a thread block.
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def codingShape(): Result<string> {
   thread(label: "codingShape", session: "") {
     return savesThenTrips()
   }
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def codingShapeNothingSaved(): Result<string> {
   thread(label: "codingShapeNothingSaved", session: "") {
     return tripsWithNothingSaved()
@@ -89,13 +89,13 @@ def reviewedAnswer(): string {
   }
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def researcherShape(): Result<string> {
   return reviewedAnswer()
 }
 
 // The agencyCodingAgent shape: the same loop, inside a thread block.
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def agencyCodingShape(): Result<string> {
   thread(label: "agencyCodingShape", session: "") {
     return reviewedAnswer()
@@ -104,30 +104,30 @@ def agencyCodingShape(): Result<string> {
 
 // An inner agent with a long budget, called by an outer one with a short
 // budget: the outer budget runs out inside the inner call.
-@guard(cost: $5, time: 1h)
+@guarded(cost: $5, time: 1h)
 def innerAgent(): Result<string> {
   return tripsWithNothingSaved()
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def outerAgent(): Result<string> {
   const inner = innerAgent()
   return "outer saw ${inner}"
 }
 
 // The note on a recovered answer names the guard, so it shows the label.
-@guard(cost: $5, time: 10s, label: "custom")
+@guarded(cost: $5, time: 10s, label: "custom")
 def relabelled(): Result<string> {
   return reviewedAnswer()
 }
 
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def cleanReview(): Result<string[]> {
   return []
 }
 
 // The writing rewrite agent's shape: a failure returned from inside a loop.
-@guard(cost: $5, time: 10s)
+@guarded(cost: $5, time: 10s)
 def failsFromLoop(): Result<string> {
   let attempt = 0
   while (attempt < 3) {
@@ -149,7 +149,7 @@ def savesFindingsThenTrips(): string[] {
   return ["finding"]
 }
 
-@guard(cost: $5, time: 10s, label: "reviewerShape")
+@guarded(cost: $5, time: 10s, label: "reviewerShape")
 def reviewUnderBudget(): Result<string[]> {
   thread(label: "reviewerShape", session: "") {
     return savesFindingsThenTrips()
@@ -171,7 +171,7 @@ def sidePass(): string[] {
   return ["side"]
 }
 
-@guard(cost: $5, time: 10s, label: "writingReviewShape")
+@guarded(cost: $5, time: 10s, label: "writingReviewShape")
 def writingReviewShape(): Result<string[]> {
   parallel {
     let cuts = sidePass()

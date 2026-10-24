@@ -1,0 +1,20 @@
+// A decorator that calls block from two fork branches at once: the first
+// call runs, the second is refused with a failure instead of reading the
+// first branch's arguments.
+def twice(call: Call, block: (args: object) -> any): any {
+  return fork([1, 2]) as n { return block({ n: n }) }
+}
+
+@twice
+def g(n: number): string {
+  return "n=${n}"
+}
+
+node main() {
+  const results = g(0)
+  const second = results[1]
+  if (isFailure(second)) {
+    return [results[0], second.error]
+  }
+  return results
+}

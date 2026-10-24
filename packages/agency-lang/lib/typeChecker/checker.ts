@@ -30,7 +30,11 @@ import { checkAssignmentValue } from "./scopes.js";
 import { checkMatchExprYields } from "./matchExprTypes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
-import { lastParameterTakesBlock } from "../types/function.js";
+import {
+  callerSuppliedParameters,
+  decoratorShapeProblem,
+  lastParameterTakesBlock,
+} from "../types/function.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 import { draftTarget, mismatchEntry } from "./mismatch.js";
 
@@ -314,10 +318,22 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
+    // A decorator call whose target lacks the decorator shape: say so and
+    // stop, since checking its arguments against the wrong slots would add
+    // a misleading error. The decorator stage reports the same mistake when
+    // it runs first; the editor drops this copy then (lib/lsp/diagnostics.ts).
+    if (call.decorator !== undefined) {
+      const problem = decoratorShapeProblem(params);
+      if (problem !== null) {
+        const { name, target } = call.decorator;
+        ctx.errors.push(diagnostic("decoratorShape", { name, target, problem }, call.loc ?? null));
+        return;
+      }
+    }
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;
     const sig = paramListSignature(params, call.arguments.length);
-    if (!checkArity(call, sig.minArgs, sig.maxArgs, hasSplatArg, ctx)) return;
+    if (!checkArity(call, sig.minArgs, sig.maxArgs, hasSplatArg, ctx, params)) return;
     checkArgsAgainstParams(call, sig, scope, ctx);
     return;
   }
@@ -458,7 +474,7 @@ function checkCallAgainstBuiltinSig(
           ...call,
           arguments: call.arguments.filter((a) => a.type !== "namedArgument"),
         };
-  if (!checkArity(positionalCall, minArgs, maxArgs, hasSplatArg, ctx)) return;
+  if (!checkArity(positionalCall, minArgs, maxArgs, hasSplatArg, ctx, [])) return;
   const slots: ParamSlot[] = sig.params.map((type) => ({
     type,
     validated: false,
@@ -702,6 +718,7 @@ function checkArity(
   maxArgs: number,
   hasSplatArg: boolean,
   ctx: TypeCheckerContext,
+  params: FunctionParameter[],
 ): boolean {
   if (hasSplatArg) return true;
   // A block argument (trailing `as` block or inline `\... -> ...`) fills the
@@ -709,9 +726,9 @@ function checkArity(
   // Count it so `f() as x { }` doesn't look like a 0-arg call.
   const argCount = call.arguments.length + (call.block ? 1 : 0);
   if (argCount >= minArgs && argCount <= maxArgs) return true;
-  // A decorator tag's call has arguments the author never wrote: the body,
-  // and the `call` record when it was passed. Count only the tag's own.
-  const hidden = hiddenDecoratorArguments(call);
+  // A decorator tag's call has arguments the author never wrote: the body
+  // and the `call` record. Count only the tag's own.
+  const hidden = hiddenDecoratorArguments(call, params);
   const arity = { fn: displayFunctionName(call.functionName), count: argCount - hidden };
   const min = minArgs - hidden;
   const max = maxArgs - hidden;
@@ -726,20 +743,19 @@ function checkArity(
   return false;
 }
 
-/** How many of a call's arguments the decorator lowering added: the body as
- *  the block, and the `call` record when it was passed. 0 for any other call. */
-function hiddenDecoratorArguments(call: FunctionCall): number {
+/** How many of a call's arguments the decorator lowering added: the `call`
+ *  record and the body as the block. 0 for any other call. */
+function hiddenDecoratorArguments(call: FunctionCall, params: FunctionParameter[]): number {
   if (call.decorator === undefined) return 0;
-  return call.decorator.passesCallRecord ? 2 : 1;
+  return params.length - callerSuppliedParameters(params).length;
 }
 
 /** The parameter names a call's author can write. For a decorator's call,
  *  the `call` record and the block are the lowering's, so they are left out
  *  of the names an unknown-argument error suggests. */
 function writableParameterNames(call: FunctionCall, params: FunctionParameter[]): string[] {
-  const names = params.map((param) => param.name);
-  if (call.decorator === undefined) return names;
-  return names.slice(call.decorator.passesCallRecord ? 1 : 0, -1);
+  const written = call.decorator === undefined ? params : callerSuppliedParameters(params);
+  return written.map((param) => param.name);
 }
 
 /**

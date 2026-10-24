@@ -197,15 +197,15 @@ Run a block for each variant in parallel, then return the first result that pass
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L156))
 
-### guard
+### guarded
 
 ```ts
-guard(
-  call: Call,
+guarded(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
-  block: () -> any = null,
+  call: Call,
+  block: (args: object) -> any,
 ): Result raises <std::guard>
 ```
 
@@ -218,7 +218,7 @@ Run the decorated function under a cost and time budget, labelled with
   @param time - Working-time cap, or null for none
   @param label - The guard's label; the function's name when null
 
-The `@guard` decorator: the `guard` block put around a whole function,
+The `@guarded` decorator: the `guard` block put around a whole function,
   with three rules added. If the body finishes, its result is the result
   (a finished `""` is a failure, "it returned no answer"). If the budget
   runs out, the best answer the body had is the result: what it saved with
@@ -227,31 +227,32 @@ The `@guard` decorator: the `guard` block put around a whole function,
   a failure naming the budget, "its time budget of 30m ran out".
 
   ```ts
-  import { guard } from "std::strategy"
+  import { guarded } from "std::strategy"
 
-  @guard(cost: $1.00, time: 5m)
+  @guarded(cost: $1.00, time: 5m)
   def summarize(text: string): Result<string> {
     return llm("Summarize: ${text}", { tools: [saveDraft] })
   }
   ```
 
-  The body's draft reaches the guard the way any partial result does: by
-  return position, or through a `finalize`. The decorator answers its own
-  budget trip, so a caller cannot grant more budget; pass a larger limit
-  instead. See docs/dev/agents/subagent-budgets.md.
+  The body runs with the arguments as passed (`block(call.args)`). Its draft
+  reaches the guard the way any partial result does: by return position, or
+  through a `finalize`. The decorator answers its own budget trip, so a
+  caller cannot grant more budget; pass a larger limit instead. See
+  docs/dev/agents/subagent-budgets.md.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| call | [Call](index.md#call) |  |
 | cost | `number \| null` | null |
 | time | `number \| null` | null |
 | label | `string \| null` | null |
-| block | `() => any` | null |
+| call | [Call](index.md#call) |  |
+| block | `(args: Record<string, any>) => any` |  |
 
 **Returns:** `Result`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L202))

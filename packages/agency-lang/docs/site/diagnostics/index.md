@@ -165,6 +165,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6040](tools.md#ag6040) | '&#123;expr&#125;' is passed as a tool, but it is a value of type '&#123;actual&#125;', not a function.&#123;shadowHint&#125; |
 | [AG6041](tools.md#ag6041) | Decorator '&#123;name&#125;' on '&#123;target&#125;' expects '&#123;param&#125;: &#123;expected&#125;', got '&#123;actual&#125;'. |
 | [AG6042](tools.md#ag6042) | '&#123;name&#125;' is an alias of parameter '&#123;param&#125;' of '&#123;fn&#125;'. In Agency code, use '&#123;param&#125;'. |
+| [AG6043](tools.md#ag6043) | '&#123;name&#125;' cannot decorate '&#123;target&#125;': &#123;problem&#125; |
 
 ## Static init, config, and imports
 

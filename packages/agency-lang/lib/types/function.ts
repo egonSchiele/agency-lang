@@ -46,6 +46,46 @@ export function lastParameterTakesBlock(parameters: FunctionParameter[]): boolea
   );
 }
 
+/** Whether a parameter is declared with a block type, `b: () -> T`. The
+ *  lowering, the preprocessor, and the splice generator all ask this. */
+export function isBlockParameter(parameter: FunctionParameter): boolean {
+  return parameter.typeHint?.type === "blockType";
+}
+
+/** Whether these parameters are a decorator's: the second-to-last is named
+ *  `call` and the last takes a block (docs/dev/language/decorators.md).
+ *  Defaults are ignored here; `decoratorShapeProblem` reports them. */
+export function hasDecoratorShape(parameters: FunctionParameter[]): boolean {
+  const secondToLast = parameters[parameters.length - 2];
+  return secondToLast?.name === "call" && lastParameterTakesBlock(parameters);
+}
+
+/** What is wrong with these parameters for a decorator, as the clause after
+ *  "'d' cannot decorate 'f': ", or null when they have the decorator shape
+ *  and neither `call` nor the block has a default. */
+export function decoratorShapeProblem(parameters: FunctionParameter[]): string | null {
+  if (parameters.length < 2 || !lastParameterTakesBlock(parameters)) {
+    return "a decorator receives the body of the function it decorates as a block, so its last parameter must be a block, such as `block: (args: object) -> any`.";
+  }
+  const [callParam, blockParam] = parameters.slice(-2);
+  if (callParam.name !== "call") {
+    return `a decorator's last two parameters are \`call: Call\` and a block, so \`call\` must come right before the block. Found '${callParam.name}' there.`;
+  }
+  const defaulted = [callParam, blockParam].find((param) => param.defaultValue !== undefined);
+  if (defaulted !== undefined) {
+    return `'${defaulted.name}' has a default, but a decorator always receives \`call\` and the block. Remove the default.`;
+  }
+  return null;
+}
+
+/** The parameters a caller writes: all of them, or all but the trailing
+ *  `call` and block the compiler supplies when the function is a decorator.
+ *  The parser's ordering check, AG6039, and the checker's call checks all
+ *  go through this, so the lowered shape is known in one place. */
+export function callerSuppliedParameters(parameters: FunctionParameter[]): FunctionParameter[] {
+  return hasDecoratorShape(parameters) ? parameters.slice(0, -2) : parameters;
+}
+
 export const VALID_CALLBACK_NAMES = [
   "onAgentStart",
   "onAgentEnd",
@@ -136,10 +176,6 @@ export type DecoratorOrigin = {
   name: string;
   tagLoc: SourceLocation | undefined;
   target: string;
-  /** Whether the lowering passed the `call` record as the first argument.
-   *  With the body, that is what the call has that the tag does not, so
-   *  the checker subtracts it from argument counts and names. */
-  passesCallRecord: boolean;
 };
 
 export type FunctionCall = BaseNode & {

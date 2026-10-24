@@ -28,16 +28,16 @@ export type WriteMode = "overwrite" | "append" | "create-only"
 
 ### Call
 
-What a decorator learns about the function it wraps. A decorator whose
-  first parameter is named `call` receives one of these: `name` is the
-  decorated function's name and `args` holds its parameters by name, block
-  parameters left out. See the Decorators guide page.
+What a decorator learns about the function it wraps. Every decorator
+  receives one of these in `call`, its second-to-last parameter: `name` is
+  the decorated function's name and `args` holds its parameters by name,
+  block parameters left out. See the Decorators guide page.
 
 ```ts
-/** What a decorator learns about the function it wraps. A decorator whose
-  first parameter is named `call` receives one of these: `name` is the
-  decorated function's name and `args` holds its parameters by name, block
-  parameters left out. See the Decorators guide page. */
+/** What a decorator learns about the function it wraps. Every decorator
+  receives one of these in `call`, its second-to-last parameter: `name` is
+  the decorated function's name and `args` holds its parameters by name,
+  block parameters left out. See the Decorators guide page. */
 export type Call = {
   name: string;
   args: object

@@ -19,7 +19,7 @@ import {
   ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 import { communicationTools } from "./lib/toolkits.agency"
@@ -152,7 +152,7 @@ def survey(
 /** Called from code, this runs on the caller's thread like any function:
  *  the system prompt, the reads, and the answer stay there. Wrap the call
  *  in `thread { ... }` for an isolated survey. */
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export handoff def explorerAgent(
   question: string,
   context: string = "",

@@ -1,0 +1,23 @@
+// A variadic parameter is in call.args as an array, a record sets it from
+// an array, and block() leaves it empty, as a call that passes nothing does.
+def withX(call: Call, block: (args: object) -> any): any {
+  return block({ ...call.args, rest: ["x"] })
+}
+
+def bare(call: Call, block: (args: object) -> any): any {
+  return block()
+}
+
+@withX
+def f(first: string = "a", ...rest: string[]): string {
+  return "${first}|${rest.join(",")}"
+}
+
+@bare
+def g(first: string = "a", ...rest: string[]): string {
+  return "${first}|${rest.join(",")}"
+}
+
+node main() {
+  return [f("b", "c", "d"), g("b", "c")]
+}

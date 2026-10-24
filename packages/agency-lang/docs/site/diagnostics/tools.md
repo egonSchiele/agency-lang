@@ -442,3 +442,15 @@ A named argument, or a `.partial()` binding, uses one of a parameter's aliases i
 An alias forgives a caller that guesses the name at runtime, usually a model calling the function as a tool. Code you write knows the name, so it uses the first one. That keeps every reference to a parameter spelled one way. In `def fetch(baseUrl | url: string)`, a call written as `fetch(url: x)` is this error.
 
 **How to fix:** use the parameter's name, the one before the first `|`.
+
+<a id="ag6043"></a>
+
+## AG6043 — '&#123;name&#125;' cannot decorate '&#123;target&#125;': &#123;problem&#125;
+
+*Default severity: error.*
+
+A tag names a def that does not have the shape of a decorator.
+
+A decorator's last two parameters are `call: Call` and a block, in that order and neither with a default: `def logged(tag: string, call: Call, block: () -> any): any`. The message says which of those slots is wrong. The decorator stage reports this mistake before the checker runs; the checker repeats it here so a program checked on its own is not accepted by mistake.
+
+**How to fix:** move `call: Call` right before the block, give the decorator a block as its last parameter, or remove the default from `call` or the block.

@@ -155,6 +155,7 @@ import {
   ValueParam,
 } from "../types.js";
 import { isReservedTagName } from "../types/tag.js";
+import { callerSuppliedParameters } from "../types/function.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { Hole } from "../types/hole.js";
 import { CodeLiteral } from "../types/codeLiteral.js";
@@ -246,7 +247,8 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  consumes (`def`, `node`, statement keywords, modifiers, literal words);
  *  extend it when a new keyword lands. A few are claimed only in one shape
  *  and are ordinary names elsewhere: `guard(...) {` is the guard block, but
- *  `def guard` is a function (the `@guard` decorator in `std::strategy`). */
+ *  `guard` is an ordinary name in any other position. The stdlib decorator
+ *  is named `guarded` so it never meets this rule. */
 export const RESERVED_WORDS: readonly string[] = [
   "def",
   "function",
@@ -7521,21 +7523,27 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
     result.markers = markers;
   }
 
-  // Validate parameter ordering: required → optional (with defaults) → variadic
+  // Validate parameter ordering: required → optional (with defaults) → variadic.
+  // A decorator's trailing `call` and block are supplied by the compiler on
+  // every call, so they may follow a defaulted parameter and are left out of
+  // the default-order check (docs/dev/language/decorators.md).
   const params = result.parameters;
+  const variadicIndex = params.findIndex((param) => param.variadic);
+  if (variadicIndex !== -1 && variadicIndex !== params.length - 1) {
+    return failure(
+      `Variadic parameter '${params[variadicIndex].name}' must be the last parameter`,
+      input,
+    );
+  }
   let seenOptional = false;
-  for (let i = 0; i < params.length; i++) {
-    if (params[i].variadic) {
-      if (i !== params.length - 1) {
-        return failure(`Variadic parameter '${params[i].name}' must be the last parameter`, input);
-      }
-    } else if (params[i].defaultValue) {
+  for (const param of callerSuppliedParameters(params)) {
+    if (param.variadic) {
+      continue;
+    }
+    if (param.defaultValue) {
       seenOptional = true;
     } else if (seenOptional) {
-      return failure(
-        `Required parameter '${params[i].name}' cannot follow optional parameter`,
-        input,
-      );
+      return failure(`Required parameter '${param.name}' cannot follow optional parameter`, input);
     }
   }
 

@@ -1,0 +1,14 @@
+// A decorator can run the body with different arguments: block(record)
+// rebinds the decorated function's parameters from the record.
+def withDefaultName(call: Call, block: (args: object) -> any): any {
+  return block({ ...call.args, name: "default" })
+}
+
+@withDefaultName
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  return greet("ignored")
+}

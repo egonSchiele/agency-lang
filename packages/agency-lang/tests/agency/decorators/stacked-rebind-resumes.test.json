@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"result\": 2, \"seen\": [2]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the inner decorator sees the outer's rebound arguments across a resume",
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

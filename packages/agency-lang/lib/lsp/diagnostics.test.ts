@@ -21,6 +21,19 @@ describe("runDiagnostics", () => {
     expect(diagnostics).toHaveLength(0);
   });
 
+  it("reports a decorator of the wrong shape once", () => {
+    // The decorator stage and the checker both find this; the editor
+    // shows the stage's report and drops the checker's copy.
+    const doc = makeDoc(
+      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+        '@logged("t")\n' +
+        'def f(): string { return "x" }\n',
+    );
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const shape = diagnostics.filter((d) => d.message.includes("'logged' cannot decorate 'f'"));
+    expect(shape).toHaveLength(1);
+  });
+
   it("returns a diagnostic with range for a parse error", () => {
     // Deliberately malformed: unclosed function
     const doc = makeDoc("def foo( {");

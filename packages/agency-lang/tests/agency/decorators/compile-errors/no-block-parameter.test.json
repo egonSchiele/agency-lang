@@ -1,4 +1,4 @@
 {
-  "expectedCompileError": "'tagged' cannot decorate 'greet': a decorator receives the body of the function it decorates as a block",
+  "expectedCompileError": "'tagged' cannot decorate 'greet': a decorator takes at least two parameters",
   "description": "agency compile refuses a decorator whose last parameter is not a block"
 }

@@ -7536,7 +7536,7 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
     );
   }
   let seenOptional = false;
-  for (const param of callerSuppliedParameters(params)) {
+  for (const param of callerSuppliedParameters(result)) {
     if (param.variadic) {
       continue;
     }

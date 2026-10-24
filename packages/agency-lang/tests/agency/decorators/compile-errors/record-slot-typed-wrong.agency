@@ -1,4 +1,4 @@
-// `call` must come right before the block.
+// The record slot takes the call record, so its type is Call or left off.
 decorator def logged(call: Call, tag: string, block: () -> any): any {
   return block()
 }

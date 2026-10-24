@@ -6,7 +6,7 @@ import type {
   FunctionDefinition,
   FunctionParameter,
 } from "@/types/function.js";
-import { decoratorShapeProblem, isBlockParameter } from "@/types/function.js";
+import { decoratorShapeProblem, isBlockParameter, isDecoratorDef } from "@/types/function.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
 import { getImportedNames } from "@/types/importStatement.js";
 import type { ReturnStatement } from "@/types/returnStatement.js";
@@ -58,9 +58,14 @@ import type { ImportedFunctionSignature } from "@/compilationUnit.js";
  */
 
 /** What the lowering and the checks need to know about a decorator: its
- *  parameters (for the shape check) and whether it is imported (so the call
- *  carries the scope the resolver expects). */
-export type DecoratorSignature = { parameters: FunctionParameter[]; imported: boolean };
+ *  parameters (for the shape check), whether it is imported (so the call
+ *  carries the scope the resolver expects), and whether it is declared
+ *  `decorator def` at all. */
+export type DecoratorSignature = {
+  parameters: FunctionParameter[];
+  imported: boolean;
+  decorator: boolean;
+};
 export type DecoratorLookup = (name: string) => DecoratorSignature | undefined;
 
 /** The one lookup both callers use, built from the two tables every caller
@@ -71,10 +76,16 @@ export function decoratorLookup(
 ): DecoratorLookup {
   return (name) => {
     if (Object.hasOwn(functionDefinitions, name)) {
-      return { parameters: functionDefinitions[name].parameters, imported: false };
+      const def = functionDefinitions[name];
+      return { parameters: def.parameters, imported: false, decorator: isDecoratorDef(def) };
     }
     if (Object.hasOwn(importedFunctions, name)) {
-      return { parameters: importedFunctions[name].parameters, imported: true };
+      const signature = importedFunctions[name];
+      return {
+        parameters: signature.parameters,
+        imported: true,
+        decorator: isDecoratorDef(signature),
+      };
     }
     return undefined;
   };

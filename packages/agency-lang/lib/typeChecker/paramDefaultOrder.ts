@@ -21,9 +21,7 @@ export function checkParamDefaultOrder(ctx: TypeCheckerContext): void {
     // A decorator's trailing `call` and block are supplied by the compiler,
     // so they may follow a defaulted parameter.
     const checked =
-      node.type === "function"
-        ? callerSuppliedParameters(node.parameters ?? [])
-        : (node.parameters ?? []);
+      node.type === "function" ? callerSuppliedParameters(node) : (node.parameters ?? []);
     let sawDefault = false;
     for (const param of checked) {
       if (param.defaultValue) {

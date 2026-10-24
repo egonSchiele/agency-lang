@@ -25,22 +25,6 @@ function withCode(errors: TypeCheckError[], name: string): TypeCheckError[] {
   return errors.filter((error) => error.name === name);
 }
 
-describe("decorator shape in the checker", () => {
-  it("reports a decorator of the wrong shape when the checker runs on its own", () => {
-    // typecheckSource runs the checker without the decorator stage, the
-    // case the checker's own AG6043 exists for.
-    const src =
-      "decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
-      '@logged("t")\n' +
-      'def f(): string { return "x" }\n';
-    const [error] = withCode(typecheckSource(src), "decoratorShape");
-    expect(error.code).toBe("AG6043");
-    expect(error.message).toContain("'logged' cannot decorate 'f'");
-    expect(error.message).toContain("Found 'tag' there");
-    expect(error.loc?.line).toBe(lineOf(src, "@logged"));
-  });
-});
-
 describe("decorator mismatch diagnostics", () => {
   it("names the decorator when a tag argument has the wrong type", () => {
     const src = BUDGETED + '@budgeted(cost: "x")\ndef one(): Result<string> {\n  return "a"\n}\n';
@@ -228,10 +212,8 @@ describe("a typo in a decorator name", () => {
       prepared.diagnostics.map((found) =>
         found.stage === "decorators" ? found.message : found.stage,
       ),
-    ).toEqual([expect.stringContaining("Found 'tag' there")]);
+    ).toEqual([expect.stringContaining("'tag' receives the call record")]);
     const errors = typeCheck(prepared.program, {}, prepared.info).errors;
-    expect(errors.filter((error) => error.severity === "error").map((error) => error.code)).toEqual(
-      ["AG6043"],
-    );
+    expect(errors.filter((error) => error.severity === "error")).toEqual([]);
   });
 });

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'tag' receives the call record, so its type must be `Call` or left off.",
+  "description": "agency compile refuses a decorator whose record slot is typed as something other than Call"
+}

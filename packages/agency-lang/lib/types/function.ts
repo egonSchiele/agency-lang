@@ -10,6 +10,7 @@ import {
 import { BaseNode, SourceLocation } from "./base.js";
 import { Hole } from "./hole.js";
 import { BlockArgument } from "./blockArgument.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { MultiLineStringLiteral } from "./literals.js";
 import { Tag } from "./tag.js";
@@ -52,38 +53,104 @@ export function isBlockParameter(parameter: FunctionParameter): boolean {
   return parameter.typeHint?.type === "blockType";
 }
 
-/** Whether these parameters are a decorator's: the second-to-last is named
- *  `call` and the last takes a block (docs/dev/language/decorators.md).
- *  Defaults are ignored here; `decoratorShapeProblem` reports them. */
-export function hasDecoratorShape(parameters: FunctionParameter[]): boolean {
-  const secondToLast = parameters[parameters.length - 2];
-  return secondToLast?.name === "call" && lastParameterTakesBlock(parameters);
+// What the compiler knows about a decorator's parameters. The functions
+// below are the only place that reads `markers.decorator` or counts the
+// trailing slots; the parser, the checker, the lowering, and the
+// compilation unit all ask here (docs/dev/language/decorators.md).
+
+/** A def or an imported signature: what the decorator questions below need. */
+export type Decoratable = { parameters: FunctionParameter[]; markers?: FunctionMarkers };
+
+/** Whether `def` was declared `decorator def`. The marker decides, never
+ *  the parameters. */
+export function isDecoratorDef(def: Decoratable): boolean {
+  return def.markers?.decorator === true;
 }
 
-/** What is wrong with these parameters for a decorator, as the clause after
- *  "'d' cannot decorate 'f': ", or null when they have the decorator shape
- *  and neither `call` nor the block has a default. */
+/** The parameters the compiler supplies to a decorator: the call record
+ *  and the body as a block, the last two. */
+export const DECORATOR_SLOT_COUNT = 2;
+
+const RECORD_SLOT_TYPE: VariableType = { type: "typeAliasVariable", aliasName: "Call" };
+const BLOCK_SLOT_TYPE: VariableType = {
+  type: "blockType",
+  params: [{ name: "args", typeAnnotation: { type: "primitiveType", value: "object" } }],
+  returnType: { type: "primitiveType", value: "any" },
+};
+
+/** The name of the parameter that receives the call record: the
+ *  second-to-last. `call` when there is no such slot, so a lowering over a
+ *  decorator in the wrong shape still builds a call the checks can see. */
+export function recordSlotName(parameters: FunctionParameter[]): string {
+  return parameters[parameters.length - DECORATOR_SLOT_COUNT]?.name ?? "call";
+}
+
+/** A decorator's parameters as the compiler sees them: an untyped record
+ *  slot is `Call` and an untyped block slot is `(args: object) -> any`. A
+ *  written type is kept. A plain def's parameters come back as they are.
+ *  Never mutates: the parse tree the formatter prints keeps the user's
+ *  text. */
+export function withDecoratorTypes(def: Decoratable): FunctionParameter[] {
+  if (!isDecoratorDef(def)) {
+    return def.parameters;
+  }
+  const recordIndex = def.parameters.length - DECORATOR_SLOT_COUNT;
+  const blockIndex = def.parameters.length - 1;
+  return def.parameters.map((parameter, index) => {
+    if (parameter.typeHint !== undefined) {
+      return parameter;
+    }
+    if (index === recordIndex) {
+      return { ...parameter, typeHint: RECORD_SLOT_TYPE };
+    }
+    if (index === blockIndex) {
+      return { ...parameter, typeHint: BLOCK_SLOT_TYPE };
+    }
+    return parameter;
+  });
+}
+
+function isRecordSlotType(hint: VariableType | undefined): boolean {
+  return (
+    hint === undefined ||
+    (hint.type === "typeAliasVariable" && hint.aliasName === "Call") ||
+    (hint.type === "primitiveType" && hint.value === "any")
+  );
+}
+
+/** What is wrong with a decorator's parameters, as the clause after
+ *  "'d' is declared as a decorator, but ", or null when they are in shape:
+ *  at least two, the last takes a block, the second-to-last is untyped or
+ *  `Call` or `any`, and neither of the two has a default or is variadic.
+ *  Names are free. */
 export function decoratorShapeProblem(parameters: FunctionParameter[]): string | null {
-  if (parameters.length < 2 || !lastParameterTakesBlock(parameters)) {
-    return "a decorator receives the body of the function it decorates as a block, so its last parameter must be a block, such as `block: (args: object) -> any`.";
+  if (parameters.length < DECORATOR_SLOT_COUNT) {
+    return "a decorator takes at least two parameters: the call record and the body as a block.";
   }
-  const [callParam, blockParam] = parameters.slice(-2);
-  if (callParam.name !== "call") {
-    return `a decorator's last two parameters are \`call: Call\` and a block, so \`call\` must come right before the block. Found '${callParam.name}' there.`;
+  const [recordSlot, blockSlot] = parameters.slice(-DECORATOR_SLOT_COUNT);
+  if (!lastParameterTakesBlock(parameters)) {
+    const written = blockSlot.typeHint ? `: ${formatTypeHint(blockSlot.typeHint)}` : "";
+    return `its last parameter must take the body as a block, such as \`block: (args: object) -> any\`. Found '${blockSlot.name}${written}'.`;
   }
-  const defaulted = [callParam, blockParam].find((param) => param.defaultValue !== undefined);
+  if (!isRecordSlotType(recordSlot.typeHint)) {
+    return `'${recordSlot.name}' receives the call record, so its type must be \`Call\` or left off.`;
+  }
+  const defaulted = [recordSlot, blockSlot].find((slot) => slot.defaultValue !== undefined);
   if (defaulted !== undefined) {
-    return `'${defaulted.name}' has a default, but a decorator always receives \`call\` and the block. Remove the default.`;
+    return `'${defaulted.name}' has a default, and a decorator always receives the call record and the block. Remove the default.`;
+  }
+  const variadic = [recordSlot, blockSlot].find((slot) => slot.variadic);
+  if (variadic !== undefined) {
+    return `'${variadic.name}' is variadic, but the call record and the block are one argument each.`;
   }
   return null;
 }
 
 /** The parameters a caller writes: all of them, or all but the trailing
- *  `call` and block the compiler supplies when the function is a decorator.
- *  The parser's ordering check, AG6039, and the checker's call checks all
- *  go through this, so the lowered shape is known in one place. */
-export function callerSuppliedParameters(parameters: FunctionParameter[]): FunctionParameter[] {
-  return hasDecoratorShape(parameters) ? parameters.slice(0, -2) : parameters;
+ *  slots the compiler supplies when `def` is a decorator. The parser's
+ *  ordering check and AG6039 go through this. */
+export function callerSuppliedParameters(def: Decoratable): FunctionParameter[] {
+  return isDecoratorDef(def) ? def.parameters.slice(0, -DECORATOR_SLOT_COUNT) : def.parameters;
 }
 
 export const VALID_CALLBACK_NAMES = [

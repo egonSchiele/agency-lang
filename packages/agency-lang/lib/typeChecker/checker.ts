@@ -31,10 +31,11 @@ import { checkMatchExprYields } from "./matchExprTypes.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
 import {
-  callerSuppliedParameters,
+  DECORATOR_SLOT_COUNT,
   decoratorShapeProblem,
   lastParameterTakesBlock,
 } from "../types/function.js";
+import { decoratorLookup } from "../preprocessors/decoratorDesugar.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 import { draftTarget, mismatchEntry } from "./mismatch.js";
 
@@ -318,17 +319,14 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    // A decorator call whose target lacks the decorator shape: say so and
-    // stop, since checking its arguments against the wrong slots would add
-    // a misleading error. The decorator stage reports the same mistake when
-    // it runs first; the editor drops this copy then (lib/lsp/diagnostics.ts).
+    // A tag on a def that is not a decorator, or on a decorator in the wrong
+    // shape: stop, since checking the call's arguments against the wrong
+    // slots would add a misleading error. The decorator stage reports both
+    // mistakes; the checker's own copies are the next step of this work.
     if (call.decorator !== undefined) {
-      const problem = decoratorShapeProblem(params);
-      if (problem !== null) {
-        const { name, target } = call.decorator;
-        ctx.errors.push(diagnostic("decoratorShape", { name, target, problem }, call.loc ?? null));
-        return;
-      }
+      const signature = decoratorLookup(ctx.functionDefs, ctx.importedFunctions)(call.functionName);
+      if (signature === undefined || !signature.decorator) return;
+      if (decoratorShapeProblem(signature.parameters) !== null) return;
     }
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;
@@ -728,7 +726,7 @@ function checkArity(
   if (argCount >= minArgs && argCount <= maxArgs) return true;
   // A decorator tag's call has arguments the author never wrote: the body
   // and the `call` record. Count only the tag's own.
-  const hidden = hiddenDecoratorArguments(call, params);
+  const hidden = hiddenDecoratorArguments(call);
   const arity = { fn: displayFunctionName(call.functionName), count: argCount - hidden };
   const min = minArgs - hidden;
   const max = maxArgs - hidden;
@@ -745,16 +743,15 @@ function checkArity(
 
 /** How many of a call's arguments the decorator lowering added: the `call`
  *  record and the body as the block. 0 for any other call. */
-function hiddenDecoratorArguments(call: FunctionCall, params: FunctionParameter[]): number {
-  if (call.decorator === undefined) return 0;
-  return params.length - callerSuppliedParameters(params).length;
+function hiddenDecoratorArguments(call: FunctionCall): number {
+  return call.decorator === undefined ? 0 : DECORATOR_SLOT_COUNT;
 }
 
 /** The parameter names a call's author can write. For a decorator's call,
  *  the `call` record and the block are the lowering's, so they are left out
  *  of the names an unknown-argument error suggests. */
 function writableParameterNames(call: FunctionCall, params: FunctionParameter[]): string[] {
-  const written = call.decorator === undefined ? params : callerSuppliedParameters(params);
+  const written = params.slice(0, params.length - hiddenDecoratorArguments(call));
   return written.map((param) => param.name);
 }
 

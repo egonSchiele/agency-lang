@@ -1,4 +1,0 @@
-{
-  "expectedCompileError": "Found 'tag' there",
-  "description": "agency compile refuses a decorator whose call parameter is not right before the block"
-}

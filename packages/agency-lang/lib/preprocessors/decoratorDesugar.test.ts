@@ -4,6 +4,7 @@ import type { AgencyProgram, Assignment } from "../types.js";
 import type { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import type { ReturnStatement } from "../types/returnStatement.js";
 import {
+  decoratorLookup,
   decoratorProblems,
   decoratorsAbove,
   desugarDecorators,
@@ -41,13 +42,18 @@ const lookup: DecoratorLookup = (name) => {
     return {
       parameters: [parameter("times"), parameter("call"), parameter("block")],
       imported: false,
+      decorator: true,
     };
   }
   if (name === "plain") {
-    return { parameters: [parameter("call"), parameter("block")], imported: false };
+    return {
+      parameters: [parameter("call"), parameter("block")],
+      imported: false,
+      decorator: true,
+    };
   }
   if (name === "fromAway") {
-    return { parameters: [parameter("call"), parameter("block")], imported: true };
+    return { parameters: [parameter("call"), parameter("block")], imported: true, decorator: true };
   }
   return undefined;
 };
@@ -251,6 +257,32 @@ describe("desugarDecorators", () => {
   });
 });
 
+describe("decoratorLookup", () => {
+  it("says whether a name is a decorator, for local and imported defs", () => {
+    const program = parse(
+      `decorator def marked(call, block) { return block() }\ndef plain(call: Call, block: () -> any): any { return block() }\n`,
+    );
+    const lookup = decoratorLookup(
+      { marked: defNamed(program, "marked"), plain: defNamed(program, "plain") },
+      {
+        fromAway: {
+          parameters: [parameter("call"), parameter("block")],
+          returnType: null,
+          markers: { decorator: true },
+        },
+        plainAway: { parameters: [parameter("call"), parameter("block")], returnType: null },
+      },
+    );
+    expect(lookup("marked")?.decorator).toBe(true);
+    expect(lookup("plain")?.decorator).toBe(false);
+    expect(lookup("fromAway")).toEqual(
+      expect.objectContaining({ imported: true, decorator: true }),
+    );
+    expect(lookup("plainAway")?.decorator).toBe(false);
+    expect(lookup("nobody")).toBeUndefined();
+  });
+});
+
 describe("decoratorProblems", () => {
   const scope = {
     functionDefinitions: {},
@@ -341,7 +373,9 @@ describe("decoratorProblems", () => {
     );
     const withTagged = { ...scope, functionDefinitions: { tagged: defNamed(program, "tagged") } };
     expect(decoratorProblems(program, withTagged).map((problem) => problem.message)).toEqual([
-      expect.stringContaining("'tagged' cannot decorate 'f': a decorator receives the body"),
+      expect.stringContaining(
+        "'tagged' cannot decorate 'f': a decorator takes at least two parameters",
+      ),
     ]);
   });
 
@@ -361,14 +395,14 @@ describe("decoratorProblems", () => {
     expect(decoratorProblems(program, scope)).toEqual([]);
   });
 
-  it("refuses a decorator whose call parameter is not right before the block", () => {
+  it("refuses a record slot typed as anything but Call or any", () => {
     const program = parse(
       `decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n@logged("t")\ndef f(): string { return "x" }\n`,
     );
     const withLogged = { ...scope, functionDefinitions: { logged: defNamed(program, "logged") } };
     expect(decoratorProblems(program, withLogged).map((problem) => problem.message)).toEqual([
       expect.stringContaining(
-        "'logged' cannot decorate 'f': a decorator's last two parameters are `call: Call` and a block, so `call` must come right before the block. Found 'tag' there.",
+        "'tag' receives the call record, so its type must be `Call` or left off.",
       ),
     ]);
   });
@@ -380,7 +414,7 @@ describe("decoratorProblems", () => {
     const withD = { ...scope, functionDefinitions: { d: defNamed(program, "d") } };
     expect(decoratorProblems(program, withD).map((problem) => problem.message)).toEqual([
       expect.stringContaining(
-        "'block' has a default, but a decorator always receives `call` and the block.",
+        "'block' has a default, and a decorator always receives the call record and the block.",
       ),
     ]);
   });

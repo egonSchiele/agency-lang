@@ -87,6 +87,9 @@ describe("prepareProgram", () => {
       );
       expect(result.ok).toBe(true);
       expect(result.diagnostics).toEqual([]);
+      if (result.ok) {
+        expect(result.info.importedFunctions.logged.markers).toEqual({ decorator: true });
+      }
     });
 
     it("refuses an unknown decorator, naming it and the def", () => {

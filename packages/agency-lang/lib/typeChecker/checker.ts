@@ -35,7 +35,7 @@ import {
   decoratorShapeProblem,
   lastParameterTakesBlock,
 } from "../types/function.js";
-import { decoratorLookup } from "../preprocessors/decoratorDesugar.js";
+import { decoratorLookup, tagProblem } from "../preprocessors/decoratorDesugar.js";
 import { isSchemaTypeHint } from "../utils/schemaParam.js";
 import { draftTarget, mismatchEntry } from "./mismatch.js";
 
@@ -319,14 +319,28 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    // A tag on a def that is not a decorator, or on a decorator in the wrong
-    // shape: stop, since checking the call's arguments against the wrong
-    // slots would add a misleading error. The decorator stage reports both
-    // mistakes; the checker's own copies are the next step of this work.
+    // A tag on a def that is not a decorator (AG6044), or on a decorator in
+    // the wrong shape: stop either way, since checking the call's arguments
+    // against the wrong slots would add a misleading error. An imported
+    // decorator's shape is reported here (AG6043); a local one is reported
+    // at its def by checkDecoratorDefs. The decorator stage reports the
+    // same mistakes from the same data, and the editor drops these copies
+    // when it has (lib/lsp/diagnostics.ts).
     if (call.decorator !== undefined) {
       const signature = decoratorLookup(ctx.functionDefs, ctx.importedFunctions)(call.functionName);
-      if (signature === undefined || !signature.decorator) return;
-      if (decoratorShapeProblem(signature.parameters) !== null) return;
+      if (signature === undefined) return;
+      const found = tagProblem(signature);
+      if (found === null && decoratorShapeProblem(signature.parameters) !== null) return;
+      if (found !== null) {
+        const { name, target } = call.decorator;
+        const loc = call.loc ?? null;
+        if (found.kind === "notADecorator") {
+          ctx.errors.push(diagnostic("notADecorator", { name, target }, loc));
+        } else {
+          ctx.errors.push(diagnostic("decoratorShape", { name, problem: found.problem }, loc));
+        }
+        return;
+      }
     }
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;

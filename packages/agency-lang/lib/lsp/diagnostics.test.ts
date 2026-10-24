@@ -36,6 +36,17 @@ describe("runDiagnostics", () => {
     expect(shape).toHaveLength(1);
   });
 
+  it("reports a tag on a plain def once", () => {
+    const doc = makeDoc(
+      "def logged(call: Call, block: () -> any): any { return block() }\n" +
+        "@logged\n" +
+        'def f(): string { return "x" }\n',
+    );
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const found = diagnostics.filter((d) => d.message.includes("is not a decorator"));
+    expect(found).toHaveLength(1);
+  });
+
   it("returns a diagnostic with range for a parse error", () => {
     // Deliberately malformed: unclosed function
     const doc = makeDoc("def foo( {");

@@ -45,6 +45,7 @@ import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { checkParamDefaultOrder } from "./paramDefaultOrder.js";
+import { checkDecoratorDefs } from "./decoratorDefs.js";
 import { checkTemplateHoles } from "./templateHoles.js";
 import { checkTemplateNames } from "./templateNames.js";
 import { checkTopLevelStatements } from "./topLevelStatements.js";
@@ -388,6 +389,7 @@ export class TypeChecker {
     // Defaulted parameters must come last (positional binding makes a
     // required-after-defaulted parameter silently unfillable).
     checkParamDefaultOrder(ctx);
+    checkDecoratorDefs(ctx);
 
     // Template holes: an expression hole in a position that supplies no
     // type must carry an inline annotation (AG8002).

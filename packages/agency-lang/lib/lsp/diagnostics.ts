@@ -124,11 +124,13 @@ export function runDiagnostics(
 
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);
 
-  // The decorator stage already reported a decorator of the wrong shape at
-  // its tag; the checker's AG6043 for it would be the same error twice.
-  const shapeReported = prepared.diagnostics.some((found) => found.stage === "decorators");
+  // The decorator stage already reported a decorator in the wrong shape and
+  // a tag on a plain def; the checker's AG6043 and AG6044 for them would be
+  // the same errors twice.
+  const stageReported = prepared.diagnostics.some((found) => found.stage === "decorators");
+  const repeatsTheStage = (name: string) => name === "decoratorShape" || name === "notADecorator";
   for (const err of errors) {
-    if (shapeReported && err.name === "decoratorShape") continue;
+    if (stageReported && repeatsTheStage(err.name)) continue;
     const range = err.loc
       ? {
           start: { line: err.loc.line, character: err.loc.col },

@@ -1,0 +1,23 @@
+// The outer decorator rebinds before the inner one is called, so the inner
+// one's call record and its tag arguments see the outer's values.
+let seen: number[] = []
+
+def outer(call: Call, block: (args: object) -> any): any {
+  return block({ n: 2 })
+}
+
+def inner(limit: number, call: Call, block: (args: object) -> any): any {
+  seen = [...seen, limit, call.args.n]
+  return block(call.args)
+}
+
+@outer
+@inner(limit: n)
+def f(n: number): number {
+  return n
+}
+
+node main() {
+  f(1)
+  return seen
+}

@@ -1,0 +1,29 @@
+// A `!` parameter is checked again when a decorator rebinds it, so a
+// decorator cannot slip an unchecked value past the validator. The body
+// does not run on a failed check.
+def isPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("must be positive")
+}
+
+@validate(isPositive)
+type Positive = number
+
+let ran = false
+
+def negate(call: Call, block: (args: object) -> any): any {
+  return block({ n: -1 })
+}
+
+@negate
+def f(n: Positive!): Result<number> {
+  ran = true
+  return success(n)
+}
+
+node main() {
+  const r = f(3)
+  return { failed: isFailure(r), ran: ran }
+}

@@ -1,7 +1,7 @@
 // A destructive region inside a decorated body still marks the failure that
 // escapes the function.
-def logged(block: () -> any): any {
-  return block()
+def logged(call: Call, block: () -> any): any {
+  return block(call.args)
 }
 
 @logged

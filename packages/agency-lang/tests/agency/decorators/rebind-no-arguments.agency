@@ -1,0 +1,14 @@
+// block() with no record means every parameter is unset, as on a call that
+// passes nothing: a parameter with a default takes its default.
+def bare(call: Call, block: (args: object) -> any): any {
+  return block()
+}
+
+@bare
+def f(a: number = 5, b: string = "x"): string {
+  return "${a}:${b}"
+}
+
+node main() {
+  return f(1, "y")
+}

@@ -1,0 +1,13 @@
+// `call` must come right before the block.
+def logged(call: Call, tag: string, block: () -> any): any {
+  return block()
+}
+
+@logged("t")
+def f(): string {
+  return "x"
+}
+
+node main() {
+  return f()
+}

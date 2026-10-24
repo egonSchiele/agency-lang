@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the body sees the rebound value after a pause and resume",
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

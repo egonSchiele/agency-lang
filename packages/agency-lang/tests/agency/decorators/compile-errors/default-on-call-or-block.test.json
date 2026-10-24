@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "'block' has a default",
+  "description": "agency compile refuses a default on call or the block"
+}

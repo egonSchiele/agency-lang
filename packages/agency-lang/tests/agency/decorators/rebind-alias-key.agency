@@ -1,0 +1,19 @@
+// An alias is for a caller outside the program that guessed the name. Agency
+// code uses the parameter's own name, and a record keyed by the alias is an
+// unknown key (docs/dev/language/parameter-aliases.md).
+def byAlias(call: Call, block: (args: object) -> any): any {
+  return block({ url: "x" })
+}
+
+@byAlias
+def fetch(baseUrl | url: string): Result<string> {
+  return success(baseUrl)
+}
+
+node main() {
+  const r = fetch("y")
+  if (isFailure(r)) {
+    return r.error
+  }
+  return "unexpected"
+}

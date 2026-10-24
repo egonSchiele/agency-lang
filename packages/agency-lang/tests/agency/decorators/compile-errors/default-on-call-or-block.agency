@@ -1,0 +1,13 @@
+// `call` and the block are always supplied, so neither may have a default.
+def d(call: Call, block: () -> any = null): any {
+  return block()
+}
+
+@d
+def f(): string {
+  return "x"
+}
+
+node main() {
+  return f()
+}

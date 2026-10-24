@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Unknown named argument 'url' in call to 'fetch'. Valid names: baseUrl.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a record keyed by a parameter alias is an unknown key"
+    }
+  ]
+}

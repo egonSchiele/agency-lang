@@ -174,6 +174,11 @@ function runOnce({ name, flags, cwd, agent: makeAgent, writeback, check }) {
   if (typeof trainObjective !== "number" || typeof baselineObjective !== "number") {
     throw new Error(`missing objectives in summary.json: ${JSON.stringify(summary)}`);
   }
+  // A baseline at full marks leaves the optimizer nothing to improve, so the
+  // run tells us nothing about it either way.
+  if (baselineObjective >= 1) {
+    throw new InconclusiveRun(`baseline already scored ${baselineObjective}`);
+  }
   if (!(trainObjective > baselineObjective)) {
     throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
   }
@@ -190,18 +195,24 @@ function runOnce({ name, flags, cwd, agent: makeAgent, writeback, check }) {
   console.log(`[${name}] PASS (baseline ${baselineObjective} -> champion ${trainObjective})`);
 }
 
+class InconclusiveRun extends Error {}
+
+// Returns "passed", or "inconclusive" when every attempt started at full marks.
+// Throws the last real failure if any attempt had one.
 function runWithRetries(run) {
-  let lastErr;
+  const errors = [];
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     try {
       runOnce(run);
-      return;
+      return "passed";
     } catch (err) {
-      lastErr = err;
+      errors.push(err);
       console.error(`[${run.name}] attempt ${attempt + 1}/${RETRIES + 1} failed: ${err.message}`);
     }
   }
-  throw lastErr;
+  const realFailures = errors.filter((err) => !(err instanceof InconclusiveRun));
+  if (realFailures.length === 0) return "inconclusive";
+  throw realFailures[realFailures.length - 1];
 }
 
 let failed = false;
@@ -216,7 +227,13 @@ for (const run of RUNS) {
     continue;
   }
   try {
-    runWithRetries(run);
+    if (runWithRetries(run) === "inconclusive") {
+      // The ::warning:: prefix shows the skip as an annotation on the GitHub run.
+      console.log(
+        `::warning::[${run.name}] SKIPPED: every attempt's baseline already scored full marks`,
+      );
+      skipped.push(run.name);
+    }
   } catch (err) {
     failed = true;
     console.error(`[${run.name}] FAILED after ${RETRIES + 1} attempts: ${err.message}`);

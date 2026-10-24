@@ -1,7 +1,7 @@
 // A decorator that calls block from two fork branches at once: the first
 // call runs, the second is refused with a failure instead of reading the
 // first branch's arguments.
-def twice(call: Call, block: (args: object) -> any): any {
+decorator def twice(call: Call, block: (args: object) -> any): any {
   return fork([1, 2]) as n { return block({ n: n }) }
 }
 

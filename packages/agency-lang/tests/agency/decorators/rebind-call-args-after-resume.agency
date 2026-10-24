@@ -1,6 +1,6 @@
 // call.args is the arguments the decorator was handed, before and after a
 // real pause: a rebind must not leak into it when the program resumes.
-def rebinding(call: Call, block: (args: object) -> any): any {
+decorator def rebinding(call: Call, block: (args: object) -> any): any {
   const before = call.args.n
   const first = block({ n: 5 })
   const second = block(call.args)

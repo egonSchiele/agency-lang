@@ -317,7 +317,7 @@ describe("decoratorProblems", () => {
 
   it("allows a chain of decorators that does not loop back", () => {
     const program = parse(
-      `@plain\ndef a(call: Call, block: () -> any): any { return block() }\n@a\ndef b(): string { return "x" }\n`,
+      `@plain\ndecorator def a(call: Call, block: () -> any): any { return block() }\n@a\ndef b(): string { return "x" }\n`,
     );
     const chain = {
       ...scope,
@@ -347,7 +347,7 @@ describe("decoratorProblems", () => {
 
   it("accepts a last parameter typed any or left untyped, as the type checker does", () => {
     const program = parse(
-      `def loose(call: Call, block: any): any { return block() }\ndef bare(call, block): any { return block() }\n@loose\n@bare\ndef f(): string { return "x" }\n`,
+      `decorator def loose(call: Call, block: any): any { return block() }\ndecorator def bare(call, block): any { return block() }\n@loose\n@bare\ndef f(): string { return "x" }\n`,
     );
     const both = {
       ...scope,
@@ -363,7 +363,7 @@ describe("decoratorProblems", () => {
 
   it("refuses a decorator whose call parameter is not right before the block", () => {
     const program = parse(
-      `def logged(call: Call, tag: string, block: () -> any): any { return block() }\n@logged("t")\ndef f(): string { return "x" }\n`,
+      `decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n@logged("t")\ndef f(): string { return "x" }\n`,
     );
     const withLogged = { ...scope, functionDefinitions: { logged: defNamed(program, "logged") } };
     expect(decoratorProblems(program, withLogged).map((problem) => problem.message)).toEqual([
@@ -375,7 +375,7 @@ describe("decoratorProblems", () => {
 
   it("refuses a default on call or the block", () => {
     const program = parse(
-      `def d(call: Call, block: () -> any = null): any { return block() }\n@d\ndef f(): string { return "x" }\n`,
+      `decorator def d(call: Call, block: () -> any = null): any { return block() }\n@d\ndef f(): string { return "x" }\n`,
     );
     const withD = { ...scope, functionDefinitions: { d: defNamed(program, "d") } };
     expect(decoratorProblems(program, withD).map((problem) => problem.message)).toEqual([

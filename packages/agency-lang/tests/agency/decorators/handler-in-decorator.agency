@@ -2,7 +2,7 @@
 // body raises: one decorator approves, the other rejects. A decorator's
 // approve does not outrank its caller: when the caller rejects, the interrupt
 // is rejected, as with any nested handlers.
-def approving(call: Call, block: () -> any): any {
+decorator def approving(call: Call, block: () -> any): any {
   let result = null
   handle {
     result = block(call.args)
@@ -10,7 +10,7 @@ def approving(call: Call, block: () -> any): any {
   return result
 }
 
-def rejecting(call: Call, block: () -> any): any {
+decorator def rejecting(call: Call, block: () -> any): any {
   let result = null
   handle {
     result = block(call.args)

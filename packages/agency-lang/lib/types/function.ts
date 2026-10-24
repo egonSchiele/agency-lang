@@ -112,7 +112,12 @@ export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
 
 /** The keywords that set a marker on a `def`, in the order the formatter
  *  prints them. The parser accepts them in any order. */
-export const FUNCTION_MARKER_KEYWORDS = ["destructive", "idempotent", "handoff"] as const;
+export const FUNCTION_MARKER_KEYWORDS = [
+  "destructive",
+  "idempotent",
+  "handoff",
+  "decorator",
+] as const;
 export type FunctionMarkerKeyword = (typeof FUNCTION_MARKER_KEYWORDS)[number];
 
 /** Per-function markers. Carried as one object from the AST through the
@@ -130,6 +135,10 @@ export type FunctionMarkers = {
    *  is replaced by a marker and a resume message. See
    *  docs/dev/language/handoff-functions.md. */
   handoff?: boolean;
+  /** Declared `decorator def`: its last two parameters receive a call
+   *  record and the decorated body as a block, and only such a def may be
+   *  named in a tag. See docs/dev/language/decorators.md. */
+  decorator?: boolean;
 };
 
 /** The keywords set on `markers`, in print order. */

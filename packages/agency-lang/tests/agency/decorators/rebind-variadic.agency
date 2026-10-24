@@ -1,10 +1,10 @@
 // A variadic parameter is in call.args as an array, a record sets it from
 // an array, and block() leaves it empty, as a call that passes nothing does.
-def withX(call: Call, block: (args: object) -> any): any {
+decorator def withX(call: Call, block: (args: object) -> any): any {
   return block({ ...call.args, rest: ["x"] })
 }
 
-def bare(call: Call, block: (args: object) -> any): any {
+decorator def bare(call: Call, block: (args: object) -> any): any {
   return block()
 }
 

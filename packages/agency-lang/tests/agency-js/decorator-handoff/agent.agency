@@ -3,7 +3,7 @@
 // caller's conversation, and the tool the model sees is the def's own.
 let trace: string[] = []
 
-def logged(call: Call, block: () -> any): any {
+decorator def logged(call: Call, block: () -> any): any {
   trace = [...trace, "enter:${call.name}:${call.args.question}"]
   const result = block(call.args)
   trace = [...trace, "leave:${call.name}"]

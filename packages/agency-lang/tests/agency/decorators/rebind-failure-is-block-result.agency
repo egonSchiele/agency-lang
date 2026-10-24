@@ -13,7 +13,7 @@ type Positive = number
 
 let seen: string[] = []
 
-def inspecting(record: object, call: Call, block: (args: object) -> any): string {
+decorator def inspecting(record: object, call: Call, block: (args: object) -> any): string {
   const r = block(record)
   if (isFailure(r)) {
     seen = [...seen, "failure"]

@@ -1,7 +1,7 @@
 // A rebind survives a real pause: the interrupt below is answered from the
 // test file, so the program is checkpointed and resumed, and the body still
 // sees the value the decorator passed. No handler in the program.
-def withTwo(call: Call, block: (args: object) -> any): any {
+decorator def withTwo(call: Call, block: (args: object) -> any): any {
   return block({ ...call.args, n: 2 })
 }
 

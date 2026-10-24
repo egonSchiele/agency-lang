@@ -1,5 +1,5 @@
 // A decorated function called through a record field.
-def doubled(call: Call, block: () -> any): any {
+decorator def doubled(call: Call, block: () -> any): any {
   return block(call.args) * 2
 }
 

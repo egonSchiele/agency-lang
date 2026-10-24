@@ -1,6 +1,6 @@
 // A function-typed parameter that is not the last parameter is kept as is
 // by a rebind, and does not collide with the record.
-def passThrough(call: Call, block: (args: object) -> any): any {
+decorator def passThrough(call: Call, block: (args: object) -> any): any {
   return block(call.args)
 }
 

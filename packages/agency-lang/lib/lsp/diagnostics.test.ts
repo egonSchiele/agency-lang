@@ -25,7 +25,7 @@ describe("runDiagnostics", () => {
     // The decorator stage and the checker both find this; the editor
     // shows the stage's report and drops the checker's copy.
     const doc = makeDoc(
-      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+      "decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
         '@logged("t")\n' +
         'def f(): string { return "x" }\n',
     );

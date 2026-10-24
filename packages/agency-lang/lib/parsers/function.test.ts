@@ -2195,6 +2195,31 @@ describe("functionParser with export keyword", () => {
 });
 
 describe("functionParser with destructive/idempotent markers", () => {
+  it("parses decorator def", () => {
+    const parsed = functionParser(
+      "decorator def logged(tag: string, call, block) { return block() }",
+    );
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result.markers).toEqual({ decorator: true });
+      expect(parsed.result.parameters.map((p) => p.name)).toEqual(["tag", "call", "block"]);
+    }
+  });
+
+  it("parses export + decorator in either order", () => {
+    for (const source of [
+      "export decorator def d(call, block) { return block() }",
+      "decorator export def d(call, block) { return block() }",
+    ]) {
+      const parsed = functionParser(source);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.result.exported).toBe(true);
+        expect(parsed.result.markers).toEqual({ decorator: true });
+      }
+    }
+  });
+
   it("parses handoff def", () => {
     const parsed = functionParser("handoff def explorer(q: string): string { return q }");
     expect(parsed.success).toBe(true);

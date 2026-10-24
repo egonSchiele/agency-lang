@@ -1,5 +1,5 @@
 // `call` must come right before the block.
-def logged(call: Call, tag: string, block: () -> any): any {
+decorator def logged(call: Call, tag: string, block: () -> any): any {
   return block()
 }
 

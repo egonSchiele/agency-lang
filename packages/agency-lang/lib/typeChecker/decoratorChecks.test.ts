@@ -11,7 +11,7 @@ import type { TypeCheckError } from "./types.js";
 // The decorator every case below uses: it takes the `call` record, one
 // argument of its own, and a block returning string.
 const BUDGETED =
-  "def budgeted(cost: number, call: Call, block: () -> string): Result<string> {\n" +
+  "decorator def budgeted(cost: number, call: Call, block: () -> string): Result<string> {\n" +
   "  return success(block())\n" +
   "}\n";
 
@@ -30,7 +30,7 @@ describe("decorator shape in the checker", () => {
     // typecheckSource runs the checker without the decorator stage, the
     // case the checker's own AG6043 exists for.
     const src =
-      "def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
+      "decorator def logged(call: Call, tag: string, block: () -> any): any { return block() }\n" +
       '@logged("t")\n' +
       'def f(): string { return "x" }\n';
     const [error] = withCode(typecheckSource(src), "decoratorShape");
@@ -72,7 +72,7 @@ describe("decorator mismatch diagnostics", () => {
   it("blames the inner decorator, not the body, when stacked decorators disagree", () => {
     const src =
       BUDGETED +
-      "def inner(call: Call, block: () -> number): number {\n  return block()\n}\n" +
+      "decorator def inner(call: Call, block: () -> number): number {\n  return block()\n}\n" +
       "@budgeted(cost: 1)\n@inner\ndef five(): Result<string> {\n  return 1\n}\n";
     const errors = typecheckSource(src);
     const [error] = withCode(errors, "decoratorStackedReturn");
@@ -100,7 +100,7 @@ describe("decorator mismatch diagnostics", () => {
 
   it("accepts block(call.args) against a block typed () -> any", () => {
     const src =
-      "def d(call: Call, block: () -> any): any {\n  return block(call.args)\n}\n" +
+      "decorator def d(call: Call, block: () -> any): any {\n  return block(call.args)\n}\n" +
       "@d\ndef f(a: number): number {\n  return a\n}\n";
     expect(typecheckSource(src).filter((error) => error.severity === "error")).toEqual([]);
   });
@@ -141,7 +141,7 @@ describe("a saveDraft in a decorated body", () => {
   it("accepts any draft when the decorator's block returns any", () => {
     // The shape of the stdlib @guard: a reusable decorator over a Result def.
     const src =
-      "def wrapped(call: Call, block: () -> any): Result {\n  return success(block())\n}\n" +
+      "decorator def wrapped(call: Call, block: () -> any): Result {\n  return success(block())\n}\n" +
       '@wrapped\ndef f(): Result<string> {\n  saveDraft("partial")\n  return "a"\n}\n';
     expect(typecheckSource(src).filter((error) => error.severity === "error")).toEqual([]);
   });
@@ -153,11 +153,12 @@ describe("a saveDraft in a decorated body", () => {
 });
 
 describe("the checks checkType does besides assignability still run on a decorated def", () => {
-  const ANY_DECORATOR = "def wrapped(call: Call, block: () -> any): any {\n  return block()\n}\n";
+  const ANY_DECORATOR =
+    "decorator def wrapped(call: Call, block: () -> any): any {\n  return block()\n}\n";
 
   it("rejects a regex in a decorated llm() return type", () => {
     const src =
-      "def deco(call: Call, block: () -> regex): regex {\n  return block()\n}\n" +
+      "decorator def deco(call: Call, block: () -> regex): regex {\n  return block()\n}\n" +
       '@deco\ndef f(): regex {\n  return llm("pick a pattern")\n}\n';
     expect(withCode(typecheckSource(src), "regexInStructuredOutput")).toHaveLength(1);
   });
@@ -216,7 +217,7 @@ describe("a typo in a decorator name", () => {
     // The checker adds no argument-count error against the wrong slots; its
     // one error is the same shape report, which the editor drops.
     const src =
-      "def d(call: Call, tag: string, block: () -> any): any {\n  return block()\n}\n" +
+      "decorator def d(call: Call, tag: string, block: () -> any): any {\n  return block()\n}\n" +
       '@d("t")\ndef f(): string {\n  return "a"\n}\n';
     const file = path.join(dir, "shape.agency");
     fs.writeFileSync(file, src);

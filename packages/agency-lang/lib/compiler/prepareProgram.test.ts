@@ -77,7 +77,7 @@ describe("prepareProgram", () => {
   });
 
   describe("decorators", () => {
-    const DECORATOR = `export def logged(call: Call, block: () -> any): any {\n  return block()\n}\n`;
+    const DECORATOR = `export decorator def logged(call: Call, block: () -> any): any {\n  return block()\n}\n`;
 
     it("prepares a program whose decorator is declared or imported", () => {
       write("deco.agency", DECORATOR);

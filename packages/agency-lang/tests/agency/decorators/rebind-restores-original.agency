@@ -1,7 +1,7 @@
 // call.args is the arguments the decorator was handed. It does not change
 // when the decorator rebinds, so block(call.args) after block({...}) runs
 // the body with the original arguments.
-def twice(call: Call, block: (args: object) -> any): any {
+decorator def twice(call: Call, block: (args: object) -> any): any {
   block({ ...call.args, n: 100 })
   return block(call.args)
 }

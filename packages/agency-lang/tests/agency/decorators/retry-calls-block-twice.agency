@@ -2,7 +2,7 @@
 // attempt, pauses on an interrupt during the second, and then succeeds.
 let attempts = 0
 
-def retry(times: number, call: Call, block: () -> any): Result<string> {
+decorator def retry(times: number, call: Call, block: () -> any): Result<string> {
   let last: Result<string> = failure("never ran")
   for (i in range(0, times)) {
     last = block(call.args)

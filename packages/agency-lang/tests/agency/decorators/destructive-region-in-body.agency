@@ -1,6 +1,6 @@
 // A destructive region inside a decorated body still marks the failure that
 // escapes the function.
-def logged(call: Call, block: () -> any): any {
+decorator def logged(call: Call, block: () -> any): any {
   return block(call.args)
 }
 

@@ -199,7 +199,7 @@ export def firstValid(
   through a `finalize`. The decorator answers its own budget trip, so a
   caller cannot grant more budget; pass a larger limit instead. See
   docs/dev/agents/subagent-budgets.md. */
-export def guarded(
+export decorator def guarded(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,

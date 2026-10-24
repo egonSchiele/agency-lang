@@ -1,6 +1,6 @@
 // A return-position guard inside a decorated body. Decorators lower before
 // guards, so this guard gets no yield stamp from the def; it still works.
-def logged(call: Call, block: () -> any): any {
+decorator def logged(call: Call, block: () -> any): any {
   return block(call.args)
 }
 

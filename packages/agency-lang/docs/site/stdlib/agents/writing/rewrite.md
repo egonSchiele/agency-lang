@@ -18,7 +18,7 @@ The writing reviewer (`std::agents/writing/review`) returns a list of
 ### writingRewriteAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 writingRewriteAgent(
   text: string,
   task: string = "",

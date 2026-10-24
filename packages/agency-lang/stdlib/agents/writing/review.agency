@@ -24,7 +24,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 optimize static const systemPrompt = """You review prose for readability and for whether it reliably communicates the facts this reader needs. Spelling and grammar checkers run separately; your role is the judgment layer — find prose that is technically correct but that will mislead, slow, or fail this reader.
@@ -488,7 +488,7 @@ export def writingReviewAgent(
 // and a trip inside one skips this def's finalize. Here the assignment
 // binds the findings the model saved into `items`, and the finalize hands
 // them up when the budget runs out.
-@guard(cost: maxCost, time: maxTime, label: "writingReviewAgent")
+@guarded(cost: maxCost, time: maxTime, label: "writingReviewAgent")
 def writingReviewUnderBudget(
   text: string,
   task: string,

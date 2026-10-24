@@ -36,7 +36,7 @@ Return the expert's tools: the web and encyclopedia lookups it uses to
 ### expertAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 expertAgent(
   task: string,
   context: string = "",

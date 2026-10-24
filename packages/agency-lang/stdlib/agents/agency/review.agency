@@ -13,7 +13,7 @@ import { llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { ensureSystemMessage } from "std::thread"
 
 static const systemPrompt = """You review code written in the Agency language. Agency compiles to
@@ -264,7 +264,7 @@ export def agencyReviewAgent(
 // under the budget, so the parse and typecheck findings always arrive.
 // Return position: when the budget runs out, the findings the model saved
 // reach the guard and come back as the result.
-@guard(cost: maxCost, time: maxTime, label: "agencyReviewAgent")
+@guarded(cost: maxCost, time: maxTime, label: "agencyReviewAgent")
 def agencyReviewUnderBudget(
   source: string,
   task: string,

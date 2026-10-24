@@ -15,7 +15,7 @@ import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { agencyDocTools, agencyCodeTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { guard } from "std::strategy"
+import { guarded } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const skills = agentSkill("agency/expert")
@@ -55,7 +55,7 @@ def consult(
   )
 }
 
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 export def agencyExpertAgent(
   task: string,
   context: string = "",

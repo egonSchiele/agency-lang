@@ -31,7 +31,7 @@ Return the data agent's tools: every connector, plus the search and fetch
 ### dataAgent
 
 ```ts
-@guard(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime)
 dataAgent(
   task: string,
   context: string = "",

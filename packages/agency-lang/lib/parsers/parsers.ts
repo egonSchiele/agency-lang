@@ -247,7 +247,8 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  consumes (`def`, `node`, statement keywords, modifiers, literal words);
  *  extend it when a new keyword lands. A few are claimed only in one shape
  *  and are ordinary names elsewhere: `guard(...) {` is the guard block, but
- *  `def guard` is a function (the `@guard` decorator in `std::strategy`). */
+ *  `guard` is an ordinary name in any other position. The stdlib decorator
+ *  is named `guarded` so it never meets this rule. */
 export const RESERVED_WORDS: readonly string[] = [
   "def",
   "function",

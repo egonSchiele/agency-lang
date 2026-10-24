@@ -174,21 +174,29 @@ function runOnce({ name, flags, cwd, agent: makeAgent, writeback, check }) {
   if (typeof trainObjective !== "number" || typeof baselineObjective !== "number") {
     throw new Error(`missing objectives in summary.json: ${JSON.stringify(summary)}`);
   }
-  // A baseline at full marks leaves the optimizer nothing to improve, so the
-  // run tells us nothing about it either way.
-  if (baselineObjective >= 1) {
-    throw new InconclusiveRun(`baseline already scored ${baselineObjective}`);
-  }
-  if (!(trainObjective > baselineObjective)) {
-    throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
-  }
   // The objective alone could rise for the wrong reason, so check the champion
   // answers the way the goal asks: the bare city, no chatter. Every input must
   // pass, and there has to be at least one -- an empty breakdown would
   // otherwise sail through.
   const outputs = (championBreakdown ?? []).map((b) => String(b.output));
   const isBareCity = (o) => /^(paris|tokyo)[.!]?$/i.test(o.trim());
-  if (outputs.length === 0 || !outputs.every(isBareCity)) {
+  const allBare = outputs.length > 0 && outputs.every(isBareCity);
+  // A baseline at full marks leaves the optimizer nothing to improve. Nothing
+  // can beat it, so the champion is the baseline and `outputs` are its replies.
+  // Bare replies mean the model obeyed the task, and the run is inconclusive.
+  // Anything else means a grader gave full marks to a wrong answer.
+  if (baselineObjective >= 1) {
+    if (!allBare) {
+      throw new Error(
+        `baseline scored ${baselineObjective} but its outputs are not bare: ${JSON.stringify(outputs)}`,
+      );
+    }
+    throw new InconclusiveRun(`baseline already scored ${baselineObjective}`);
+  }
+  if (!(trainObjective > baselineObjective)) {
+    throw new Error(`no improvement: champion ${trainObjective} <= baseline ${baselineObjective}`);
+  }
+  if (!allBare) {
     throw new Error(`champion outputs are not all the bare city name: ${JSON.stringify(outputs)}`);
   }
   if (check) check({ summary, runDir, agent });

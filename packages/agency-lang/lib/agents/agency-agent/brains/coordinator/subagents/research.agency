@@ -1,19 +1,12 @@
 /*
- * The reading specialist, as the agency agent's coordinator sees it.
- *
- * This is a router, not an agent. Both destinations are stdlib agents, so a
- * user gets the same two in their own code:
- *
- *   agencyTopic: true   -> agencyResearcherAgent  (the bundled Agency docs)
- *   agencyTopic: false  -> researcherAgent        (web, Wikipedia, URLs)
- *
- * General is the default. A general researcher asked about Agency is merely
- * less expert, while the Agency researcher asked about anything else has
- * only Agency documentation to answer from and will answer badly.
- *
- * What stays here is the agency agent's own business: the model slot the
- * user selected, a shared session, the REPL formatting rules, and the memory
- * and todo tools the agent gives its specialists.
+ * The reading specialist, as the coordinator sees it: a router over two
+ * stdlib agents. agencyTopic: true goes to agencyResearcherAgent (the bundled
+ * Agency docs); false, the default, goes to researcherAgent (web, Wikipedia,
+ * URLs). General is the default because a general researcher asked about
+ * Agency is merely less expert, while the Agency researcher asked about
+ * anything else has only Agency documentation to answer from. This file
+ * adds the shared session, the REPL formatting rules, and the memory and
+ * todo tools the agent gives its specialists.
  */
 import { question } from "std::agent"
 import { agencyResearcherAgent } from "std::agents/agency/researcher"

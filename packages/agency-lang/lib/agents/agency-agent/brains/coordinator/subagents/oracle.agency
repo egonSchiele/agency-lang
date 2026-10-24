@@ -1,15 +1,9 @@
 /*
- * The oracle, as the agency agent's coordinator sees it.
- *
- * The agent itself lives in std::agents/oracle, so users get the same
- * reviewer in their own agents. This wrapper supplies the slow-model slot
- * the user selected, which is the agency agent's business and not the
- * stdlib's. It is a handoff: the oracle continues the coordinator's
- * conversation, so it sees everything above and its reasoning stays in
- * the coordinator's history.
- *
- * The docstring below is what the coordinator reads when deciding whether to
- * call this, so it is written for routing, not for the agent's own behavior.
+ * The oracle, as the coordinator sees it. The agent is std::agents/oracle;
+ * this file adds the slow-model slot the user chose, the question tool so
+ * it can ask the user, and the dispatch announcement. It is a handoff: it
+ * continues the coordinator's conversation. The docstring is written for
+ * routing, not for the agent's own behaviour.
  */
 import { question } from "std::agent"
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"

@@ -18,16 +18,18 @@ A command can print far more than a model should be handed in one tool
   the oldest output goes, and reading its name back says it is no longer
   available.
 
-  The tool loop uses the same store for any tool result over the
-  `maxToolResultChars` cap, so a long page from `fetchMarkdown` reaches the
-  model the same way: a preview and a name.
+  When an `llm()` call offers `readSpill`, the tool loop uses the same store
+  for any tool result over the `maxToolResultChars` cap, so a long page from
+  `fetchMarkdown` reaches the model the same way: a preview and a name.
+  When it does not, the loop cuts the result at the cap.
 
   Two tools read saved output back: `readSpill` for the whole text or a
   slice of lines, and `grepSpill` to search it. Both take a name, never a
   path, and raise no interrupt: the output was already in the conversation
-  the model was handed the name in. `spillTools()` in `std::agents/lib/toolkits`
-  bundles the two, and every stdlib agent that runs commands or fetches
-  pages carries them.
+  the model was handed the name in. `shellTools()` in
+  `std::agents/lib/toolkits` includes the two, and `spillTools()` is the
+  two on their own, for an agent that fetches pages without running
+  commands.
 
   ```agency
   import { keepOutput, readSpill, grepSpill } from "std::spill"
@@ -46,7 +48,7 @@ A command can print far more than a model should be handed in one tool
 export static const MAX_STDOUT_LEN = 2000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L43))
 
 ## Functions
 
@@ -71,7 +73,7 @@ What the model gets back for a command's output.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L45))
 
 ### readSpill
 
@@ -95,7 +97,7 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L56))
 
 ### grepSpill
 
@@ -119,4 +121,4 @@ Search saved tool output for a regular expression. Each match comes back with it
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L71))

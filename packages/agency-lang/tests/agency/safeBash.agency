@@ -271,8 +271,7 @@ node quotedRedirectTarget() {
 node longOutputIsKept() {
   // A >2000-char literal goes through the shell-free path, which keeps
   // output the same way the bash path does — so this also pins the
-  // consistency between the two. The output is saved in the run, so there
-  // is nothing on disk to point at or clean up.
+  // consistency between the two.
   const chars = ["x" for i in range(2500)]
   const long = chars.join("")
   const result = safeBash("echo ${long}") with approve

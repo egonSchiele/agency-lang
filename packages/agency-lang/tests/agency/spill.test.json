@@ -34,8 +34,8 @@
       ]
     },
     {
-      "nodeName": "overCapResultWithoutReadersSaysSo",
-      "description": "when the model has no readSpill tool the notice says the rest cannot be read from here, instead of naming a tool the model lacks",
+      "nodeName": "overCapResultWithoutReadersIsCut",
+      "description": "when the model has no readSpill tool, a result over the cap is cut with the truncation marker and nothing is saved",
       "input": "",
       "expectedOutput": "[true,false]",
       "evaluationCriteria": [{ "type": "exact" }],

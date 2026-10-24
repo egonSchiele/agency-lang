@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
 import type { Run } from "./asyncContext.js";
 import {
+  DEFAULT_READERS,
   MAX_STORE_CHARS,
   findOutput,
   isOutputName,
   missingOutputMessage,
   outputNotice,
+  spillReaders,
   storeOutput,
 } from "./toolOutputStore.js";
 
@@ -69,7 +71,7 @@ describe("toolOutputStore", () => {
 
   it("writes a preview under 2000 characters that names the readers", () => {
     const text = "x".repeat(2500);
-    const notice = outputNotice(text, "n.log", 0, true);
+    const notice = outputNotice(text, "n.log", 0, DEFAULT_READERS);
     expect(notice.length).toBeLessThan(2000);
     expect(notice).toContain("Command exited with code 0");
     expect(notice).toContain("full output saved as n.log");
@@ -77,16 +79,29 @@ describe("toolOutputStore", () => {
     expect(notice).toContain('grepSpill(pattern, filename: "n.log")');
   });
 
-  it("leaves out the exit code for a tool result, and the readers when the model has none", () => {
-    const notice = outputNotice("line\n".repeat(600), "n.log", null, false);
+  it("leaves out the exit code for a tool result, and grepSpill when it was not offered", () => {
+    const notice = outputNotice("line\n".repeat(600), "n.log", null, {
+      read: "readSpill",
+      grep: null,
+    });
     expect(notice).not.toContain("exited with code");
-    expect(notice).not.toContain("readSpill(");
-    expect(notice).toContain("no readSpill tool");
+    expect(notice).toContain('readSpill(filename: "n.log")');
+    expect(notice).not.toContain("grepSpill");
     expect(notice).toContain("full output saved as n.log");
   });
 
+  it("finds the readers by module and registered name, so a rename still counts", () => {
+    const spill = "stdlib/spill.agency";
+    const read = { name: "read_saved", module: spill, registeredName: "readSpill" };
+    const grep = { name: "grepSpill", module: spill, registeredName: "grepSpill" };
+    const lookalike = { name: "readSpill", module: "mine.agency", registeredName: "readSpill" };
+    expect(spillReaders([read, grep])).toEqual({ read: "read_saved", grep: "grepSpill" });
+    expect(spillReaders([read])).toEqual({ read: "read_saved", grep: null });
+    expect(spillReaders([lookalike, grep])).toBeNull();
+  });
+
   it("shows both ends without repeating a line", () => {
-    const notice = outputNotice("first\nsecond", "n.log", null, true);
+    const notice = outputNotice("first\nsecond", "n.log", null, DEFAULT_READERS);
     expect(notice).toContain("--- first 2 lines ---\nfirst\nsecond\n--- last 0 lines ---");
   });
 });

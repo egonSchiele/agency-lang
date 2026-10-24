@@ -26,7 +26,6 @@ import {
   agencyDocTools,
   planningTools,
   webTools,
-  spillTools,
   ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
 import { setAgentCwd, getAgentCwd } from "std::index"
@@ -69,7 +68,6 @@ export def buildTools(): any[] {
     getAgentCwd,
     ...writableFileTools(),
     ...shellTools(),
-    ...spillTools(),
     ...gitTools(),
     ...githubTools(),
     ...agencyCodeTools(),

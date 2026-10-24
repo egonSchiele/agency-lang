@@ -7,7 +7,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, readOnlyGitTools, shellTools, spillTools, agencyCodeTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { guard } from "std::strategy"
@@ -31,7 +31,6 @@ export def buildTools(): any[] {
     ...readOnlyFileTools(),
     ...readOnlyGitTools(),
     ...shellTools(),
-    ...spillTools(),
     ...agencyCodeTools(),
     ...communicationTools(),
     readBinary.partial(useAgentCwd: true),

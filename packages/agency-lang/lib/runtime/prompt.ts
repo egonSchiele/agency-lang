@@ -108,7 +108,9 @@ import {
   unwrapToolResultForLlm,
   toolArgumentsFor,
   callFromOutside,
+  overCapFor,
 } from "./toolInvocation.js";
+import { spillReaders } from "./toolOutputStore.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -686,8 +688,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const clientConfig = withHostKeys(ctx.host.settings, hosted);
 
   const toolResultCap = resultCap(callMaxToolResultChars, stackMaxToolResultChars, ctx);
-  const canReadSpill = exposedFunctions.some((fn) => fn.name === "readSpill");
-  const capForLlm = (value: any) => capToolResultForLlm(value, toolResultCap, run, canReadSpill);
+  const readers = spillReaders(exposedFunctions);
+  const capForLlm = (value: any, tool: AgencyFunction) =>
+    capToolResultForLlm(value, toolResultCap, overCapFor(run, readers, tool));
 
   // Restore or initialize messages.
   //
@@ -953,7 +956,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       reason: string,
     ): { toolResult: any; invokeOutcome: "rejected" } => {
       const { handler, toolCall, log, callKey, branchKey, marks, toolResult } = call;
-      const capped = String(capForLlm(reason));
+      const capped = String(capForLlm(reason, handler));
       if (!rejectedCalls.includes(callKey)) {
         rejectedCalls.push(callKey);
       }
@@ -983,7 +986,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       const { handler, toolCall, log, branchKey, marks, toolResult } = call;
       const errorMessage = failed.error;
       // Cap only what the LLM sees; statelog keeps the full message.
-      const cappedError = String(capForLlm(errorMessage));
+      const cappedError = String(capForLlm(errorMessage, handler));
       toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
       log.error({
         errorType: "toolError",
@@ -1316,7 +1319,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         toolName: handler.name,
       });
       const content = appendReplyMarker(
-        capForLlm(unwrapToolResultForLlm(toolResult, handler.name)),
+        capForLlm(unwrapToolResultForLlm(toolResult, handler.name), handler),
         replyMarker,
         stringifyToolResult,
       );

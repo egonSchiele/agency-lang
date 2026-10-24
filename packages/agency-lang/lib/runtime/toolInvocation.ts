@@ -4,7 +4,13 @@
  * constants that decide when a tool is removed. prompt.ts decides when
  * to call them.
  */
-import { outputNotice, storeOutput } from "./toolOutputStore.js";
+import {
+  isSpillReader,
+  outputNotice,
+  storeOutput,
+  type SpillReaders,
+  type ToolIdentity,
+} from "./toolOutputStore.js";
 import type { FuncParam, CallType } from "./agencyFunction.js";
 import type { AliasCorrection, CanonicalKeysResult } from "../utils/parameterAliases.js";
 import { withChildRun, type Run } from "./asyncContext.js";
@@ -137,10 +143,10 @@ export const DEFAULT_TOOL_RESULT_CHARS = 100_000;
 /** Coerce an arbitrary tool result to the string the LLM would see.
  *  Strings pass through; everything else is JSON-stringified, with a
  *  `String()` fallback for values JSON can't represent (e.g. circular). */
-export function stringifyToolResult(result: any): string {
+export function stringifyToolResult(result: any, indent?: number): string {
   if (typeof result === "string") return result;
   try {
-    const json = JSON.stringify(result);
+    const json = JSON.stringify(result, null, indent);
     // JSON.stringify returns undefined WITHOUT throwing for symbols,
     // functions, and undefined itself; callers read .length off this.
     return json === undefined ? String(result) : json;
@@ -149,18 +155,48 @@ export function stringifyToolResult(result: any): string {
   }
 }
 
+/** What the loop does with a tool result over the cap. */
+export type OverCap =
+  /** The model has no `readSpill`, so a saved result could not be read
+   *  back: cut it at the cap. */
+  | { kind: "cut" }
+  /** The result came from `readSpill` or `grepSpill`, so its text is
+   *  already saved: cut it and point at a smaller slice, rather than save
+   *  a second copy under a new name. */
+  | { kind: "slice" }
+  /** Save it whole and give the model a notice naming it. */
+  | { kind: "save"; run: Run; readers: SpillReaders };
+
+/** How the loop treats an over-cap result from `tool`, given the readers
+ *  the call offers (null when it offers no `readSpill`). */
+export function overCapFor(run: Run, readers: SpillReaders | null, tool: ToolIdentity): OverCap {
+  if (readers === null) return { kind: "cut" };
+  if (isSpillReader(tool)) return { kind: "slice" };
+  return { kind: "save", run, readers };
+}
+
 /** Cap a tool result for the LLM. Returns the ORIGINAL value untouched
  *  when its serialized form is within `cap` characters (so smoltalk
  *  serializes it exactly as before) or when the cap is disabled (`cap <= 0`
- *  or non-finite). Over the cap, the whole text is saved in the run's
- *  output store and the model gets a preview naming it, the same notice
- *  `safeBash` gives for long command output. `canRead` says whether the
- *  model has the `readSpill` tool, which decides how the notice ends. */
-export function capToolResultForLlm(result: any, cap: number, run: Run, canRead: boolean): any {
+ *  or non-finite). Over the cap, `overCap` decides: the result is cut with
+ *  a marker, or saved in the run's output store and replaced by the notice
+ *  `safeBash` gives for long command output. */
+export function capToolResultForLlm(result: any, cap: number, overCap: OverCap): any {
   if (!Number.isFinite(cap) || cap <= 0) return result;
   const text = stringifyToolResult(result);
   if (text.length <= cap) return result;
-  return outputNotice(text, storeOutput(run, text), null, canRead);
+  if (overCap.kind === "save") {
+    // An object is saved indented, so its JSON has lines that readSpill's
+    // offset and limit, and grepSpill, can work on.
+    const saved = stringifyToolResult(result, 2);
+    return outputNotice(saved, storeOutput(overCap.run, saved), null, overCap.readers);
+  }
+  const marker = `[tool result truncated: showing ${cap} of ${text.length} chars]`;
+  if (overCap.kind === "cut") return text.slice(0, cap) + `\n\n${marker}`;
+  return (
+    text.slice(0, cap) +
+    `\n\n${marker} The output is still saved whole: read a smaller slice with offset and limit, or narrow the search.`
+  );
 }
 
 /** LLMs routinely emit an explicit `null` for an optional tool argument

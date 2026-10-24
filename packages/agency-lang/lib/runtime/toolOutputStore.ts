@@ -42,6 +42,39 @@ export function isOutputName(name: string): boolean {
   return OUTPUT_NAME.test(name);
 }
 
+/** The two reader tools a model was offered, by the names it sees them
+ *  under. `grep` is null when only `readSpill` was offered. */
+export type SpillReaders = { read: string; grep: string | null };
+
+/** The names `safeBash` puts in its notice. It does not know the call's
+ *  tool list, and `shellTools()` hands the readers out beside it. */
+export const DEFAULT_READERS: SpillReaders = { read: "readSpill", grep: "grepSpill" };
+
+const SPILL_MODULE = "stdlib/spill.agency";
+
+export type ToolIdentity = { name: string; module: string; registeredName: string };
+
+/** Whether `tool` is `std::spill`'s reader `reader`. Matched on the module
+ *  and the registered name, which a `.rename()` or `.partial()` keeps. */
+function isReader(tool: ToolIdentity, reader: "readSpill" | "grepSpill"): boolean {
+  return tool.module === SPILL_MODULE && tool.registeredName === reader;
+}
+
+/** Whether `tool` reads saved output back. Its own result is already in
+ *  the store, so the loop never saves it a second time. */
+export function isSpillReader(tool: ToolIdentity): boolean {
+  return isReader(tool, "readSpill") || isReader(tool, "grepSpill");
+}
+
+/** The readers among `tools`, or null when `readSpill` is not one of
+ *  them: then nothing the loop saved could be read back. */
+export function spillReaders(tools: ToolIdentity[]): SpillReaders | null {
+  const read = tools.find((tool) => isReader(tool, "readSpill"));
+  if (read === undefined) return null;
+  const grep = tools.find((tool) => isReader(tool, "grepSpill"));
+  return { read: read.name, grep: grep === undefined ? null : grep.name };
+}
+
 function readStore(run: Run): ToolOutputStore {
   const existing = run.globals.get(GlobalStore.INTERNAL_MODULE, STORE_KEY) as
     ToolOutputStore | undefined;
@@ -87,7 +120,7 @@ export function missingOutputMessage(name: string): string {
   if (!isOutputName(name)) {
     return `'${name}' is not a saved output name: expected the name from a "full output saved as" notice, with no directory part`;
   }
-  return `Saved output ${name} is no longer available. Run the command again if you need it.`;
+  return `Saved output ${name} is no longer available. Call the tool again if you need it.`;
 }
 
 function cutLine(line: string): string {
@@ -124,25 +157,24 @@ function previewTail(lines: string[], skip: number): string[] {
 
 /**
  * The preview that stands in for a long output: what happened, a glimpse of
- * both ends, the name it was saved under, and how to read the rest.
- * `exitCode` is null for a tool result that is not a command's output.
- * `canRead` says whether the model has the `readSpill` tool; without it the
- * notice says the rest cannot be read from here, instead of naming a tool
- * the model does not have.
+ * both ends, the name it was saved under, and how to read the rest with
+ * `readers`. `exitCode` is null for a tool result that is not a command's
+ * output.
  */
 export function outputNotice(
   text: string,
   name: string,
   exitCode: number | null,
-  canRead: boolean,
+  readers: SpillReaders,
 ): string {
   const lines = text.split("\n");
   const head = previewHead(lines);
   const tail = previewTail(lines, head.length);
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
-  const howToRead = canRead
-    ? `To read it, use the readSpill tool: readSpill(filename: "${name}"), with offset and limit to take a slice. To search it, use grepSpill(pattern, filename: "${name}"). Neither needs approval.`
-    : "This agent has no readSpill tool, so the rest cannot be read from here.";
+  const search =
+    readers.grep === null
+      ? " It needs no approval."
+      : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
   return [
     `[Output too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
     `--- first ${head.length} lines ---`,
@@ -150,6 +182,6 @@ export function outputNotice(
     `--- last ${tail.length} lines ---`,
     tail.join("\n"),
     `--- full output saved as ${name} ---`,
-    howToRead,
+    `To read it, use the ${readers.read} tool: ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}`,
   ].join("\n");
 }

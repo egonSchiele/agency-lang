@@ -5,6 +5,7 @@ import {
   DEFAULT_TOOL_RESULT_CHARS,
   stringifyToolResult,
   capToolResultForLlm,
+  overCapFor,
   assertUniqueToolNames,
   unwrapToolResultForLlm,
   failureTier,
@@ -17,7 +18,8 @@ import { meteredDispatch } from "./recordPaidUsage.js";
 import type { GraphState } from "./types.js";
 import type { Run } from "./asyncContext.js";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
-import { findOutput } from "./toolOutputStore.js";
+import { DEFAULT_READERS, findOutput } from "./toolOutputStore.js";
+import { GlobalStore } from "./state/globalStore.js";
 
 describe("failureTier", () => {
   const f = (over: { destructiveRan?: boolean; neverStarted?: boolean }) => over;
@@ -153,57 +155,82 @@ describe("capToolResultForLlm", () => {
     const ctx = makeMockCtx();
     return inFrameOf(ctx, ctx.stateStack, fn);
   }
+  const page = { name: "longPage", module: "page.agency", registeredName: "longPage" };
+  const reader = { name: "readSpill", module: "stdlib/spill.agency", registeredName: "readSpill" };
+  const save = (run: Run) => overCapFor(run, DEFAULT_READERS, page);
+  const storedEntries = (run: Run) =>
+    (run.globals.get(GlobalStore.INTERNAL_MODULE, "__toolOutput")?.entries ?? []).length;
+  const savedName = (notice: string) => /full output saved as (\S+) ---/.exec(notice)![1];
 
   it("returns the original value untouched when within the cap", () => {
     withRun((run) => {
       const obj = { big: "x".repeat(100) };
       // Object under cap → returned as-is (object identity), so smoltalk
       // serializes it exactly as before — no behavior change.
-      expect(capToolResultForLlm(obj, 1000, run, true)).toBe(obj);
-      expect(capToolResultForLlm("short", 1000, run, true)).toBe("short");
+      expect(capToolResultForLlm(obj, 1000, save(run))).toBe(obj);
+      expect(capToolResultForLlm("short", 1000, save(run))).toBe("short");
     });
   });
 
   it("saves an over-cap string whole and hands the model a notice naming it", () => {
     withRun((run) => {
-      const out = capToolResultForLlm("a".repeat(5000), 100, run, true) as string;
-      expect(typeof out).toBe("string");
+      const out = capToolResultForLlm("a".repeat(5000), 100, save(run)) as string;
       expect(out).toContain("5000 characters");
-      const name = /full output saved as (\S+) ---/.exec(out)![1];
+      const name = savedName(out);
       expect(findOutput(run, name)).toBe("a".repeat(5000));
       expect(out).toContain(`readSpill(filename: "${name}")`);
     });
   });
 
-  it("says the rest cannot be read when the model has no readSpill tool", () => {
+  it("saves an over-cap object indented, so readSpill and grepSpill have lines", () => {
     withRun((run) => {
-      const out = capToolResultForLlm("a".repeat(5000), 100, run, false) as string;
-      expect(out).toContain("no readSpill tool");
-      expect(out).not.toContain("readSpill(");
+      const big = { data: "y".repeat(5000), more: [1, 2] };
+      const out = capToolResultForLlm(big, 100, save(run)) as string;
+      expect(findOutput(run, savedName(out))).toBe(JSON.stringify(big, null, 2));
     });
   });
 
-  it("saves an over-cap object by its serialized form", () => {
+  it("cuts the result at the cap when the model has no readSpill, and saves nothing", () => {
     withRun((run) => {
-      const big = { data: "y".repeat(5000) };
-      const out = capToolResultForLlm(big, 100, run, true) as string;
-      expect(typeof out).toBe("string");
-      const name = /full output saved as (\S+) ---/.exec(out)![1];
-      expect(findOutput(run, name)).toBe(JSON.stringify(big));
+      const out = capToolResultForLlm("a".repeat(5000), 100, overCapFor(run, null, page));
+      expect(out).toBe("a".repeat(100) + "\n\n[tool result truncated: showing 100 of 5000 chars]");
+      expect(storedEntries(run)).toBe(0);
+    });
+  });
+
+  it("cuts a reader's own result instead of saving a second copy", () => {
+    withRun((run) => {
+      const out = capToolResultForLlm(
+        "a".repeat(5000),
+        100,
+        overCapFor(run, DEFAULT_READERS, reader),
+      );
+      expect(out).toContain("[tool result truncated: showing 100 of 5000 chars]");
+      expect(out).toContain("offset and limit");
+      expect(storedEntries(run)).toBe(0);
+    });
+  });
+
+  it("names the readers by the names the model sees them under", () => {
+    withRun((run) => {
+      const renamed = { read: "read_saved", grep: null };
+      const out = capToolResultForLlm("a".repeat(5000), 100, overCapFor(run, renamed, page));
+      expect(out).toContain(`read_saved(filename: "${savedName(out as string)}")`);
+      expect(out).not.toContain("grepSpill");
     });
   });
 
   it("cap of 0 disables the cap (returns original)", () => {
     withRun((run) => {
       const huge = "z".repeat(1_000_000);
-      expect(capToolResultForLlm(huge, 0, run, true)).toBe(huge);
+      expect(capToolResultForLlm(huge, 0, save(run))).toBe(huge);
     });
   });
 
   it("non-finite cap (Infinity) disables the cap", () => {
     withRun((run) => {
       const huge = "z".repeat(1_000_000);
-      expect(capToolResultForLlm(huge, Infinity, run, true)).toBe(huge);
+      expect(capToolResultForLlm(huge, Infinity, save(run))).toBe(huge);
     });
   });
 
@@ -211,10 +238,10 @@ describe("capToolResultForLlm", () => {
     withRun((run) => {
       expect(DEFAULT_TOOL_RESULT_CHARS).toBe(100_000);
       const justOver = "q".repeat(DEFAULT_TOOL_RESULT_CHARS + 1);
-      const out = capToolResultForLlm(justOver, DEFAULT_TOOL_RESULT_CHARS, run, true) as string;
+      const out = capToolResultForLlm(justOver, DEFAULT_TOOL_RESULT_CHARS, save(run)) as string;
       expect(out).toContain("full output saved as");
       const under = "q".repeat(DEFAULT_TOOL_RESULT_CHARS);
-      expect(capToolResultForLlm(under, DEFAULT_TOOL_RESULT_CHARS, run, true)).toBe(under);
+      expect(capToolResultForLlm(under, DEFAULT_TOOL_RESULT_CHARS, save(run))).toBe(under);
     });
   });
 });

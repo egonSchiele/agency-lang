@@ -7,7 +7,7 @@
 import { runCode } from "std::agency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, readOnlyGitTools, shellTools, spillTools } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { guard } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -26,7 +26,7 @@ export def buildTools(): any[] {
   left behind; it has no write tools, because a verifier that can fix things
   is no longer a verifier.
   """
-  return [...readOnlyFileTools(), ...readOnlyGitTools(), ...shellTools(), ...spillTools(), skills]
+  return [...readOnlyFileTools(), ...readOnlyGitTools(), ...shellTools(), skills]
 }
 
 def judgeResult(

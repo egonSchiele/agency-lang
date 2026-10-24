@@ -3,6 +3,7 @@
 // run's globals, so it travels with every checkpoint.
 import { currentRun } from "../runtime/asyncContext.js";
 import {
+  DEFAULT_READERS,
   findOutput,
   missingOutputMessage,
   outputNotice,
@@ -17,12 +18,11 @@ import { firstMatchingLines, type GrepMatch } from "./shell.js";
 export const MAX_STDOUT_LEN = 2000;
 
 /** What the model gets back for a command's output: short output as
- *  printed, long output saved and replaced by the notice. The readers are
- *  named in the notice: `shellTools()` hands them out beside `safeBash`. */
+ *  printed, long output saved and replaced by the notice. */
 export function _keepOutput(text: string, exitCode: number): string {
   if (text.length <= MAX_STDOUT_LEN) return text;
   const run = currentRun();
-  return outputNotice(text, storeOutput(run, text), exitCode, true);
+  return outputNotice(text, storeOutput(run, text), exitCode, DEFAULT_READERS);
 }
 
 function saved(name: string): string {

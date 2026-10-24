@@ -111,11 +111,30 @@ node overCapToolResultIsKept() {
   ]
 }
 
-node overCapResultWithoutReadersSaysSo() {
+/** The first tool message in the current thread, or "" if there is none. */
+def toolMessageInThread(): string {
+  const messages = getThread(currentThreadId(), 0, 50)
+  if (isFailure(messages)) {
+    return ""
+  }
+  for (message in messages.value) {
+    if (message.role == "tool") {
+      return message.content
+    }
+  }
+  return ""
+}
+
+node overCapResultWithoutReadersIsCut() {
+  // With no readSpill offered, nothing saved could be read back, so the
+  // loop cuts the result at the cap.
   llm("read the page", {
     tools: [longPage],
     maxToolResultChars: 20000
   })
-  const notice = noticeInThread()
-  return [notice.includes("no readSpill tool"), notice.includes("readSpill(")]
+  const content = toolMessageInThread()
+  return [
+    content.includes("[tool result truncated: showing 20000 of"),
+    content.includes("full output saved as"),
+  ]
 }

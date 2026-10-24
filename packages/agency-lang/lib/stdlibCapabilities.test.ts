@@ -141,6 +141,9 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "exit",
   ],
   "run state and conversation threads, which live in memory": [
+    "keepOutput",
+    "readSpill",
+    "grepSpill",
     "setLlmOptions",
     "setModel",
     "listHostedModels",

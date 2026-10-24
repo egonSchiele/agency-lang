@@ -285,6 +285,36 @@ export class AgencyFunction {
     return normalizeForeignResult(await this._fn(run, ...args));
   }
 
+  /**
+   * The value of every unbound parameter for a call that passes `record`
+   * by name and nothing by position: the record's value, UNSET for an
+   * absent defaulted parameter, [] for an absent variadic. `blockArg` is
+   * the value of the block-typed parameter, when the function has one,
+   * since a record cannot carry a block. Throws what a call throws: an
+   * unknown name, a missing required argument. Null and undefined are the
+   * empty record; any other non-object is refused.
+   *
+   * This is how a decorator's block rebinds the decorated function's
+   * parameters (lib/runtime/rebind.ts). That function's module-level
+   * constant is never partially applied, so `_unboundParams` is all of its
+   * parameters.
+   */
+  bindRecord(record: unknown, blockArg?: unknown): Record<string, unknown> {
+    const isRecord = typeof record === "object" && !Array.isArray(record);
+    if (record !== null && record !== undefined && !isRecord) {
+      throw new Error(
+        `block() in '${this.name}' takes a record of arguments, got ${JSON.stringify(record)}`,
+      );
+    }
+    const namedArgs: Record<string, unknown> = { ...(record ?? {}) };
+    const values = this.resolveNamed([], namedArgs, blockArg);
+    const bound: Record<string, unknown> = {};
+    this._unboundParams.forEach((param, index) => {
+      bound[param.name] = values[index];
+    });
+    return bound;
+  }
+
   partial(bindings: Record<string, unknown>): AgencyFunction {
     if (Object.keys(bindings).length === 0) return this;
 

@@ -1041,3 +1041,46 @@ describe("parameter aliases: def fetch(baseUrl | url: string)", () => {
     });
   });
 });
+
+describe("bindRecord (the decorator rebind)", () => {
+  const fn = makeFunction([
+    { name: "a" },
+    { name: "b", hasDefault: true, defaultValue: "d" },
+    { name: "rest", variadic: true },
+  ]);
+
+  it("binds present keys, UNSET for an absent default, [] for an absent variadic", () => {
+    expect(fn.bindRecord({ a: 1 })).toEqual({ a: 1, b: UNSET, rest: [] });
+  });
+
+  it("treats null and undefined as the empty record", () => {
+    const allDefaulted = makeFunction([{ name: "b", hasDefault: true, defaultValue: "d" }]);
+    expect(allDefaulted.bindRecord(null)).toEqual({ b: UNSET });
+    expect(allDefaulted.bindRecord(undefined)).toEqual({ b: UNSET });
+  });
+
+  it("throws the call's message for a missing required key", () => {
+    expect(() => fn.bindRecord({})).toThrow("Missing required argument 'a' in call to 'testFn'");
+  });
+
+  it("throws the call's message for an unknown key", () => {
+    expect(() => fn.bindRecord({ a: 1, c: 2 })).toThrow(
+      "Unknown named argument 'c' in call to 'testFn'",
+    );
+  });
+
+  it("refuses a record that is not an object", () => {
+    expect(() => fn.bindRecord(5)).toThrow(
+      "block() in 'testFn' takes a record of arguments, got 5",
+    );
+    expect(() => fn.bindRecord([1])).toThrow(
+      "block() in 'testFn' takes a record of arguments, got [1]",
+    );
+  });
+
+  it("passes the block argument to the block parameter", () => {
+    const withBlock = makeFunction([{ name: "n" }, { name: "body", isFunctionTyped: true }]);
+    const theBlock = () => 1;
+    expect(withBlock.bindRecord({ n: 1 }, theBlock)).toEqual({ n: 1, body: theBlock });
+  });
+});

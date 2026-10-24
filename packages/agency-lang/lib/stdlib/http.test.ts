@@ -65,37 +65,62 @@ describe("_fetchTarget and networkOf", () => {
     expect(_fetchTarget("http://example.com", "")).toEqual({ scheme: "http", network: "public" });
   });
 
+  // Through _fetchTarget with whole URLs, not networkOf with hand-written
+  // hostnames: the URL parser rewrites some hosts (an IPv4 address inside
+  // IPv6 comes out in hex), and the check has to see what it produces.
+  const networkFor = (url: string) => _fetchTarget(url, "").network;
+
   it("calls loopback, private, link-local, and local names local", () => {
-    for (const host of [
-      "localhost",
-      "LOCALHOST",
-      "dev.localhost",
-      "printer.local",
-      "127.0.0.1",
-      "127.1.2.3",
-      "0.0.0.0",
-      "10.0.0.5",
-      "192.168.1.4",
-      "172.16.0.1",
-      "172.31.255.255",
-      "169.254.169.254",
-      "[::1]",
-      "[::]",
-      "[fd12:3456::1]",
-      "[fe80::1]",
-      "[::ffff:10.0.0.1]",
+    for (const url of [
+      "https://localhost/",
+      "https://LOCALHOST/",
+      "https://localhost./",
+      "https://dev.localhost/",
+      "https://printer.local/",
+      "https://printer.local./",
+      "https://127.0.0.1/",
+      "https://127.1.2.3/",
+      "https://0x7f.1/",
+      "https://2130706433/",
+      "https://0.0.0.0/",
+      "https://10.0.0.5/",
+      "https://192.168.1.4/",
+      "https://172.16.0.1/",
+      "https://172.31.255.255/",
+      "https://169.254.169.254/",
+      "https://100.64.0.1/",
+      "https://100.101.102.103/",
+      "https://100.127.255.255/",
+      "https://[::1]/",
+      "https://[0:0:0:0:0:0:0:1]/",
+      "https://[::]/",
+      "https://[fd12:3456::1]/",
+      "https://[fe80::1]/",
+      "https://[::ffff:10.0.0.1]/",
+      "https://[::ffff:127.0.0.1]/",
+      "https://[::ffff:169.254.169.254]/",
     ]) {
-      expect(networkOf(host), host).toBe("local");
+      expect(networkFor(url), url).toBe("local");
     }
-    for (const host of [
-      "example.com",
-      "172.32.0.1",
-      "11.0.0.1",
-      "localhost.example.com",
-      "[2606:4700::1]",
+    for (const url of [
+      "https://example.com/",
+      "https://example.com./",
+      "https://172.32.0.1/",
+      "https://11.0.0.1/",
+      "https://100.63.255.255/",
+      "https://100.128.0.1/",
+      "https://localhost.example.com/",
+      "https://[2606:4700::1]/",
+      "https://[::ffff:8.8.8.8]/",
     ]) {
-      expect(networkOf(host), host).toBe("public");
+      expect(networkFor(url), url).toBe("public");
     }
+  });
+
+  it("reads an IPv4 address inside IPv6 in either spelling", () => {
+    expect(networkOf("[::ffff:127.0.0.1]")).toBe("local");
+    expect(networkOf("[::ffff:7f00:1]")).toBe("local");
+    expect(networkOf("[::ffff:808:808]")).toBe("public");
   });
 
   it("says unknown for something that is not a URL", () => {

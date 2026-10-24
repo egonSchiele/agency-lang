@@ -579,8 +579,10 @@ export function resolveUrl(baseUrl: string, path: string): string {
 /** Where a request goes, as two plain words a policy rule can match:
  *  the URL's scheme, and whether the host is on the public internet or
  *  on this machine or its network. `network` is "local" for loopback,
- *  unspecified, link-local, and private addresses (IPv4 and IPv6) and
- *  for `localhost`, `.localhost`, and `.local` names; "public" for any
+ *  unspecified, link-local, private, and carrier-grade NAT addresses
+ *  (IPv4 and IPv6, an IPv4 address inside IPv6 included) and for
+ *  `localhost`, `.localhost`, and `.local` names, with or without a
+ *  trailing dot; "public" for any
  *  other host; "unknown" when the string is not a URL. A rule that
  *  approves a read of the web says `scheme: "https", network: "public"`,
  *  which keeps a local admin page or the cloud metadata address out of
@@ -601,18 +603,40 @@ export function _fetchTarget(baseUrl: string, urlPath: string): FetchTarget {
   }
 }
 
-const LOCAL_V4 = [/^127\./, /^10\./, /^192\.168\./, /^169\.254\./, /^172\.(1[6-9]|2[0-9]|3[01])\./];
+// 100.64.0.0/10 is carrier-grade NAT, which Tailscale uses for every
+// machine on a tailnet.
+const LOCAL_V4 = [
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^172\.(1[6-9]|2[0-9]|3[01])\./,
+  /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./,
+];
 const LOCAL_V6 = [/^f[cd][0-9a-f]{2}:/, /^fe[89ab][0-9a-f]:/];
 
 export function networkOf(hostname: string): "public" | "local" {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  // `localhost.` is the same machine as `localhost`: a trailing dot only
+  // marks the name as fully qualified.
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
     return "local";
   }
   if (host === "0.0.0.0" || host === "::" || host === "::1") return "local";
   // An IPv4 address carried inside IPv6 is judged as the IPv4 address.
+  // The URL parser writes it in hex (`[::ffff:127.0.0.1]` becomes
+  // `[::ffff:7f00:1]`), so both spellings are read.
   const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
   if (mapped) return networkOf(mapped[1]);
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (mappedHex) {
+    const high = parseInt(mappedHex[1], 16);
+    const low = parseInt(mappedHex[2], 16);
+    return networkOf(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+  }
   if ([...LOCAL_V4, ...LOCAL_V6].some((pattern) => pattern.test(host))) return "local";
   return "public";
 }

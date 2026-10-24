@@ -349,18 +349,27 @@ servers and the cloud metadata address (`169.254.169.254`) live; and a
 `scheme` and `network` are two fields the three effects carry beside
 `baseUrl`, `path`, and `method`, computed by `_fetchTarget` in
 `lib/stdlib/http.ts` before the interrupt is raised. `network` is
-`local` for loopback, unspecified, link-local, and private addresses in
-IPv4 and IPv6, and for `localhost`, `.localhost`, and `.local` names;
-`public` for any other host; `unknown` when the string is not a URL. They
+`local` for loopback, unspecified, link-local, private, and carrier-grade
+NAT (`100.64.0.0/10`, which Tailscale uses) addresses in IPv4 and IPv6,
+and for `localhost`, `.localhost`, and `.local` names; `public` for any
+other host; `unknown` when the string is not a URL. The check reads the
+hostname the URL parser produces, which is not always what the model
+wrote: `[::ffff:127.0.0.1]` comes out as `[::ffff:7f00:1]`, so both
+spellings of an IPv4 address inside IPv6 are read, and a trailing dot
+(`localhost.`) is dropped first. Its tests go through `_fetchTarget` with
+whole URLs for that reason. They
 exist because a rule cannot say this with a glob on `baseUrl`: the glob
 matcher is path-segment aware, so `https://!(localhost)*` fails on the
 first slash of a path, and a host exclusion list in a glob is unreadable
 anyway. Two plain words match cleanly and read in a saved policy file.
 
-The host is judged as written, not resolved. A public name that resolves
-to a private address (DNS rebinding) is not caught by the rule; that is
-the containment process's job (`docs/dev/security/goal.md`), not the
-policy's.
+The host is judged by its name, not resolved. A public name that
+resolves to a private address is not caught by the rule. The common case
+is an intranet name with a real certificate, such as
+`https://wiki.corp.example.com`: it is `https` and `public`, so the rule
+approves a GET to it. The rarer case is DNS rebinding, a name an attacker
+points at a private address. Both are the containment process's job
+(`docs/dev/security/goal.md`), not the policy's.
 
 The reason is trace wX5GvrUq. The researcher offered three fetch tools,
 each with its own effect. The user's saved policy approved two of them,

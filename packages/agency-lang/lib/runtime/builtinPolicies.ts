@@ -114,9 +114,9 @@ export const minimalAutoApprovePolicy: Policy = {
 // the one the research agent needs on every source. Three fields of the
 // effect bound it: a POST, PUT, PATCH, or DELETE sends something; plain
 // http is where local dev servers and the cloud metadata address live;
-// and `network` is "local" for loopback, private, and link-local hosts
-// (`networkOf` in lib/stdlib/http.ts), which a search could never reach,
-// so neither should an approved fetch. Anything else still asks.
+// and `network` is "local" for loopback, private, link-local, and
+// carrier-grade NAT hosts (`networkOf` in lib/stdlib/http.ts), which a
+// search could never reach, so neither should an approved fetch. Anything else still asks.
 // docs/dev/agents/approval-policies.md says what this does and does not
 // widen.
 function webReadRules(): PolicyRule[] {

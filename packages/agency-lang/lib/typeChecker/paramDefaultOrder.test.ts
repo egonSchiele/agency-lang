@@ -32,4 +32,23 @@ describe("required parameter after a defaulted one (AG6039)", () => {
   it("allows no defaults at all", () => {
     expect(orderError("node t(a: string, b: string) { return a }")).toBeUndefined();
   });
+
+  it("allows defaulted parameters before `call` and the block on a decorator", () => {
+    const src = "def d(cost: number = 1, call: Call, block: () -> any) { return block() }";
+    expect(orderError(src)).toBeUndefined();
+  });
+
+  it("still refuses a required parameter after a defaulted one when the shape is not a decorator's", () => {
+    expect(() =>
+      typeCheckSource(
+        "def d(cost: number = 1, label: string, block: () -> any) { return block() }",
+      ),
+    ).toThrow(/expected/);
+  });
+
+  it("still refuses it on a node, which has no decorator shape", () => {
+    expect(
+      orderError('node t(a: string = "x", call: string, b: string) { return b }'),
+    ).toBeDefined();
+  });
 });

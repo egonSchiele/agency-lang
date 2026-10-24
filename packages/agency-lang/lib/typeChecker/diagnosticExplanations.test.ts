@@ -21,6 +21,16 @@ describe("diagnostic explanations", () => {
     }
   });
 
+  it("every decorator shown in an explanation says decorator def", () => {
+    // A def whose parameters end in the call record and a block is a
+    // decorator only with the keyword; an example without it fails AG6044.
+    const decoratorDef = /(?<!decorator )def \w+\([^)]*\bcall\b[^)]*\bblock\b/g;
+    for (const name of names) {
+      const stale = DIAGNOSTIC_EXPLANATIONS[name].match(decoratorDef) ?? [];
+      expect(stale, name).toEqual([]);
+    }
+  });
+
   it("no explanation leaks a TS interpolation", () => {
     for (const name of names) {
       expect(DIAGNOSTIC_EXPLANATIONS[name], name).not.toContain("${");

@@ -825,7 +825,7 @@ A tag such as \`@budgeted(cost: "x")\` is a call to \`budgeted\` with the decora
 
   decoratorBodyReturn: `A \`return\` in a decorated function's body does not fit the block the decorator takes.
 
-The body of a decorated function runs as the decorator's block, so its returns are checked against the block's return type, not against the function's own. For example, a decorator declared \`def budgeted(cost: number, call: Call, block: () -> string): Result<string>\` takes a body that returns \`string\`.
+The body of a decorated function runs as the decorator's block, so its returns are checked against the block's return type, not against the function's own. For example, a decorator declared \`decorator def budgeted(cost: number, call: Call, block: () -> string): Result<string>\` takes a body that returns \`string\`.
 
 **How to fix:** return the type the decorator's block declares. A decorator meant for functions of any return type types its block \`() -> any\`.`,
 
@@ -843,7 +843,7 @@ A decorated function returns whatever its outermost decorator returns. A functio
 
   decoratorDraftType: `A \`saveDraft\` in a decorated function's body saves a value the decorator's block does not return.
 
-The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared \`def budgeted(cost: number, call: Call, block: () -> string): Result<string>\`, the body saves a \`string\` draft, even though the function is declared to return \`Result<string>\`.
+The body of a decorated function runs as the decorator's block, so a draft saved there is the block's value, and it is checked against the block's return type. Under a decorator declared \`decorator def budgeted(cost: number, call: Call, block: () -> string): Result<string>\`, the body saves a \`string\` draft, even though the function is declared to return \`Result<string>\`.
 
 **How to fix:** save a value of the type the decorator's block returns.`,
 

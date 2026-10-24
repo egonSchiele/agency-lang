@@ -179,9 +179,10 @@ def researchTurn(userMsg: string): string {
 }
 
 // The oracle and explorer are handoffs: as tools they continue the
-// caller's thread. Called directly by --target there is no caller thread
-// to continue, so give each its own, as the other subagents do for
-// themselves.
+// caller's thread. Called directly by --agent there is no caller thread
+// to continue, so give each its own. The thread is this brain's display
+// choice: if the stdlib agents opened it, every direct call from a user
+// program would get a labelled, summarized thread too.
 def oracleTurn(userMsg: string): string {
   let reply = ""
   thread(label: "oracle", summarize: true) {

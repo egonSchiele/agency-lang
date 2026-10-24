@@ -1,0 +1,63 @@
+/** @module
+  @summary The code subagent's auto-review: review the .agency files it
+  wrote, never the chat reply.
+
+  Feeding a Python or shell chat reply to the Agency parser crashed and
+  showed up as "your code has errors", which thrashed the agent and
+  shadowed the `verify` step. Reviewing the .agency files on disk means the
+  parser only ever sees Agency source, so a non-Agency task is a clean
+  no-op (no findings) and the loop falls through to `verify`.
+*/
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { Feedback, mergeFeedback } from "std::agents/lib/feedback"
+import { gitStatus, gitIsRepo } from "std::git"
+import { filter, map } from "std::array"
+
+/** Keep only the .agency files from a list of paths. */
+export def filterAgencyPaths(paths: string[]): string[] {
+  return filter(paths, \path -> path.endsWith(".agency"))
+}
+
+/** The .agency files changed in the agent working directory, or [] when the
+  working dir is not a git repo (or git otherwise fails). Fails open — a
+  non-repo/error yields no files so the auto-review is a no-op, never a crash.
+  Includes untracked new files (they are what a coding agent just wrote). */
+export def changedAgencyFiles(): string[] raises <std::git::status> {
+  // The auto-review only makes sense in a git repo. Skip it explicitly when the
+  // working directory is not one (the common case — the agent often runs in a
+  // plain dir), so review is a clean no-op rather than a caught git failure.
+  if (!gitIsRepo()) {
+    return []
+  }
+  // `try` still folds any other git failure to a Result we read as "no changed
+  // files". The interrupt propagates to the caller's handler (the agent policy
+  // auto-approves this read effect).
+  const statusResult = try gitStatus()
+  if (statusResult is success(status)) {
+    return filterAgencyPaths(map(status.entries, \entry -> entry.path))
+  }
+  return []
+}
+
+/** Review the .agency source at each given path, merging the findings. Reads
+  each file against the agent cwd; an unreadable path (e.g. a file `git status`
+  lists as deleted) is skipped, so a stale path can never crash the review. No
+  `task` is passed, so this is deterministic parse+typecheck with no LLM call. */
+export def reviewFiles(paths: string[]): Result<Feedback[]> raises <std::read, std::guard> {
+  let feedback: Result<Feedback[]> = success([])
+  for (path in paths) {
+    const sourceResult = read(filename: path, useAgentCwd: true)
+    if (sourceResult is success(source)) {
+      feedback = mergeFeedback(feedback, agencyReviewAgent(source))
+    }
+  }
+  return feedback
+}
+
+/** The code agent's per-iteration auto-review. Reviews the .agency files the
+  agent changed this run (found via std::git), never the chat reply. Returns
+  success([]) when no .agency files changed — the common case for Python / C /
+  shell tasks — so `feedbackHasErrors` is false and the loop reaches `verify`. */
+export def reviewWrittenFiles(): Result<Feedback[]> raises <std::git::status, std::read, std::guard> {
+  return reviewFiles(changedAgencyFiles())
+}

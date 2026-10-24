@@ -13,9 +13,11 @@ Run it with `agency agent` (it is the default) or `agency agent --brain coordina
 
 One coordinator LLM reads each turn and either answers itself or calls a
 specialist. The specialists are ordinary Agency functions handed to the
-coordinator as tools, so "routing" is the model choosing a tool. Each
-specialist runs in its own conversation thread, so the coordinator sees only
-the specialist's final answer, not its inner steps.
+coordinator as tools, so "routing" is the model choosing a tool. The research,
+oracle, and explorer specialists are handoffs: they continue the coordinator's
+conversation, so it sees their steps as well as their answer. The review,
+writing, and rewrite specialists run in a thread of their own, and the
+coordinator sees only their final answer.
 
 ## The files
 
@@ -32,7 +34,7 @@ tests/                  Agency execution tests for this brain
 `coordinatorBrain()` returns the record the registry hands to the harness:
 
 - `name: "coordinator"`, the `--brain` value.
-- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`, `writing`. These
+- `startTargets`: `code`, `research`, `oracle`, `explorer`, `review`, `writing`, `rewrite`. These
   are the names `--agent <name>` may route the starting prompt to directly.
   `--agent main` (or no flag) goes through the coordinator.
 - `init(context)`: runs once per session, inside the harness policy handler.
@@ -66,18 +68,32 @@ and an inner `with approve` cannot get past an outer policy.
 | Tool | What it does | Where the agent really lives |
 |---|---|---|
 | `codeAgent` | Anything that touches code or the file system: reading, writing, editing, running commands, Agency questions. Triages the task; a complex task gets a plan, a brainstorm of directions, a supervised solve, and a verification round. | here (`code.agency`, with `brainstorm.agency` and `supervisor.agency`) |
-| `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents. | `std::agents` |
-| `oracleAgent` | Deep-reasoning consult on the slow model slot; repeated consults share a session. | `std::agents/oracle` |
-| `explorerAgent` | Surveys a codebase or topic on the slow model slot; shared session. | `std::agents/explorer` |
-| `reviewAgent` | Reviews Agency code: snippets from a message, or the files the code agent just wrote. | `std::agents/agency/review` |
+| `researchAgent` | Reads for the user: web, Wikipedia, URLs, or the bundled Agency docs. A router over two stdlib agents, and a handoff. | `std::agents` |
+| `oracleAgent` | Deep-reasoning consult on the slow model slot. A handoff: it continues the coordinator's conversation, so repeated consults see each other. | `std::agents/oracle` |
+| `explorerAgent` | Surveys a codebase or topic on the slow model slot. A handoff, like the oracle. | `std::agents/explorer` |
+| `reviewAgent` | Reviews code from a message: Agency code through the Agency reviewer, anything else through the general one. | `std::agents/agency/review`, `std::agents/review` |
 | `writingAgent` | Reviews prose for readability; reports findings, or applies them when asked. | `std::agents/writing/review` |
 | `rewriteAgent` | Rewrites prose from the reviewer's findings and returns the new text. | `std::agents/writing/rewrite` |
 
-Most specialists are thin wrappers that add what is the agent's business
-(the user's chosen model slots, a shared session) to an agent that ships in
-the standard library, so users get the same agent in their own programs. The
-code subagent is the exception and carries the most machinery: its own
-tools, its skill files, the one-shot flag, and the supervise/verify loop.
+Most specialists are thin wrappers over an agent that ships in the standard
+library, so users get the same agent in their own programs. A wrapper holds
+only what is the agency agent's business: the function the coordinator
+calls (a `handoff def` for the researcher, the oracle, and the explorer)
+with the parameters the model fills in (`userMsg`, `maxSeconds`, `maxDollars`,
+and a routing flag such as `agencyTopic`), the docstring the coordinator
+reads to decide when to call it, `announce`, `setMemoryId`, the model slot
+from `shared.agency`, the session name, the seconds-to-milliseconds line
+(`timeBudget` in `lib/budgets.agency`), and a REPL style text where the
+subagent has one. The code subagent is the exception and carries the most
+machinery: its own tools, its skill files, the one-shot flag, and the
+supervise/verify loop. `brainstorm.agency` and `supervisor.agency` are its
+parts, not wrappers, and `lib/autoReview.agency` is its check on the
+`.agency` files it wrote.
+
+The oracle and the explorer are handoffs, so a `--agent oracle` or
+`--agent explorer` call, which has no conversation to continue, gets a thread
+from `oracleTurn` and `explorerTurn` in `coordinator.agency`; the comment
+above them says why that is the brain's job and not the stdlib agent's.
 
 ## Tests (`tests/`)
 
@@ -91,6 +107,8 @@ Run one with `pnpm run agency test lib/agents/agency-agent/brains/coordinator/te
   reaches the model; detection and modality filtering are tested in the
   harness (`tests/turn.agency`), not here.
 - `brainstorm`, `supervisor`, `toolWiring` test the code subagent's helpers.
+- `learn`, `presetTools`, and `bundledSkills` test the skill and tool
+  learning tools, the preset tools, and the bundled-skill check.
 
 The tests bind `brain.init` / `brain.runTurn` to locals before calling them
 with `with approve`; calling a record field with `with approve` directly does

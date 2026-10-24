@@ -92,6 +92,10 @@ for the agent's calls, `review` for the check's):
   is text, and the one review mock sees the text. If the empty answer
   were reviewed, the researcher's second mock would go to a second
   attempt and the old loop would report "it returned no answer".
+- `shortFollowUpIsAnAnswer`: the first reply is empty and the follow-up
+  is `Yes (https://x.io).`, under the 20-character floor. It is an
+  answer, not a second empty one, so the review judges it and it comes
+  back.
 - `twoEmptyAnswersAreAFailure`: two empty replies, no review mock at all,
   so a review of nothing would fail the test for want of a mock.
 - `rejectedAnswerIsFixedNotRedone`: one answer missing a fact, a finding

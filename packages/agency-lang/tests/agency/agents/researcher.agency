@@ -25,6 +25,15 @@ node emptyFirstAnswerIsAskedAgain(): string {
   return answer.value
 }
 
+// A short reply to the follow-up is an answer: the review judges it.
+node shortFollowUpIsAnAnswer(): string {
+  const answer = research("what did he study")
+  if (answer is failure(err)) {
+    return "failed: ${err}"
+  }
+  return answer.value
+}
+
 node twoEmptyAnswersAreAFailure(): string {
   const answer = research("what did he study")
   if (answer is failure(err)) {

@@ -56,7 +56,7 @@
       }
     },
     {
-      "nodeName": "emptyFirstAnswerIsAskedAgain",
+      "nodeName": "shortFollowUpIsAnAnswer",
       "description": "a short reply to the follow-up is an answer, not a second empty one: the review judges it",
       "input": "",
       "expectedOutput": "\"Yes (https://x.io).\"",

@@ -280,6 +280,26 @@ describe("command graders", () => {
     expect(Date.now() - started).toBeLessThan(3000);
   });
 
+  it("a background process holding the output pipe does not hold the grader past its timeout", async () => {
+    const started = Date.now();
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "sleep 5 & echo started", timeoutSec: 1 },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.feedback).toBe("timed out after 1s");
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it("keeps a multi-byte character whole when it arrives split across two writes", async () => {
+    const grade = await gradeWith(
+      { kind: "command", name: "c", command: "printf '\\342\\202'; sleep 0.2; printf '\\254\\n'" },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.feedback).toBe("\u20ac\n");
+  });
+
   it("no workdir fails with a message", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "true" },

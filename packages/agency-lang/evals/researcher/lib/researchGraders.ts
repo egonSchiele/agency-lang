@@ -1,6 +1,6 @@
 // The grading library for researcher tests. The output under test is the
 // researcher's answer, a string with citations.
-import { binary, grader, scalar, type Grader } from "agency-lang/eval";
+import { binary, grader, scalar, type Grade, type Grader } from "agency-lang/eval";
 
 /** Mirrors `ResearchEvalInput` in stdlib/agents/researcher.agency. */
 type ResearchInput = { task: string; history?: { role: string; content: string }[] };
@@ -42,41 +42,122 @@ export function readsInContext(args: { truth: string }): ResearchGrader {
   );
 }
 
-const URL_PATTERN = /https?:\/\/[^\s)\]>"']+/g;
+// A URL runs to whitespace or a character that markdown puts around a
+// link: a quote, a backtick, an emphasis star, an angle bracket, or a
+// closing square bracket. A closing paren is kept, since Wikipedia titles
+// such as `Amnesiac_(album)` have one, and trimmed afterwards when the URL
+// never opened one, as in `(see https://example.com)`.
+const URL_PATTERN = /https?:\/\/[^\s<>"'`*\]]+/g;
+const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 
-/** Every URL the answer cites must resolve. An answer with no URL fails. */
+/** The distinct URLs a text cites, each trimmed of the punctuation that
+ *  followed it in the sentence. */
+export function citedUrls(text: string): string[] {
+  const urls: string[] = [];
+  for (const match of text.match(URL_PATTERN) ?? []) {
+    const url = trimUrl(match);
+    if (!urls.includes(url)) {
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+function trimUrl(raw: string): string {
+  let url = raw.replace(TRAILING_PUNCTUATION, "");
+  while (url.endsWith(")") && count(url, "(") < count(url, ")")) {
+    url = url.slice(0, -1).replace(TRAILING_PUNCTUATION, "");
+  }
+  return url;
+}
+
+function count(text: string, char: string): number {
+  return text.split(char).length - 1;
+}
+
+type Verdict = "ok" | "missing" | "unchecked";
+export type CitationCheck = { url: string; verdict: Verdict; note: string };
+
+const MISSING_STATUSES = [404, 410];
+const CHECK_TIMEOUT_MS = 15000;
+/** Wide enough for the longest verdict, so the URLs line up. */
+const VERDICT_COLUMN = "UNCHECKED".length;
+
+/** Every URL the answer cites is fetched. One that does not exist (a host
+ *  that does not resolve, a 404, a 410) is an invented citation and costs
+ *  its share of the score. One that answers 403 or 429, a server error,
+ *  or a timeout may be real and blocking scripts, so it is reported as
+ *  unchecked and costs nothing. An answer that cites no URL fails, and so
+ *  does one where nothing could be checked, since a machine whose every
+ *  fetch fails must not pass every answer. */
 export function citationsResolve(): ResearchGrader {
   return grader<ResearchInput>(
     async ({ output }) => {
-      const urls = [...new Set(answerText(output).match(URL_PATTERN) ?? [])].map((url) =>
-        url.replace(/[.,;:]+$/, ""),
-      );
-      if (urls.length === 0) {
-        return binary(false, "the answer cites no URL");
-      }
-      const results = await Promise.all(urls.map(resolves));
-      const ok = results.filter((r) => r.ok).length;
-      return scalar(
-        ok / urls.length,
-        results
-          .map((r) => `${r.ok ? "ok" : "FAIL"} ${r.url}${r.note ? ` (${r.note})` : ""}`)
-          .join("\n"),
-      );
+      const urls = citedUrls(answerText(output));
+      const checks = await Promise.all(urls.map(checkCitation));
+      return citationGrade(checks);
     },
     { name: "citations-resolve" },
   );
 }
 
-async function resolves(url: string): Promise<{ url: string; ok: boolean; note?: string }> {
+/** The grade for a set of checked citations, by the rules `citationsResolve`
+ *  describes. */
+export function citationGrade(checks: CitationCheck[]): Grade {
+  if (checks.length === 0) {
+    return binary(false, "the answer cites no URL");
+  }
+  const lines = checks.map(describeCheck).join("\n");
+  if (checks.every((citation) => citation.verdict === "unchecked")) {
+    return binary(false, `none of the ${checks.length} cited URLs could be checked\n${lines}`);
+  }
+  const missing = checks.filter((citation) => citation.verdict === "missing").length;
+  return scalar(
+    1 - missing / checks.length,
+    `${checks.length} cited, ${missing} missing\n${lines}`,
+  );
+}
+
+function describeCheck(citation: CitationCheck): string {
+  return `${citation.verdict.toUpperCase().padEnd(VERDICT_COLUMN)} ${citation.url} (${citation.note})`;
+}
+
+/** Fetch one cited URL and say whether it exists. Only the status is read.
+ *  The body is cancelled, so its download does not keep the connection
+ *  open until the timeout. */
+export async function checkCitation(url: string): Promise<CitationCheck> {
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: "GET",
       redirect: "follow",
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       headers: { "user-agent": "agency-eval-citation-check" },
     });
-    return response.ok ? { url, ok: true } : { url, ok: false, note: `HTTP ${response.status}` };
   } catch (error) {
-    return { url, ok: false, note: error instanceof Error ? error.message : String(error) };
+    if (hostNotFound(error)) {
+      return { url, verdict: "missing", note: "host does not resolve" };
+    }
+    const note = error instanceof Error ? error.message : String(error);
+    return { url, verdict: "unchecked", note };
   }
+  await response.body?.cancel();
+  return { url, verdict: verdictFor(response), note: `HTTP ${response.status}` };
+}
+
+function verdictFor(response: Response): Verdict {
+  if (response.ok) {
+    return "ok";
+  }
+  if (MISSING_STATUSES.includes(response.status)) {
+    return "missing";
+  }
+  return "unchecked";
+}
+
+/** Node reports every "no such host" answer from the resolver as ENOTFOUND
+ *  on the cause of the fetch error. */
+function hostNotFound(error: unknown): boolean {
+  const cause = (error as { cause?: { code?: string } } | undefined)?.cause;
+  return cause?.code === "ENOTFOUND";
 }

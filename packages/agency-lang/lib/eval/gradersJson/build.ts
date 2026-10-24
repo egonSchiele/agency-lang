@@ -1,4 +1,4 @@
-import { spawnSync } from "child_process";
+import { spawn } from "child_process";
 
 import type { EvalRecord } from "@/eval/types.js";
 
@@ -179,29 +179,67 @@ function commandGrader(spec: CommandSpec): BaseGrader {
   );
 }
 
-function runCommand(
+async function runCommand(
   command: string,
   workdir: string,
   graderFiles: string,
   timeoutSec: number,
-): Grade {
+): Promise<Grade> {
   if (workdir === "") {
     return binary(false, "no working directory was captured");
   }
-  const result = spawnSync("sh", ["-c", command], {
+  const result = await runShell(command, {
     cwd: workdir,
     env: { ...process.env, [GRADER_FILES_ENV]: graderFiles },
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: Math.ceil(timeoutSec * MS_PER_SECOND),
-    killSignal: "SIGKILL",
-    maxBuffer: COMMAND_OUTPUT_MAX_BYTES,
+    timeoutMs: Math.ceil(timeoutSec * MS_PER_SECOND),
   });
-  if ((result.error as { code?: string } | undefined)?.code === "ETIMEDOUT") {
+  if (result.timedOut) {
     return binary(false, `timed out after ${timeoutSec}s`);
   }
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  return binary(result.status === 0, cut(output));
+  return binary(result.status === 0, cut(result.output));
+}
+
+type ShellOptions = { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number };
+type ShellResult = { status: number | null; output: string; timedOut: boolean };
+
+/** Run `sh -c command` without blocking the event loop, so the LLM judges
+ *  grading beside it keep receiving their responses while it runs. Output
+ *  is stdout and stderr interleaved in the order they arrive, and stops
+ *  growing at the byte cap. At the timeout the shell is killed and the
+ *  result is settled at once, so a process the command started in the
+ *  background that still holds the output pipe cannot keep the grader
+ *  waiting past the timeout. */
+function runShell(command: string, options: ShellOptions): Promise<ShellResult> {
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    const collect = (chunk: Buffer): void => {
+      if (bytes < COMMAND_OUTPUT_MAX_BYTES) {
+        chunks.push(chunk);
+        bytes += chunk.length;
+      }
+    };
+    const output = (): string => Buffer.concat(chunks).toString("utf8");
+    child.stdout.on("data", collect);
+    child.stderr.on("data", collect);
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve({ status: null, output: output(), timedOut: true });
+    }, options.timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ status: null, output: error.message, timedOut: false });
+    });
+    child.on("close", (status) => {
+      clearTimeout(timer);
+      resolve({ status, output: output(), timedOut: false });
+    });
+  });
 }
 
 function cut(text: string): string {

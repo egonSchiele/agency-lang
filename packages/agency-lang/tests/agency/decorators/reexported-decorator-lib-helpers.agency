@@ -1,0 +1,3 @@
+export decorator def logged(call, block) {
+  return "${call.name}=${block(call.args)}"
+}

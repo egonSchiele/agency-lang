@@ -1,0 +1,12 @@
+// A decorator re-exported through a middle file: the wrapper the re-export
+// builds is a decorator too, and passes the block on.
+import { logged } from "./reexported-decorator-helpers.agency"
+
+@logged
+def f(a: number): number {
+  return a
+}
+
+node main() {
+  return f(3)
+}

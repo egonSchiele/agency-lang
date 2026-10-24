@@ -1,0 +1,12 @@
+// A decorator imported from another file: the marker and the slot types
+// travel with the import.
+import { logged } from "./imported-decorator-helpers.agency"
+
+@logged
+def f(a: number): number {
+  return a
+}
+
+node main() {
+  return f(3)
+}

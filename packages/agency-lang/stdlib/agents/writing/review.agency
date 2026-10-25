@@ -185,7 +185,7 @@ def cutsOrNothing(
   }
 }
 
-// The tics pass. The list below is the only copy; docs/dev/contributing/verbal-tics.md points here.
+// The tics pass.
 static const ticsPrompt = """You read prose and report verbal tics: phrases a language model reaches for that a careful editor cuts. Report nothing else. Readability, structure, and facts are reviewed by a separate pass.
 
 The rule behind every entry: state the fact. Do not decorate it, rank it, or warn the reader about it.

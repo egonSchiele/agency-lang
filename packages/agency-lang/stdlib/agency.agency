@@ -98,7 +98,32 @@ export type RunOptions = {
   logFile?: string;
   cwd?: string;
   maxDepth?: number;
-  maxCost?: number | null
+  maxCost?: number
+}
+
+type RunSettings = {
+  wallClock: number;
+  memory: number;
+  ipcPayload: number;
+  stdout: number;
+  logFile: string;
+  cwd: string;
+  maxDepth: number;
+  maxCost: number | null
+}
+
+// Every entry into _runProgram uses this one set of effective defaults.
+def _runOptions(options: RunOptions): RunSettings {
+  return {
+    wallClock: options.wallClock ?? 60s,
+    memory: options.memory ?? 512mb,
+    ipcPayload: options.ipcPayload ?? 100mb,
+    stdout: options.stdout ?? 1mb,
+    logFile: options.logFile ?? "",
+    cwd: options.cwd ?? "",
+    maxDepth: options.maxDepth ?? 5,
+    maxCost: options.maxCost ?? null
+  }
 }
 
 export type SourceLocation = {
@@ -154,17 +179,19 @@ export def run(
   compiled: CompiledProgram,
   node: string,
   args: Record<string, any> = {},
-  wallClock: number = 60s,
-  memory: number = 512mb,
-  ipcPayload: number = 100mb,
-  stdout: number = 1mb,
-  logFile: string = "",
-  cwd: string = "",
-  maxDepth: number = 5,
-  maxCost: number | null = null,
+  wallClock?: number,
+  memory?: number,
+  ipcPayload?: number,
+  stdout?: number,
+  logFile?: string,
+  cwd?: string,
+  maxDepth?: number,
+  maxCost?: number,
 ): Result {
   """
   Execute a compiled Agency program in a subprocess and return the node's result.
+
+  The std::run gate's module and function labels describe a prepared call. They do not verify saved code against the installed module. Checkpoint or session edits can replace compiled code while retaining its label. Use module-specific approval rules only with trusted saved state. Hosts receiving external checkpoints should verify their integrity before resuming; see [checkpoint integrity](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/docs/dev/runtime/checkpoint-integrity.md). Source text and sandboxed descendants use the generic gate with empty labels.
 
   @param compiled - A compiled Agency program
   @param node - Which exported node to run
@@ -178,7 +205,10 @@ export def run(
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
   @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
-  return _runProgram(compiled, node, args, wallClock, memory, ipcPayload, stdout, logFile, cwd, maxDepth, maxCost)
+  return _runProgram(compiled, node, args, {
+    wallClock: wallClock, memory: memory, ipcPayload: ipcPayload, stdout: stdout,
+    logFile: logFile, cwd: cwd, maxDepth: maxDepth, maxCost: maxCost
+  })
 }
 
 // Only the prepared-function path supplies a source identity. An arbitrary
@@ -188,23 +218,17 @@ def _runProgram(
   compiled: CompiledProgram,
   node: string,
   args: Record<string, any>,
-  wallClock: number,
-  memory: number,
-  ipcPayload: number,
-  stdout: number,
-  logFile: string,
-  cwd: string,
-  maxDepth: number,
-  maxCost: number | null,
+  options: RunOptions = {},
   sourceModule: string = "",
   functionName: string = "",
 ): Result {
+  const settings = _runOptions(options)
   let configOverrides = null
-  if (logFile != "") {
+  if (settings.logFile != "") {
     configOverrides = {
       observability: true,
       log: {
-        logFile: logFile
+        logFile: settings.logFile
       }
     }
   }
@@ -219,14 +243,14 @@ def _runProgram(
     node: node,
     args: args,
     limits: {
-      wallClock: wallClock,
-      memory: memory,
-      ipcPayload: ipcPayload,
-      stdout: stdout,
-      maxCost: maxCost
+      wallClock: settings.wallClock,
+      memory: settings.memory,
+      ipcPayload: settings.ipcPayload,
+      stdout: settings.stdout,
+      maxCost: settings.maxCost
     },
-    cwd: cwd,
-    logFile: logFile,
+    cwd: settings.cwd,
+    logFile: settings.logFile,
     depth: _subprocessDepth() + 1,
     module: originModule,
     function: originFunction
@@ -237,19 +261,19 @@ def _runProgram(
   // one guarded call site serves both cases. Safe since #513: block
   // frames revive correctly across a nested subprocess pause.
   const NO_COST_CAP = -1.0
-  const cap = if maxCost != null then maxCost else NO_COST_CAP
+  const cap = if settings.maxCost != null then settings.maxCost else NO_COST_CAP
   const guarded = guard(cost: cap) {
     return try _run(
       compiled,
       node,
       args,
-      wallClock,
-      memory,
-      ipcPayload,
-      stdout,
+      settings.wallClock,
+      settings.memory,
+      settings.ipcPayload,
+      settings.stdout,
       configOverrides,
-      cwd,
-      maxDepth,
+      settings.cwd,
+      settings.maxDepth,
     )
   }
   // guard() runs the block through a try-style call, which passes a
@@ -262,11 +286,11 @@ def _runProgram(
       // run() limits (shape mirrors makeLimitFailure in lib/runtime/ipc.ts
       // — keep the two in sync).
       return failure(
-        "Subprocess exceeded cost limit of ${maxCost} (used ${guarded.data.actualCost})",
+        "Subprocess exceeded cost limit of ${settings.maxCost} (used ${guarded.data.actualCost})",
         {
           reason: "limit_exceeded",
           limit: "cost",
-          threshold: maxCost,
+          threshold: settings.maxCost,
           value: guarded.data.actualCost
         },
       )
@@ -309,10 +333,7 @@ export def _executePrepared(
 ): Result {
   const outcome = _runProgram(
     prepared.compiled, prepared.invokeNode, { exportName: exportName, args: args },
-    options.wallClock ?? 60s, options.memory ?? 512mb, options.ipcPayload ?? 100mb,
-    options.stdout ?? 1mb, options.logFile ?? "", options.cwd ?? "",
-    options.maxDepth ?? 5, options.maxCost ?? null,
-    prepared.sourceModule, exportName,
+    options, prepared.sourceModule, exportName,
   )
   if (outcome is failure) {
     return outcome
@@ -343,7 +364,7 @@ export def learn(
   """
   Return tools with the original functions' descriptions, schemas, aliases, and argument binding. An empty names list selects all public exported defs; hidden exports, types, and nodes are excluded. Selecting a node, handoff def, required function argument, or unresolved generic schema fails the whole batch. A namespace advertises namespace_exportName; empty keeps the export name.
 
-  Learning runs module initialization once in a subprocess to inspect the compiled definitions, so it can pause, fail, or be rejected. It does not call the selected function bodies. Each later tool call runs in its own fresh subprocess with the bound options and the usual run gate and parent handlers. Imported code is captured during preparation; later calls do not reread local source files. This returns function values without saving them or changing an agent's tool list.
+  Learning runs module initialization once in a subprocess to inspect the compiled definitions, so it can pause, fail, or be rejected. Inspection uses the same std::run gate as calls, with function set to `<inspect>` for a module or file prepared by the host. Source text and sandboxed descendants use the generic gate. It does not call the selected function bodies. Each later tool call runs in its own fresh subprocess with the bound options and the usual run gate and parent handlers. Imported code is captured during preparation; later calls do not reread local source files. This returns function values without saving them or changing an agent's tool list.
 
   @param source - The module, file, or complete source accepted by runFunction
   @param names - Exported defs to learn; empty selects all public defs
@@ -354,11 +375,9 @@ export def learn(
   if (prepared is failure) {
     return prepared
   }
-  const metadata = run(
-    prepared.value.compiled, prepared.value.metadataNode, {},
-    options.wallClock ?? 60s, options.memory ?? 512mb, options.ipcPayload ?? 100mb,
-    options.stdout ?? 1mb, options.logFile ?? "", options.cwd ?? "",
-    options.maxDepth ?? 5, options.maxCost ?? null,
+  const metadata = _runProgram(
+    prepared.value.compiled, prepared.value.metadataNode, {}, options,
+    prepared.value.sourceModule, "<inspect>",
   )
   if (metadata is failure) {
     return metadata

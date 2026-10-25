@@ -1,6 +1,12 @@
 {
-  "data": { "turns": 2, "tools": ["session_seriesInfo"] },
-  "records": { "count": 1, "onlyData": true },
+  "data": { "turns": 2, "tools": ["session_seriesInfo", "session_seriesLabel"] },
+  "records": {
+    "count": 2,
+    "programCount": 1,
+    "programReferences": [0, 0],
+    "recordsContainCode": false,
+    "onlyData": true
+  },
   "schemaRestored": true,
   "aliasCallUsesPreparedSource": true
 }

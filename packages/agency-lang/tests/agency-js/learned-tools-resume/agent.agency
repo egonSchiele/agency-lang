@@ -13,13 +13,13 @@ let turns = 0
 def turn(line: string): boolean {
   turns = turns + 1
   if (line == "learn") {
-    const learned = learnSessionTools({ kind: "file", dir: "./test-output/source", filename: "tools.agency" }, ["seriesInfo"]) with approve
+    const learned = learnSessionTools({ kind: "file", dir: "./test-output/source", filename: "tools.agency" }, ["seriesInfo", "seriesLabel"]) with approve
     if (learned is failure) {
       return false
     }
     thread(label: "main", session: "main") {
-      userMessage("Learn seriesInfo")
-      assistantMessage("Learned session_seriesInfo")
+      userMessage("Learn seriesInfo and seriesLabel")
+      assistantMessage("Learned session_seriesInfo and session_seriesLabel")
     }
     return true
   }

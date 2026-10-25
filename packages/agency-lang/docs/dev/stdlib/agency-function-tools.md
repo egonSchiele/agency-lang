@@ -93,17 +93,29 @@ subprocess envelope is removed.
 In the host run, the private execution helper supplies the source module
 and export name to the `std::run` gate. Its message names the function,
 and its data contains `module` and `function` for policy matching.
-Ordinary `run` calls leave those fields empty. Calls from a subprocess
-also leave them empty: sandboxed Agency code can import hidden helpers
+Source text and ordinary `run` calls leave those fields empty. Calls
+from a subprocess also leave them empty: sandboxed Agency code can import hidden helpers
 and construct its own prepared record, so its claimed origin is not
 trusted. Naming an arbitrary node `invokeLearned` does not assign it a
 learned function's identity.
 
+These labels describe how the program was prepared. They do not verify
+that saved code still matches the installed module. Checkpoints and
+session files contain both the labels and the compiled code. Someone
+who edits that state can retain a trusted module label while replacing
+its code. A policy that approves a module by name therefore relies on
+trusted saved state. See [checkpoint integrity](../runtime/checkpoint-integrity.md)
+for optional signing and verification. External hosts must verify
+checkpoints before resuming when they rely on that protection.
+
 `learn` also generates a metadata node. Agency's compiler emits schema
 code rather than a finished JSON Schema, so the node reads the compiled
 function objects inside a child. It returns their schemas and parameter
-metadata. Executable validators stay in the child and run when the
-original function is invoked.
+metadata. For a file or installed module, this inspection uses the same
+module label as later calls, with `function: "<inspect>"`. A policy that
+approves the module covers its initialization during both inspection
+and invocation. Executable validators stay in the child and run when
+the original function is invoked.
 
 The parent factory is private to the runtime. It needs the binder's
 parameter metadata, which a general caller should not have to construct.
@@ -118,23 +130,26 @@ Schema. The original `!` checks and custom validators run in the child.
 
 ## Coordinator records
 
-The coordinator's learning module keeps `learnedRecords` in an Agency
-global. A record contains the advertised name, definition, prepared
-program, export name, and execution options. It contains no function
-values. `getGeneratedTools()` rebuilds callables from those records when
-the coordinator assembles its tools.
+The coordinator's learning module keeps `learnedState` in an Agency
+global. Its `programs` array stores each learning batch's prepared code
+once. Each entry in `records` contains a `programIndex` plus the
+advertised name, definition, export name, and execution options. These
+values contain no functions. `getGeneratedTools()` looks up each
+record's program and rebuilds the callables when the coordinator
+assembles its tools.
 
 The private helpers in `lib/stdlib/sessionTools.ts` convert the values
 returned by `learn` into records. They keep executor bindings out of the
-Agency coordinator code. The batch check returns either a complete new
-array or a failure. The coordinator replaces its global immediately
+Agency coordinator code. Extraction checks that all executor bindings
+are present before saving a record. The batch check returns either a
+complete new state or a failure. The coordinator replaces its global immediately
 after a successful check. A name collision never replaces an existing
 tool. The default namespace is `session`.
 
 Agency globals already persist between user turns and in session
 checkpoints. Rebuilding from records makes a between-turn restore use
 the saved prepared program, even if the original source files disappear.
-A fresh run starts with an empty array.
+A fresh run starts with empty program and record arrays.
 
 The coordinator's `learnTools` is a handoff. It learns the functions and
 continues the caller's conversation with a freshly assembled tool list.
@@ -158,7 +173,10 @@ records alone do not fix a checkpoint inside an active prompt.
 A created callable carries its definition and a
 registered, partially applied executor. The function reviver rebuilds
 the callable and reapplies its normal derivations. It does not inspect
-the source or run the metadata node again.
+the source or run the metadata node again. These active tool values
+still include a bound copy of their prepared program in a checkpoint
+inside `llm`. Sharing programs in the coordinator global reduces the
+between-turn session data; it does not deduplicate active callables.
 
 An interrupted child resumes through the existing subprocess checkpoint
 path. The prepared value carries its local module code, so restoration
@@ -171,17 +189,14 @@ check remains responsible for refusing incompatible runtime code.
   actual model tool call, using a scripted client. It checks the handoff's
   tool list and history, alias calls, the next user turn, failed batches,
   and a fresh conversation.
-- `tests/agency-js/learned-tools-resume` saves a real between-turn session
-  checkpoint. A new process rebuilds the tool and calls it through an
-  alias after the fixture's source directory has been deleted.
+- `tests/agency-js/learned-tools-resume` learns two functions and checks
+  that the between-turn session stores one program with two record
+  references. A new process rebuilds both tools and calls them through
+  aliases after the fixture's source directory has been deleted.
 - `tests/agency-js/learned-call-resume` pauses inside an imported helper
   after a completed write. A new process resumes with both parent and
   child handlers, using saved code after the fixture's sources disappear.
   The completed write does not repeat.
-- `tests/agency-js/learned-call-resume` pauses inside an imported helper,
-  deletes the fixture-owned source directory, and resumes in a new
-  process. Parent and child handlers remain active and a completed
-  file append does not repeat.
 - `tests/agency-js/learned-tool-parity` compares ordinary and learned
   schemas, aliases, argument errors, repeat detection, and tool removal.
 - Runtime factory and function-reference tests cover derivations and

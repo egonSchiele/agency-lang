@@ -5,7 +5,7 @@ Status: implemented and validated. Date: 2026-10-25. Revised the same day after
 
 ## Goal
 
-Implement `runFunction` and `learn` in `std::agency`, with a private runtime factory behind `learn`. The Agency agent keeps a record of what it learned in a global array and builds the tools from those records on every turn. Learned functions preserve ordinary parameter handling, validation, and tool-loop behavior while their implementations run in subprocesses.
+Implement `runFunction` and `learn` in `std::agency`, with a private runtime factory behind `learn`. The Agency agent keeps prepared programs and indexed records in one global value and builds the tools from those records on every turn. Learned functions preserve ordinary parameter handling, validation, and tool-loop behavior while their implementations run in subprocesses.
 
 Contract: [Learn Agency functions as session tools](../specs/2026-10-24-session-tools.md).
 
@@ -146,7 +146,7 @@ Compare an ordinary Agency function with a factory-created function built from t
 **Work**
 
 - [x] Write the helper `describeLearned` calls: for each selected compiled `AgencyFunction`, return `name`, `toolDefinition.description`, `toolDefinition.schema.toJSONSchema()`, `params` without `defaultValue`, and `markers`. Nothing executable crosses.
-- [x] Implement `learn`: `prepare` once with the metadata node requested, `run` the metadata node through the normal gate, then one `createTool` per export with the executor `executePrepared.partial(prepared:, exportName:, options:)`.
+- [x] Implement `learn`: `prepare` once with the metadata node requested, run the metadata node through `_runProgram` with the same module label and `<inspect>` as the function name, then one `createTool` per export with the executor `executePrepared.partial(prepared:, exportName:, options:)`.
 - [x] Apply the namespace as `[namespace, exportName]` joined by `_` after dropping empty parts, so an empty namespace is not a branch. Fail the batch if any advertised name exceeds `MAX_TOOL_NAME_LEN`.
 - [x] Validate the whole batch before returning it. Return an array on success, a diagnostic naming the export and the reason on failure. Do not touch any agent global.
 - [x] Docstring: that learning runs the module's top-level code once in a subprocess and can pause or be rejected there; that each call forks a fresh process; the unsupported signatures; the namespace rule.
@@ -188,9 +188,9 @@ Round-trip a created tool whose executor is a registered partial with bound data
 
 **Work**
 
-- [x] Add `LearnedRecord` and the global `learnedRecords: LearnedRecord[] = []` to the learning module. The global holds JSON only.
-- [x] Add `getGeneratedTools()`, which maps records through `toolFromRecord`, a function that calls the factory with the record's definition and `executePrepared.partial(...)`. Pure; runs every turn.
-- [x] Add `addLearnedRecords(current, candidates, offeredNames)`, a function that returns either the new record list or a diagnostic. It fails on a name already in `current` or in `offeredNames`, and on a name over `maxLearnedToolName`'s equivalent for the namespace. `learnTools` calls it and assigns the result to the global in the next statement, with no call between that can raise an interrupt.
+- [x] Add `LearnedRecord` and a global `learnedState` holding `programs` and `records`. Each learning batch stores its prepared program once; records refer to it by index. The global holds JSON only.
+- [x] Add `getGeneratedTools()`, which looks up each record's program through `_toolsFromRecords`, a helper that calls the factory with the record's definition and `executePrepared.partial(...)`. Pure; runs every turn.
+- [x] Add `addLearnedRecords(current, candidates, offeredNames)`, a function that returns either the new program-and-record state or a diagnostic. It fails on a name already in `current` or in `offeredNames`, and on a name over `maxLearnedToolName`'s equivalent for the namespace. `learnTools` calls it and assigns the result to the global in the next statement, with no call between that can raise an interrupt.
 - [x] Add the agent-facing `learnTools(source, names, namespace)`. Default namespace `session`. It calls `learn`, then `addLearnedRecords`. Its reply states when the tools become available.
 - [x] Pass the offered names in from coordinator wiring to avoid a circular import.
 - [x] Offer `learnTools` and spread `getGeneratedTools()` in `turnTools()`. Do not clear the global on resumed initialization.
@@ -215,7 +215,7 @@ Within one Agency run, call `brain.runTurn` twice. In the first turn the scripte
 - [x] Separately, pause during a learned call, delete only a directory the test created, through `safeDeleteDirectoryWithin`, and resume in a fresh process. Never touch the shared `.agency-tmp` root. Verify parent and child handlers and that completed side effects do not repeat.
 - [x] Confirm restored calls use the prepared code after the test-created sources change or disappear.
 - [x] Write the dev doc: the two public functions with one example each, the prepare pipeline and its one value, why the factory is private, why the metadata node exists (no compile-time schema), the gate data, the fork-per-call cost, the records global, what the Task 6 test found, and the handoff spike's outcome.
-- [x] Add the doc to the `CLAUDE.md` index. The `agency-stdlib-docs` skill was removed from the current repository and is absent from installed skills, so there is no skill index to update.
+- [x] Add the doc to the `CLAUDE.md` index and the matching `.claude/skills/agency-stdlib-docs/SKILL.md` index.
 - [x] Regenerate stdlib reference pages through the existing build. Do not edit generated Markdown.
 - [x] Review the diff for any argument, alias, name, or validation logic that duplicates `agencyFunction.ts` or `toolInvocation.ts`.
 
@@ -280,6 +280,6 @@ The handoff experiment succeeded. Tools are available in a continuation of the s
 
 The unregistered-function baseline failed as expected: a raw function restored as a throwing stub without its parameter schema. Created functions now restore through a definition plus registered executor; arbitrary MCP closures are not repaired by this change.
 
-Validation passed: the full build, production/test/eval TypeScript checks, formatting and structural lint, preparation and runtime unit tests, 14 `runFunction` cases, learned schema/argument/validator/tool-loop parity, same-turn and next-turn coordinator tests, and fresh-process restoration both between turns and during a learned call. Existing parent-handler, child-handler, durable-subprocess, coordinator-learning, and tool-wiring tests passed. PR 1 was also built and tested in isolation from the other changes.
+Validation passed: the full build, production/test/eval TypeScript checks, formatting and structural lint, preparation and runtime unit tests, 16 `runFunction` cases, learned schema/argument/validator/tool-loop parity, same-turn and next-turn coordinator tests, and fresh-process restoration both between turns and during a learned call. Existing parent-handler, child-handler, durable-subprocess, coordinator-learning, and tool-wiring tests passed. PR 1 was also built and tested in isolation from the other changes.
 
 The existing compiler can fail when a re-export wrapper refers to a checked type available only in the original module. Ordinary Agency compilation reproduced the same failure. The dev doc records the limitation and the workaround of selecting the original export; compiler re-export repair remains separate from this feature.

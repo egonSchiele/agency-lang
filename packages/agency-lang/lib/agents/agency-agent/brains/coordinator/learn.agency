@@ -20,15 +20,17 @@ import {
 type LearnedRecord = {
   advertisedName: string;
   definition: any;
-  prepared: any;
+  programIndex: number;
   exportName: string;
   options: any
 }
 
-let learnedRecords: LearnedRecord[] = []
+type LearnedState = { programs: any[]; records: LearnedRecord[] }
+
+let learnedState: LearnedState = { programs: [], records: [] }
 
 export def getGeneratedTools(): any[] {
-  return _toolsFromRecords(learnedRecords, _executePrepared)
+  return _toolsFromRecords(learnedState, _executePrepared)
 }
 
 export def learnSessionTools(
@@ -42,12 +44,12 @@ export def learnSessionTools(
     return learned
   }
   const candidates = _learnedRecords(learned.value)
-  const updated = _addLearnedRecords(learnedRecords, candidates, offeredNames, MAX_TOOL_NAME_LEN)
+  const updated = _addLearnedRecords(learnedState, candidates, offeredNames, MAX_TOOL_NAME_LEN)
   if (updated is failure) {
     return updated
   }
-  learnedRecords = updated.value
-  return success([record.advertisedName for record in candidates])
+  learnedState = updated.value
+  return success([record.advertisedName for record in candidates.records])
 }
 
 export def learnSkill(name: string, description: string, body: string): string {

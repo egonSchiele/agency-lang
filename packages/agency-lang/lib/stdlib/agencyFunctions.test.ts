@@ -60,6 +60,7 @@ describe("function preparation", () => {
     );
     expect(prepared.exportNames).toEqual(["greet"]);
     expect(prepared.invokeNode).toBe("invokeLearned");
+    expect(prepared.sourceModule).toBe("");
     expect(prepared.metadataNode).toBeUndefined();
     expect(prepared.compiled.code).toContain("invokeLearned");
     expect(Object.values(prepared.compiled.modules ?? {}).join("\n")).toContain("greet");

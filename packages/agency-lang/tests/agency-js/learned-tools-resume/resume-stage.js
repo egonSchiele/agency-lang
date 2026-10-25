@@ -12,8 +12,17 @@ const client = {
     return {
       success: true,
       value: {
-        output: requests.length === 1 ? null : "restored answer",
-        toolCalls: requests.length === 1 ? [new ToolCall("restored-call", "session_seriesInfo", { id: "UNRATE" })] : [],
+        output: requests.length < 3 ? null : "restored answer",
+        toolCalls:
+          requests.length < 3
+            ? [
+                new ToolCall(
+                  `restored-call-${requests.length}`,
+                  requests.length === 1 ? "session_seriesInfo" : "session_seriesLabel",
+                  { id: "UNRATE" },
+                ),
+              ]
+            : [],
         model: "test",
         usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
         cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
@@ -30,9 +39,20 @@ const client = {
 };
 __setLLMClient(client);
 const result = await main();
-writeFileSync("__result.json", JSON.stringify({
-  data: result.data,
-  records: JSON.parse(readFileSync("test-output/record-check.json", "utf8")),
-  schemaRestored: requests[0]?.tools[0].schema.properties.seriesId.type === "string",
-  aliasCallUsesPreparedSource: JSON.stringify(requests[1]?.messages).includes("original:UNRATE"),
-}, null, 2));
+writeFileSync(
+  "__result.json",
+  JSON.stringify(
+    {
+      data: result.data,
+      records: JSON.parse(readFileSync("test-output/record-check.json", "utf8")),
+      schemaRestored: requests[0]?.tools.every(
+        (tool) => tool.schema.properties.seriesId.type === "string",
+      ),
+      aliasCallUsesPreparedSource:
+        JSON.stringify(requests[2]?.messages).includes("original:UNRATE") &&
+        JSON.stringify(requests[2]?.messages).includes("label:UNRATE"),
+    },
+    null,
+    2,
+  ),
+);

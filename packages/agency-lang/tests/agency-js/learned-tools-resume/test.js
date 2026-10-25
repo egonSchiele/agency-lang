@@ -9,28 +9,42 @@ import { safeDeleteDirectoryWithin } from "../../../dist/lib/utils.js";
 const fixtureRoot = process.cwd();
 safeDeleteDirectoryWithin(fixtureRoot, resolve("test-output"));
 mkdirSync("test-output/source", { recursive: true });
-writeFileSync("test-output/source/tools.agency", 'export def seriesInfo(seriesId | id: string): string { return "original:${seriesId}" }');
+writeFileSync(
+  "test-output/source/tools.agency",
+  `
+export def seriesInfo(seriesId | id: string): string { return "original:${"${seriesId}"}" }
+export def seriesLabel(seriesId | id: string): string { return "label:${"${seriesId}"}" }
+`,
+);
 process.env.LINES = "learn";
 await main();
 const checkpoint = JSON.parse(readFileSync("test-output/sessions/session-tools.json", "utf8"));
 
-function recordsIn(value) {
+function statesIn(value) {
   if (!value || typeof value !== "object") {
     return [];
   }
   return Object.entries(value).flatMap(([key, child]) => {
-    if (key.endsWith("learnedRecords") && Array.isArray(child)) {
-      return child;
+    if (key.endsWith("learnedState") && child?.programs && child?.records) {
+      return [child];
     }
-    return recordsIn(child);
+    return statesIn(child);
   });
 }
 
-const records = recordsIn(checkpoint);
-writeFileSync("test-output/record-check.json", JSON.stringify({
-  count: records.length,
-  onlyData: !JSON.stringify(records).includes('"__nativeType":"FunctionRef"'),
-}));
+const states = statesIn(checkpoint);
+const records = states.flatMap((state) => state.records);
+const programs = states.flatMap((state) => state.programs);
+writeFileSync(
+  "test-output/record-check.json",
+  JSON.stringify({
+    count: records.length,
+    programCount: programs.length,
+    programReferences: records.map((record) => record.programIndex),
+    recordsContainCode: records.some((record) => Object.hasOwn(record, "prepared")),
+    onlyData: !JSON.stringify(states).includes('"__nativeType":"FunctionRef"'),
+  }),
+);
 safeDeleteDirectoryWithin(fixtureRoot, resolve("test-output/source"));
 execFileSync(process.execPath, ["./resume-stage.js"], {
   stdio: "inherit",

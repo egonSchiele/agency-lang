@@ -1,0 +1,75 @@
+{
+  "tests": [
+    {
+      "nodeName": "fredInspectionPolicy",
+      "description": "learn gate: fredInspectionPolicy",
+      "input": "",
+      "expectedOutput": "[\"fredSeriesInfo\",true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modulePolicy",
+      "description": "learn gate: modulePolicy",
+      "input": "",
+      "expectedOutput": "{\"sum\":5,\"gates\":[{\"module\":\"std::math\",\"function\":\"<inspect>\",\"limits\":{\"wallClock\":30000,\"memory\":268435456,\"ipcPayload\":1048576,\"stdout\":262144,\"maxCost\":0.25}},{\"module\":\"std::math\",\"function\":\"add\",\"limits\":{\"wallClock\":30000,\"memory\":268435456,\"ipcPayload\":1048576,\"stdout\":262144,\"maxCost\":0.25}}]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sourceGeneric",
+      "description": "learn gate: sourceGeneric",
+      "input": "",
+      "expectedOutput": "{\"sum\":7,\"gates\":[[\"\",\"\",\"Running agent-generated code in subprocess\"],[\"\",\"\",\"Running agent-generated code in subprocess\"]]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parentRejectsInspection",
+      "description": "learn gate: parentRejectsInspection",
+      "input": "",
+      "expectedOutput": "[true,\"parent refused inspection\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parentPropagatesInspection",
+      "description": "learn gate: parentPropagatesInspection",
+      "input": "",
+      "expectedOutput": "\"add\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    },
+    {
+      "nodeName": "nestedGeneric",
+      "description": "learn gate: nestedGeneric",
+      "input": "",
+      "expectedOutput": "{\"sum\":11,\"gates\":[[\"\",\"\",1],[\"\",\"\",2],[\"\",\"\",2]]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -168,6 +168,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "sourceGateHasNoIdentity",
+      "description": "runFunction: sourceGateHasNoIdentity",
+      "input": "",
+      "expectedOutput": "9",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "runOptionParity",
+      "description": "runFunction: runOptionParity",
+      "input": "",
+      "expectedOutput": "[{\"limits\":{\"wallClock\":60000,\"memory\":536870912,\"ipcPayload\":104857600,\"stdout\":1048576,\"maxCost\":null},\"cwd\":\"\",\"logFile\":\"\"},{\"limits\":{\"wallClock\":60000,\"memory\":536870912,\"ipcPayload\":104857600,\"stdout\":1048576,\"maxCost\":null},\"cwd\":\"\",\"logFile\":\"\"},{\"limits\":{\"wallClock\":60000,\"memory\":536870912,\"ipcPayload\":104857600,\"stdout\":1048576,\"maxCost\":null},\"cwd\":\"\",\"logFile\":\"\"},{\"limits\":{\"wallClock\":60000,\"memory\":536870912,\"ipcPayload\":104857600,\"stdout\":1048576,\"maxCost\":null},\"cwd\":\"\",\"logFile\":\"\"},{\"limits\":{\"wallClock\":2500,\"memory\":67108864,\"ipcPayload\":1048576,\"stdout\":4096,\"maxCost\":0},\"cwd\":\".\",\"logFile\":\"options.log\"},{\"limits\":{\"wallClock\":2500,\"memory\":67108864,\"ipcPayload\":1048576,\"stdout\":4096,\"maxCost\":0},\"cwd\":\".\",\"logFile\":\"options.log\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

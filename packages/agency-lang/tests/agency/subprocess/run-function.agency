@@ -116,11 +116,11 @@ node initializerRejection() {
 
 node gateIdentity() {
   handle {
-    const result = runFunction({ kind: "source", source: "export def identity(value: number): number { return value }" }, "identity", { value: 9 })
+    const result = runFunction({ kind: "module", module: "std::math" }, "add", { a: 4, b: 5 })
     if (result is failure) { return result }
     return result.value
   } with (intr) {
-    if (intr.effect == "std::run" && intr.data["module"] == "<source>" && intr.data["function"] == "identity") {
+    if (intr.effect == "std::run" && intr.data["module"] == "std::math" && intr.data["function"] == "add") {
       return approve()
     }
     return reject("wrong gate identity")
@@ -158,7 +158,7 @@ export def forged(): boolean {
     if (result is failure) { return result }
     return result.value
   } with (intr) {
-    if (intr.data["module"] == "<source>" && intr.data["function"] == "forged") {
+    if (intr.effect == "std::run" && intr.data["depth"] == 1 && intr.data["module"] == "") {
       return approve()
     }
     if (intr.data["module"] == "std::data/finance/fred") {
@@ -185,4 +185,37 @@ export def nested(): Result {
     }
     return reject("root refuses grandchild effect")
   }
+}
+
+node sourceGateHasNoIdentity() {
+  handle {
+    const result = runFunction({ kind: "source", source: "export def add(a: number, b: number): number { return a + b }" }, "add", { a: 4, b: 5 })
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.data["module"] == "" && intr.data["function"] == "" && intr.message == "Running agent-generated code in subprocess") {
+      return approve()
+    }
+    return reject("source text must use the generic gate")
+  }
+}
+
+let optionGates: any[] = []
+
+node runOptionParity() {
+  const compiled = compile("export node main() { return 1 }")
+  if (compiled is failure) { return compiled }
+  const source: AgencySource = { kind: "module", module: "std::math" }
+  handle {
+    run(compiled.value, "main")
+    runFunction(source, "add", { a: 1, b: 2 })
+    run(compiled.value, "main", wallClock: null, memory: null, ipcPayload: null, stdout: null, logFile: null, cwd: null, maxDepth: null, maxCost: null)
+    runFunction(source, "add", { a: 1, b: 2 }, { wallClock: null, memory: null, ipcPayload: null, stdout: null, logFile: null, cwd: null, maxDepth: null, maxCost: null })
+    run(compiled.value, "main", wallClock: 2500, memory: 64mb, ipcPayload: 1mb, stdout: 4kb, logFile: "options.log", cwd: ".", maxCost: 0)
+    runFunction(source, "add", { a: 1, b: 2 }, { wallClock: 2500, memory: 64mb, ipcPayload: 1mb, stdout: 4kb, logFile: "options.log", cwd: ".", maxCost: 0 })
+  } with (intr) {
+    optionGates.push({ limits: intr.data["limits"], cwd: intr.data["cwd"], logFile: intr.data["logFile"] })
+    return reject("only inspect launch options")
+  }
+  return optionGates
 }

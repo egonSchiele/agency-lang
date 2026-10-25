@@ -92,6 +92,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "bundledDocsDir",
     "disableMemory",
     "_budgetOutcome",
+    "_describeLearned",
   ],
   "a guard: its trip is raised on the TypeScript side and needs no host": ["_guard", "guarded"],
   "agents and strategies that assemble a prompt and hand on the tools they are given": [

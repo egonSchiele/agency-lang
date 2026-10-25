@@ -194,6 +194,8 @@ Please note that you cannot write and run agency files in the `/tmp` directory o
 ## Plan and spec docs
 - Put spec docs in docs/superpowers/specs.
 - Put plan docs in docs/superpowers/plans.
+- Write these docs, and any review of them, inside the task's worktree. Create the worktree before you write the first doc.
+- Do not write them in the main checkout. A doc written there stays behind as an untracked file. When the branch that commits the same file merges, `git pull` on main refuses to overwrite it.
 
 ## Worktrees
 Always create your worktrees inside packages/agency-lang. Never create them outside that directory.

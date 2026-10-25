@@ -29,7 +29,7 @@ If you try to write commit messages with apostrophes right on the command line, 
 
 ## General writing tips
 
-When talking to me, or writing documentation or comments, please follow these general writing tips: `packages/agency-lang/docs/dev/contributing/general-writing-tips.md`
+When talking to me, or writing documentation or comments, please follow the writing tips in `~/.claude/skills/simplify-speech/general-writing-tips.md`. After drafting, check your prose against `~/.claude/skills/simplify-speech/verbal-tics.md`.
 
 Specifically, make sure you are writing readable prose, not using jargon, and explaining things with examples where possible.
 

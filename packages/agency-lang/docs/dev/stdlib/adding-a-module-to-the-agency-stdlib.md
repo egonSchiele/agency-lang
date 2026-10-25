@@ -229,4 +229,4 @@ Remember that all the parameter names and types in the function name will get se
 ### Move information to the doc comment.
 If there are any details that would be good for a *developer* using Agency to know, as opposed to information that the *tool* needs to know, please put that information in doc comments instead.
 
-Also read the [general writing tips](../contributing/general-writing-tips.md) and [anti-patterns](../contributing/anti-patterns.md) guides for more information on writing good documentation and code.
+Also read the [anti-patterns](../contributing/anti-patterns.md) guide for more information on writing good code.

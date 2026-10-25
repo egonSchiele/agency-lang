@@ -1,8 +1,28 @@
-## Unreleased
+## Oct 24 2026 — v0.33.0
 
 ### Breaking
 
-- **The budget decorator is now `@guarded` in `std::decorators`.** Change `import { guard } from "std::strategy"` to `import { guarded } from "std::decorators"`, and `@guard(...)` to `@guarded(...)`. The name changed in #1269 (so the decorator can be called as a function, since `guard(...) {` always parses as the block), and the module changed in #1271: `std::decorators` is where every decorator the standard library ships now lives.
+- **Decorators are declared with the `decorator` keyword.** Write `decorator def logged(tag: string, call, block)`. The last two parameters are the call record and the block.
+- **A decorator's block takes a record of arguments.** eg `block(call.args)` or `block({ ...call.args, name: "x" })`.
+- **`@guard` renamed to `@guarded`, and now sits in `std::decorators`.**
+- **The `std::spill::read` and `std::spill::write` effects are gone.** Spilled output no longer touches the disk, but sits in a global var instead.
+
+### Language
+
+- **Parameters can carry aliases, eg `def fetch(baseUrl | url: string)`.** Helps when models consistently get a param name mixed up.
+
+### Runtime
+
+- **A call's own `maxToolCallRounds` is honoured.** It used to be ignored in favour of the branch default from `setLlmOptions`, but now the smaller of the two wins.
+- **If a model fetches the same URL twice in one conversation, we respond with a note.** The note tells the model when the page was fetched. It can use `refresh: true` to fetch it again.
+
+### CLI
+
+- **`agency skills`** can be used to list, show, and install the `debug-run` and `debug-logs` skills for any coding agent. 
+
+### Evals
+
+- **`buildGraders`, `GraderSpec`, and `ChecklistJudge` are exported from `agency-lang/eval`,** so a `graders.ts` can mix the `graders.json` kinds with graders of its own.
 
 ## Oct 23 2026 — v0.32.0
 
@@ -12,12 +32,6 @@
 - **A `destructive { }` region inside a block now marks the function it is in.** The mark used to be lost when the block returned, so a failure escaping the function said no destructive work had run, and the tool loop kept a tool it should have removed.
 - **The unknown-named-argument error lists the valid names:** `Unknown named argument 'url' in call to 'fetch'. Valid names: baseUrl, allowedDomains, headers.` A model can fix its call without guessing as to what the correct arg name is.
 - `x += y` and `i++` statements now have a source location, so the debugger highlights them.
-
-### Language
-
-- **Parameters can carry aliases: `def fetch(baseUrl | url: string)`.** A model that calls a tool with a guessed name (`url` for `baseUrl`) gets the call instead of a wasted round. An alias is a misspelling the tool forgives and is not a second name. The body sees `baseUrl`, the tool schema lists `baseUrl`, and Agency code that writes `fetch(url: x)` or `fetch.partial(url: x)` gets AG6042 naming the parameter. Only a call whose arguments come from outside the program (a model, an HTTP body, the command line) is forgiven; passing both spellings in one call is a failure naming both. Names and aliases in one signature must be distinct (AG2022), and aliases go on `def` parameters only. `std::http`'s `fetch`, `fetchJSON`, and `fetchMarkdown` accept `url` for `baseUrl`.
-- **Tool-call records show the call the function saw.** The `toolCallStart` and `toolCall` log events, and the `onToolCallStart` and `onToolCallEnd` callbacks, carry the arguments with alias keys renamed, and the log events gain `argCorrections` (`[{ from: "url", to: "baseUrl" }]`) when a key was renamed. The repeated-call and already-rejected guards treat the two spellings as one call.
-- **The MCP `tools/list` schema no longer says `additionalProperties: false`.** An MCP client that validated arguments against it would have refused a parameter alias before the call reached the server.
 
 ### Debugger
 

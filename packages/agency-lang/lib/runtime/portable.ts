@@ -124,7 +124,7 @@ export { AgencyFunction, UNSET } from "./agencyFunction.js";
 export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";
 export { createTool } from "./createdTool.js";
 export type { CreatedTool, CreatedToolDefinition } from "./createdTool.js";
-export { invokeLearnedFunction, invokeLearnedFunctionFor } from "./learnedFunction.js";
+export { invokeLearnedFunction } from "./learnedFunction.js";
 export { __call, __callMethod } from "./call.js";
 
 export { callHook, registerGlobalHook } from "./hooks.js";

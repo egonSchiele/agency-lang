@@ -98,7 +98,7 @@ function resolveSource(source: AgencySourceValue): ResolvedSource {
     return {
       closure,
       entryId: openValidatedClosure(closure).entryModuleId,
-      sourceModule: "<source>",
+      sourceModule: "",
     };
   }
   throw new Error("Agency source kind must be module, file, or source");

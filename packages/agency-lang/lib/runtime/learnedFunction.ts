@@ -13,7 +13,7 @@ export function invokeLearnedFunction(
 
 /** The generated entry is already a resumable node. Calling inside its run
  * keeps imported functions, handlers, and child checkpoints on that stack. */
-export function invokeLearnedFunctionFor(
+function invokeLearnedFunctionFor(
   run: Run,
   target: AgencyFunction,
   args: Record<string, unknown>,

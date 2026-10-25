@@ -630,9 +630,9 @@ export class AgencyFunction {
       if (Object.hasOwn(namedArgs, param.name)) {
         result.push(namedArgs[param.name]);
       } else if (param.hasDefault) {
-        const hasLaterNamedArg = this._nonVariadicUnbound
-          .slice(i + 1)
-          .some((p) => p.name in namedArgs);
+        const hasLaterNamedArg =
+          this._nonVariadicUnbound.slice(i + 1).some((p) => p.name in namedArgs) ||
+          (variadicParam !== undefined && Object.hasOwn(namedArgs, variadicParam.name));
         if (hasLaterNamedArg) {
           result.push(UNSET);
         } else {

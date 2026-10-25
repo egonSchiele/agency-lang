@@ -1,0 +1,6 @@
+effect test::functionStep { phase: string }
+
+export def ask(phase: string): string {
+  return interrupt test::functionStep("Continue the function?", { phase: phase })
+  return phase
+}

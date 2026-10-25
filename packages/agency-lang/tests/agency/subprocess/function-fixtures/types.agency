@@ -1,0 +1,9 @@
+def checkPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("amount must be positive")
+}
+
+@validate(checkPositive)
+export type Positive = number

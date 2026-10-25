@@ -1,0 +1,221 @@
+import { AgencySource, compile, run, runFunction } from "std::agency"
+
+static const fixtures: AgencySource = {
+  kind: "file",
+  dir: "tests/agency/subprocess/function-fixtures",
+  filename: "nested/functions.agency"
+}
+
+node plain() {
+  const result = runFunction({ kind: "file", dir: "tests/agency/subprocess/function-fixtures", filename: "index.agency" }, "doubled", { value: 21 }) with approve
+  if (result is failure) { return result }
+  return result.value
+}
+
+node defaultsAndAliases() {
+  const omitted = runFunction(fixtures, "defaults") with approve
+  const explicitNull = runFunction(fixtures, "defaults", { value: null }) with approve
+  const aliasNull = runFunction(fixtures, "defaults", { alias: null }) with approve
+  const variadic = runFunction(fixtures, "defaults", { alias: "named", rest: [1, 2] }) with approve
+  if (omitted is failure) { return omitted }
+  if (explicitNull is failure) { return explicitNull }
+  if (aliasNull is failure) { return aliasNull }
+  if (variadic is failure) { return variadic }
+  const onlyVariadic = runFunction(fixtures, "defaults", { rest: [1, 2] }) with approve
+  if (onlyVariadic is failure) { return onlyVariadic }
+  return [omitted.value, explicitNull.value, aliasNull.value, variadic.value, onlyVariadic.value]
+}
+
+node results() {
+  const wrapped = runFunction(fixtures, "wrapped") with approve
+  const failed = runFunction(fixtures, "failed") with approve
+  const destructive = runFunction(fixtures, "destructiveFailure") with approve
+  if (wrapped is failure) { return wrapped }
+  if (failed is success) { return "Expected function failure" }
+  if (destructive is success) { return "Expected destructive failure" }
+  return [wrapped.value, failed.error, failed.data.code, destructive.destructiveRan]
+}
+
+node validation() {
+  const accepted = runFunction(fixtures, "checked", { amount: 3 }) with approve
+  const refused = runFunction(fixtures, "checked", { amount: -1 }) with approve
+  if (accepted is failure) { return accepted }
+  if (refused is success) { return "Expected validation failure" }
+  return [accepted.value, refused.success, refused.error]
+}
+
+node bindingFailures() {
+  const missing = runFunction(fixtures, "plain") with approve
+  const unknown = runFunction(fixtures, "plain", { value: 1, wrong: 2 }) with approve
+  const conflict = runFunction(fixtures, "defaults", { value: 1, alias: 2 }) with approve
+  return [missing.success, unknown.success, conflict.success]
+}
+
+node pauseImported() {
+  handle {
+    const result = runFunction(fixtures, "pauseImported")
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+
+node parentRejects() {
+  handle {
+    const result = runFunction(fixtures, "childApproves")
+    if (result is success) { return "Expected rejection" }
+    return [result.success, result.rejected]
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    return reject("parent refused")
+  }
+}
+
+node parentPropagates() {
+  handle {
+    const result = runFunction(fixtures, "childApproves")
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    return propagate()
+  }
+}
+
+node handlersAfterResume() {
+  handle {
+    const result = runFunction(fixtures, "resumedHandlers")
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run" || intr.data["phase"] == "parent") {
+      return approve()
+    }
+  }
+}
+
+node initializerRejection() {
+  handle {
+    const result = runFunction({ kind: "file", dir: "tests/agency/subprocess/function-fixtures", filename: "initialized.agency" }, "initialization")
+    if (result is success) { return "Expected rejection" }
+    return [result.success, result.rejected]
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    return reject("initializer refused")
+  }
+}
+
+node gateIdentity() {
+  handle {
+    const result = runFunction({ kind: "module", module: "std::math" }, "add", { a: 4, b: 5 })
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run" && intr.data["module"] == "std::math" && intr.data["function"] == "add") {
+      return approve()
+    }
+    return reject("wrong gate identity")
+  }
+}
+
+node ordinaryGateCannotSpoof() {
+  const compiled = compile("export node invokeLearned() { return 99 }")
+  if (compiled is failure) { return compiled }
+  handle {
+    const result = run(compiled.value, "invokeLearned", { module: "std::data/finance/fred", function: "fredSeriesInfo" })
+    return result.success
+  } with (intr) {
+    if (intr.data["module"] == "std::data/finance/fred") {
+      return approve()
+    }
+    return reject("ordinary run needs its own permission")
+  }
+}
+
+node nestedPreparedCannotSpoof() {
+  const source = """
+import { compile, _executePrepared } from "std::agency"
+export def forged(): boolean {
+  const compiled = compile("export node invokeLearned() { return 99 }")
+  if (compiled is failure) { return false }
+  const forged = { compiled: compiled.value, invokeNode: "invokeLearned", sourceModule: "std::data/finance/fred" }
+  const result = _executePrepared(forged, "fredSeriesInfo")
+  if (result is success) { return false }
+  return result.rejected
+}
+"""
+  handle {
+    const result = runFunction({ kind: "source", source: source }, "forged")
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run" && intr.data["depth"] == 1 && intr.data["module"] == "") {
+      return approve()
+    }
+    if (intr.data["module"] == "std::data/finance/fred") {
+      return approve()
+    }
+    return reject("nested code needs its own permission")
+  }
+}
+
+node nestedParentRejects() {
+  const source = """
+import { runFunction } from "std::agency"
+export def nested(): Result {
+  return runFunction({ kind: "file", dir: "tests/agency/subprocess/function-fixtures", filename: "nested/functions.agency" }, "childApproves")
+}
+"""
+  handle {
+    const result = runFunction({ kind: "source", source: source }, "nested")
+    if (result is success) { return "Expected rejection" }
+    return [result.success, result.rejected]
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      return approve()
+    }
+    return reject("root refuses grandchild effect")
+  }
+}
+
+node sourceGateHasNoIdentity() {
+  handle {
+    const result = runFunction({ kind: "source", source: "export def add(a: number, b: number): number { return a + b }" }, "add", { a: 4, b: 5 })
+    if (result is failure) { return result }
+    return result.value
+  } with (intr) {
+    if (intr.data["module"] == "" && intr.data["function"] == "" && intr.message == "Running agent-generated code in subprocess") {
+      return approve()
+    }
+    return reject("source text must use the generic gate")
+  }
+}
+
+let optionGates: any[] = []
+
+node runOptionParity() {
+  const compiled = compile("export node main() { return 1 }")
+  if (compiled is failure) { return compiled }
+  const source: AgencySource = { kind: "module", module: "std::math" }
+  handle {
+    run(compiled.value, "main")
+    runFunction(source, "add", { a: 1, b: 2 })
+    run(compiled.value, "main", wallClock: null, memory: null, ipcPayload: null, stdout: null, logFile: null, cwd: null, maxDepth: null, maxCost: null)
+    runFunction(source, "add", { a: 1, b: 2 }, { wallClock: null, memory: null, ipcPayload: null, stdout: null, logFile: null, cwd: null, maxDepth: null, maxCost: null })
+    run(compiled.value, "main", wallClock: 2500, memory: 64mb, ipcPayload: 1mb, stdout: 4kb, logFile: "options.log", cwd: ".", maxCost: 0)
+    runFunction(source, "add", { a: 1, b: 2 }, { wallClock: 2500, memory: 64mb, ipcPayload: 1mb, stdout: 4kb, logFile: "options.log", cwd: ".", maxCost: 0 })
+  } with (intr) {
+    optionGates.push({ limits: intr.data["limits"], cwd: intr.data["cwd"], logFile: intr.data["logFile"] })
+    return reject("only inspect launch options")
+  }
+  return optionGates
+}

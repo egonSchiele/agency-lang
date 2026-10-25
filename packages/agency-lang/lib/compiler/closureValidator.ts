@@ -12,8 +12,8 @@
  * lay every file out at its own relative path and compile it unchanged:
  * a file's relative imports resolve identically in the mirror.
  *
- * The result is an opaque capability: only `compileValidatedClosure` may
- * open it, so the mirror layout stays private to the compiler subsystem.
+ * The result is an opaque capability. Compiler-side source preparation and
+ * compilation may inspect it; runtime code receives only compiled output.
  */
 import * as fs from "fs";
 import { rootPath } from "../host/roots.js";
@@ -68,10 +68,38 @@ export type ValidateClosureArgs = {
   dir: string;
 };
 
-/** Compiler-internal accessor. Not a package export; only the sandboxed
- *  compile path may open the capability. */
+/** Compiler-internal accessor for validated source preparation and compilation.
+ * Not a package export. */
 export function openValidatedClosure(closure: ValidatedClosure): ValidatedClosureData {
   return closure as unknown as ValidatedClosureData;
+}
+
+/** Add a compiler-generated adapter without reopening any validated source.
+ * Its local imports must name files already in the snapshot. */
+export function withGeneratedEntry(closure: ValidatedClosure, source: string): ValidatedClosure {
+  const data = openValidatedClosure(closure);
+  const parsed = parseAgency(source, {}, false);
+  if (!parsed.success || splicesIn(parsed.result).length > 0) {
+    throw new ClosureValidationError(["The generated entry must be Agency source without splices"]);
+  }
+  const paths = Object.values(data.modules).map((module) => module.relPath);
+  for (const imported of getAllImports(parsed.result)) {
+    if (importKind(imported.path) === "stdlib") continue;
+    const relative = path.posix.normalize(imported.path);
+    if (path.isAbsolute(imported.path) || !paths.includes(relative)) {
+      throw new ClosureValidationError([
+        `Generated entry imports '${imported.path}', which is outside the validated closure`,
+      ]);
+    }
+  }
+  const entryModuleId = `<adapter:${nanoid()}>`;
+  let relPath = pickEntryRelPath();
+  while (paths.includes(relPath)) relPath = pickEntryRelPath();
+  return Object.freeze({
+    ...data,
+    entryModuleId,
+    modules: { ...data.modules, [entryModuleId]: { source, relPath } },
+  }) as unknown as ValidatedClosure;
 }
 
 /** Test-only projection: names only, never source or mirror layout. */

@@ -242,7 +242,7 @@ function isResolvableReExport(node: ExportFromStatement): boolean {
  *  exported at all", which take opposite paths. */
 type DescribeResult = { info: ModuleInfo; hiddenNames: string[] };
 
-function describeSource(source: string, visited: string[]): DescribeResult {
+export function parseDescribedProgram(source: string): AgencyProgram {
   const program = parseSource(source);
   // Doc comments live as loose comment nodes until attachment — the same
   // pass `agency doc` runs. It hoists the @module comment onto
@@ -251,6 +251,11 @@ function describeSource(source: string, visited: string[]): DescribeResult {
   preprocessor.attachDocComments();
   // `@hidden` is read off attached tags, so run the same pass doc runs.
   preprocessor.attachTags();
+  return program;
+}
+
+function describeSource(source: string, visited: string[]): DescribeResult {
+  const program = parseDescribedProgram(source);
   // The effects pipeline REQUIRES every re-export to resolve, and
   // relative/pkg paths cannot resolve from a bare string — so effects
   // run on a copy with unresolvable re-exports stripped. They are

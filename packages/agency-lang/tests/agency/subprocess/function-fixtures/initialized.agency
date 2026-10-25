@@ -1,0 +1,7 @@
+import { ask } from "./permission.agency"
+
+const initialized = ask("initialize") with approve
+
+export def initialization(): any {
+  return initialized
+}

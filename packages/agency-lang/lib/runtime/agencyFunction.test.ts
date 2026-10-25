@@ -95,6 +95,21 @@ describe("pre-execution tagging (the neverStarted producer)", () => {
   });
 });
 
+describe("named variadic padding", () => {
+  it("keeps an omitted default before a named variadic in its own slot", async () => {
+    const fn = makeFunction([
+      { name: "query" },
+      { name: "limit", hasDefault: true },
+      { name: "values", variadic: true },
+    ]);
+    expect(await fn.invoke(testRun(), callFromOutside({ query: "GDP", values: [1, 2] }))).toEqual([
+      "GDP",
+      UNSET,
+      [1, 2],
+    ]);
+  });
+});
+
 describe("AgencyFunction", () => {
   describe("positional calls", () => {
     it("passes exact args through", async () => {

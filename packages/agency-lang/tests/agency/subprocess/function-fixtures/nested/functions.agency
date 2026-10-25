@@ -1,0 +1,45 @@
+import { Positive } from "../types.agency"
+import { ask } from "../permission.agency"
+
+def privateDouble(value: number): number {
+  return value * 2
+}
+
+export def plain(value: number): number {
+  return privateDouble(value)
+}
+
+export def defaults(value | alias: any = "default", ...rest: any[]): any {
+  return [value, rest]
+}
+
+export def wrapped(): Result {
+  return success({ answer: 42 })
+}
+
+export def failed(): Result {
+  return failure("function failed", { code: "fixture" })
+}
+
+export destructive def destructiveFailure(): Result {
+  return failure("destructive function failed")
+}
+
+export def checked(amount: Positive!): Result<number> {
+  return success(amount)
+}
+
+export def pauseImported(): string {
+  return ask("pause")
+}
+
+export def childApproves(): string {
+  return ask("child-approved") with approve
+}
+
+export def resumedHandlers(): string {
+  const first = ask("first")
+  const second = ask("child") with approve
+  const third = ask("parent")
+  return first + ":" + second + ":" + third
+}

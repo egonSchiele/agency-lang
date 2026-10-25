@@ -35,6 +35,8 @@ export const NODE_ONLY = {
     "filling a template runs the compiler (the parser, the symbol table, and the import resolver read files); lib/types/function.ts names only its types",
   "lib/runtime/trace/traceReader.ts": "tooling: reads a trace file for the debugger",
   "lib/stdlib/agency.ts": "compiles and runs Agency code in a subprocess (std::agency)",
+  "lib/stdlib/agencyFunctions.ts":
+    "prepares source closures for std::agency subprocess function calls",
   "lib/stdlib/agencyEval.ts": "runs evals of agents from run directories on disk",
   "lib/stdlib/args.ts":
     "std::args parses the command line with node:util's parseArgs and ends the process; a browser has no command line",

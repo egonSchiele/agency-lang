@@ -1,0 +1,173 @@
+{
+  "tests": [
+    {
+      "nodeName": "plain",
+      "description": "runFunction: plain",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "defaultsAndAliases",
+      "description": "runFunction: defaultsAndAliases",
+      "input": "",
+      "expectedOutput": "[[\"default\",[]],[null,[]],[\"default\",[]],[\"named\",[1,2]],[\"default\",[1,2]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "results",
+      "description": "runFunction: results",
+      "input": "",
+      "expectedOutput": "[{\"answer\":42},\"function failed\",\"fixture\",true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "validation",
+      "description": "runFunction: validation",
+      "input": "",
+      "expectedOutput": "[3,false,\"Argument \\\"amount\\\" of checked was refused: amount must be positive\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindingFailures",
+      "description": "runFunction: bindingFailures",
+      "input": "",
+      "expectedOutput": "[false,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pauseImported",
+      "description": "runFunction: pauseImported",
+      "input": "",
+      "expectedOutput": "\"pause\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    },
+    {
+      "nodeName": "parentRejects",
+      "description": "runFunction: parentRejects",
+      "input": "",
+      "expectedOutput": "[false,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "parentPropagates",
+      "description": "runFunction: parentPropagates",
+      "input": "",
+      "expectedOutput": "\"child-approved\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    },
+    {
+      "nodeName": "handlersAfterResume",
+      "description": "runFunction: handlersAfterResume",
+      "input": "",
+      "expectedOutput": "\"first:child:parent\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    },
+    {
+      "nodeName": "initializerRejection",
+      "description": "runFunction: initializerRejection",
+      "input": "",
+      "expectedOutput": "[false,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gateIdentity",
+      "description": "runFunction: gateIdentity",
+      "input": "",
+      "expectedOutput": "9",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ordinaryGateCannotSpoof",
+      "description": "runFunction: ordinaryGateCannotSpoof",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nestedPreparedCannotSpoof",
+      "description": "runFunction: nestedPreparedCannotSpoof",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nestedParentRejects",
+      "description": "runFunction: nestedParentRejects",
+      "input": "",
+      "expectedOutput": "[false,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

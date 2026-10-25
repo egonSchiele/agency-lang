@@ -30,6 +30,8 @@ import {
   _toSource,
   _combine,
  } from "agency-lang/stdlib-lib/template.js"
+import { _prepareFunctions } from "agency-lang/stdlib-lib/agencyFunctions.js"
+import { invokeLearnedFunction } from "agency-lang/runtime"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
 /** @module
@@ -70,11 +72,31 @@ effect std::run {
   limits: { wallClock: number; memory: number; ipcPayload: number; stdout: number; maxCost: number | null };
   cwd: string;
   logFile: string;
-  depth: number
+  depth: number;
+  module: string;
+  function: string
 }
 
 export type CompiledProgram = {
   moduleId: string
+}
+
+/** An installed stdlib module, a file confined to dir, or source text / Template Agency code. */
+export type AgencyModuleSource = { kind: "module"; module: string }
+export type AgencyFileSource = { kind: "file"; dir: string; filename: string }
+export type AgencyTextSource = { kind: "source"; source: string | Code; dir?: string }
+export type AgencySource = AgencyModuleSource | AgencyFileSource | AgencyTextSource
+
+/** Subprocess limits and working directory, with the same defaults as run. */
+export type RunOptions = {
+  wallClock?: number;
+  memory?: number;
+  ipcPayload?: number;
+  stdout?: number;
+  logFile?: string;
+  cwd?: string;
+  maxDepth?: number;
+  maxCost?: number | null
 }
 
 export type SourceLocation = {
@@ -154,6 +176,27 @@ export def run(
   @param maxDepth - Max subprocess nesting depth (default 5, hard ceiling 10).
   @param maxCost - Max subprocess LLM spend in dollars (e.g. $0.50). null = no cost limit.
   """
+  return _runProgram(compiled, node, args, wallClock, memory, ipcPayload, stdout, logFile, cwd, maxDepth, maxCost)
+}
+
+// Only the prepared-function path supplies a source identity. An arbitrary
+// program with a node called invokeLearned remains an ordinary run.
+@capabilities(fileWrite, subprocess)
+def _runProgram(
+  compiled: CompiledProgram,
+  node: string,
+  args: Record<string, any>,
+  wallClock: number,
+  memory: number,
+  ipcPayload: number,
+  stdout: number,
+  logFile: string,
+  cwd: string,
+  maxDepth: number,
+  maxCost: number | null,
+  sourceModule: string = "",
+  functionName: string = "",
+): Result {
   let configOverrides = null
   if (logFile != "") {
     configOverrides = {
@@ -163,7 +206,13 @@ export def run(
       }
     }
   }
-  return interrupt std::run("Running agent-generated code in subprocess", {
+  // Source labels are authority hints only for a trusted host program.
+  // Sandboxed descendants can import hidden helpers, so their launches
+  // must still pass the generic run gate, even with a supplied label.
+  const originModule = if _subprocessDepth() == 0 then sourceModule else ""
+  const originFunction = if originModule != "" then functionName else ""
+  const message = if originModule != "" then "Running ${originModule} function ${originFunction} in subprocess" else "Running agent-generated code in subprocess"
+  return interrupt std::run(message, {
     moduleId: compiled.moduleId,
     node: node,
     args: args,
@@ -176,7 +225,9 @@ export def run(
     },
     cwd: cwd,
     logFile: logFile,
-    depth: _subprocessDepth() + 1
+    depth: _subprocessDepth() + 1,
+    module: originModule,
+    function: originFunction
   })
 
   // guard() disables a dimension on a NEGATIVE value (null for BOTH
@@ -220,6 +271,63 @@ export def run(
     }
   }
   return guarded
+}
+
+/** Call an exported Agency function without writing an entry node yourself. */
+@capabilities(fileRead, fileWrite, subprocess)
+export def runFunction(
+  source: AgencySource,
+  functionName: string,
+  args: Record<string, any> = {},
+  options: RunOptions = {},
+): Result {
+  """
+  Call an exported function in a fresh subprocess. Returns its Result unchanged, or wraps a plain value in success. Parent handlers, policies, callbacks, and run's resource limits apply.
+
+  Use { kind: "module", module: "std::data/finance/fred" } for installed stdlib code, { kind: "file", dir: "/project", filename: "tools.agency" } for a file, or { kind: "source", source: "export def double(n: number) { return n * 2 }" } for text or complete Template Agency Code. Local imports stay inside dir; JS/TS, Node modules, pkg:: imports, symlinks, and compile-time splices are refused. Only public exported defs are supported, not nodes or handoff functions.
+
+  @param source - The module, file, or source to prepare
+  @param functionName - Which public exported def to call
+  @param args - Named arguments; defaults and aliases follow ordinary Agency calls
+  @param options - The limits, logFile, and cwd accepted by run
+  """
+  const prepared = try _prepareFunctions(source, [functionName])
+  if (prepared is failure) {
+    return prepared
+  }
+  return _executePrepared(prepared.value, functionName, args, options)
+}
+
+/** @hidden */
+export def _executePrepared(
+  prepared: any,
+  exportName: string,
+  args: Record<string, any> = {},
+  options: RunOptions = {},
+): Result {
+  const outcome = _runProgram(
+    prepared.compiled, prepared.invokeNode, { exportName: exportName, args: args },
+    options.wallClock ?? 60s, options.memory ?? 512mb, options.ipcPayload ?? 100mb,
+    options.stdout ?? 1mb, options.logFile ?? "", options.cwd ?? "",
+    options.maxDepth ?? 5, options.maxCost ?? null,
+    prepared.sourceModule, exportName,
+  )
+  if (outcome is failure) {
+    return outcome
+  }
+  const value = outcome.value.data
+  if (value is success) {
+    return value
+  }
+  if (value is failure) {
+    return value
+  }
+  return success(value)
+}
+
+/** @hidden */
+export def _invokeLearned(target: any, args: Record<string, any>): any {
+  return invokeLearnedFunction(target, args)
 }
 
 /** Just like `run`, any interrupts and guards defined in the parent process

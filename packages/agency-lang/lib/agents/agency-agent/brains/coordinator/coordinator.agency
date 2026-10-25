@@ -6,17 +6,18 @@
 */
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { question } from "std::agent"
+import { AgencySource } from "std::agency"
 import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
 import { skillsDir } from "std::skills"
-import { Attachment, systemMessage } from "std::thread"
+import { Attachment, endTurn, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { learnedExtras } from "../../lib/learned.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
-import { learnSkill, writeToolFor } from "./learn.agency"
+import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "./learn.agency"
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
 import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
@@ -117,10 +118,53 @@ export def turnTools(turnStart: any): any[] {
     ...mainAgentTools,
     ...getMcpTools(),
     ...learnedExtras(),
+    ...getGeneratedTools(),
+    learnTools.partial(turnStart: turnStart),
     whatIAmDoing,
     question,
     elapsedTime.partial(since: turnStart),
   ]
+}
+
+def mainOptions(turnStart: any): any {
+  const options: any = { memory: true, tools: turnTools(turnStart) }
+  const slowModel = getSlowModel()
+  if (slowModel != "") {
+    options.model = slowModel
+    options.provider = getSlowProvider()
+  }
+  return options
+}
+
+handoff def learnTools(
+  turnStart: any,
+  source: AgencySource,
+  names: string[] = [],
+  namespace: string = "session",
+): Result<string> {
+  """
+  Learn exported Agency functions for this conversation, then continue
+  the user's request with those tools available immediately. Read a
+  documentation URL first and resolve it to a stdlib module or Agency
+  source. An empty names list learns all supported public functions.
+
+  Learning runs the module's top-level code in a subprocess and can ask
+  for approval. Every later call also uses the normal subprocess gates.
+  Tools remain available after this conversation is resumed. They are
+  not saved in the permanent toolbox. Existing names are never replaced;
+  choose another namespace if a name is already available.
+  """
+  const offeredNames = [tool.name for tool in turnTools(turnStart)]
+  const learned = learnSessionTools(source, names, namespace, offeredNames)
+  if (learned is failure) {
+    return learned
+  }
+  const answer = llm(
+    "The tools ${learned.value.join(", ")} are now available for this conversation. Continue the user's request using them as needed.",
+    mainOptions(turnStart),
+  )
+  endTurn()
+  return success(answer)
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
@@ -143,16 +187,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // conversation and makes every routing decision, so it gets the
     // strongest model the user configured. High-volume work still runs on
     // the subagents' own slots.
-    const options: any = {
-      memory: true,
-      tools: turnTools(turnStart)
-    }
-    const slowModel = getSlowModel()
-    if (slowModel != "") {
-      options.model = slowModel
-      options.provider = getSlowProvider()
-    }
-    const result = llm(prompt, options)
+    const result = llm(prompt, mainOptions(turnStart))
   }
   return result
 }

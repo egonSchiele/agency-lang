@@ -1,6 +1,6 @@
 # Learn Agency functions as session tools
 
-Status: implementation in progress. Created 2026-10-24; revised 2026-10-25 after review
+Status: implemented. Created 2026-10-24; revised 2026-10-25 after review
 ([review](../plans/2026-10-25-session-tools-review.md)).
 
 ## Goal
@@ -18,7 +18,7 @@ The public library operations are:
 
 Both belong to `std::agency` and work independently of the Agency agent. A third piece, the factory that turns a compiled function's metadata into a parent-side callable, is a runtime helper that `learn` uses. It is not exported from `std::agency`: its input is the argument binder's own metadata, which nothing outside the runtime can fill in correctly. If a second caller appears, it can be exported then with the contract it has proven.
 
-The coordinator keeps a global array of records describing what was learned and builds the tools from those records on every turn.
+The coordinator keeps one global value with prepared programs and records describing what was learned. Records reference programs by index, and the coordinator builds tools from them on every turn.
 
 ## Example
 
@@ -155,7 +155,7 @@ The compiled program already carries the local module code, and the existing res
 
 ### Metadata execution
 
-There is no compile-time way to produce a JSON Schema from an Agency type: the generator emits schema code into the compiled module (`typeToZodSchema.ts`), and the schema exists only once that module runs. So `learn` runs a metadata node once, in a subprocess, the way `std::toolbox` runs a saved tool's `requestSchema` node. The node reads the original compiled function objects and returns their `toolDefinition` and `params` data, with default expressions and validators left out. Import originals directly so generated re-export wrappers do not discard descriptions. Preserve source export names separately from generated import aliases.
+There is no compile-time way to produce a JSON Schema from an Agency type: the generator emits schema code into the compiled module (`typeToZodSchema.ts`), and the schema exists only once that module runs. So `learn` runs a metadata node once, in a subprocess, the way `std::toolbox` runs a saved tool's `requestSchema` node. The node reads the original compiled function objects and returns their `toolDefinition` and `params` data, with default expressions and validators left out. Import originals directly so generated re-export wrappers do not discard descriptions. Preserve source export names separately from generated import aliases. Read markers from the actual callable re-export wrapper when it adds an override.
 
 Metadata execution uses `run` and its normal gate, limits, handlers, and checkpoint behavior. Loading a module runs its top-level code, so `learn` can pause, be rejected, or fail before any function is called. The `learn` docstring says so. Learning does not invoke the selected function bodies.
 
@@ -165,7 +165,11 @@ Generate an exported invocation node, named `invokeLearned`, that takes the expo
 
 The parent adapter uses the existing `std::agency.run` path. Preserve the `std::run` gate, cost accounting, cancellation, callbacks, and resource limits. Do not bypass it with a direct call to the low-level subprocess implementation.
 
-Every learned call raises the `std::run` gate, and the function's own effects raise inside the child, so a user approves both. The gate's message today says "Running agent-generated code in subprocess", which is wrong for a stdlib function and gives a policy nothing to match on. The prepared execution path supplies `module` (the source module or file) and `function` (the export name), and the message names them. Only launches from the trusted host program carry these policy hints. A sandboxed descendant always raises the generic gate with empty identity fields: it can import hidden stdlib helpers and construct their arguments, so its claimed identity is not authoritative. Naming an ordinary node `invokeLearned` supplies no identity. This lets a parent policy approve its own prepared calls without trusting a child's labels.
+Every learned call raises the `std::run` gate, and the function's own effects raise inside the child. The prepared execution path supplies `module` (the source module or file) and `function` (the export name), and the message names them. Metadata inspection uses the same module label with `function` set to `<inspect>`. Source text has no stable identity and uses the generic gate with empty labels.
+
+Only launches from the trusted host program carry module and function labels. A sandboxed descendant can import hidden stdlib helpers and construct their arguments, so its launches always use the generic gate with empty labels. Naming an ordinary node `invokeLearned` supplies no identity.
+
+The labels do not verify saved code against installed modules. They are as trustworthy as the checkpoint or session state holding the compiled program. Hosts must protect that state and verify externally supplied checkpoints before resuming; see [checkpoint integrity](../../dev/runtime/checkpoint-integrity.md).
 
 Omitted defaults remain absent across IPC. Do not serialize the binder's padding sentinel or substitute `null`. Arguments and results travel the way every `run` argument travels; this feature adds no checker of its own, and a value `run` mishandles is fixed in `run`.
 
@@ -179,25 +183,26 @@ The coordinator's learning module keeps records, not function values:
 type LearnedRecord = {
   advertisedName: string;
   definition: any;
-  prepared: any;
+  programIndex: number;
   exportName: string;
   options: any
 }
 
-let learnedRecords: LearnedRecord[] = []
+type LearnedState = { programs: any[]; records: LearnedRecord[] }
+let learnedState: LearnedState = { programs: [], records: [] }
 
 export def getGeneratedTools(): any[] {
-  return map(learnedRecords, toolFromRecord)
+  return _toolsFromRecords(learnedState, _executePrepared)
 }
 ~~~
 
-`toolFromRecord` calls the factory, which is pure and runs in-process, so rebuilding on every turn costs nothing and matches how `learnedExtras()` rebuilds from `meta.json`. A between-turn session restore then needs nothing from the function reviver: the global holds JSON.
+The helper `_toolsFromRecords` looks up each record's program and calls the factory in-process. Each learning batch stores its compiled program once, including after JSON serialization. A between-turn session restore needs no function reviver for this global because it holds only data. Active tool lists still carry each executor's bound program for callable restoration during a turn.
 
 The agent-facing `learnTools` calls the library `learn` and uses the namespace `session` by default, with an optional user-supplied namespace. Names are checked against the records already held and the other tools the turn offers; a collision fails the batch without renaming or replacing anything, and a repeated request for the same names reports that they already exist. The check and the append are one function from the current records and the candidate batch to either the new records or a diagnostic, with no call between them that can raise an interrupt, so two loads cannot interleave.
 
 Spread `getGeneratedTools()` into the existing `turnTools()` result. The handoff experiment succeeded: `learnTools` is a coordinator-local `handoff def` that continues the caller's conversation with a rebuilt tool list. It preserves the main model options and the original turn clock, then calls `endTurn()` when the continuation finishes. The tools are available immediately and on subsequent user turns. A failed learning request returns to the ordinary tool loop.
 
-Agency globals already survive turns and participate in checkpoints. Do not clear the array during coordinator initialization for a resumed run. A fresh conversation starts with the empty declaration.
+Agency globals already survive turns and participate in checkpoints. Do not clear the stored programs or records during coordinator initialization for a resumed run. A fresh conversation starts with the empty declaration.
 
 ## Callable restoration
 
@@ -240,7 +245,7 @@ Use deterministic fixtures and scripted model clients.
 | Tool-loop parity | Corrected aliases produce the same repeat key. Independently named tools retain separate failure/removal counts. Markers and failure flags retain their meaning. |
 | Imports | Nested paths, private helpers, imported types, and transitive dependencies work. Prepared calls still work after original local files change or disappear. |
 | Refused code | A forbidden import, a splice, or a JavaScript global outside the allowlist fails `learn` and adds no tools. |
-| Gate data | The `std::run` interrupt for a learned call carries `module` and `function`, and a policy rule matching them approves it. |
+| Gate data | Host-prepared module and file calls carry `module` and `function`; inspection uses the same module with `<inspect>`. A matching policy approves both. Source text and descendant launches use the generic gate. |
 | Result transport | Plain values and existing Results return correctly. Nested failures retain their data. |
 | Handler chain | Child approvals cannot defeat parent rejection or propagation. Test an imported helper and a nested subprocess. |
 | Callable restoration | A created and derived tool survives JSON serialization and fresh-process restore with its full schema, aliases, bindings, and executor. |

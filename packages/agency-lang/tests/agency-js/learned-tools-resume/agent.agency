@@ -1,0 +1,55 @@
+import {
+  _installSessionHooks,
+  _sessionOnSubmit,
+  _readCheckpointFile,
+} from "agency-lang/stdlib-lib/agentSessions.js"
+import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/brains/coordinator/learn.agency"
+import { env } from "std::system"
+import { assistantMessage, userMessage } from "std::thread"
+import { fakeRepl } from "./loop.js"
+
+let turns = 0
+
+def turn(line: string): boolean {
+  turns = turns + 1
+  if (line == "learn") {
+    const learned = learnSessionTools({ kind: "file", dir: "./test-output/source", filename: "tools.agency" }, ["seriesInfo", "seriesLabel"]) with approve
+    if (learned is failure) {
+      return false
+    }
+    thread(label: "main", session: "main") {
+      userMessage("Learn seriesInfo and seriesLabel")
+      assistantMessage("Learned session_seriesInfo and session_seriesLabel")
+    }
+    return true
+  }
+  thread(label: "main", session: "main") {
+    const answer = llm("Call the learned function for UNRATE.", tools: getGeneratedTools()) with approve
+  }
+  return true
+}
+
+def recordTurn(line: string): any {
+  return {
+    dir: "./test-output/sessions",
+    record: {
+      id: "session-tools",
+      cwd: ".",
+      brain: "test",
+      created: 1,
+      lastActive: turns,
+      turns: turns,
+      title: "Session tools"
+    }
+  }
+}
+
+node main() {
+  _installSessionHooks(turn, recordTurn)
+  const resume = env("RESUME") with approve
+  if (resume == "1") {
+    restore(_readCheckpointFile("./test-output/sessions", "session-tools"), {})
+  }
+  fakeRepl(_sessionOnSubmit)
+  return { turns: turns, tools: [tool.name for tool in getGeneratedTools()] }
+}

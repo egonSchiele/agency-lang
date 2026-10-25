@@ -1,0 +1,27 @@
+{
+  "data": {
+    "first": "same-turn answer",
+    "second": "next-turn answer",
+    "tools": ["session_seriesInfo"]
+  },
+  "requestCount": 7,
+  "absentBeforeLearning": true,
+  "internalClockIsBound": true,
+  "sameTurnOffered": true,
+  "handoffKeepsRequest": true,
+  "handoffKeepsGrounding": true,
+  "aliasCallRan": true,
+  "nextTurnOffered": true,
+  "nextTurnCallRan": true,
+  "freshCount": 0,
+  "failedBatches": {
+    "saved": true,
+    "duplicate": true,
+    "occupied": true,
+    "missing": true,
+    "tooLong": true,
+    "names": ["session_echo"]
+  },
+  "failedLearningReply": "learning failed; conversation continues",
+  "failedLearningStayedInCaller": true
+}

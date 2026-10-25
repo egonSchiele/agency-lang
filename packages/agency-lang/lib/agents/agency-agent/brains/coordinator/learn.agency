@@ -1,9 +1,10 @@
 /** @module
-  @summary The coordinator's two learning tools: `designSkill` and
-  `designTool` from the stdlib, pointed at the agent home. Each runs the
-  stdlib review loop and save gate; nothing here adds a handler or a
-  policy rule.
+  @summary Learning for the current conversation, and skills and tools
+  saved in the agent home. These functions use the stdlib's existing
+  gates; nothing here adds a handler or a policy rule.
 */
+import { _addLearnedRecords, _learnedRecords, _toolsFromRecords } from "agency-lang/stdlib-lib/sessionTools.js"
+import { AgencySource, _executePrepared, learn } from "std::agency"
 import { MAX_TOOL_NAME_LEN, designSkill } from "std::skills"
 import { designTool } from "std::toolbox"
 
@@ -13,6 +14,41 @@ import {
   learnedToolsDir,
   maxLearnedToolName,
  } from "../../lib/learned.agency"
+
+// Plain records survive the session checkpoint. Each turn rebuilds its
+// callable values without rereading or recompiling the original source.
+type LearnedRecord = {
+  advertisedName: string;
+  definition: any;
+  prepared: any;
+  exportName: string;
+  options: any
+}
+
+let learnedRecords: LearnedRecord[] = []
+
+export def getGeneratedTools(): any[] {
+  return _toolsFromRecords(learnedRecords, _executePrepared)
+}
+
+export def learnSessionTools(
+  source: AgencySource,
+  names: string[] = [],
+  namespace: string = "session",
+  offeredNames: string[] = [],
+): Result<string[]> {
+  const learned = learn(source, names, namespace)
+  if (learned is failure) {
+    return learned
+  }
+  const candidates = _learnedRecords(learned.value)
+  const updated = _addLearnedRecords(learnedRecords, candidates, offeredNames, MAX_TOOL_NAME_LEN)
+  if (updated is failure) {
+    return updated
+  }
+  learnedRecords = updated.value
+  return success([record.advertisedName for record in candidates])
+}
 
 export def learnSkill(name: string, description: string, body: string): string {
   """

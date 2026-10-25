@@ -1,0 +1,47 @@
+import { coordinatorBrain } from "../../../lib/agents/agency-agent/brains/coordinator/coordinator.agency"
+import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/brains/coordinator/learn.agency"
+import test { _setLearnedRoot } from "../../../lib/agents/agency-agent/lib/learned.agency"
+
+node main() {
+  _setLearnedRoot("${__dirname}/empty-home")
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "SESSION-TOOLS-GROUNDING" }) with approve
+  const first = answer("", "Learn the supplied series tool and answer ORIGINAL-REQUEST-MARKER with it.") with approve
+  const second = answer("", "Call the same series tool for GDP.") with approve
+  return { first: first, second: second, tools: [tool.name for tool in getGeneratedTools()] }
+}
+
+node freshConversation() {
+  return getGeneratedTools().length
+}
+
+node failedLearningTurn() {
+  _setLearnedRoot("${__dirname}/empty-home")
+  const brain = coordinatorBrain()
+  const init = brain.init
+  const answer = brain.runTurn
+  init({ interactive: false, grounding: "SESSION-TOOLS-GROUNDING" }) with approve
+  return answer("", "Learn the missing function.") with approve
+}
+
+node failedBatches() {
+  const source: any = {
+    kind: "source",
+    source: "export def echo(text: string): string { return text }"
+  }
+  const saved = learnSessionTools(source, ["echo"]) with approve
+  const duplicate = learnSessionTools(source, ["echo"]) with approve
+  const occupied = learnSessionTools(source, ["echo"], "other", ["other_echo"]) with approve
+  const missing = learnSessionTools(source, ["missing"]) with approve
+  const tooLong = learnSessionTools(source, ["echo"], "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop") with approve
+  return {
+    saved: isSuccess(saved),
+    duplicate: isFailure(duplicate),
+    occupied: isFailure(occupied),
+    missing: isFailure(missing),
+    tooLong: isFailure(tooLong),
+    names: [tool.name for tool in getGeneratedTools()]
+  }
+}

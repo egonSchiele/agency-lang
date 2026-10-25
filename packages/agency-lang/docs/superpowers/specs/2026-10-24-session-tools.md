@@ -1,6 +1,6 @@
 # Learn Agency functions as session tools
 
-Status: implementation in progress. Created 2026-10-24; revised 2026-10-25 after review
+Status: implemented. Created 2026-10-24; revised 2026-10-25 after review
 ([review](../plans/2026-10-25-session-tools-review.md)).
 
 ## Goal
@@ -155,7 +155,7 @@ The compiled program already carries the local module code, and the existing res
 
 ### Metadata execution
 
-There is no compile-time way to produce a JSON Schema from an Agency type: the generator emits schema code into the compiled module (`typeToZodSchema.ts`), and the schema exists only once that module runs. So `learn` runs a metadata node once, in a subprocess, the way `std::toolbox` runs a saved tool's `requestSchema` node. The node reads the original compiled function objects and returns their `toolDefinition` and `params` data, with default expressions and validators left out. Import originals directly so generated re-export wrappers do not discard descriptions. Preserve source export names separately from generated import aliases.
+There is no compile-time way to produce a JSON Schema from an Agency type: the generator emits schema code into the compiled module (`typeToZodSchema.ts`), and the schema exists only once that module runs. So `learn` runs a metadata node once, in a subprocess, the way `std::toolbox` runs a saved tool's `requestSchema` node. The node reads the original compiled function objects and returns their `toolDefinition` and `params` data, with default expressions and validators left out. Import originals directly so generated re-export wrappers do not discard descriptions. Preserve source export names separately from generated import aliases. Read markers from the actual callable re-export wrapper when it adds an override.
 
 Metadata execution uses `run` and its normal gate, limits, handlers, and checkpoint behavior. Loading a module runs its top-level code, so `learn` can pause, be rejected, or fail before any function is called. The `learn` docstring says so. Learning does not invoke the selected function bodies.
 

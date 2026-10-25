@@ -321,6 +321,8 @@ Other process docs:
 
 ### Standard library
 
+- `docs/dev/stdlib/agency-function-tools.md` — `runFunction` and `learn`: prepared subprocess calls, metadata inspection, ordinary callable behavior, and the coordinator's session records.
+
 - `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
 - `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, why no policy rule can answer it, which agents carry the tool and which are handed it at the call site, and the prompt hint without which none of them use it.
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.

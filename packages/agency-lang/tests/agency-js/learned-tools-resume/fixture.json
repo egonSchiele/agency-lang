@@ -1,0 +1,6 @@
+{
+  "data": { "turns": 2, "tools": ["session_seriesInfo"] },
+  "records": { "count": 1, "onlyData": true },
+  "schemaRestored": true,
+  "aliasCallUsesPreparedSource": true
+}

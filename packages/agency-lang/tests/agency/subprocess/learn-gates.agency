@@ -1,0 +1,186 @@
+import { learn, runFunction } from "std::agency"
+import { checkPolicy } from "std::policy"
+
+node fredInspectionPolicy() {
+  let inspected = false
+  const policy = {
+    "std::run": [
+      {
+        match: {
+          module: "std::data/finance/fred"
+        },
+        action: "approve"
+      },
+      {
+        action: "reject"
+      },
+    ]
+  }
+  handle {
+    const learned = learn(
+      {
+        kind: "module",
+        module: "std::data/finance/fred"
+      },
+      ["fredSeriesInfo"],
+    )
+    if (learned is failure) {
+      return learned
+    }
+    return [learned.value[0].name, inspected]
+  } with (intr) {
+    inspected = intr.data["function"] == "<inspect>" && intr.message.includes("std::data/finance/fred")
+    return checkPolicy(policy, intr)
+  }
+}
+
+node modulePolicy() {
+  const gates: any[] = []
+  const policy = {
+    "std::run": [
+      {
+        match: {
+          module: "std::math"
+        },
+        action: "approve"
+      },
+      {
+        action: "reject"
+      },
+    ]
+  }
+  handle {
+    const learned = learn(
+      {
+        kind: "module",
+        module: "std::math"
+      },
+      ["add"],
+      options: {
+        wallClock: 30000,
+        memory: 268435456,
+        ipcPayload: 1048576,
+        stdout: 262144,
+        maxDepth: 3,
+        maxCost: 0.25
+      },
+    )
+    if (learned is failure) {
+      return learned
+    }
+    const add = learned.value[0]
+    const sum = add(a: 2, b: 3)
+    if (sum is failure) {
+      return sum
+    }
+    return {
+      sum: sum.value,
+      gates: gates
+    }
+  } with (intr) {
+    gates.push(
+      {
+        module: intr.data["module"],
+        function: intr.data["function"],
+        limits: intr.data["limits"]
+      },
+    )
+    return checkPolicy(policy, intr)
+  }
+}
+
+node sourceGeneric() {
+  const gates: any[] = []
+  handle {
+    const learned = learn(
+      {
+        kind: "source",
+        source: "export def add(a: number, b: number): number { return a + b }"
+      },
+    )
+    if (learned is failure) {
+      return learned
+    }
+    const add = learned.value[0]
+    const sum = add(a: 3, b: 4)
+    if (sum is failure) {
+      return sum
+    }
+    return {
+      sum: sum.value,
+      gates: gates
+    }
+  } with (intr) {
+    gates.push([intr.data["module"], intr.data["function"], intr.message])
+    return approve()
+  }
+}
+
+node parentRejectsInspection() {
+  handle {
+    const learned = learn({
+      kind: "module",
+      module: "std::math"
+    }, ["add"]) with approve
+    if (learned is success) {
+      return "Expected inspection rejection"
+    }
+    return [learned.rejected, learned.error]
+  } with (intr) {
+    if (intr.effect == "std::run" && intr.data["function"] == "<inspect>") {
+      return reject("parent refused inspection")
+    }
+    return approve()
+  }
+}
+
+node parentPropagatesInspection() {
+  handle {
+    const learned = learn({
+      kind: "module",
+      module: "std::math"
+    }, ["add"]) with approve
+    if (learned is failure) {
+      return learned
+    }
+    return learned.value[0].name
+  } with (intr) {
+    if (intr.effect == "std::run" && intr.data["function"] == "<inspect>") {
+      return propagate()
+    }
+    return approve()
+  }
+}
+
+node nestedGeneric() {
+  const gates: any[] = []
+  const source = """
+import { learn } from "std::agency"
+export def nested(): Result {
+  const learned = learn({ kind: "module", module: "std::math" }, ["add"]) with approve
+  if (learned is failure) { return learned }
+  const add = learned.value[0]
+  return add(a: 5, b: 6) with approve
+}
+"""
+  handle {
+    const result = runFunction({
+      kind: "source",
+      source: source
+    }, "nested")
+    if (result is failure) {
+      return result
+    }
+    return {
+      sum: result.value,
+      gates: gates
+    }
+  } with (intr) {
+    gates.push([intr.data["module"], intr.data["function"], intr.data["depth"]])
+    if (intr.effect == "std::run" && intr.data["module"] == "" && intr.data["function"] == "") {
+      return approve()
+    }
+    return reject("untrusted origin")
+  }
+}
+

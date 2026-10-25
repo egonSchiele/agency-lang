@@ -1,0 +1,26 @@
+import { learn } from "std::agency"
+
+node main() {
+  handle {
+    const learned = learn(
+      { kind: "file", dir: "./test-output/source", filename: "tools.agency" },
+      names: ["lookupSeries"],
+    )
+    if (learned is failure) {
+      return learned
+    }
+    const lookup = learned.value[0]
+    const result = lookup(seriesId: "UNRATE", dir: "${__dirname}/test-output")
+    if (result is failure) {
+      return result
+    }
+    return result.value
+  } with (intr) {
+    if (intr.effect == "std::run" || intr.effect == "std::write") {
+      return approve()
+    }
+    if (intr.message == "parent after resume") {
+      return approve()
+    }
+  }
+}

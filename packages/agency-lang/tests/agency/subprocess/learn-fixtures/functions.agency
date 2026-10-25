@@ -1,0 +1,34 @@
+import { Count } from "./types.agency"
+
+export def checked(value: Count!): Result<number> {
+  """
+  Return a checked count.
+
+  @param value - A count to check
+  """
+  return success(value)
+}
+
+export def unchecked(value: number): any {
+  return value
+}
+
+export def defaults(label: string = "original", ...values: number[]): any {
+  return { label: label, values: values }
+}
+
+export def plain(value: number): number {
+  return value
+}
+
+export def wrapped(value: number): Result<number> {
+  return success(value)
+}
+
+export def refused(): Result {
+  return failure("expected fixture failure", { code: "fixture", detail: { count: 3 } })
+}
+
+export def nestedFailure(): any {
+  return { nested: failure("nested fixture failure", { code: "nested" }) }
+}

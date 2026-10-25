@@ -1,0 +1,14 @@
+import { learn } from "std::agency"
+import { probe, other } from "./functions.agency"
+
+node main(learned: boolean) {
+  let tools: any[] = [probe, other]
+  handle {
+    if (learned) {
+      const loaded = learn({ kind: "file", dir: __dirname, filename: "functions.agency" })
+      if (loaded is failure) { return loaded }
+      tools = loaded.value
+    }
+    return llm("Call the tools.", { tools: tools })
+  } with approve
+}

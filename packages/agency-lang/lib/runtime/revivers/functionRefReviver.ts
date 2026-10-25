@@ -4,6 +4,7 @@ import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
 import { currentRun, currentRunOrNone, type Run } from "../asyncContext.js";
 import type { StatelogClient } from "../../statelogClient.js";
+import { restoreCreatedTool } from "../createdTool.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -24,6 +25,9 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       name: value.name,
       module: value.module,
     };
+    if (value.created) {
+      result.created = value.created;
+    }
     // A renamed function is not in the registry under its new name, so the
     // ref must carry the name its registered ancestor was created under —
     // revive() looks that up and re-applies the rename.
@@ -58,7 +62,9 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     const module = value.module as string;
     const lookupName = typeof value.registeredName === "string" ? value.registeredName : name;
 
-    const found = lookupInRegistry(this.registry, lookupName, module);
+    const found = Object.hasOwn(value, "created")
+      ? restoreCreatedTool(value.created)
+      : lookupInRegistry(this.registry, lookupName, module);
     if (!found) {
       return this.reviveMiss(name, module, value);
     }

@@ -16,6 +16,7 @@ import { normalizeForeignResult } from "./result.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
 import { enterCallable } from "./capabilities.js";
 import type { Capability } from "../host/host.js";
+import type { CreatedTool } from "./createdTool.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -129,6 +130,8 @@ export type AgencyFunctionOpts = {
   /** What the function's own `@capabilities` tag names. Checked against the
    *  run's host on every call, before the body. Empty when untagged. */
   capabilities?: Capability[];
+  /** Definition and registered executor for a callable built at runtime. */
+  created?: CreatedTool;
 };
 
 export class AgencyFunction {
@@ -157,12 +160,14 @@ export class AgencyFunction {
    *  ref to any derived copy can find its registry entry again. Equal to
    *  `name` for functions never renamed. */
   readonly registeredName: string;
+  readonly created?: CreatedTool;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
     this.module = opts.module;
     this.registeredName = opts.registeredName ?? opts.name;
     this._fn = opts.fn;
+    this.created = opts.created;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
@@ -215,6 +220,7 @@ export class AgencyFunction {
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
       capabilities: this.capabilities,
+      created: this.created,
     };
   }
 
@@ -234,6 +240,17 @@ export class AgencyFunction {
 
   getUnboundParams(): FuncParam[] {
     return this._unboundParams;
+  }
+
+  /** The full resolved argument list received by a body, by canonical
+   *  parameter name. Omitted defaults stay absent; an explicit undefined
+   *  is still present. A variadic already occupies one array slot. */
+  namedArguments(resolved: readonly unknown[]): Record<string, unknown> {
+    return Object.fromEntries(
+      this.params.flatMap((param, index) =>
+        index < resolved.length && resolved[index] !== UNSET ? [[param.name, resolved[index]]] : [],
+      ),
+    );
   }
 
   async invoke(outerRun: Run, descriptor: CallType): Promise<unknown> {

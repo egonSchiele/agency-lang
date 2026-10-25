@@ -1,0 +1,25 @@
+{
+  "arguments": {
+    "sameSchemas": true,
+    "sameReplies": true,
+    "aliasAndNullDefault": { "query": "alias", "limit": 10, "items": [1, 2] },
+    "unknownArgument": true,
+    "missingArgument": true,
+    "aliasConflict": true,
+    "variadicMustBeArray": true,
+    "stillCallable": { "query": "after-errors", "limit": 4, "items": [] }
+  },
+  "repeats": {
+    "sameSchemas": true,
+    "sameReplies": true,
+    "aliasRepeatRefused": true,
+    "otherCallRan": true
+  },
+  "removal": {
+    "sameSchemas": true,
+    "sameReplies": true,
+    "removedAfterFiveErrors": true,
+    "onlyFailedToolRemoved": ["other"],
+    "otherCallRan": true
+  }
+}

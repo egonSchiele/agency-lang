@@ -1,0 +1,10 @@
+def positive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("expected a positive count")
+}
+
+@validate(positive)
+@jsonSchema({ description: "A positive count", minimum: 1 })
+export type Count = number

@@ -7,6 +7,9 @@ import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
 import { testRun, withTestFrame } from "../__tests__/testHelpers.js";
+import { z } from "zod";
+import { createTool } from "../createdTool.js";
+import { callFromOutside } from "../toolInvocation.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -20,6 +23,108 @@ function makeAgencyFunction(name: string, module: string): AgencyFunction {
     toolDefinition: null,
   });
 }
+
+function createdFixture() {
+  const registry: Record<string, AgencyFunction> = {};
+  const executor = AgencyFunction.create(
+    {
+      name: "executePrepared",
+      module: "created-fixture",
+      params: ["prepared", "args"].map((name) => ({
+        name,
+        hasDefault: false,
+        defaultValue: undefined,
+        variadic: false,
+      })),
+      toolDefinition: null,
+      fn: (_run, prepared: unknown, args: unknown) => ({ prepared, args }),
+    },
+    registry,
+  ).partial({ prepared: { code: "compiled fixture" } });
+  const tool = createTool(
+    {
+      name: "series",
+      description: "Read a series.",
+      params: [
+        { name: "seriesId", aliases: ["series"], hasDefault: false, variadic: false },
+        { name: "limit", hasDefault: true, variadic: false },
+      ],
+      inputSchema: z.object({ seriesId: z.string(), limit: z.number().nullable() }).toJSONSchema(),
+      markers: { idempotent: true },
+    },
+    executor,
+  );
+  return { tool, registry };
+}
+
+function roundTripFunction(tool: AgencyFunction, registry: Record<string, AgencyFunction>) {
+  const previous = functionRefReviver.registry;
+  functionRefReviver.registry = registry;
+  try {
+    return JSON.parse(
+      JSON.stringify(tool, nativeTypeReplacer),
+      nativeTypeReviver,
+    ) as AgencyFunction;
+  } finally {
+    functionRefReviver.registry = previous;
+  }
+}
+
+describe("created function references", () => {
+  it("restores a created tool and its separately bound executor", async () => {
+    const { tool, registry } = createdFixture();
+    const restored = roundTripFunction(tool, registry);
+    expect(restored.params).toEqual(tool.params);
+    expect((restored.toolDefinition!.schema as z.ZodType).toJSONSchema()).toEqual(
+      (tool.toolDefinition!.schema as z.ZodType).toJSONSchema(),
+    );
+    expect(restored.markers).toEqual(tool.markers);
+    expect(await restored.invoke(testRun(), callFromOutside({ series: "GDP" }))).toEqual({
+      prepared: { code: "compiled fixture" },
+      args: { seriesId: "GDP" },
+    });
+  });
+
+  it("restores further partial application, renaming, and description", async () => {
+    const { tool, registry } = createdFixture();
+    const derived = tool.partial({ seriesId: "GDP" }).rename("gdp").describe("Read GDP.");
+    const restored = roundTripFunction(derived, registry);
+    expect(restored.name).toBe("gdp");
+    expect(restored.description).toBe("Read GDP.");
+    expect(restored.params).toEqual(derived.params);
+    expect((restored.toolDefinition!.schema as z.ZodType).toJSONSchema()).toEqual(
+      (derived.toolDefinition!.schema as z.ZodType).toJSONSchema(),
+    );
+    expect(await restored.invoke(testRun(), callFromOutside({ limit: 2 }))).toEqual({
+      prepared: { code: "compiled fixture" },
+      args: { seriesId: "GDP", limit: 2 },
+    });
+  });
+
+  it("retains preapproval without running the executor while restoring", () => {
+    const { tool, registry } = createdFixture();
+    expect(roundTripFunction(tool.preapprove(), registry).isPreapproved).toBe(true);
+  });
+
+  it("preserves an embedded created reference when this process lacks the executor", async () => {
+    const { tool, registry } = createdFixture();
+    const embedded = roundTripFunction(tool.rename("embedded"), {});
+    const restored = roundTripFunction(embedded, registry);
+    expect(restored.name).toBe("embedded");
+    expect(await restored.invoke(testRun(), callFromOutside({ seriesId: "GDP" }))).toEqual({
+      prepared: { code: "compiled fixture" },
+      args: { seriesId: "GDP" },
+    });
+  });
+
+  it("rejects an unknown created-reference shape with a diagnostic", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    expect(() => reviver.revive({ name: "series", module: "fixture", created: {} })).toThrow(
+      /Invalid created function reference/,
+    );
+  });
+});
 
 describe("FunctionRefReviver", () => {
   const reviver = new FunctionRefReviver();
@@ -99,6 +204,22 @@ describe("FunctionRefReviver", () => {
       await expect(stub.invoke(testRun(), { type: "positional", args: [] })).rejects.toThrow(
         /never loaded its module/,
       );
+    });
+
+    it("cannot restore an unregistered tool from its name and module alone", async () => {
+      const tool = new AgencyFunction({
+        name: "unregisteredEcho",
+        module: "runtime-created",
+        fn: (_run, text: string) => text,
+        params: [{ name: "text", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: null,
+      });
+      reviver.registry = {};
+      const restored = reviver.revive(JSON.parse(JSON.stringify(reviver.serialize(tool))));
+      expect(restored.params).toEqual([]);
+      await expect(
+        restored.invoke(testRun(), { type: "positional", args: ["hello"] }),
+      ).rejects.toThrow(/never loaded its module/);
     });
 
     it("revives an unregistered block ref to a stub instead of throwing", () => {

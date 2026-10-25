@@ -1,0 +1,15 @@
+import { makeUnregisteredTool, makeCreatedTool } from "./tools.js"
+
+def pauseTool(): string {
+  interrupt("Continue the tool conversation")
+  return "continued"
+}
+
+def execute(prefix: string, args: any): string {
+  return "${prefix}:${args.query}"
+}
+
+node main(kind: string) {
+  const tool = if kind == "created" then makeCreatedTool(execute.partial(prefix: "bound")) else makeUnregisteredTool()
+  return llm("Call the tools.", { tools: [pauseTool, tool] })
+}

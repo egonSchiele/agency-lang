@@ -95,7 +95,24 @@ describe("pre-execution tagging (the neverStarted producer)", () => {
   });
 });
 
-describe("named variadic padding", () => {
+describe("namedArguments", () => {
+  it("omits padding while keeping explicit values and a variadic array", () => {
+    const fn = makeFunction([
+      { name: "query" },
+      { name: "limit", hasDefault: true },
+      { name: "nullable" },
+      { name: "explicitUndefined" },
+      { name: "values", variadic: true },
+    ]);
+    expect(fn.namedArguments(["GDP", UNSET, null, undefined, [1, 2]])).toEqual({
+      query: "GDP",
+      nullable: null,
+      explicitUndefined: undefined,
+      values: [1, 2],
+    });
+    expect(fn.namedArguments(["GDP"])).toEqual({ query: "GDP" });
+  });
+
   it("keeps an omitted default before a named variadic in its own slot", async () => {
     const fn = makeFunction([
       { name: "query" },

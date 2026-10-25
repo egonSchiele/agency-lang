@@ -31,6 +31,8 @@ import {
   _combine,
  } from "agency-lang/stdlib-lib/template.js"
 import { _prepareFunctions } from "agency-lang/stdlib-lib/agencyFunctions.js"
+import { _describeLearnedFunctions, _createLearnedTools } from "agency-lang/stdlib-lib/learnFunctions.js"
+import { MAX_TOOL_NAME_LEN } from "std::skills"
 import { invokeLearnedFunction } from "agency-lang/runtime"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
@@ -328,6 +330,49 @@ export def _executePrepared(
 /** @hidden */
 export def _invokeLearned(target: any, args: Record<string, any>): any {
   return invokeLearnedFunction(target, args)
+}
+
+/** Learn public Agency functions as callable tools for this program. */
+@capabilities(fileRead, fileWrite, subprocess)
+export def learn(
+  source: AgencySource,
+  names: string[] = [],
+  namespace: string = "",
+  options: RunOptions = {},
+): Result<any[]> {
+  """
+  Return tools with the original functions' descriptions, schemas, aliases, and argument binding. An empty names list selects all public exported defs; hidden exports, types, and nodes are excluded. Selecting a node, handoff def, required function argument, or unresolved generic schema fails the whole batch. A namespace advertises namespace_exportName; empty keeps the export name.
+
+  Learning runs module initialization once in a subprocess to inspect the compiled definitions, so it can pause, fail, or be rejected. It does not call the selected function bodies. Each later tool call runs in its own fresh subprocess with the bound options and the usual run gate and parent handlers. Imported code is captured during preparation; later calls do not reread local source files. This returns function values without saving them or changing an agent's tool list.
+
+  @param source - The module, file, or complete source accepted by runFunction
+  @param names - Exported defs to learn; empty selects all public defs
+  @param namespace - Optional prefix for advertised tool names
+  @param options - The limits, logFile, and cwd accepted by run, used for inspection and calls
+  """
+  const prepared = try _prepareFunctions(source, names, true)
+  if (prepared is failure) {
+    return prepared
+  }
+  const metadata = run(
+    prepared.value.compiled, prepared.value.metadataNode, {},
+    options.wallClock ?? 60s, options.memory ?? 512mb, options.ipcPayload ?? 100mb,
+    options.stdout ?? 1mb, options.logFile ?? "", options.cwd ?? "",
+    options.maxDepth ?? 5, options.maxCost ?? null,
+  )
+  if (metadata is failure) {
+    return metadata
+  }
+  const definitions = metadata.value.data
+  if (definitions is failure) {
+    return definitions
+  }
+  return try _createLearnedTools(definitions, prepared.value, namespace, options, _executePrepared, MAX_TOOL_NAME_LEN)
+}
+
+/** @hidden */
+export def _describeLearned(targets: any[], names: string[], callTargets: any[] = []): any {
+  return _describeLearnedFunctions(targets, names, callTargets)
 }
 
 /** Just like `run`, any interrupts and guards defined in the parent process

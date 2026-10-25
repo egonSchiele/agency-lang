@@ -122,6 +122,8 @@ export { enterCallable as __enterCallable } from "./capabilities.js";
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";
 export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";
+export { createTool } from "./createdTool.js";
+export type { CreatedTool, CreatedToolDefinition } from "./createdTool.js";
 export { invokeLearnedFunction, invokeLearnedFunctionFor } from "./learnedFunction.js";
 export { __call, __callMethod } from "./call.js";
 

@@ -1,0 +1,6 @@
+{
+  "before": { "message": "pause learned call", "effects": "once\n" },
+  "finalData": "remembered:UNRATE",
+  "handlersRestored": true,
+  "effectsAfter": "once\n"
+}

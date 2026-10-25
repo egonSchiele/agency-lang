@@ -1,0 +1,12 @@
+{
+  "unregistered": {
+    "finalData": "done",
+    "schemaRestored": false,
+    "missingExecutor": true
+  },
+  "created": {
+    "finalData": "done",
+    "schemaRestored": true,
+    "reply": "bound:hello"
+  }
+}

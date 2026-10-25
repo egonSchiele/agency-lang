@@ -1,0 +1,83 @@
+import { learn } from "std::agency"
+import { checked as originalChecked } from "./learn-fixtures/functions.agency"
+
+let checkedBodies = 0
+
+def named(tools: any[], name: string): any {
+  for (tool in tools) {
+    if (tool.name == name) {
+      return tool
+    }
+  }
+  return null
+}
+
+def metadata(tool: any): any {
+  return {
+    description: tool.description,
+    schema: tool.toolDefinition.schema.toJSONSchema()
+  }
+}
+
+node main() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "checked") {
+      checkedBodies = checkedBodies + 1
+    }
+  }
+  handle {
+    const learned = learn({
+      kind: "file",
+      dir: "tests/agency/subprocess/learn-fixtures",
+      filename: "functions.agency"
+    })
+    if (learned is failure) {
+      return learned
+    }
+    const tools = learned.value
+    const checked = named(tools, "checked")
+    const unchecked = named(tools, "unchecked")
+    const defaults = named(tools, "defaults")
+    const plain = named(tools, "plain")
+    const wrapped = named(tools, "wrapped")
+    const refused = named(tools, "refused")
+    const nestedFailure = named(tools, "nestedFailure")
+
+    const wrongShape = checked(value: "wrong")
+    const wrongCount = checked(value: -1)
+    const valid = checked(value: 2)
+    const uncheckedValue = unchecked(value: "unchanged")
+    const defaultValues = defaults(values: [1, 2])
+    const plainValue = plain(value: 5)
+    const wrappedValue = wrapped(value: 6)
+    const refusedValue = refused()
+    const nested = nestedFailure()
+    const original = metadata(originalChecked)
+    const learnedMetadata = metadata(checked)
+
+    if (valid is failure) { return valid }
+    if (uncheckedValue is failure) { return uncheckedValue }
+    if (defaultValues is failure) { return defaultValues }
+    if (plainValue is failure) { return plainValue }
+    if (wrappedValue is failure) { return wrappedValue }
+    if (nested is failure) { return nested }
+    if (refusedValue is success) { return "failure was wrapped as success" }
+    return {
+      shapeRejected: isFailure(wrongShape),
+      validatorRejected: isFailure(wrongCount),
+      checkedBodies: checkedBodies,
+      checkedValue: valid.value,
+      uncheckedValue: uncheckedValue.value,
+      defaults: defaultValues.value,
+      plainValue: plainValue.value,
+      wrappedValue: wrappedValue.value,
+      failureCode: refusedValue.data.code,
+      failureDetail: refusedValue.data.detail.count,
+      nestedFailureCode: nested.value.nested.data.code,
+      descriptionPreserved: learnedMetadata.description == original.description,
+      countType: learnedMetadata.schema.properties.value.type,
+      countDescription: learnedMetadata.schema.properties.value.description,
+      countMinimum: learnedMetadata.schema.properties.value.minimum
+    }
+  } with approve
+}

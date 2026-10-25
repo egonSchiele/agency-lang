@@ -1,0 +1,10 @@
+export def probe(query | q: string, limit: number = 10, ...items: number[]): any {
+  """Return the supplied query and options.
+  @param query The query to return.
+  """
+  return { query: query, limit: limit, items: items }
+}
+
+export def other(query | q: string, limit: number = 10, ...items: number[]): any {
+  return { query: query, limit: limit, items: items }
+}

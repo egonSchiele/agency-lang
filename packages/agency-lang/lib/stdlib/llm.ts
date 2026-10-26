@@ -49,15 +49,16 @@ export type LlmDefaults = RetryConfig & {
   maxRepeatedToolCalls?: number;
   /** Which companies OpenRouter may send the call to. Other providers ignore it. */
   openRouter?: OpenRouterOptions;
-  /** Spread into the provider's request body, except the fields the client builds itself. */
+  /** Spread into the provider's request body as given. */
   rawAttributes?: Record<string, unknown>;
 };
 
 /**
  * Merge `opts` into the ACTIVE branch stack's LLM defaults
  * (`stack.other.llmDefaults`). Only present (non-undefined) keys are
- * written, and a key set to `null` is removed. Switching between text and decision models without a provider
- * selects the new model's registry provider.
+ * written, and a key set to `null` is removed, so the baked `agency.json`
+ * value for it applies again. Switching between text and decision models
+ * without a provider selects the new model's registry provider.
  *
  * Branch-scoped: inside a fork/race/tool branch this writes that
  * branch's own slice (seeded from the parent at fork time by
@@ -79,7 +80,6 @@ export function _setLlmOptions(opts: LlmDefaults): void {
     if (value === undefined) {
       continue;
     }
-    // Agency has one nothing value, so null unsets the option.
     if (value === null) {
       delete current[key];
       continue;

@@ -116,9 +116,7 @@ Neither goes on the assistant message in the thread, so `lastReply()` does not r
 - **The reasoning has no signature.** smoltalk sends a message's `thinkingBlocks` back to Anthropic on the next request, and Anthropic rejects a thinking block without a valid signature. If reasoning from a GLM call rode on the thread, the first Claude call after a `/model` switch would fail.
 - **The thread is in every checkpoint.** Reasoning can run to thousands of tokens per call.
 
-`prompt.replyMessage.test.ts` pins both halves: the event carries the two fields, and the message does not.
-
-Two request options go the other way. `openRouter.provider` chooses which companies OpenRouter may use, for example `{ provider: { ignore: ["open-inference"] } }`; it can be set per call, with `setLlmOptions`, or as `client.openRouter` in `agency.json`. `rawAttributes` is spread into the request body for a field Agency has no option for. smoltalk drops the keys a client builds itself (the model, the messages, the tools) from `rawAttributes` with a warning, so it cannot swap the model or replace the conversation.
+Two request options go the other way. `openRouter.provider` chooses which companies OpenRouter may use, for example `{ provider: { ignore: ["open-inference"] } }`; it can be set per call, with `setLlmOptions`, or as `client.openRouter` in `agency.json`. `rawAttributes` is spread into the request body for a field Agency has no option for, such as `top_k`. It is spread after the fields the client builds, so today it can also replace them, the model included (smoltalk#73).
 
 ## Where smoltalk is used
 

@@ -137,24 +137,20 @@ export class NameClassifier {
     return undefined;
   }
 
-  /** Recursively walks `node` and returns true if any function call within
-   *  it targets a function marked `destructive`; reads the destructiveFunctions
-   *  registry. `except` lists call nodes to ignore: calls a nested body's own
-   *  post-flip already covers. */
-  containsDestructiveCall(node: AgencyNode, except: AgencyNode[] = []): boolean {
-    for (const { node: subNode } of walkNodesArray([node])) {
-      if (except.includes(subNode)) {
-        continue;
-      }
-      const name = this.callTarget(subNode);
-      // Object.hasOwn, not a truthy index: a call to a function named
-      // `toString`/`constructor` would otherwise match an inherited prototype
-      // member on the plain destructiveFunctions object.
-      if (name !== undefined && Object.hasOwn(this.compilationUnit.destructiveFunctions, name)) {
-        return true;
-      }
-    }
-    return false;
+  /** True if `node` is a call (or a `try` call) to a function marked
+   *  `destructive`; reads the destructiveFunctions registry. */
+  isDestructiveCall(node: AgencyNode): boolean {
+    const name = this.callTarget(node);
+    // Object.hasOwn, not a truthy index: a call to a function named
+    // `toString`/`constructor` would otherwise match an inherited prototype
+    // member on the plain destructiveFunctions object.
+    return name !== undefined && Object.hasOwn(this.compilationUnit.destructiveFunctions, name);
+  }
+
+  /** True if any function call within `node` targets a function marked
+   *  `destructive`. */
+  containsDestructiveCall(node: AgencyNode): boolean {
+    return walkNodesArray([node]).some(({ node: subNode }) => this.isDestructiveCall(subNode));
   }
 
   /**

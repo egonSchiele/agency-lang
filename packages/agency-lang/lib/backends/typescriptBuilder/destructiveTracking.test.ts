@@ -6,6 +6,8 @@ import { parseAgency } from "../../parser.js";
 import { printTs } from "../../ir/prettyPrint.js";
 import type { AgencyNode } from "../../types.js";
 import type { FunctionDefinition } from "../../types/function.js";
+import type { ForLoop } from "../../types/forLoop.js";
+import { ts } from "../../ir/builders.js";
 
 function buildUnit(source: string) {
   const parsed = parseAgency(source, {}, false);
@@ -153,8 +155,9 @@ describe("DestructiveTracking", () => {
     });
   });
 
-  // #1278: a compound statement skips the pre-flip when every destructive
-  // call inside it is covered by a nested post-flip.
+  // #1278: a compound statement leaves a destructive call in a nested body
+  // to that body's own flips.
+  const PRE = "__activation.__destructiveRan = true;";
   const RM = `destructive def rm(p: string): Result { return failure("x") }\n`;
 
   it("a loop whose body binds a destructive call to a local gets NO pre-flip (#1278)", () => {
@@ -217,15 +220,26 @@ describe("DestructiveTracking", () => {
     expect(flips(tracking, body[0], false)).toEqual({ pre: undefined, post: undefined });
   });
 
-  it("a destructive call on the right of && inside a loop body keeps the pre-flip", () => {
+  it("a destructive call on the right of && in a nested if: the if gets the pre-flip, not the loop", () => {
     // Hoisting does not move a call out of the right side of &&, so this
-    // shape reaches codegen as written and only the pre-flip covers it.
+    // shape reaches codegen as written.
     const { tracking, body } = setup(
       `destructive def burn(): number { return 1 }\n` +
         `def caller(xs: string[], b: boolean) { for (x in xs) { if (b && burn() > 0) { return 1 } } }`,
       "caller",
     );
-    expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
+    expect(flips(tracking, body[0], false).pre).toBeUndefined();
+    const loop = body[0] as ForLoop;
+    expect(flips(tracking, loop.body[0], false).pre).toBe(PRE);
+  });
+
+  it("a destructive call in the statement's own condition gets the pre-flip", () => {
+    const { tracking, body } = setup(
+      `destructive def burn(): number { return 1 }\n` +
+        `def caller(b: boolean) { if (b && burn() > 0) { return 1 } }`,
+      "caller",
+    );
+    expect(flips(tracking, body[0], false).pre).toBe(PRE);
   });
 
   it("a loop whose ITERABLE is a destructive call keeps the pre-flip (parse-level shape only)", () => {
@@ -240,12 +254,14 @@ describe("DestructiveTracking", () => {
     expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
   });
 
-  it("a bare destructive call inside a loop body keeps the pre-flip", () => {
+  it("a bare destructive call inside a loop body gets its own pre-flip, not the loop's", () => {
     const { tracking, body } = setup(
       RM + `def caller(xs: string[]) { for (x in xs) { rm(x) } }`,
       "caller",
     );
-    expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
+    expect(flips(tracking, body[0], false).pre).toBeUndefined();
+    const loop = body[0] as ForLoop;
+    expect(flips(tracking, loop.body[0], false).pre).toBe(PRE);
   });
 
   it("a destructured assignment inside a loop body is covered", () => {
@@ -259,12 +275,67 @@ describe("DestructiveTracking", () => {
     expect(flips(tracking, body[0], false)).toEqual({ pre: undefined, post: undefined });
   });
 
-  it("a covered call next to an uncovered one keeps the pre-flip", () => {
+  it("a tracked call whose try operand calls another destructive function gets both flips", () => {
+    // A `try` operand is not hoisted, so `name()` stays inside the
+    // statement and the post-flip only describes `rm`.
     const { tracking, body } = setup(
-      RM + `def caller(xs: string[]) { for (x in xs) { const r = rm(x)\n  rm(x) } }`,
+      RM +
+        `destructive def name(): string { return "x" }\n` +
+        `def caller() { const r = try rm(name()) }`,
       "caller",
     );
-    expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
+    const f = flips(tracking, body[0], false);
+    expect(f.pre).toBe(PRE);
+    expect(f.post).toContain("isFailure(__self.r)");
+  });
+
+  it("a value-position block argument with a tracked call gets NO pre-flip", () => {
+    const { tracking, body } = setup(
+      RM +
+        `def run(block: () -> any): any { return block() }\n` +
+        `def caller() { const y = run() { const r = rm("x") } }`,
+      "caller",
+    );
+    expect(flips(tracking, body[0], false)).toEqual({ pre: undefined, post: undefined });
+  });
+
+  it("a returned block argument with a tracked call gets NO pre-flip", () => {
+    const { tracking, body } = setup(
+      RM +
+        `def run(block: () -> any): any { return block() }\n` +
+        `def caller() { return run() { const r = rm("x") } }`,
+      "caller",
+    );
+    expect(flips(tracking, body[0], false)).toEqual({ pre: undefined, post: undefined });
+  });
+
+  it("a handle nested in a loop body: the handle carries its handler body's pre-flip, not the loop", () => {
+    const { tracking, body } = setup(
+      RM +
+        `def caller(xs: string[]) { for (x in xs) { handle { return interrupt("go?") } with (intr) { const r = rm("x")\n  return reject() } } }`,
+      "caller",
+    );
+    expect(flips(tracking, body[0], false).pre).toBeUndefined();
+    const loop = body[0] as ForLoop;
+    expect(flips(tracking, loop.body[0], false).pre).toBe(PRE);
+  });
+
+  it("markOnThrow marks the activation on any throw but a run-control signal, then rethrows", () => {
+    const { tracking } = setup(RM + `def caller() { const n = 1 }`, "caller");
+    const printed = printTs(tracking.markOnThrow(ts.raw("work();")));
+    expect(printed).toContain("try {");
+    expect(printed).toContain("if (!(__error instanceof RunControlSignal)) {");
+    expect(printed).toContain(PRE);
+    expect(printed).toContain("throw __error");
+  });
+
+  it("nestedRoots names the nested statements a compound statement relies on", () => {
+    const { tracking, body } = setup(
+      RM + `def caller(xs: string[]) { for (x in xs) { const r = rm(x)\n  const n = 1 } }`,
+      "caller",
+    );
+    const loop = body[0] as ForLoop;
+    expect(tracking.nestedRoots(loop)).toEqual([loop.body[0]]);
   });
 
   it("a tracked assignment inside an inline handler body is NOT covered: the handle keeps the pre-flip", () => {

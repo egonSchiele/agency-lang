@@ -308,6 +308,11 @@ export class TypeScriptBuilder {
   // Threading & control flow
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
+  // Statements compiled by processBodyAsParts, so each got its own
+  // destructive flips. A statement's compile truncates this back to what was
+  // there before it and adds itself, so while a statement compiles, the part
+  // added since it started is the nested statements that got flips.
+  private flipCompiledStatements: AgencyNode[] = [];
   // Handler bodies emit all their statements into a single arrow-function
   // scope (unlike node/function bodies, where each statement is wrapped in
   // its own substep block). A fixed `__funcResult` temp name therefore
@@ -4356,6 +4361,17 @@ export class TypeScriptBuilder {
       const pipeStages = this.pipes.tryGetChainStages(stmt);
       if (pipeStages) {
         flushPart();
+        if (!this.scopes.inDestructiveFunction && this.names.containsDestructiveCall(stmt)) {
+          // A pipe chain emits runner nodes of its own, with no post-flip,
+          // so a destructive stage gets the conservative pre-flip in a
+          // step before the chain.
+          currentPart = [this.tracking.markDestructiveRan()];
+          this.steps.push(nextId());
+          this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+          this.steps.pop();
+          flushPart();
+        }
+        this.flipCompiledStatements.push(stmt);
         const baseId = nextId();
         const pipeNodes = this.pipes.expand(stmt as Assignment, pipeStages, baseId);
         for (let i = 0; i < pipeNodes.length; i++) {
@@ -4395,7 +4411,13 @@ export class TypeScriptBuilder {
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
-      const processed = this.processStatement(stmt);
+      const compiledBefore = this.flipCompiledStatements.length;
+      const processed = post
+        ? this.tracking.markOnThrow(this.processStatement(stmt))
+        : this.processStatement(stmt);
+      this.checkNestedFlips(stmt, this.flipCompiledStatements.slice(compiledBefore));
+      this.flipCompiledStatements.length = compiledBefore;
+      this.flipCompiledStatements.push(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
         if (pre && !preNeedsOwnStep) {
           // The pre-flip is sitting in the open part, which would flush after
@@ -4424,6 +4446,23 @@ export class TypeScriptBuilder {
 
     flushPart();
     return result;
+  }
+
+  /** `statementFlips` skips the pre-flip for a destructive call in a nested
+   *  body, trusting that body's statements to carry their own flips. Check
+   *  that each one really was compiled by `processBodyAsParts`; a body
+   *  compiled some other way would leave the call with no flip at all. */
+  private checkNestedFlips(stmt: AgencyNode, nestedCompiled: AgencyNode[]): void {
+    if (this.scopes.inDestructiveFunction) {
+      return;
+    }
+    for (const root of this.tracking.nestedRoots(stmt)) {
+      if (!nestedCompiled.includes(root)) {
+        throw new Error(
+          `Internal error: a destructive call inside a \`${stmt.type}\` sits in a \`${root.type}\` that was compiled without destructive flips. DestructiveTracking.callSites must treat that body as uncovered.`,
+        );
+      }
+    }
   }
 
   // ------- Imports and pre/post processing -------

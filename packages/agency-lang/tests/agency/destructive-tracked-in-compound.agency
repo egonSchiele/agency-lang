@@ -4,6 +4,8 @@
 // failure saying destructiveRan: false. Calls no post-flip covers (a bare
 // call, the right side of &&) still mark the caller (#1278).
 
+import { destructive boomDestructive } from "../helpers/destructiveExterns.js"
+
 def saveOne(item: string): Result<string> {
   if (item == "bad") {
     return failure("refused")
@@ -15,6 +17,14 @@ def saveOne(item: string): Result<string> {
 
 destructive def burn(): number {
   return 1
+}
+
+def run(block: () -> any): any {
+  return block()
+}
+
+def keep(s: string): Result<string> {
+  return success(s)
 }
 
 def saveAll(items: string[]): Result<string> {
@@ -144,6 +154,110 @@ def andRightInLoop(): Result<string> {
 }
 node andRightInLoop_() {
   const r = andRightInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def bareBlockRefused(): Result<string> {
+  run() {
+    const s = saveOne("bad")
+  }
+  return failure("after")
+}
+node bareBlockRefused_() {
+  const r = bareBlockRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def valueBlockRefused(): Result<string> {
+  const refused = run() {
+    const s = saveOne("bad")
+    return isFailure(s)
+  }
+  if (refused) {
+    return failure("stopped")
+  }
+  return failure("after")
+}
+node valueBlockRefused_() {
+  const r = valueBlockRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def threadRefused(): Result<string> {
+  thread {
+    const s = saveOne("bad")
+  }
+  return failure("after")
+}
+node threadRefused_() {
+  const r = threadRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def handleBodyRefused(): Result<string> {
+  handle {
+    const s = saveOne("bad")
+  } with approve
+  return failure("after")
+}
+node handleBodyRefused_() {
+  const r = handleBodyRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive JS extern that throws skips the post-flip, so the tracked
+// statement marks the function on the way out.
+def externThrowsInLoop(): Result<string> {
+  for (item in ["a"]) {
+    const r = boomDestructive()
+  }
+  return success("unreachable")
+}
+node externThrowsInLoop_() {
+  const r = externThrowsInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def externThrows(): Result<string> {
+  const r = boomDestructive()
+  return success("unreachable")
+}
+node externThrows_() {
+  const r = externThrows()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Hoisting lifts a pipe chain's input into its own tracked statement, so a
+// refusal there leaves the caller clean too.
+def pipeInLoop(): Result<string> {
+  for (item in ["bad"]) {
+    const r = saveOne(item) |> keep
+  }
+  return failure("after")
+}
+node pipeInLoop_() {
+  const r = pipeInLoop()
   if (isFailure(r)) {
     return [r.destructiveRan]
   }

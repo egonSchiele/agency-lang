@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Changed after PR review (#1284).** The shipped rule is broader and simpler than the one below. A statement's pre-flip now covers only the destructive calls it owns: those in its own expressions and in an inline handler body. A call in any other nested body belongs to the statement in that body, which gets its own flips whether or not it is a tracked assignment. The `except` list and `coveredCalls` are gone. Two additions: a tracked call's statement is wrapped in a catch that sets the flag on a throw (`markOnThrow`), and `processBodyAsParts` checks that every nested statement the rule relied on really was compiled with flips. `docs/dev/language/destructive-regions.md` describes the result.
+
 **Goal:** Stop a compound statement (a loop, an `if`, a `match`, a `handle`, a `thread`, a `with` modifier, a call with a block argument) from marking `destructiveRan: true` before it runs, when the only destructive calls inside it are already tracked precisely by their own post-flip.
 
 **Architecture:** One decision changes, in one place. `DestructiveTracking.statementFlips` decides today "pre-flip if the statement textually contains a destructive call". After this change it decides "pre-flip if the statement contains a destructive call that no precise post-flip covers". Nothing about step numbering, the compound-statement list, or the runtime changes.

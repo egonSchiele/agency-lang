@@ -87,6 +87,83 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "bareBlockRefused_",
+      "description": "a refusal bound to a local inside a block argument leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "valueBlockRefused_",
+      "description": "a refusal inside a block argument in value position leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "threadRefused_",
+      "description": "a refusal bound to a local inside a thread leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "handleBodyRefused_",
+      "description": "a refusal bound to a local inside a handle body leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "externThrowsInLoop_",
+      "description": "a destructive extern that throws inside a loop body marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "externThrows_",
+      "description": "a destructive extern that throws, bound to a local, marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pipeInLoop_",
+      "description": "a refusal as a pipe chain's input inside a loop leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

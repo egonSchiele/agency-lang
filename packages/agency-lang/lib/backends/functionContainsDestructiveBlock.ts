@@ -11,7 +11,7 @@ import { walkNodesArray } from "../utils/node.js";
  *  a region here, or via the raw `destructive def` marker checked by the caller.
  *  It deliberately does NOT treat a function that merely CALLS a `destructive`
  *  function as destructive: that runtime taint is handled separately by Rule 2
- *  (`NameClassifier.containsDestructiveCall` + the `destructiveFunctions`
+ *  (`DestructiveTracking.statementFlips` + the `destructiveFunctions`
  *  registry), which folds a callee's `destructiveRan` into the caller's failure.
  *  (Agency has no nested function definitions, so there is no destructive-marked
  *  function to find inside a body.)

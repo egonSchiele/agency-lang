@@ -102,10 +102,10 @@ node ranTwice_() {
   return "unexpected"
 }
 
-// A destructive call inside a handler body. The handler body is not walked
-// statement by statement; the conservative flip on the `handle` statement has
-// to run BEFORE it, or the `return` inside leaves the function with the flag
-// still false.
+// A destructive call inside a handler body. The handler body compiles to
+// plain JS, where each statement that owns a destructive call is flipped
+// before it runs, so the `return` inside leaves the function with the flag
+// already true.
 def handlerDoesWork(): Result {
   handle {
     return interrupt("go?")

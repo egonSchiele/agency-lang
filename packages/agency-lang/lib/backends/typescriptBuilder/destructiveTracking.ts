@@ -1,11 +1,12 @@
 import type { TsNode } from "../../ir/tsIR.js";
 import { ts } from "../../ir/builders.js";
 import type { AgencyNode, Assignment } from "../../types.js";
-import type { HandleBlock } from "../../types/handleBlock.js";
+import type { IfElse } from "../../types/ifElse.js";
 import { bodySlots } from "../../utils/bodySlots.js";
 import { walkNodesArray, type WalkAncestor } from "../../utils/node.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import type { NameClassifier } from "./nameClassifier.js";
+import { flattenedElseIf } from "./elseIfChain.js";
 
 /**
  * Emits the destructive-execution tracking codegen: the per-function
@@ -81,45 +82,42 @@ export class DestructiveTracking {
     ]);
   }
 
-  /** The flips for one statement, for a function that is NOT itself
-   *  `destructive`. A `destructive def` commits at entry (see `init`), so it
-   *  needs no per-statement flips.
+  /** The flips for one statement of a stepped body (`processBodyAsParts`),
+   *  for a function that is NOT itself `destructive`. A `destructive def`
+   *  commits at entry (see `init`), so it needs no per-statement flips.
    *
    *  Rule 2 (any function calling a destructive fn): when the call's result
    *  binds to a simple local (`const r = burn()` / `const r = try burn()`), an
    *  outcome-dependent POST flip trusts the result's own destructiveRan (a
    *  swallowed destructive failure still marks us; a clean refusal does not).
    *  The caller wraps that statement in `markOnThrow`, because a throw skips
-   *  the post-flip. Every other destructive call in the statement's own
-   *  expressions or in an inline handler body gets a conservative PRE flip.
-   *  A call inside a nested body that `processBodyAsParts` compiles is left
-   *  to that body's own flips (#1278). */
+   *  the post-flip. Every other destructive call the statement owns gets a
+   *  conservative PRE flip. A call inside a nested body is not the
+   *  statement's: every body flips its own statements (#1278). */
   statementFlips(
     stmt: AgencyNode,
     inDestructiveFunction: boolean,
   ): { pre?: TsNode; post?: TsNode } {
-    // A `destructive def` commits at entry; no per-statement flips.
     if (inDestructiveFunction) {
       return {};
     }
     const tracked = this.trackedCall(stmt);
-    const needsPre = this.callSites(stmt).some(
-      (site) => site.root === null && !tracked.includes(site.call),
-    );
+    const needsPre = this.ownedCalls(stmt).some((call) => !isTracked(call, tracked));
     return {
       pre: needsPre ? this.markDestructiveRan() : undefined,
-      post: tracked.length > 0 ? this.outcomeFlip((stmt as Assignment).variableName!) : undefined,
+      post: tracked ? this.outcomeFlip((stmt as Assignment).variableName!) : undefined,
     };
   }
 
-  /** The statements in nested bodies that `statementFlips` relies on for a
-   *  destructive call under `stmt`. Codegen checks that each one went
-   *  through `processBodyAsParts`, so a body compiled without flips fails
-   *  the build instead of under-reporting `destructiveRan`. */
-  nestedRoots(stmt: AgencyNode): AgencyNode[] {
-    return this.callSites(stmt)
-      .map((site) => site.root)
-      .filter((root): root is AgencyNode => root !== null);
+  /** The flip for one statement of plain-mode code: an inline handler body,
+   *  or an `if`, loop, or `match` compiled inside one. Plain code has no
+   *  steps, so a PRE flip runs first. A tracked call gets one too, because
+   *  plain code emits no post-flip. */
+  plainFlip(stmt: AgencyNode, inDestructiveFunction: boolean): TsNode | undefined {
+    if (inDestructiveFunction || this.ownedCalls(stmt).length === 0) {
+      return undefined;
+    }
+    return this.markDestructiveRan();
   }
 
   /** `__activation.__destructiveRan = true` — sets the activation's destructive-ran
@@ -169,65 +167,58 @@ export class DestructiveTracking {
     );
   }
 
-  /** The call nodes of a tracked assignment: a simple local bound to a direct
-   *  call to a destructive function, optionally `try`-wrapped. `[call]` for a
-   *  direct call, `[tryExpr, call]` for a `try` call, because the walk yields
-   *  both. `[]` for anything else: bare calls, nested calls, access chains,
-   *  non-innermost block targets. */
-  private trackedCall(stmt: AgencyNode): AgencyNode[] {
+  /** The value of a tracked assignment: a simple local bound to a direct
+   *  call to a destructive function, optionally `try`-wrapped. Null for
+   *  anything else: bare calls, nested calls, access chains, non-innermost
+   *  block targets. */
+  private trackedCall(stmt: AgencyNode): AgencyNode | null {
     if (stmt.type !== "assignment") {
-      return [];
+      return null;
     }
     const asn = stmt as Assignment;
     if (asn.pattern || asn.accessChain || asn.blockDepth || !asn.variableName) {
-      return [];
+      return null;
     }
     const value = asn.value as AgencyNode & { call?: AgencyNode };
-    if (value?.type === "functionCall" && this.names.isDestructiveCall(value)) {
-      return [value];
-    }
-    if (
-      value?.type === "tryExpression" &&
-      value.call?.type === "functionCall" &&
-      this.names.isDestructiveCall(value)
-    ) {
-      return [value, value.call];
-    }
-    return [];
+    const isCall =
+      value?.type === "functionCall" ||
+      (value?.type === "tryExpression" && value.call?.type === "functionCall");
+    return isCall && this.names.isDestructiveCall(value) ? value : null;
   }
 
-  /** Every destructive call under `stmt`, with the statement of the first
-   *  nested body on its path (`root`). `root` is null when the call sits in
-   *  `stmt`'s own expressions or under an inline handler body, which
-   *  `processHandleBlockWithSteps` compiles statement by statement with no
-   *  flips. Every other body is compiled by `processBodyAsParts`, which gives
-   *  `root` flips of its own. docs/dev/language/destructive-regions.md. */
-  private callSites(stmt: AgencyNode): { call: AgencyNode; root: AgencyNode | null }[] {
+  /** The destructive calls `stmt` owns: the ones in its own expressions.
+   *  A call inside one of its statement bodies belongs to the statement in
+   *  that body, and every body flips its own statements, stepped
+   *  (`processBodyAsParts`) or plain (`plainFlip`).
+   *  docs/dev/language/destructive-regions.md. */
+  private ownedCalls(stmt: AgencyNode): AgencyNode[] {
     return walkNodesArray([stmt])
-      .filter(({ node }) => this.names.isDestructiveCall(node))
-      .map(({ node, ancestors }) => ({ call: node, root: nestedBodyRoot([...ancestors, node]) }));
+      .filter(({ node, ancestors }) => {
+        return this.names.isDestructiveCall(node) && !inNestedBody([...ancestors, node]);
+      })
+      .map(({ node }) => node);
   }
 }
 
-/** Walks a root-first ancestor chain to the first step into a statement
- *  body. Returns the statement entered, or null when there is none or the
- *  body is an inline handler body. */
-function nestedBodyRoot(chain: WalkAncestor[]): AgencyNode | null {
+/** True when `call` is the tracked value or, for `try f()`, its inner
+ *  call: the walk yields both nodes. */
+function isTracked(call: AgencyNode, tracked: AgencyNode | null): boolean {
+  return tracked !== null && (call === tracked || call === (tracked as { call?: AgencyNode }).call);
+}
+
+/** True when the last node of a root-first ancestor chain sits in a
+ *  statement body below the root. A flattened else-if does not count,
+ *  because codegen compiles its condition as part of the parent `if`. */
+function inNestedBody(chain: WalkAncestor[]): boolean {
   for (let i = 0; i + 1 < chain.length; i++) {
     const parent = chain[i] as AgencyNode;
     const child = chain[i + 1] as AgencyNode;
-    const slot = bodySlots(parent).find((candidate) => candidate.body.includes(child));
-    if (slot) {
-      return isInlineHandlerBody(parent, slot.body) ? null : child;
+    if (parent.type === "ifElse" && flattenedElseIf(parent as IfElse) === child) {
+      continue;
+    }
+    if (bodySlots(parent).some((slot) => slot.body.includes(child))) {
+      return true;
     }
   }
-  return null;
-}
-
-function isInlineHandlerBody(stmt: AgencyNode, body: AgencyNode[]): boolean {
-  if (stmt.type !== "handleBlock") {
-    return false;
-  }
-  const handler = (stmt as HandleBlock).handler;
-  return handler.kind === "inline" && handler.body === body;
+  return false;
 }

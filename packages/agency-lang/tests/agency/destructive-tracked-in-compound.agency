@@ -263,3 +263,41 @@ node pipeInLoop_() {
   }
   return "unexpected"
 }
+
+// Codegen folds an else-if into its parent `if`, so a call hoisting leaves
+// in the else-if condition belongs to the parent, which flips before it.
+def elseIfAndRight(): Result<string> {
+  if (false) {
+    return failure("first")
+  } else if (true && burn() > 0) {
+    return failure("inside")
+  }
+  return failure("after")
+}
+node elseIfAndRight_() {
+  const r = elseIfAndRight()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The finalize body flips its own statements, and it only runs on an abort,
+// so a clean refusal in the block leaves the caller clean.
+def finalizeInBlock(): Result<string> {
+  run() {
+    const s = saveOne("bad")
+
+    finalize {
+      burn()
+    }
+  }
+  return failure("after")
+}
+node finalizeInBlock_() {
+  const r = finalizeInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

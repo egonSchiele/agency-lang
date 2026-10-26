@@ -164,6 +164,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "elseIfAndRight_",
+      "description": "a destructive call on the right of && in an else-if condition marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "finalizeInBlock_",
+      "description": "a destructive call in a block's finalize that never runs leaves a clean refusal clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

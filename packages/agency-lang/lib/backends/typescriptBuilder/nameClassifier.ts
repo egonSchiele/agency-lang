@@ -2,7 +2,6 @@ import { declaredName } from "../../types/hole.js";
 import type { AgencyNode } from "../../types.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import { getImportedNames } from "../../types/importStatement.js";
-import { walkNodesArray } from "../../utils/node.js";
 
 /**
  * Plain JS functions that bypass the `__call` dispatcher and are invoked
@@ -145,12 +144,6 @@ export class NameClassifier {
     // `toString`/`constructor` would otherwise match an inherited prototype
     // member on the plain destructiveFunctions object.
     return name !== undefined && Object.hasOwn(this.compilationUnit.destructiveFunctions, name);
-  }
-
-  /** True if any function call within `node` targets a function marked
-   *  `destructive`. */
-  containsDestructiveCall(node: AgencyNode): boolean {
-    return walkNodesArray([node]).some(({ node: subNode }) => this.isDestructiveCall(subNode));
   }
 
   /**

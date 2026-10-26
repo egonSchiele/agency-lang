@@ -122,7 +122,8 @@ export type CompilationUnit = {
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
   /** Local names (defs + imports + re-exports) marked `destructive`. Read
-   *  by codegen's containsDestructiveCall to track destructive execution. */
+   *  by codegen's `NameClassifier.isDestructiveCall` to track destructive
+   *  execution. */
   destructiveFunctions: Record<string, boolean>;
   /** Local names marked `idempotent`. Populated for symmetry with
    *  `destructiveFunctions`, but idempotent has NO codegen role today: the

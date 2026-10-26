@@ -156,10 +156,11 @@ export def spillTools(): any[] {
   """
   Return the two tools that read saved tool output back: readSpill for the
   whole text or a slice of lines, grepSpill to search it. A long command
-  output or a long fetched page is saved in the run and the model gets a
-  preview naming it (std::spill). shellTools() already includes these;
-  add spillTools() to an agent that fetches pages without it. They raise
-  no interrupt: the output was already in the conversation the name
+  output is saved in the run and the model gets a preview naming it
+  (std::spill); so is any long tool result, such as a fetched page, when
+  the llm() call sets spillToolResultsOver. shellTools() already includes
+  these; add spillTools() to an agent that fetches pages without it. They
+  raise no interrupt: the output was already in the conversation the name
   arrived in.
   """
   return [readSpill, grepSpill]

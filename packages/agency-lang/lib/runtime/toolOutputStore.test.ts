@@ -104,4 +104,22 @@ describe("toolOutputStore", () => {
     const notice = outputNotice("first\nsecond", "n.log", null, DEFAULT_READERS);
     expect(notice).toContain("--- first 2 lines ---\nfirst\nsecond\n--- last 0 lines ---");
   });
+
+  it("shrinks the preview to fit a limit, keeping the name and how to read it", () => {
+    const text = Array.from({ length: 5000 }, (_, index) => `line ${index}`).join("\n");
+    const full = outputNotice(text, "n.log", null, DEFAULT_READERS);
+    const fitted = outputNotice(text, "n.log", null, DEFAULT_READERS, 600);
+    expect(fitted.length).toBeLessThanOrEqual(600);
+    expect(fitted).toContain("--- full output saved as n.log ---");
+    expect(fitted).toContain('readSpill(filename: "n.log")');
+    const headCount = (notice: string) => Number(/--- first (\d+) lines ---/.exec(notice)![1]);
+    expect(headCount(fitted)).toBeGreaterThan(0);
+    expect(headCount(fitted)).toBeLessThan(headCount(full));
+  });
+
+  it("shows no preview when the text around it already fills the limit", () => {
+    const text = "line\n".repeat(600);
+    const notice = outputNotice(text, "n.log", null, DEFAULT_READERS, 100);
+    expect(notice).toContain("--- first 0 lines ---\n\n--- last 0 lines ---");
+  });
 });

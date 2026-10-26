@@ -11,7 +11,7 @@
   oracle to judge one thing; ask the explorer to survey many.
 */
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { llmOptions, withContext } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
   readOnlyFileTools,
   agencyCodeTools,
@@ -114,6 +114,7 @@ def consider(
     model: model,
     provider: provider,
     tools: buildTools().concat(extraTools).concat([saveDraft]),
+    spillToolResultsOver: AGENT_SPILL_OVER,
     hostedTools: hostedSearchTools(model, provider),
     reasoningEffort: "high",
     thinking: true,

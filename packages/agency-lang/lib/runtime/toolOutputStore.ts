@@ -25,9 +25,9 @@ const STORE_KEY = "__toolOutput";
 export const MAX_STORE_CHARS = 1_000_000;
 
 /** Characters of preview, newlines included, taken from each end of a long
- *  output. Two of these plus the notice around them stay near 2000, so a
- *  preview is never longer than the output it replaces would have been
- *  when cut. */
+ *  output. Two of these plus the notice around them stay near 2000, under
+ *  `safeBash`'s own limit. A tool loop with a smaller `maxToolResultChars`
+ *  passes it to `outputNotice`, which shrinks the preview to fit. */
 export const PREVIEW_CHARS = 700;
 
 /** Longest line the preview shows before cutting it. */
@@ -127,28 +127,30 @@ function cutLine(line: string): string {
   return line.length > PREVIEW_LINE_LEN ? line.slice(0, PREVIEW_LINE_LEN) + "…" : line;
 }
 
-/** Lines from the start until the preview budget is spent. Always at least
- *  one line, so a single enormous line still shows its beginning. */
-function previewHead(lines: string[]): string[] {
+/** Lines from the start until `budget` characters are spent. At the
+ *  default budget the first line always fits, because `cutLine` keeps it
+ *  under `PREVIEW_LINE_LEN`, so a single enormous line still shows its
+ *  beginning. Under a small budget the preview can be empty. */
+function previewHead(lines: string[], budget: number): string[] {
   const out: string[] = [];
   let used = 0;
   for (const line of lines) {
     const shown = cutLine(line);
-    if (out.length > 0 && used + shown.length + 1 > PREVIEW_CHARS) return out;
+    if (used + shown.length + 1 > budget) return out;
     out.push(shown);
     used += shown.length + 1;
   }
   return out;
 }
 
-/** Lines from the end until the preview budget is spent, never reaching
+/** Lines from the end until `budget` characters are spent, never reaching
  *  back into the lines the head already showed. */
-function previewTail(lines: string[], skip: number): string[] {
+function previewTail(lines: string[], skip: number, budget: number): string[] {
   const out: string[] = [];
   let used = 0;
   for (let index = lines.length - 1; index >= skip; index--) {
     const shown = cutLine(lines[index]);
-    if (out.length > 0 && used + shown.length + 1 > PREVIEW_CHARS) return out;
+    if (used + shown.length + 1 > budget) return out;
     out.unshift(shown);
     used += shown.length + 1;
   }
@@ -159,29 +161,38 @@ function previewTail(lines: string[], skip: number): string[] {
  * The preview that stands in for a long output: what happened, a glimpse of
  * both ends, the name it was saved under, and how to read the rest with
  * `readers`. `exitCode` is null for a tool result that is not a command's
- * output.
+ * output. The preview shrinks so the notice fits in `maxChars`; only when
+ * the text around the preview is longer than that on its own does the
+ * notice come out longer, and the caller cuts it.
  */
 export function outputNotice(
   text: string,
   name: string,
   exitCode: number | null,
   readers: SpillReaders,
+  maxChars: number = Infinity,
 ): string {
   const lines = text.split("\n");
-  const head = previewHead(lines);
-  const tail = previewTail(lines, head.length);
   const exit = exitCode === null ? "" : ` Command exited with code ${exitCode}.`;
   const search =
     readers.grep === null
       ? " It needs no approval."
       : ` To search it, use ${readers.grep}(pattern, filename: "${name}"). Neither needs approval.`;
-  return [
-    `[Output too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
-    `--- first ${head.length} lines ---`,
-    head.join("\n"),
-    `--- last ${tail.length} lines ---`,
-    tail.join("\n"),
-    `--- full output saved as ${name} ---`,
-    `To read it, use the ${readers.read} tool: ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}`,
-  ].join("\n");
+  const notice = (head: string[], tail: string[], headCount: number, tailCount: number) =>
+    [
+      `[Output too long to return in full: ${lines.length} lines, ${text.length} characters.${exit}]`,
+      `--- first ${headCount} lines ---`,
+      head.join("\n"),
+      `--- last ${tailCount} lines ---`,
+      tail.join("\n"),
+      `--- full output saved as ${name} ---`,
+      `To read it, use the ${readers.read} tool: ${readers.read}(filename: "${name}"), with offset and limit to take a slice.${search}`,
+    ].join("\n");
+  // The line counts are not known until the preview is built, so the text
+  // around it is measured with both at their largest.
+  const around = notice([], [], lines.length, lines.length).length;
+  const budget = Math.min(PREVIEW_CHARS, Math.floor((maxChars - around) / 2));
+  const head = previewHead(lines, budget);
+  const tail = previewTail(lines, head.length, budget);
+  return notice(head, tail, head.length, tail.length);
 }

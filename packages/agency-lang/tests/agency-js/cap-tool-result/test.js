@@ -69,9 +69,10 @@ const out = {
   reportsOriginalLength: content.includes("of 500"),
   preservesPrefix: content.startsWith(PREFIX),
   shorterThanFull: content.length < 500,
+  withinCap: content.length <= 200,
 };
 
 if (!out.truncated) throw new Error("tool message not truncated: " + content.slice(0, 80));
-if (!out.shorterThanFull) throw new Error("tool message not capped, len=" + content.length);
+if (!out.withinCap) throw new Error("tool message over the cap, len=" + content.length);
 
 writeFileSync("__result.json", JSON.stringify(out, null, 2));

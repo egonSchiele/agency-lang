@@ -95,12 +95,13 @@ def noticeInThread(): string {
 
 node overCapToolResultIsKept() {
   // The mock calls longPage, which returns about 38,000 characters against
-  // a 20,000 cap. The loop saves it whole and the model gets a notice. The
-  // node then reads the saved text back by the name in that notice, which
-  // is what the model would do with readSpill.
+  // a spill value of 20,000, under the default 100,000 limit. The loop saves
+  // it whole and the model gets a notice. The node then reads the saved text
+  // back by the name in that notice, which is what the model would do with
+  // readSpill.
   llm("read the page", {
     tools: [longPage, readSpill, grepSpill],
-    maxToolResultChars: 20000
+    spillToolResultsOver: 20000
   })
   const notice = noticeInThread()
   const name = spilledName(notice)
@@ -125,6 +126,34 @@ def toolMessageInThread(): string {
   return ""
 }
 
+node readersWithoutSpillAreCut() {
+  // Offering the readers does not turn spilling on: without
+  // spillToolResultsOver, a result over the cap is cut.
+  llm("read the page", {
+    tools: [longPage, readSpill, grepSpill],
+    maxToolResultChars: 20000
+  })
+  const content = toolMessageInThread()
+  return [
+    content.includes("[tool result truncated: showing"),
+    content.includes("full output saved as"),
+  ]
+}
+
+def spillWithoutReaders(): string {
+  return llm("read the page", {
+    tools: [longPage],
+    spillToolResultsOver: 20000
+  })
+}
+
+node spillWithoutReadersFails() {
+  // Spilling with no readSpill offered is refused before the request: the
+  // model could never read a saved result back.
+  const result = spillWithoutReaders()
+  return [isFailure(result), isFailure(result) && result.error.includes("readSpill")]
+}
+
 node overCapResultWithoutReadersIsCut() {
   // With no readSpill offered, nothing saved could be read back, so the
   // loop cuts the result at the cap.
@@ -134,7 +163,7 @@ node overCapResultWithoutReadersIsCut() {
   })
   const content = toolMessageInThread()
   return [
-    content.includes("[tool result truncated: showing 20000 of"),
+    content.includes("[tool result truncated: showing"),
     content.includes("full output saved as"),
   ]
 }

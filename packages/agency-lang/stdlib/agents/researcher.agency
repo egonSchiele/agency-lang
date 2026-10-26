@@ -18,7 +18,7 @@
 */
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { llmOptions, withContext } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, spillTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { reviewAgent } from "std::agents/review"
 import { now } from "std::date"
@@ -224,6 +224,7 @@ def researchLoop(
           model: model,
           provider: provider,
           tools: tools,
+          spillToolResultsOver: AGENT_SPILL_OVER,
           hostedTools: hostedTools,
           // A research run is many searches and fetches; the default ten
           // rounds end it before the sources are in.
@@ -255,6 +256,7 @@ def researchLoop(
             model: model,
             provider: provider,
             tools: tools,
+            spillToolResultsOver: AGENT_SPILL_OVER,
             hostedTools: hostedTools,
             maxToolCallRounds: FIX_ROUNDS
           ),

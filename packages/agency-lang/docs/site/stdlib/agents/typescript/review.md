@@ -33,7 +33,7 @@ export type TsReviewEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/typescript/review.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/typescript/review.agency#L229))
 
 ## Functions
 
@@ -105,4 +105,4 @@ Review TypeScript code for readability and architecture and return
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/typescript/review.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/typescript/review.agency#L150))

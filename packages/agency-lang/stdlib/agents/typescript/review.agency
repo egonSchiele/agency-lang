@@ -11,7 +11,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions, withContext, docsOnlyHandler } from "std::agents/lib/shared"
 import {
   communicationTools,
   readOnlyFileTools,
@@ -141,6 +141,7 @@ Return a list of feedback items.
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools).concat([saveDraft]),
+      spillToolResultsOver: AGENT_SPILL_OVER,
       hostedTools: hostedSearchTools(model, provider),
     ),
   )

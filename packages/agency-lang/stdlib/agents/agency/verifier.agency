@@ -6,7 +6,7 @@
 */
 import { runCode } from "std::agency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
-import { llmOptions } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, readOnlyGitTools, shellTools } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -53,6 +53,7 @@ ${data}
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools).concat([saveDraft]),
+      spillToolResultsOver: AGENT_SPILL_OVER,
     ),
   )
 }

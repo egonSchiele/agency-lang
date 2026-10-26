@@ -23,7 +23,7 @@
     },
     {
       "nodeName": "overCapToolResultIsKept",
-      "description": "a tool result over maxToolResultChars is saved whole and the model gets a notice naming readSpill; the saved text reads back by that name, whole and by grep",
+      "description": "a tool result over spillToolResultsOver is saved whole, though under maxToolResultChars, and the model gets a notice naming readSpill; the saved text reads back by that name, whole and by grep",
       "input": "",
       "expectedOutput": "[true,38890,1]",
       "evaluationCriteria": [{ "type": "exact" }],
@@ -32,6 +32,27 @@
         { "toolCalls": [{ "name": "longPage" }] },
         { "return": "done" }
       ]
+    },
+    {
+      "nodeName": "readersWithoutSpillAreCut",
+      "description": "offering readSpill without spillToolResultsOver does not save anything: a result over maxToolResultChars is cut with the truncation marker",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "longPage" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "spillWithoutReadersFails",
+      "description": "spillToolResultsOver with no readSpill in the tools is refused before the request, as a failure naming readSpill",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
     },
     {
       "nodeName": "overCapResultWithoutReadersIsCut",

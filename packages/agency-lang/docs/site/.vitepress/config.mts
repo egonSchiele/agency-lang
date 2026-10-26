@@ -71,7 +71,6 @@ export default defineConfig({
           items: [
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
-            { text: "Decorators", link: "/guide/decorators" },
             { text: "List Comprehensions", link: "/guide/comprehensions" },
             { text: "Match Expressions", link: "/guide/match-expressions" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
@@ -158,6 +157,7 @@ export default defineConfig({
           text: "09. Advanced",
           items: [
             { text: "Callbacks", link: "/guide/callbacks" },
+            { text: "Decorators", link: "/guide/decorators" },
             { text: "Partial Results", link: "/guide/partial-results" },
             {
               text: "Agency Packages",
@@ -195,6 +195,7 @@ export default defineConfig({
           items: [
             { text: "VSCode Extension", link: "/guide/vscode-extension" },
             { text: "Using Local Models", link: "/guide/using-local-models" },
+            { text: "Parameter Aliases", link: "/guide/parameter-aliases" },
             {
               text: "Agency vs TypeScript",
               link: "/guide/agency-vs-typescript",

@@ -29,6 +29,9 @@ import { recordLikeKeyValue } from "./recordLike.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { diagnostic } from "./diagnostics.js";
 import { expressionChildren } from "../utils/node.js";
+import { expressionSlots } from "../utils/expressionSlots.js";
+import { bodySlots } from "../utils/bodySlots.js";
+import { typeKey } from "./typeKey.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -138,10 +141,22 @@ export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeChecker
   const existingType = node.declKind
     ? scope.lookupInFunction(node.variableName)
     : scope.lookup(node.variableName);
-  const isConst = node.declKind === "const";
+  // A `let`/`const` whose name a block parameter already uses shares that
+  // parameter's binding (see sharedBlockParamType). The binding is not
+  // treated as const, because it also holds the parameter.
+  const sharesBlockParam =
+    node.declKind !== undefined &&
+    existingType !== undefined &&
+    scope.isBlockParam(node.variableName);
+  const isConst = node.declKind === "const" && !sharesBlockParam;
 
   if (newType) {
     validateTypeReferences(newType, node.variableName, ctx.getTypeAliases(), ctx.errors, node.loc);
+    if (sharesBlockParam) {
+      const declared = resultTypeForValidation(newType, node.validated);
+      scope.declare(node.variableName, sharedBlockParamType(existingType, declared, ctx));
+      return;
+    }
     if (existingType) {
       reportNotAssignable(ctx, node.variableName, newType, existingType, node.loc);
     }
@@ -162,6 +177,11 @@ export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeChecker
   // second, and the live one must set the type.
   const declaredInDeadBranch =
     node.declKind !== undefined && existingType !== undefined && isNever(existingType);
+  if (sharesBlockParam) {
+    const inferred = widenType(synthType(node.value, scope, ctx));
+    scope.declare(node.variableName, sharedBlockParamType(existingType, inferred, ctx));
+    return;
+  }
   if (existingType && !declaredInDeadBranch) {
     return;
   }
@@ -386,6 +406,70 @@ function importedValueType(name: string, ctx: TypeCheckerContext): VariableType 
 }
 
 /**
+ * Blocks do not have scopes of their own yet, so a block parameter shares one
+ * binding with every other variable of the same name in the function: another
+ * block's parameter, a function parameter, or a local. When their types
+ * differ, no single type is right for every use, so the binding becomes `any`.
+ * For example, `onNum() as x { ... }` followed by `onStr() as x { ... }` makes
+ * `x` an `any`. Without this, the last declaration's type would be used to
+ * check the code that belongs to the others.
+ */
+function sharedBlockParamType(
+  existing: VariableType | undefined,
+  incoming: VariableType,
+  ctx: TypeCheckerContext,
+): VariableType {
+  if (existing === undefined) return incoming;
+  const aliases = ctx.getTypeAliases();
+  return typeKey(existing, aliases) === typeKey(incoming, aliases) ? incoming : ANY_T;
+}
+
+/**
+ * True for a value that owns statement bodies the scope walk must enter
+ * itself: a `thread { }` used as a value, and a `match` used as a value (its
+ * arms). Statements reach their bodies through walkScopeBody's switch, and a
+ * call's trailing block is handled in walkExpressionBlocks.
+ */
+function isValueWithBodies(node: AgencyNode): boolean {
+  return node.type === "messageThread" || node.type === "matchBlock";
+}
+
+/** Collect declarations from statement bodies owned by expressions. */
+function walkExpressionBlocks(
+  node: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+  isStatement: boolean = false,
+): void {
+  for (const { expr } of expressionSlots(node)) {
+    walkExpressionBlocks(expr, scope, ctx);
+  }
+  if (node.type === "functionCall") {
+    // Leave inline callbacks in expressions to synthesis; see
+    // synthBlockReturnType in synthesizer.ts for array callback scopes.
+    if (!node.block || (node.block.inline && !isStatement)) {
+      return;
+    }
+    const slot = getBlockSlot(node.functionName, ctx);
+    node.block.params.forEach((param, index) => {
+      const slotType = slot?.params[index]?.typeAnnotation;
+      // typeHint is reserved for future typed block-parameter syntax.
+      const paramType = param.typeHint ?? slotType ?? ANY_T;
+      const existing = scope.lookupInFunction(param.name);
+      scope.declareBlockParam(param.name, sharedBlockParamType(existing, paramType, ctx));
+    });
+    walkScopeBody(node.block.body, scope, ctx);
+    return;
+  }
+  if (isStatement || !isValueWithBodies(node)) {
+    return;
+  }
+  for (const { body } of bodySlots(node)) {
+    walkScopeBody(body, scope, ctx);
+  }
+}
+
+/**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks using the same scope, which preserves today's
  * function-scoped semantics — declarations leak out of nested blocks.
@@ -401,6 +485,7 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
     // expressionChildren, so a recursive walkScopeBody call would report
     // const mutations twice.
     const node = raw.type === "withModifier" ? raw.statement : raw;
+    walkExpressionBlocks(node, scope, ctx, true);
     switch (node.type) {
       case "assignment":
         declareVariable(node, scope, ctx);
@@ -527,21 +612,6 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
           }
           scope.declare(node.handler.param.name, node.handler.param.typeHint ?? ANY_T);
           walkScopeBody(node.handler.body, scope, ctx);
-        }
-        break;
-      case "functionCall":
-        if (node.block) {
-          // Block params today have no syntax for an explicit type annotation,
-          // so the type comes from the matching slot in the callee's
-          // `blockType` param (when present), falling back to `any`. The
-          // `param.typeHint` branch is dead code that anticipates a future
-          // typed-block-param syntax.
-          const slot = getBlockSlot(node.functionName, ctx);
-          node.block.params.forEach((param, i) => {
-            const slotType = slot?.params[i]?.typeAnnotation;
-            scope.declare(param.name, param.typeHint ?? slotType ?? ANY_T);
-          });
-          walkScopeBody(node.block.body, scope, ctx);
         }
         break;
     }

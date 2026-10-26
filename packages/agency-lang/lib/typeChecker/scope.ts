@@ -19,6 +19,8 @@ export class Scope {
   // (losing the binding and mutating the map) instead of storing an entry.
   private readonly vars: Record<string, ScopeType> = Object.create(null);
   private readonly consts: Record<string, boolean> = Object.create(null);
+  /** Names declared by a trailing block's parameters (`f() as x { ... }`). */
+  private readonly blockParams: string[] = [];
   /** Narrowed member paths (`request.subject`), keyed by `referenceKey`. */
   private readonly paths: Record<string, ScopeType> = Object.create(null);
   private readonly isFunctionBoundary: boolean;
@@ -68,6 +70,25 @@ export class Scope {
     target.vars[name] = type;
     if (isConst) target.consts[name] = true;
     target.bumpGeneration();
+  }
+
+  /**
+   * Declare a trailing block's parameter. Like `declare`, it writes to the
+   * nearest function scope, because blocks do not get scopes of their own
+   * yet. The name is remembered so a later declaration of the same name can
+   * tell it is sharing a binding with a block parameter (see
+   * `sharedBlockParamType` in scopes.ts).
+   */
+  declareBlockParam(name: string, type: ScopeType): void {
+    const target = this.functionScope();
+    target.vars[name] = type;
+    delete target.consts[name];
+    if (!target.blockParams.includes(name)) target.blockParams.push(name);
+    target.bumpGeneration();
+  }
+
+  isBlockParam(name: string): boolean {
+    return this.functionScope().blockParams.includes(name);
   }
 
   /**

@@ -25,6 +25,74 @@ function withCode(errors: TypeCheckError[], name: string): TypeCheckError[] {
   return errors.filter((error) => error.name === name);
 }
 
+describe("decorated body scopes", () => {
+  const config = {
+    typechecker: { enabled: true, undefinedVariables: "error", undefinedFunctions: "error" },
+  } as const;
+  const logged = "decorator def logged(call, block) { return block(call.args) }\n";
+
+  it.each([
+    ["single decorator", "@logged", "def"],
+    ["stacked decorators", "@logged\n@logged", "def"],
+    ["handoff function", "@logged", "export handoff def"],
+  ])("resolves const and let locals for %s", (_label, tags, marker) => {
+    const source = `${logged}${tags}
+${marker} greet(name: string): string {
+  const greeting = "hello \${name}"
+  let result = greeting
+  return result
+}
+`;
+    expect(typecheckSource(source, config)).toEqual([]);
+  });
+
+  it("resolves locals in nested branches, destructive regions, and fork blocks", () => {
+    const source = `${logged}@logged
+def greet(name: string): string {
+  let result = name
+  if (name == "ada") {
+    const suffix = "!"
+    result = result + suffix
+  }
+  destructive {
+    const ending = "."
+    result = result + ending
+  }
+  const values = fork([result]) as value {
+    const greeting = "hello \${value}"
+    return greeting
+  }
+  return values[0]
+}
+`;
+    expect(typecheckSource(source, config)).toEqual([]);
+  });
+
+  it("still reports a missing name at its original source location", () => {
+    const source = `${logged}@logged
+def greet(): string {
+  const greeting = "hello"
+  return greeting + missing
+}
+`;
+    const errors = typecheckSource(source, config);
+    expect(errors.map((error) => error.code)).toEqual(["AG4007"]);
+    expect(errors[0].loc?.line).toBe(lineOf(source, "return greeting + missing"));
+    expect(errors[0].message).toContain("'missing'");
+  });
+
+  it("reports reassignment to a decorated body's const once", () => {
+    const source = `${logged}@logged
+def greet(): string {
+  const greeting = "hello"
+  greeting = "goodbye"
+  return greeting
+}
+`;
+    expect(typecheckSource(source, config).map((error) => error.code)).toEqual(["AG4005"]);
+  });
+});
+
 describe("decorators in the checker", () => {
   it("reports AG6044 at a tag on a plain def when the checker runs on its own", () => {
     const src =

@@ -122,9 +122,8 @@ export class NameClassifier {
   }
 
   /** The function name a call-bearing node targets, if any. Handles a plain
-   *  `functionCall` and the `try f()` case (`walkNodes` yields the
-   *  tryExpression node but does not descend into its `.call`, so the common
-   *  `return try _extern(...)` stdlib pattern would otherwise be missed). */
+   *  `functionCall` and the `try f()` case. `walkNodes` yields the
+   *  tryExpression and then its `.call`, so a `try` call matches twice. */
   private callTarget(subNode: AgencyNode): string | undefined {
     if (subNode.type === "functionCall") {
       return subNode.functionName;
@@ -140,9 +139,11 @@ export class NameClassifier {
 
   /** Recursively walks `node` and returns true if any function call within
    *  it targets a function marked `destructive`; reads the destructiveFunctions
-   *  registry. */
-  containsDestructiveCall(node: AgencyNode): boolean {
+   *  registry. `except` lists call nodes to ignore: calls a nested body's own
+   *  post-flip already covers. */
+  containsDestructiveCall(node: AgencyNode, except: AgencyNode[] = []): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
+      if (except.includes(subNode)) continue;
       const name = this.callTarget(subNode);
       // Object.hasOwn, not a truthy index: a call to a function named
       // `toString`/`constructor` would otherwise match an inherited prototype

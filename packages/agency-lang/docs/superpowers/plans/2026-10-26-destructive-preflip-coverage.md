@@ -25,7 +25,7 @@ For a call to a destructive function, the compiler emits one of two flips:
 
 The two rules are applied by one function, `statementFlips` in `lib/backends/typescriptBuilder/destructiveTracking.ts`, and `processBodyAsParts` in `lib/backends/typescriptBuilder.ts` calls it for every statement of every body it compiles. Bodies nest: the body of a loop is compiled by `processBodyAsParts` too, so a `const saved = saveOne(item)` inside the loop gets its own precise post-flip.
 
-One more fact shapes what the pre-flip is really for. Codegen runs on the preprocessed tree, and the hoisting pass (`docs/dev/compiler/hoist-calls.md`) moves a call out of a `for` iterable or an `if` condition into its own statement before the compound one. Verified with `pnpm run preprocess` on a scratch file: `for (x in items())` reaches codegen as `const __hoist_0 = items()` followed by `for (x in __hoist_0)`, and `if (burn() > 0)` becomes `const __hoist_1 = burn()` followed by `if (__hoist_1 > 0)`. Those hoisted temps are plain local assignments, so they get the precise post-flip like any other. Hoisting leaves some positions alone because moving a call out of them would change when it runs: the right side of `&&` and `||`, a `catch` expression, a `try` operand, and the statement under a `with` modifier. Those, plus bare call statements, calls nested in other expressions, and destructured assignments, are where the pre-flip still does real work.
+One more fact shapes what the pre-flip is really for. Codegen runs on the preprocessed tree, and the hoisting pass (`docs/dev/compiler/hoist-calls.md`) moves a call out of a `for` iterable or an `if` condition into its own statement before the compound one. Verified with `pnpm run preprocess` on a scratch file: `for (x in items())` reaches codegen as `const __hoist_0 = items()` followed by `for (x in __hoist_0)`, and `if (burn() > 0)` becomes `const __hoist_1 = burn()` followed by `if (__hoist_1 > 0)`. Those hoisted temps are plain local assignments, so they get the precise post-flip like any other. Hoisting leaves some positions alone because moving a call out of them would change when it runs: the right side of `&&` and `||`, a `catch` expression, a `try` operand, and the statement under a `with` modifier. Those, plus bare call statements and calls nested in other expressions, are where the pre-flip still does real work. A destructured assignment is not one of them: the parser lowers `const [a, b] = burn()` to `const __tmp_N = burn()` plus element reads, so the call is a tracked assignment.
 
 ## The bug
 
@@ -70,7 +70,7 @@ The same thing happens for an `if`, `while`, `match` arm, `handle` body, `thread
 1. It is the value of a plain local assignment, with the same shape `destructiveOutcomeVar` already accepts: no destructuring pattern, no access chain, no block depth, a direct call or a `try`-wrapped call.
 2. That assignment sits in a body `processBodyAsParts` compiles, so it will get its own post-flip. Every body slot from `bodySlots` qualifies **except an inline handler body** (`with (intr) { ... }`). `processHandleBlockWithSteps` compiles that body statement by statement with `processStatement`, so nothing in it gets a flip.
 
-Any destructive call that is not covered keeps the pre-flip: a bare call statement, a call on the right side of `&&` or `||`, a call nested in any other expression, a destructured assignment, and anything inside an inline handler body. A statement that mixes a covered call and an uncovered one still gets the pre-flip. That mixed case is rare and the conservative answer is the safe one.
+Any destructive call that is not covered keeps the pre-flip: a bare call statement, a call on the right side of `&&` or `||`, a call nested in any other expression, and anything inside an inline handler body. A statement that mixes a covered call and an uncovered one still gets the pre-flip. That mixed case is rare and the conservative answer is the safe one.
 
 One limitation to write down so nobody files it as a bug: the same constructs in value position keep the pre-flip. `const t = thread { const r = rm(x) }` and `const x = run() { const r = rm(x) }` are assignments, `bodySlots` returns nothing for an assignment, so the inner tracked call is never collected. That direction is safe, only conservative.
 
@@ -99,10 +99,10 @@ Inputs the issue does not name, each pinned by a test in the task that owns it:
 
 1. A tracked assignment inside an inline handler body must still produce the pre-flip on the `handle` statement, or the flag fails open. Task 1 unit test, and `handlerDoesWork_` in `tests/agency/destructive-in-blocks.agency` already pins the runtime result.
 2. A destructive call on the right side of `&&` inside a loop body must keep the pre-flip. Hoisting leaves that position alone, so the pre-flip is the only flip that covers it. Task 1 unit test, Task 2 runtime test.
-6. A clean refusal under `const r = rm(x) with approve` must report `false`, since the `with` statement loses its pre-flip and the inner post-flip must carry it. Task 1 unit test, Task 2 runtime test.
-3. A compound statement with one covered call and one uncovered call must keep the pre-flip. Task 1 unit test.
-4. A destructured assignment, `const [a, b] = burn()`, is not tracked and must keep the pre-flip even inside a loop body. Task 1 unit test.
-5. The second iteration of a loop must still mark the function when the first iteration did destructive work and a later one fails. Task 2 runtime test. This proves the post-flip is carrying the load once the pre-flip is gone.
+3. A clean refusal under `const r = rm(x) with approve` must report `false`, since the `with` statement loses its pre-flip and the inner post-flip must carry it. Task 1 unit test, Task 2 runtime test.
+4. A compound statement with one covered call and one uncovered call must keep the pre-flip. Task 1 unit test.
+5. A destructured assignment, `const [a, b] = burn()`, is lowered by the parser to a tracked temp, so inside a loop body it is covered. Task 1 unit test.
+6. The second iteration of a loop must still mark the function when the first iteration did destructive work and a later one fails. Task 2 runtime test. This proves the post-flip is carrying the load once the pre-flip is gone.
 
 ---
 
@@ -213,13 +213,15 @@ it("a bare destructive call inside a loop body keeps the pre-flip", () => {
   expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
 });
 
-it("a destructured assignment inside a loop body is not tracked and keeps the pre-flip", () => {
+it("a destructured assignment inside a loop body is covered", () => {
+  // The parser lowers `const [a, b] = pair()` to `const __tmp_N = pair()`
+  // plus element reads, so the call is a tracked assignment.
   const { tracking, body } = setup(
     `destructive def pair(): number[] { return [1, 2] }\n` +
       `def caller(xs: string[]) { for (x in xs) { const [a, b] = pair() } }`,
     "caller",
   );
-  expect(flips(tracking, body[0], false).pre).toBe("__activation.__destructiveRan = true;");
+  expect(flips(tracking, body[0], false)).toEqual({ pre: undefined, post: undefined });
 });
 
 it("a covered call next to an uncovered one keeps the pre-flip", () => {
@@ -407,7 +409,7 @@ Expected: pass.
 
 - [ ] **Step 3: Update the Rule 2 bullet in the dev doc**
 
-In `docs/dev/language/destructive-regions.md`, rewrite the second sentence of the Rule 2 bullet. Today it says "Any other statement containing a destructive call gets a conservative pre-flip before the statement." Replace it with text that says: any other destructive call gets a conservative pre-flip on the statement that contains it, **except** a call that a nested body's own post-flip already covers. Then say what covered means in one sentence (a plain local assignment of the call, inside a body `processBodyAsParts` compiles: an `if` branch, a loop body, a `match` arm, a `handle` body, a `thread` body, a `with` statement, a block argument) and name the one body that is never covered, an inline handler body, with the reason (`processHandleBlockWithSteps` compiles it statement by statement with no flips). Add one sentence on where the pre-flip still matters after hoisting: the right side of `&&` and `||`, a `catch` expression, a bare call, a call nested in another expression, a destructured assignment. Do not credit the pre-flip with a loop iterable or an `if` condition; the bullet's later clause "a destructive call in an `if` condition, a loop's iterable, or a handler body would be covered by nothing" must change to name a handler body and the right side of `&&` instead, because the hoisting pass turns an iterable or a condition into a tracked temp before codegen sees it. Keep the rest about `COMPOUND_STATEMENT_TYPES` as it is. Add `destructive-tracked-in-compound.agency` to the Tests line in the Files section.
+In `docs/dev/language/destructive-regions.md`, rewrite the second sentence of the Rule 2 bullet. Today it says "Any other statement containing a destructive call gets a conservative pre-flip before the statement." Replace it with text that says: any other destructive call gets a conservative pre-flip on the statement that contains it, **except** a call that a nested body's own post-flip already covers. Then say what covered means in one sentence (a plain local assignment of the call, inside a body `processBodyAsParts` compiles: an `if` branch, a loop body, a `match` arm, a `handle` body, a `thread` body, a `with` statement, a block argument) and name the one body that is never covered, an inline handler body, with the reason (`processHandleBlockWithSteps` compiles it statement by statement with no flips). Add one sentence on where the pre-flip still matters after hoisting: the right side of `&&` and `||`, a `catch` expression, a bare call, a call nested in another expression. Do not credit the pre-flip with a loop iterable or an `if` condition; the bullet's later clause "a destructive call in an `if` condition, a loop's iterable, or a handler body would be covered by nothing" must change to name a handler body and the right side of `&&` instead, because the hoisting pass turns an iterable or a condition into a tracked temp before codegen sees it. Keep the rest about `COMPOUND_STATEMENT_TYPES` as it is. Add `destructive-tracked-in-compound.agency` to the Tests line in the Files section.
 
 Also in `docs/dev/language/destructive-regions.md`, the "What this fixes" list says "a destructive call in a handler body, and one in an `if` condition (the pre-flip ordering above)". Change the `if` condition clause to say the hoisted temp's post-flip covers it.
 
@@ -451,7 +453,7 @@ Write the PR body to `$SCRATCH/pr.md`: what the bug was (two sentences), what ch
 Not part of this change, but found while reviewing it: `processBodyAsParts` takes a `continue` for pipe-chain statements before it calls `statementFlips` (`lib/backends/typescriptBuilder.ts:4356-4367`), so a pipe chain with a destructive stage gets no flip of its own. Open a GitHub issue that states that in two sentences, points at the line, and asks whether any other path marks the function for a destructive pipe stage. Do not fix it in this PR.
 
 ```bash
-git push -u origin adit/destructive-preflip-coverage
+git push -u origin adit/destructive-preflip-impl
 gh pr create --title "Skip the destructive pre-flip for calls a post-flip already covers" --body-file "$SCRATCH/pr.md"
 ```
 

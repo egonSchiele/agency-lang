@@ -1,0 +1,40 @@
+/** @module
+  @summary The coordinator's tool for llm() options. A tool runs in a
+  branch, and setLlmOptions there would change only that branch, so the
+  tool records a request and the REPL applies it after the turn.
+*/
+import { LlmOptions, checkLlmOptions } from "../../lib/llmOptions.agency"
+import { requestSessionLlmOptions } from "../../lib/session.agency"
+
+export def useLlmOptions(options: LlmOptions): string {
+  """
+  Set llm() options for the rest of this session, from the next turn.
+  They replace any options this session, its preset, or settings.json set;
+  pass {} to go back to those. A /model switch that changes a model drops
+  them. To keep them, save a preset with savePreset and the same
+  llmOptions.
+
+  Fields, each optional:
+  - openRouter.provider: which companies OpenRouter may send calls to, by
+    OpenRouter's names. { ignore: ["open-inference"] } avoids one;
+    { only: ["fireworks"], allowFallbacks: false } uses only one. Also
+    order, requireParameters, dataCollection ("allow" or "deny"), sort
+    ("price", "throughput", or "latency"), and quantizations (["fp8"]).
+  - rawAttributes: request fields Agency has no option for, sent as
+    given, e.g. { top_k: 5 }.
+  - thinking ({ enabled, budgetTokens }), temperature, replyLimits,
+    retries, timeout, validationRetries.
+
+  @param options - Only the fields the user asked for
+  """
+  const checked = checkLlmOptions(options)
+  if (checked is failure(reason)) {
+    return "Not set: ${reason}"
+  }
+  requestSessionLlmOptions(checked.value)
+  const fields = Object.keys(checked.value)
+  if (fields.length == 0) {
+    return "From the next turn this session uses the preset's or settings.json's options again."
+  }
+  return "From the next turn this session uses these options: ${fields.join(", ")}. A /model switch that changes a model drops them; savePreset with llmOptions keeps them."
+}

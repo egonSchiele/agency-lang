@@ -1,0 +1,22 @@
+import { LlmOptions } from "../../../lib/llmOptions.agency"
+import { takePendingLlmOptions } from "../../../lib/session.agency"
+import { useLlmOptions } from "../llmOptionTools.agency"
+
+node refusesAModelField(): string {
+  const options: any = { model: "x" }
+  const reply = useLlmOptions(options)
+  return "${reply.startsWith("Not set")} ${takePendingLlmOptions() == null}"
+}
+
+node recordsARequestForTheRepl(): string {
+  const options: LlmOptions = { openRouter: { provider: { ignore: ["open-inference"] } } }
+  const reply = useLlmOptions(options)
+  const first = takePendingLlmOptions()
+  const second = takePendingLlmOptions()
+  return "${reply.includes("openRouter")} ${JSON.stringify(first)} ${second == null}"
+}
+
+node anEmptyBlockGoesBack(): string {
+  const reply = useLlmOptions({})
+  return "${reply.includes("preset")} ${JSON.stringify(takePendingLlmOptions())}"
+}

@@ -41,6 +41,8 @@ import {
   parseModelsFilters,
   parsePresetName,
   switchPreset,
+  applySessionLlmOptions,
+  takePendingLlmOptions,
  } from "./session.agency"
 import { formatTurnFailure } from "./utils.agency"
 import { configureLocalModel, getResolvedSlots, currentProvider } from "../shared.agency"
@@ -329,8 +331,22 @@ def renameSlashCommand(title: string): boolean {
 def renderUserTurn(trimmed: string, msg: string): boolean {
   const result = try runTurn("", msg)
   renderAgentResponse(result)
+  applyPendingLlmOptions()
   markTurnDone()
   return true
+}
+
+// The coordinator's useLlmOptions tool records a request during the turn;
+// it is applied here, outside the tool's branch.
+def applyPendingLlmOptions() {
+  const pending = takePendingLlmOptions()
+  if (pending == null) {
+    return
+  }
+  _session = applySessionLlmOptions(_session, pending)
+  const fields = Object.keys(pending)
+  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
+  pushMessage(color.dim("Options set for the next turn: ${listed}"))
 }
 
 export def buildStatus(): { left: string; right: string; context: string } {
@@ -349,6 +365,7 @@ export def runSeedTurn(target: string, msg: string) {
   renderUserLine(msg)
   const response = try runTurn(target, msg)
   renderAgentResponse(response)
+  applyPendingLlmOptions()
   markTurnDone()
   saveSeedTurn(msg)
 }

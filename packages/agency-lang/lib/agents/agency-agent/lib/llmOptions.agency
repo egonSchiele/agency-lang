@@ -1,0 +1,106 @@
+/** @module
+  @summary The llm() options a preset or a session can set beside its
+  model: OpenRouter routing, raw request fields, reasoning, sampling, and
+  retries. One block, so the next provider option needs no agent change.
+  The shapes mirror LlmDefaults in std::llm.
+*/
+import { setLlmOptions, OpenRouterOptions } from "std::llm"
+
+import { isPlainObject } from "./presetRules.agency"
+
+export type ThinkingOption = {
+  enabled: boolean;
+  budgetTokens?: number
+}
+
+export type ReplyLimitsOption = {
+  hedgeLimit?: number;
+  repeatLimit?: number;
+  limitAnswers?: boolean
+}
+
+export type LlmOptions = {
+  openRouter?: OpenRouterOptions;
+  rawAttributes?: any;
+  reasoningEffort?: "low" | "medium" | "high";
+  thinking?: ThinkingOption;
+  temperature?: number;
+  maxTokens?: number;
+  replyLimits?: ReplyLimitsOption;
+  retries?: number;
+  timeout?: number;
+  validationRetries?: number
+}
+
+// model, provider, maxToolCallRounds, and maxToolResultChars are left out:
+// each has a field of its own in a preset and in settings.json.
+export static const LLM_OPTION_KEYS: string[] = [
+  "openRouter",
+  "rawAttributes",
+  "reasoningEffort",
+  "thinking",
+  "temperature",
+  "maxTokens",
+  "replyLimits",
+  "retries",
+  "timeout",
+  "validationRetries",
+]
+
+export def checkLlmOptions(value: any): Result<LlmOptions> {
+  """
+  Check a block of llm() options. Returns the block with null fields
+  dropped, or a failure naming every problem: a value that is not an
+  object, an unknown key, or a known key whose value does not fit.
+
+  @param value - The block, as read from settings.json or passed to a tool
+  """
+  if (!isPlainObject(value)) {
+    return failure("must be an object of llm() options")
+  }
+  const set = Object.fromEntries(
+    [[key, value[key]] for key in Object.keys(value) if value[key] != null],
+  )
+  const unknown = ["unknown option '${key}'" for key in Object.keys(set) if !LLM_OPTION_KEYS.includes(key)]
+  if (unknown.length > 0) {
+    return failure(unknown.join("; "))
+  }
+  const wrongShape = ["${key} has the wrong shape for that option" for key in Object.keys(set) if !fits(key, set[key])]
+  if (wrongShape.length > 0) {
+    return failure(wrongShape.join("; "))
+  }
+  return success(set)
+}
+
+// One key at a time, so the failure can name the key.
+def fits(key: string, value: any): boolean {
+  const single: any = Object.fromEntries([[key, value]])
+  const checked = single as LlmOptions!
+  return isSuccess(checked)
+}
+
+export def optionsToApply(options: LlmOptions): Record<string, any> {
+  """
+  What applyLlmOptions passes to setLlmOptions: every key in
+  LLM_OPTION_KEYS set to null, with `options` spread over it. The nulls
+  remove whatever an earlier block set, so a switch replaces the block
+  rather than merging into it.
+
+  @param options - The block to apply
+  """
+  const cleared = Object.fromEntries([[key, null] for key in LLM_OPTION_KEYS])
+  return {
+    ...cleared,
+    ...options
+  }
+}
+
+export def applyLlmOptions(options: LlmOptions) {
+  """
+  Make this block the session's llm() options, removing any option an
+  earlier block set.
+
+  @param options - The block to apply
+  """
+  setLlmOptions(optionsToApply(options))
+}

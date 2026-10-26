@@ -1,0 +1,75 @@
+{
+  "sourceFile": "llmOptions.agency",
+  "tests": [
+    {
+      "nodeName": "acceptsOpenRouter",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "acceptsEffortAndRaw",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsModel",
+      "input": "",
+      "expectedOutput": "\"no: unknown option 'model'\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsBadSort",
+      "input": "",
+      "expectedOutput": "\"no: openRouter has the wrong shape for that option\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsNonObject",
+      "input": "",
+      "expectedOutput": "\"no: must be an object of llm() options\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nullFieldsCountAsLeftOut",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "applyClearsEveryOtherKey",
+      "input": "",
+      "expectedOutput": "\"true 0 {\\\"provider\\\":{\\\"only\\\":[\\\"fireworks\\\"]}} false false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

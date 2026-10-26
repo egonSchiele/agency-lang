@@ -1,0 +1,40 @@
+import { checkLlmOptions, LLM_OPTION_KEYS, optionsToApply } from "../lib/llmOptions.agency"
+
+def verdict(value: any): string {
+  const checked = checkLlmOptions(value)
+  if (checked is failure(reason)) {
+    return "no: ${reason}"
+  }
+  return "ok"
+}
+
+node acceptsOpenRouter(): string {
+  return verdict({ openRouter: { provider: { ignore: ["open-inference"] } } })
+}
+
+node acceptsEffortAndRaw(): string {
+  return verdict({ reasoningEffort: "high", rawAttributes: { top_k: 5 } })
+}
+
+node rejectsModel(): string {
+  return verdict({ model: "x" })
+}
+
+node rejectsBadSort(): string {
+  return verdict({ openRouter: { provider: { sort: "cheapest" } } })
+}
+
+node rejectsNonObject(): string {
+  return verdict("not an object")
+}
+
+node nullFieldsCountAsLeftOut(): string {
+  return verdict({ openRouter: null, temperature: 0.2 })
+}
+
+node applyClearsEveryOtherKey(): string {
+  const applied = optionsToApply({ openRouter: { provider: { only: ["fireworks"] } } })
+  const keys = Object.keys(applied)
+  const othersNull = [key for key in LLM_OPTION_KEYS if key != "openRouter" && applied[key] != null]
+  return "${keys.length == LLM_OPTION_KEYS.length} ${othersNull.length} ${JSON.stringify(applied.openRouter)} ${keys.includes("model")} ${keys.includes("maxToolResultChars")}"
+}

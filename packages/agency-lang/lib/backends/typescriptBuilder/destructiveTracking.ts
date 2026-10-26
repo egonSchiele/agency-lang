@@ -148,10 +148,13 @@ export class DestructiveTracking {
    *  presents them: `[call]` for a direct call, `[tryExpr, call]` for a `try`
    *  call (the walk yields both). `[]` when `stmt` is not a tracked assignment. */
   private trackedCallNodes(stmt: AgencyNode): AgencyNode[] {
-    if (stmt.type !== "assignment") return [];
+    if (stmt.type !== "assignment") {
+      return [];
+    }
     const asn = stmt as Assignment;
-    if (asn.pattern || asn.accessChain || asn.blockDepth) return [];
-    if (!asn.variableName) return [];
+    if (asn.pattern || asn.accessChain || asn.blockDepth || !asn.variableName) {
+      return [];
+    }
     const value = asn.value as AgencyNode & {
       functionName?: string;
       call?: AgencyNode & { functionName?: string };
@@ -165,7 +168,9 @@ export class DestructiveTracking {
       nodes = [value, value.call];
       functionName = value.call.functionName;
     }
-    if (!functionName) return [];
+    if (!functionName) {
+      return [];
+    }
     // Object.hasOwn, not a truthy index: `destructiveFunctions` is a plain
     // object, so a call to a function named `toString` / `constructor` would
     // otherwise resolve an inherited prototype member as truthy and be
@@ -183,7 +188,9 @@ export class DestructiveTracking {
     for (const stmt of body) {
       covered.push(...this.trackedCallNodes(stmt));
       for (const slot of bodySlots(stmt)) {
-        if (isInlineHandlerBody(stmt, slot.body)) continue;
+        if (isInlineHandlerBody(stmt, slot.body)) {
+          continue;
+        }
         covered.push(...this.coveredCalls(slot.body));
       }
     }
@@ -192,7 +199,9 @@ export class DestructiveTracking {
 }
 
 function isInlineHandlerBody(stmt: AgencyNode, body: AgencyNode[]): boolean {
-  if (stmt.type !== "handleBlock") return false;
+  if (stmt.type !== "handleBlock") {
+    return false;
+  }
   const handler = (stmt as HandleBlock).handler;
   return handler.kind === "inline" && handler.body === body;
 }

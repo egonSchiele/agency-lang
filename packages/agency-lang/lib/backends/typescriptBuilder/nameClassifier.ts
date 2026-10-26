@@ -143,7 +143,9 @@ export class NameClassifier {
    *  post-flip already covers. */
   containsDestructiveCall(node: AgencyNode, except: AgencyNode[] = []): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
-      if (except.includes(subNode)) continue;
+      if (except.includes(subNode)) {
+        continue;
+      }
       const name = this.callTarget(subNode);
       // Object.hasOwn, not a truthy index: a call to a function named
       // `toString`/`constructor` would otherwise match an inherited prototype

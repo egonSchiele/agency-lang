@@ -70,6 +70,46 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "presetSwitchCarriesItsOptions",
+      "input": "",
+      "expectedOutput": "\"{\\\"openRouter\\\":{\\\"provider\\\":{\\\"only\\\":[\\\"fireworks\\\"]}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchToAPresetWithoutOptionsLeavesNone",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelSwitchDropsTheSessionOptions",
+      "input": "",
+      "expectedOutput": "\"{\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"slots\\\":{}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sameModelKeepsTheSessionOptions",
+      "input": "",
+      "expectedOutput": "\"{\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"slots\\\":{},\\\"llmOptions\\\":{\\\"temperature\\\":0.7}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

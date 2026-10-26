@@ -170,6 +170,46 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "presetWithLlmOptions",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetLlmOptionsWithAModel",
+      "input": "",
+      "expectedOutput": "[\"llmOptions: unknown option 'model'\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetLlmOptionsNotAnObject",
+      "input": "",
+      "expectedOutput": "[\"llmOptions must be an object of llm() options\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localPresetWithLlmOptions",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

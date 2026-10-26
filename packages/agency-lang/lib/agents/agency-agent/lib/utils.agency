@@ -1,5 +1,10 @@
 import { map } from "std::array"
 
+/** True for a JSON object: not null, not an array, not a primitive. */
+export def isPlainObject(value: any): boolean {
+  return value != null && typeof value == "object" && !Array.isArray(value)
+}
+
 export def formatToolResponse(data: string): string {
   let _text = ""
   if (typeof data == "string") {

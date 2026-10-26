@@ -1,3 +1,5 @@
+// LlmOptions is imported only so the inlined ModelSettings schema can find it.
+import { LlmOptions } from "../lib/llmOptions.agency"
 /*
  * Tests for the agent's settings.json persistence layer.
  *
@@ -318,4 +320,12 @@ node oldModelKeysStillLoad(): string {
   const loaded = loadSettings() with approve
   const model = getModelSettings(loaded)
   return model.pin ?? ""
+}
+
+node dropsABadLlmOptionsBlock(): ModelSettings {
+  return sanitizeModelSettings({ pin: "gpt-5.5", llmOptions: { model: "x" } })
+}
+
+node keepsAGoodLlmOptionsBlock(): ModelSettings {
+  return sanitizeModelSettings({ pin: "gpt-5.5", llmOptions: { temperature: 0.2, rawAttributes: null } })
 }

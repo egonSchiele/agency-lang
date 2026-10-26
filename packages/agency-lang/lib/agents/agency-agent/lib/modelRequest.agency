@@ -6,6 +6,7 @@
 */
 import { filterEntries } from "std::object"
 
+import { LlmOptions } from "./llmOptions.agency"
 import { embeddingSpecHasProvider, parseModelFlag } from "./models.agency"
 import { Preset, PresetSlots } from "./presetRules.agency"
 import { RawLayer } from "./resolution.agency"
@@ -22,10 +23,12 @@ export type ModelFlags = {
   local: string | null
 }
 
-/** The /model choices of this session. */
+/** The /model choices of this session, and the llm() options it set
+  from chat. */
 export type ModelChoices = {
   pin: string;
-  slots: Record<string, string>
+  slots: Record<string, string>;
+  llmOptions?: LlmOptions
 }
 
 export type ModelRequest = {
@@ -186,6 +189,26 @@ export def localModelOf(request: ModelRequest): LocalModel | null {
 
 def firstSet(values: string[]): string {
   return find(values, \value -> value != "") ?? ""
+}
+
+// A model flag drops the preset's options with its models: options are
+// written for the models beside them. Unlike presetModelSettings, a local
+// preset keeps its block, since a local model has options too.
+def presetLlmOptions(request: ModelRequest): LlmOptions | null {
+  const preset = request.preset
+  if (preset == null || hasModelFlags(request.flags)) {
+    return null
+  }
+  return preset.llmOptions ?? null
+}
+
+export def requestLlmOptions(request: ModelRequest, settings: ModelSettings): LlmOptions {
+  """
+  The llm() options the request fixes: the in-session block, then the
+  preset's, then settings.model's. The first that is set wins whole;
+  blocks never merge, because each was written for its own models.
+  """
+  return request.choices.llmOptions ?? presetLlmOptions(request) ?? settings.llmOptions ?? {}
 }
 
 export def requestProvider(request: ModelRequest, settings: ModelSettings): string {

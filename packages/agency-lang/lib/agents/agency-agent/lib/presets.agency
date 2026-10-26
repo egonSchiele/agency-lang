@@ -10,7 +10,10 @@ import { filterEntries, mapValues } from "std::object"
 import { SETTINGS_PATH } from "./config.agency"
 // PresetSlots is imported only because the generated schema for Preset
 // refers to it. Without the import, presets.js fails to load.
-import { Preset, PresetSlots, checkPreset, isPlainObject } from "./presetRules.agency"
+// LlmOptions is imported only so the inlined Preset schema can find it.
+import { LlmOptions } from "./llmOptions.agency"
+import { Preset, PresetSlots, checkPreset } from "./presetRules.agency"
+import { isPlainObject } from "./utils.agency"
 import { Settings } from "./settings.agency"
 
 /** The saved presets that pass the rules, a message per preset that does

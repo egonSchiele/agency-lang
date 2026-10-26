@@ -12,8 +12,12 @@ node acceptsOpenRouter(): string {
   return verdict({ openRouter: { provider: { ignore: ["open-inference"] } } })
 }
 
-node acceptsEffortAndRaw(): string {
-  return verdict({ reasoningEffort: "high", rawAttributes: { top_k: 5 } })
+node acceptsTemperatureAndRaw(): string {
+  return verdict({ temperature: 0.2, rawAttributes: { top_k: 5 } })
+}
+
+node rejectsKeysWithAnotherOwner(): string {
+  return verdict({ reasoningEffort: "high", maxTokens: 100 })
 }
 
 node rejectsModel(): string {

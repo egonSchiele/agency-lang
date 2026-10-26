@@ -9,6 +9,7 @@ import {
   noModelFlags,
   presetModelSettings,
   requestLayers,
+  requestLlmOptions,
   requestProvider,
  } from "../lib/modelRequest.agency"
 import { buildLayers, resolveAll, Ctx } from "../lib/resolution.agency"
@@ -170,4 +171,37 @@ node localWithEmbeddingFlagIsFine(): ModelFlags {
     return noModelFlags()
   }
   return parsed.value
+}
+
+static const FIREWORKS = { openRouter: { provider: { only: ["fireworks"] } } }
+static const AVOID = { openRouter: { provider: { ignore: ["open-inference"] } } }
+static const WARM = { temperature: 0.7 }
+
+def optionsFor(flags: ModelFlags, preset: any, choices: any, settings: ModelSettings): string {
+  return JSON.stringify(requestLlmOptions(request(flags, preset, choices), settings))
+}
+
+node sessionOptionsBeatThePreset(): string {
+  const choices = { ...noModelChoices(), llmOptions: WARM }
+  return optionsFor(noModelFlags(), { pin: "p", llmOptions: FIREWORKS }, choices, { llmOptions: AVOID })
+}
+
+node presetOptionsBeatSettings(): string {
+  return optionsFor(noModelFlags(), { pin: "p", llmOptions: FIREWORKS }, noModelChoices(), { llmOptions: AVOID })
+}
+
+node settingsOptionsWhenThePresetHasNone(): string {
+  return optionsFor(noModelFlags(), { pin: "p" }, noModelChoices(), { llmOptions: AVOID })
+}
+
+node noOptionsAnywhere(): string {
+  return optionsFor(noModelFlags(), null, noModelChoices(), {})
+}
+
+node aModelFlagDropsThePresetOptions(): string {
+  return optionsFor(withPin("flag-model"), { pin: "p", llmOptions: FIREWORKS }, noModelChoices(), {})
+}
+
+node aLocalPresetKeepsItsOptions(): string {
+  return optionsFor(noModelFlags(), { local: "qwen3.5-2b", llmOptions: WARM }, noModelChoices(), {})
 }

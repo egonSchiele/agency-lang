@@ -12,9 +12,19 @@
       ]
     },
     {
-      "nodeName": "acceptsEffortAndRaw",
+      "nodeName": "acceptsTemperatureAndRaw",
       "input": "",
       "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsKeysWithAnotherOwner",
+      "input": "",
+      "expectedOutput": "\"no: unknown option 'reasoningEffort'; unknown option 'maxTokens'\"",
       "evaluationCriteria": [
         {
           "type": "exact"

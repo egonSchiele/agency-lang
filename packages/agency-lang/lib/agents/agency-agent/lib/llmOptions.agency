@@ -1,12 +1,12 @@
 /** @module
   @summary The llm() options a preset or a session can set beside its
-  model: OpenRouter routing, raw request fields, reasoning, sampling, and
+  model: OpenRouter routing, raw request fields, thinking, sampling, and
   retries. One block, so the next provider option needs no agent change.
   The shapes mirror LlmDefaults in std::llm.
 */
-import { setLlmOptions, OpenRouterOptions } from "std::llm"
+import { setLlmOptions, LlmDefaults, OpenRouterOptions } from "std::llm"
 
-import { isPlainObject } from "./presetRules.agency"
+import { isPlainObject } from "./utils.agency"
 
 export type ThinkingOption = {
   enabled: boolean;
@@ -22,25 +22,24 @@ export type ReplyLimitsOption = {
 export type LlmOptions = {
   openRouter?: OpenRouterOptions;
   rawAttributes?: any;
-  reasoningEffort?: "low" | "medium" | "high";
   thinking?: ThinkingOption;
   temperature?: number;
-  maxTokens?: number;
   replyLimits?: ReplyLimitsOption;
   retries?: number;
   timeout?: number;
   validationRetries?: number
 }
 
-// model, provider, maxToolCallRounds, and maxToolResultChars are left out:
-// each has a field of its own in a preset and in settings.json.
+// Left out because each has a home of its own: model, provider,
+// maxToolCallRounds, and maxToolResultChars (fields in a preset and in
+// settings.json), reasoningEffort (--effort), and maxTokens (the
+// capabilities settings). Applying a block nulls every key listed here, so
+// a key with another owner would be undone by every switch.
 export static const LLM_OPTION_KEYS: string[] = [
   "openRouter",
   "rawAttributes",
-  "reasoningEffort",
   "thinking",
   "temperature",
-  "maxTokens",
   "replyLimits",
   "retries",
   "timeout",
@@ -102,5 +101,6 @@ export def applyLlmOptions(options: LlmOptions) {
 
   @param options - The block to apply
   """
-  setLlmOptions(optionsToApply(options))
+  // The nulls in it remove keys, which setLlmOptions allows.
+  setLlmOptions(optionsToApply(options) as LlmDefaults)
 }

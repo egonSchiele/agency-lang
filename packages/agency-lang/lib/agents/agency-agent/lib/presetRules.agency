@@ -6,8 +6,10 @@
 */
 import { filterEntries } from "std::object"
 
+import { checkLlmOptions, LlmOptions } from "./llmOptions.agency"
 import { embeddingSpecHasProvider } from "./models.agency"
 import { canonicalSlot, isKnownSlot, slotKind } from "./slots.agency"
+import { isPlainObject } from "./utils.agency"
 
 export type PresetSlots = {
   main?: string;
@@ -22,7 +24,8 @@ export type PresetInput = {
   slots?: PresetSlots;
   local?: string;
   maxToolCallRounds?: number;
-  maxToolResultChars?: number
+  maxToolResultChars?: number;
+  llmOptions?: LlmOptions
 }
 
 /** One preset as settings.json stores it. */
@@ -33,10 +36,11 @@ export type Preset = {
   slots?: PresetSlots;
   local?: string;
   maxToolCallRounds?: number;
-  maxToolResultChars?: number
+  maxToolResultChars?: number;
+  llmOptions?: LlmOptions
 }
 
-type FieldKind = "flag" | "text" | "slots" | "positiveWholeNumber" | "wholeNumber"
+type FieldKind = "flag" | "text" | "slots" | "positiveWholeNumber" | "wholeNumber" | "llmOptions"
 
 static const PRESET_FIELD_KINDS: Record<string, FieldKind> = {
   default: "flag",
@@ -45,7 +49,8 @@ static const PRESET_FIELD_KINDS: Record<string, FieldKind> = {
   local: "text",
   slots: "slots",
   maxToolCallRounds: "positiveWholeNumber",
-  maxToolResultChars: "wholeNumber"
+  maxToolResultChars: "wholeNumber",
+  llmOptions: "llmOptions"
 }
 
 static const KIND_RULES: Record<string, string> = {
@@ -53,16 +58,12 @@ static const KIND_RULES: Record<string, string> = {
   text: "must be a non-empty string",
   slots: "must be an object of slot names to models",
   positiveWholeNumber: "must be a whole number above zero",
-  wholeNumber: "must be a whole number, zero or more"
+  wholeNumber: "must be a whole number, zero or more",
+  llmOptions: "must be an object of llm() options"
 }
 
 // `local` sets the provider and every chat slot itself.
 static const REPLACED_BY_LOCAL = ["provider", "pin"]
-
-/** True for a JSON object: not null, not an array, not a primitive. */
-export def isPlainObject(value: any): boolean {
-  return value != null && typeof value == "object" && !Array.isArray(value)
-}
 
 def kindHolds(kind: FieldKind, value: any): boolean {
   return match(kind) {
@@ -71,6 +72,7 @@ def kindHolds(kind: FieldKind, value: any): boolean {
     "slots" => isPlainObject(value)
     "positiveWholeNumber" => Number.isInteger(value) && value > 0
     "wholeNumber" => Number.isInteger(value) && value >= 0
+    "llmOptions" => isPlainObject(value)
     _ => false
   }
 }
@@ -147,6 +149,18 @@ def localProblems(value: any): string[] {
   return [...fields, ...chatSlots]
 }
 
+// The kind rule only says the block must be an object; this says what in it is wrong.
+def llmOptionProblems(value: any): string[] {
+  if (!isPlainObject(value.llmOptions)) {
+    return []
+  }
+  const checked = checkLlmOptions(value.llmOptions)
+  if (checked is failure(reason)) {
+    return ["llmOptions: ${reason}"]
+  }
+  return []
+}
+
 /** Every rule the preset breaks, as sentences. Empty when it is valid. */
 export def presetProblems(name: string, value: any, allowDefault: boolean): string[] {
   if (!isPlainObject(value)) {
@@ -157,6 +171,7 @@ export def presetProblems(name: string, value: any, allowDefault: boolean): stri
     ...fieldProblems(value, allowedFields(allowDefault)),
     ...slotProblems(slotsOf(value)),
     ...localProblems(value),
+    ...llmOptionProblems(value),
   ]
 }
 

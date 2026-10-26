@@ -130,6 +130,66 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "sessionOptionsBeatThePreset",
+      "input": "",
+      "expectedOutput": "\"{\\\"temperature\\\":0.7}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetOptionsBeatSettings",
+      "input": "",
+      "expectedOutput": "\"{\\\"openRouter\\\":{\\\"provider\\\":{\\\"only\\\":[\\\"fireworks\\\"]}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "settingsOptionsWhenThePresetHasNone",
+      "input": "",
+      "expectedOutput": "\"{\\\"openRouter\\\":{\\\"provider\\\":{\\\"ignore\\\":[\\\"open-inference\\\"]}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noOptionsAnywhere",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aModelFlagDropsThePresetOptions",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aLocalPresetKeepsItsOptions",
+      "input": "",
+      "expectedOutput": "\"{\\\"temperature\\\":0.7}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

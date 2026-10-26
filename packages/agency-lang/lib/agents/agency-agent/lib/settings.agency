@@ -18,12 +18,13 @@
   ```
 */
 import { mkdir } from "std::fs"
-import { keys } from "std::object"
+import { filterEntries, keys } from "std::object"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 
 import { SETTINGS_PATH, POLICY_DIR, SETTINGS_FILE } from "./config.agency"
 import { CapabilitySettings, sanitizeCapabilitySettings } from "./capabilities.agency"
+import { LlmOptions, checkLlmOptions } from "./llmOptions.agency"
 import { embeddingSpecHasProvider } from "./models.agency"
 import { isKnownSlot, canonicalSlot } from "./slots.agency"
 
@@ -35,7 +36,8 @@ export type SearchSettings = {
 export type ModelSettings = {
   provider?: string;
   slots?: Record<string, string>;
-  pin?: string
+  pin?: string;
+  llmOptions?: LlmOptions
 }
 
 export type Settings = {
@@ -47,9 +49,29 @@ export type Settings = {
   presets?: Record<string, any>
 }
 
-/** Return a NEW ModelSettings with unknown slot keys dropped (warned). Does NOT
-  mutate the input. Pure except the warning print. */
+/** Return a NEW ModelSettings with unknown slot keys and a bad llmOptions
+  block dropped (warned). Does NOT mutate the input. Pure except the
+  warning print. */
 export def sanitizeModelSettings(settings: ModelSettings): ModelSettings {
+  return sanitizeSlots(sanitizeLlmOptions(settings))
+}
+
+def sanitizeLlmOptions(settings: ModelSettings): ModelSettings {
+  if (settings.llmOptions == null) {
+    return settings
+  }
+  const checked = checkLlmOptions(settings.llmOptions)
+  if (checked is failure(reason)) {
+    print("Warning: settings.json model.llmOptions ${reason}; ignoring it.")
+    return filterEntries(settings, \(value, field) -> field != "llmOptions")
+  }
+  return {
+    ...settings,
+    llmOptions: checked.value
+  }
+}
+
+def sanitizeSlots(settings: ModelSettings): ModelSettings {
   // Bind to a local so the null-guard narrows for the loop (member-path
   // narrowing of `settings.slots` does not survive across statements).
   const slots = settings.slots

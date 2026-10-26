@@ -1,10 +1,17 @@
 import { setEnv } from "std::system"
 
-import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
+import { noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
 import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
-import { parsePresetName, setStartupModelFlags, switchModel, switchPreset } from "../lib/session.agency"
+import {
+  applySessionLlmOptions,
+  currentModelRequest,
+  parsePresetName,
+  setStartupModelFlags,
+  switchModel,
+  switchPreset,
+ } from "../lib/session.agency"
 import { setStartupLimitFlags } from "../lib/toolLimits.agency"
 
 static const CTX: Ctx = {
@@ -86,4 +93,55 @@ node unresolvablePresetChangesNothing(): string {
 
 node presetNameFromCommand(): string {
   return "[${parsePresetName("/preset")}] [${parsePresetName("/preset   cheap ")}]"
+}
+
+def optionsNow(): string {
+  return JSON.stringify(requestLlmOptions(currentModelRequest(noModelChoices()), {}))
+}
+
+def useOptionPresets() {
+  usePresets()
+  setPresetTable(readPresetTable({
+    fast: {
+      provider: "anthropic",
+      pin: "claude-sonnet-4-6",
+      llmOptions: { openRouter: { provider: { only: ["fireworks"] } } }
+    },
+    plain: { provider: "anthropic", pin: "claude-sonnet-4-6" }
+  }))
+}
+
+node presetSwitchCarriesItsOptions(): string {
+  useOptionPresets()
+  const switched = switchPreset("fast")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  return optionsNow()
+}
+
+node switchToAPresetWithoutOptionsLeavesNone(): string {
+  useOptionPresets()
+  switchPreset("fast")
+  const switched = switchPreset("plain")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  return optionsNow()
+}
+
+node modelSwitchDropsTheSessionOptions(): string {
+  useOptionPresets()
+  setStartupModelFlags({ ...noModelFlags(), pin: "claude-sonnet-4-6" }, {})
+  const withOptions = applySessionLlmOptions(noModelChoices(), { temperature: 0.7 })
+  const out = switchModel(withOptions, "claude-opus-4-8", CTX, {})
+  return JSON.stringify(out.session)
+}
+
+node sameModelKeepsTheSessionOptions(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags(noModelFlags(), {})
+  const withOptions = applySessionLlmOptions({ ...noModelChoices(), pin: "claude-opus-4-8" }, { temperature: 0.7 })
+  const out = switchModel(withOptions, "claude-opus-4-8", CTX, {})
+  return JSON.stringify(out.session)
 }

@@ -9,7 +9,7 @@ import {
   localModelsSupported,
   listModelNames,
  } from "std::agency/local"
-import { listHostedModels } from "std::llm"
+import { hostedModelInfo, listHostedModels } from "std::llm"
 import { disableMemory } from "std::memory"
 import { filterEntries } from "std::object"
 import { isTTY } from "std::system"
@@ -133,11 +133,24 @@ def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const options = requestLlmOptions(request, settings)
   applyLlmOptions(options)
   const slots = getResolvedSlots()
-  const providers = [slots[slot].provider for slot in Object.keys(slots) if slot != "embedding" && slots[slot] != null]
+  const providers = [slotProvider(slots[slot]) for slot in Object.keys(slots) if slot != "embedding" && slots[slot] != null]
   const warning = mixedProviderWarning(options, providers)
   if (warning != "") {
     pushMessage(color.yellow("Warning: ${warning}"))
   }
+}
+
+// An empty provider means smoltalk picks it from the model name, so look
+// the model up the same way.
+def slotProvider(resolved: Resolved): string {
+  if (resolved.provider != "") {
+    return resolved.provider
+  }
+  const info = hostedModelInfo(resolved.model)
+  if (info == null) {
+    return ""
+  }
+  return info.provider
 }
 
 // What the coordinator's useLlmOptions tool asked for, applied by the REPL

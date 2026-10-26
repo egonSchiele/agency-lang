@@ -37,6 +37,8 @@ type SchemaIssue = {
   code: string;
   path: IssuePath;
   message: string;
+  // The type the value should have had, on an `invalid_type` issue.
+  expected?: string;
   // The literal values that would have been accepted, on an `invalid_value`
   // issue.
   values?: unknown[];
@@ -139,6 +141,15 @@ function isWholeValueIssue(issue: SchemaIssue): boolean {
   return issue.path.length === 0;
 }
 
+function isNullOption(option: SchemaIssue[]): boolean {
+  return (
+    option.length === 1 &&
+    option[0].code === "invalid_type" &&
+    isWholeValueIssue(option[0]) &&
+    option[0].expected === "null"
+  );
+}
+
 function isLiteralMismatchAt(issue: SchemaIssue, key: string | number): boolean {
   return issue.code === "invalid_value" && issue.path.length === 1 && issue.path[0] === key;
 }
@@ -196,7 +207,12 @@ function tagKey(options: SchemaIssue[][]): string | number | null {
  *  When the value picked no option, the problem says which choices exist. */
 function unionProblems(issue: SchemaIssue, prefix: IssuePath, root: unknown): Problem[] {
   const path = [...prefix, ...issue.path];
-  const options = issue.errors ?? [];
+  // The null option of an optional field (`T | null`) says only that the
+  // value was not null, so the other options say what was wrong.
+  const options = (issue.errors ?? []).filter((option) => !isNullOption(option));
+  if (options.length === 1) {
+    return problemsAt(options[0], path, root);
+  }
   const literals = literalChoices(options);
   if (literals !== null) {
     return [expectedLiterals(path, literals, root)];
@@ -258,6 +274,19 @@ function nestedProblems(issues: SchemaIssue[], value: unknown): string {
     return "";
   }
   return ` Problems: ${problems.map(formatProblem).join("; ")}.`;
+}
+
+/** What inside `value` did not fit, as `path: problem` parts joined by
+ *  "; ", for a failure from a checked cast or a `!` check. Null when the
+ *  message is not the schema library's issue list, or names nothing inside
+ *  the value. */
+export function schemaProblems(message: string, value: unknown): string | null {
+  const issues = schemaIssues(message);
+  if (issues === null) {
+    return null;
+  }
+  const problems = problemsAt(issues, [], value);
+  return problems.length === 0 ? null : problems.map(formatProblem).join("; ");
 }
 
 function emptyHint(arg: InvalidArgument): string {

@@ -4,6 +4,8 @@
   so the next provider option needs no agent change. The shapes mirror
   LlmDefaults in std::llm.
 */
+import { _schemaProblems } from "agency-lang/stdlib-lib/schemaProblems.js"
+
 import { setLlmOptions, LlmDefaults, OpenRouterOptions } from "std::llm"
 
 import { isPlainObject } from "./utils.agency"
@@ -81,51 +83,9 @@ def shapeProblem(key: string, value: any): string {
   const single: any = Object.fromEntries([[key, value]])
   const checked = single as LlmOptions!
   if (checked is failure(reason)) {
-    return describeFailure(key, reason)
+    return _schemaProblems(reason, single) ?? "${key} has the wrong shape for that option"
   }
   return ""
-}
-
-// The checked cast fails with its validation issues as JSON. Each optional
-// field is a union with null, so the useful issue is inside the branch
-// that is not the null one.
-def describeFailure(key: string, reason: string): string {
-  const parsed = try JSON.parse(reason)
-  if (parsed is failure(_)) {
-    return "${key} has the wrong shape for that option"
-  }
-  const issues: any[] = parsed.value
-  if (issues.length == 0) {
-    return "${key} has the wrong shape for that option"
-  }
-  return issueText(issues[0], [])
-}
-
-def isNullBranch(branch: any[]): boolean {
-  return branch.length == 1 && branch[0].code == "invalid_type" && branch[0].expected == "null"
-}
-
-def issueText(issue: any, outer: string[]): string {
-  const path = [...outer, ...[String(part) for part in issue.path]]
-  const where = path.join(".")
-  if (issue.code == "invalid_union") {
-    const branches = [branch for branch in issue.errors if !isNullBranch(branch)]
-    const literals = [
-      branch[0].values[0]
-      for branch in branches
-      if branch.length == 1 && branch[0].code == "invalid_value"
-    ]
-    if (literals.length > 0 && literals.length == branches.length) {
-      return "${where} must be one of ${literals.join(", ")}"
-    }
-    if (branches.length > 0) {
-      return issueText(branches[0][0], path)
-    }
-  }
-  if (issue.code == "invalid_type") {
-    return "${where} must be of type ${issue.expected}"
-  }
-  return "${where}: ${issue.message}"
 }
 
 /** The nulls remove whatever an earlier block set, so a switch replaces

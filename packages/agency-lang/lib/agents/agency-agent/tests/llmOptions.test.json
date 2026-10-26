@@ -54,7 +54,7 @@
     {
       "nodeName": "rejectsBadSort",
       "input": "",
-      "expectedOutput": "\"no: openRouter.provider.sort must be one of price, throughput, latency\"",
+      "expectedOutput": "\"no: openRouter.provider.sort: expected one of \\\"price\\\", \\\"throughput\\\", \\\"latency\\\", but received the text \\\"cheapest\\\"\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -64,7 +64,7 @@
     {
       "nodeName": "namesAWrongType",
       "input": "",
-      "expectedOutput": "\"no: openRouter.provider.order must be of type array\"",
+      "expectedOutput": "\"no: openRouter.provider.order: Invalid input: expected array, received string\"",
       "evaluationCriteria": [
         {
           "type": "exact"

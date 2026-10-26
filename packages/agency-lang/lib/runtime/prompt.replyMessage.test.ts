@@ -102,3 +102,36 @@ describe("the reply message carries the completion's extras", () => {
     expect(() => smoltalk.messageFromJSON(reply.toJSON())).not.toThrow();
   });
 });
+
+describe("an OpenRouter reply's servedBy and reasoning", () => {
+  const completion: PromptResult = {
+    output: "",
+    toolCalls: [],
+    model: "z-ai/glm-5.3-flash",
+    servedBy: "OpenInference",
+    reasoning: "Let me search",
+  };
+
+  it("logs servedBy and reasoning on the promptCompletion event", async () => {
+    const ctx = makeCtx();
+    ctx.setLLMClient(new CannedClient(completion));
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const logged = vi.spyOn(ctx.statelogClient, "promptCompletion").mockResolvedValue();
+    await runInTestContext(ctx, ctx.stateStack, threads, (run) =>
+      runPrompt(run, { prompt: "say hi", messages: new MessageThread(), clientConfig: {} as any }),
+    );
+    const event = logged.mock.calls[0][0];
+    expect(event.completion.servedBy).toBe("OpenInference");
+    expect(event.completion.reasoning).toBe("Let me search");
+  });
+
+  it("does not put reasoning on the reply message", async () => {
+    // Unsigned reasoning on the message would be sent to Anthropic as a
+    // thinking block after a model switch, and Anthropic rejects it.
+    const thread = await runWith(new CannedClient(completion));
+    const reply = (thread.getMessages().at(-1) as smoltalk.AssistantMessage).toJSON();
+    expect(JSON.stringify(reply)).not.toContain("Let me search");
+    expect(JSON.stringify(reply)).not.toContain("OpenInference");
+    expect((reply as any).thinkingBlocks).toBeUndefined();
+  });
+});

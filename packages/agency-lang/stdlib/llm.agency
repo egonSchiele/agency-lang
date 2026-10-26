@@ -30,6 +30,25 @@ node main() {
 ```
 */
 
+/** How OpenRouter picks the company that runs the model. Provider names
+ *  are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+ *  smoltalk's `OpenRouterProviderPreferences`. */
+export type OpenRouterProviderPreferences = {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  allowFallbacks?: boolean;
+  requireParameters?: boolean;
+  dataCollection?: "allow" | "deny";
+  sort?: "price" | "throughput" | "latency";
+  quantizations?: string[]
+}
+
+/** OpenRouter-only `llm()` options. Other providers ignore them. */
+export type OpenRouterOptions = {
+  provider?: OpenRouterProviderPreferences
+}
+
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
  *  model name. Set it only when the name doesn't imply a provider (e.g.
@@ -45,7 +64,18 @@ node main() {
  *  "Hmm") it allows and `repeatLimit` how many times one sentence may
  *  repeat, both within the last two thousand tokens, and `limitAnswers`
  *  watches the answer as well as the thinking. `0` turns a limit off,
- *  which a song with a chorus needs. Other providers ignore it. */
+ *  which a song with a chorus needs. Other providers ignore it.
+ *
+ *  `openRouter.provider` chooses which companies OpenRouter may send the
+ *  call to, for example `{ provider: { ignore: ["open-inference"] } }` to
+ *  skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
+ *  to use only one. Other providers ignore it. `rawAttributes` is spread
+ *  into the provider's request body as given, for a request field Agency
+ *  has no option for, such as `{ top_k: 5 }`.
+ *
+ *  Setting a field to `null` removes it, so the value `agency.json` gives
+ *  it, if any, applies again. To turn OpenRouter routing off entirely,
+ *  pass `openRouter: {}`. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;
@@ -57,6 +87,8 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
+  openRouter?: OpenRouterOptions;
+  rawAttributes?: any;
   retries?: number;
   timeout?: number;
   validationRetries?: number

@@ -210,6 +210,9 @@ how smoltalk is allowed to infer the provider from the model name. If your
 `agency.json` sets `defaultProvider` to route through a proxy, a bare `--model`
 bypasses that proxy; name it (`--model litellm/gpt-4o-mini`) to keep it.
 
+A bare `--model` leaves `client.openRouter` in place. Only the OpenRouter client
+reads it, so on a model routed anywhere else it does nothing.
+
 The mapping removes the key rather than setting it to `undefined`. Either would
 satisfy the generator; removing it keeps the resolved config free of dangling
 fields, which is what `agency config show` and any other consumer sees. The test
@@ -290,6 +293,7 @@ Type-checker settings live under `typechecker`, not at the top level.
 | `budget.maxTime` | `string` | Duration string such as `30s`, `5m`, `1h`. `<= 0` disables. |
 | `memory` | object | Enables the memory layer: `dir`, `model`, `autoExtract.interval`, `compaction.trigger`/`threshold`, `embeddings.model` |
 | `client` | `Partial<SmolConfig>` | Smoltalk client defaults: `logLevel`, `defaultModel`, `defaultProvider`, the `apiKey` and `baseUrl` per-provider maps, `providerModules`, `modelAliases`, `modelsDir`, and a nested `statelog` block |
+| `client.openRouter` | `{ provider?: {...} }` | Which companies OpenRouter may send each call to, for every call in the run: `order`, `only`, `ignore`, `allowFallbacks`, `requireParameters`, `dataCollection`, `sort`, `quantizations`, as in smoltalk's `OpenRouterProviderPreferences`. Baked into the smoltalk defaults; a `setLlmOptions` or per-call `openRouter` replaces it whole. Other providers ignore it. |
 
 > **Breaking change (smoltalk 0.6.0):** the flat `client.openAiApiKey` /
 > `googleApiKey` / `anthropicApiKey` fields are removed. Nest keys under

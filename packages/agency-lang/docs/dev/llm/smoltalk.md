@@ -105,6 +105,19 @@ the normal policy (two retries with backoff) instead of failing at once. A
 400 that names the field it rejected, such as `messages.1.content: ...`, is
 still terminal.
 
+## What an OpenRouter call records
+
+OpenRouter passes each call on to one of several companies that host the model. Its reply names that company in a top-level `provider` field (for example `"OpenInference"`), and a reasoning model's thinking arrives as plain text in `message.reasoning`. smoltalk puts these on the result as `servedBy` and `reasoning`.
+
+Both reach the log with no Agency code: `emitPromptCompletion` (`lib/runtime/promptEvents.ts`) copies the whole completion into the `promptCompletion` event. The logs viewer shows `servedBy` after the model name and `reasoning` above the reply.
+
+Neither goes on the assistant message in the thread, so `lastReply()` does not return them. `buildReplyMessage` (`lib/runtime/utils.ts`) copies named fields only. There are two reasons:
+
+- **The reasoning has no signature.** smoltalk sends a message's `thinkingBlocks` back to Anthropic on the next request, and Anthropic rejects a thinking block without a valid signature. If reasoning from a GLM call rode on the thread, the first Claude call after a `/model` switch would fail.
+- **The thread is in every checkpoint.** Reasoning can run to thousands of tokens per call.
+
+Two request options go the other way. `openRouter.provider` chooses which companies OpenRouter may use, for example `{ provider: { ignore: ["open-inference"] } }`; it can be set per call, with `setLlmOptions`, or as `client.openRouter` in `agency.json`. `rawAttributes` is spread into the request body for a field Agency has no option for, such as `top_k`. It is spread after the fields the client builds, so today it can also replace them, the model included (smoltalk#73).
+
 ## Where smoltalk is used
 
 - **`lib/runtime/llmClient.ts`** — the only place `smoltalk.text()` is called

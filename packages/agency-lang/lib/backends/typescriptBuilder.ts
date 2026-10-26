@@ -4510,6 +4510,9 @@ export class TypeScriptBuilder {
     if (Object.keys(metadata).length > 0) {
       smoltalkFields.metadata = ts.obj(metadata);
     }
+    if (cfg.client?.openRouter) {
+      smoltalkFields.openRouter = ts.raw(JSON.stringify(cfg.client.openRouter));
+    }
     return ts.obj(smoltalkFields);
   }
 

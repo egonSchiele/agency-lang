@@ -68,6 +68,32 @@ const baseUrlObject: VariableType = {
   ],
 };
 
+const stringLiterals = (...values: string[]): VariableType => ({
+  type: "unionType",
+  types: values.map((value) => ({ type: "stringLiteralType", value })),
+});
+
+/** Mirrors smoltalk's `OpenRouterProviderPreferences`. */
+const openRouterProviderObject: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "order", value: optional(stringArray) },
+    { key: "only", value: optional(stringArray) },
+    { key: "ignore", value: optional(stringArray) },
+    { key: "allowFallbacks", value: optional(boolean) },
+    { key: "requireParameters", value: optional(boolean) },
+    { key: "dataCollection", value: optional(stringLiterals("allow", "deny")) },
+    { key: "sort", value: optional(stringLiterals("price", "throughput", "latency")) },
+    { key: "quantizations", value: optional(stringArray) },
+  ],
+};
+
+/** `llm()`'s `openRouter` option. */
+const openRouterObject: VariableType = {
+  type: "objectType",
+  properties: [{ key: "provider", value: optional(openRouterProviderObject) }],
+};
+
 /**
  * Options accepted by `llm()`'s second argument. Mirrors the user-facing
  * fields of smoltalk's PromptConfig (lib/runtime/llmClient.ts) — the runtime
@@ -178,6 +204,9 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
   { key: "label", value: optional(string) },
   // `any` already accepts undefined, so no need to wrap in optional.
   { key: "metadata", value: ANY_T },
+  { key: "openRouter", value: optional(openRouterObject) },
+  // Spread into the provider's request body as given, so it is not checked.
+  { key: "rawAttributes", value: ANY_T },
 ];
 
 const llmOptions: VariableType = {

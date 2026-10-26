@@ -23,7 +23,7 @@ import {
   type ErrorStoryRow,
   type LlmGroupStoryRow,
 } from "./story.js";
-import type { Round } from "./timeline/rounds.js";
+import { modelText, type Round } from "./timeline/rounds.js";
 import { buildTreeIndex, nearestAncestor, walkNodes } from "./forest.js";
 import { overviewData, type OverviewCall } from "./overviewData.js";
 import { spanExtent } from "./timeline/spans.js";
@@ -154,19 +154,30 @@ function rawPayload(row: StoryRow): PayloadLine[] {
       .map((text) => ({ kind: "json" as const, text })),
   );
 }
+function reasoningPayload(round: Round): PayloadLine[] {
+  if (round.reasoning === undefined) {
+    return [];
+  }
+  return [
+    { kind: "heading", text: "REASONING", tone: "chrome" },
+    ...valuePayload(round.reasoning),
+    { kind: "blank" },
+  ];
+}
 function roundPayload(row: RoundStoryRow): PayloadLine[] {
   const round = row.round;
   return [
     { kind: "heading", text: `ASSISTANT · LLM call ${round.index + 1}`, tone: "assistant" },
     {
       kind: "meta",
-      text: `${round.model} · ${fmtDuration(round.durationMs)} · ${fmtUsd(round.costUsd)}`,
+      text: `${modelText(round)} · ${fmtDuration(round.durationMs)} · ${fmtUsd(round.costUsd)}`,
     },
     {
       kind: "meta",
       text: roundTokenLine(round),
     },
     { kind: "blank" },
+    ...reasoningPayload(round),
     ...roundResponsePayload(round, [], TRACE_DETAIL),
   ];
 }

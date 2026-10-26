@@ -195,12 +195,14 @@ const SLICE_NOTE =
   " The output is still saved whole: read a smaller slice with offset and limit, or narrow the search.";
 
 /** `text` cut so that it and the truncation marker after it fit in
- *  `limit` characters. */
+ *  `limit` characters. A limit too small for the marker gets the start of
+ *  the text alone, which is more use to the model than part of a marker. */
 function cutAt(text: string, limit: number, note: string): string {
   const marker = (shown: number) =>
     `\n\n[tool result truncated: showing ${shown} of ${text.length} chars]${note}`;
-  const shown = Math.max(0, limit - marker(limit).length);
-  return (text.slice(0, shown) + marker(shown)).slice(0, limit);
+  const shown = limit - marker(limit).length;
+  if (shown <= 0) return text.slice(0, limit);
+  return text.slice(0, shown) + marker(shown);
 }
 
 /** Cap a tool result for the LLM. `cap` is `maxToolResultChars`, a ceiling

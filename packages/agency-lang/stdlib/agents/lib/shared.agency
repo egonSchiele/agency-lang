@@ -8,8 +8,9 @@ import { bundledDocsDir } from "std::skills"
   passes to its llm() call. A tool result longer than this, or longer than
   the call's maxToolResultChars, is saved in the run, and the model gets a
   preview and a name to read the rest with. 100,000 is the default
-  maxToolResultChars, so at default settings a result is saved exactly
-  when it would otherwise have been cut. */
+  maxToolResultChars, so with that limit or a lower one, an agent saves
+  exactly the results it saved before this option existed. With a higher
+  limit or none, it now saves anything over 100,000. */
 export static const AGENT_SPILL_OVER = 100000
 
 /** Approves reads of the docs that ship in this package and rejects every
@@ -61,7 +62,7 @@ export def llmOptions(
   @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
   @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
   @param maxToolCallRounds - Tool-call rounds the call may use, or 0 for the configured default
-  @param spillToolResultsOver - Save a tool result longer than this in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
+  @param spillToolResultsOver - Save a tool result longer than this or than maxToolResultChars in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
   """
   const options: any = {
     tools: tools

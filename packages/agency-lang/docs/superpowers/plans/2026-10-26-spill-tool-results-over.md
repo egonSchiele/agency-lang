@@ -10,6 +10,7 @@
 - The truncation marker now counts toward the limit. Before, a cut result was `maxToolResultChars` characters plus about 60 characters of marker, so even a plain cut broke the ceiling. The `cap-tool-result` agency-js test capped at 50 characters, which the marker alone now fills, so it caps at 200 and also checks the tool message is within the cap.
 - `spillSettings` takes the branch defaults object and checks for the key, instead of `runPrompt` pulling the key out. It runs before anything is sent, so the key never reaches smoltalk.
 - `prompt.ts` was already at its 1,250-line limit, so the closure that applies the cap moved into `toolResultCapper` in `toolInvocation.ts`.
+- From the PR review: decision 5's "no user sees a change" holds only at or below the default limit. With a higher `maxToolResultChars` or none, the agents now save anything over 100,000. A cap too small for the truncation marker now gets the start of the result alone.
 
 ---
 

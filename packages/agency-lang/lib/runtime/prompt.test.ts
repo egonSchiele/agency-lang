@@ -186,6 +186,10 @@ describe("capToolResultForLlm", () => {
     });
   });
 
+  it("gives the start of the result alone when the cap is too small for the marker", () => {
+    expect(capToolResultForLlm("a".repeat(5000), 30, null, page)).toBe("a".repeat(30));
+  });
+
   it("cuts a reader's own result with the slice note when spilling is off", () => {
     withRun((run) => {
       const out = capToolResultForLlm("a".repeat(5000), 1000, null, reader) as string;

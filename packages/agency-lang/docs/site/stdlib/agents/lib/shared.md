@@ -15,7 +15,7 @@ overrides, and the handler an eval entry node runs its worker under.
 export type ReasoningEffort = "low" | "medium" | "high"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L38))
 
 ## Constants
 
@@ -25,7 +25,7 @@ export type ReasoningEffort = "low" | "medium" | "high"
 export static const AGENT_SPILL_OVER = 100000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L14))
 
 ## Functions
 
@@ -46,7 +46,7 @@ Approves reads of the docs that ship in this package and rejects every
 |---|---|---|
 | intr |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L20))
 
 ### withContext
 
@@ -69,7 +69,7 @@ Fold optional context material into a task prompt. Returns the task
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L27))
 
 ### llmOptions
 
@@ -100,7 +100,7 @@ Build an llm options object with an optional model override. Returns a
   @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
   @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
   @param maxToolCallRounds - Tool-call rounds the call may use, or 0 for the configured default
-  @param spillToolResultsOver - Save a tool result longer than this in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
+  @param spillToolResultsOver - Save a tool result longer than this or than maxToolResultChars in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
 
 **Parameters:**
 
@@ -118,4 +118,4 @@ Build an llm options object with an optional model override. Returns a
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L40))

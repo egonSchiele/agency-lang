@@ -30,6 +30,25 @@ node main() {
 ```
 */
 
+/** How OpenRouter picks the company that runs the model. Provider names
+ *  are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+ *  smoltalk's `OpenRouterProviderPreferences`. */
+export type OpenRouterProviderPreferences = {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  allowFallbacks?: boolean;
+  requireParameters?: boolean;
+  dataCollection?: "allow" | "deny";
+  sort?: "price" | "throughput" | "latency";
+  quantizations?: string[]
+}
+
+/** OpenRouter-only `llm()` options. Other providers ignore them. */
+export type OpenRouterOptions = {
+  provider?: OpenRouterProviderPreferences
+}
+
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
  *  model name. Set it only when the name doesn't imply a provider (e.g.
@@ -66,19 +85,7 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
-  // Mirrors smoltalk's OpenRouterProviderPreferences.
-  openRouter?: {
-    provider?: {
-      order?: string[];
-      only?: string[];
-      ignore?: string[];
-      allowFallbacks?: boolean;
-      requireParameters?: boolean;
-      dataCollection?: "allow" | "deny";
-      sort?: "price" | "throughput" | "latency";
-      quantizations?: string[]
-    }
-  };
+  openRouter?: OpenRouterOptions;
   rawAttributes?: any;
   retries?: number;
   timeout?: number;

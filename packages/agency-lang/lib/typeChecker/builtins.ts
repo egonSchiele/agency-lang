@@ -73,28 +73,25 @@ const stringLiterals = (...values: string[]): VariableType => ({
   types: values.map((value) => ({ type: "stringLiteralType", value })),
 });
 
-/** `llm()`'s `openRouter` option. Mirrors smoltalk's
- *  `OpenRouterProviderPreferences`. */
-const openRouterObject: VariableType = {
+/** Mirrors smoltalk's `OpenRouterProviderPreferences`. */
+const openRouterProviderObject: VariableType = {
   type: "objectType",
   properties: [
-    {
-      key: "provider",
-      value: optional({
-        type: "objectType",
-        properties: [
-          { key: "order", value: optional(stringArray) },
-          { key: "only", value: optional(stringArray) },
-          { key: "ignore", value: optional(stringArray) },
-          { key: "allowFallbacks", value: optional(boolean) },
-          { key: "requireParameters", value: optional(boolean) },
-          { key: "dataCollection", value: optional(stringLiterals("allow", "deny")) },
-          { key: "sort", value: optional(stringLiterals("price", "throughput", "latency")) },
-          { key: "quantizations", value: optional(stringArray) },
-        ],
-      }),
-    },
+    { key: "order", value: optional(stringArray) },
+    { key: "only", value: optional(stringArray) },
+    { key: "ignore", value: optional(stringArray) },
+    { key: "allowFallbacks", value: optional(boolean) },
+    { key: "requireParameters", value: optional(boolean) },
+    { key: "dataCollection", value: optional(stringLiterals("allow", "deny")) },
+    { key: "sort", value: optional(stringLiterals("price", "throughput", "latency")) },
+    { key: "quantizations", value: optional(stringArray) },
   ],
+};
+
+/** `llm()`'s `openRouter` option. */
+const openRouterObject: VariableType = {
+  type: "objectType",
+  properties: [{ key: "provider", value: optional(openRouterProviderObject) }],
 };
 
 /**

@@ -25,6 +25,43 @@ node main() {
 
 ## Types
 
+### OpenRouterProviderPreferences
+
+How OpenRouter picks the company that runs the model. Provider names
+ are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+ smoltalk's `OpenRouterProviderPreferences`.
+
+```ts
+/** How OpenRouter picks the company that runs the model. Provider names
+ *  are OpenRouter's slugs, such as `"z-ai"` or `"fireworks"`. Mirrors
+ *  smoltalk's `OpenRouterProviderPreferences`. */
+export type OpenRouterProviderPreferences = {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  allowFallbacks?: boolean;
+  requireParameters?: boolean;
+  dataCollection?: "allow" | "deny";
+  sort?: "price" | "throughput" | "latency";
+  quantizations?: string[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L36))
+
+### OpenRouterOptions
+
+OpenRouter-only `llm()` options. Other providers ignore them.
+
+```ts
+/** OpenRouter-only `llm()` options. Other providers ignore them. */
+export type OpenRouterOptions = {
+  provider?: OpenRouterProviderPreferences
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L48))
+
 ### LlmDefaults
 
 Default options for `llm()` calls. Every field is optional; only the
@@ -90,21 +127,7 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
-  // Mirrors smoltalk's OpenRouterProviderPreferences.
-  openRouter?: { provider:
-  | { order: string[]
-  | null; only: string[]
-  | null; ignore: string[]
-  | null; allowFallbacks: boolean
-  | null; requireParameters: boolean
-  | null; dataCollection: "allow"
-  | "deny"
-  | null; sort: "price"
-  | "throughput"
-  | "latency"
-  | null; quantizations: string[]
-  | null }
-  | null };
+  openRouter?: OpenRouterOptions;
   rawAttributes?: any;
   retries?: number;
   timeout?: number;
@@ -112,7 +135,7 @@ export type LlmDefaults = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L77))
 
 ### HostedModelInfo
 
@@ -128,7 +151,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L198))
 
 ## Effects
 
@@ -141,7 +164,7 @@ effect std::llm::registerProvider {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L176))
 
 ### std::read
 
@@ -153,7 +176,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L243))
 
 ## Functions
 
@@ -174,7 +197,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L95))
 
 ### setModel
 
@@ -192,7 +215,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L105))
 
 ### envVarFor
 
@@ -217,7 +240,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L114))
 
 ### pickProvider
 
@@ -246,7 +269,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L143))
 
 ### registerProviderModule
 
@@ -271,7 +294,7 @@ Load a provider module by path at runtime and register its custom provider
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L179))
 
 ### listHostedModels
 
@@ -284,7 +307,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L208))
 
 ### hostedModelInfo
 
@@ -305,7 +328,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L216))
 
 ### modelSupportsInput
 
@@ -330,7 +353,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L226))
 
 ### loadModelData
 
@@ -357,4 +380,4 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L251))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L258))

@@ -1,7 +1,6 @@
 import type { BaseNode } from "./base.js";
 
-/** Metadata requested by decorator lowering and supplied by code generation.
- *  A synthetic expression with no Agency source form. */
+/** Compiler-only decorator metadata with no Agency source syntax. */
 export type DecoratorCallField = BaseNode &
   (
     | {

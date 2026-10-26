@@ -62,10 +62,6 @@ import { GLOBAL_SCOPE_KEY, ScopedTypeAliases } from "@/compilationUnit.js";
  * Stacked tags nest, outermost first: `@a @b def f` becomes
  * `const __call_0 = ...; return a(...) { rebind; const __call_1 = ...; return b(...) { rebind; BODY } }`.
  *
- * The metadata fields are compiler-only expressions. Code generation
- * supplies the function identity and tool context. Inner records copy
- * the outermost record's context so all decorators describe one invocation.
- *
  * MUTATES IN PLACE, for the reason guardDesugar.ts gives: the compilation
  * unit built before the TypeChecker constructor runs already holds the def
  * objects, so a copying rewrite would leave it pointing at undecorated
@@ -239,8 +235,7 @@ function rebindStatement(
   };
 }
 
-/** The decorated function's record. Block parameters cannot be stored
- *  in it. Metadata leaves describe the values code generation supplies. */
+/** Block parameters cannot be stored in the call record. */
 function callRecord(
   depth: number,
   target: string,

@@ -75,7 +75,9 @@ Every decorator receives a record describing the call it wraps, in its second-to
 - `call.name` is the decorated function's name.
 - `call.args` holds the function's arguments, keyed by parameter name. Block-typed parameters are left out, since a block cannot be stored in a record.
 - `call.id` identifies the decorated function within the compiled program. Partial, renamed, and preapproved copies of that function use the same ID. Use it as a key, without parsing it or relying on it to remain the same across builds.
-- `call.inToolCall` is `true` when the invocation began inside a model tool call. This includes functions called by the selected tool and calls made in its branches. Ordinary calls outside tool execution see `false`.
+- `call.inToolCall` is `true` when the invocation began inside a tool call made by `llm()` in the same run. This includes functions called by the selected tool and calls made in its branches. Ordinary calls outside that context see `false`.
+
+The caller's tool context does not cross subprocess or MCP boundaries. A decorated export called through `runFunction` or a tool returned by `learn` sees `false`. An export invoked directly through `agency serve` over MCP also sees `false`.
 
 ```ts
 decorator def tagged(label: string, call, block) {
@@ -171,6 +173,8 @@ node main() {
 ```
 
 `Call` is `{ name: string, args: object, id: string, inToolCall: boolean }`. A direct call supplies all four fields, including the identity and tool context the caller wants to report. It is checked like any other call, so leaving the record out is a missing argument.
+
+Use `id` and `inToolCall` for reporting. Callers can supply them directly or change them in a checkpoint, so do not use them to grant permissions or skip approvals.
 
 ## A budget decorator
 

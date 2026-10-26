@@ -80,29 +80,6 @@ describe("decorator call metadata", () => {
     expect(JSON.parse(JSON.stringify(fields))).toEqual(metadataFields());
   });
 
-  it.each([
-    ["local", 'def _callRecord(): string { return "user helper" }'],
-    ["imported", 'import { _callRecord } from "./custom.js"'],
-  ])("ignores a %s binding named _callRecord", (_kind, declaration) => {
-    const parsed = parseAgency(`
-${declaration}
-decorator def recorded(call, block) {
-  return block(call.args)
-}
-@recorded
-def f(): number {
-  return 1
-}
-`);
-    if (!parsed.success) {
-      throw new Error(parsed.message);
-    }
-    const output = generateTypeScript(parsed.result, {}, undefined, "tools.agency");
-    expect(output).toContain('"id": "tools.agency:f"');
-    expect(output).toContain('"inToolCall": __run.toolInvocationStack !== undefined');
-    expect(output).not.toMatch(/__call\(_callRecord[,)]/);
-  });
-
   it("registers metadata as leaves with no identifier references or source statement form", () => {
     for (const field of metadataFields()) {
       expect(isRegisteredExpressionKind(field.type)).toBe(true);

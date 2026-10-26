@@ -110,7 +110,6 @@ function callRecordOf(body: ReturnType<typeof loweredBody>, call: FunctionCall):
   return declaration!.value;
 }
 
-/** The arguments stored on the decorated function's call record. */
 function outermostRecordArgs(record: unknown): RecordArgs {
   expect(record).toMatchObject({ type: "agencyObject" });
   const entries = (record as { entries: { key: string; value: unknown }[] }).entries;

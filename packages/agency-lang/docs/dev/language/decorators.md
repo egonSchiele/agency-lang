@@ -69,7 +69,7 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
    Two other layouts were weighed and set aside before the keyword: `call` first would put tag arguments one slot off from the parameter list; `call` and the block first would break the rule that a block binds to the last parameter. Detecting a decorator by a parameter named `call` was the shape before the keyword; it let a plain def with that name in that slot skip the ordering and arity checks, and a renamed parameter silently turned a decorator into a plain function.
 
-   **The `call` record** is `{ name, args, id, inToolCall }`. It holds the decorated function's name, its parameters by name, its runtime identity, and whether the invocation began inside a tool call. Block-typed parameters are left out because a block cannot be stored in a record. It is passed by name, `<record slot>: __call_N`, after the tag's own arguments.
+   **The `call` record** is `{ name, args, id, inToolCall }`. It holds the decorated function's name, its parameters by name, its runtime identity, and whether the invocation began inside an `llm()` tool call in the same run. Block-typed parameters are left out because a block cannot be stored in a record. It is passed by name, `<record slot>: __call_N`, after the tag's own arguments.
 
    The record is built in its own `const` statement right before the decorator call, from the parameters as they are at that moment. That statement is its own step. A resume replays the step that calls the decorator, so building the record there would read parameters the decorator has since rebound. The const's local is restored from the checkpoint instead (`tests/agency/decorators/rebind-call-args-after-resume.agency`). This also preserves `id` and `inToolCall`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`).
 
@@ -93,15 +93,13 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
 ## Call metadata
 
-The lowering keeps the record as an ordinary object. Its `id` and outermost `inToolCall` values are compiler-only `DecoratorCallField` leaves (`lib/types/decoratorCallField.ts`). Each leaf requests one field. The type checker assigns it `string` or `boolean`, and `TypeScriptBuilder` emits its value.
+`DecoratorCallField` represents the record's `id` and outermost `inToolCall` expressions. These compiler-only nodes have no Agency source syntax. `agency preprocess` includes them in its JSON output. `agency fmt` uses the original decorators.
 
-The ID is the same module-and-original-name key that `processRebindParameters` uses to find the function in the registry. The builder emits it as a string literal using its final module ID. This matters for `compileSource`, where a generated ID or `fingerprintModuleId` can differ from the source path. Output relocation and bundling leave that literal intact. Its uniqueness follows the existing function registry's assumptions. Treat it as opaque, with no promise of an absolute path or stability across builds.
+The ID uses the function registry's module-and-original-name key. `TypeScriptBuilder` supplies the final module ID, including a generated ID or `fingerprintModuleId` from `compileSource`. Output relocation and bundling preserve the emitted string. Treat the ID as opaque. It has no promised path format or stability across builds.
 
-The outermost boolean reads whether the current run has `toolInvocationStack`. The tool loop already sets that slot, and child execution contexts inherit it. It is true for functions selected by the model, calls from their bodies, re-export forwarding, and calls in their branches. It does not distinguish direct from indirect tool calls.
+`inToolCall` captures whether the current run has `toolInvocationStack` when the decorated invocation begins. This covers tool calls made by `llm()` and their nested calls and branches in the same run. It does not distinguish direct from indirect calls. Tool context does not propagate across subprocess or `serve` boundaries.
 
-Inner records emit the same ID literal and copy `__call_0.inToolCall` through the existing scoped property-access machinery. Their arguments still come from the preceding rebind. This captures tool context once for the decorated invocation, including when a decorator runs its block in a branch.
-
-These leaves generate no helper call, frame, or additional runner step. They have no source syntax. `agency preprocess` prints them as JSON, while ordinary `agency fmt` uses the original decorators. Converting a lowered leaf back to Agency source is refused.
+Stacked decorators share the same ID and captured tool context. Inner records copy `__call_0.inToolCall` so a decorator that runs its block in a branch cannot change the reported context. Their arguments still come from the preceding rebind.
 
 ## How the tag grammar changed
 

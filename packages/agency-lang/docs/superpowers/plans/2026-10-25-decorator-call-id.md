@@ -5,11 +5,13 @@
 Add two required fields to the existing `Call` record:
 
 - `id: string`: the decorated function's existing runtime identity, formed from the compiler's module ID and the function's original definition name.
-- `inToolCall: boolean`: whether this invocation began inside a model tool call. This includes functions called by the selected tool and calls made in its branches.
+- `inToolCall: boolean`: whether this invocation began inside a tool call made by `llm()` in the same run. This includes functions called by the selected tool and calls made in its branches. Tool context does not cross subprocess or MCP boundaries.
 
 Treat `id` as opaque. Its uniqueness follows the function registry's existing module identity rules. It is not an absolute source path or an identifier promised to remain stable across builds. Partial, renamed, and preapproved copies of a function produce the same ID inside the decorated definition.
 
 The boolean supports counting a function's invocations during tool execution. It does not distinguish functions selected directly by the model from functions called by their bodies. Direct-only counting is outside this change.
+
+Both fields are for reporting. Direct callers and edited checkpoints can supply their values, so they must not control permissions or approvals.
 
 Keep the implementation confined to constructing decorator records. Generated code gains two properties on an object it already creates. Ordinary function definitions and calls gain no instrumentation. The runtime change is limited to recognizing the new record shape in an existing error message.
 
@@ -167,10 +169,7 @@ Per decorated invocation, the outer record adds a literal property and one prese
 1. Add the typed metadata leaf and its compiler registrations. Add type synthesis and TypeScript emission together.
 2. Update `callRecord` to construct the two fields. Preserve its existing argument collection, source locations, statement placement, and idempotency.
 3. Update `Call`, the decorator shape check, the runtime diagnostic, and direct-call examples.
-4. Replace the current prototype's helper-based implementation with this design. Remove the `_callRecord` prelude export, its import and prelude-list entry, `lib/stdlib/callRecord.ts`, and its capability-test exemption. Adapt the prototype tests to the new contract.
-5. Run the focused checks below, regenerate fixtures and stdlib documentation, and update the decorator guide and dev documentation.
-
-The current worktree contains an uncommitted prototype for absolute paths and a three-way `toolCall` flag. Its passing tests do not validate this revised design. Remove only the superseded prototype work, preserving unrelated changes.
+4. Run the focused checks below, regenerate fixtures and stdlib documentation, and update the decorator guide and dev documentation.
 
 ## Tests
 
@@ -182,7 +181,6 @@ The current worktree contains an uncommitted prototype for absolute paths and a 
 - Add the leaf to the existing traversal coverage tests.
 - Check that `agency preprocess` can print the lowered tree as JSON and that ordinary `agency fmt` still prints decorator tags.
 - Regenerate the decorator TypeScript fixture. Verify the two emitted properties and the existing number of record steps. Undecorated fixtures should remain unchanged.
-- Compile a decorated function with a local or imported binding named `_callRecord`. That binding must not affect the metadata because no generated call refers to it.
 - Exercise `compileSource` with its generated module identity and with `fingerprintModuleId`, so code generation cannot accidentally use `fromFile`.
 
 ### Execution without a model

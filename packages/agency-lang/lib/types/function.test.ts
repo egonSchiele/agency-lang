@@ -77,7 +77,7 @@ describe("decoratorShapeProblem", () => {
     const aliases: Record<string, string> = {
       Ctx: "Call",
       Twice: "Ctx",
-      Call: "{ name: string, args: object }",
+      Call: "{ name: string, args: object, id: string, inToolCall: boolean }",
     };
     const resolve: AliasResolver = (name) =>
       aliases[name] === undefined ? undefined : typeOf(aliases[name]);
@@ -85,7 +85,7 @@ describe("decoratorShapeProblem", () => {
     expect(decoratorShapeProblem(slot("Ctx"), resolve)).toBeNull();
     expect(decoratorShapeProblem(slot("Twice"), resolve)).toBeNull();
     expect(decoratorShapeProblem(slot("Call"), resolve)).toBeNull();
-    expect(decoratorShapeProblem(slot("{ name: string, args: object }"), resolve)).toBeNull();
+    expect(decoratorShapeProblem(slot(aliases.Call), resolve)).toBeNull();
     // Without a resolver only the name is known, and `Call` is the prelude's.
     expect(decoratorShapeProblem(slot("Call"))).toBeNull();
     expect(decoratorShapeProblem(slot("Ctx"))).toContain("must be `Call` or left off");

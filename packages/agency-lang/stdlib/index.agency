@@ -73,9 +73,12 @@ export type WriteMode = "overwrite" | "append" | "create-only"
   with block parameters left out. The `id` is the function's opaque runtime
   identity, shared by partial, renamed, and preapproved copies. It is not
   a source path or an identifier guaranteed to stay the same across builds.
-  The `inToolCall` flag is true when the invocation began inside a model
-  tool call, including calls made by that tool's body or branches. See the
-  Decorators guide page. */
+  The `inToolCall` flag records whether the invocation began inside a
+  tool call made by `llm()` in this run, including calls from that tool's
+  body or branches. Subprocess and MCP calls do not inherit this context.
+  Use these fields for reporting. Direct callers and edited checkpoints
+  can supply their values, so do not use them to grant permissions or skip
+  approvals. See the Decorators guide page. */
 export type Call = { name: string, args: object, id: string, inToolCall: boolean }
 
 @capabilities(terminal)

@@ -193,7 +193,6 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "rebindParameters":
     case "decoratorCallField":
     case "markDestructiveRan":
-      // Synthetic leaves have no statement bodies.
       return [];
     case "messageThread":
       return [bodyField(node as MessageThread)];

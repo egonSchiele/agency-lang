@@ -29,6 +29,7 @@ import { recordLikeKeyValue } from "./recordLike.js";
 import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing.js";
 import { diagnostic } from "./diagnostics.js";
 import { expressionChildren } from "../utils/node.js";
+import { expressionSlots } from "../utils/expressionSlots.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -385,6 +386,28 @@ function importedValueType(name: string, ctx: TypeCheckerContext): VariableType 
   };
 }
 
+/** Collect trailing-block declarations wherever the call appears in an expression. */
+function walkExpressionBlocks(
+  node: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+  isStatement: boolean = false,
+): void {
+  for (const { expr } of expressionSlots(node)) {
+    walkExpressionBlocks(expr, scope, ctx);
+  }
+  // Inline callbacks in expressions keep their separate synthesis scope.
+  if (node.type !== "functionCall" || !node.block || (node.block.inline && !isStatement)) {
+    return;
+  }
+  const slot = getBlockSlot(node.functionName, ctx);
+  node.block.params.forEach((param, index) => {
+    const slotType = slot?.params[index]?.typeAnnotation;
+    scope.declare(param.name, param.typeHint ?? slotType ?? ANY_T);
+  });
+  walkScopeBody(node.block.body, scope, ctx);
+}
+
 /**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks using the same scope, which preserves today's
@@ -401,6 +424,7 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
     // expressionChildren, so a recursive walkScopeBody call would report
     // const mutations twice.
     const node = raw.type === "withModifier" ? raw.statement : raw;
+    walkExpressionBlocks(node, scope, ctx, true);
     switch (node.type) {
       case "assignment":
         declareVariable(node, scope, ctx);
@@ -527,21 +551,6 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
           }
           scope.declare(node.handler.param.name, node.handler.param.typeHint ?? ANY_T);
           walkScopeBody(node.handler.body, scope, ctx);
-        }
-        break;
-      case "functionCall":
-        if (node.block) {
-          // Block params today have no syntax for an explicit type annotation,
-          // so the type comes from the matching slot in the callee's
-          // `blockType` param (when present), falling back to `any`. The
-          // `param.typeHint` branch is dead code that anticipates a future
-          // typed-block-param syntax.
-          const slot = getBlockSlot(node.functionName, ctx);
-          node.block.params.forEach((param, i) => {
-            const slotType = slot?.params[i]?.typeAnnotation;
-            scope.declare(param.name, param.typeHint ?? slotType ?? ANY_T);
-          });
-          walkScopeBody(node.block.body, scope, ctx);
         }
         break;
     }

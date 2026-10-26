@@ -65,6 +65,7 @@ The same walk also handles:
 - **`importStatement`**: an imported Agency function gets a `functionRefType` built from its real signature in `ctx.importedFunctions`. A name from a JS import, or one with no known signature, gets `ANY_T`.
 - **`forLoop`**: `for (item, second in x)` binds two variables. Over an array, `item` is the element type and `second` is `number`. Over a record or object literal, `item` is the key and `second` is the value. `recordLikeKeyValue` is the shared helper so this and index-access synthesis agree.
 - Nested blocks (`ifElse`, `whileLoop`, `matchBlock`, `handleBlock`, `finalizeBlock`, `parallelBlock`, `seqBlock`, `messageThread`) recurse into the same scope, which is why declarations leak out of nested blocks today.
+- Trailing call blocks are visited in every expression position, before inferring an enclosing assignment's type. Inline callbacks in expressions keep their separate synthesis scope.
 
 ### Checking phase
 

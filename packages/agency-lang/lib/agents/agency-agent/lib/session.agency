@@ -146,13 +146,19 @@ export def takePendingLlmOptions(): LlmOptions | null {
 export def applySessionLlmOptions(prior: Session, options: LlmOptions): Session {
   """
   Make `options` this session's llm() options from the next turn, over
-  the preset's and settings.model's. Returns the new session.
+  the preset's and settings.model's. An empty block clears the session's
+  own, so the preset's or settings.model's apply again. Returns the new
+  session.
 
   @param prior - The session before
   @param options - The block the user asked for
   """
-  const next: Session = {
-    ...prior,
+  const models: Session = {
+    pin: prior.pin,
+    slots: prior.slots
+  }
+  const next: Session = if Object.keys(options).length == 0 then models else {
+    ...models,
     llmOptions: options
   }
   applyLlmOptions(requestLlmOptions(currentModelRequest(next), _startupModelSettings))

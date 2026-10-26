@@ -110,6 +110,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "anEmptyBlockFallsBackToThePreset",
+      "input": "",
+      "expectedOutput": "\"{\\\"pin\\\":\\\"\\\",\\\"slots\\\":{}} {\\\"openRouter\\\":{\\\"provider\\\":{\\\"only\\\":[\\\"fireworks\\\"]}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

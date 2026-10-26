@@ -145,3 +145,11 @@ node sameModelKeepsTheSessionOptions(): string {
   const out = switchModel(withOptions, "claude-opus-4-8", CTX, {})
   return JSON.stringify(out.session)
 }
+
+node anEmptyBlockFallsBackToThePreset(): string {
+  useOptionPresets()
+  switchPreset("fast")
+  const set = applySessionLlmOptions(noModelChoices(), { temperature: 0.7 })
+  const cleared = applySessionLlmOptions(set, {})
+  return "${JSON.stringify(cleared)} ${JSON.stringify(requestLlmOptions(currentModelRequest(cleared), {}))}"
+}

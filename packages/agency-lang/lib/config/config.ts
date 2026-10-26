@@ -647,18 +647,28 @@ export const AgencyConfigSchema = z
             downloadConcurrency: z.number().int().positive(),
           })
           .partial(),
-        // Mirrors smoltalk's OpenRouterProviderPreferences.
+        // Mirrors smoltalk's OpenRouterProviderPreferences. Provider names
+        // are OpenRouter's slugs, such as "z-ai" or "fireworks".
         openRouter: z
           .object({
             provider: z
               .object({
+                // Providers to try first, in this order.
                 order: z.array(z.string()),
+                // The only providers that may serve the call.
                 only: z.array(z.string()),
+                // Providers that must never serve the call.
                 ignore: z.array(z.string()),
+                // Whether OpenRouter may fall back to other providers when
+                // the listed ones fail. Default true.
                 allowFallbacks: z.boolean(),
+                // Only use providers that support every request parameter.
                 requireParameters: z.boolean(),
+                // "deny" skips providers that may store or train on the data.
                 dataCollection: z.enum(["allow", "deny"]),
+                // Rank providers by price, speed, or time to first token.
                 sort: z.enum(["price", "throughput", "latency"]),
+                // Allowed weight formats, such as ["fp8"] to skip fp4.
                 quantizations: z.array(z.string()),
               })
               .partial(),

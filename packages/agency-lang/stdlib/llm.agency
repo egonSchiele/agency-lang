@@ -71,9 +71,11 @@ export type OpenRouterOptions = {
  *  skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
  *  to use only one. Other providers ignore it. `rawAttributes` is spread
  *  into the provider's request body as given, for a request field Agency
- *  has no option for, except the fields the client builds itself (the
- *  model, the messages, the tools). Setting a field to `null` removes it
- *  from the defaults. */
+ *  has no option for, such as `{ top_k: 5 }`.
+ *
+ *  Setting a field to `null` removes it, so the value `agency.json` gives
+ *  it, if any, applies again. To turn OpenRouter routing off entirely,
+ *  pass `openRouter: {}`. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;

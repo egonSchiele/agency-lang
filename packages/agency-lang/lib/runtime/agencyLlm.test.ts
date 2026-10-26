@@ -354,8 +354,9 @@ describe("model and provider precedence", () => {
 describe("agency.llm — OpenRouter and raw request options", () => {
   async function recordedConfig(
     call: (threads: ThreadStore, run: Run) => Promise<unknown>,
+    baked: Partial<SmolConfig> = { model: "baked-model", provider: "openrouter" },
   ): Promise<PromptConfig> {
-    const ctx = makeCtx({ model: "baked-model", provider: "openrouter" });
+    const ctx = makeCtx(baked);
     const client = new RecordingClient(["ok", "ok"]);
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
@@ -401,6 +402,19 @@ describe("agency.llm — OpenRouter and raw request options", () => {
       return agency.llm("hi");
     });
     expect("openRouter" in toSmolConfig(config)).toBe(false);
+  });
+
+  it("setLlmOptions with null brings back the baked agency.json value", async () => {
+    const baked = { provider: { ignore: ["open-inference"] } };
+    const config = await recordedConfig(
+      async () => {
+        _setLlmOptions({ openRouter: { provider: { only: ["fireworks"] } } });
+        _setLlmOptions({ openRouter: null } as any);
+        return agency.llm("hi");
+      },
+      { model: "baked-model", provider: "openrouter", openRouter: baked },
+    );
+    expect(toSmolConfig(config).openRouter).toEqual(baked);
   });
 
   it("null removes replyLimits whole", async () => {

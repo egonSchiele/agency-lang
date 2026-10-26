@@ -1,4 +1,4 @@
-// LlmOptions is imported only so the inlined ModelSettings schema can find it.
+// Imported only so the inlined ModelSettings schema can find it (#1283).
 import { LlmOptions } from "../lib/llmOptions.agency"
 /*
  * Tests for the agent's settings.json persistence layer.
@@ -327,5 +327,5 @@ node dropsABadLlmOptionsBlock(): ModelSettings {
 }
 
 node keepsAGoodLlmOptionsBlock(): ModelSettings {
-  return sanitizeModelSettings({ pin: "gpt-5.5", llmOptions: { temperature: 0.2, rawAttributes: null } })
+  return sanitizeModelSettings({ pin: "gpt-5.5", llmOptions: { temperature: 0.2, retries: null } })
 }

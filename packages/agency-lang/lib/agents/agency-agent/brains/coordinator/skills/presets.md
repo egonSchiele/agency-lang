@@ -36,7 +36,8 @@ Set only the fields the user asked for.
 - `deletePreset(name)`: delete one.
 - `setDefaultPreset(name)`: make one the default. `savePreset` cannot.
 - `useLlmOptions(options)`: set `llm()` options for this session only,
-  from the next turn. Nothing is saved, and no approval is asked.
+  from the next turn. Nothing is saved. The user approves the change, and
+  a `/model` or `/preset` switch drops it.
 
 Every preset change asks the user to approve reading and writing settings.json.
 

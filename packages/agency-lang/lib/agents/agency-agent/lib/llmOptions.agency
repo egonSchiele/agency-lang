@@ -1,8 +1,8 @@
 /** @module
   @summary The llm() options a preset or a session can set beside its
-  model: OpenRouter routing, raw request fields, thinking, sampling, and
-  retries. One block, so the next provider option needs no agent change.
-  The shapes mirror LlmDefaults in std::llm.
+  models: OpenRouter routing, thinking, sampling, and retries. One block,
+  so the next provider option needs no agent change. The shapes mirror
+  LlmDefaults in std::llm.
 */
 import { setLlmOptions, LlmDefaults, OpenRouterOptions } from "std::llm"
 
@@ -21,7 +21,6 @@ export type ReplyLimitsOption = {
 
 export type LlmOptions = {
   openRouter?: OpenRouterOptions;
-  rawAttributes?: any;
   thinking?: ThinkingOption;
   temperature?: number;
   replyLimits?: ReplyLimitsOption;
@@ -34,10 +33,10 @@ export type LlmOptions = {
 // maxToolCallRounds, and maxToolResultChars (fields in a preset and in
 // settings.json), reasoningEffort (--effort), and maxTokens (the
 // capabilities settings). Applying a block nulls every key listed here, so
-// a key with another owner would be undone by every switch.
+// a key with another owner would be undone by every switch. rawAttributes
+// is left out until smoltalk stops it replacing the model (smoltalk#73).
 export static const LLM_OPTION_KEYS: string[] = [
   "openRouter",
-  "rawAttributes",
   "thinking",
   "temperature",
   "replyLimits",
@@ -46,13 +45,18 @@ export static const LLM_OPTION_KEYS: string[] = [
   "validationRetries",
 ]
 
+// The options a provider other than the one they were written for may
+// reject. The rest are read by one provider only, or by Agency itself.
+static const PROVIDER_SENSITIVE_KEYS: string[] = ["thinking", "temperature"]
+
+/** Null fields count as left out, the way a tool call sends null for an
+  optional field the model did not fill. */
 export def checkLlmOptions(value: any): Result<LlmOptions> {
   """
-  Check a block of llm() options. Returns the block with null fields
-  dropped, or a failure naming every problem: a value that is not an
-  object, an unknown key, or a known key whose value does not fit.
+  Check a block of llm() options. Returns the block, or a failure naming
+  each problem.
 
-  @param value - The block, as read from settings.json or passed to a tool
+  @param value - The block to check
   """
   if (!isPlainObject(value)) {
     return failure("must be an object of llm() options")
@@ -64,26 +68,72 @@ export def checkLlmOptions(value: any): Result<LlmOptions> {
   if (unknown.length > 0) {
     return failure(unknown.join("; "))
   }
-  const wrongShape = ["${key} has the wrong shape for that option" for key in Object.keys(set) if !fits(key, set[key])]
-  if (wrongShape.length > 0) {
-    return failure(wrongShape.join("; "))
+  const problems = [shapeProblem(key, set[key]) for key in Object.keys(set)]
+  const wrong = [problem for problem in problems if problem != ""]
+  if (wrong.length > 0) {
+    return failure(wrong.join("; "))
   }
   return success(set)
 }
 
-// One key at a time, so the failure can name the key.
-def fits(key: string, value: any): boolean {
+// One key at a time, so the problem can name the key. "" when it fits.
+def shapeProblem(key: string, value: any): string {
   const single: any = Object.fromEntries([[key, value]])
   const checked = single as LlmOptions!
-  return isSuccess(checked)
+  if (checked is failure(reason)) {
+    return describeFailure(key, reason)
+  }
+  return ""
 }
 
+// The checked cast fails with its validation issues as JSON. Each optional
+// field is a union with null, so the useful issue is inside the branch
+// that is not the null one.
+def describeFailure(key: string, reason: string): string {
+  const parsed = try JSON.parse(reason)
+  if (parsed is failure(_)) {
+    return "${key} has the wrong shape for that option"
+  }
+  const issues: any[] = parsed.value
+  if (issues.length == 0) {
+    return "${key} has the wrong shape for that option"
+  }
+  return issueText(issues[0], [])
+}
+
+def isNullBranch(branch: any[]): boolean {
+  return branch.length == 1 && branch[0].code == "invalid_type" && branch[0].expected == "null"
+}
+
+def issueText(issue: any, outer: string[]): string {
+  const path = [...outer, ...[String(part) for part in issue.path]]
+  const where = path.join(".")
+  if (issue.code == "invalid_union") {
+    const branches = [branch for branch in issue.errors if !isNullBranch(branch)]
+    const literals = [
+      branch[0].values[0]
+      for branch in branches
+      if branch.length == 1 && branch[0].code == "invalid_value"
+    ]
+    if (literals.length > 0 && literals.length == branches.length) {
+      return "${where} must be one of ${literals.join(", ")}"
+    }
+    if (branches.length > 0) {
+      return issueText(branches[0][0], path)
+    }
+  }
+  if (issue.code == "invalid_type") {
+    return "${where} must be of type ${issue.expected}"
+  }
+  return "${where}: ${issue.message}"
+}
+
+/** The nulls remove whatever an earlier block set, so a switch replaces
+  the block rather than merging into it. */
 export def optionsToApply(options: LlmOptions): Record<string, any> {
   """
   What applyLlmOptions passes to setLlmOptions: every key in
-  LLM_OPTION_KEYS set to null, with `options` spread over it. The nulls
-  remove whatever an earlier block set, so a switch replaces the block
-  rather than merging into it.
+  LLM_OPTION_KEYS set to null, with `options` spread over it.
 
   @param options - The block to apply
   """
@@ -94,6 +144,9 @@ export def optionsToApply(options: LlmOptions): Record<string, any> {
   }
 }
 
+/** setLlmOptions writes defaults for every llm() call in the branch, so
+  the block reaches every model the agent calls: the coordinator's and the
+  subagents'. */
 export def applyLlmOptions(options: LlmOptions) {
   """
   Make this block the session's llm() options, removing any option an
@@ -101,6 +154,27 @@ export def applyLlmOptions(options: LlmOptions) {
 
   @param options - The block to apply
   """
-  // The nulls in it remove keys, which setLlmOptions allows.
   setLlmOptions(optionsToApply(options) as LlmDefaults)
+}
+
+export def mixedProviderWarning(options: LlmOptions, providers: string[]): string {
+  """
+  A warning when the block sets an option some provider may reject and
+  the session's models use more than one provider. "" otherwise.
+
+  @param options - The block being applied
+  @param providers - The providers of the session's models
+  """
+  let distinct: string[] = []
+  for (provider in providers) {
+    if (provider != "" && !distinct.includes(provider)) {
+      distinct.push(provider)
+    }
+  }
+  const raw: any = options
+  const sensitive = [key for key in PROVIDER_SENSITIVE_KEYS if raw[key] != null]
+  if (distinct.length < 2 || sensitive.length == 0) {
+    return ""
+  }
+  return "llmOptions sets ${sensitive.join(" and ")}, which every model in this session gets, and the models use different providers (${distinct.join(", ")}). A provider may reject it."
 }

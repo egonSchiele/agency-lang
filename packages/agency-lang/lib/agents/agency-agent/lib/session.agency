@@ -11,11 +11,12 @@ import {
  } from "std::agency/local"
 import { listHostedModels } from "std::llm"
 import { disableMemory } from "std::memory"
+import { filterEntries } from "std::object"
 import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
-import { LlmOptions, applyLlmOptions } from "./llmOptions.agency"
+import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
   ModelFilters,
@@ -115,7 +116,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   const local = localModelOf(request)
   if (local != null) {
     configureLocalModel(local.model, local.embedding)
-    applyLlmOptions(requestLlmOptions(request, settings))
+    applyRequestOptions(request, settings)
     return success(true)
   }
   const resolved = resolveHostedModels(request, settings)
@@ -123,8 +124,20 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     return failure(reason)
   }
   applyResolved(resolved.value)
-  applyLlmOptions(requestLlmOptions(request, settings))
+  applyRequestOptions(request, settings)
   return success(true)
+}
+
+// Call after the models are applied: the warning reads their providers.
+def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
+  const options = requestLlmOptions(request, settings)
+  applyLlmOptions(options)
+  const slots = getResolvedSlots()
+  const providers = [slots[slot].provider for slot in Object.keys(slots) if slot != "embedding" && slots[slot] != null]
+  const warning = mixedProviderWarning(options, providers)
+  if (warning != "") {
+    pushMessage(color.yellow("Warning: ${warning}"))
+  }
 }
 
 // What the coordinator's useLlmOptions tool asked for, applied by the REPL
@@ -143,26 +156,26 @@ export def takePendingLlmOptions(): LlmOptions | null {
   return pending
 }
 
+/** An empty block clears the session's own, so the preset's or
+  settings.model's apply again. Takes effect from the next turn. */
 export def applySessionLlmOptions(prior: Session, options: LlmOptions): Session {
   """
-  Make `options` this session's llm() options from the next turn, over
-  the preset's and settings.model's. An empty block clears the session's
-  own, so the preset's or settings.model's apply again. Returns the new
-  session.
+  Make `options` this session's llm() options. Returns the new session.
 
   @param prior - The session before
   @param options - The block the user asked for
   """
-  const models: Session = {
-    pin: prior.pin,
-    slots: prior.slots
-  }
+  const models: Session = withoutOptions(prior)
   const next: Session = if Object.keys(options).length == 0 then models else {
     ...models,
     llmOptions: options
   }
-  applyLlmOptions(requestLlmOptions(currentModelRequest(next), _startupModelSettings))
+  applyRequestOptions(currentModelRequest(next), _startupModelSettings)
   return next
+}
+
+def withoutOptions(session: Session): Session {
+  return filterEntries(session, \(value, field) -> field != "llmOptions")
 }
 
 // The session's own block was written for the models it was set beside.
@@ -170,10 +183,7 @@ def withoutStaleOptions(prior: Session, next: Session): Session {
   if (next.pin == prior.pin && JSON.stringify(next.slots) == JSON.stringify(prior.slots)) {
     return next
   }
-  return {
-    pin: next.pin,
-    slots: next.slots
-  }
+  return withoutOptions(next)
 }
 
 // Persistent knowledge graph, gated on the capability profile.
@@ -273,7 +283,7 @@ export def switchModel(
   }
   const resolved = all.value
   applyResolved(resolved)
-  applyLlmOptions(requestLlmOptions(request, settings))
+  applyRequestOptions(request, settings)
   return {
     session: next,
     resolved: resolved,

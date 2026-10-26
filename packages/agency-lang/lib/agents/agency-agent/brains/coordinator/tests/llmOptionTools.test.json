@@ -12,9 +12,19 @@
       ]
     },
     {
-      "nodeName": "recordsARequestForTheRepl",
+      "nodeName": "anApprovedChangeIsRecordedForTheRepl",
       "input": "",
       "expectedOutput": "\"true {\\\"openRouter\\\":{\\\"provider\\\":{\\\"ignore\\\":[\\\"open-inference\\\"]}}} true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRejectedChangeRecordsNothing",
+      "input": "",
+      "expectedOutput": "\"true true\"",
       "evaluationCriteria": [
         {
           "type": "exact"

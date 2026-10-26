@@ -202,11 +202,15 @@ def presetLlmOptions(request: ModelRequest): LlmOptions | null {
   return preset.llmOptions ?? null
 }
 
+/** The first block set wins whole, and blocks never merge: each was
+  written for its own models. */
 export def requestLlmOptions(request: ModelRequest, settings: ModelSettings): LlmOptions {
   """
   The llm() options the request fixes: the in-session block, then the
-  preset's, then settings.model's. The first that is set wins whole;
-  blocks never merge, because each was written for its own models.
+  preset's, then settings.model's.
+
+  @param request - The model request
+  @param settings - settings.model
   """
   return request.choices.llmOptions ?? presetLlmOptions(request) ?? settings.llmOptions ?? {}
 }

@@ -22,6 +22,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "llmOptionsSpillOnlyWhenSet",
+      "description": "spillToolResultsOver is written when above 0 and left out otherwise",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "emptyGuidanceRendersEmpty",
       "description": "failed consult renders empty guidance",
       "input": "",

@@ -149,7 +149,8 @@ node main() {
 | `tools` | `any[]` | Tools the model may call. |
 | `hostedTools` | `string[]` | Provider tools to enable (e.g. `["web_search"]`). |
 | `memory` | `boolean` | Enable [memory](/guide/memory). |
-| `maxToolResultChars` | `number` | Limit the number of characters from a tool call that are sent back to the model (`0` to disable). When the call's tools include `readSpill` from `std::spill`, a longer result is saved in the run and the model gets a preview and a name to read the rest with; otherwise it is cut at the limit. |
+| `maxToolResultChars` | `number` | The most characters from one tool result that are sent back to the model (`0` for no limit). A longer result is cut at the limit, unless the call sets `spillToolResultsOver`. |
+| `spillToolResultsOver` | `number` | Save a tool result in the run when it is longer than this many characters or longer than `maxToolResultChars`, and send the model a short preview and a name to read the rest with. The preview fits under `maxToolResultChars`. This applies to a tool's error messages too. The call's tools must include `readSpill` from `std::spill`, or the call fails before it starts. Unset or `0`: nothing is saved. |
 
 ### Resilience
 

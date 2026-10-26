@@ -5,7 +5,7 @@ import {
   DEFAULT_TOOL_RESULT_CHARS,
   stringifyToolResult,
   capToolResultForLlm,
-  overCapFor,
+  spillSettings,
   assertUniqueToolNames,
   unwrapToolResultForLlm,
   failureTier,
@@ -18,7 +18,7 @@ import { meteredDispatch } from "./recordPaidUsage.js";
 import type { GraphState } from "./types.js";
 import type { Run } from "./asyncContext.js";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
-import { DEFAULT_READERS, findOutput } from "./toolOutputStore.js";
+import { findOutput } from "./toolOutputStore.js";
 import { GlobalStore } from "./state/globalStore.js";
 
 describe("failureTier", () => {
@@ -157,91 +157,182 @@ describe("capToolResultForLlm", () => {
   }
   const page = { name: "longPage", module: "page.agency", registeredName: "longPage" };
   const reader = { name: "readSpill", module: "stdlib/spill.agency", registeredName: "readSpill" };
-  const save = (run: Run) => overCapFor(run, DEFAULT_READERS, page);
+  const spillOver = (run: Run, over: number) => spillSettings(run, over, {}, [page, reader]);
   const storedEntries = (run: Run) =>
     (run.globals.get(GlobalStore.INTERNAL_MODULE, "__toolOutput")?.entries ?? []).length;
   const savedName = (notice: string) => /full output saved as (\S+) ---/.exec(notice)![1];
 
-  it("returns the original value untouched when within the cap", () => {
+  it("returns the original value untouched when within the limits", () => {
     withRun((run) => {
       const obj = { big: "x".repeat(100) };
-      // Object under cap → returned as-is (object identity), so smoltalk
-      // serializes it exactly as before — no behavior change.
-      expect(capToolResultForLlm(obj, 1000, save(run))).toBe(obj);
-      expect(capToolResultForLlm("short", 1000, save(run))).toBe("short");
+      // Object under the limits → returned as-is (object identity), so
+      // smoltalk serializes it exactly as before — no behavior change.
+      expect(capToolResultForLlm(obj, 1000, null, page)).toBe(obj);
+      expect(capToolResultForLlm(obj, 1000, spillOver(run, 500), page)).toBe(obj);
+      expect(capToolResultForLlm("short", 1000, spillOver(run, 500), page)).toBe("short");
     });
   });
 
-  it("saves an over-cap string whole and hands the model a notice naming it", () => {
+  it("cuts an over-limit result when spilling is off, even with the readers offered", () => {
     withRun((run) => {
-      const out = capToolResultForLlm("a".repeat(5000), 100, save(run)) as string;
-      expect(out).toContain("5000 characters");
+      // The call offers readSpill, but only spillToolResultsOver turns
+      // spilling on: the tool list never changes what happens to a result.
+      expect(spillSettings(run, undefined, {}, [page, reader])).toBeNull();
+      const out = capToolResultForLlm("a".repeat(5000), 100, null, page) as string;
+      expect(out.length).toBeLessThanOrEqual(100);
+      expect(out.startsWith("a")).toBe(true);
+      expect(out).toMatch(/\[tool result truncated: showing \d+ of 5000 chars\]$/);
+      expect(storedEntries(run)).toBe(0);
+    });
+  });
+
+  it("gives the start of the result alone when the cap is too small for the marker", () => {
+    expect(capToolResultForLlm("a".repeat(5000), 30, null, page)).toBe("a".repeat(30));
+  });
+
+  it("cuts a reader's own result with the slice note when spilling is off", () => {
+    withRun((run) => {
+      const out = capToolResultForLlm("a".repeat(5000), 1000, null, reader) as string;
+      expect(out.length).toBeLessThanOrEqual(1000);
+      expect(out).toContain("of 5000 chars]");
+      expect(out).toContain("read a smaller slice with offset and limit");
+      expect(storedEntries(run)).toBe(0);
+    });
+  });
+
+  it("saves a result over the spill value though it is under the limit", () => {
+    withRun((run) => {
+      const text = "a".repeat(30_000);
+      const out = capToolResultForLlm(text, 100_000, spillOver(run, 20_000), page) as string;
+      expect(out).toContain("30000 characters");
       const name = savedName(out);
-      expect(findOutput(run, name)).toBe("a".repeat(5000));
+      expect(findOutput(run, name)).toBe(text);
       expect(out).toContain(`readSpill(filename: "${name}")`);
     });
   });
 
-  it("saves an over-cap object indented, so readSpill and grepSpill have lines", () => {
+  it("saves a result over the limit though it is under the spill value", () => {
+    withRun((run) => {
+      const text = "a".repeat(30_000);
+      const out = capToolResultForLlm(text, 20_000, spillOver(run, 50_000), page) as string;
+      expect(findOutput(run, savedName(out))).toBe(text);
+      expect(out).not.toContain("tool result truncated");
+    });
+  });
+
+  it("fits the notice under the limit", () => {
+    withRun((run) => {
+      const text = Array.from({ length: 5000 }, (_, index) => `line ${index}`).join("\n");
+      const out = capToolResultForLlm(text, 500, spillOver(run, 100), page) as string;
+      expect(out.length).toBeLessThanOrEqual(500);
+      expect(out).toContain(`readSpill(filename: "${savedName(out)}")`);
+    });
+  });
+
+  it("saves with no limit, and does not cut the notice", () => {
+    withRun((run) => {
+      const out = capToolResultForLlm("a".repeat(5000), 0, spillOver(run, 100), page) as string;
+      expect(out).toContain(`readSpill(filename: "${savedName(out)}")`);
+      expect(storedEntries(run)).toBe(1);
+    });
+  });
+
+  it("cuts a reader's own result at the spill value instead of saving a second copy", () => {
+    withRun((run) => {
+      const out = capToolResultForLlm("a".repeat(5000), 100_000, spillOver(run, 1000), reader);
+      expect((out as string).length).toBeLessThanOrEqual(1000);
+      expect(out).toContain("read a smaller slice with offset and limit");
+      expect(storedEntries(run)).toBe(0);
+    });
+  });
+
+  it("saves an over-limit object indented, so readSpill and grepSpill have lines", () => {
     withRun((run) => {
       const big = { data: "y".repeat(5000), more: [1, 2] };
-      const out = capToolResultForLlm(big, 100, save(run)) as string;
+      const out = capToolResultForLlm(big, 100_000, spillOver(run, 100), page) as string;
       expect(findOutput(run, savedName(out))).toBe(JSON.stringify(big, null, 2));
-    });
-  });
-
-  it("cuts the result at the cap when the model has no readSpill, and saves nothing", () => {
-    withRun((run) => {
-      const out = capToolResultForLlm("a".repeat(5000), 100, overCapFor(run, null, page));
-      expect(out).toBe("a".repeat(100) + "\n\n[tool result truncated: showing 100 of 5000 chars]");
-      expect(storedEntries(run)).toBe(0);
-    });
-  });
-
-  it("cuts a reader's own result instead of saving a second copy", () => {
-    withRun((run) => {
-      const out = capToolResultForLlm(
-        "a".repeat(5000),
-        100,
-        overCapFor(run, DEFAULT_READERS, reader),
-      );
-      expect(out).toContain("[tool result truncated: showing 100 of 5000 chars]");
-      expect(out).toContain("offset and limit");
-      expect(storedEntries(run)).toBe(0);
     });
   });
 
   it("names the readers by the names the model sees them under", () => {
     withRun((run) => {
-      const renamed = { read: "read_saved", grep: null };
-      const out = capToolResultForLlm("a".repeat(5000), 100, overCapFor(run, renamed, page));
-      expect(out).toContain(`read_saved(filename: "${savedName(out as string)}")`);
+      const renamed = {
+        name: "read_saved",
+        module: "stdlib/spill.agency",
+        registeredName: "readSpill",
+      };
+      const spill = spillSettings(run, 100, {}, [page, renamed]);
+      const out = capToolResultForLlm("a".repeat(5000), 100_000, spill, page) as string;
+      expect(out).toContain(`read_saved(filename: "${savedName(out)}")`);
       expect(out).not.toContain("grepSpill");
     });
   });
 
   it("cap of 0 disables the cap (returns original)", () => {
-    withRun((run) => {
-      const huge = "z".repeat(1_000_000);
-      expect(capToolResultForLlm(huge, 0, save(run))).toBe(huge);
-    });
+    const huge = "z".repeat(1_000_000);
+    expect(capToolResultForLlm(huge, 0, null, page)).toBe(huge);
   });
 
   it("non-finite cap (Infinity) disables the cap", () => {
-    withRun((run) => {
-      const huge = "z".repeat(1_000_000);
-      expect(capToolResultForLlm(huge, Infinity, save(run))).toBe(huge);
-    });
+    const huge = "z".repeat(1_000_000);
+    expect(capToolResultForLlm(huge, Infinity, null, page)).toBe(huge);
   });
 
   it("default cap is 100000 characters", () => {
+    expect(DEFAULT_TOOL_RESULT_CHARS).toBe(100_000);
+    const justOver = "q".repeat(DEFAULT_TOOL_RESULT_CHARS + 1);
+    const out = capToolResultForLlm(justOver, DEFAULT_TOOL_RESULT_CHARS, null, page) as string;
+    expect(out.length).toBeLessThanOrEqual(DEFAULT_TOOL_RESULT_CHARS);
+    expect(out).toContain("tool result truncated");
+    const under = "q".repeat(DEFAULT_TOOL_RESULT_CHARS);
+    expect(capToolResultForLlm(under, DEFAULT_TOOL_RESULT_CHARS, null, page)).toBe(under);
+  });
+});
+
+describe("spillSettings", () => {
+  function withRun<T>(fn: (run: Run) => T): T {
+    const ctx = makeMockCtx();
+    return inFrameOf(ctx, ctx.stateStack, fn);
+  }
+  const spill = "stdlib/spill.agency";
+  const page = {
+    name: "fetchMarkdown",
+    module: "stdlib/http.agency",
+    registeredName: "fetchMarkdown",
+  };
+  const read = { name: "readSpill", module: spill, registeredName: "readSpill" };
+  const grep = { name: "grepSpill", module: spill, registeredName: "grepSpill" };
+
+  it("is off when the option is unset, 0, or negative", () => {
     withRun((run) => {
-      expect(DEFAULT_TOOL_RESULT_CHARS).toBe(100_000);
-      const justOver = "q".repeat(DEFAULT_TOOL_RESULT_CHARS + 1);
-      const out = capToolResultForLlm(justOver, DEFAULT_TOOL_RESULT_CHARS, save(run)) as string;
-      expect(out).toContain("full output saved as");
-      const under = "q".repeat(DEFAULT_TOOL_RESULT_CHARS);
-      expect(capToolResultForLlm(under, DEFAULT_TOOL_RESULT_CHARS, save(run))).toBe(under);
+      expect(spillSettings(run, undefined, {}, [page])).toBeNull();
+      expect(spillSettings(run, 0, {}, [page])).toBeNull();
+      expect(spillSettings(run, -1, {}, [page])).toBeNull();
+    });
+  });
+
+  it("names the readers the call offers", () => {
+    withRun((run) => {
+      const settings = spillSettings(run, 20_000, {}, [page, read, grep]);
+      expect(settings?.over).toBe(20_000);
+      expect(settings?.readers).toEqual({ read: "readSpill", grep: "grepSpill" });
+    });
+  });
+
+  it("refuses a call whose tools have no readSpill, naming the tools it has", () => {
+    withRun((run) => {
+      const lookalike = { name: "readOutput", module: "mine.agency", registeredName: "readOutput" };
+      expect(() => spillSettings(run, 20_000, {}, [page, lookalike])).toThrow(
+        "its tools (fetchMarkdown, readOutput) do not include readSpill",
+      );
+    });
+  });
+
+  it("refuses a value set with setLlmOptions", () => {
+    withRun((run) => {
+      expect(() =>
+        spillSettings(run, undefined, { spillToolResultsOver: 20_000 }, [page, read]),
+      ).toThrow("spillToolResultsOver is set per llm() call, not with setLlmOptions.");
     });
   });
 });

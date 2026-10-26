@@ -93,7 +93,6 @@ import {
 import { isAborted } from "./abortedResult.js";
 import {
   assertUniqueToolNames,
-  capToolResultForLlm,
   dropNullDefaultedArgs,
   failureTier,
   invokeOnFreshThreadStore,
@@ -108,9 +107,9 @@ import {
   unwrapToolResultForLlm,
   toolArgumentsFor,
   callFromOutside,
-  overCapFor,
+  spillSettings,
+  toolResultCapper,
 } from "./toolInvocation.js";
-import { spillReaders } from "./toolOutputStore.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -608,6 +607,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    spillToolResultsOver: callSpillOver,
     maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     maxToolCallRounds: ccMaxToolCallRounds,
     retries: ccRetries,
@@ -624,6 +624,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       memory?: boolean | { model?: string };
       replyLimits?: ReplyLimits;
       maxToolResultChars?: number;
+      spillToolResultsOver?: number;
       maxRepeatedToolCalls?: number;
       maxToolCallRounds?: number;
       label?: string;
@@ -688,9 +689,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const clientConfig = withHostKeys(ctx.host.settings, hosted);
 
   const toolResultCap = resultCap(callMaxToolResultChars, stackMaxToolResultChars, ctx);
-  const readers = spillReaders(exposedFunctions);
-  const capForLlm = (value: any, tool: AgencyFunction) =>
-    capToolResultForLlm(value, toolResultCap, overCapFor(run, readers, tool));
+  // Throws before the first request, so nothing reaches smoltalk.
+  const spill = spillSettings(run, callSpillOver, stackDefaults, exposedFunctions);
+  const capForLlm = toolResultCapper(toolResultCap, spill);
 
   // Restore or initialize messages.
   //

@@ -2,6 +2,7 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { webTools, spillTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage } from "std::thread"
+import { AGENT_SPILL_OVER } from "std::agents/lib/shared"
 
 static const skills = agentSkill("researcher")
 
@@ -45,6 +46,7 @@ export def researcherAgent(topic: string): string {
     const result = llm(
       "Please research this topic: <topic>${topic}</topic>",
       tools: [...buildTools()],
+      spillToolResultsOver: AGENT_SPILL_OVER,
       hostedTools: hostedSearchTools(),
     )
     return result

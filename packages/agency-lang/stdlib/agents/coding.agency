@@ -15,7 +15,7 @@
   For an Agency-specific coding agent, use std::agents/agency/coding.
 */
 import { hostedSearchTools } from "std::agents/lib/search"
-import { llmOptions, withContext } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import {
   writableFileTools,
   shellTools,
@@ -101,6 +101,7 @@ ${finalizeReminder}
     model: model,
     provider: provider,
     tools: [...buildTools(), ...extraTools, saveDraft],
+    spillToolResultsOver: AGENT_SPILL_OVER,
     hostedTools: hostedSearchTools(model, provider),
   ),
   )

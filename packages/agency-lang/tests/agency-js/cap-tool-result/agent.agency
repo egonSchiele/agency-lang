@@ -1,7 +1,7 @@
 // bigTool returns a 500-char result; the llm() call caps tool results
-// at 50 chars. This exercises the REAL wiring: runPrompt must apply the
-// cap to the tool message it feeds back to the LLM (the unit tests only
-// cover the pure helper).
+// at 200 chars, truncation marker included. This exercises the REAL
+// wiring: runPrompt must apply the cap to the tool message it feeds back
+// to the LLM (the unit tests only cover the pure helper).
 def bigTool(): string {
   let s = ""
   for (i in range(50)) {
@@ -11,5 +11,5 @@ def bigTool(): string {
 }
 
 node main() {
-  return llm("use the tool", { tools: [bigTool], maxToolResultChars: 50 })
+  return llm("use the tool", { tools: [bigTool], maxToolResultChars: 200 })
 }

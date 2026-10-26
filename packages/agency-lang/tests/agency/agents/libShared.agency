@@ -16,6 +16,12 @@ node llmOptionsSetsModelAndProvider(): boolean {
   return options.model == "gpt-x" && options.provider == "openai" && options.hostedTools.length == 1
 }
 
+node llmOptionsSpillOnlyWhenSet(): boolean {
+  const on = llmOptions("", "", spillToolResultsOver: 100000)
+  const off = llmOptions("", "")
+  return on.spillToolResultsOver == 100000 && off.spillToolResultsOver == null
+}
+
 node emptyGuidanceRendersEmpty(): boolean {
   const guidance = guidanceOrEmpty(failure("boom"))
   return renderGuidance(guidance) == ""

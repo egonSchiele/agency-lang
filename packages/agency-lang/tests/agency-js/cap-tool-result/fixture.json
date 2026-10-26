@@ -3,5 +3,6 @@
   "truncated": true,
   "reportsOriginalLength": true,
   "preservesPrefix": true,
-  "shorterThanFull": true
+  "shorterThanFull": true,
+  "withinCap": true
 }

@@ -79,29 +79,6 @@ greet(greeting: "Hi")
 greet(greeting: "Hi", name: "Bob")
 ```
 
-### Parameter aliases
-
-A model calling a function as a tool sometimes guesses a parameter's name. In one run, a model called `fetch` with `url` instead of `baseUrl` twice, and each miss cost a round. An alias lets the function accept the guess without renaming the parameter:
-
-```ts
-def fetch(baseUrl | url: string, path: string = ""): Result<string> {
-  ...
-}
-```
-
-The first name is the parameter's name. Each name after a `|` is an alias. Only before the colon: after it, `|` is still a union type, so `baseUrl | url: string | null` means the parameter `baseUrl`, the alias `url`, and the type `string | null`.
-
-An alias is a misspelling the tool forgives. It is not a second name for the parameter. Inside the body, the parameter is `baseUrl`, and `url` is not a variable. The tool schema a model sees lists `baseUrl` only. When a model, an HTTP request to a served agent, or `agency run` passes `url`, the runtime renames the key before the function sees it. Passing both `url` and `baseUrl` in one call is an error naming both.
-
-Code you write uses the parameter's name. This is an error:
-
-```ts
-fetch(url: "https://example.com")
-// error AG6042: 'url' is an alias of parameter 'baseUrl' of 'fetch'. In Agency code, use 'baseUrl'.
-```
-
-The type checker is off unless `typechecker.enabled` is set. With it off, the same call compiles and fails when it runs, with the runtime's error: `'url' is an alias of 'baseUrl' in call to 'fetch'; use 'baseUrl'.` Either way the alias is refused. The same goes for `fetch.partial(url: ...)`. Aliases go on `def` parameters only; a node's parameters cannot carry them, because nothing would ever forgive them there.
-
 ## Blocks
 
 Functions can also take blocks. This is a way to pass a chunk of code to a function. If you're used lambda functions in other languages, this is similar.

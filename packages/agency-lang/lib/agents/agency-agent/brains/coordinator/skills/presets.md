@@ -6,8 +6,9 @@ description: Create, change, delete, list, or pick the default agent preset (sav
 # Presets
 
 A preset is a named set of settings the agent can start with: a provider,
-models, and two tool limits. Presets live in the agent's settings.json.
-A preset does not change your prompt, your tools, or the approval policy.
+models, two tool limits, and `llm()` options. Presets live in the agent's
+settings.json. A preset does not change your prompt, your tools, or the
+approval policy.
 
 ## Fields
 
@@ -23,6 +24,10 @@ Set only the fields the user asked for.
 - `maxToolCallRounds`: the most tool-call rounds in one turn, a whole number above zero.
 - `maxToolResultChars`: the most characters of one tool result you see.
   `0` means no cap.
+- `llmOptions`: `llm()` options for the preset's models, the same fields
+  `useLlmOptions` takes. The common one is `openRouter.provider`, which
+  picks the companies OpenRouter may send calls to, such as
+  `{ openRouter: { provider: { ignore: ["open-inference"] } } }`.
 
 ## Tools
 
@@ -30,8 +35,11 @@ Set only the fields the user asked for.
 - `savePreset(name, preset)`: create or replace one.
 - `deletePreset(name)`: delete one.
 - `setDefaultPreset(name)`: make one the default. `savePreset` cannot.
+- `useLlmOptions(options)`: set `llm()` options for this session only,
+  from the next turn. Nothing is saved. The user approves the change, and
+  a `/model` or `/preset` switch drops it.
 
-Every change asks the user to approve reading and writing settings.json.
+Every preset change asks the user to approve reading and writing settings.json.
 
 ## Steps
 
@@ -57,4 +65,11 @@ User: make it my default
 
 ```
 setDefaultPreset("cheap")
+```
+
+User: use fireworks only for glm, and save that as a preset called glm-fw
+
+```
+useLlmOptions({ openRouter: { provider: { only: ["fireworks"], allowFallbacks: false } } })
+savePreset("glm-fw", { provider: "openrouter", pin: "z-ai/glm-5.3-flash", llmOptions: { openRouter: { provider: { only: ["fireworks"], allowFallbacks: false } } } })
 ```

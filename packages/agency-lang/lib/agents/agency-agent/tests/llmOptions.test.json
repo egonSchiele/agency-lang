@@ -1,0 +1,135 @@
+{
+  "sourceFile": "llmOptions.agency",
+  "tests": [
+    {
+      "nodeName": "acceptsOpenRouter",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "acceptsTemperatureAndRetries",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsKeysWithAnotherOwner",
+      "input": "",
+      "expectedOutput": "\"no: unknown option 'reasoningEffort'; unknown option 'maxTokens'\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsRawAttributes",
+      "input": "",
+      "expectedOutput": "\"no: unknown option 'rawAttributes'\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsModel",
+      "input": "",
+      "expectedOutput": "\"no: unknown option 'model'\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsBadSort",
+      "input": "",
+      "expectedOutput": "\"no: openRouter.provider.sort: expected one of \\\"price\\\", \\\"throughput\\\", \\\"latency\\\", but received the text \\\"cheapest\\\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "namesAWrongType",
+      "input": "",
+      "expectedOutput": "\"no: openRouter.provider.order: Invalid input: expected array, received string\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsNonObject",
+      "input": "",
+      "expectedOutput": "\"no: must be an object of llm() options\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nullFieldsCountAsLeftOut",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "applyClearsEveryOtherKey",
+      "input": "",
+      "expectedOutput": "\"true 0 {\\\"provider\\\":{\\\"only\\\":[\\\"fireworks\\\"]}} false false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "warnsWhenTemperatureMeetsTwoProviders",
+      "input": "",
+      "expectedOutput": "\"llmOptions sets temperature, which every model in this session gets, and the models use different providers (openrouter, anthropic). A provider may reject it.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noWarningForRoutingAlone",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noWarningForOneProvider",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+// Imported only so the inlined Preset schema can find it (#1283).
+import { LlmOptions } from "../lib/llmOptions.agency"
 import { checkPreset, presetProblems } from "../lib/presetRules.agency"
 
 // Each rule, one passing and one failing case. A node returns the list of
@@ -86,4 +88,24 @@ node checkNamesThePreset(): string {
     return checked.error
   }
   return "unexpected success"
+}
+
+node presetWithLlmOptions(): string[] {
+  return presetProblems("glm-fw", {
+    provider: "openrouter",
+    pin: "z-ai/glm-5.3-flash",
+    llmOptions: { openRouter: { provider: { only: ["fireworks"] } } }
+  }, false)
+}
+
+node presetLlmOptionsWithAModel(): string[] {
+  return presetProblems("x", { llmOptions: { model: "x" } }, false)
+}
+
+node presetLlmOptionsNotAnObject(): string[] {
+  return presetProblems("x", { llmOptions: 5 }, false)
+}
+
+node localPresetWithLlmOptions(): string[] {
+  return presetProblems("offline", { local: "qwen3.5-2b", llmOptions: { replyLimits: { hedgeLimit: 4 } } }, false)
 }

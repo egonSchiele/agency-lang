@@ -1,0 +1,28 @@
+import { LlmOptions } from "../../../lib/llmOptions.agency"
+import { takePendingLlmOptions } from "../../../lib/session.agency"
+import { useLlmOptions } from "../llmOptionTools.agency"
+
+static const AVOID: LlmOptions = { openRouter: { provider: { ignore: ["open-inference"] } } }
+
+node refusesAModelField(): string {
+  const options: any = { model: "x" }
+  const reply = useLlmOptions(options) with approve
+  return "${reply.startsWith("Not set")} ${takePendingLlmOptions() == null}"
+}
+
+node anApprovedChangeIsRecordedForTheRepl(): string {
+  const reply = useLlmOptions(AVOID) with approve
+  const first = takePendingLlmOptions()
+  const second = takePendingLlmOptions()
+  return "${reply.includes("openRouter")} ${JSON.stringify(first)} ${second == null}"
+}
+
+node aRejectedChangeRecordsNothing(): string {
+  const reply = useLlmOptions(AVOID) with reject
+  return "${isFailure(reply)} ${takePendingLlmOptions() == null}"
+}
+
+node anEmptyBlockGoesBack(): string {
+  const reply = useLlmOptions({}) with approve
+  return "${reply.includes("preset")} ${JSON.stringify(takePendingLlmOptions())}"
+}

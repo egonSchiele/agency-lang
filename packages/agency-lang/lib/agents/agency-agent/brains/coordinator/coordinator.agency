@@ -19,6 +19,7 @@ import { learnedExtras } from "../../lib/learned.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "./learn.agency"
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
+import { useLlmOptions } from "./llmOptionTools.agency"
 import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
@@ -74,6 +75,7 @@ export static const mainAgentTools = [
   savePreset,
   deletePreset,
   setDefaultPreset,
+  useLlmOptions,
   ...readOnlyFileTools(),
   edit.partial(useAgentCwd: true),
 ]

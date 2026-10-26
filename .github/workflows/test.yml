@@ -44,6 +44,7 @@ jobs:
   # `node23-build` below keeps a cheaper node 23.x signal.
   unit-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       # Keep every shard running even if one fails, so a failure in one slice
@@ -107,6 +108,7 @@ jobs:
   # `make`: the tests run from source.
   speech-ffmpeg:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -135,6 +137,7 @@ jobs:
   # compiles the stdlib under node 23.x.
   node23-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -159,6 +162,7 @@ jobs:
   # machine class); no `make` (these tests run from source via vitest).
   perf:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     continue-on-error: true
 
     steps:
@@ -205,6 +209,7 @@ jobs:
   # they run in parallel with `unit-tests` rather than serially behind it.
   integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -266,6 +271,7 @@ jobs:
   # min no longer serializes behind the unit suite.
   agent-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -303,6 +309,7 @@ jobs:
       contents: read
 
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       # Don't cancel the other shards when one fails — we still want the full
@@ -421,6 +428,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -489,6 +497,7 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

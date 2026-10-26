@@ -190,6 +190,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "dropsABadLlmOptionsBlock",
+      "input": "",
+      "expectedOutput": "{\"pin\":\"gpt-5.5\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "keepsAGoodLlmOptionsBlock",
+      "input": "",
+      "expectedOutput": "{\"llmOptions\":{\"temperature\":0.2},\"pin\":\"gpt-5.5\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

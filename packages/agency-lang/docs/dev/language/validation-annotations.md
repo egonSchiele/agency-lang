@@ -340,6 +340,15 @@ failure on the first miss, and stores the checked value back on each
 pass. The body's steps see the halt and skip, and the function returns
 the failure.
 
+The message names each field inside the argument that did not fit, read
+from zod's issue list. An optional field is a union with `null`, and its
+`null` option only says the value was not null, so it is set aside before
+the other options are read. That is what turns `sort: "cheapest"` into
+`sort: expected one of "price", "throughput", "latency"` and not
+`Invalid input`. `schemaProblems` gives the same field list for a failed
+checked cast; Agency code reaches it as `_schemaProblems` from
+`agency-lang/stdlib-lib/schemaProblems.js`.
+
 ### Why step 0
 
 A `@validate` function is an Agency function, so it claims a frame from

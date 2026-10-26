@@ -1,0 +1,69 @@
+import {
+  checkLlmOptions,
+  LLM_OPTION_KEYS,
+  mixedProviderWarning,
+  optionsToApply,
+ } from "../lib/llmOptions.agency"
+
+def verdict(value: any): string {
+  const checked = checkLlmOptions(value)
+  if (checked is failure(reason)) {
+    return "no: ${reason}"
+  }
+  return "ok"
+}
+
+node acceptsOpenRouter(): string {
+  return verdict({ openRouter: { provider: { ignore: ["open-inference"] } } })
+}
+
+node acceptsTemperatureAndRetries(): string {
+  return verdict({ temperature: 0.2, retries: 3 })
+}
+
+node rejectsRawAttributes(): string {
+  return verdict({ rawAttributes: { top_k: 5 } })
+}
+
+node namesAWrongType(): string {
+  return verdict({ openRouter: { provider: { order: "z-ai" } } })
+}
+
+node rejectsKeysWithAnotherOwner(): string {
+  return verdict({ reasoningEffort: "high", maxTokens: 100 })
+}
+
+node rejectsModel(): string {
+  return verdict({ model: "x" })
+}
+
+node rejectsBadSort(): string {
+  return verdict({ openRouter: { provider: { sort: "cheapest" } } })
+}
+
+node rejectsNonObject(): string {
+  return verdict("not an object")
+}
+
+node nullFieldsCountAsLeftOut(): string {
+  return verdict({ openRouter: null, temperature: 0.2 })
+}
+
+node applyClearsEveryOtherKey(): string {
+  const applied = optionsToApply({ openRouter: { provider: { only: ["fireworks"] } } })
+  const keys = Object.keys(applied)
+  const othersNull = [key for key in LLM_OPTION_KEYS if key != "openRouter" && applied[key] != null]
+  return "${keys.length == LLM_OPTION_KEYS.length} ${othersNull.length} ${JSON.stringify(applied.openRouter)} ${keys.includes("model")} ${keys.includes("maxToolResultChars")}"
+}
+
+node warnsWhenTemperatureMeetsTwoProviders(): string {
+  return mixedProviderWarning({ temperature: 0.2 }, ["openrouter", "anthropic", "openrouter"])
+}
+
+node noWarningForRoutingAlone(): string {
+  return mixedProviderWarning({ openRouter: { provider: { ignore: ["open-inference"] } } }, ["openrouter", "anthropic"])
+}
+
+node noWarningForOneProvider(): string {
+  return mixedProviderWarning({ temperature: 0.2 }, ["openrouter", "openrouter", ""])
+}

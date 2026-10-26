@@ -9,12 +9,14 @@ import {
   localModelsSupported,
   listModelNames,
  } from "std::agency/local"
-import { listHostedModels } from "std::llm"
+import { hostedModelInfo, listHostedModels } from "std::llm"
 import { disableMemory } from "std::memory"
+import { filterEntries } from "std::object"
 import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
+import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
   ModelFilters,
@@ -28,6 +30,7 @@ import {
   noModelChoices,
   noModelFlags,
   requestIsLocal,
+  requestLlmOptions,
   requestProvider,
  } from "./modelRequest.agency"
 import {
@@ -113,6 +116,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   const local = localModelOf(request)
   if (local != null) {
     configureLocalModel(local.model, local.embedding)
+    applyRequestOptions(request, settings)
     return success(true)
   }
   const resolved = resolveHostedModels(request, settings)
@@ -120,7 +124,79 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     return failure(reason)
   }
   applyResolved(resolved.value)
+  applyRequestOptions(request, settings)
   return success(true)
+}
+
+// Call after the models are applied: the warning reads their providers.
+def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
+  const options = requestLlmOptions(request, settings)
+  applyLlmOptions(options)
+  const slots = getResolvedSlots()
+  const providers = [slotProvider(slots[slot]) for slot in Object.keys(slots) if slot != "embedding" && slots[slot] != null]
+  const warning = mixedProviderWarning(options, providers)
+  if (warning != "") {
+    pushMessage(color.yellow("Warning: ${warning}"))
+  }
+}
+
+// An empty provider means smoltalk picks it from the model name, so look
+// the model up the same way.
+def slotProvider(resolved: Resolved): string {
+  if (resolved.provider != "") {
+    return resolved.provider
+  }
+  const info = hostedModelInfo(resolved.model)
+  if (info == null) {
+    return ""
+  }
+  return info.provider
+}
+
+// What the coordinator's useLlmOptions tool asked for, applied by the REPL
+// after the turn. A tool runs in a branch, and setLlmOptions there writes
+// the branch's own defaults, which are dropped when the branch joins.
+let _pendingLlmOptions: LlmOptions | null = null
+
+export def requestSessionLlmOptions(options: LlmOptions) {
+  _pendingLlmOptions = options
+}
+
+/** The block the chat tool asked for, or null. Clears it. */
+export def takePendingLlmOptions(): LlmOptions | null {
+  const pending = _pendingLlmOptions
+  _pendingLlmOptions = null
+  return pending
+}
+
+/** An empty block clears the session's own, so the preset's or
+  settings.model's apply again. Takes effect from the next turn. */
+export def applySessionLlmOptions(prior: Session, options: LlmOptions): Session {
+  """
+  Make `options` this session's llm() options. Returns the new session.
+
+  @param prior - The session before
+  @param options - The block the user asked for
+  """
+  const models: Session = withoutOptions(prior)
+  const next: Session = if Object.keys(options).length == 0 then models else {
+    ...models,
+    llmOptions: options
+  }
+  applyRequestOptions(currentModelRequest(next), _startupModelSettings)
+  return next
+}
+
+def withoutOptions(session: Session): Session {
+  return filterEntries(session, \(value, field) -> field != "llmOptions")
+}
+
+// The session's own block was written for the models it was set beside.
+def withoutStaleOptions(prior: Session, next: Session): Session {
+  if (next.pin == prior.pin && JSON.stringify(next.slots) == JSON.stringify(prior.slots)) {
+    return next
+  }
+  return withoutOptions(next)
 }
 
 // Persistent knowledge graph, gated on the capability profile.
@@ -204,6 +280,7 @@ export def switchModel(
   } else {
     next.slots[parsed.slot] = parsed.model
   }
+  next = withoutStaleOptions(prior, next)
 
   const request = currentModelRequest(next)
   const settings = _startupModelSettings
@@ -219,6 +296,7 @@ export def switchModel(
   }
   const resolved = all.value
   applyResolved(resolved)
+  applyRequestOptions(request, settings)
   return {
     session: next,
     resolved: resolved,

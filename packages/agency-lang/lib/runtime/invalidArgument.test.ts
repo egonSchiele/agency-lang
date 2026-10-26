@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { __invalidArgument, describeValue } from "./invalidArgument.js";
+import { __invalidArgument, describeValue, schemaProblems } from "./invalidArgument.js";
 import { failure } from "./result.js";
 import { __validateType } from "./schema.js";
 import type { ResultFailure } from "./result.js";
@@ -243,5 +243,38 @@ describe("__invalidArgument", () => {
     expect(describeValue(true)).toBe("true");
     expect(describeValue([1])).toBe("a list");
     expect(describeValue({ a: 1 })).toBe("an object");
+  });
+});
+
+describe("schemaProblems", () => {
+  // The shape a checked cast builds for optional fields: each is `T | null`.
+  const options = z.object({
+    provider: z.union([
+      z.object({
+        sort: z.union([z.literal("price"), z.literal("latency"), z.null()]),
+        order: z.union([z.array(z.string()), z.null()]),
+      }),
+      z.null(),
+    ]),
+  });
+
+  function problems(value: unknown): string | null {
+    return schemaProblems(refused(value, options).error, value);
+  }
+
+  it("lists the literals an optional field takes", () => {
+    expect(problems({ provider: { sort: "cheapest", order: null } })).toBe(
+      'provider.sort: expected one of "price", "latency", but received the text "cheapest"',
+    );
+  });
+
+  it("names the type an optional field takes", () => {
+    expect(problems({ provider: { sort: null, order: "z-ai" } })).toBe(
+      "provider.order: Invalid input: expected array, received string",
+    );
+  });
+
+  it("returns null for a message that is not a list of issues", () => {
+    expect(schemaProblems("must be positive", 5)).toBeNull();
   });
 });

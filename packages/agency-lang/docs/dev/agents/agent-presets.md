@@ -53,6 +53,48 @@ The startup flags and `settings.model` are kept in `let` globals in
 above the preset all session, and neither command reads `settings.json`
 inside a turn.
 
+## Options beside the model
+
+`settings.model`, a preset, and the session's `/model` choices can each hold
+an `llmOptions` block: `llm()` options for the models beside it, such as
+`{ "openRouter": { "provider": { "ignore": ["open-inference"] } } }`. The
+block is defined in `lib/llmOptions.agency`. It may hold `openRouter`,
+`rawAttributes`, `thinking`, `temperature`, `replyLimits`, `retries`,
+`timeout`, and `validationRetries` (`LLM_OPTION_KEYS`). Keys that already
+have an owner are refused: `model`, `provider`, and the two tool limits have
+fields of their own, `reasoningEffort` comes from `--effort`, and `maxTokens`
+comes from the capabilities settings.
+
+`requestLlmOptions` picks the block: the session's, then the preset's, then
+`settings.model`'s. The first one set wins whole, and blocks never merge,
+because each was written for its own models. `rawAttributes: { "top_k": 5 }`
+written for GLM would be rejected by Anthropic, so an option must not
+outlive the model it was set for. For the same reason a model flag drops
+the preset's block with its models, and a `/model` switch that changes a
+model drops the session's block. A local preset keeps its block: a local
+model has options too.
+
+`applyModelRequest` and `switchModel` apply the block right after the
+models, through `applyLlmOptions`. That calls `setLlmOptions` with every key
+in `LLM_OPTION_KEYS` set to `null` and the block spread over them. A `null`
+removes the key from the branch defaults, so switching from a preset with
+an `openRouter` block to one without leaves no `openRouter` behind. The
+nulls stop at `LLM_OPTION_KEYS`, which is why a key with another owner
+cannot be in the block: every switch would undo `--effort` or the token cap.
+
+The coordinator's `useLlmOptions` tool sets the session's block from chat.
+It does not call `setLlmOptions`: a tool runs in a branch, and the branch's
+defaults are dropped when it joins, so the change would vanish. The tool
+records a request with `requestSessionLlmOptions`, and the REPL applies it
+after the turn with `applySessionLlmOptions`, the way `/model` takes effect
+on the next turn. `savePreset` takes the same block through `PresetInput`.
+
+`presets.agency`, `presetTools.agency`, and two tests import `LlmOptions`
+without using it. The compiler inlines an imported type's schema, such as
+`Preset`, into the importing module but does not import the named types
+that schema refers to, so without the import the module fails to load
+with "LlmOptions is not defined".
+
 ## Why the presets are read once
 
 The preset table is read at startup, before the policy handler exists,

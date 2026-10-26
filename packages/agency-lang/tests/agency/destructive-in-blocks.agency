@@ -123,8 +123,9 @@ node handlerDoesWork_() {
   return "unexpected"
 }
 
-// A destructive call in an `if` condition: the only flip that covers it is
-// the conservative one on the `if` statement.
+// A destructive call in an `if` condition. Hoisting moves it into its own
+// `const __hoist_N = burn()` statement before the `if`, and that statement's
+// post-flip is what marks the function.
 def inCondition(): Result {
   if (burn() > 0) {
     return failure("inside")

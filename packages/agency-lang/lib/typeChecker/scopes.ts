@@ -6,6 +6,7 @@ import {
   GraphNodeDefinition,
   VariableType,
   functionScope,
+  isExpressionNode,
   nodeScope,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
@@ -30,6 +31,8 @@ import { analyzeCondition, walkWithNarrowing, postGuardFacts } from "./narrowing
 import { diagnostic } from "./diagnostics.js";
 import { expressionChildren } from "../utils/node.js";
 import { expressionSlots } from "../utils/expressionSlots.js";
+import { bodySlots } from "../utils/bodySlots.js";
+import { typeKey } from "./typeKey.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -386,7 +389,7 @@ function importedValueType(name: string, ctx: TypeCheckerContext): VariableType 
   };
 }
 
-/** Collect trailing-block declarations wherever the call appears in an expression. */
+/** Collect declarations from statement bodies owned by expressions. */
 function walkExpressionBlocks(
   node: AgencyNode,
   scope: Scope,
@@ -396,16 +399,35 @@ function walkExpressionBlocks(
   for (const { expr } of expressionSlots(node)) {
     walkExpressionBlocks(expr, scope, ctx);
   }
-  // Inline callbacks in expressions keep their separate synthesis scope.
-  if (node.type !== "functionCall" || !node.block || (node.block.inline && !isStatement)) {
+  if (node.type === "functionCall") {
+    // Leave inline callbacks in expressions to synthesis; see
+    // synthBlockReturnType in synthesizer.ts for array callback scopes.
+    if (!node.block || (node.block.inline && !isStatement)) {
+      return;
+    }
+    const slot = getBlockSlot(node.functionName, ctx);
+    const aliases = ctx.getTypeAliases();
+    node.block.params.forEach((param, index) => {
+      const slotType = slot?.params[index]?.typeAnnotation;
+      // typeHint is reserved for future typed block-parameter syntax.
+      const paramType = param.typeHint ?? slotType ?? ANY_T;
+      const existing = scope.lookupInFunction(param.name);
+      // Blocks share the function scope. Conflicting parameter types must stay
+      // unknown so the last block cannot change the type used to check earlier ones.
+      const conflicts = existing && typeKey(existing, aliases) !== typeKey(paramType, aliases);
+      scope.declare(param.name, conflicts ? ANY_T : paramType);
+    });
+  } else if (
+    isStatement ||
+    node.type === "blockArgument" ||
+    (!isExpressionNode(node) && node.type !== "messageThread")
+  ) {
+    // Ordinary statement bodies use walkScopeBody's narrowing and binding rules.
     return;
   }
-  const slot = getBlockSlot(node.functionName, ctx);
-  node.block.params.forEach((param, index) => {
-    const slotType = slot?.params[index]?.typeAnnotation;
-    scope.declare(param.name, param.typeHint ?? slotType ?? ANY_T);
-  });
-  walkScopeBody(node.block.body, scope, ctx);
+  for (const { body } of bodySlots(node)) {
+    walkScopeBody(body, scope, ctx);
+  }
 }
 
 /**

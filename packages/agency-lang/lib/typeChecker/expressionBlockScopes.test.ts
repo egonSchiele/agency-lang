@@ -30,6 +30,48 @@ describe("scope collection inside expression blocks", () => {
     expect(check(`def main(): ${returnType} { ${body} }`)).toEqual([]);
   });
 
+  it.each([
+    ["two", ""],
+    ["three", "const c = onStr() as x { return x.length }"],
+  ])("accepts %s typed blocks that reuse a parameter name", (_, thirdBlock) => {
+    const errors = typecheckSource(`
+def onNum(cb: (number) -> number): number { return cb(1) }
+def onStr(cb: (string) -> number): number { return cb("hello") }
+def main(): number {
+  const a = onNum() as x { return x + 1 }
+  const b = onStr() as x { return x.length }
+  ${thirdBlock}
+  return a + b
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("resolves locals in a thread used as a value", () => {
+    expect(
+      check(`
+def main(): number {
+  const messages = thread {
+    const local = 3
+    identity(local)
+  }
+  return 0
+}
+`),
+    ).toEqual([]);
+  });
+
+  it("keeps trailing-block locals visible after the call", () => {
+    expect(
+      check(`
+def main(): number {
+  const result = apply() { const local = 3; return local }
+  return local + result
+}
+`),
+    ).toEqual([]);
+  });
+
   it("resolves a callable local inside a returned block", () => {
     expect(
       check(`
@@ -60,19 +102,19 @@ def main(): number {
     ]);
   });
 
-  it("reports each const reassignment and mutation once", () => {
+  it("reports each const reassignment and mutation once through with modifiers", () => {
     const errors = check(`
 def main(): number {
   const result = apply() {
     const assigned = 1
     assigned = 2
     return assigned
-  }
+  } with approve
   return apply() {
     const incremented = result
     incremented++
     return incremented
-  }
+  } with approve
 }
 `);
     expect(errors.map((error) => [error.name, error.message])).toEqual([
@@ -112,9 +154,8 @@ def main(): number {
 def each(cb: (number) -> void): void { cb(1) }
 def main(): void { each(\\(item) -> item) }
 `);
-    expect(errors).toHaveLength(1);
-    expect(errors[0].message).toContain("number");
-    expect(errors[0].message).toContain("void");
-    expect(errors[0].message).toContain("block return");
+    expect(errors.map((error) => [error.code, error.message])).toEqual([
+      ["AG2001", "Type 'number' is not assignable to type 'void' (block return)."],
+    ]);
   });
 });

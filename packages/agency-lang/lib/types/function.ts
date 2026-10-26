@@ -134,7 +134,7 @@ const NO_ALIASES: AliasResolver = () => undefined;
  *  (`stdlib/index.agency`). The record slot's written type must resolve to
  *  this, so a file that redefines `Call` is refused: the decorator would
  *  be typed against a record it never receives. */
-const CALL_RECORD_TYPE = "{ name: string, args: object }";
+const CALL_RECORD_TYPE = "{ name: string, args: object, id: string, inToolCall: boolean }";
 
 /** Whether `hint` is a type the record slot may carry: left off, `any`,
  *  the prelude's `Call`, or an alias of it (`type Ctx = Call`). Aliases

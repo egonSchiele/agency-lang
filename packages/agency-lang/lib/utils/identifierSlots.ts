@@ -213,6 +213,7 @@ const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   awaitPending: none,
   markDestructiveRan: none,
   rebindParameters: none,
+  decoratorCallField: none,
   hole: none,
   // Quoted code: names inside a literal body belong to the GENERATED
   // program, so the host emits no semantic tokens for them.

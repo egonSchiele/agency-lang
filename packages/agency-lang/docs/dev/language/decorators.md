@@ -20,16 +20,20 @@ Specs: `docs/superpowers/specs/2026-10-22-decorators.md` (the feature), `docs/su
 
 ## What the compiler does
 
-The tag lowers to a call with the body as the block argument. The tag's own arguments come first, as written; the call record is passed by name after them, under whatever the decorator calls its second-to-last parameter; the block takes one parameter, `__args`, and starts with a `rebindParameters` statement. `greet` above becomes:
+The tag lowers to a call with the body as the block argument. The tag's own arguments come first. The call record is passed by name after them, under whatever the decorator calls its second-to-last parameter. The block takes one parameter, `__args`, and starts with a `rebindParameters` statement.
 
+For `greet` in a module whose ID is `tools.agency`, the generated record has this shape:
+
+```ts
+const __call_0 = {
+  name: "greet",
+  args: { name: __stack.args["name"] },
+  id: "tools.agency:greet",
+  inToolCall: __run.toolInvocationStack !== undefined,
+};
 ```
-def greet(name: string): string {
-  return logged(call: { name: "greet", args: { name: name } }) {
-    <rebindParameters>
-    return "hello ${name}"
-  }
-}
-```
+
+The record is saved in the function's locals in its own step. The next step calls `logged` with that record and the block containing the rebind and original body.
 
 The lowering lives in `lib/preprocessors/decoratorDesugar.ts`, next to `guardDesugar.ts`, which it copies in every structural respect:
 
@@ -55,7 +59,7 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
    The last two parameters are the record slot and the block slot, by position. Their names are free. The record slot is untyped, `Call`, an alias of it (`type Ctx = Call`), or `any`; the block slot takes a block (`lastParameterTakesBlock`: block-typed, untyped, or `any`); neither has a default or is variadic. A written type on the record slot other than those is refused at the def because the checker is off by default: `decorator def d(call: Call, tag: string, block)` would otherwise pass the record into `tag` and fail at runtime, which is the mistake the previous fixed shape existed to prevent. A plain def is never a decorator, whatever its parameters, so there is one way to say it.
 
-   **What counts as `Call`.** `decoratorShapeProblem` takes an `AliasResolver`, a function from an alias name to its body, and follows the record slot's type through it: the slot is accepted when the chain ends at the prelude's record type, `{ name: string, args: object }`, compared by its printed form. A file that declares its own `type Call = { foo: number }` is refused, because the decorator would be typed against a record it never receives. An alias the resolver cannot see is accepted only when it is named `Call`, because a program checked with no prelude loaded (a unit test over `decoratorShapeProblem` alone) has nothing to resolve the name to. The stage's resolver is `aliasResolver` over the compilation unit's aliases at the global scope; the checker's is over the aliases visible in its current scope (`checkDecoratorDefs`, the call branch of `checkSingleFunctionCall`). One thing to know: the test helper `typecheckSource` lets the prelude's `Call` win over a file's own, while `prepareProgram` lets the file's win, so the redefinition case is tested through `prepareProgram` (`lib/typeChecker/decoratorChecks.test.ts`). That disagreement is older than decorators and not theirs to settle.
+   **What counts as `Call`.** `decoratorShapeProblem` takes an `AliasResolver`, a function from an alias name to its body, and follows the record slot's type through it: the slot is accepted when the chain ends at the prelude's record type, `{ name: string, args: object, id: string, inToolCall: boolean }`, compared by its printed form. A file that declares its own `type Call = { foo: number }` is refused, because the decorator would be typed against a record it never receives. An alias the resolver cannot see is accepted only when it is named `Call`, because a program checked with no prelude loaded (a unit test over `decoratorShapeProblem` alone) has nothing to resolve the name to. The stage's resolver is `aliasResolver` over the compilation unit's aliases at the global scope; the checker's is over the aliases visible in its current scope (`checkDecoratorDefs`, the call branch of `checkSingleFunctionCall`). One thing to know: the test helper `typecheckSource` lets the prelude's `Call` win over a file's own, while `prepareProgram` lets the file's win, so the redefinition case is tested through `prepareProgram` (`lib/typeChecker/decoratorChecks.test.ts`). That disagreement is older than decorators and not theirs to settle.
 
    **The fill.** An untyped record slot is typed `Call` and an untyped block slot `(args: object) -> any`, by `withDecoratorTypes`, which returns a copy and never writes the parse tree, so `agency fmt` prints the user's text. Each fill is a fresh type node (`recordSlotType`, `blockSlotType`): the hints are spliced into defs across the program, and a pass that annotates one in place must not reach every decorator. A `decorator def` with fewer than two parameters is left as written; AG6043 says what is missing. The fill runs in two places, and both views agree. `SymbolTable.build` stores the filled parameters on every function symbol, so an imported decorator's signature, hover and signature help in the editor, and `agency doc` all show `Call` and the block type. `desugarDecorators` puts the filled copy on the def itself before it lowers anything, which is what the checker, the preprocessor's block-type propagation, and codegen read. The order inside the lowering matters: `callRecord` leaves block-typed parameters out of a decorated decorator's own record, so its block slot must be typed before the record is built (`tests/agency/decorators/decorated-decorator-untyped.agency`). The filled view also reaches the decorator's tool schema, so an untyped record slot gets an object schema.
 
@@ -65,7 +69,9 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 
    Two other layouts were weighed and set aside before the keyword: `call` first would put tag arguments one slot off from the parameter list; `call` and the block first would break the rule that a block binds to the last parameter. Detecting a decorator by a parameter named `call` was the shape before the keyword; it let a plain def with that name in that slot skip the ordering and arity checks, and a renamed parameter silently turned a decorator into a plain function.
 
-   **The `call` record** is `{ name, args }`: the decorated function's name and its parameters by name, block-typed parameters left out (a block cannot be stored in a record). It is passed by name, `<record slot>: __call_N`, after the tag's own arguments, so it never competes with a positional tag argument for a slot. It is built in its own `const` statement right before the call, from the parameters as they are at that moment. That statement is its own step: a resume replays the step that calls the decorator, and building the record there would read parameters the decorator has since rebound. The const's local is restored from the checkpoint instead (`tests/agency/decorators/rebind-call-args-after-resume.agency`). `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`).
+   **The `call` record** is `{ name, args, id, inToolCall }`. It holds the decorated function's name, its parameters by name, its runtime identity, and whether the invocation began inside an `llm()` tool call in the same run. Block-typed parameters are left out because a block cannot be stored in a record. It is passed by name, `<record slot>: __call_N`, after the tag's own arguments.
+
+   The record is built in its own `const` statement right before the decorator call, from the parameters as they are at that moment. That statement is its own step. A resume replays the step that calls the decorator, so building the record there would read parameters the decorator has since rebound. The const's local is restored from the checkpoint instead (`tests/agency/decorators/rebind-call-args-after-resume.agency`). This also preserves `id` and `inToolCall`. `type Call` is in the prelude (`stdlib/index.agency`, listed in `PRELUDE_NAMES`).
 
    **The block takes the arguments.** The decorator chooses what the body runs with: `block(call.args)` runs it with the arguments as passed, `block({ ...call.args, name: "x" })` with one changed, `block()` with none (defaults apply; a parameter with no default is a missing argument). The block's first statement is the synthetic `rebindParameters` node (`lib/types/rebindParameters.ts`), which compiles to one `__rebindParameters` call (`lib/runtime/rebind.ts`) over a table of the function's parameters, each default a thunk compiled where the function's scope is visible. The runtime binds the record with `AgencyFunction.bindRecord`, a public method over the private `resolveNamed`, so unknown keys, missing arguments, variadics, and aliases follow the rules of a call and produce its messages; it stores the values on the enclosing function's frame (`__stack.args`, reached lexically from the block); then it runs the `!` checks over the rebound parameters, so a decorator cannot route a value around a validator. Any failure halts the block's runner, so `block()` returns a failure value and nothing propagates through the decorator.
 
@@ -84,6 +90,16 @@ The `lookup` both callers pass comes from `decoratorLookup(functionDefinitions, 
 5. **The formatter prints the tag back**, never the lowered body. `agency fmt` parses and prints without lowering; `formatTag` renders a tag's arguments through the same `renderArgList` a call uses, so named arguments and comments survive.
 6. **The block rules apply.** A decorator calls `block()` directly and may call it more than once (`tests/agency/decorators/retry-calls-block-twice.agency`). It never stores or returns the block.
 7. **`def` only.** A decorator tag on a node, a type, a statement, or nothing is a compile error.
+
+## Call metadata
+
+`DecoratorCallField` represents the record's `id` and outermost `inToolCall` expressions. These compiler-only nodes have no Agency source syntax. `agency preprocess` includes them in its JSON output. `agency fmt` uses the original decorators.
+
+The ID uses the function registry's module-and-original-name key. `TypeScriptBuilder` supplies the final module ID, including a generated ID or `fingerprintModuleId` from `compileSource`. Output relocation and bundling preserve the emitted string. Treat the ID as opaque. It has no promised path format or stability across builds.
+
+`inToolCall` captures whether the current run has `toolInvocationStack` when the decorated invocation begins. This covers tool calls made by `llm()` and their nested calls and branches in the same run. It does not distinguish direct from indirect calls. Tool context does not propagate across subprocess or `serve` boundaries.
+
+Stacked decorators share the same ID and captured tool context. Inner records copy `__call_0.inToolCall` so a decorator that runs its block in a branch cannot change the reported context. Their arguments still come from the preceding rebind.
 
 ## How the tag grammar changed
 
@@ -154,6 +170,7 @@ Part 1 found that a `destructive { }` region inside a block argument lost its `d
 - `lib/types/function.ts`: `FunctionMarkers.decorator`, `FunctionDefinition.decorators`, `DecoratorOrigin`, `FunctionCall.decorator`, and the one section that knows the shape: `isDecoratorDef`, `DECORATOR_SLOT_COUNT`, `recordSlotName`, `withDecoratorTypes`, `decoratorShapeProblem`, `callerSuppliedParameters`.
 - `lib/compilationUnit.ts`: `ImportedFunctionSignature.markers` and the fill on import; `lib/preprocessors/resolveReExports.ts`: the wrapper that carries the markers.
 - `lib/typeChecker/decoratorDefs.ts`: `checkDecoratorDefs`; `lib/typeChecker/checker.ts`: the decorator branch of `checkSingleFunctionCall`, `hiddenDecoratorArguments`.
+- `lib/types/decoratorCallField.ts`: the synthetic record metadata expressions, typed by `lib/typeChecker/synthesizer.ts` and emitted by `lib/backends/typescriptBuilder.ts`.
 - `lib/types/rebindParameters.ts`: the synthetic statement; `lib/runtime/rebind.ts`: `__rebindParameters` and `__releaseRebind`, over the live-only `rebinding` list on `State` (`lib/runtime/state/stateStack.ts`); `lib/runtime/agencyFunction.ts`: `bindRecord`, and the `block(call)` hint it throws when the record is the call record itself.
 - `lib/backends/typescriptBuilder.ts`: `processRebindParameters` (the function is reached through `__toolRegistry` by its module key, which a parameter named like the function cannot shadow), `firstEntryParamStore`, the `storeOnFirstEntry` option of `buildFunctionBody`.
 - `lib/parsers/parsers.ts` and `lib/typeChecker/paramDefaultOrder.ts`: the ordering check over `orderCheckedParameters`; `lib/symbolTable.ts` stores `withDecoratorTypes` on every function symbol; `lib/backends/agencyGenerator.ts` prints the marker through `markerKeywordsOf`.

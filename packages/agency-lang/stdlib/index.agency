@@ -68,12 +68,18 @@ effect std::writeBinary {
   already exists. */
 export type WriteMode = "overwrite" | "append" | "create-only"
 
-/** What a decorator learns about the function it wraps. Every decorator
-  receives one of these in its second-to-last parameter, whatever that
-  parameter is called: `name` is the decorated function's name and `args`
-  holds its parameters by name, block parameters left out. See the
-  Decorators guide page. */
-export type Call = { name: string, args: object }
+/** What a decorator learns about the function it wraps. The `name` is
+  the definition's original name. Its `args` hold the parameters by name,
+  with block parameters left out. The `id` is the function's opaque runtime
+  identity, shared by partial, renamed, and preapproved copies. It is not
+  a source path or an identifier guaranteed to stay the same across builds.
+  The `inToolCall` flag records whether the invocation began inside a
+  tool call made by `llm()` in this run, including calls from that tool's
+  body or branches. Subprocess and MCP calls do not inherit this context.
+  Use these fields for reporting. Direct callers and edited checkpoints
+  can supply their values, so do not use them to grant permissions or skip
+  approvals. See the Decorators guide page. */
+export type Call = { name: string, args: object, id: string, inToolCall: boolean }
 
 @capabilities(terminal)
 export def print(...messages: any[]) {

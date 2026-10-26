@@ -536,6 +536,8 @@ export class AgencyGenerator {
         return this.processAgencyArray(node);
       case "agencyObject":
         return this.processAgencyObject(node);
+      case "decoratorCallField":
+        throw new Error("Decorator call metadata has no Agency source form.");
       case "graphNode":
         return this.processGraphNode(node);
       case "importStatement":

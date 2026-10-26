@@ -1102,7 +1102,8 @@ describe("bindRecord (the decorator rebind)", () => {
   });
 
   it("says to pass call.args when given the call record itself", () => {
-    expect(() => fn.bindRecord({ name: "testFn", args: { a: 1 } })).toThrow(
+    const call = { name: "testFn", args: { a: 1 }, id: "f.agency:testFn", inToolCall: false };
+    expect(() => fn.bindRecord(call)).toThrow(
       "block() in 'testFn' was given the call record itself. Pass its arguments: block(call.args).",
     );
   });

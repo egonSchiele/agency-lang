@@ -44,7 +44,7 @@ import { GLOBAL_SCOPE_KEY, ScopedTypeAliases } from "@/compilationUnit.js";
  * becomes
  *
  *     def research(task: string, maxCost: number): Result<string> {
- *       const __call_0 = { name: "research", args: { task: task, maxCost: maxCost } }
+ *       const __call_0 = { name: "research", args: { task: task, maxCost: maxCost }, id: <id>, inToolCall: <context> }
  *       return budgeted(cost: maxCost, call: __call_0) {
  *         <rebindParameters>
  *         BODY
@@ -143,7 +143,7 @@ export function loweredBody(
     const depth = innermostFirst.length - 1 - index;
     const recordName = `${RECORD_LOCAL}${depth}`;
     return [
-      recordDeclaration(recordName, target, def.parameters, tag.loc),
+      recordDeclaration(recordName, depth, target, def.parameters, tag.loc),
       returning(decoratorCall(tag, target, depth, def.parameters, body, lookup), tag.loc),
     ];
   }, def.body);
@@ -154,10 +154,11 @@ function returning(value: Expression, loc: SourceLocation | undefined): ReturnSt
   return { type: "returnStatement", value, loc };
 }
 
-/** `const __call_N = { name: "<def>", args: { ... } }`, the record the
- *  decorator at depth N receives, built once in its own step. */
+/** `const __call_N = ...`, the record the decorator at depth N receives,
+ *  built once in its own step. */
 function recordDeclaration(
   name: string,
+  depth: number,
   target: string,
   parameters: FunctionParameter[],
   loc: SourceLocation | undefined,
@@ -166,7 +167,7 @@ function recordDeclaration(
     type: "assignment",
     declKind: "const",
     variableName: name,
-    value: callRecord(target, parameters, loc),
+    value: callRecord(depth, target, parameters, loc),
     loc,
   };
 }
@@ -234,9 +235,9 @@ function rebindStatement(
   };
 }
 
-/** `{ name: "<def>", args: { a: a, b: b } }` over the def's parameters,
- *  block-typed ones left out: a block cannot be stored in a record. */
+/** Block parameters cannot be stored in the call record. */
 function callRecord(
+  depth: number,
   target: string,
   parameters: FunctionParameter[],
   loc: SourceLocation | undefined,
@@ -255,7 +256,22 @@ function callRecord(
     entries: [
       { key: "name", value: { type: "string", segments: [{ type: "text", value: target }], loc } },
       { key: "args", value: args },
+      { key: "id", value: { type: "decoratorCallField", field: "id", functionName: target, loc } },
+      { key: "inToolCall", value: recordToolContext(depth, loc) },
     ],
+    loc,
+  };
+}
+
+/** Stacked decorators keep the context captured by the outermost record. */
+function recordToolContext(depth: number, loc: SourceLocation | undefined): Expression {
+  if (depth === 0) {
+    return { type: "decoratorCallField", field: "inToolCall", loc };
+  }
+  return {
+    type: "valueAccess",
+    base: { type: "variableName", value: `${RECORD_LOCAL}0`, loc },
+    chain: [{ kind: "property", name: "inToolCall" }],
     loc,
   };
 }

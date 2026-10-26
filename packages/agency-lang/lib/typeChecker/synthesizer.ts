@@ -441,6 +441,8 @@ export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContex
       return STRING_T;
     case "boolean":
       return BOOLEAN_T;
+    case "decoratorCallField":
+      return expr.field === "id" ? STRING_T : BOOLEAN_T;
     case "regex":
       return REGEX_T;
     case "binOpExpression":

@@ -83,6 +83,7 @@ export const NO_EXPRESSION_SLOTS: Record<string, true> = {
   boolean: true,
   null: true,
   regex: true,
+  decoratorCallField: true,
   // A schema literal carries a type argument, not runtime expressions.
   schemaExpression: true,
   // Params are binders; the body is STATEMENTS, owned by bodySlots.

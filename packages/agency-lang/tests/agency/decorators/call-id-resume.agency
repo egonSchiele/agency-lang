@@ -1,0 +1,44 @@
+decorator def captured(call, block) {
+  const beforeId = call.id
+  const beforeContext = call.inToolCall
+  const value = block(call.args)
+  return {
+    id: call.id,
+    inToolCall: call.inToolCall,
+    stable: beforeId == call.id && beforeContext == call.inToolCall,
+    value: value
+  }
+}
+
+decorator def inBranch(call, block) {
+  const beforeId = call.id
+  const beforeContext = call.inToolCall
+  const values = fork([call.args]) as args {
+    return block(args)
+  }
+  return {
+    id: call.id,
+    inToolCall: call.inToolCall,
+    stable: beforeId == call.id && beforeContext == call.inToolCall,
+    value: values[0]
+  }
+}
+
+@inBranch
+@captured
+def paused(value: number): any {
+  interrupt("Continue the decorated call?")
+  return value
+}
+
+node main() {
+  const result = paused(7)
+  return {
+    sameId: result.id == result.value.id,
+    outerStable: result.stable,
+    innerStable: result.value.stable,
+    outerInToolCall: result.inToolCall,
+    innerInToolCall: result.value.inToolCall,
+    value: result.value.value
+  }
+}

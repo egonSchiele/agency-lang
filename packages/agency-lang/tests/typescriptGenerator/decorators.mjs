@@ -648,7 +648,9 @@ __stack.locals.__call_0 = {
           "name": `plainTwin`,
           "args": {
             "x": __stack.args.x
-          }
+          },
+          "id": "decorators.agency:plainTwin",
+          "inToolCall": __run.toolInvocationStack !== undefined
         };
       });
       await runner.step(2, __run, async (runner, __run) => {
@@ -1004,7 +1006,9 @@ __stack.locals.__call_0 = {
           "args": {
             "task": __stack.args.task,
             "maxCost": __stack.args.maxCost
-          }
+          },
+          "id": "decorators.agency:researcher",
+          "inToolCall": __run.toolInvocationStack !== undefined
         };
       });
       await runner.step(2, __run, async (runner, __run) => {
@@ -1047,7 +1051,9 @@ __bstack.locals.__call_1 = {
       "args": {
         "task": __stack.args.task,
         "maxCost": __stack.args.maxCost
-      }
+      },
+      "id": "decorators.agency:researcher",
+      "inToolCall": __stack.locals.__call_0.inToolCall
     };
   });
 await runner.step(2, __run, async (runner, __run) => {
@@ -1311,7 +1317,9 @@ __stack.locals.__call_0 = {
           "name": `positionalAndNamed`,
           "args": {
             "a": __stack.args.a
-          }
+          },
+          "id": "decorators.agency:positionalAndNamed",
+          "inToolCall": __run.toolInvocationStack !== undefined
         };
       });
       await runner.step(2, __run, async (runner, __run) => {

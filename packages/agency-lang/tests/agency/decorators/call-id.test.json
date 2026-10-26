@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nonemptyIds\":true,\"differentModules\":true,\"differentDefinitions\":true,\"inToolCall\":false,\"partialSameId\":true,\"partialValue\":2,\"stackedSame\":true,\"stackedInToolCall\":false,\"stackedValue\":3}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Opaque IDs distinguish definitions and survive partial application and stacked decorators; ordinary calls have no tool context"
+    }
+  ]
+}

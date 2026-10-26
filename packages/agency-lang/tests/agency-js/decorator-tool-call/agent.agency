@@ -1,0 +1,59 @@
+import { recorded, records } from "./recording.agency"
+import { reexported } from "./reexported.agency"
+
+@recorded
+def add(a: number, b: number): number {
+  """
+  Add two numbers.
+  """
+  return a + b
+}
+
+@recorded
+def inner(text: string): string {
+  return "inner:${text}"
+}
+
+def outer(text: string): string {
+  """
+  Pass the text to inner.
+  """
+  return inner(text)
+}
+
+def branched(text: string): any {
+  """
+  Call inner from a fork branch.
+  """
+  return fork([text], shared: true) as value {
+    return inner(value)
+  }
+}
+
+@recorded
+@recorded("alsoRecorded")
+def stacked(x: number): number {
+  """
+  Return x.
+  """
+  return x
+}
+
+@recorded
+@recorded("alsoRecorded")
+def paused(x: number): number {
+  """
+  Pause before returning x.
+  """
+  interrupt("Continue the tool call?")
+  return x
+}
+
+node main() {
+  const plain = add(1, 2)
+  const addTen = add.partial(a: 10).rename("addTen")
+  const addApproved = add.preapprove().rename("addApproved")
+  const answer = llm("Use the tools.", tools: [add, outer, addTen, addApproved, stacked, reexported, branched, paused])
+  const after = add(4, 5)
+  return { plain: plain, answer: answer, after: after, seen: records() }
+}

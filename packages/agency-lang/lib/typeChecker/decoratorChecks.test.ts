@@ -65,11 +65,21 @@ describe("decorators in the checker", () => {
     expect(typecheckSource(src).filter((e) => e.severity === "error")).toEqual([]);
   });
 
+  it.each([
+    { field: "id", record: '{ name: "x", args: {}, inToolCall: false }' },
+    { field: "inToolCall", record: '{ name: "x", args: {}, id: "manual" }' },
+  ])("requires $field in a direct decorator call", ({ record }) => {
+    const src = BUDGETED + `node main() { budgeted(1, call: ${record}) { return "s" } }`;
+    const errors = typecheckSource(src).filter((error) => error.severity === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("is not assignable to parameter type 'Call'");
+  });
+
   it("checks a direct call to a decorator like any call", () => {
     const src =
       BUDGETED +
       "node main() {\n" +
-      '  budgeted(1, call: { name: "x", args: {} }) { return "s" }\n' +
+      '  budgeted(1, call: { name: "x", args: {}, id: "f.agency:x", inToolCall: false }) { return "s" }\n' +
       '  budgeted(1) { return "s" }\n' +
       "}\n";
     const errors = typecheckSource(src).filter((e) => e.severity === "error");

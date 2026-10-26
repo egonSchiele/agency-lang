@@ -119,6 +119,39 @@ describe("builtin named-arg validation (llm options)", () => {
     ).toEqual([]);
   });
 
+  it("accepts rawAttributes as an option and a named argument", () => {
+    for (const options of [
+      `{ rawAttributes: { provider: { order: ["z-ai"] } } }`,
+      `rawAttributes: { top_k: 5 }`,
+    ]) {
+      expect(errorsFrom(`node main() { let r = llm("hi", ${options})\n print(r) }`)).toEqual([]);
+    }
+  });
+
+  it("accepts every openRouter provider preference", () => {
+    // Lists each field of smoltalk's OpenRouterProviderPreferences once, so a
+    // field added there and forgotten in builtins.ts fails here.
+    expect(
+      errorsFrom(`node main() {
+      let r = llm("hi", { openRouter: { provider: {
+        order: ["z-ai", "fireworks"], only: ["z-ai"], ignore: ["open-inference"],
+        allowFallbacks: false, requireParameters: true, dataCollection: "deny",
+        sort: "throughput", quantizations: ["fp8"]
+      } } })
+      print(r)
+    }`),
+    ).toEqual([]);
+  });
+
+  it.each([`{ provider: { sort: "cheapest" } }`, `{ provider: { order: "z-ai" } }`])(
+    "rejects bad openRouter options: %s",
+    (value) => {
+      expect(
+        errorsFrom(`node main() { let r = llm("hi", { openRouter: ${value} }) }`).length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
   it("accepts a known option as a named arg", () => {
     const errors = errorsFrom(`node main() { let r = llm("hi", model: "gpt-4o-mini")\n print(r) }`);
     expect(errors).toHaveLength(0);

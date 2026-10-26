@@ -15,6 +15,7 @@ import {
   mergeModelData,
   mergeHostedTools,
   modelSupportsInputModality,
+  type OpenRouterOptions,
 } from "smoltalk";
 
 /**
@@ -46,12 +47,16 @@ export type LlmDefaults = RetryConfig & {
   maxToolCallRounds?: number;
   /** Refuse a tool call after this many identical runs with the same result; 0 disables. */
   maxRepeatedToolCalls?: number;
+  /** Which companies OpenRouter may send the call to. Other providers ignore it. */
+  openRouter?: OpenRouterOptions;
+  /** Spread into the provider's request body, except the fields the client builds itself. */
+  rawAttributes?: Record<string, unknown>;
 };
 
 /**
  * Merge `opts` into the ACTIVE branch stack's LLM defaults
  * (`stack.other.llmDefaults`). Only present (non-undefined) keys are
- * written. Switching between text and decision models without a provider
+ * written, and a key set to `null` is removed. Switching between text and decision models without a provider
  * selects the new model's registry provider.
  *
  * Branch-scoped: inside a fork/race/tool branch this writes that
@@ -72,6 +77,11 @@ export function _setLlmOptions(opts: LlmDefaults): void {
   for (const key of Object.keys(opts)) {
     const value = (opts as Record<string, unknown>)[key];
     if (value === undefined) {
+      continue;
+    }
+    // Agency has one nothing value, so null unsets the option.
+    if (value === null) {
+      delete current[key];
       continue;
     }
     // The limits combine field by field, so setting one keeps the others.

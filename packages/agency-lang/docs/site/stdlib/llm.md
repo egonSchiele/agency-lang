@@ -44,6 +44,15 @@ Default options for `llm()` calls. Every field is optional; only the
  watches the answer as well as the thinking. `0` turns a limit off,
  which a song with a chorus needs. Other providers ignore it.
 
+ `openRouter.provider` chooses which companies OpenRouter may send the
+ call to, for example `{ provider: { ignore: ["open-inference"] } }` to
+ skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
+ to use only one. Other providers ignore it. `rawAttributes` is spread
+ into the provider's request body as given, for a request field Agency
+ has no option for, except the fields the client builds itself (the
+ model, the messages, the tools). Setting a field to `null` removes it
+ from the defaults.
+
 ```ts
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
@@ -60,7 +69,16 @@ Default options for `llm()` calls. Every field is optional; only the
  *  "Hmm") it allows and `repeatLimit` how many times one sentence may
  *  repeat, both within the last two thousand tokens, and `limitAnswers`
  *  watches the answer as well as the thinking. `0` turns a limit off,
- *  which a song with a chorus needs. Other providers ignore it. */
+ *  which a song with a chorus needs. Other providers ignore it.
+ *
+ *  `openRouter.provider` chooses which companies OpenRouter may send the
+ *  call to, for example `{ provider: { ignore: ["open-inference"] } }` to
+ *  skip one, or `{ provider: { only: ["fireworks"], allowFallbacks: false } }`
+ *  to use only one. Other providers ignore it. `rawAttributes` is spread
+ *  into the provider's request body as given, for a request field Agency
+ *  has no option for, except the fields the client builds itself (the
+ *  model, the messages, the tools). Setting a field to `null` removes it
+ *  from the defaults. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;
@@ -72,13 +90,29 @@ export type LlmDefaults = {
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
+  // Mirrors smoltalk's OpenRouterProviderPreferences.
+  openRouter?: { provider:
+  | { order: string[]
+  | null; only: string[]
+  | null; ignore: string[]
+  | null; allowFallbacks: boolean
+  | null; requireParameters: boolean
+  | null; dataCollection: "allow"
+  | "deny"
+  | null; sort: "price"
+  | "throughput"
+  | "latency"
+  | null; quantizations: string[]
+  | null }
+  | null };
+  rawAttributes?: any;
   retries?: number;
   timeout?: number;
   validationRetries?: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L58))
 
 ### HostedModelInfo
 
@@ -94,7 +128,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L191))
 
 ## Effects
 
@@ -107,7 +141,7 @@ effect std::llm::registerProvider {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L169))
 
 ### std::read
 
@@ -119,7 +153,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L236))
 
 ## Functions
 
@@ -140,7 +174,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L88))
 
 ### setModel
 
@@ -158,7 +192,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L98))
 
 ### envVarFor
 
@@ -183,7 +217,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L107))
 
 ### pickProvider
 
@@ -212,7 +246,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L136))
 
 ### registerProviderModule
 
@@ -237,7 +271,7 @@ Load a provider module by path at runtime and register its custom provider
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L172))
 
 ### listHostedModels
 
@@ -250,7 +284,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L201))
 
 ### hostedModelInfo
 
@@ -271,7 +305,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L209))
 
 ### modelSupportsInput
 
@@ -296,7 +330,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L196))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L219))
 
 ### loadModelData
 
@@ -323,4 +357,4 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L251))

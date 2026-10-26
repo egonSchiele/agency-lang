@@ -350,3 +350,65 @@ describe("model and provider precedence", () => {
     expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });
 });
+
+describe("agency.llm — OpenRouter and raw request options", () => {
+  async function recordedConfig(
+    call: (threads: ThreadStore, run: Run) => Promise<unknown>,
+  ): Promise<PromptConfig> {
+    const ctx = makeCtx({ model: "baked-model", provider: "openrouter" });
+    const client = new RecordingClient(["ok", "ok"]);
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, (run) => call(threads, run));
+    const config = client.configs.at(-1);
+    if (config === undefined) {
+      throw new Error("the prompt never reached the recording client");
+    }
+    return config;
+  }
+
+  function callWith(clientConfig: Record<string, unknown>) {
+    return (threads: ThreadStore, run: Run) =>
+      runPrompt(run, { prompt: "hi", messages: threads.getOrCreateActive(), clientConfig });
+  }
+
+  it("passes a per-call openRouter option to the client", async () => {
+    const config = await recordedConfig(
+      callWith({ openRouter: { provider: { only: ["fireworks"] } } }),
+    );
+    expect(toSmolConfig(config).openRouter).toEqual({ provider: { only: ["fireworks"] } });
+  });
+
+  it("passes per-call rawAttributes to the client", async () => {
+    const config = await recordedConfig(callWith({ rawAttributes: { top_k: 5 } }));
+    expect(toSmolConfig(config).rawAttributes).toEqual({ top_k: 5 });
+  });
+
+  it("a setLlmOptions openRouter default reaches the call", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ openRouter: { provider: { ignore: ["open-inference"] } } });
+      return agency.llm("hi");
+    });
+    expect(toSmolConfig(config).openRouter).toEqual({
+      provider: { ignore: ["open-inference"] },
+    });
+  });
+
+  it("setLlmOptions with null removes the option", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ openRouter: { provider: { ignore: ["open-inference"] } } });
+      _setLlmOptions({ openRouter: null } as any);
+      return agency.llm("hi");
+    });
+    expect("openRouter" in toSmolConfig(config)).toBe(false);
+  });
+
+  it("null removes replyLimits whole", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ replyLimits: { hedgeLimit: 2 } });
+      _setLlmOptions({ replyLimits: null } as any);
+      return agency.llm("hi");
+    });
+    expect("replyLimits" in toSmolConfig(config)).toBe(false);
+  });
+});

@@ -45,6 +45,25 @@ describe("AgencyConfigSchema", () => {
     expect(result.data.client?.baseUrl?.typesafe).toBe("http://localhost:8000");
   });
 
+  it("keeps client.openRouter, and rejects an unknown sort", () => {
+    const good = AgencyConfigSchema.safeParse({
+      client: { openRouter: { provider: { ignore: ["open-inference"], sort: "price" } } },
+    });
+    expect(good.success).toBe(true);
+    if (good.success) {
+      expect(good.data.client?.openRouter).toEqual({
+        provider: { ignore: ["open-inference"], sort: "price" },
+      });
+    }
+    const bad = AgencyConfigSchema.safeParse({
+      client: { openRouter: { provider: { sort: "cheapest" } } },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues[0].path).toEqual(["client", "openRouter", "provider", "sort"]);
+    }
+  });
+
   it("accepts a budget with a finite maxCost and a duration maxTime", () => {
     const result = AgencyConfigSchema.safeParse({
       budget: { maxCost: 0.5, maxTime: "30m" },
@@ -388,6 +407,18 @@ describe("applyCliFlags", () => {
       // explicit undefined would also omit the provider — this pins the
       // contract, not a codegen requirement.)
       expect(after.client).not.toHaveProperty("defaultProvider");
+    });
+
+    it("a bare --model keeps client.openRouter", () => {
+      const configured = {
+        ...configWithProvider(),
+        client: {
+          ...configWithProvider().client,
+          openRouter: { provider: { ignore: ["open-inference"] } },
+        },
+      };
+      const after = applyCliFlags(configured, { model: { model: "z-ai/glm-5.3-flash" } });
+      expect(after.client?.openRouter).toEqual({ provider: { ignore: ["open-inference"] } });
     });
 
     it("a prefixed model sets both fields", () => {

@@ -1,6 +1,7 @@
 import { AgencyNode } from "../types.js";
 import type { LogLevel } from "../logger.js";
 import { z } from "zod";
+import type { OpenRouterOptions } from "smoltalk";
 import { McpServersSchema, type McpServers } from "./mcpServers.js";
 import { defaultHost } from "#default-host";
 import type { Platform } from "../host/host.js";
@@ -250,6 +251,10 @@ export interface AgencyConfig {
       /** Parallel byte-range requests while downloading an MLX model. Default 8. */
       downloadConcurrency: number;
     }>;
+    /** Which companies OpenRouter may send each call to, for every call in
+     *  the run. Mirrors smoltalk's `OpenRouterProviderPreferences`; a
+     *  `setLlmOptions` or per-call `openRouter` replaces it whole. */
+    openRouter?: OpenRouterOptions;
     /** Settings for GGUF models, which run in this process through llama.cpp. */
     llamaCpp?: Partial<{
       /** A smaller model of the same family that drafts tokens for the main
@@ -640,6 +645,23 @@ export const AgencyConfigSchema = z
           .object({
             python: z.string(),
             downloadConcurrency: z.number().int().positive(),
+          })
+          .partial(),
+        // Mirrors smoltalk's OpenRouterProviderPreferences.
+        openRouter: z
+          .object({
+            provider: z
+              .object({
+                order: z.array(z.string()),
+                only: z.array(z.string()),
+                ignore: z.array(z.string()),
+                allowFallbacks: z.boolean(),
+                requireParameters: z.boolean(),
+                dataCollection: z.enum(["allow", "deny"]),
+                sort: z.enum(["price", "throughput", "latency"]),
+                quantizations: z.array(z.string()),
+              })
+              .partial(),
           })
           .partial(),
         llamaCpp: z

@@ -43,6 +43,19 @@ describe("smoltalkDefaults codegen", () => {
     );
   });
 
+  it("bakes client.openRouter when set", () => {
+    const out = generate(PROGRAM, {
+      client: { openRouter: { provider: { ignore: ["open-inference"] } } },
+    });
+    expect(out).toMatch(
+      /openRouter:\s*\{\s*"?provider"?:\s*\{\s*"?ignore"?:\s*\["open-inference"\]/,
+    );
+  });
+
+  it("omits openRouter when unset", () => {
+    expect(generate(PROGRAM, {})).not.toMatch(/openRouter:\s*\{\s*"?provider/);
+  });
+
   it("emits a nested apiKey map with env fallbacks by default", () => {
     const out = generate(PROGRAM);
     expect(out).toContain("apiKey");

@@ -550,3 +550,38 @@ describe("commentsPayload", () => {
     expect((withComments.at(-1) as { text: string }).text).toContain("why twice?");
   });
 });
+
+describe("a round's reasoning", () => {
+  function reasoningRow(completion: Record<string, unknown>): StoryRow {
+    return outlineRows(
+      buildForest([event("promptCompletion", 1000, "L", null, { completion })])[0],
+      { machinery: false, admin: false },
+    )[0];
+  }
+
+  function texts(row: StoryRow): string[] {
+    return payloadFor(row, options).map((line) => ("text" in line ? String(line.text) : ""));
+  }
+
+  it("shows the model's reasoning above its reply", () => {
+    const lines = texts(
+      reasoningRow({ output: "Here is the answer.", reasoning: "Let me search" }),
+    );
+    const heading = lines.indexOf("REASONING");
+    expect(heading).toBeGreaterThan(-1);
+    expect(lines.findIndex((text) => text.includes("Let me search"))).toBeGreaterThan(heading);
+    expect(lines.findIndex((text) => text.includes("Here is the answer."))).toBeGreaterThan(
+      lines.findIndex((text) => text.includes("Let me search")),
+    );
+  });
+
+  it("an empty reply with reasoning still shows the reasoning", () => {
+    const lines = texts(reasoningRow({ output: null, toolCalls: [], reasoning: "Let me search" }));
+    expect(lines).toContain("REASONING");
+    expect(lines.some((text) => text.includes("Let me search"))).toBe(true);
+  });
+
+  it("a round without reasoning has no REASONING heading", () => {
+    expect(texts(reasoningRow({ output: "hi" }))).not.toContain("REASONING");
+  });
+});

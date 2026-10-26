@@ -11,7 +11,7 @@ import { payloadFor } from "./payload.js";
 import { payloadText } from "./payloadText.js";
 import { fmtDuration } from "./spanText.js";
 import { toolStatusText, type StoryRow } from "./story.js";
-import { roundsOf } from "./timeline/rounds.js";
+import { modelText, roundsOf } from "./timeline/rounds.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 
 export type ExpandedRow = {
@@ -71,7 +71,7 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
       return [
         `Thread · ${row.round.threadLabel ?? "unnamed"}`,
         `LLM call ${row.round.index + 1} of ${total}`,
-        row.round.model,
+        modelText(row.round),
         fmtDuration(row.round.durationMs, { minutes: true }),
         fmtUsd(row.round.costUsd),
       ].join(" · ");

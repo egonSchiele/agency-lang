@@ -174,6 +174,21 @@ export function modelOf(ev: EventEnvelope): string {
   return raw;
 }
 
+/** The company that ran the model on a promptCompletion, when the call
+ *  went through a router such as OpenRouter. */
+export function servedByOf(ev: EventEnvelope): string | undefined {
+  return nonEmptyString(ev.data.completion?.servedBy);
+}
+
+/** The model's unsigned reasoning text on a promptCompletion. */
+export function reasoningOf(ev: EventEnvelope): string | undefined {
+  return nonEmptyString(ev.data.completion?.reasoning);
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
 /** Tools array advertised to the LLM on a promptCompletion. */
 export function toolsOf(ev: EventEnvelope): string[] {
   const t = ev.data.tools;

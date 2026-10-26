@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Comment } from "../runDirectory/comments.js";
 import { expandRow, unresolvedCommentText } from "./rowText.js";
 import { outlineRows } from "./story.js";
-import { agentLoopTrace } from "./storyFixture.js";
+import { agentLoopTrace, event } from "./storyFixture.js";
+import { buildForest } from "./tree.js";
 
 describe("expandRow", () => {
   const trace = agentLoopTrace();
@@ -68,5 +69,30 @@ describe("unresolvedCommentText", () => {
     expect(text).toContain("reviewer · gpt-5 · 2026-10-19T14:02:11.408Z");
     expect(text).toContain("c1 adit: why?");
     expect(text).toContain("c2 claude: it retries");
+  });
+});
+
+describe("a round's header names who served it", () => {
+  function headerFor(completion: Record<string, unknown>): string {
+    const trace = buildForest([
+      event("promptCompletion", 1000, "L", null, {
+        model: JSON.stringify("z-ai/glm-5.3-flash"),
+        completion,
+      }),
+    ])[0];
+    const row = outlineRows(trace, { machinery: false, admin: false })[0];
+    return expandRow(trace, row.id)!.header;
+  }
+
+  it("shows the serving provider after the model", () => {
+    expect(headerFor({ output: "hi", servedBy: "OpenInference" })).toContain(
+      "z-ai/glm-5.3-flash via OpenInference",
+    );
+  });
+
+  it("a round without servedBy shows only the model", () => {
+    const header = headerFor({ output: "hi" });
+    expect(header).toContain("· z-ai/glm-5.3-flash ·");
+    expect(header).not.toContain("via");
   });
 });

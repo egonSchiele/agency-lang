@@ -4,6 +4,8 @@ import {
   cost,
   decisionOf,
   modelOf,
+  reasoningOf,
+  servedByOf,
   threadIdOf,
   threadIdentityOf,
   threadLabelOf,
@@ -39,6 +41,11 @@ export type Round = {
   /** Ids of the tool calls this call ran inside, outermost first. */
   toolPath: string[];
   model: string;
+  /** The company that ran the model, when a router such as OpenRouter
+   *  recorded it. */
+  servedBy: string | undefined;
+  /** The model's unsigned reasoning text, when the provider sent it. */
+  reasoning: string | undefined;
   start: number;
   end: number;
   durationMs: number;
@@ -65,6 +72,11 @@ type DraftInputs = {
 };
 
 const ROUND_PREFIX = "round:";
+
+/** `z-ai/glm-5.3-flash via OpenInference`, or the bare model name. */
+export function modelText(round: Round): string {
+  return round.servedBy === undefined ? round.model : `${round.model} via ${round.servedBy}`;
+}
 
 export function roundId(spanId: string, ordinal: number): string {
   return `${ROUND_PREFIX}${spanId}:${ordinal}`;
@@ -145,6 +157,8 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
       .map((ancestor) => ancestor.id)
       .reverse(),
     model: modelOf(event),
+    servedBy: servedByOf(event),
+    reasoning: reasoningOf(event),
     start: end - durationMs,
     end,
     durationMs,

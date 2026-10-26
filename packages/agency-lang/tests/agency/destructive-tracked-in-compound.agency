@@ -1,0 +1,303 @@
+// A destructive call bound to a local inside a loop, if, match, or `with`
+// gets its own precise post-flip, so the statement around it must not add a
+// conservative pre-flip. A clean refusal from the callee leaves the caller's
+// failure saying destructiveRan: false. Calls no post-flip covers (a bare
+// call, the right side of &&) still mark the caller (#1278).
+
+import { destructive boomDestructive } from "../helpers/destructiveExterns.js"
+
+def saveOne(item: string): Result<string> {
+  if (item == "bad") {
+    return failure("refused")
+  }
+  destructive {
+    return success("saved")
+  }
+}
+
+destructive def burn(): number {
+  return 1
+}
+
+def run(block: () -> any): any {
+  return block()
+}
+
+def keep(s: string): Result<string> {
+  return success(s)
+}
+
+def saveAll(items: string[]): Result<string> {
+  for (item in items) {
+    const saved = saveOne(item)
+    if (isFailure(saved)) {
+      return failure("stopped")
+    }
+  }
+  return success("all saved")
+}
+
+node loopRefusedFirst_() {
+  const r = saveAll(["bad", "ok"])
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The first item does destructive work, the second refuses. The post-flip
+// alone has to carry the mark.
+node loopRefusedSecond_() {
+  const r = saveAll(["ok", "bad"])
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def ifRefused(): Result<string> {
+  if (true) {
+    const s = saveOne("bad")
+    if (isFailure(s)) {
+      return failure("stopped")
+    }
+  }
+  return failure("after")
+}
+node ifRefused_() {
+  const r = ifRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def whileRefused(): Result<string> {
+  let i = 0
+  while (i < 1) {
+    const s = saveOne("bad")
+    if (isFailure(s)) {
+      return failure("stopped")
+    }
+    i = i + 1
+  }
+  return failure("after")
+}
+node whileRefused_() {
+  const r = whileRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def matchRefused(kind: string): Result<string> {
+  let refused = false
+  match (kind) {
+    "save" => {
+      const s = saveOne("bad")
+      refused = isFailure(s)
+    }
+    _ => {
+      refused = false
+    }
+  }
+  if (refused) {
+    return failure("stopped")
+  }
+  return failure("after")
+}
+node matchRefused_() {
+  const r = matchRefused("save")
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def withRefused(): Result<string> {
+  const s = saveOne("bad") with approve
+  return failure("stopped")
+}
+node withRefused_() {
+  const r = withRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A bare call has no post-flip, so the loop keeps its pre-flip.
+def bareInLoop(): Result<string> {
+  for (item in ["bad"]) {
+    saveOne(item)
+  }
+  return failure("after")
+}
+node bareInLoop_() {
+  const r = bareInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Hoisting does not move a call out of the right side of &&, so the loop's
+// pre-flip is the only thing that marks the function before the return.
+def andRightInLoop(): Result<string> {
+  for (item in ["a"]) {
+    if (true && burn() > 0) {
+      return failure("inside")
+    }
+  }
+  return failure("after")
+}
+node andRightInLoop_() {
+  const r = andRightInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def bareBlockRefused(): Result<string> {
+  run() {
+    const s = saveOne("bad")
+  }
+  return failure("after")
+}
+node bareBlockRefused_() {
+  const r = bareBlockRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def valueBlockRefused(): Result<string> {
+  const refused = run() {
+    const s = saveOne("bad")
+    return isFailure(s)
+  }
+  if (refused) {
+    return failure("stopped")
+  }
+  return failure("after")
+}
+node valueBlockRefused_() {
+  const r = valueBlockRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def threadRefused(): Result<string> {
+  thread {
+    const s = saveOne("bad")
+  }
+  return failure("after")
+}
+node threadRefused_() {
+  const r = threadRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def handleBodyRefused(): Result<string> {
+  handle {
+    const s = saveOne("bad")
+  } with approve
+  return failure("after")
+}
+node handleBodyRefused_() {
+  const r = handleBodyRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A destructive JS extern that throws skips the post-flip, so the tracked
+// statement marks the function on the way out.
+def externThrowsInLoop(): Result<string> {
+  for (item in ["a"]) {
+    const r = boomDestructive()
+  }
+  return success("unreachable")
+}
+node externThrowsInLoop_() {
+  const r = externThrowsInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def externThrows(): Result<string> {
+  const r = boomDestructive()
+  return success("unreachable")
+}
+node externThrows_() {
+  const r = externThrows()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Hoisting lifts a pipe chain's input into its own tracked statement, so a
+// refusal there leaves the caller clean too.
+def pipeInLoop(): Result<string> {
+  for (item in ["bad"]) {
+    const r = saveOne(item) |> keep
+  }
+  return failure("after")
+}
+node pipeInLoop_() {
+  const r = pipeInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Codegen folds an else-if into its parent `if`, so a call hoisting leaves
+// in the else-if condition belongs to the parent, which flips before it.
+def elseIfAndRight(): Result<string> {
+  if (false) {
+    return failure("first")
+  } else if (true && burn() > 0) {
+    return failure("inside")
+  }
+  return failure("after")
+}
+node elseIfAndRight_() {
+  const r = elseIfAndRight()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The finalize body flips its own statements, and it only runs on an abort,
+// so a clean refusal in the block leaves the caller clean.
+def finalizeInBlock(): Result<string> {
+  run() {
+    const s = saveOne("bad")
+
+    finalize {
+      burn()
+    }
+  }
+  return failure("after")
+}
+node finalizeInBlock_() {
+  const r = finalizeInBlock()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

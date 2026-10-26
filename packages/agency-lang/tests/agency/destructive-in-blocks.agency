@@ -102,10 +102,10 @@ node ranTwice_() {
   return "unexpected"
 }
 
-// A destructive call inside a handler body. The handler body is not walked
-// statement by statement; the conservative flip on the `handle` statement has
-// to run BEFORE it, or the `return` inside leaves the function with the flag
-// still false.
+// A destructive call inside a handler body. The handler body compiles to
+// plain JS, where each statement that owns a destructive call is flipped
+// before it runs, so the `return` inside leaves the function with the flag
+// already true.
 def handlerDoesWork(): Result {
   handle {
     return interrupt("go?")
@@ -123,8 +123,9 @@ node handlerDoesWork_() {
   return "unexpected"
 }
 
-// A destructive call in an `if` condition: the only flip that covers it is
-// the conservative one on the `if` statement.
+// A destructive call in an `if` condition. Hoisting moves it into its own
+// `const __hoist_N = burn()` statement before the `if`, and that statement's
+// post-flip is what marks the function.
 def inCondition(): Result {
   if (burn() > 0) {
     return failure("inside")

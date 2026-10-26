@@ -1,8 +1,12 @@
 import type { TsNode } from "../../ir/tsIR.js";
 import { ts } from "../../ir/builders.js";
 import type { AgencyNode, Assignment } from "../../types.js";
+import type { IfElse } from "../../types/ifElse.js";
+import { bodySlots } from "../../utils/bodySlots.js";
+import { walkNodesArray, type WalkAncestor } from "../../utils/node.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import type { NameClassifier } from "./nameClassifier.js";
+import { flattenedElseIf } from "./elseIfChain.js";
 
 /**
  * Emits the destructive-execution tracking codegen: the per-function
@@ -78,27 +82,42 @@ export class DestructiveTracking {
     ]);
   }
 
-  /** Post-statement destructive flip for one statement, for a function that is
-   *  NOT itself `destructive`. A `destructive def` commits at entry (see
-   *  `init`), so it needs no per-statement flips.
+  /** The flips for one statement of a stepped body (`processBodyAsParts`),
+   *  for a function that is NOT itself `destructive`. A `destructive def`
+   *  commits at entry (see `init`), so it needs no per-statement flips.
    *
    *  Rule 2 (any function calling a destructive fn): when the call's result
    *  binds to a simple local (`const r = burn()` / `const r = try burn()`), an
    *  outcome-dependent POST flip trusts the result's own destructiveRan (a
    *  swallowed destructive failure still marks us; a clean refusal does not).
-   *  Otherwise a conservative PRE flip fires whenever the statement textually
-   *  contains a destructive call. */
+   *  The caller wraps that statement in `markOnThrow`, because a throw skips
+   *  the post-flip. Every other destructive call the statement owns gets a
+   *  conservative PRE flip. A call inside a nested body is not the
+   *  statement's: every body flips its own statements (#1278). */
   statementFlips(
     stmt: AgencyNode,
     inDestructiveFunction: boolean,
   ): { pre?: TsNode; post?: TsNode } {
-    // A `destructive def` commits at entry; no per-statement flips.
-    if (inDestructiveFunction) return {};
-    const outcomeVar = this.destructiveOutcomeVar(stmt);
-    if (outcomeVar) {
-      return { post: this.outcomeFlip(outcomeVar) };
+    if (inDestructiveFunction) {
+      return {};
     }
-    return this.names.containsDestructiveCall(stmt) ? { pre: this.markDestructiveRan() } : {};
+    const tracked = this.trackedCall(stmt);
+    const needsPre = this.ownedCalls(stmt).some((call) => !isTracked(call, tracked));
+    return {
+      pre: needsPre ? this.markDestructiveRan() : undefined,
+      post: tracked ? this.outcomeFlip((stmt as Assignment).variableName!) : undefined,
+    };
+  }
+
+  /** The flip for one statement of plain-mode code: an inline handler body,
+   *  or an `if`, loop, or `match` compiled inside one. Plain code has no
+   *  steps, so a PRE flip runs first. A tracked call gets one too, because
+   *  plain code emits no post-flip. */
+  plainFlip(stmt: AgencyNode, inDestructiveFunction: boolean): TsNode | undefined {
+    if (inDestructiveFunction || this.ownedCalls(stmt).length === 0) {
+      return undefined;
+    }
+    return this.markDestructiveRan();
   }
 
   /** `__activation.__destructiveRan = true` — sets the activation's destructive-ran
@@ -106,6 +125,25 @@ export class DestructiveTracking {
    *  `markDestructiveRan` node) and as the Rule-2 conservative pre-flip. */
   markDestructiveRan(): TsNode {
     return ts.assign(this.slot(), ts.bool(true));
+  }
+
+  /** Wraps the statement of a tracked call so a throw out of it marks the
+   *  activation before it propagates. The post-flip runs only when the call
+   *  returns, and a destructive JS extern called without `try`, or an abort
+   *  such as a guard trip, leaves by throwing. Run-control signals (pause,
+   *  restore) say nothing about the call's work and pass through unmarked. */
+  markOnThrow(statement: TsNode): TsNode {
+    return ts.tryCatch(
+      ts.statements([statement]),
+      ts.statements([
+        ts.if(
+          ts.raw("!(__error instanceof RunControlSignal)"),
+          ts.statements([this.markDestructiveRan()]),
+        ),
+        ts.throw("__error"),
+      ]),
+      "__error",
+    );
   }
 
   /** `__activation.__destructiveRan = __activation.__destructiveRan ||
@@ -129,34 +167,58 @@ export class DestructiveTracking {
     );
   }
 
-  /** If `stmt` is a simple assignment whose value is a direct call to a
-   *  destructive function (optionally `try`-wrapped), return the local it
-   *  binds to. Null for bare calls, nested-in-expression calls, patterns,
-   *  access chains, or non-innermost block targets — those get the
-   *  conservative pre-flip instead. */
-  private destructiveOutcomeVar(stmt: AgencyNode): string | null {
-    if (stmt.type !== "assignment") return null;
-    const asn = stmt as Assignment;
-    if (asn.pattern || asn.accessChain || asn.blockDepth) return null;
-    if (!asn.variableName) return null;
-    const value = asn.value as {
-      type?: string;
-      functionName?: string;
-      call?: { type?: string; functionName?: string };
-    };
-    let call: { type?: string; functionName?: string } | undefined;
-    if (value?.type === "functionCall") {
-      call = value;
-    } else if (value?.type === "tryExpression" && value.call?.type === "functionCall") {
-      call = value.call;
+  /** The value of a tracked assignment: a simple local bound to a direct
+   *  call to a destructive function, optionally `try`-wrapped. Null for
+   *  anything else: bare calls, nested calls, access chains, non-innermost
+   *  block targets. */
+  private trackedCall(stmt: AgencyNode): AgencyNode | null {
+    if (stmt.type !== "assignment") {
+      return null;
     }
-    if (!call?.functionName) return null;
-    // Object.hasOwn, not a truthy index: `destructiveFunctions` is a plain
-    // object, so a call to a function named `toString` / `constructor` would
-    // otherwise resolve an inherited prototype member as truthy and be
-    // misclassified as destructive.
-    return Object.hasOwn(this.compilationUnit.destructiveFunctions, call.functionName)
-      ? asn.variableName
-      : null;
+    const asn = stmt as Assignment;
+    if (asn.pattern || asn.accessChain || asn.blockDepth || !asn.variableName) {
+      return null;
+    }
+    const value = asn.value as AgencyNode & { call?: AgencyNode };
+    const isCall =
+      value?.type === "functionCall" ||
+      (value?.type === "tryExpression" && value.call?.type === "functionCall");
+    return isCall && this.names.isDestructiveCall(value) ? value : null;
   }
+
+  /** The destructive calls `stmt` owns: the ones in its own expressions.
+   *  A call inside one of its statement bodies belongs to the statement in
+   *  that body, and every body flips its own statements, stepped
+   *  (`processBodyAsParts`) or plain (`plainFlip`).
+   *  docs/dev/language/destructive-regions.md. */
+  private ownedCalls(stmt: AgencyNode): AgencyNode[] {
+    return walkNodesArray([stmt])
+      .filter(({ node, ancestors }) => {
+        return this.names.isDestructiveCall(node) && !inNestedBody([...ancestors, node]);
+      })
+      .map(({ node }) => node);
+  }
+}
+
+/** True when `call` is the tracked value or, for `try f()`, its inner
+ *  call: the walk yields both nodes. */
+function isTracked(call: AgencyNode, tracked: AgencyNode | null): boolean {
+  return tracked !== null && (call === tracked || call === (tracked as { call?: AgencyNode }).call);
+}
+
+/** True when the last node of a root-first ancestor chain sits in a
+ *  statement body below the root. A flattened else-if does not count,
+ *  because codegen compiles its condition as part of the parent `if`. */
+function inNestedBody(chain: WalkAncestor[]): boolean {
+  for (let i = 0; i + 1 < chain.length; i++) {
+    const parent = chain[i] as AgencyNode;
+    const child = chain[i + 1] as AgencyNode;
+    if (parent.type === "ifElse" && flattenedElseIf(parent as IfElse) === child) {
+      continue;
+    }
+    if (bodySlots(parent).some((slot) => slot.body.includes(child))) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -272,6 +272,27 @@ destructive def rm(id: string): string {
 destructive def rm(id: string): string {
   return id
 }
+def viaCondition(id: string, b: boolean): string {
+  if (b && rm(id) == id) {
+    return id
+  }
+  return id
+}
+`);
+    const body = bodyOf(output, "viaCondition");
+    // The if owns the call on the right of &&. Its flip has to run before
+    // the if, or the return inside leaves the flag false.
+    const flip = body.indexOf("__activation.__destructiveRan = true");
+    const ifElse = body.indexOf("runner.ifElse(");
+    expect(flip).toBeGreaterThan(-1);
+    expect(flip).toBeLessThan(ifElse);
+  });
+
+  it("a destructive call in an inline handler body is flipped inside the handler, before the call", () => {
+    const output = generateWithBuilder(`
+destructive def rm(id: string): string {
+  return id
+}
 def viaHandler(id: string): string {
   handle {
     return interrupt("go?")
@@ -283,13 +304,14 @@ def viaHandler(id: string): string {
 }
 `);
     const body = bodyOf(output, "viaHandler");
-    // The handler body is not walked statement by statement, so the only
-    // flip covering rm(id) is the one on the handle statement. It has to run
-    // before the handle, or the return inside leaves the flag false.
+    // The handler body is plain code, so its statement carries its own
+    // flip, and the handle statement carries none.
     const flip = body.indexOf("__activation.__destructiveRan = true");
     const handle = body.indexOf("runner.handle(");
-    expect(flip).toBeGreaterThan(-1);
-    expect(flip).toBeLessThan(handle);
+    const call = body.indexOf("__call(__run, rm,");
+    expect(handle).toBeGreaterThan(-1);
+    expect(flip).toBeGreaterThan(handle);
+    expect(flip).toBeLessThan(call);
   });
 
   it("an unmarked caller of a destructive fn emits the outcome flip on the result", () => {

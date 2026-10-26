@@ -151,6 +151,7 @@ function toolMarkersOf(node: FunctionDefinition): FunctionMarkers {
   return { ...node.markers, destructive };
 }
 import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
+import { flattenedElseIf } from "./typescriptBuilder/elseIfChain.js";
 import {
   FinalizeCodegen,
   type CompiledScopeFinalize,
@@ -1580,10 +1581,7 @@ export class TypeScriptBuilder {
       body: thenBody,
     });
 
-    let current: IfElse | undefined =
-      node.elseBody?.length === 1 && node.elseBody[0].type === "ifElse"
-        ? (node.elseBody[0] as IfElse)
-        : undefined;
+    let current: IfElse | undefined = flattenedElseIf(node);
     let remainingElse = current ? undefined : node.elseBody;
 
     while (current) {
@@ -1593,8 +1591,9 @@ export class TypeScriptBuilder {
         condition: this.processNode(current.condition),
         body,
       });
-      if (current.elseBody?.length === 1 && current.elseBody[0].type === "ifElse") {
-        current = current.elseBody[0] as IfElse;
+      const next = flattenedElseIf(current);
+      if (next) {
+        current = next;
       } else {
         remainingElse = current.elseBody;
         current = undefined;
@@ -4060,14 +4059,16 @@ export class TypeScriptBuilder {
 
   private processBlockPlain(node: IfElse | WhileLoop | ForLoop | MatchBlock): TsNode {
     const processBody = (body: AgencyNode[]): TsNode =>
-      ts.statements(body.map((s) => this.processNode(s)));
+      ts.statements(body.map((s) => this.withPlainFlip(s, this.processNode(s))));
 
     if (node.type === "ifElse") {
-      const elseBody = node.elseBody?.length
-        ? node.elseBody.length === 1 && node.elseBody[0].type === "ifElse"
-          ? this.processBlockPlain(node.elseBody[0] as IfElse)
-          : processBody(node.elseBody)
-        : undefined;
+      const elseIf = flattenedElseIf(node);
+      let elseBody: TsNode | undefined;
+      if (elseIf) {
+        elseBody = this.processBlockPlain(elseIf);
+      } else if (node.elseBody?.length) {
+        elseBody = processBody(node.elseBody);
+      }
       return ts.if(this.processNode(node.condition), processBody(node.thenBody), { elseBody });
     }
     if (node.type === "whileLoop") {
@@ -4136,7 +4137,7 @@ export class TypeScriptBuilder {
     if (node.indexVar) {
       loopBody.push(ts.constDecl(node.indexVar, ts.raw(`${isArr} ? ${i} : ${src}[${keys}[${i}]]`)));
     }
-    for (const s of node.body) loopBody.push(this.processNode(s));
+    for (const s of node.body) loopBody.push(this.withPlainFlip(s, this.processNode(s)));
 
     return ts.statements([
       ts.constDecl(src, this.processNode(node.iterable)),
@@ -4257,7 +4258,9 @@ export class TypeScriptBuilder {
     if (node.handler.kind === "inline") {
       const prevInsideHandlerBody = this.insideHandlerBody;
       this.insideHandlerBody = true;
-      const handlerBody = node.handler.body.map((stmt) => this.processStatement(stmt));
+      const handlerBody = node.handler.body.map((stmt) =>
+        this.withPlainFlip(stmt, this.processStatement(stmt)),
+      );
       this.insideHandlerBody = prevInsideHandlerBody;
       const paramType = node.handler.param.typeHint
         ? formatTypeHintTs(node.handler.param.typeHint)
@@ -4356,6 +4359,19 @@ export class TypeScriptBuilder {
       const pipeStages = this.pipes.tryGetChainStages(stmt);
       if (pipeStages) {
         flushPart();
+        // A pipe chain is never a tracked assignment, so it gets only a
+        // pre-flip, in a step before the chain's own runner nodes.
+        const { pre: pipePre } = this.tracking.statementFlips(
+          stmt,
+          this.scopes.inDestructiveFunction,
+        );
+        if (pipePre) {
+          currentPart = [pipePre];
+          this.steps.push(nextId());
+          this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+          this.steps.pop();
+          flushPart();
+        }
         const baseId = nextId();
         const pipeNodes = this.pipes.expand(stmt as Assignment, pipeStages, baseId);
         for (let i = 0; i < pipeNodes.length; i++) {
@@ -4395,7 +4411,9 @@ export class TypeScriptBuilder {
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
-      const processed = this.processStatement(stmt);
+      const processed = post
+        ? this.tracking.markOnThrow(this.processStatement(stmt))
+        : this.processStatement(stmt);
       if (COMPOUND_RUNNER_KINDS.has(processed.kind)) {
         if (pre && !preNeedsOwnStep) {
           // The pre-flip is sitting in the open part, which would flush after
@@ -4424,6 +4442,15 @@ export class TypeScriptBuilder {
 
     flushPart();
     return result;
+  }
+
+  /** One statement of plain-mode code, with a destructive pre-flip in
+   *  front when it owns a destructive call. Every plain statement list
+   *  compiles its statements through this, as every stepped one goes
+   *  through `processBodyAsParts`. See DestructiveTracking.plainFlip. */
+  private withPlainFlip(stmt: AgencyNode, compiled: TsNode): TsNode {
+    const pre = this.tracking.plainFlip(stmt, this.scopes.inDestructiveFunction);
+    return pre ? ts.statements([pre, compiled]) : compiled;
   }
 
   // ------- Imports and pre/post processing -------

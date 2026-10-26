@@ -35,6 +35,7 @@ import {
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { BlockArgument } from "@/types/blockArgument.js";
 import type { RebindParameters } from "@/types/rebindParameters.js";
+import type { DecoratorCallField } from "@/types/decoratorCallField.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { TypeTestExpression } from "@/types/pattern.js";
@@ -690,6 +691,8 @@ export class TypeScriptBuilder {
         return this.tracking.markDestructiveRan();
       case "rebindParameters":
         return this.processRebindParameters(node);
+      case "decoratorCallField":
+        return this.processDecoratorCallField(node);
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
@@ -1098,6 +1101,17 @@ export class TypeScriptBuilder {
 
   private processComment(node: AgencyComment): TsNode {
     return ts.comment(node.content);
+  }
+
+  private processDecoratorCallField(node: DecoratorCallField): TsNode {
+    if (node.field === "id") {
+      return ts.str(`${this.moduleId}:${node.functionName}`);
+    }
+    return ts.binOp(
+      $(ts.runtime.run).prop("toolInvocationStack").done(),
+      "!==",
+      ts.id("undefined"),
+    );
   }
 
   private processAgencyObject(node: AgencyObject): TsNode {

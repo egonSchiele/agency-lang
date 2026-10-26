@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"sameId\":true,\"outerStable\":true,\"innerStable\":true,\"outerInToolCall\":false,\"innerInToolCall\":false,\"value\":7}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Stacked decorator metadata survives a pause inside a forked block",
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

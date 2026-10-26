@@ -191,8 +191,9 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "seqBlock":
       return [bodyField(node as SeqBlock)];
     case "rebindParameters":
+    case "decoratorCallField":
     case "markDestructiveRan":
-      // Synthetic leaf (no body) introduced post-typecheck by parallelDesugar.
+      // Synthetic leaves have no statement bodies.
       return [];
     case "messageThread":
       return [bodyField(node as MessageThread)];

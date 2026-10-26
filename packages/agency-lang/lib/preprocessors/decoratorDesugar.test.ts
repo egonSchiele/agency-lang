@@ -91,12 +91,11 @@ function innerCall(body: ReturnType<typeof loweredBody>): FunctionCall {
   return statement.value as FunctionCall;
 }
 
+type RecordArgs = { entries: { key: string }[] };
+
 /** The `call:` record a lowered call passes last: the call names the const
  *  declared beside it, and this returns that const's value. */
-function callRecordOf(
-  body: ReturnType<typeof loweredBody>,
-  call: FunctionCall,
-): { entries: { key: string; value: unknown }[] } {
+function callRecordOf(body: ReturnType<typeof loweredBody>, call: FunctionCall): unknown {
   const last = call.arguments[call.arguments.length - 1] as {
     type: string;
     name: string;
@@ -108,7 +107,16 @@ function callRecordOf(
     (node) => node.type === "assignment" && (node as Assignment).variableName === last.value.value,
   ) as Assignment | undefined;
   expect(declaration).toBeDefined();
-  return declaration!.value as { entries: { key: string; value: unknown }[] };
+  return declaration!.value;
+}
+
+/** The arguments stored on the decorated function's call record. */
+function outermostRecordArgs(record: unknown): RecordArgs {
+  expect(record).toMatchObject({ type: "agencyObject" });
+  const entries = (record as { entries: { key: string; value: unknown }[] }).entries;
+  const args = entries.find((entry) => entry.key === "args");
+  expect(args).toBeDefined();
+  return args!.value as RecordArgs;
 }
 
 describe("decoratorsAbove", () => {
@@ -140,7 +148,15 @@ describe("loweredBody", () => {
     const call = outermostCall(body);
     expect(call.functionName).toBe("plain");
     expect(call.arguments).toHaveLength(1);
-    expect(callRecordOf(body, call).entries[0]).toMatchObject({ key: "name" });
+    expect(callRecordOf(body, call)).toMatchObject({
+      type: "agencyObject",
+      entries: [
+        { key: "name", value: { type: "string", segments: [{ type: "text", value: "f" }] } },
+        { key: "args", value: { type: "agencyObject" } },
+        { key: "id", value: { type: "decoratorCallField", field: "id", functionName: "f" } },
+        { key: "inToolCall", value: { type: "decoratorCallField", field: "inToolCall" } },
+      ],
+    });
     // The block takes the record, starts with the rebind, and then runs the
     // body's own statements.
     expect(call.block?.params.map((param) => param.name)).toEqual(["__args"]);
@@ -164,20 +180,11 @@ describe("loweredBody", () => {
     const call = outermostCall(body);
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[0]).toMatchObject({ type: "number" });
-    expect(callRecordOf(body, call)).toMatchObject({
+    expect(outermostRecordArgs(callRecordOf(body, call))).toMatchObject({
       type: "agencyObject",
       entries: [
-        { key: "name", value: { type: "string", segments: [{ type: "text", value: "f" }] } },
-        {
-          key: "args",
-          value: {
-            type: "agencyObject",
-            entries: [
-              { key: "a", value: { type: "variableName", value: "a" } },
-              { key: "b", value: { type: "variableName", value: "b" } },
-            ],
-          },
-        },
+        { key: "a", value: { type: "variableName", value: "a" } },
+        { key: "b", value: { type: "variableName", value: "b" } },
       ],
     });
   });
@@ -189,10 +196,7 @@ describe("loweredBody", () => {
     const def = defNamed(program, "each");
     const body = loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup);
     const call = outermostCall(body);
-    const record = callRecordOf(body, call) as {
-      entries: { key: string; value: { entries: unknown[] } }[];
-    };
-    expect(record.entries[1].value.entries).toHaveLength(1);
+    expect(outermostRecordArgs(callRecordOf(body, call)).entries).toHaveLength(1);
     expect(call.block?.body[0]).toMatchObject({
       type: "rebindParameters",
       parameters: [{ name: "xs" }],
@@ -221,6 +225,31 @@ describe("loweredBody", () => {
     expect(inner.scope).toBe("imported");
     expect(inner.arguments[0]).toMatchObject({ type: "namedArgument", name: "cost" });
     expect(inner.block?.body.slice(1)).toEqual(original);
+  });
+
+  it("keeps the definition identity and copies the outermost tool context", () => {
+    const program = parse(`@plain\n@withCall\ndef f(a: number): number { return a }\n`);
+    const def = defNamed(program, "f");
+    const outer = outermostCall(loweredBody(def, decoratorsAbove(program.nodes)[0].tags, lookup));
+    const block = outer.block?.body ?? [];
+    const inner = innerCall(block);
+    const fromOutermost = (key: string) => ({
+      key,
+      value: {
+        type: "valueAccess",
+        base: { type: "variableName", value: "__call_0" },
+        chain: [{ kind: "property", name: key }],
+      },
+    });
+    expect(callRecordOf(block, inner)).toMatchObject({
+      type: "agencyObject",
+      entries: [
+        { key: "name", value: { type: "string", segments: [{ type: "text", value: "f" }] } },
+        { key: "args", value: { entries: [{ key: "a" }] } },
+        { key: "id", value: { type: "decoratorCallField", field: "id", functionName: "f" } },
+        fromOutermost("inToolCall"),
+      ],
+    });
   });
 
   it("does not write to the def", () => {
@@ -282,10 +311,8 @@ describe("desugarDecorators fills decorator slots", () => {
       expect(def.parameters[0].typeHint).toEqual({ type: "typeAliasVariable", aliasName: "Call" });
       expect(def.parameters[1].typeHint).toMatchObject({ type: "blockType" });
     }
-    const record = (defs.inner.body[0] as Assignment).value as {
-      entries: { key: string; value: { entries: { key: string }[] } }[];
-    };
-    expect(record.entries[1].value.entries.map((entry) => entry.key)).toEqual(["call"]);
+    const record = outermostRecordArgs((defs.inner.body[0] as Assignment).value);
+    expect(record.entries.map((entry) => entry.key)).toEqual(["call"]);
   });
 });
 

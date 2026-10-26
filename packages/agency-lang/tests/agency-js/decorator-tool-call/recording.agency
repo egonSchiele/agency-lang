@@ -1,0 +1,19 @@
+let seen: any[] = []
+
+export decorator def recorded(by: string = "recorded", call, block) {
+  const beforeId = call.id
+  const beforeContext = call.inToolCall
+  const value = block(call.args)
+  seen.push({
+    by: by,
+    name: call.name,
+    id: call.id,
+    inToolCall: call.inToolCall,
+    stable: beforeId == call.id && beforeContext == call.inToolCall
+  })
+  return value
+}
+
+export def records(): any[] {
+  return seen
+}

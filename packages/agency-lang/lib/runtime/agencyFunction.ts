@@ -721,14 +721,13 @@ function buildReducedSchema(originalSchema: any, unboundParams: FuncParam[]): an
   return z.object(reducedShape);
 }
 
-/** Whether `record` is a decorator's `call` value, `{ name, args }`, which
- *  a decorator passes by mistake as `block(call)` instead of `block(call.args)`. */
+/** Whether `record` is a decorator's `call` value, `{ name, args, id,
+ *  inToolCall }`, which a decorator passes by mistake as `block(call)`
+ *  instead of `block(call.args)`. */
 function isCallRecord(record: Record<string, unknown>): boolean {
   const keys = Object.keys(record).sort();
   return (
-    keys.length === 2 &&
-    keys[0] === "args" &&
-    keys[1] === "name" &&
+    keys.join(",") === "args,id,inToolCall,name" &&
     typeof record.name === "string" &&
     typeof record.args === "object" &&
     record.args !== null

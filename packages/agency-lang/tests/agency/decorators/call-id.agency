@@ -1,0 +1,38 @@
+// IDs distinguish definitions and stay the same through partial application
+// and stacked decorators. Their spelling is opaque.
+import { f as otherF, identify } from "./call-id-other.agency"
+
+decorator def outerSeen(call, block) {
+  const inner = block(call.args)
+  return { outer: { id: call.id, inToolCall: call.inToolCall }, inner: inner }
+}
+
+@identify
+def f(x: number): any {
+  return x
+}
+
+@outerSeen
+@identify
+def stacked(x: number): any {
+  return x
+}
+
+node main() {
+  const here = f(1)
+  const there = otherF(1)
+  const g = f.partial(x: 2)
+  const viaPartial = g()
+  const both = stacked(3)
+  return {
+    nonemptyIds: here.id.length > 0 && there.id.length > 0,
+    differentModules: here.id != there.id,
+    differentDefinitions: here.id != both.outer.id,
+    inToolCall: here.inToolCall,
+    partialSameId: viaPartial.id == here.id,
+    partialValue: viaPartial.value,
+    stackedSame: both.outer.id == both.inner.id && both.outer.inToolCall == both.inner.inToolCall,
+    stackedInToolCall: both.inner.inToolCall,
+    stackedValue: both.inner.value
+  }
+}

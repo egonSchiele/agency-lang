@@ -1,0 +1,9 @@
+import { recorded } from "./recording.agency"
+
+@recorded
+export def reexported(text: string): string {
+  """
+  Return text through a re-exported tool.
+  """
+  return text
+}

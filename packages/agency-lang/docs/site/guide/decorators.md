@@ -35,17 +35,7 @@ leaving greet
 hello ada
 ```
 
-`@logged` means "run `greet`'s body as the block passed to `logged`". The compiler turns `greet` into this:
-
-```ts
-def greet(name: string): string {
-  return logged(call: { name: "greet", args: { name: name } }) {
-    return "hello ${name}"
-  }
-}
-```
-
-So `greet` returns whatever `logged` returns, and the body only runs when `logged` calls its block.
+`@logged` means "run `greet`'s body as the block passed to `logged`". The compiler builds a `Call` record for each invocation and passes it to `logged` along with the body. `greet` returns whatever `logged` returns, and the body only runs when `logged` calls its block.
 
 The two parameters of `logged` have no types. The compiler knows what a decorator receives, so it types them for you: `call` is `Call` and `block` is `(args: object) -> any`. You can call them anything you like; `call` and `block` are the names this guide uses. You can also type them yourself, which the [budget decorator](#a-budget-decorator) below does.
 
@@ -84,6 +74,8 @@ Every decorator receives a record describing the call it wraps, in its second-to
 
 - `call.name` is the decorated function's name.
 - `call.args` holds the function's arguments, keyed by parameter name. Block-typed parameters are left out, since a block cannot be stored in a record.
+- `call.id` identifies the decorated function within the compiled program. Partial, renamed, and preapproved copies of that function use the same ID. Use it as a key, without parsing it or relying on it to remain the same across builds.
+- `call.inToolCall` is `true` when the invocation began inside a model tool call. This includes functions called by the selected tool and calls made in its branches. Ordinary calls outside tool execution see `false`.
 
 ```ts
 decorator def tagged(label: string, call, block) {
@@ -99,6 +91,29 @@ def lookUp(topic: string): string {
 ```
 
 Calling `lookUp("owls")` prints `research: lookUp`, then `{ topic: 'owls' }`.
+
+```ts
+decorator def recorded(call, block) {
+  print("${call.id}: ${call.inToolCall}")
+  return block(call.args)
+}
+
+@recorded
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def outer(): number {
+  return add(1, 2)
+}
+
+node main() {
+  add(1, 2)
+  llm("Use the tools.", tools: [add, outer])
+}
+```
+
+The first call prints `false` for `inToolCall`. If the model selects either `add` or `outer`, the decorator on `add` prints `true`. You can use this to count calls during tool execution. The boolean does not distinguish functions selected directly by the model from functions called by their bodies.
 
 ## Changing the arguments
 
@@ -130,6 +145,8 @@ def careful(url: string): Result<string> {
 
 This becomes `logged(call: …) { return retry(2, call: …) { ...body... } }`, so `logged` runs once around both attempts. When the outer decorator changes the arguments, the inner one sees the changed ones: its `call.args`, and any tag argument that names a parameter, are read after the outer rebind.
 
+All stacked decorators receive the same `id` and the same captured `inToolCall` value. Those fields also keep their values when the invocation resumes after an interrupt.
+
 A decorator can itself be decorated. Put the tag above the `decorator def` as you would above any def.
 
 ## Calling a decorator directly
@@ -142,13 +159,18 @@ decorator def tagged(tag: string, call, block) {
 }
 
 node main() {
-  return tagged("t", call: { name: "direct", args: {} }) {
+  return tagged("t", call: {
+    name: "direct",
+    args: {},
+    id: "manual-example",
+    inToolCall: false
+  }) {
     return "body"
   }
 }
 ```
 
-`Call` is `{ name: string, args: object }`, so an object literal is all the slot needs. A direct call is checked like any other call, so leaving the record out is a missing argument.
+`Call` is `{ name: string, args: object, id: string, inToolCall: boolean }`. A direct call supplies all four fields, including the identity and tool context the caller wants to report. It is checked like any other call, so leaving the record out is a missing argument.
 
 ## A budget decorator
 

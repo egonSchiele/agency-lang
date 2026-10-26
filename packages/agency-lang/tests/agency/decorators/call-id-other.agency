@@ -1,0 +1,10 @@
+// Both modules use this decorator. Its caller's definition supplies the ID.
+export decorator def identify(call, block) {
+  const value = block(call.args)
+  return { id: call.id, inToolCall: call.inToolCall, value: value }
+}
+
+@identify
+export def f(x: number): any {
+  return x
+}

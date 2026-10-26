@@ -68,12 +68,15 @@ effect std::writeBinary {
   already exists. */
 export type WriteMode = "overwrite" | "append" | "create-only"
 
-/** What a decorator learns about the function it wraps. Every decorator
-  receives one of these in its second-to-last parameter, whatever that
-  parameter is called: `name` is the decorated function's name and `args`
-  holds its parameters by name, block parameters left out. See the
+/** What a decorator learns about the function it wraps. The `name` is
+  the definition's original name. Its `args` hold the parameters by name,
+  with block parameters left out. The `id` is the function's opaque runtime
+  identity, shared by partial, renamed, and preapproved copies. It is not
+  a source path or an identifier guaranteed to stay the same across builds.
+  The `inToolCall` flag is true when the invocation began inside a model
+  tool call, including calls made by that tool's body or branches. See the
   Decorators guide page. */
-export type Call = { name: string, args: object }
+export type Call = { name: string, args: object, id: string, inToolCall: boolean }
 
 @capabilities(terminal)
 export def print(...messages: any[]) {

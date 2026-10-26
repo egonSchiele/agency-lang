@@ -1,0 +1,22 @@
+{
+  "data": {
+    "plain": 3,
+    "answer": "done",
+    "after": 9,
+    "seen": [
+      { "by": "recorded", "name": "add", "inToolCall": false, "stable": true, "identity": 0 },
+      { "by": "recorded", "name": "add", "inToolCall": true, "stable": true, "identity": 0 },
+      { "by": "recorded", "name": "inner", "inToolCall": true, "stable": true, "identity": 1 },
+      { "by": "recorded", "name": "add", "inToolCall": true, "stable": true, "identity": 0 },
+      { "by": "recorded", "name": "add", "inToolCall": true, "stable": true, "identity": 0 },
+      { "by": "alsoRecorded", "name": "stacked", "inToolCall": true, "stable": true, "identity": 2 },
+      { "by": "recorded", "name": "stacked", "inToolCall": true, "stable": true, "identity": 2 },
+      { "by": "recorded", "name": "reexported", "inToolCall": true, "stable": true, "identity": 3 },
+      { "by": "recorded", "name": "inner", "inToolCall": true, "stable": true, "identity": 1 },
+      { "by": "alsoRecorded", "name": "paused", "inToolCall": true, "stable": true, "identity": 4 },
+      { "by": "recorded", "name": "paused", "inToolCall": true, "stable": true, "identity": 4 },
+      { "by": "recorded", "name": "add", "inToolCall": false, "stable": true, "identity": 0 }
+    ]
+  },
+  "requests": 9
+}

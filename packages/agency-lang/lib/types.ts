@@ -22,6 +22,7 @@ import { WhileLoop } from "./types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { MarkDestructiveRan } from "./types/markDestructiveRan.js";
 import { RebindParameters } from "./types/rebindParameters.js";
+import { DecoratorCallField } from "./types/decoratorCallField.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { FinalizeBlock } from "./types/finalizeBlock.js";
@@ -74,6 +75,7 @@ export * from "./types/whileLoop.js";
 export * from "./types/parallelBlock.js";
 export * from "./types/markDestructiveRan.js";
 export * from "./types/rebindParameters.js";
+export * from "./types/decoratorCallField.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/finalizeBlock.js";
@@ -99,6 +101,7 @@ export type Expression =
   | BinOpExpression
   | AgencyArray
   | AgencyObject
+  | DecoratorCallField
   | TryExpression
   | NewExpression
   | RegexLiteral
@@ -148,6 +151,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "binOpExpression",
   "agencyArray",
   "agencyObject",
+  "decoratorCallField",
   "tryExpression",
   "newExpression",
   "regex",
@@ -352,6 +356,7 @@ export type AgencyNode =
   | SeqBlock
   | MarkDestructiveRan
   | RebindParameters
+  | DecoratorCallField
   | IfElse
   | NewLine
   | RawCode

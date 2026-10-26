@@ -6,7 +6,6 @@ import {
   GraphNodeDefinition,
   VariableType,
   functionScope,
-  isExpressionNode,
   nodeScope,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
@@ -142,10 +141,22 @@ export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeChecker
   const existingType = node.declKind
     ? scope.lookupInFunction(node.variableName)
     : scope.lookup(node.variableName);
-  const isConst = node.declKind === "const";
+  // A `let`/`const` whose name a block parameter already uses shares that
+  // parameter's binding (see sharedBlockParamType). The binding is not
+  // treated as const, because it also holds the parameter.
+  const sharesBlockParam =
+    node.declKind !== undefined &&
+    existingType !== undefined &&
+    scope.isBlockParam(node.variableName);
+  const isConst = node.declKind === "const" && !sharesBlockParam;
 
   if (newType) {
     validateTypeReferences(newType, node.variableName, ctx.getTypeAliases(), ctx.errors, node.loc);
+    if (sharesBlockParam) {
+      const declared = resultTypeForValidation(newType, node.validated);
+      scope.declare(node.variableName, sharedBlockParamType(existingType, declared, ctx));
+      return;
+    }
     if (existingType) {
       reportNotAssignable(ctx, node.variableName, newType, existingType, node.loc);
     }
@@ -166,6 +177,11 @@ export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeChecker
   // second, and the live one must set the type.
   const declaredInDeadBranch =
     node.declKind !== undefined && existingType !== undefined && isNever(existingType);
+  if (sharesBlockParam) {
+    const inferred = widenType(synthType(node.value, scope, ctx));
+    scope.declare(node.variableName, sharedBlockParamType(existingType, inferred, ctx));
+    return;
+  }
   if (existingType && !declaredInDeadBranch) {
     return;
   }
@@ -389,6 +405,35 @@ function importedValueType(name: string, ctx: TypeCheckerContext): VariableType 
   };
 }
 
+/**
+ * Blocks do not have scopes of their own yet, so a block parameter shares one
+ * binding with every other variable of the same name in the function: another
+ * block's parameter, a function parameter, or a local. When their types
+ * differ, no single type is right for every use, so the binding becomes `any`.
+ * For example, `onNum() as x { ... }` followed by `onStr() as x { ... }` makes
+ * `x` an `any`. Without this, the last declaration's type would be used to
+ * check the code that belongs to the others.
+ */
+function sharedBlockParamType(
+  existing: VariableType | undefined,
+  incoming: VariableType,
+  ctx: TypeCheckerContext,
+): VariableType {
+  if (existing === undefined) return incoming;
+  const aliases = ctx.getTypeAliases();
+  return typeKey(existing, aliases) === typeKey(incoming, aliases) ? incoming : ANY_T;
+}
+
+/**
+ * True for a value that owns statement bodies the scope walk must enter
+ * itself: a `thread { }` used as a value, and a `match` used as a value (its
+ * arms). Statements reach their bodies through walkScopeBody's switch, and a
+ * call's trailing block is handled in walkExpressionBlocks.
+ */
+function isValueWithBodies(node: AgencyNode): boolean {
+  return node.type === "messageThread" || node.type === "matchBlock";
+}
+
 /** Collect declarations from statement bodies owned by expressions. */
 function walkExpressionBlocks(
   node: AgencyNode,
@@ -406,23 +451,17 @@ function walkExpressionBlocks(
       return;
     }
     const slot = getBlockSlot(node.functionName, ctx);
-    const aliases = ctx.getTypeAliases();
     node.block.params.forEach((param, index) => {
       const slotType = slot?.params[index]?.typeAnnotation;
       // typeHint is reserved for future typed block-parameter syntax.
       const paramType = param.typeHint ?? slotType ?? ANY_T;
       const existing = scope.lookupInFunction(param.name);
-      // Blocks share the function scope. Conflicting parameter types must stay
-      // unknown so the last block cannot change the type used to check earlier ones.
-      const conflicts = existing && typeKey(existing, aliases) !== typeKey(paramType, aliases);
-      scope.declare(param.name, conflicts ? ANY_T : paramType);
+      scope.declareBlockParam(param.name, sharedBlockParamType(existing, paramType, ctx));
     });
-  } else if (
-    isStatement ||
-    node.type === "blockArgument" ||
-    (!isExpressionNode(node) && node.type !== "messageThread")
-  ) {
-    // Ordinary statement bodies use walkScopeBody's narrowing and binding rules.
+    walkScopeBody(node.block.body, scope, ctx);
+    return;
+  }
+  if (isStatement || !isValueWithBodies(node)) {
     return;
   }
   for (const { body } of bodySlots(node)) {

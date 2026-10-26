@@ -30,13 +30,17 @@ describe("scope collection inside expression blocks", () => {
     expect(check(`def main(): ${returnType} { ${body} }`)).toEqual([]);
   });
 
-  it.each([
-    ["two", ""],
-    ["three", "const c = onStr() as x { return x.length }"],
-  ])("accepts %s typed blocks that reuse a parameter name", (_, thirdBlock) => {
-    const errors = typecheckSource(`
+  describe("a name shared by a block parameter and another variable", () => {
+    const TYPED_HELPERS = `
 def onNum(cb: (number) -> number): number { return cb(1) }
 def onStr(cb: (string) -> number): number { return cb("hello") }
+`;
+
+    it.each([
+      ["two", ""],
+      ["three", "const c = onStr() as x { return x.length }"],
+    ])("accepts %s typed blocks that reuse a parameter name", (_, thirdBlock) => {
+      const errors = typecheckSource(`${TYPED_HELPERS}
 def main(): number {
   const a = onNum() as x { return x + 1 }
   const b = onStr() as x { return x.length }
@@ -44,7 +48,50 @@ def main(): number {
   return a + b
 }
 `);
-    expect(errors).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+
+    it.each([
+      ["no annotation", "const x = 5"],
+      ["an annotation", "const x: number = 5"],
+    ])("accepts a later local with %s that reuses a block parameter name", (_, local) => {
+      const errors = typecheckSource(`${TYPED_HELPERS}
+def main(): number {
+  const b = onStr() as x { return x.length }
+  ${local}
+  return b + x
+}
+`);
+      expect(errors).toEqual([]);
+    });
+
+    // Blocks do not have scopes of their own yet, so the function parameter
+    // and the block parameter share one binding, and it becomes `any`. That
+    // also hides the real mistake on the `const s` line. Block-aware scopes
+    // would report it, and this test should change when they land.
+    it("makes a function parameter that a block parameter reuses `any`", () => {
+      const errors = typecheckSource(`${TYPED_HELPERS}
+def main(x: number): number {
+  const b = onStr() as x { return x.length }
+  const s: string = x
+  return b
+}
+`);
+      expect(errors).toEqual([]);
+    });
+
+    it.each([
+      ["before", "const x = 1\n  const b = onNum() as x { x = x + 1; return x }"],
+      ["after", "const b = onNum() as x { x = x + 1; return x }\n  const x = 1"],
+    ])("lets a block reassign a parameter named like a const declared %s it", (_, body) => {
+      const errors = typecheckSource(`${TYPED_HELPERS}
+def main(): number {
+  ${body}
+  return b
+}
+`);
+      expect(errors).toEqual([]);
+    });
   });
 
   it("resolves locals in a thread used as a value", () => {
@@ -102,19 +149,22 @@ def main(): number {
     ]);
   });
 
-  it("reports each const reassignment and mutation once through with modifiers", () => {
+  it.each([
+    ["plain", ""],
+    ["with modifier", " with approve"],
+  ])("reports each const reassignment and mutation once (%s)", (_, modifier) => {
     const errors = check(`
 def main(): number {
   const result = apply() {
     const assigned = 1
     assigned = 2
     return assigned
-  } with approve
+  }${modifier}
   return apply() {
     const incremented = result
     incremented++
     return incremented
-  } with approve
+  }${modifier}
 }
 `);
     expect(errors.map((error) => [error.name, error.message])).toEqual([

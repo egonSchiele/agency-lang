@@ -65,8 +65,18 @@ The same walk also handles:
 - **`importStatement`**: an imported Agency function gets a `functionRefType` built from its real signature in `ctx.importedFunctions`. A name from a JS import, or one with no known signature, gets `ANY_T`.
 - **`forLoop`**: `for (item, second in x)` binds two variables. Over an array, `item` is the element type and `second` is `number`. Over a record or object literal, `item` is the key and `second` is the value. `recordLikeKeyValue` is the shared helper so this and index-access synthesis agree.
 - Nested blocks (`ifElse`, `whileLoop`, `matchBlock`, `handleBlock`, `finalizeBlock`, `parallelBlock`, `seqBlock`, `messageThread`) recurse into the same scope, which is why declarations leak out of nested blocks today.
-- The scope walk visits trailing call blocks in expressions and `thread` bodies used as values. It collects their declarations before inferring an enclosing assignment's type. These declarations leak into the enclosing function scope, as with other nested blocks.
-- When trailing blocks reuse a parameter name with different types, the shared binding becomes `any`. This loses type precision for that parameter but prevents the last block's type from being used to check earlier blocks.
+- The scope walk visits trailing call blocks in expressions, and `thread` bodies and `match` arms used as values. It collects their declarations before inferring an enclosing assignment's type. These declarations leak into the enclosing function scope, as with other nested blocks.
+- Blocks do not have scopes of their own yet, so a block parameter shares one binding with every other variable of the same name in the function: another block's parameter, a function parameter, or a `let`/`const`. `sharedBlockParamType` in `scopes.ts` makes that binding `any` when the types differ, and a shared name is never treated as `const`. For example:
+
+  ```
+  def main(x: number): number {
+    const b = onStr() as x { return x.length }
+    const s: string = x
+    return b
+  }
+  ```
+
+  Here `x` is `any` for the whole function. That avoids a false error inside the block (where `x` is a string), but it also hides the real mistake on the `const s` line. Block-aware scopes in the checking passes would fix both; `expressionBlockScopes.test.ts` pins the current behavior so that change shows up in the tests.
 - This walk skips inline callbacks in expressions, preserving their existing synthesis behavior. For array methods, `synthBlockReturnType` in `lib/typeChecker/synthesizer.ts` gives the callback parameters their own scope.
 
 ### Checking phase

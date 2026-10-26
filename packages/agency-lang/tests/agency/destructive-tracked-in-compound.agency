@@ -1,0 +1,151 @@
+// A destructive call bound to a local inside a loop, if, match, or `with`
+// gets its own precise post-flip, so the statement around it must not add a
+// conservative pre-flip. A clean refusal from the callee leaves the caller's
+// failure saying destructiveRan: false. Calls no post-flip covers (a bare
+// call, the right side of &&) still mark the caller (#1278).
+
+def saveOne(item: string): Result<string> {
+  if (item == "bad") {
+    return failure("refused")
+  }
+  destructive {
+    return success("saved")
+  }
+}
+
+destructive def burn(): number {
+  return 1
+}
+
+def saveAll(items: string[]): Result<string> {
+  for (item in items) {
+    const saved = saveOne(item)
+    if (isFailure(saved)) {
+      return failure("stopped")
+    }
+  }
+  return success("all saved")
+}
+
+node loopRefusedFirst_() {
+  const r = saveAll(["bad", "ok"])
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// The first item does destructive work, the second refuses. The post-flip
+// alone has to carry the mark.
+node loopRefusedSecond_() {
+  const r = saveAll(["ok", "bad"])
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def ifRefused(): Result<string> {
+  if (true) {
+    const s = saveOne("bad")
+    if (isFailure(s)) {
+      return failure("stopped")
+    }
+  }
+  return failure("after")
+}
+node ifRefused_() {
+  const r = ifRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def whileRefused(): Result<string> {
+  let i = 0
+  while (i < 1) {
+    const s = saveOne("bad")
+    if (isFailure(s)) {
+      return failure("stopped")
+    }
+    i = i + 1
+  }
+  return failure("after")
+}
+node whileRefused_() {
+  const r = whileRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def matchRefused(kind: string): Result<string> {
+  let refused = false
+  match (kind) {
+    "save" => {
+      const s = saveOne("bad")
+      refused = isFailure(s)
+    }
+    _ => {
+      refused = false
+    }
+  }
+  if (refused) {
+    return failure("stopped")
+  }
+  return failure("after")
+}
+node matchRefused_() {
+  const r = matchRefused("save")
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+def withRefused(): Result<string> {
+  const s = saveOne("bad") with approve
+  return failure("stopped")
+}
+node withRefused_() {
+  const r = withRefused()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// A bare call has no post-flip, so the loop keeps its pre-flip.
+def bareInLoop(): Result<string> {
+  for (item in ["bad"]) {
+    saveOne(item)
+  }
+  return failure("after")
+}
+node bareInLoop_() {
+  const r = bareInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Hoisting does not move a call out of the right side of &&, so the loop's
+// pre-flip is the only thing that marks the function before the return.
+def andRightInLoop(): Result<string> {
+  for (item in ["a"]) {
+    if (true && burn() > 0) {
+      return failure("inside")
+    }
+  }
+  return failure("after")
+}
+node andRightInLoop_() {
+  const r = andRightInLoop()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

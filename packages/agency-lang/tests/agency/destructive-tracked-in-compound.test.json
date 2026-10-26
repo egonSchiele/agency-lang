@@ -1,0 +1,92 @@
+{
+  "tests": [
+    {
+      "nodeName": "loopRefusedFirst_",
+      "description": "a refusal on the first loop item leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "loopRefusedSecond_",
+      "description": "destructive work on an earlier loop item still marks a later failure",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "ifRefused_",
+      "description": "a refusal bound to a local inside an if leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "whileRefused_",
+      "description": "a refusal bound to a local inside a while leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "matchRefused_",
+      "description": "a refusal bound to a local inside a match arm leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "withRefused_",
+      "description": "a refusal bound to a local under with approve leaves the caller's failure clean",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bareInLoop_",
+      "description": "a bare destructive call inside a loop keeps the conservative mark",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "andRightInLoop_",
+      "description": "a destructive call on the right of && inside a loop marks the function",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -32,6 +32,27 @@ Return the web-search tools whose API key is set, or an empty array when
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L53))
 
+### searchProviderName
+
+```ts
+searchProviderName(toolName: string): string | null
+```
+
+Return a search tool's provider name from the catalog, or null for an
+  unknown tool. This lookup does not read API keys or contact a provider.
+
+  @param toolName - The name assigned to the search tool
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| toolName | `string` |  |
+
+**Returns:** `string | null`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L62))
+
 ### hostedSearchTools
 
 ```ts
@@ -55,7 +76,7 @@ Return the provider-hosted search capabilities available to a call on this
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L76))
 
 ### searchProviderNames
 
@@ -72,4 +93,4 @@ Return the names of the web-search providers whose API key is set, for
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L89))

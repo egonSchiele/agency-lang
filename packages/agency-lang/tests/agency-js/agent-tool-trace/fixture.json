@@ -2,7 +2,9 @@
   "results": { "interactive": "done", "quiet": "done", "verbose": "done", "debug": "done" },
   "interactive": {
     "oneTaskSnapshot": true,
-    "noGenericTodo": true,
+    "todoStartsVisible": true,
+    "noGenericTodoResult": true,
+    "noTodoArgumentRows": true,
     "twoHostedSearches": true,
     "hostedQueries": true,
     "missingQueries": true,
@@ -12,12 +14,15 @@
     "unwrappedFailure": true,
     "failedToolNeverSucceeded": true,
     "suppressedWhatIAmDoing": true,
+    "malformedSearchUsesGenericStart": true,
     "clientSearches": true
   },
   "quietHasNoTraces": true,
   "verbose": {
     "oneTaskSnapshot": true,
-    "noGenericTodo": true,
+    "todoStartsVisible": true,
+    "noGenericTodoResult": true,
+    "noTodoArgumentRows": true,
     "twoHostedSearches": true,
     "hostedQueries": true,
     "missingQueries": true,
@@ -27,11 +32,14 @@
     "unwrappedFailure": true,
     "failedToolNeverSucceeded": true,
     "suppressedWhatIAmDoing": true,
+    "malformedSearchUsesGenericStart": true,
     "clientSearches": true
   },
   "debug": {
     "oneTaskSnapshot": true,
-    "noGenericTodo": true,
+    "todoStartsVisible": true,
+    "noGenericTodoResult": true,
+    "noTodoArgumentRows": true,
     "twoHostedSearches": true,
     "hostedQueries": true,
     "missingQueries": true,
@@ -41,6 +49,7 @@
     "unwrappedFailure": true,
     "failedToolNeverSucceeded": true,
     "suppressedWhatIAmDoing": true,
+    "malformedSearchUsesGenericStart": true,
     "clientSearches": true
   },
   "debugDiagnostics": true,

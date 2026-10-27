@@ -16,7 +16,7 @@ describe("task lists", () => {
     "shows the full %s snapshot",
     (toolName) => {
       expect(formatAgentTrace({ kind: "toolStart", toolName, args: { todos: tasks } }, plain)).toBe(
-        "",
+        `● Tool call  ${toolName}`,
       );
       const heading = toolName === "todoList" ? "Tasks" : "✓ Tasks updated";
       expect(
@@ -184,12 +184,12 @@ describe("web searches", () => {
   );
 
   it.each([
-    ["web_search_tavily", "Tavily"],
-    ["web_search_brave", "Brave"],
+    ["catalog_search", "Catalog provider"],
+    ["renamed_search", "Renamed provider"],
   ])("labels the %s client search", (toolName, provider) => {
     const query = "q".repeat(140);
     const output = formatAgentTrace(
-      { kind: "toolStart", toolName, args: { query } },
+      { kind: "clientSearch", toolName, provider, query },
       { columns: 200, color: false },
     );
     expect(output).toBe(`⌕ Searching web  ${toolName}\n  │ ${provider} · 1 query\n  │ · ${query}`);
@@ -300,6 +300,30 @@ describe("ordinary agent tool output", () => {
         "· Tool returned  custom\n  │ " + "b".repeat(100) + (length > 100 ? "…" : ""),
       );
     }
+  });
+
+  it("keeps emoji intact at argument and result preview limits", () => {
+    const options = { columns: 200, color: false };
+    const argument = "a".repeat(48) + "😀tail";
+    expect(
+      formatAgentTrace(
+        { kind: "toolStart", toolName: "custom", args: { text: argument } },
+        options,
+      ),
+    ).toBe('● Tool call  custom\n  │ text: "' + "a".repeat(48) + "😀…");
+    const result = "b".repeat(99) + "😀";
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "custom", value: result, outcome: "plain" },
+        options,
+      ),
+    ).toBe("· Tool returned  custom\n  │ " + result);
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "custom", value: result + "tail", outcome: "plain" },
+        options,
+      ),
+    ).toBe("· Tool returned  custom\n  │ " + result + "…");
   });
 
   it("preserves session diagnostics below the warning", () => {

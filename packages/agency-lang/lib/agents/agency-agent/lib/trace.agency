@@ -7,10 +7,12 @@
  * cannot also carry one, or the preprocessor rejects it. See issue below.
  */
 import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
+import { searchProviderName } from "std::agents/lib/search"
 import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
 import {
+  isPlainObject,
   retryReasonLabel,
  } from "./utils.agency"
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
@@ -39,7 +41,12 @@ callback("onToolCallStart") as data {
   }
 
   if (_showTraces()) {
-    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args })
+    const provider = searchProviderName(data.toolName)
+    if (provider != null && isPlainObject(data.args) && typeof data.args.query == "string") {
+      _printAgentTrace({ kind: "clientSearch", toolName: data.toolName, provider: provider, query: data.args.query })
+    } else {
+      _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args })
+    }
   }
 }
 

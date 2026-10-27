@@ -21,11 +21,12 @@ the existing LLM diagnostics. `whatIAmDoing` has no separate tool block.
 - `lib/stdlib/agentToolTrace.ts` describes and renders each event.
 - `lib/agents/agency-agent/lib/trace.agency` checks visibility and unwraps
   Agency Results before calling `_printAgentTrace`.
+- `stdlib/agents/lib/search.agency` owns the search-provider catalog and
+  exports `searchProviderName` for looking up a tool's provider label.
+- `lib/utils/controlCharacters.ts` strips control characters for both the
+  trace renderer and the TUI. The TUI re-exports the shared helper.
 - `lib/agents/agency-agent/lib/resume.agency` and
   `lib/stdlib/agentSessions.ts` use the same renderer for save warnings.
-- `lib/stdlib/agentToolTrace.test.ts` covers the formatting contract.
-- `tests/agency-js/agent-tool-trace/` exercises the real callbacks with a
-  scripted LLM client. It saves captured output in `test-output/trace.json`.
 
 The TypeScript helper belongs in `lib/stdlib` so the agent can import it
 through `agency-lang/stdlib-lib/agentToolTrace.js`. Agent staging removes
@@ -51,8 +52,9 @@ after it. The Agency bridge reads `currentHost()` before delegating.
 
 ## Display rules
 
-The four todo operations suppress their start block. A valid returned list
-prints every task in its original order, including repeated snapshots.
+The four todo operations print only a heading at start, so a failed call still
+appears in the trace. A successful result containing a valid list prints
+every task in its original order, including repeated snapshots.
 Completed tasks have a green check and dim strikethrough text. Active tasks
 use blue text and an explicit status label. Plain output keeps the markers
 and words. Empty lists show `0/0 complete` and `No tasks`.
@@ -63,15 +65,18 @@ string gets its own row. Missing queries show `Queries not reported`, and
 missing provider text shows `Provider not reported`. Raw provider results
 are not interpreted or printed.
 
-Tavily and Brave client tools print their full query at start. Their end
-events use the ordinary result display. Unknown tools and malformed custom
-results also use that display. Argument previews stop after 50 characters;
-result previews stop after 100. Failures, task text, and queries stay complete.
+Client search tools print their full query at start. `trace.agency` looks up
+the provider label with `searchProviderName(toolName)` and sends a
+`clientSearch` event to the renderer. The lookup returns `null` for unknown
+tools. Provider names come from the existing search catalog.
 
-Only an explicit failure event produces a failure heading. The runtime
-currently skips `onToolCallEnd` for a tool returning a failure. The fixture
-checks that such a call has no successful completion and injects a separate
-failure event to cover the callback's Result unwrapping.
+Client search end events use the ordinary result display. Unknown tools and
+malformed custom results also use that display. Argument previews stop after
+50 Unicode code points. Result previews stop after 100. Failures, task text,
+and queries stay complete.
+
+The runtime skips `onToolCallEnd` for a failure, so a failure block only
+appears when an end event supplies that failure.
 
 All incoming text passes through one sanitizer before trusted styling.
 It strips ANSI sequences, normalizes CRLF, expands tabs to four spaces, and
@@ -82,15 +87,3 @@ The renderer uses the existing `wrapText` and `visualWidth` helpers. It
 inherits their JavaScript character-width measurement, including its limits
 for emoji and wide characters. Missing or invalid terminal widths use 80
 columns. Very narrow terminals omit decorative prefixes to preserve content.
-
-## Checks
-
-Save output when running tests:
-
-```bash
-pnpm test:run lib/stdlib/agentToolTrace.test.ts lib/stdlib/agentSessions.test.ts > /tmp/agent-tool-output-unit.log 2>&1
-make > /tmp/agent-tool-output-build.log 2>&1
-AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agent-tool-output-integration.log 2>&1
-```
-
-The fixture uses no model or web requests.

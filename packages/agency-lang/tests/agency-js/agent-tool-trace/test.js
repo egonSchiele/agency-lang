@@ -9,12 +9,14 @@ const todos = [
   { id: "3", text: "Compare hardware", status: "pending" },
 ];
 const calls = [
+  ["todoWrite", {}],
   ["todoWrite", { todos }],
   ["echo", { value: "first result" }],
   ["echo", { value: "second result" }],
   ["successful", {}],
   ["failedFixture", {}],
   ["whatIAmDoing", {}],
+  ["web_search_tavily", {}],
   ["web_search_tavily", { query: 'site.example.com "quoted phrase"' }],
   ["web_search_brave", { query: "another query" }],
 ];
@@ -93,7 +95,9 @@ const taskBlock = "✓ Tasks updated  todoWrite\n  │ 1/3 complete\n  │ ✓ V
 function detailed(output) {
   return {
     oneTaskSnapshot: output.split(taskBlock).length === 2,
-    noGenericTodo: !/Tool (call|returned|finished)  todoWrite/.test(output),
+    todoStartsVisible: output.split("● Tool call  todoWrite\n\n").length === 3,
+    noGenericTodoResult: !/Tool (returned|finished)  todoWrite/.test(output),
+    noTodoArgumentRows: !output.includes("  │ todos:"),
     twoHostedSearches: output.split("⌕ Web search  web_search").length === 3,
     hostedQueries: output.includes('  │ openai-responses · 2 queries\n  │ · site.example.com "quoted phrase"\n  │ · another query'),
     missingQueries: output.includes("  │ test-provider\n  │ Queries not reported"),
@@ -103,7 +107,8 @@ function detailed(output) {
     unwrappedFailure: output.includes("✗ Tool failed  injectedFailure\n  │ fixture failure"),
     failedToolNeverSucceeded: !output.includes("✓ Tool finished  failedFixture"),
     suppressedWhatIAmDoing: !/Tool (call|returned|finished)  whatIAmDoing/.test(output),
-    clientSearches: ["web_search_tavily", "web_search_brave"].every((toolName) => output.includes(`⌕ Searching web  ${toolName}`)),
+    malformedSearchUsesGenericStart: output.includes("● Tool call  web_search_tavily\n\n"),
+    clientSearches: [["web_search_tavily", "Tavily"], ["web_search_brave", "Brave"]].every(([toolName, provider]) => output.includes(`⌕ Searching web  ${toolName}\n  │ ${provider} · 1 query`)),
   };
 }
 

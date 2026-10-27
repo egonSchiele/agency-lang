@@ -1,6 +1,7 @@
 import { isPlainObject } from "../config/paths.js";
 import type { Host } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { stripControlCharacters } from "../utils/controlCharacters.js";
 import { color, plainColor, RESET } from "../utils/termcolors.js";
 import { stripAnsi, visualWidth, wrapText } from "./layout/ansi.js";
 
@@ -13,9 +14,15 @@ export type ToolEndEvent = {
   outcome: "success" | "failure" | "plain";
 };
 export type HostedSearchEvent = { kind: "hostedSearch"; result: unknown };
+export type ClientSearchEvent = {
+  kind: "clientSearch";
+  toolName: string;
+  provider: string;
+  query: string;
+};
 export type SessionSaveFailureEvent = { kind: "sessionSaveFailure"; message: string };
 export type AgentTraceEvent =
-  ToolStartEvent | ToolEndEvent | HostedSearchEvent | SessionSaveFailureEvent;
+  ToolStartEvent | ToolEndEvent | HostedSearchEvent | ClientSearchEvent | SessionSaveFailureEvent;
 
 type TraceStyle = "heading" | "muted" | "completed" | "active" | "success" | "error" | "warning";
 type TraceSpan = { text: string; style?: TraceStyle; bold?: boolean; limit?: number };
@@ -40,10 +47,6 @@ const TODO_HEADINGS: Record<string, TraceSpan> = {
   todoAdd: { text: "✓ Tasks updated", style: "success" },
   todoUpdate: { text: "✓ Tasks updated", style: "success" },
   todoList: { text: "Tasks", style: "heading" },
-};
-const CLIENT_SEARCH_PROVIDERS: Record<string, string> = {
-  web_search_tavily: "Tavily",
-  web_search_brave: "Brave",
 };
 type TodoStatus = "pending" | "in_progress" | "completed";
 type Todo = { id: string; text: string; status: TodoStatus };
@@ -94,19 +97,7 @@ function describeEvent(event: AgentTraceEvent): TraceBlock | null {
   switch (event.kind) {
     case "toolStart":
       if (Object.hasOwn(TODO_HEADINGS, event.toolName)) {
-        return null;
-      }
-      if (
-        Object.hasOwn(CLIENT_SEARCH_PROVIDERS, event.toolName) &&
-        isPlainObject(event.args) &&
-        typeof event.args.query === "string"
-      ) {
-        return describeSearch(
-          "⌕ Searching web",
-          event.toolName,
-          CLIENT_SEARCH_PROVIDERS[event.toolName],
-          [event.args.query],
-        );
+        return describeToolStart({ ...event, args: {} });
       }
       return describeToolStart(event);
     case "toolEnd":
@@ -120,6 +111,8 @@ function describeEvent(event: AgentTraceEvent): TraceBlock | null {
       return describeToolEnd(event);
     case "hostedSearch":
       return describeHostedSearch(event.result);
+    case "clientSearch":
+      return describeSearch("⌕ Searching web", event.toolName, event.provider, [event.query]);
     case "sessionSaveFailure":
       return {
         heading: [{ text: "! Session not saved", style: "warning", bold: true }],
@@ -240,17 +233,16 @@ function serialize(value: unknown): string {
 }
 
 function sanitize(text: string): string {
-  return stripAnsi(text)
-    .replace(/\r\n/g, "\n")
-    .replace(/\t/g, " ".repeat(TAB_WIDTH))
-    .replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, "�");
+  const normalized = stripAnsi(text).replace(/\r\n/g, "\n");
+  return stripControlCharacters(normalized).replace(/\t/g, " ".repeat(TAB_WIDTH));
 }
 
 function renderSpan(span: TraceSpan, options: TraceOptions): string {
   const clean = sanitize(span.text);
+  const characters = Array.from(clean);
   const text =
-    span.limit !== undefined && clean.length > span.limit
-      ? clean.slice(0, span.limit) + "…"
+    span.limit !== undefined && characters.length > span.limit
+      ? characters.slice(0, span.limit).join("") + "…"
       : clean;
   const palette = options.color ? color : plainColor;
   const styles = {

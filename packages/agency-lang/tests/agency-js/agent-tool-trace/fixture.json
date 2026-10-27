@@ -1,0 +1,48 @@
+{
+  "results": { "interactive": "done", "quiet": "done", "verbose": "done", "debug": "done" },
+  "interactive": {
+    "oneTaskSnapshot": true,
+    "noGenericTodo": true,
+    "twoHostedSearches": true,
+    "hostedQueries": true,
+    "missingQueries": true,
+    "ordinaryStart": true,
+    "independentReturns": true,
+    "unwrappedSuccess": true,
+    "unwrappedFailure": true,
+    "failedToolNeverSucceeded": true,
+    "suppressedWhatIAmDoing": true,
+    "clientSearches": true
+  },
+  "quietHasNoTraces": true,
+  "verbose": {
+    "oneTaskSnapshot": true,
+    "noGenericTodo": true,
+    "twoHostedSearches": true,
+    "hostedQueries": true,
+    "missingQueries": true,
+    "ordinaryStart": true,
+    "independentReturns": true,
+    "unwrappedSuccess": true,
+    "unwrappedFailure": true,
+    "failedToolNeverSucceeded": true,
+    "suppressedWhatIAmDoing": true,
+    "clientSearches": true
+  },
+  "debug": {
+    "oneTaskSnapshot": true,
+    "noGenericTodo": true,
+    "twoHostedSearches": true,
+    "hostedQueries": true,
+    "missingQueries": true,
+    "ordinaryStart": true,
+    "independentReturns": true,
+    "unwrappedSuccess": true,
+    "unwrappedFailure": true,
+    "failedToolNeverSucceeded": true,
+    "suppressedWhatIAmDoing": true,
+    "clientSearches": true
+  },
+  "debugDiagnostics": true,
+  "interactiveHasNoDiagnostics": true
+}

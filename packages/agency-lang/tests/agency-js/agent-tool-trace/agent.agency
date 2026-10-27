@@ -1,0 +1,40 @@
+import { todoWrite } from "std::agent"
+import {
+  setInteractive,
+  setVerbose,
+  setDebug,
+} from "../../../lib/agents/agency-agent/lib/trace.agency"
+
+def echo(value: string): string {
+  return value
+}
+
+def successful(): Result<string> {
+  return success("wrapped-ok")
+}
+
+def failedFixture(): Result<string> {
+  return failure("fixture failure")
+}
+
+def whatIAmDoing(): string {
+  return "suppressed"
+}
+
+def web_search_tavily(query: string): string {
+  return "Tavily fixture result"
+}
+
+def web_search_brave(query: string): string {
+  return "Brave fixture result"
+}
+
+node main(interactive: boolean, verbose: boolean, debug: boolean) {
+  setInteractive(interactive)
+  setVerbose(verbose)
+  setDebug(debug)
+  return llm("trace fixture", {
+    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, web_search_tavily, web_search_brave],
+    retries: 0
+  })
+}

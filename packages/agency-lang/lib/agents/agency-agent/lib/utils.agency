@@ -5,33 +5,6 @@ export def isPlainObject(value: any): boolean {
   return value != null && typeof value == "object" && !Array.isArray(value)
 }
 
-export def formatToolResponse(data: string): string {
-  let _text = ""
-  if (typeof data == "string") {
-    _text = truncate(data)
-  } else if (typeof data == "array") {
-    if (data.length > 15) {
-      _text = truncate(JSON.stringify(data[:15], null, 2)) + "\n... (${data.length} total items)"
-    } else if (data.length > 3) {
-      _text = JSON.stringify(data, null, 2)
-    } else {
-      _text = truncate(JSON.stringify(data))
-    }
-  } else {
-    _text = truncate(JSON.stringify(data))
-  }
-
-  const truncated = _text
-  if (truncated.length < 1) {
-    return ""
-  }
-  const lines = truncated.split("\n")
-  const head = lines[0]
-  const tail = indentStr(lines[1:].join("\n"), 5)
-  const result = ` ⎿  ${head}\n${tail}`
-  return result
-}
-
 export def truncate(str: string, maxLength: number = 100): string {
   if (str.length <= maxLength) {
     return str

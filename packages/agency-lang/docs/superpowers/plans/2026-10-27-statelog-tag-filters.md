@@ -1,5 +1,7 @@
 # StateLog Tag Filters Implementation Plan
 
+> **Not ready for implementation.** The [existing-capabilities review](/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/statelog-tag-filters/packages/agency-lang/docs/superpowers/plans/2026-10-27-statelog-tag-filters-existing-capabilities-review.md) found that the proposed `tagValues` storage duplicates `runMetadata.custom`. It also identifies unresolved configuration-versus-setter precedence and unnecessary scope. The steps below are retained for reference and require replacement before execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Identify complete runs by agent name and key/value tags, with filters and a single-line trace list.

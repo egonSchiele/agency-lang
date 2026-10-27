@@ -1,5 +1,7 @@
 # Agent names and run tags in the logs viewer
 
+> **Design requires revision.** The [existing-capabilities review](/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/statelog-tag-filters/packages/agency-lang/docs/superpowers/plans/2026-10-27-statelog-tag-filters-existing-capabilities-review.md) supersedes this document's storage and scope assumptions. Existing `runMetadata.custom` already stores string key/value pairs. Configuration-versus-setter precedence remains unresolved. Do not implement this specification as written.
+
 ## Purpose
 
 Make Agency agent runs easy to find in a JSONL file containing many runs. Display the recorded agent name and key/value run tags, and filter runs by either or both. The existing `log.oct26.jsonl` contains 482 traces, including 64 named `agency-agent/coordinator`; name filtering must work on those existing events without rewriting the file.

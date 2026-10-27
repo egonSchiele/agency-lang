@@ -41,14 +41,21 @@ In this case, the agent will autonomously do the work and then exit.
   │ · downloadable model weights
 ```
 
-Each task update prints the current list. Completed tasks have a check mark
+Each task update prints only the current list, without a generic tool-call block. Completed tasks have a check mark
 and crossed-out text when terminal styling is enabled. Active tasks have
 an arrow and an explicit status label. Pending tasks have an open circle.
 
-Search blocks show each query in full. Hosted search records appear when
-the model response arrives. Tavily and Brave searches show their query
-when the tool starts. Other tools show named argument and result blocks.
-Long lines wrap to fit the terminal.
+All search providers share the same display. Queries appear in full; returned
+sources show titles and URLs, up to five with a count of any remaining ones.
+Hosted records appear with the model response. Tavily and Brave show a start
+block followed by their results.
+
+Starts are blue; completed calls have green check marks and dim result
+previews. Failures are red. Hosted searches have a neutral heading because
+their records do not report success or failure. Markers and words distinguish
+these states when color is disabled. Subagent dispatches have one named
+announcement. Other tools show named arguments and result previews. Long
+lines wrap to fit the terminal.
 
 Interactive sessions show tool output by default. Add `--verbose` to show
 it in one-shot mode. `--debug` also enables tracing and retains additional

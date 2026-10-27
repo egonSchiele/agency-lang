@@ -1,5 +1,7 @@
 # Detailed Agent Tool Output Implementation Plan
 
+The follow-up [tool lifecycle plan](2026-10-27-tool-output-lifecycle.md) replaces the start/completion rules below with one custom presentation per tool.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make the Agency agent's tool output match the Detailed design selected in the conversation, with readable tool headers, complete task lists, and one search query per line.

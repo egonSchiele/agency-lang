@@ -30,7 +30,7 @@ let _isInteractive: boolean = true
 // with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
 // const: it reads globals that `main()` sets after module init, so the
 // value must be computed per call.
-def _showTraces(): boolean {
+export def isTraceEnabled(): boolean {
   return _isInteractive || VERBOSE || AGENT_DEBUG
 }
 
@@ -40,13 +40,8 @@ callback("onToolCallStart") as data {
     return
   }
 
-  if (_showTraces()) {
-    const provider = searchProviderName(data.toolName)
-    if (provider != null && isPlainObject(data.args) && typeof data.args.query == "string") {
-      _printAgentTrace({ kind: "clientSearch", toolName: data.toolName, provider: provider, query: data.args.query })
-    } else {
-      _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args })
-    }
+  if (isTraceEnabled()) {
+    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) })
   }
 }
 
@@ -55,13 +50,16 @@ callback("onToolCallEnd") as data {
     return
   }
 
-  if (_showTraces()) {
+  if (isTraceEnabled()) {
+    const provider = searchProviderName(data.toolName)
     if (data.result is success(_result)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _result, outcome: "success" })
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _result, outcome: "success", provider: provider })
     } else if (data.result is failure(_error)) {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _error, outcome: "failure" })
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _error, outcome: "failure", provider: provider })
+    } else if (isPlainObject(data.result) && data.result.type == "reject") {
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result.value ?? "Tool call rejected", outcome: "failure", provider: provider })
     } else {
-      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result, outcome: "plain" })
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result, outcome: "plain", provider: provider })
     }
   }
 }
@@ -73,7 +71,7 @@ callback("onLLMCallStart") as data {
 }
 
 callback("onLLMCallEnd") as data {
-  if (_showTraces() && data.result.hostedToolResults) {
+  if (isTraceEnabled() && data.result.hostedToolResults) {
     for (result in data.result.hostedToolResults) {
       _printAgentTrace({ kind: "hostedSearch", result: result })
     }
@@ -86,7 +84,7 @@ callback("onLLMCallEnd") as data {
 }
 
 callback("onLLMRetry") as data {
-  if (_showTraces()) {
+  if (isTraceEnabled()) {
     pushMessage(
       color.dim(
       "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",

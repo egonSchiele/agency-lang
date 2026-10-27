@@ -29,7 +29,7 @@ export def rewriteAgent(userMsg: string): string {
 
   @param userMsg - the text to rewrite, and who it is for if known.
   """
-  announce("rewrite", userMsg)
+  announce("rewriteAgent", userMsg)
   let reply = ""
   thread(label: "rewrite", summarize: true, session: "rewrite") {
     setMemoryId("rewrite")

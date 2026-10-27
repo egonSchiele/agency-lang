@@ -107,6 +107,28 @@ branchStack })` so that scoped callbacks registered inside the
 branch's frame chain are discovered by `gatherCallbacks`. This is
 purely about scope discovery, not interrupt routing.
 
+### Tool completion
+
+`onToolCallEnd` fires when an invoked tool returns successfully, fails,
+or is rejected. Its `result` preserves `success(...)`, `failure(...)`,
+and raw TypeScript `{ type: "reject", value }` values without unwrapping them.
+Plain null or undefined returns use the tool loop's existing
+"ran successfully but did not return a value" placeholder.
+A thrown error, including an argument-binding error, reaches the hook as
+the failure the tool loop creates for it. Handoff tools use the same hooks.
+
+A tool paused on an interrupt has not finished, so it emits no end event
+until it resumes and returns or is rejected. Cancellation and guard-aborted
+results also emit no end event. A call refused before invocation, such as
+an identical retry of a rejected call, emits neither start nor end.
+
+The invoke step stores the outcome and duration in `runnerState`, and the
+actual result in the branch. The separate `.end` step fires the callback
+once; a resume skips completed steps and can finish a pending end hook
+without invoking the tool again. Failure and rejection bookkeeping stays
+inside `.invoke`, before the end hook. The batch clears completed branches
+at the join.
+
 ## `onCheckpoint`: one statement checkpoint per event
 
 A host that runs long jobs needs a checkpoint between yields, so a run

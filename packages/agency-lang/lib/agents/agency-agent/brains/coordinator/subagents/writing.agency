@@ -17,7 +17,7 @@ export def writingAgent(userMsg: string): string {
   @param userMsg - the text to review or the files holding it, who the
     text is for if known, and whether to apply the fixes.
   """
-  announce("writing review", userMsg)
+  announce("writingAgent", userMsg)
   let reply = ""
   thread(label: "writing", summarize: true, session: "writing") {
     setMemoryId("writing")

@@ -49,7 +49,7 @@ export handoff def researchAgent(
   @param maxDollars - spend cap in dollars, when the user gave one; null
     for the default ($50, $10 for an Agency topic).
   """
-  announce("research", userMsg)
+  announce("researchAgent", userMsg)
   setMemoryId("research")
   if (agencyTopic) {
     return agencyResearcherAgent(

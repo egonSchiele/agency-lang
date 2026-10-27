@@ -11,12 +11,166 @@ const tasks = [
   { id: "3", text: "Compare hardware", status: "pending" },
 ];
 
+describe("custom presentations", () => {
+  it("announces a subagent once and labels its completion", () => {
+    expect(
+      formatAgentTrace(
+        { kind: "toolStart", toolName: "researchAgent", args: { userMsg: "Find sources" } },
+        plain,
+      ),
+    ).toBe("");
+    expect(
+      formatAgentTrace(
+        { kind: "agentStart", toolName: "researchAgent", message: "Find sources" },
+        plain,
+      ),
+    ).toBe("→ Research  researchAgent\n  │ Find sources");
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "researchAgent", value: "Found them", outcome: "plain" },
+        plain,
+      ),
+    ).toBe("✓ Research finished  researchAgent\n  │ Found them");
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "researchAgent", value: "Unavailable", outcome: "failure" },
+        plain,
+      ),
+    ).toBe("✗ Research failed  researchAgent\n  │ Unavailable");
+  });
+
+  it("uses blue starts and green completions, including plain returns", () => {
+    const options = { columns: 80, color: true };
+    const start = formatAgentTrace({ kind: "toolStart", toolName: "echo", args: {} }, options);
+    const end = formatAgentTrace(
+      { kind: "toolEnd", toolName: "echo", value: "done", outcome: "plain" },
+      options,
+    );
+    expect(start).toContain("\x1b[34m");
+    expect(start).not.toContain("\x1b[32m");
+    expect(end).toContain("\x1b[32m");
+    expect(end).toContain("\x1b[2mdone");
+    expect(stripAnsi(end)).toBe("✓ Tool finished  echo\n  │ done");
+  });
+});
+
+describe("search sources", () => {
+  const sources = [
+    {
+      title: "Release notes",
+      url: "https://example.com/release",
+      description: "Do not dump snippets",
+    },
+    { url: "https://example.com/model" },
+  ];
+  it("shares source rows between client results and hosted records", () => {
+    const rows =
+      "  │ 2 sources\n  │ 1. Release notes\n  │    https://example.com/release\n  │ 2. https://example.com/model";
+    const client = formatAgentTrace(
+      {
+        kind: "toolEnd",
+        toolName: "catalog_search",
+        provider: "Catalog",
+        outcome: "plain",
+        value: sources,
+      },
+      plain,
+    );
+    expect(client).toBe("✓ Web search  catalog_search\n  │ Catalog\n" + rows);
+    const hosted = formatAgentTrace(
+      { kind: "hostedSearch", result: { tool: "web_search", provider: "openrouter", sources } },
+      plain,
+    );
+    expect(hosted).toBe(
+      "⌕ Web search  web_search\n  │ openrouter\n  │ Queries not reported\n" + rows,
+    );
+    expect(client + hosted).not.toMatch(/Tool finished|description|Do not dump snippets/);
+  });
+
+  it("bounds source lists and keeps failures on the custom path", () => {
+    const sources = Array.from({ length: 7 }, (_, index) => ({
+      title: `Source ${index + 1}`,
+      url: `https://example.com/${index + 1}`,
+    }));
+    const output = formatAgentTrace(
+      {
+        kind: "toolEnd",
+        toolName: "catalog_search",
+        provider: "Catalog",
+        outcome: "success",
+        value: sources,
+      },
+      plain,
+    );
+    expect(output).toContain("7 sources");
+    expect(output).toContain("5. Source 5");
+    expect(output).toContain("… 2 more sources");
+    expect(output).not.toContain("Source 6");
+    expect(
+      formatAgentTrace(
+        {
+          kind: "toolEnd",
+          toolName: "catalog_search",
+          provider: "Catalog",
+          outcome: "failure",
+          value: "Unavailable",
+        },
+        plain,
+      ),
+    ).toBe("✗ Web search  catalog_search\n  │ Catalog\n  │ Unavailable");
+  });
+
+  it("distinguishes zero sources from unreported or malformed sources", () => {
+    const render = (value: unknown) =>
+      formatAgentTrace(
+        {
+          kind: "toolEnd",
+          toolName: "catalog_search",
+          provider: "Catalog",
+          outcome: "plain",
+          value,
+        },
+        plain,
+      );
+    expect(render([])).toBe("✓ Web search  catalog_search\n  │ Catalog\n  │ 0 sources");
+    for (const value of [null, "raw result", [null, { title: "Missing URL" }]]) {
+      expect(render(value)).toBe(
+        "✓ Web search  catalog_search\n  │ Catalog\n  │ Sources not reported",
+      );
+    }
+    expect(
+      formatAgentTrace(
+        { kind: "hostedSearch", result: { tool: "web_search", sources: [null] } },
+        plain,
+      ),
+    ).not.toContain("0 sources");
+  });
+
+  it("sanitizes source titles and URLs and wraps them without leaking styles", () => {
+    const value = [
+      {
+        title: "Notes\x1b[2J\nsecond line",
+        url: "https://example.com/" + "path".repeat(20) + "\x07",
+      },
+    ];
+    const output = formatAgentTrace(
+      { kind: "toolEnd", toolName: "search", provider: "Catalog", outcome: "success", value },
+      { columns: 40, color: true },
+    );
+    expect(output).not.toContain("\x1b[2J");
+    expect(output).not.toContain("\x07");
+    expect(stripAnsi(output)).toContain("second line");
+    expect(stripAnsi(output)).toContain("�");
+    expect(output.split("\n").every((line) => visualWidth(line) <= 40)).toBe(true);
+  });
+});
+
 describe("task lists", () => {
   it.each(["todoWrite", "todoAdd", "todoUpdate", "todoList"])(
     "shows the full %s snapshot",
     (toolName) => {
       expect(formatAgentTrace({ kind: "toolStart", toolName, args: { todos: tasks } }, plain)).toBe(
-        `● Tool call  ${toolName}`,
+        "",
       );
       const heading = toolName === "todoList" ? "Tasks" : "✓ Tasks updated";
       expect(
@@ -68,7 +222,7 @@ describe("task lists", () => {
         { kind: "toolEnd", toolName: "todoWrite", value: "Update refused", outcome: "failure" },
         plain,
       ),
-    ).toBe("✗ Tool failed  todoWrite\n  │ Update refused");
+    ).toBe("✗ Tasks failed  todoWrite\n  │ Update refused");
   });
 
   it("falls back for sparse task arrays supplied by JavaScript", () => {
@@ -77,7 +231,7 @@ describe("task lists", () => {
         { kind: "toolEnd", toolName: "todoWrite", value: Array(1), outcome: "plain" },
         plain,
       ),
-    ).toBe("· Tool returned  todoWrite\n  │ [null]");
+    ).toBe("· Task result  todoWrite\n  │ [null]");
   });
 
   it.each([
@@ -91,7 +245,7 @@ describe("task lists", () => {
       { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },
       plain,
     );
-    expect(output).toContain("· Tool returned  todoWrite");
+    expect(output).toContain("· Task result  todoWrite");
     expect(output).not.toContain("Tasks updated");
   });
 });
@@ -189,10 +343,10 @@ describe("web searches", () => {
   ])("labels the %s client search", (toolName, provider) => {
     const query = "q".repeat(140);
     const output = formatAgentTrace(
-      { kind: "clientSearch", toolName, provider, query },
+      { kind: "toolStart", toolName, provider, args: { query } },
       { columns: 200, color: false },
     );
-    expect(output).toBe(`⌕ Searching web  ${toolName}\n  │ ${provider} · 1 query\n  │ · ${query}`);
+    expect(output).toBe(`⌕ Web search  ${toolName}\n  │ ${provider} · 1 query\n  │ · ${query}`);
     expect(
       formatAgentTrace({ kind: "toolEnd", toolName, value: "result", outcome: "success" }, plain),
     ).toBe(`✓ Tool finished  ${toolName}\n  │ result`);
@@ -204,11 +358,17 @@ describe("web searches", () => {
     ).toBe(`✗ Tool failed  ${toolName}\n  │ unavailable`);
   });
 
-  it.each([null, {}, { query: 3 }])("falls back for malformed client search args (%j)", (args) => {
-    expect(
-      formatAgentTrace({ kind: "toolStart", toolName: "web_search_tavily", args }, plain),
-    ).toContain("● Tool call  web_search_tavily");
-  });
+  it.each([null, {}, { query: 3 }])(
+    "keeps a custom search display for malformed args (%j)",
+    (args) => {
+      expect(
+        formatAgentTrace(
+          { kind: "toolStart", toolName: "web_search_tavily", provider: "Tavily", args },
+          plain,
+        ),
+      ).toBe("⌕ Web search  web_search_tavily\n  │ Tavily\n  │ Queries not reported");
+    },
+  );
 });
 
 describe("ordinary agent tool output", () => {
@@ -231,7 +391,7 @@ describe("ordinary agent tool output", () => {
   it.each([
     ["success", "✓ Tool finished"],
     ["failure", "✗ Tool failed"],
-    ["plain", "· Tool returned"],
+    ["plain", "✓ Tool finished"],
   ] as const)("keeps the %s outcome attached to its tool name", (outcome, heading) => {
     expect(
       formatAgentTrace({ kind: "toolEnd", toolName: "readFile", value: "answer", outcome }, plain),
@@ -257,7 +417,7 @@ describe("ordinary agent tool output", () => {
   it.each([null, undefined, ""])("still names a tool with an empty result (%s)", (value) => {
     expect(
       formatAgentTrace({ kind: "toolEnd", toolName: "noop", value, outcome: "plain" }, plain),
-    ).toBe("· Tool returned  noop");
+    ).toBe("✓ Tool finished  noop");
   });
 
   it("handles empty and non-object arguments", () => {
@@ -277,9 +437,9 @@ describe("ordinary agent tool output", () => {
       formatAgentTrace({ kind: "toolEnd", toolName: "custom", value, outcome: "plain" }, plain),
     );
     expect(outputs).toEqual([
-      "· Tool returned  custom\n  │ [1,2]",
-      '· Tool returned  custom\n  │ {"count":2}',
-      "· Tool returned  custom\n  │ [unserializable value]",
+      "✓ Tool finished  custom\n  │ [1,2]",
+      '✓ Tool finished  custom\n  │ {"count":2}',
+      "✓ Tool finished  custom\n  │ [unserializable value]",
     ]);
   });
 
@@ -297,7 +457,7 @@ describe("ordinary agent tool output", () => {
         options,
       );
       expect(output).toBe(
-        "· Tool returned  custom\n  │ " + "b".repeat(100) + (length > 100 ? "…" : ""),
+        "✓ Tool finished  custom\n  │ " + "b".repeat(100) + (length > 100 ? "…" : ""),
       );
     }
   });
@@ -317,13 +477,13 @@ describe("ordinary agent tool output", () => {
         { kind: "toolEnd", toolName: "custom", value: result, outcome: "plain" },
         options,
       ),
-    ).toBe("· Tool returned  custom\n  │ " + result);
+    ).toBe("✓ Tool finished  custom\n  │ " + result);
     expect(
       formatAgentTrace(
         { kind: "toolEnd", toolName: "custom", value: result + "tail", outcome: "plain" },
         options,
       ),
-    ).toBe("· Tool returned  custom\n  │ " + result + "…");
+    ).toBe("✓ Tool finished  custom\n  │ " + result + "…");
   });
 
   it("preserves session diagnostics below the warning", () => {

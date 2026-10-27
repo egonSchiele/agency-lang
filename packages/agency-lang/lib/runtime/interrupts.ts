@@ -48,6 +48,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
+import type { CheckpointInterrupt, InterruptSummary } from "../statelogClient.js";
 import { sendInterruptToParent } from "./ipcChild.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
@@ -106,6 +107,21 @@ export type Interrupt<T = any> = {
   // (falsy) on statement-position raises.
   expectsValue?: boolean;
 };
+
+/** The `interrupt` field of the handler and resolution events. */
+export function interruptSummary(intr: InterruptSummary): InterruptSummary {
+  return { effect: intr.effect, message: intr.message, data: intr.data };
+}
+
+/** What `checkpointCreated` records about the interrupts a run stopped for. */
+export function checkpointInterrupts(interrupts: Interrupt[]): CheckpointInterrupt[] {
+  return interrupts.map((intr) => ({
+    interruptId: intr.interruptId,
+    ...interruptSummary(intr),
+    origin: intr.origin,
+    ...(intr.debugger ? { debugger: true } : {}),
+  }));
+}
 
 export function interrupt<T = any>(opts: {
   effect: string;
@@ -174,13 +190,26 @@ export async function reportUnhandledInterrupts(result: InterruptResult): Promis
   for (const it of result.data) {
     console.error(
       `\nInterrupt "${it.effect}" was not handled:\n` +
-        `  ${it.message}\n` +
-        `  ${JSON.stringify(it.data)}\n\n` +
+        `${describeInterrupt(it)}\n\n` +
         `You need to handle your interrupts by wrapping them in a handler.\n` +
         `See the guide: https://agency-lang.com/guide/handlers.html`,
     );
   }
   await exitProcess(1);
+}
+
+/** What a REPL prints when a turn returns interrupts nothing answered: the
+ *  turn stopped there, so its reply was never shown. */
+export function escapedTurnText(interrupts: Interrupt[]): string {
+  const each = interrupts.map((it) => `Interrupt "${it.effect}":\n${describeInterrupt(it)}`);
+  return [
+    "The turn stopped on an interrupt that no handler answered, so it has no reply.",
+    ...each,
+  ].join("\n");
+}
+
+function describeInterrupt(it: Interrupt): string {
+  return `  ${it.message}\n  ${JSON.stringify(it.data)}`;
 }
 
 export function isDebugger(obj: any): obj is Interrupt {
@@ -367,17 +396,13 @@ async function runHandlerChain(
         // is being approved/rejected without needing a separate
         // interruptThrown event (which doesn't fire for synchronously-
         // resolved interrupts like `with approve`).
-        const interruptSummary = {
-          effect: interruptObj.effect,
-          message: interruptObj.message,
-          data: interruptObj.data,
-        };
+        const summary = interruptSummary(interruptObj);
         if (result.type === "pass") {
           run.log.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "pass",
-            interrupt: interruptSummary,
+            interrupt: summary,
           });
           continue;
         }
@@ -394,7 +419,7 @@ async function runHandlerChain(
             handlerIndex: i,
             decision: "reject",
             value: result.value,
-            interrupt: interruptSummary,
+            interrupt: summary,
           });
           return { kind: "rejected", value: result.value };
         }
@@ -403,7 +428,7 @@ async function runHandlerChain(
             interruptId,
             handlerIndex: i,
             decision: "propagate",
-            interrupt: interruptSummary,
+            interrupt: summary,
           });
           hasPropagation = true;
           continue;
@@ -414,7 +439,7 @@ async function runHandlerChain(
             handlerIndex: i,
             decision: "approve",
             value: result.value,
-            interrupt: interruptSummary,
+            interrupt: summary,
           });
           approvals.push(result.value);
           continue;
@@ -525,13 +550,13 @@ function renderVerdict(
 ): Interrupt[] | Approved | Rejected {
   const ctx = run.ctx;
   const { effect, message, data, origin } = interruptObj;
-  const interruptSummary = { effect, message, data };
+  const summary = interruptSummary(interruptObj);
   if (merged.kind === "rejected") {
     run.log.interruptResolved({
       interruptId,
       outcome: "rejected",
       resolvedBy,
-      interrupt: interruptSummary,
+      interrupt: summary,
     });
     return { type: "reject", value: merged.value };
   }
@@ -540,7 +565,7 @@ function renderVerdict(
       interruptId,
       outcome: "approved",
       resolvedBy,
-      interrupt: interruptSummary,
+      interrupt: summary,
     });
     return { type: "approve", value: merged.value };
   }
@@ -565,7 +590,7 @@ function renderVerdict(
       interruptId,
       outcome: "rejected",
       resolvedBy,
-      interrupt: interruptSummary,
+      interrupt: summary,
     });
     return {
       type: "reject",
@@ -576,12 +601,9 @@ function renderVerdict(
         `instead.`,
     };
   }
-  // propagated or noResponse — surface to the user.
-  // Note: checkpointCreated for these interrupts is emitted by the generated
-  // interrupt template code, not here. This is a known gap — non-tool
-  // interrupts will have interruptThrown but no matching checkpointCreated
-  // from the runtime. A future improvement could add checkpoint events to
-  // the generated templates.
+  // propagated or noResponse — surface to the user. The checkpoint is taken
+  // by whoever the interrupt is returned to, and its checkpointCreated event
+  // lists this interrupt.
   const intr = interrupt({
     effect,
     message,
@@ -609,7 +631,7 @@ function renderVerdict(
     interruptId: intr.interruptId,
     outcome: merged.kind === "propagated" ? "propagated" : "passed",
     resolvedBy: null,
-    interrupt: interruptSummary,
+    interrupt: summary,
   });
   return [intr];
 }

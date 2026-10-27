@@ -10,6 +10,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./prompts.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
+import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
@@ -1521,6 +1522,9 @@ export async function _runLineRepl(
       if (reply === false) break;
       if (typeof reply === "string" && reply.length > 0) {
         process.stdout.write(reply + "\n");
+      }
+      if (hasInterrupts(reply)) {
+        process.stdout.write(`${escapedTurnText(reply)}\n`);
       }
       const tokensAfter = readTokenSnapshot(replCtx);
       // Per-turn footer (WL2). Reads the same `status` callback the

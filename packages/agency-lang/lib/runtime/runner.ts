@@ -7,7 +7,7 @@ import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { hasCallbackConsumer, invokeCallbacks, isInsideCallback } from "./hooks.js";
-import { hasInterrupts } from "./interrupts.js";
+import { checkpointInterrupts, hasInterrupts } from "./interrupts.js";
 import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
@@ -1429,7 +1429,7 @@ export class Runner {
           });
         },
         onBranchSettled: (key) => collector.armSettled(key),
-        onCheckpoint: (cpId) => {
+        onCheckpoint: (cpId, interrupts) => {
           const cp = this.ctx.checkpoints.get(cpId)!;
           run.log.checkpointCreated({
             checkpointId: cpId,
@@ -1439,6 +1439,7 @@ export class Runner {
               scopeName: cp.scopeName,
               stepPath: cp.stepPath,
             },
+            interrupts: checkpointInterrupts(interrupts),
           });
         },
       },
@@ -1509,7 +1510,7 @@ export class Runner {
             value: safeStatelogValue(value, run.globals),
           });
         },
-        onCheckpoint: (cpId) => {
+        onCheckpoint: (cpId, interrupts) => {
           const cp = this.ctx.checkpoints.get(cpId)!;
           run.log.checkpointCreated({
             checkpointId: cpId,
@@ -1519,6 +1520,7 @@ export class Runner {
               scopeName: cp.scopeName,
               stepPath: cp.stepPath,
             },
+            interrupts: checkpointInterrupts(interrupts),
           });
         },
       },

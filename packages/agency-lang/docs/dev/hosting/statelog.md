@@ -339,7 +339,7 @@ Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
 
 Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
 
-Checkpoints: `checkpointCreated`, `checkpointRestored`.
+Checkpoints: `checkpointCreated`, `checkpointRestored`. A checkpoint taken because the run stopped on interrupts lists them in `interrupts`: each one's `interruptId`, `origin`, and the same `effect`, `message`, and `data` summary the interrupt events carry, with `debugger: true` on a debugger stop. The handler chain logs every interrupt raised through it (`handlerDecision`, `interruptResolved`, and `interruptThrown` for one that goes to a person). Two kinds are made outside the chain and appear only here: a debugger stop, and a guard question re-asked on a resume (`guardTripInterrupt.ts`).
 
 ### A resumed run opens its span before it restores
 

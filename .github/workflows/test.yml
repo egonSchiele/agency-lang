@@ -190,7 +190,9 @@ jobs:
   # takes as long as tests/integration/cli, about 3.5 min, and not the sum.
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # runAll.mjs keeps every group's time limits under 22 min (its
+    # RUNNER_BUDGET_MINUTES); change the two together.
+    timeout-minutes: 25
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

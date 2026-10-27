@@ -1,5 +1,5 @@
 // Runs the real ffmpeg. The cases skip when ffmpeg is missing, unless
-// AGENCY_REQUIRE_FFMPEG=1 is set, as it is in the CI job that installs it.
+// AGENCY_REQUIRE_FFMPEG=1 is set, as it is in .github/workflows/speech-ffmpeg.yml.
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";

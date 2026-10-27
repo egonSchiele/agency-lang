@@ -16,16 +16,30 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [ "main" ]
+    # The files that decide how ffmpeg is started and fed. speech.ts imports
+    # many more; a break in one of those shows up in the weekly run.
     paths:
       - "packages/agency-lang/lib/stdlib/ffmpeg.ts"
       - "packages/agency-lang/lib/stdlib/speech.ts"
+      - "packages/agency-lang/lib/stdlib/speechPieces.ts"
       - "packages/agency-lang/lib/stdlib/wavFile.ts"
       - "packages/agency-lang/lib/stdlib/abortable.ts"
+      - "packages/agency-lang/lib/stdlib/abortReason.ts"
+      - "packages/agency-lang/lib/runtime/audioFormats.ts"
+      - "packages/agency-lang/lib/host/host.ts"
+      - "packages/agency-lang/lib/host/node/nodeHost.ts"
       - "packages/agency-lang/lib/stdlib/speech.ffmpeg.test.ts"
+      - "pnpm-lock.yaml"
       - ".github/workflows/speech-ffmpeg.yml"
 
 permissions:
   contents: read
+
+# A new push to a PR cancels that PR's older run. A run on main, by hand or
+# by schedule, is never cancelled.
+concurrency:
+  group: speech-ffmpeg-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   speech-ffmpeg:

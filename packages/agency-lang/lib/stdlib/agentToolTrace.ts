@@ -18,7 +18,7 @@ export type AgentTraceEvent =
   ToolStartEvent | ToolEndEvent | HostedSearchEvent | SessionSaveFailureEvent;
 
 type TraceStyle = "heading" | "muted" | "completed" | "active" | "success" | "error" | "warning";
-type TraceSpan = { text: string; style?: TraceStyle; limit?: number };
+type TraceSpan = { text: string; style?: TraceStyle; bold?: boolean; limit?: number };
 type TraceRow = { spans: TraceSpan[]; marker?: TraceSpan };
 type TraceBlock = { heading: TraceSpan[]; rows: TraceRow[] };
 
@@ -122,7 +122,7 @@ function describeEvent(event: AgentTraceEvent): TraceBlock | null {
       return describeHostedSearch(event.result);
     case "sessionSaveFailure":
       return {
-        heading: [{ text: "! Session not saved", style: "warning" }],
+        heading: [{ text: "! Session not saved", style: "warning", bold: true }],
         rows: [{ spans: [{ text: event.message }] }],
       };
   }
@@ -154,12 +154,12 @@ function describeTodos(toolName: string, todos: Todo[]): TraceBlock {
       ],
     };
   });
+  const taskRows = todos.length === 0 ? [{ spans: [{ text: "No tasks" }] }] : rows;
   return {
     heading: toolHeading(TODO_HEADINGS[toolName], toolName),
     rows: [
       { spans: [{ text: `${complete}/${todos.length} complete`, style: "muted" }] },
-      ...rows,
-      ...(todos.length === 0 ? [{ spans: [{ text: "No tasks" }] }] : []),
+      ...taskRows,
     ],
   };
 }
@@ -200,7 +200,7 @@ function describeSearch(
 }
 
 function toolHeading(label: TraceSpan, toolName: string): TraceSpan[] {
-  return [label, { text: "  " }, { text: toolName, style: "muted" }];
+  return [{ ...label, bold: true }, { text: "  " }, { text: toolName, style: "muted" }];
 }
 
 function describeToolStart(event: ToolStartEvent): TraceBlock {
@@ -260,7 +260,8 @@ function renderSpan(span: TraceSpan, options: TraceOptions): string {
     error: palette.red,
     warning: palette.yellow,
   };
-  return span.style === undefined ? text : styles[span.style](text);
+  const style = span.style === undefined ? palette : styles[span.style];
+  return span.bold ? style.bold(text) : style(text);
 }
 
 function renderBlock(block: TraceBlock, options: TraceOptions): string {

@@ -1,6 +1,6 @@
 # Detailed Agent Tool Output Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make the Agency agent's tool output match the Detailed design selected in the conversation, with readable tool headers, complete task lists, and one search query per line.
 
@@ -164,7 +164,7 @@ Inside this module, define private `TraceBlock`, `TraceRow`, and `TraceSpan` typ
 
 Declare `DEFAULT_COLUMNS = 80`, `ARGUMENT_PREVIEW_LENGTH = 50`, `RESULT_PREVIEW_LENGTH = 100`, and `TAB_WIDTH = 4`. Derive indentation widths from the actual prefix strings with `visualWidth()`. Keep todo headings, search-provider labels, and task-status markers/styles in small objects so these rules each have one definition.
 
-- [ ] Add failing unit tests for the ordinary start, completion, failure, and session-warning examples. Assert exact plain strings, including rails and indentation. Cover no arguments, empty values, arrays, multiline errors, and serialization that cannot produce JSON, such as `undefined` or a circular object. Use `[unserializable value]` as the latter's explicit fallback.
+- [x] Add failing unit tests for the ordinary start, completion, failure, and session-warning examples. Assert exact plain strings, including rails and indentation. Cover no arguments, empty values, arrays, multiline errors, and serialization that cannot produce JSON, such as `undefined` or a circular object. Use `[unserializable value]` as the latter's explicit fallback.
 
 ```ts
 it("puts each argument below its tool name", () => {
@@ -175,11 +175,11 @@ it("puts each argument below its tool name", () => {
 });
 ```
 
-- [ ] Add width/color tests: 40 and 80 columns, missing or invalid width falling back to 80, and a tiny width that still prints content. Assert plain output has no `\x1b`, styled text resets at line boundaries, embedded escape sequences in headers, metadata, keys, and bodies cannot clear the terminal, and arguments/results obey their 50/100 limits. Test that printing suppresses empty blocks and writes one complete block with exactly one blank line after it.
-- [ ] Run `pnpm test:run lib/stdlib/agentToolTrace.test.ts > /tmp/agency-tool-output-task1-red.log 2>&1`; confirm the new assertions fail for the missing formatter.
-- [ ] Implement the interfaces. `_printAgentTrace` reads `currentHost()` on its first line and delegates to `printAgentTrace`. The latter owns the one terminal write and trailing blank line. `traceOptionsForHost` reads that host's size and color preference on each call. Keep event descriptions and rendering pure, with all layout in the shared renderer. Reserve the special event branches for Task 2.
-- [ ] Run the same targeted test file, saving output to `/tmp/agency-tool-output-task1-green.log`; require all Task 1 tests to pass.
-- [ ] Commit these two files using a message file and `git commit -F`.
+- [x] Add width/color tests: 40 and 80 columns, missing or invalid width falling back to 80, and a tiny width that still prints content. Assert plain output has no `\x1b`, styled text resets at line boundaries, embedded escape sequences in headers, metadata, keys, and bodies cannot clear the terminal, and arguments/results obey their 50/100 limits. Test that printing suppresses empty blocks and writes one complete block with exactly one blank line after it.
+- [x] Run `pnpm test:run lib/stdlib/agentToolTrace.test.ts > /tmp/agency-tool-output-task1-red.log 2>&1`; confirm the new assertions fail for the missing formatter.
+- [x] Implement the interfaces. `_printAgentTrace` reads `currentHost()` on its first line and delegates to `printAgentTrace`. The latter owns the one terminal write and trailing blank line. `traceOptionsForHost` reads that host's size and color preference on each call. Keep event descriptions and rendering pure, with all layout in the shared renderer. Reserve the special event branches for Task 2.
+- [x] Run the same targeted test file, saving output to `/tmp/agency-tool-output-task1-green.log`; require all Task 1 tests to pass.
+- [x] Commit these two files using a message file and `git commit -F`.
 
 ## Task 2: Add complete task lists and detailed search blocks
 
@@ -189,8 +189,8 @@ it("puts each argument below its tool name", () => {
 
 **Produces:** Declarative block descriptions for the four todo tools, the two client search tools, and hosted `web_search` records. All use Task 1's renderer. No new public interface or mutable cache.
 
-- [ ] Add a failing exact-output test for a three-item list with one item in each status. Assert the entire text of tasks longer than 100 characters survives, order is preserved, the count is correct, and only completed task text carries the strikethrough escape `\x1b[9m` in colored output.
-- [ ] Add cases for all four todo names, an empty list, all completed, several active items, failure, and malformed results. Check that task starts return `""`, failed results have no `Tasks updated` header, and malformed results show a named generic preview. Rendering two different lists sequentially must leave each output independent.
+- [x] Add a failing exact-output test for a three-item list with one item in each status. Assert the entire text of tasks longer than 100 characters survives, order is preserved, the count is correct, and only completed task text carries the strikethrough escape `\x1b[9m` in colored output.
+- [x] Add cases for all four todo names, an empty list, all completed, several active items, failure, and malformed results. Check that task starts return `""`, failed results have no `Tasks updated` header, and malformed results show a named generic preview. Rendering two different lists sequentially must leave each output independent.
 
 ```ts
 it("does not turn a failed update into a checklist", () => {
@@ -201,11 +201,11 @@ it("does not turn a failed update into a checklist", () => {
 });
 ```
 
-- [ ] Add hosted-search tests for the four quoted queries in the contract, a single query, long queries, embedded newlines, missing provider, missing/empty/mixed query arrays, and a record whose `raw` data reports failure. Assert the neutral header never claims success, raw data is not dumped, and query counts derive only from valid query strings. An unsupported hosted tool returns `""`.
-- [ ] Add client-search tests for Tavily and Brave start labels, full query text, malformed argument fallback, success, and failure. End events must render correctly without having seen a start event.
-- [ ] Run the targeted unit file to `/tmp/agency-tool-output-task2-red.log`; verify the new cases fail.
-- [ ] Implement custom event descriptions and input validation using the shared metadata objects. Do not assemble styled strings or calculate indentation inside these functions. Keep unsupported or malformed data on the generic path where the contract calls for it.
-- [ ] Run the unit file to `/tmp/agency-tool-output-task2-green.log`; require all tests to pass. Commit with a message file.
+- [x] Add hosted-search tests for the four quoted queries in the contract, a single query, long queries, embedded newlines, missing provider, missing/empty/mixed query arrays, and a record whose `raw` data reports failure. Assert the neutral header never claims success, raw data is not dumped, and query counts derive only from valid query strings. An unsupported hosted tool returns `""`.
+- [x] Add client-search tests for Tavily and Brave start labels, full query text, malformed argument fallback, success, and failure. End events must render correctly without having seen a start event.
+- [x] Run the targeted unit file to `/tmp/agency-tool-output-task2-red.log`; verify the new cases fail.
+- [x] Implement custom event descriptions and input validation using the shared metadata objects. Do not assemble styled strings or calculate indentation inside these functions. Keep unsupported or malformed data on the generic path where the contract calls for it.
+- [x] Run the unit file to `/tmp/agency-tool-output-task2-green.log`; require all tests to pass. Commit with a message file.
 
 ## Task 3: Wire the agent callbacks and session warnings
 
@@ -215,14 +215,14 @@ it("does not turn a failed update into a checklist", () => {
 
 **Produces:** Actual agent output following the contract, with ordinary and hosted traces both controlled by `_showTraces()`.
 
-- [ ] Create a scripted integration fixture that imports the real trace module and uses its existing `setInteractive`, `setVerbose`, and `setDebug` functions. Inject an in-memory LLM client through `__setLLMClient`, following `coordinator-session-tools/test.js`. Have it issue a real `todoWrite`, an ordinary pure tool, and hosted search records. Supply stub tools with the client-search names; do not call the web. Restore captured console output in `finally`, following `policy-code-diffs-late/test.js`.
-- [ ] Assert the actual callback output has one full todo block and no generic todo start or JSON return; one block per hosted record; and readable ordinary start/end blocks. Include two same-named calls in a round and assert each returned value remains attached to its own completion block. A real failed tool currently skips `onToolCallEnd` in `prompt.ts`; assert that it never prints a successful completion. Exercise the existing callback's failure branch with an explicitly injected end event from a test-only metadata callback, without changing runtime behavior.
-- [ ] Assert mode behavior with fresh invocations: interactive prints traces; quiet one-shot prints neither ordinary nor hosted traces; verbose one-shot prints both; debug retains its existing additional LLM diagnostics. Confirm `whatIAmDoing` remains suppressed. Configure the scripted client to throw on any unexpected request so the test cannot fall through to a real provider.
-- [ ] Run `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-task3-integration-red.log 2>&1`; confirm the fixture fails on the current output format. The build from the workspace setup must already exist.
-- [ ] Replace trace formatting calls with the print bridge. Keep Result unwrapping in the current end callback and translate its three existing branches into the explicit `outcome`. Apply `_showTraces()` to the hosted-results loop; preserve existing skip and debug behavior. Leave empty-block suppression and spacing to the shared print function. Remove only the now-unused `formatToolResponse` export after confirming all callers moved; leave `formatArgs` and its debug caller intact.
-- [ ] Replace only the output expressions in the two save-error branches. The TypeScript branch uses the host already on `run`; the Agency branch uses the bridge. Do not change error handling, return values, or session paths.
-- [ ] Check both warning call sites against the session-warning unit test from Task 1. The existing `agentSessions.test.ts` runs as a regression check below; do not add checkpoint or session-lifecycle test scaffolding for a text-only change.
-- [ ] Run `make > /tmp/agency-tool-output-task3-build.log 2>&1`, then `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-task3-integration-green.log 2>&1` and `pnpm test:run lib/stdlib/agentSessions.test.ts > /tmp/agency-tool-output-task3-session-green.log 2>&1`. Require success before committing with a message file.
+- [x] Create a scripted integration fixture that imports the real trace module and uses its existing `setInteractive`, `setVerbose`, and `setDebug` functions. Inject an in-memory LLM client through `__setLLMClient`, following `coordinator-session-tools/test.js`. Have it issue a real `todoWrite`, an ordinary pure tool, and hosted search records. Supply stub tools with the client-search names; do not call the web. Restore captured console output in `finally`, following `policy-code-diffs-late/test.js`.
+- [x] Assert the actual callback output has one full todo block and no generic todo start or JSON return; one block per hosted record; and readable ordinary start/end blocks. Include two same-named calls in a round and assert each returned value remains attached to its own completion block. A real failed tool currently skips `onToolCallEnd` in `prompt.ts`; assert that it never prints a successful completion. Exercise the existing callback's failure branch with an explicitly injected end event from a test-only metadata callback, without changing runtime behavior.
+- [x] Assert mode behavior with fresh invocations: interactive prints traces; quiet one-shot prints neither ordinary nor hosted traces; verbose one-shot prints both; debug retains its existing additional LLM diagnostics. Confirm `whatIAmDoing` remains suppressed. Configure the scripted client to throw on any unexpected request so the test cannot fall through to a real provider.
+- [x] Run `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-task3-integration-red.log 2>&1`; confirm the fixture fails on the current output format. The build from the workspace setup must already exist.
+- [x] Replace trace formatting calls with the print bridge. Keep Result unwrapping in the current end callback and translate its three existing branches into the explicit `outcome`. Apply `_showTraces()` to the hosted-results loop; preserve existing skip and debug behavior. Leave empty-block suppression and spacing to the shared print function. Remove only the now-unused `formatToolResponse` export after confirming all callers moved; leave `formatArgs` and its debug caller intact.
+- [x] Replace only the output expressions in the two save-error branches. The TypeScript branch uses the host already on `run`; the Agency branch uses the bridge. Do not change error handling, return values, or session paths.
+- [x] Check both warning call sites against the session-warning unit test from Task 1. The existing `agentSessions.test.ts` runs as a regression check below; do not add checkpoint or session-lifecycle test scaffolding for a text-only change.
+- [x] Run `make > /tmp/agency-tool-output-task3-build.log 2>&1`, then `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-task3-integration-green.log 2>&1` and `pnpm test:run lib/stdlib/agentSessions.test.ts > /tmp/agency-tool-output-task3-session-green.log 2>&1`. Require success before committing with a message file.
 
 ## Task 4: Document and verify the finished display
 
@@ -232,16 +232,14 @@ it("does not turn a failed update into a checklist", () => {
 
 **Produces:** User-facing examples, a short maintenance guide, and recorded checks for the whole change.
 
-- [ ] Document the task markers, full task snapshots, hosted versus client search timing, and generic fallback. State that `--verbose` enables traces in one-shot mode and `--debug` retains additional diagnostics. Keep generated stdlib reference pages untouched.
-- [ ] Add a short developer note naming the formatter, bridge, callback file, and test fixture. Explain how to add a custom display without changing tools or caching call state.
-- [ ] Run `pnpm run fmt:ts > /tmp/agency-tool-output-format.log 2>&1`. Inspect the diff and retain only formatting changes belonging to this work.
-- [ ] Run `pnpm run fmt:ts:check > /tmp/agency-tool-output-format-check.log 2>&1`, `pnpm run lint:structure > /tmp/agency-tool-output-lint.log 2>&1`, and `pnpm run typecheck > /tmp/agency-tool-output-typecheck.log 2>&1`. The new module is already covered by the `lib/stdlib/**/*.ts` browser lint rule; keep its imports platform-neutral.
-- [ ] After the last code edit, run `make > /tmp/agency-tool-output-final-build.log 2>&1`, `pnpm test:run lib/stdlib/agentToolTrace.test.ts lib/stdlib/agentSessions.test.ts > /tmp/agency-tool-output-final-unit.log 2>&1`, and `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-final-integration.log 2>&1`. Do not repeat unchanged successful checks merely to obtain another view of their output.
-- [ ] Inspect the fixture output at 40 and 80 columns with color enabled and disabled. Verify strike/check combinations, wrapped continuation indentation, metadata contrast, and separation from agent prose. Use the fixture output; do not spend a model call on this check.
-- [ ] Run `git diff --check > /tmp/agency-tool-output-diff-check.log 2>&1`. Check that no generated files, saved sessions, unrelated edits, or new dependencies entered the diff. Commit the documentation with a message file.
+- [x] Document the task markers, full task snapshots, hosted versus client search timing, and generic fallback. State that `--verbose` enables traces in one-shot mode and `--debug` retains additional diagnostics. Keep generated stdlib reference pages untouched.
+- [x] Add a short developer note naming the formatter, bridge, callback file, and test fixture. Explain how to add a custom display without changing tools or caching call state.
+- [x] Run `pnpm run fmt:ts > /tmp/agency-tool-output-format.log 2>&1`. Inspect the diff and retain only formatting changes belonging to this work.
+- [x] Run `pnpm run fmt:ts:check > /tmp/agency-tool-output-format-check.log 2>&1`, `pnpm run lint:structure > /tmp/agency-tool-output-lint.log 2>&1`, and `pnpm run typecheck > /tmp/agency-tool-output-typecheck.log 2>&1`. The new module is already covered by the `lib/stdlib/**/*.ts` browser lint rule; keep its imports platform-neutral.
+- [x] After the last code edit, run `make > /tmp/agency-tool-output-final-build.log 2>&1`, `pnpm test:run lib/stdlib/agentToolTrace.test.ts lib/stdlib/agentSessions.test.ts > /tmp/agency-tool-output-final-unit.log 2>&1`, and `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/agent-tool-trace > /tmp/agency-tool-output-final-integration.log 2>&1`. Do not repeat unchanged successful checks merely to obtain another view of their output.
+- [x] Inspect the fixture output at 40 and 80 columns with color enabled and disabled. Verify strike/check combinations, wrapped continuation indentation, metadata contrast, and separation from agent prose. Use the fixture output; do not spend a model call on this check.
+- [x] Run `git diff --check > /tmp/agency-tool-output-diff-check.log 2>&1`. Check that no generated files, saved sessions, unrelated edits, or new dependencies entered the diff. Commit the documentation with a message file.
 
-## Handoff
+## Verification
 
-This document is a plan; no implementation has been made and the planned tests have not been run. The worktree was created for this plan without installing dependencies or running a baseline suite. Before execution, install the workspace dependencies with the repository's pnpm workflow and build as needed, saving output to files.
-
-Implement the tasks in order. Native execution in this chat is a reasonable fit because all four tasks share one formatter and its contract. An independent review after implementation should check the selected Detailed display against the fixture output and the review-focus cases above.
+Implemented in the task worktree. The targeted unit run passed 45 tests, and the scripted Agency-JS fixture passed in interactive, quiet, verbose, and debug modes. The required build, TypeScript checks, formatting check, and structural/browser lint passed. Output was inspected at 40 and 80 columns with color enabled and disabled. No model or web requests were made. The full Agency suite remains for CI, as required by the repository instructions.

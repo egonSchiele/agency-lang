@@ -1,6 +1,6 @@
 import { main, __setLLMClient } from "./agent.js";
 import { callHook, currentRun, failure } from "agency-lang/runtime";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { ToolCall } from "smoltalk";
 
 const todos = [
@@ -107,7 +107,8 @@ function detailed(output) {
   };
 }
 
-writeFileSync("__trace.json", JSON.stringify(outputs, null, 2));
+mkdirSync("test-output", { recursive: true });
+writeFileSync("test-output/trace.json", JSON.stringify(outputs, null, 2));
 writeFileSync("__result.json", JSON.stringify({
   results,
   interactive: detailed(outputs.interactive),

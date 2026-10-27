@@ -26,6 +26,34 @@ echo "summarize this file" | agency agent
 
 In this case, the agent will autonomously do the work and then exit.
 
+## Tool output
+
+```text
+✓ Tasks updated  todoWrite
+  │ 1/3 complete
+  │ ✓ Verify rankings
+  │ › Check availability · in progress
+  │ ○ Compare hardware
+
+⌕ Web search  web_search
+  │ openai-responses · 2 queries
+  │ · site.example.com "release notes"
+  │ · downloadable model weights
+```
+
+Each task update prints the current list. Completed tasks have a check mark
+and crossed-out text when terminal styling is enabled. Active tasks have
+an arrow and an explicit status label. Pending tasks have an open circle.
+
+Search blocks show each query in full. Hosted search records appear when
+the model response arrives. Tavily and Brave searches show their query
+when the tool starts. Other tools show named argument and result blocks.
+Long lines wrap to fit the terminal.
+
+Interactive sessions show tool output by default. Add `--verbose` to show
+it in one-shot mode. `--debug` also enables tracing and retains additional
+diagnostics.
+
 ## Safety features
 Agency comes with great support for making agents safer, and the Agency agent takes full advantage of it. Before taking most actions, the agent will pause and ask you for approval. You can also pre-approve actions by using [Agency's policies feature](/guide/policies).
 
@@ -97,9 +125,8 @@ You can add your own commands too. See
 A few flags help when debugging or scripting. The [CLI reference](/cli/agent)
 lists them all.
 
-- `--verbose` — echo each tool call to stdout in one-shot mode (interactive
-  sessions always show tool calls).
-- `--debug` — also log tool returns and timing.
+- `--verbose` — show tool calls, results, and LLM diagnostics in one-shot mode.
+- `--debug` — enable tracing and additional debug diagnostics.
 - `--max-tool-call-rounds <n>` — cap the LLM tool-call rounds before a turn
   stops. Defaults to 10 interactive, 50 in one-shot mode.
 - `--log <path>` — write logs to a file.

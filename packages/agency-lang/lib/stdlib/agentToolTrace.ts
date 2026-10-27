@@ -35,6 +35,29 @@ const OUTCOMES: Record<ToolEndEvent["outcome"], TraceSpan> = {
   plain: { text: "· Tool returned", style: "heading" },
 };
 
+const TODO_HEADINGS: Record<string, TraceSpan> = {
+  todoWrite: { text: "✓ Tasks updated", style: "success" },
+  todoAdd: { text: "✓ Tasks updated", style: "success" },
+  todoUpdate: { text: "✓ Tasks updated", style: "success" },
+  todoList: { text: "Tasks", style: "heading" },
+};
+const CLIENT_SEARCH_PROVIDERS: Record<string, string> = {
+  web_search_tavily: "Tavily",
+  web_search_brave: "Brave",
+};
+type TodoStatus = "pending" | "in_progress" | "completed";
+type Todo = { id: string; text: string; status: TodoStatus };
+type TodoPresentation = { marker: TraceSpan; style?: TraceStyle; suffix: string };
+const TODO_STATUSES: Record<TodoStatus, TodoPresentation> = {
+  pending: { marker: { text: "○", style: "muted" }, suffix: "" },
+  in_progress: {
+    marker: { text: "›", style: "active" },
+    style: "active",
+    suffix: " · in progress",
+  },
+  completed: { marker: { text: "✓", style: "success" }, style: "completed", suffix: "" },
+};
+
 function columnsOrDefault(columns: number | undefined): number {
   return columns !== undefined && Number.isFinite(columns) && columns >= 1
     ? Math.floor(columns)
@@ -70,17 +93,110 @@ export function _printAgentTrace(event: AgentTraceEvent): void {
 function describeEvent(event: AgentTraceEvent): TraceBlock | null {
   switch (event.kind) {
     case "toolStart":
+      if (Object.hasOwn(TODO_HEADINGS, event.toolName)) {
+        return null;
+      }
+      if (
+        Object.hasOwn(CLIENT_SEARCH_PROVIDERS, event.toolName) &&
+        isPlainObject(event.args) &&
+        typeof event.args.query === "string"
+      ) {
+        return describeSearch(
+          "⌕ Searching web",
+          event.toolName,
+          CLIENT_SEARCH_PROVIDERS[event.toolName],
+          [event.args.query],
+        );
+      }
       return describeToolStart(event);
     case "toolEnd":
+      if (
+        Object.hasOwn(TODO_HEADINGS, event.toolName) &&
+        event.outcome !== "failure" &&
+        isTodoList(event.value)
+      ) {
+        return describeTodos(event.toolName, event.value);
+      }
       return describeToolEnd(event);
     case "hostedSearch":
-      return null;
+      return describeHostedSearch(event.result);
     case "sessionSaveFailure":
       return {
         heading: [{ text: "! Session not saved", style: "warning" }],
         rows: [{ spans: [{ text: event.message }] }],
       };
   }
+}
+
+function isTodoList(value: unknown): value is Todo[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (todo) =>
+        isPlainObject(todo) &&
+        typeof todo.id === "string" &&
+        typeof todo.text === "string" &&
+        typeof todo.status === "string" &&
+        Object.hasOwn(TODO_STATUSES, todo.status),
+    )
+  );
+}
+
+function describeTodos(toolName: string, todos: Todo[]): TraceBlock {
+  const complete = todos.filter((todo) => todo.status === "completed").length;
+  const rows: TraceRow[] = todos.map((todo) => {
+    const presentation = TODO_STATUSES[todo.status];
+    return {
+      marker: presentation.marker,
+      spans: [
+        { text: todo.text, style: presentation.style },
+        { text: presentation.suffix, style: "muted" },
+      ],
+    };
+  });
+  return {
+    heading: toolHeading(TODO_HEADINGS[toolName], toolName),
+    rows: [
+      { spans: [{ text: `${complete}/${todos.length} complete`, style: "muted" }] },
+      ...rows,
+      ...(todos.length === 0 ? [{ spans: [{ text: "No tasks" }] }] : []),
+    ],
+  };
+}
+
+function describeHostedSearch(result: unknown): TraceBlock | null {
+  if (!isPlainObject(result) || result.tool !== "web_search") {
+    return null;
+  }
+  const provider =
+    typeof result.provider === "string" && result.provider !== ""
+      ? result.provider
+      : "Provider not reported";
+  const queries: string[] = Array.isArray(result.queries)
+    ? result.queries.filter((query): query is string => typeof query === "string")
+    : [];
+  return describeSearch("⌕ Web search", "web_search", provider, queries);
+}
+
+function describeSearch(
+  label: string,
+  toolName: string,
+  provider: string,
+  queries: string[],
+): TraceBlock {
+  const count = queries.length === 1 ? "1 query" : `${queries.length} queries`;
+  const metadata = queries.length === 0 ? provider : `${provider} · ${count}`;
+  const queryRows: TraceRow[] =
+    queries.length === 0
+      ? [{ spans: [{ text: "Queries not reported", style: "muted" }] }]
+      : queries.map((query) => ({
+          marker: { text: "·", style: "muted" },
+          spans: [{ text: query }],
+        }));
+  return {
+    heading: toolHeading({ text: label, style: "heading" }, toolName),
+    rows: [{ spans: [{ text: metadata, style: "muted" }] }, ...queryRows],
+  };
 }
 
 function toolHeading(label: TraceSpan, toolName: string): TraceSpan[] {

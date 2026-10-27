@@ -5,6 +5,192 @@ import { formatAgentTrace, printAgentTrace, traceOptionsForHost } from "./agentT
 
 const plain = { columns: 80, color: false };
 
+const tasks = [
+  { id: "1", text: "Verify rankings", status: "completed" },
+  { id: "2", text: "Check availability", status: "in_progress" },
+  { id: "3", text: "Compare hardware", status: "pending" },
+];
+
+describe("task lists", () => {
+  it.each(["todoWrite", "todoAdd", "todoUpdate", "todoList"])(
+    "shows the full %s snapshot",
+    (toolName) => {
+      expect(formatAgentTrace({ kind: "toolStart", toolName, args: { todos: tasks } }, plain)).toBe(
+        "",
+      );
+      const heading = toolName === "todoList" ? "Tasks" : "✓ Tasks updated";
+      expect(
+        formatAgentTrace({ kind: "toolEnd", toolName, value: tasks, outcome: "plain" }, plain),
+      ).toBe(
+        [
+          `${heading}  ${toolName}`,
+          "  │ 1/3 complete",
+          "  │ ✓ Verify rankings",
+          "  │ › Check availability · in progress",
+          "  │ ○ Compare hardware",
+        ].join("\n"),
+      );
+    },
+  );
+
+  it("strikes only completed task text and wraps the whole list", () => {
+    const text = "long-task-".repeat(20);
+    const value = [...tasks, { id: "4", text, status: "pending" }];
+    const output = formatAgentTrace(
+      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "success" },
+      { columns: 40, color: true },
+    );
+    expect(output).toContain("\x1b[2m\x1b[9mVerify rankings\x1b[0m");
+    expect(output.match(/\x1b\[9m/g)).toHaveLength(1);
+    expect(output.split("\n").every((line) => visualWidth(line) <= 40)).toBe(true);
+    expect(stripAnsi(output).replace(/\s|│/g, "")).toContain(text);
+    expect(stripAnsi(output)).toContain("1/4 complete");
+  });
+
+  it("shows empty, completed, and multiple active lists independently", () => {
+    const render = (value: unknown) =>
+      formatAgentTrace({ kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" }, plain);
+    expect(render([])).toBe("✓ Tasks updated  todoWrite\n  │ 0/0 complete\n  │ No tasks");
+    expect(render(tasks.map((task) => ({ ...task, status: "completed" })))).toContain(
+      "3/3 complete",
+    );
+    const active = render(tasks.map((task) => ({ ...task, status: "in_progress" })));
+    expect(active).toContain("0/3 complete");
+    expect(active.match(/· in progress/g)).toHaveLength(3);
+    expect(render([tasks[2]])).toBe(
+      "✓ Tasks updated  todoWrite\n  │ 0/1 complete\n  │ ○ Compare hardware",
+    );
+  });
+
+  it("keeps a failed update attached to its name", () => {
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "todoWrite", value: "Update refused", outcome: "failure" },
+        plain,
+      ),
+    ).toBe("✗ Tool failed  todoWrite\n  │ Update refused");
+  });
+
+  it.each([
+    null,
+    {},
+    [null],
+    [{ text: "Missing id", status: "pending" }],
+    [{ id: "1", text: "Unknown", status: "done" }],
+  ])("falls back for malformed tasks (%j)", (value) => {
+    const output = formatAgentTrace(
+      { kind: "toolEnd", toolName: "todoWrite", value, outcome: "plain" },
+      plain,
+    );
+    expect(output).toContain("· Tool returned  todoWrite");
+    expect(output).not.toContain("Tasks updated");
+  });
+});
+
+describe("web searches", () => {
+  const queries = [
+    'site.anthropic.com "Fable" "5.1"',
+    'site.moonshot.ai "K3.1"',
+    'site.anthropic.com "Opus 5.5" "October"',
+    'site.blog.google "Gemini 4" "Argon"',
+  ];
+
+  it("shows hosted query strings with their quotes intact", () => {
+    const output = formatAgentTrace(
+      {
+        kind: "hostedSearch",
+        result: { tool: "web_search", provider: "openai-responses", queries },
+      },
+      plain,
+    );
+    expect(output).toBe(
+      [
+        "⌕ Web search  web_search",
+        "  │ openai-responses · 4 queries",
+        ...queries.map((query) => `  │ · ${query}`),
+      ].join("\n"),
+    );
+  });
+
+  it("wraps full multiline queries and indents continuations", () => {
+    const query = "abcdefgh".repeat(20) + "\nsecond line";
+    const output = formatAgentTrace(
+      { kind: "hostedSearch", result: { tool: "web_search", queries: [query] } },
+      { columns: 40, color: false },
+    );
+    expect(output).toContain("Provider not reported · 1 query");
+    expect(output).toContain("\n  │   second line");
+    expect(output.split("\n").every((line) => visualWidth(line) <= 40)).toBe(true);
+    expect(output.replace(/\s|│/g, "")).toContain(query.replace(/\s/g, ""));
+  });
+
+  it.each([undefined, [], [null, 3]])(
+    "reports missing queries (%j) without inventing a count",
+    (queries) => {
+      const output = formatAgentTrace(
+        { kind: "hostedSearch", result: { tool: "web_search", queries } },
+        plain,
+      );
+      expect(output).toBe(
+        "⌕ Web search  web_search\n  │ Provider not reported\n  │ Queries not reported",
+      );
+    },
+  );
+
+  it("counts only query strings and never infers hosted success from raw data", () => {
+    const output = formatAgentTrace(
+      {
+        kind: "hostedSearch",
+        result: {
+          tool: "web_search",
+          provider: "custom\x1b[2J\nprovider",
+          queries: ["one", false, "two"],
+          raw: { status: "failed", secret: "raw must stay hidden" },
+        },
+      },
+      plain,
+    );
+    expect(output).toContain("custom\n  │ provider · 2 queries");
+    expect(output).not.toContain("\x1b");
+    expect(output).not.toMatch(/✓|finished|raw must stay hidden/);
+    expect(output).toContain("  │ · one\n  │ · two");
+  });
+
+  it.each([null, {}, { tool: "code_interpreter" }])(
+    "skips unsupported hosted records (%j)",
+    (result) => {
+      expect(formatAgentTrace({ kind: "hostedSearch", result }, plain)).toBe("");
+    },
+  );
+
+  it.each([
+    ["web_search_tavily", "Tavily"],
+    ["web_search_brave", "Brave"],
+  ])("labels the %s client search", (toolName, provider) => {
+    const query = "q".repeat(140);
+    const output = formatAgentTrace(
+      { kind: "toolStart", toolName, args: { query } },
+      { columns: 200, color: false },
+    );
+    expect(output).toBe(`⌕ Searching web  ${toolName}\n  │ ${provider} · 1 query\n  │ · ${query}`);
+    expect(
+      formatAgentTrace({ kind: "toolEnd", toolName, value: "result", outcome: "success" }, plain),
+    ).toBe(`✓ Tool finished  ${toolName}\n  │ result`);
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName, value: "unavailable", outcome: "failure" },
+        plain,
+      ),
+    ).toBe(`✗ Tool failed  ${toolName}\n  │ unavailable`);
+  });
+
+  it.each([null, {}, { query: 3 }])("falls back for malformed client search args (%j)", (args) => {
+    expect(
+      formatAgentTrace({ kind: "toolStart", toolName: "web_search_tavily", args }, plain),
+    ).toContain("● Tool call  web_search_tavily");
+  });
+});
+
 describe("ordinary agent tool output", () => {
   it("puts named arguments on their own rows", () => {
     expect(

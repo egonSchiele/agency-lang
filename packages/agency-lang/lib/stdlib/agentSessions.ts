@@ -3,6 +3,7 @@ import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { __call } from "../runtime/call.js";
+import { hasInterrupts } from "../runtime/interrupts.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { _contentToString } from "./threads.js";
@@ -191,7 +192,9 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
   const run = currentRun();
   if (!hooks) throw new Error("_installSessionHooks was not called");
   const reply = await call(run, hooks.onSubmit, line);
-  if (reply === false) return reply;
+  // A turn stopped by an interrupt did not finish, so there is nothing to
+  // record; the REPL shows the interrupt.
+  if (reply === false || hasInterrupts(reply)) return reply;
   const target = (await call(run, hooks.afterTurn, line)) as SaveTarget;
   if (target) {
     const cp = getCheckpointFor(run, await checkpointFor(run));

@@ -3,6 +3,7 @@ import { GuardScope } from "./guardScope.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import {
+  checkpointInterrupts,
   interrupt,
   interruptWithHandlers,
   isApproved,
@@ -351,6 +352,7 @@ export async function raiseGuardTripsAtStep(args: {
     checkpointId,
     reason: "interrupt",
     sourceLocation: args.location,
+    interrupts: checkpointInterrupts(outcome),
   });
   args.halt(args.isNodeContext ? { messages: args.threads, data: outcome } : outcome);
   return true;

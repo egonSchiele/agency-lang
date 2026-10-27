@@ -3,6 +3,8 @@ import {
   interrupt,
   hasInterrupts,
   reportUnhandledInterrupts,
+  checkpointInterrupts,
+  escapedTurnText,
   mergeChainOutcomes,
   interruptWithHandlers,
   gatherChainOutcome,
@@ -541,5 +543,58 @@ describe("interrupt response API (moved to interruptResponse leaf, re-exported)"
       ],
     });
     expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("checkpointInterrupts", () => {
+  it("keeps the id, origin, and the events' summary, and marks a debugger stop", () => {
+    const read = interrupt({
+      effect: "std::read",
+      message: "Read?",
+      data: { path: "a" },
+      origin: "m",
+      runId: "r",
+    });
+    const stop = {
+      ...interrupt({ effect: "debug", message: "", data: null, origin: "m", runId: "r" }),
+      debugger: true,
+    };
+    expect(checkpointInterrupts([read, stop])).toEqual([
+      {
+        interruptId: read.interruptId,
+        effect: "std::read",
+        message: "Read?",
+        data: { path: "a" },
+        origin: "m",
+      },
+      {
+        interruptId: stop.interruptId,
+        effect: "debug",
+        message: "",
+        data: null,
+        origin: "m",
+        debugger: true,
+      },
+    ]);
+  });
+});
+
+describe("escapedTurnText", () => {
+  it("says the turn stopped and names each interrupt with its message and data", () => {
+    const read = interrupt({
+      effect: "std::read",
+      message: "Read?",
+      data: { path: "a" },
+      origin: "m",
+      runId: "r",
+    });
+    expect(escapedTurnText([read])).toBe(
+      [
+        "The turn stopped on an interrupt that no handler answered, so it has no reply.",
+        'Interrupt "std::read":',
+        "  Read?",
+        '  {"path":"a"}',
+      ].join("\n"),
+    );
   });
 });

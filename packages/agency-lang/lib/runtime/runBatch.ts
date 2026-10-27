@@ -126,8 +126,9 @@ export type BatchHooks = {
    * checkpoint would carry the pre-batch messages and successful
    * sibling tool responses would be silently lost on resume. */
   beforeCheckpoint?: () => void;
-  /** Called once when the batch stamps its shared checkpoint. */
-  onCheckpoint?: (checkpointId: number) => void;
+  /** Called once when the batch stamps its shared checkpoint, with the
+   *  interrupts it was stamped for. */
+  onCheckpoint?: (checkpointId: number, interrupts: Interrupt[]) => void;
 };
 
 export type RunBatchOpts<T> = {
@@ -577,7 +578,7 @@ function stampSharedCheckpoint<T>(opts: RunBatchOpts<T>, interrupts: Interrupt[]
     intr.checkpoint = cp;
     intr.checkpointId = cpId;
   }
-  hooks?.onCheckpoint?.(cpId);
+  hooks?.onCheckpoint?.(cpId, interrupts);
 }
 
 export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {

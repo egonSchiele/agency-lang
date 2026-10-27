@@ -35,7 +35,7 @@ export type ChoiceItem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L124))
 
 ## Functions
 
@@ -57,13 +57,14 @@ A line-mode REPL in the terminal's own scrollback.
   Each iteration prints `prompt`, awaits one line of input (full line
   editing, history, bracketed paste), and calls `onSubmit(line)`.
   Returning false exits; returning a non-empty string prints it;
-  anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
+  returning a list of interrupts prints each one and says the turn has no
+  reply; anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
   idle prompt. Type `/paste` (TTY only) to open a multi-line editor:
   Enter inserts a newline, Ctrl+D submits the whole buffer as one
   message, and Ctrl+C / Esc cancels.
 
   @param status - Callback returning {left, right, context}
-  @param onSubmit - Called with the submitted line; return false to exit or a string to print
+  @param onSubmit - Called with the submitted line; return false to exit, a string to print, or the interrupts that stopped the turn
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries
@@ -106,7 +107,7 @@ The map is kept outside the execution model, so call this before any
 |---|---|---|
 | paletteCommands | `Record<string, string>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L90))
 
 ### clearScreen
 
@@ -118,7 +119,7 @@ Clear the terminal screen.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L96))
 
 ### clearHistory
 
@@ -130,7 +131,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L101))
 
 ### hline
 
@@ -152,7 +153,7 @@ Return a horizontal rule: `char` repeated `width` times (terminal
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L113))
 
 ### pushMessage
 
@@ -172,7 +173,7 @@ Print a message to the terminal. The string may include style markup.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L130))
 
 ### select
 
@@ -213,7 +214,7 @@ non-TTY fallback, so a scripted caller must route around it
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L145))
 
 ### autocomplete
 
@@ -259,7 +260,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L170))
 
 ### prompt
 
@@ -301,7 +302,7 @@ a tool so the LLM cannot override the constraint.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L204))
 
 ### confirm
 
@@ -329,7 +330,7 @@ Needs a terminal: raises when stdout is not a TTY.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L229))
 
 ### chooseOption
 
@@ -377,7 +378,7 @@ std::policy uses it for its approve/reject menus.
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L270))
 
 ### interruptChoice
 
@@ -420,4 +421,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Needs:** `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L370))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L371))

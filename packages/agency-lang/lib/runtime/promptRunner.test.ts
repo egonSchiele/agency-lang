@@ -269,11 +269,27 @@ describe("PromptRunner.step interrupt handling", () => {
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => [],
     });
-    await expect(runner.step("a", async () => [fakeInterrupt()] as any)).rejects.toBeInstanceOf(
+    const raised = {
+      ...fakeInterrupt(),
+      effect: "std::read",
+      message: "Read?",
+      data: { path: "a" },
+      origin: "m",
+    };
+    await expect(runner.step("a", async () => [raised] as any)).rejects.toBeInstanceOf(
       PromptBailout,
     );
     expect(logged.length).toBe(1);
     expect(logged[0].checkpointId).toBe(5);
+    expect(logged[0].interrupts).toEqual([
+      {
+        interruptId: "i-1",
+        effect: "std::read",
+        message: "Read?",
+        data: { path: "a" },
+        origin: "m",
+      },
+    ]);
     expect(logged[0].reason).toBe("interrupt");
     expect(logged[0].sourceLocation).toEqual({
       moduleId: "m",
@@ -308,6 +324,7 @@ describe("PromptRunner.parallel", () => {
 
   it("merges interrupts from multiple branches into kind='interrupts' with one shared checkpoint", async () => {
     let cpCount = 0;
+    const logged: any[] = [];
     const ctx: any = {
       checkpoints: {
         create: () => {
@@ -316,17 +333,26 @@ describe("PromptRunner.parallel", () => {
         },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
-      statelogClient: stubStatelogClient(),
+      statelogClient: stubStatelogClient({
+        checkpointCreated: (args: any) => {
+          logged.push(args);
+        },
+      }),
       beforeCheckpoint: [],
     };
     const { parallel } = makeRunner({ ctx });
     const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
-      await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+      const raised = { ...fakeInterrupt(item), interruptId: item, effect: `fx::${item}` };
+      await b.step(`${item}.s1`, async () => [raised] as any);
     });
     expect(result.kind).toBe("interrupts");
     if (result.kind !== "interrupts") return;
     expect(result.interrupts.length).toBe(2);
     expect(cpCount).toBe(1);
+    // The one checkpoint event names both branches' interrupts.
+    expect(logged.map((event) => event.interrupts.map((it: any) => it.effect))).toEqual([
+      ["fx::a", "fx::b"],
+    ]);
     expect(result.interrupts.every((i) => i.checkpointId === 101)).toBe(true);
   });
 

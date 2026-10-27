@@ -9,6 +9,7 @@ import {
   _stickyInterruptAvailable,
   type PasteState,
 } from "./cli.js";
+import { escapedTurnText, interrupt } from "../runtime/interrupts.js";
 
 const {
   EMPTY_PASTE,
@@ -29,6 +30,7 @@ const {
   summarizeMultiline,
   eraseRows,
   buildFrame,
+  replyOutput,
 } = _internal;
 
 /** Replace process.stdout.write with a capturing sink and force isTTY on.
@@ -926,5 +928,31 @@ describe("renderInterruptFooter body cap is by physical rows", () => {
     const bodyRowCount = lines.filter((line) => line.includes("x")).length;
     expect(bodyRowCount).toBeLessThanOrEqual(6);
     expect(lines.some((line) => line.includes("…"))).toBe(true);
+  });
+});
+
+describe("replyOutput", () => {
+  it("prints a non-empty string as is and nothing for an empty one", () => {
+    expect(replyOutput("hi")).toBe("hi");
+    expect(replyOutput("")).toBeUndefined();
+  });
+
+  it("prints a turn's interrupts as the escaped-turn notice", () => {
+    const raised = [
+      interrupt({
+        effect: "std::read",
+        message: "Read?",
+        data: { path: "a" },
+        origin: "m",
+        runId: "r",
+      }),
+    ];
+    expect(replyOutput(raised)).toBe(escapedTurnText(raised));
+  });
+
+  it("prints nothing for any other reply", () => {
+    expect(replyOutput(true)).toBeUndefined();
+    expect(replyOutput(null)).toBeUndefined();
+    expect(replyOutput([])).toBeUndefined();
   });
 });

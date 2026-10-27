@@ -47,7 +47,7 @@ Reuse the existing `runMetadata` event. Preserve its historical `tags: string[]`
 
 Readers interpret an old label `"interactive"` as `{ interactive: true }`. When an event has both fields, `tagValues` takes precedence for overlapping keys. Across events, later supplied values win. Invalid saved entries are ignored individually without discarding the rest of the trace; invalid API/configuration input is rejected before writing.
 
-One pure metadata projection owns these rules and agent-name extraction. The viewer computes it before grouping events into spans, because tree traversal and timestamps do not preserve file order. The existing eval extractor and streaming run scanner reuse the name rule without adding new public eval fields or an unused tags cache.
+One pure metadata projection owns these rules. The viewer computes it before grouping events into spans, because tree traversal and timestamps do not preserve file order. A shared agent-name accessor serves the projection, eval extractor, and streaming run scanner. Name-only consumers do not need tag state.
 
 File and stdout output use the same normal StateLog serialization and redaction. The new field is additive within format version 1. This plan covers the local viewer, including a locally downloaded log. It does not claim that an older hosted viewer understands the new field or that concurrent live HTTP arrival reconstructs local file order.
 
@@ -81,7 +81,7 @@ The example is a layout sketch, not a measurement of the sample file after filte
 - Multiple selected agents mean any selected name. Tag conditions combine with AND, with one selected value per key; choosing another value for that key replaces it. Metadata filters also combine with the existing text search using AND.
 - A tag condition requires the key to exist and its value to match exactly. Missing differs from null. A name merely mentioned in a prompt does not match an agent-name filter.
 - Filter choices come from all current trace metadata, not just the filtered rows. Keep active choices that temporarily have no matches so follow updates cannot silently remove a condition.
-- Filter state belongs to the viewer session and survives opening a trace, returning to the list, and follow updates. The filter overlay edits a draft, not live session state.
+- Filter state belongs to the viewer session and survives opening a trace, returning to the list, and follow updates. Views send selection edits through one session command. The filter overlay edits a local draft and sends it on apply. One pure projection provides matching rows, search hits, and filter descriptions for the picker, counts, and navigation.
 - Keep the selected trace by ID when it still matches. Otherwise select the first matching row. An empty result has no actionable row; Enter does nothing and clearing filters remains available.
 - On the picker, Escape cancels text editing/clears text search first, then clears metadata filters, then follows the existing back behavior. Inside an overlay, Escape closes that overlay first.
 - `<` and `>` navigate matching traces and the position count uses the same matches. A trace already open stays open if a follow update makes it stop matching. Its header says `outside filters · N matches` instead of displaying an invalid position. From an excluded trace, `>` selects the first match and `<` selects the last; either key selects the sole match when there is one. With zero matches, navigation is a no-op.

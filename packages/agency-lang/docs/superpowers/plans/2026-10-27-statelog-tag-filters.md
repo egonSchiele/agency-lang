@@ -37,16 +37,29 @@
 | Area | Files | Responsibility |
 | --- | --- | --- |
 | Metadata contract | New `lib/statelog/runMetadata.ts` and `.test.ts` | Scalar validation, legacy normalization, writer encoding, ordered projection |
+| Name accessor | `lib/statelog/wireAccessors.ts` and `.test.ts` | Read one agent-name event without requiring tag state |
 | Writer/config | `lib/statelogClient.ts`, `lib/config/config.ts`, their tests; `lib/backends/statelog.codegen.test.ts` | Accept tags from configuration and preserve the wire contract |
 | Agency API | `stdlib/statelog.agency`, `lib/stdlib/statelog.ts`, `.test.ts`; `lib/agents/agency-agent/agent.agency` | Public setter and automatic family tag |
 | API integration | New `tests/agency-js/set-statelog-tags/{agent.agency,test.js,fixture.json,agency.json}` | Prove compiled calls emit correct metadata without an LLM |
 | Metadata consumers | `lib/logsViewer/{types,tree,traceSummaries}.ts`, `lib/eval/extract.ts`, `lib/runsExplorer/mine.ts`, existing tests | Consume one projection; retain existing external eval/scanner shapes |
 | Dense display | `lib/logsViewer/screens/tracePicker.ts`, `screens/chrome.ts`; new `views/traceMetadataView.ts`, matching tests | Single-line columns, shared header, full metadata overlay |
-| Filters | New `lib/logsViewer/traceFilters.ts`, `views/traceFiltersView.ts`, matching tests | Pure predicates/options and keyboard-driven draft selection |
-| Session integration | `lib/logsViewer/run.ts`, `views/view.ts`, `screenHost.ts` only where needed, shell/lifecycle tests | Own session selection, overlay actions, navigation and follow |
+| Filters | New `lib/logsViewer/traceFilters.ts`, `views/traceFiltersView.ts`, matching tests | Pure predicates, options, edits, matching results, and keyboard-driven draft selection |
+| Session integration | `lib/logsViewer/run.ts`, `views/view.ts`, `screenHost.ts` only where needed, shell/lifecycle tests | Apply selection commands in one place; own overlay actions, navigation and follow |
 | Documentation | `docs/dev/hosting/statelog.md`, `docs/dev/runtime/config.md`, `docs/dev/cli/logs-viewer.md`, `docs/site/guide/{observability,tags}.md` | API scope, compatibility, controls and matching rules |
 
 Do not change `OverviewScreen`, `overviewData`, or `overviewCharts` to add metadata to calls. Do not add fields to public eval records or Runs Explorer rows without a consumer in this scope.
+
+## Declarative boundaries
+
+| Caller declares | Boundary owns |
+| --- | --- |
+| A metadata patch or an ordered sequence of events | Validation, wire compatibility, merging, and name extraction |
+| Selected agent names, tag conditions, and text query | Predicates and one matching result used by rows, counts, and navigation |
+| A selection edit | One session operation replaces selection and refreshes its derived result |
+| Column definitions with widths and visibility priority | One column selector chooses what fits; `TableComponent` measures, clips, and paints |
+| A keybinding or overlay action | Existing keymap dispatch and shell side effects |
+
+Event order is an input to the metadata reducer. Callers do not coordinate mutable tag/name fields. Keep compatibility checks inside the metadata module, field predicates inside `traceFilters.ts`, and viewport decisions inside the picker column selector. Existing layout helpers retain width allocation; do not reimplement it.
 
 ## Execution preflight
 
@@ -56,7 +69,7 @@ Do not change `OverviewScreen`, `overviewData`, or `overviewCharts` to add metad
 
 ## Task 1: Define ordered run metadata and compatible storage
 
-**Files:** Metadata contract and writer/config rows above; `lib/statelogClient.test.ts`, `lib/config/config.test.ts`, `lib/backends/statelog.codegen.test.ts`.
+**Files:** Metadata contract, name accessor, and writer/config rows above; `lib/statelogClient.test.ts`, `lib/config/config.test.ts`, `lib/backends/statelog.codegen.test.ts`.
 
 **Interfaces produced in `lib/statelog/runMetadata.ts`:**
 
@@ -75,6 +88,8 @@ traceMetadata(events: readonly EventEnvelope[]): TraceMetadata;
 
 Export the types/functions. Validation checks a plain record and returns the same object, preserving object-level redaction. Invalid input throws a descriptive error naming the invalid key without echoing its value. The read projection tolerates malformed saved entries; write validation is strict. `traceMetadata` reduces ordered events through `applyTraceMetadata`.
 
+Add `agentNameOf(event: EventWithData): string | undefined` to the existing `lib/statelog/wireAccessors.ts`, with `type EventWithData = { data: unknown }`. It reads only a valid string name on an `agentName` event. Use it inside the metadata reducer and in name-only consumers. A streaming consumer passes `{ data: payload }` and retains only its existing name field.
+
 - [ ] Write failing metadata tests with these assertions:
   - Legacy `{ tags: ["interactive"] }` becomes `{ interactive: true }`.
   - Patches `{ project: "agency", ready: false }`, then `{ project: "site" }`, yield `{ project: "site", ready: false }`.
@@ -85,10 +100,11 @@ Export the types/functions. Validation checks a plain record and returns the sam
   - Reject empty keys, nested values, arrays passed to the public validator, nonfinite numbers, undefined, and non-record roots atomically.
 - [ ] Run the focused tests and confirm the new behavior fails. Save output to `/tmp/statelog-tag-contract-red.log`.
 - [ ] Implement the contract using one scalar predicate, one writer adapter, and one projection. Own the only key-merging logic here. Avoid stringify/parse copies that lose references before StateLog redaction.
+- [ ] Test `agentNameOf` with valid names, non-name events, and malformed data. The accessor returns undefined for a non-name event even when it contains a `name` field. Metadata reduction and name-only consumers must not repeat its wire-field checks.
 - [ ] Widen the handwritten configuration and Zod types for `log.metadata.tags` to `RunTags | string[]`. Reuse the scalar constraint. Keep string-array configuration accepted. `StatelogClient.runMetadata` uses `encodeRunTags` so array input keeps `data.tags`, object input emits `data.tagValues`, and unrelated metadata fields remain unchanged.
 - [ ] Add writer/config/codegen tests: record config is accepted; legacy array bytes retain their existing shape; object tags generate `tagValues` without an object-valued `tags` field; invalid config fails; `agentStart` still emits configured metadata. The existing builder uses `JSON.stringify`; change its implementation only if these tests reveal a need.
 - [ ] Pin repeated-start behavior: configured `{ project: "configured" }`, a setter-style metadata patch `{ project: "changed" }`, then another configured emission resolves to `"configured"`. This is source-order patch behavior, not persistence in a checkpoint.
-- [ ] Run `pnpm test:run lib/statelog/runMetadata.test.ts lib/statelogClient.test.ts lib/config/config.test.ts lib/backends/statelog.codegen.test.ts > /tmp/statelog-tag-contract.log 2>&1`. Require exit 0. Inspect the saved failure output if needed.
+- [ ] Run `pnpm test:run lib/statelog/runMetadata.test.ts lib/statelog/wireAccessors.test.ts lib/statelogClient.test.ts lib/config/config.test.ts lib/backends/statelog.codegen.test.ts > /tmp/statelog-tag-contract.log 2>&1`. Require exit 0. Inspect the saved failure output if needed.
 - [ ] Commit the contract with a message file: `feat: define compatible key-value run metadata`.
 
 ## Task 2: Expose `std::statelog.setTags` and tag Agency agent runs
@@ -126,8 +142,8 @@ TypeScript implementation: `_setTags(tags: RunTags): Promise<void>` in `lib/stdl
 
 - [ ] Add failing tests for interleaved traces and sibling spans whose tree order differs from input order. Assert that `buildForest` plus `traceSummaries` agrees with `traceMetadata(events)` per trace. Include no metadata and same-timestamp updates.
 - [ ] Accumulate metadata into each trace root during `buildForest`'s existing input-order pass. Do not walk/sort the finished forest to decide which value wins. `traceSummaries` reads the root metadata directly.
-- [ ] Reuse the same name projection in `lib/eval/extract.ts` and the streaming scanner `lib/runsExplorer/mine.ts`. Keep their existing public shapes and last-name behavior; add parity tests against the viewer. Do not add unused tag fields to these consumers.
-- [ ] Define responsive columns as data over the existing `TableColumn` renderer. Use the spec's column priority and 24-cell minimum prompt width. Tags use a stable sorted-key summary, quoted string values, and terminal-safe clipping. Add no tag lines to `traceNote`.
+- [ ] Reuse `agentNameOf` in `lib/eval/extract.ts` and the streaming scanner `lib/runsExplorer/mine.ts`. Keep their existing public shapes and last-name behavior; add parity tests against the viewer. Do not construct and discard a full tags record for these name-only reads.
+- [ ] Define responsive columns as data over the existing `TableColumn` renderer. Give each optional column a visibility priority and keep selection in one picker-local helper. Store the spec's prompt width as `MIN_PROMPT_CELLS = 24`; use existing `MIN_COLS` for the terminal minimum. Reuse `TableComponent` and its width allocator. Tags use a stable sorted-key summary, quoted string values, and terminal-safe clipping. Add no tag lines to `traceNote`.
 - [ ] Write rendering tests at widths 100, 128, and 180: exactly one primary line per run, tag count does not affect body height, optional columns give way in the declared order, and existing annotation/comment rows are unchanged. Include long Unicode values and terminal-control text.
 - [ ] Add the full metadata overlay with the existing keymap, scrolling, and safe painters. `I` opens it for the selected picker trace or current open trace. Display a clear empty state for unnamed/untagged logs. Keep full values reachable even when the compact table clips them.
 - [ ] Add the selected agent name to the existing shared header without increasing its height. Nested overlays must keep their originating trace ID, rather than switching the header to the underlying screen's trace. Escape closes metadata and restores the same selection.
@@ -148,18 +164,34 @@ type MetadataSelection = { agentNames: string[]; tags: TagCondition[] };
 type TagChoices = { key: string; values: RunTagValue[] };
 type MetadataChoices = { agentNames: string[]; tags: TagChoices[] };
 type TracePickerState = { query: string; metadata: MetadataSelection };
+type TracePickerEdit =
+  | { kind: "setQuery"; query: string }
+  | { kind: "setMetadata"; metadata: MetadataSelection };
+type VisibleTraces = {
+  summaries: TraceSummary[];
+  hits: TraceHit[];
+  filters: TraceFilter[];
+};
 
 metadataChoices(summaries: readonly TraceSummary[]): MetadataChoices;
 metadataFilters(selection: MetadataSelection): TraceFilter[];
+editTracePickerState(state: TracePickerState, edit: TracePickerEdit): TracePickerState;
+projectTraces(
+  summaries: readonly TraceSummary[],
+  texts: readonly TraceText[],
+  state: TracePickerState,
+): VisibleTraces;
 ```
 
-The session creates one `TracePickerState` and passes it to recreated pickers. The filter view edits a copied `MetadataSelection`; applying replaces that selection in one operation. Store only selections, not a second cache of predicates or matched rows.
+The session owns `TracePickerState`. Views receive read-only snapshots and an `editSelection(edit: TracePickerEdit): void` command bound to one shell operation. They never assign the shared query, mutate selected arrays, or rebuild predicates. Query entry, Escape clearing, and applying the filter draft all call this command. This works with the current `View.escape(): boolean` contract without changing every screen's return type.
 
-- [ ] Add pure failing tests: any selected agent, all tag keys, exact scalar equality, missing versus null, combined metadata/text filters, empty selection, and zero matches. A name appearing only in prompt text must not satisfy the name predicate. `"true"` must not match `true`.
+The shell's edit operation replaces state through `editTracePickerState`, computes `projectTraces`, and passes the result to the picker. Follow updates use the same projection with new input data. Picker rows, header counts, and trace stepping consume that one result; they do not each repeat search/filter composition. Treat the result as derived data, not a separately editable cache. The filter overlay owns its draft and emits one `setMetadata` command on apply; cancel emits none.
+
+- [ ] Add pure failing tests: any selected agent, all tag keys, exact scalar equality, missing versus null, combined metadata/text filters, empty selection, and zero matches. A name appearing only in prompt text must not satisfy the name predicate. `"true"` must not match `true`. State edits must not mutate their inputs, a query edit must preserve metadata selection, and a metadata edit must preserve the query.
 - [ ] Implement predicate/choice derivation through the existing `TraceFilter` interface. Keep key existence checks own-property-safe. Derive options from all traces; retain unmatched active selections in the overlay.
 - [ ] Build `TraceFiltersView` with the existing `View`, table, keymap and scrolling helpers. Use Agents and Tags sections; tag selection chooses a key then an observed typed value. Space toggles an agent/value, Enter applies, Escape cancels, and Clear filters clears the draft. At most one selected condition per key. Do not create a generalized form system or a new search syntax.
-- [ ] Wire an explicit `openTraceFilters` action to uppercase `F` in the picker. Add metadata/filter overlay names and actions to `views/view.ts`. Keep overlay construction and state application in the shell; the renderer must not perform file reads or navigation side effects.
-- [ ] Persist the session selection across `createHost`/`makeActions.openPicker`, which currently construct fresh pickers. Factor one pure projection of matching summaries for picker rows, `<`/`>` stepping, and the trace-position count. Preserve an already-open trace when new metadata excludes it. Show `outside filters · N matches` in its header. From that trace, next selects the first match and previous selects the last, including when there is exactly one match; do not retain `ScreenHost.stepTrace`'s early return for that case.
+- [ ] Wire an explicit `openTraceFilters` action to uppercase `F` in the picker. Add metadata/filter overlay names and actions to `views/view.ts`. Bind `editSelection` to the shell operation above. Keep overlay construction and state application in the shell; the renderer must not perform file reads or navigation side effects.
+- [ ] Persist the session selection across `createHost`/`makeActions.openPicker`, which currently construct fresh pickers. Use `projectTraces` for picker rows, `<`/`>` stepping, and the trace-position count. Keep cursor reconciliation inside the picker when it receives the result; the shell must not reset a cursor or scroll field directly. Preserve an already-open trace when new metadata excludes it. Show `outside filters · N matches` in its header. From that trace, next selects the first match and previous selects the last, including when there is exactly one match; do not retain `ScreenHost.stepTrace`'s early return for that case.
 - [ ] Use the picker's existing search/status chrome for active filters and match count; do not add per-run lines. Only the payload text query is forwarded to `selectTrace`; metadata-only filtering opens Overview.
 - [ ] Add scripted lifecycle tests: draft apply/cancel/clear; Enter into a run then Escape back; follow updates while either overlay is open; an open trace becoming excluded with zero, one, and several matches; selected trace removal; filtered stepping and counts; Escape clearing text before metadata; and ordinary `f`, `q`, number keys, help, and single-trace metadata access retaining their meanings. Assert that an excluded trace never displays position `0/N`.
 - [ ] Run `pnpm test:run lib/logsViewer/traceFilters.test.ts lib/logsViewer/traceSearch.test.ts lib/logsViewer/views/traceFiltersView.test.ts lib/logsViewer/screens/tracePicker.test.ts lib/logsViewer/run.shell.test.ts lib/logsViewer/run.test.ts lib/logsViewer/screenHost.test.ts lib/logsViewer/escLadder.test.ts > /tmp/statelog-tag-filters.log 2>&1`; require exit 0.
@@ -173,7 +205,7 @@ The session creates one `TracePickerState` and passes it to recreated pickers. T
 - [ ] Verify a synthetic mixed log in the terminal at 100 and 180 columns. Exercise names, booleans versus strings, a missing tag, a long value, a later update, and no matches. Use the real local sample files read-only for a large-log check: the named coordinator traces must be selectable without matching prompt mentions. Do not copy those logs into fixtures or commits.
 - [ ] Run `pnpm run fmt:ts > /tmp/statelog-tag-format.log 2>&1`, then `pnpm run fmt:ts:check > /tmp/statelog-tag-format-check.log 2>&1`, `pnpm run typecheck > /tmp/statelog-tag-types.log 2>&1`, and `pnpm run lint:structure > /tmp/statelog-tag-lint.log 2>&1`; each must exit 0. Run `make` again only if subsequent stdlib/source changes require it.
 - [ ] Run the focused unit group covering Tasks 1–4 once after the final changes, saving output to `/tmp/statelog-tag-final-tests.log`. Repeat the targeted Agency-JS fixture only if later changes affect it. Do not run the full Agency test suite.
-- [ ] Review against `docs/dev/contributing/anti-patterns.md`: one metadata policy, declarative columns/filters/key tables, no renderer-side metadata interpretation, no duplicate filter state, no unused public fields, and no execution/checkpoint changes. Request independent final code review and address actionable findings.
+- [ ] Review against `docs/dev/contributing/anti-patterns.md`: one metadata policy, the shared name accessor, declarative columns/filters/key tables, one session edit operation, and one matching result. Check that consumers do not read wire fields, mutate shared selection, duplicate width allocation, or reach into cursor/scroll internals. Keep public fields limited to actual consumers. Request independent final code review and address actionable findings.
 - [ ] Commit documentation/verification fixes with message files. A later instruction to publish should use a concrete PR description in a file, normal push, and attach the resulting PR. This planning request does not itself create a PR.
 
 ## Plan review checklist

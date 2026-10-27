@@ -4,8 +4,22 @@ name: Node.js CI
 on:
   push:
     branches: [ "main" ]
+    # Prose no code or test reads. docs/site and skills/ are not here:
+    # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    paths-ignore:
+      - "packages/agency-lang/docs/dev/**"
+      - "packages/agency-lang/docs/misc/**"
+      - "packages/agency-lang/docs/superpowers/**"
+      - "**/CHANGELOG.md"
   pull_request:
     branches: [ "main" ]
+    # Prose no code or test reads. docs/site and skills/ are not here:
+    # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    paths-ignore:
+      - "packages/agency-lang/docs/dev/**"
+      - "packages/agency-lang/docs/misc/**"
+      - "packages/agency-lang/docs/superpowers/**"
+      - "**/CHANGELOG.md"
 
 # Workflow-level permissions are read-only by default. Each job opts into
 # additional scopes only when it needs them.

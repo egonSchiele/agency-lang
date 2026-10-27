@@ -7,6 +7,7 @@ import { hasInterrupts } from "../runtime/interrupts.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { _contentToString } from "./threads.js";
+import { printAgentTrace } from "./agentToolTrace.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -200,7 +201,7 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
     const cp = getCheckpointFor(run, await checkpointFor(run));
     const error = await saveSession(run.ctx.host, target.dir, target.record, cp);
     if (error) {
-      run.ctx.host.terminal.writeOut(`Could not save this session: ${error}\n`);
+      printAgentTrace(run.ctx.host, { kind: "sessionSaveFailure", message: error });
     }
   }
   return reply;

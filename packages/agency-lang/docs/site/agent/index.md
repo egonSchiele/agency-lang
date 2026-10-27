@@ -26,6 +26,41 @@ echo "summarize this file" | agency agent
 
 In this case, the agent will autonomously do the work and then exit.
 
+## Tool output
+
+```text
+✓ Tasks updated  todoWrite
+  │ 1/3 complete
+  │ ✓ Verify rankings
+  │ › Check availability · in progress
+  │ ○ Compare hardware
+
+⌕ Web search  web_search
+  │ openai-responses · 2 queries
+  │ · site.example.com "release notes"
+  │ · downloadable model weights
+```
+
+Each task update prints only the current list, without a generic tool-call block. Completed tasks have a check mark
+and crossed-out text when terminal styling is enabled. Active tasks have
+an arrow and an explicit status label. Pending tasks have an open circle.
+
+All search providers share the same display. Queries appear in full; returned
+sources show titles and URLs, up to five with a count of any remaining ones.
+Hosted records appear with the model response. Tavily and Brave show a start
+block followed by their results.
+
+Starts are blue; completed calls have green check marks and dim result
+previews. Failures are red. Hosted searches have a neutral heading because
+their records do not report success or failure. Markers and words distinguish
+these states when color is disabled. Subagent dispatches have one named
+announcement. Other tools show named arguments and result previews. Long
+lines wrap to fit the terminal.
+
+Interactive sessions show tool output by default. Add `--verbose` to show
+it in one-shot mode. `--debug` also enables tracing and retains additional
+diagnostics.
+
 ## Safety features
 Agency comes with great support for making agents safer, and the Agency agent takes full advantage of it. Before taking most actions, the agent will pause and ask you for approval. You can also pre-approve actions by using [Agency's policies feature](/guide/policies).
 
@@ -97,9 +132,8 @@ You can add your own commands too. See
 A few flags help when debugging or scripting. The [CLI reference](/cli/agent)
 lists them all.
 
-- `--verbose` — echo each tool call to stdout in one-shot mode (interactive
-  sessions always show tool calls).
-- `--debug` — also log tool returns and timing.
+- `--verbose` — show tool calls, results, and LLM diagnostics in one-shot mode.
+- `--debug` — enable tracing and additional debug diagnostics.
 - `--max-tool-call-rounds <n>` — cap the LLM tool-call rounds before a turn
   stops. Defaults to 10 interactive, 50 in one-shot mode.
 - `--log <path>` — write logs to a file.

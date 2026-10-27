@@ -1,0 +1,52 @@
+import { todoWrite } from "std::agent"
+import { announce } from "../../../lib/agents/agency-agent/brains/coordinator/lib/announce.agency"
+import {
+  setInteractive,
+  setVerbose,
+  setDebug,
+} from "../../../lib/agents/agency-agent/lib/trace.agency"
+
+def echo(value: string): string {
+  return value
+}
+
+def successful(): Result<string> {
+  return success("wrapped-ok")
+}
+
+def failedFixture(): Result<string> {
+  return failure("fixture failure")
+}
+
+def whatIAmDoing(): string {
+  return "suppressed"
+}
+
+def researchAgent(userMsg: string): string {
+  announce("researchAgent", userMsg)
+  return "Research fixture result"
+}
+
+type SearchResult = {
+  title: string;
+  url: string;
+  description: string
+}
+
+def web_search_tavily(query: string): SearchResult[] {
+  return [{ title: "Tavily fixture source", url: "https://tavily.example/source", description: "Tavily fixture snippet" }]
+}
+
+def web_search_brave(query: string): SearchResult[] {
+  return [{ title: "Brave fixture source", url: "https://brave.example/source", description: "Brave fixture snippet" }]
+}
+
+node main(interactive: boolean, verbose: boolean, debug: boolean) {
+  setInteractive(interactive)
+  setVerbose(verbose)
+  setDebug(debug)
+  return llm("trace fixture", {
+    tools: [todoWrite, echo, successful, failedFixture, whatIAmDoing, researchAgent, web_search_tavily, web_search_brave],
+    retries: 0
+  })
+}

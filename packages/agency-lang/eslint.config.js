@@ -58,6 +58,7 @@ export const BROWSER_FILES = [
   "lib/backends/typescriptGenerator/typeToString.ts",
   "lib/utils/canonicalize.ts",
   "lib/utils/columnWidths.ts",
+  "lib/utils/controlCharacters.ts",
   "lib/utils/diff.ts",
   "lib/utils/formatType.ts",
   "lib/utils/hash.ts",

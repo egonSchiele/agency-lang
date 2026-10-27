@@ -2,12 +2,25 @@
   "handlerRejects": {
     "result": "s1 done",
     "toolStarts": 1,
+    "toolEnds": [
+      {
+        "toolName": "guardedTool",
+        "rejected": true
+      }
+    ],
     "reasonSeen": true,
     "noRetrySuffixSeen": true,
     "identicalRetryRefused": true,
     "framedAsError": false
   },
   "interactiveReject": {
+    "endsAtPause": [],
+    "toolEnds": [
+      {
+        "toolName": "guardedTool",
+        "rejected": true
+      }
+    ],
     "pausedWithInterrupt": true,
     "result": "s2 done",
     "reasonSeen": true
@@ -29,6 +42,22 @@
     "removalSeen": false
   },
   "parallelRejectAndPause": {
+    "endsAtPause": [
+      {
+        "toolName": "guardedTool",
+        "rejected": true
+      }
+    ],
+    "toolEnds": [
+      {
+        "toolName": "guardedTool",
+        "rejected": true
+      },
+      {
+        "toolName": "pauseMe",
+        "rejected": false
+      }
+    ],
     "pausedWithInterrupt": true,
     "result": "s6 done",
     "toolMessagesInFinalRequest": 2,

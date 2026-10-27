@@ -25,7 +25,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
     reviewer that parses and typechecks it. Leave it false for every other
     language, where that reviewer has nothing useful to say.
   """
-  announce("review", userMsg)
+  announce("reviewAgent", userMsg)
   if (!agencyTask) {
     const general = generalReviewAgent(work: userMsg, task: "Review this code.")
     return renderFeedback(general)

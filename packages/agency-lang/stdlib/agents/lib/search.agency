@@ -59,6 +59,20 @@ export def searchTools(): any[] {
   return map(available, boundTool)
 }
 
+export def searchProviderName(toolName: string): string | null {
+  """
+  Return a search tool's provider name from the catalog, or null for an
+  unknown tool. This lookup does not read API keys or contact a provider.
+
+  @param toolName - The name assigned to the search tool
+  """
+  const provider = find(providers, \provider -> provider.toolName == toolName)
+  if (provider == null) {
+    return null
+  }
+  return provider.name
+}
+
 export def hostedSearchTools(model: string = "", provider: string = ""): string[] {
   """
   Return the provider-hosted search capabilities available to a call on this

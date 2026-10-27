@@ -95,14 +95,21 @@ const llmClient = {
 
 __setLLMClient(llmClient);
 
-const initial = await main();
+const toolStarts = [];
+const toolEnds = [];
+const callbacks = {
+  onToolCallStart: ({ toolName }) => toolStarts.push(toolName),
+  onToolCallEnd: ({ toolName }) => toolEnds.push(toolName),
+};
+const initial = await main({ callbacks });
+const endsAtPause = [...toolEnds];
 if (!hasInterrupts(initial.data)) {
   throw new Error(
     `Expected interrupts from interruptTool, got: ${JSON.stringify(initial.data)}`,
   );
 }
 
-const final = await respondToInterrupts(initial.data, [approve()]);
+const final = await respondToInterrupts(initial.data, [approve()], { metadata: { callbacks } });
 
 writeFileSync(
   "__result.json",
@@ -110,6 +117,9 @@ writeFileSync(
     {
       finalData: final.data,
       llmCallCount: callIndex,
+      toolStarts,
+      endsAtPause,
+      toolEnds,
     },
     null,
     2,

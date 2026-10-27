@@ -5,6 +5,7 @@
   sessionTitle.agency.
 */
 import { _exit } from "agency-lang/stdlib-lib/system.js"
+import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
@@ -217,6 +218,6 @@ export def saveSeedTurn(userMsg: string) {
   const id = checkpoint()
   const saved = saveSession(target.record, getCheckpoint(id))
   if (isFailure(saved)) {
-    print(color.red("Could not save this session: ${saved.error}"))
+    _printAgentTrace({ kind: "sessionSaveFailure", message: saved.error })
   }
 }

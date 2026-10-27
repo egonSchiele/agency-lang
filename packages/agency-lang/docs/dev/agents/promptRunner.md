@@ -63,10 +63,14 @@ rounds.
   `removedTools`, `rejectedCalls`, and `repeatStreak`, all of which
   mutate as sibling branches complete.
 - `runnerState.invokeOutcomes` — how each invocation ended, recorded
-  inside the `.invoke` step. A completed non-success invocation already
-  answered the model, so a later pass returns instead of re-entering the
-  end and log steps. An interrupted invocation records nothing: its
-  invoke step must re-run on resume to consume the user's response.
+  inside the `.invoke` step. Successes, failures, and rejections keep
+  their actual result on the branch so the separate `.end` step can
+  report it. On resume, completed steps are skipped and a pending end
+  hook can run without repeating the invocation or its model reply.
+  Only a success reaches the `.log` step; failure and rejection logs
+  were already written inside `.invoke`. An interrupted invocation
+  records nothing: its invoke step must re-run on resume to consume
+  the user's response. Aborted results bypass the end hook.
 
 Deterministic reads need no record. Deriving `namedArgs` from
 `toolCall.arguments` inline is fine, because the checkpoint restores the

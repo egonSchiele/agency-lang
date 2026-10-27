@@ -6,13 +6,13 @@
  * No @module banner here on purpose: a file holding a top-level callback()
  * cannot also carry one, or the preprocessor rejects it. See issue below.
  */
-import { map } from "std::array"
+import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
+import { searchProviderName } from "std::agents/lib/search"
 import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
 import {
-  formatArgs,
-  formatToolResponse,
+  isPlainObject,
   retryReasonLabel,
  } from "./utils.agency"
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
@@ -30,7 +30,7 @@ let _isInteractive: boolean = true
 // with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
 // const: it reads globals that `main()` sets after module init, so the
 // value must be computed per call.
-def _showTraces(): boolean {
+export def isTraceEnabled(): boolean {
   return _isInteractive || VERBOSE || AGENT_DEBUG
 }
 
@@ -40,8 +40,8 @@ callback("onToolCallStart") as data {
     return
   }
 
-  if (_showTraces()) {
-    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  if (isTraceEnabled()) {
+    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) })
   }
 }
 
@@ -50,13 +50,16 @@ callback("onToolCallEnd") as data {
     return
   }
 
-  if (_showTraces()) {
+  if (isTraceEnabled()) {
+    const provider = searchProviderName(data.toolName)
     if (data.result is success(_result)) {
-      pushMessage(color.dim.green("${formatToolResponse(_result)}"))
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _result, outcome: "success", provider: provider })
     } else if (data.result is failure(_error)) {
-      pushMessage(color.red(" ⎿  Error: ${_error}"))
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: _error, outcome: "failure", provider: provider })
+    } else if (isPlainObject(data.result) && data.result.type == "reject") {
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result.value ?? "Tool call rejected", outcome: "failure", provider: provider })
     } else {
-      pushMessage(color.dim("${formatToolResponse(data.result)}"))
+      _printAgentTrace({ kind: "toolEnd", toolName: data.toolName, value: data.result, outcome: "plain", provider: provider })
     }
   }
 }
@@ -68,19 +71,9 @@ callback("onLLMCallStart") as data {
 }
 
 callback("onLLMCallEnd") as data {
-  if (data.result.hostedToolResults) {
+  if (isTraceEnabled() && data.result.hostedToolResults) {
     for (result in data.result.hostedToolResults) {
-      match(result.tool) {
-        "web_search" => {
-          const queries = map(result.queries, \q -> "\"${q}\"").join(", ")
-          // there's also result.sources and result.citations
-          pushMessage(
-            color.yellow(
-            "⏺ web_search(provider: '${result.provider}', queries: [${queries}])",
-          ),
-          )
-        }
-      }
+      _printAgentTrace({ kind: "hostedSearch", result: result })
     }
   }
   if (AGENT_DEBUG || VERBOSE) {
@@ -91,7 +84,7 @@ callback("onLLMCallEnd") as data {
 }
 
 callback("onLLMRetry") as data {
-  if (_showTraces()) {
+  if (isTraceEnabled()) {
     pushMessage(
       color.dim(
       "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",

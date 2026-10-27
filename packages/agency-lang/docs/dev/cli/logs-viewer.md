@@ -264,6 +264,23 @@ Tool outcomes describe recorded evidence. A missing completion reads “completi
 
 A call to a decision model such as Laya is not a chat: the model receives a state and a set of questions and returns answers with probabilities. The runtime records that on the `promptCompletion` event as `usageKind: "decision"` and a `decision` field (see `docs/dev/hosting/statelog.md`), and `Round.decision` carries it. `decision.ts` is the one place the viewer reads it: `decisionSummary` gives the row label (`decision · curious 86%`, the chosen answer with its probability; several questions read `department: billing 80% · churn: yes 97%`), `decisionInputPayload` shows the state and each question with its type, choices and instructions, and `decisionOutputPayload` shows each answer with its confidence and the highest probabilities as bars, up to `PROBABILITY_BARS`. Trace, Transcript and Timeline rows carry the summary; the Overview previews use the two payloads; the Transcript shows a decision call as one block and not as user messages leading to a JSON reply. That is deliberate: the prompt the decision model was asked is its `STATE` (or the questions' instructions), and showing it again as a user message would draw a chat the model never had. A later text call on the same thread may then reply to a message the reader saw only inside the decision block. A log without the fields is shown as an ordinary call; the viewer does not guess from `rawData`.
 
+## Hosted tool calls
+
+Some providers run tools themselves during a model call. OpenAI's and Anthropic's built-in web search are examples. The runtime never runs these tools, so the log has no `toolCallStart` or `toolCall` event for them. smoltalk records them on the call's `promptCompletion`, under `completion.hostedToolResults`. Each entry names the tool and the provider, and keeps the provider's own items in `raw`.
+
+`hostedCalls.ts` is the one place the viewer reads that field. `hostedCallsOf(round)` returns one `HostedCall` per call the provider made. `CALL_READERS` is a table keyed by the type of a raw item:
+
+| Raw item | Provider | One call per | Gist |
+| --- | --- | --- | --- |
+| `web_search_call` | OpenAI Responses | item | the queries, `open <url>`, or `find "<pattern>" in <url>` |
+| `server_tool_use` | Anthropic | item, paired with the `web_search_tool_result` whose `tool_use_id` names it | the query |
+
+A result with no raw item the table knows, such as a router that reports only citations, becomes one call per recorded query, or one call when it recorded no query. To support another provider, add a reader to the table.
+
+The trace outline (`kind: "hosted"`), the timeline (`HostedRow`), and the transcript (a `hosted` block) put these calls under their LLM call, before the tools that call asked the runtime for. A title names a call `HOSTED TOOL CALL · <tool>` (`hostedCallTitle`), so it is never read as a tool the runtime ran: the trace details, the transcript box, and the timeline row and footer all use it. The trace outline and the transcript call list are too narrow for that title next to the queries, so they read `hosted · web_search`.
+
+The log has no time for a hosted call. The timeline draws no bar for one. It prints the call's gist in the bar column, its duration column reads `—`, and the footer says `ran inside LLM call 5 · no timing recorded`. A hosted row has no event of its own; its node is its LLM call's. So the trace search matches a hosted row by its own title and details, and `r` shows that call's raw items, not the whole LLM call.
+
 ## Resumed runs
 
 A run that paused for a person and resumed is several invocations, each with its own `agentRun` span, and the viewer reads them as one story:
@@ -364,6 +381,7 @@ ID, and the timeline opens the same rows. The shapes are:
 | An LLM call (a round) | `round:<span id>:<ordinal>` | `round:span-7f3a:2` |
 | The user turn before a round | `<round id>:user` | `round:span-7f3a:2:user` |
 | A tool call | its span ID | `span-9c01` |
+| A hosted tool call inside a round | `<round id>:hosted:<n>`, counting the round's hosted calls from 0 | `round:span-7f3a:2:hosted:0` |
 | An interrupt, error, or other event under a parent | `leaf:<parent id>:<event type>:<ordinal>` | `leaf:span-9c01:interrupt:0` |
 
 An **address** is `<trace id>/<row id>` (`address.ts`). `A` copies the

@@ -2,7 +2,8 @@ import { paint, paintedLine, segment, joinPainted, type Painted } from "../../tu
 import { THEME, durationTone, toneStyle, hotMark } from "../theme.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { roundsOf, parseRoundId, type Round } from "../timeline/rounds.js";
-import { timelineRows, rowIdFor, type TimelineRow } from "../timeline/rows.js";
+import { timelineRows, rowIdFor, type HostedRow, type TimelineRow } from "../timeline/rows.js";
+import { hostedCallTitle } from "../hostedCalls.js";
 import { ancestorsOf } from "../forest.js";
 import {
   cursorBindings,
@@ -515,8 +516,8 @@ export class TimelineScreen implements Screen {
         depth: row.depth + (stacked ? 1 : 0),
         turn: turn?.index ?? 0,
         row,
-        node: row.kind === "round" ? row.round.node : index.byId[row.id],
-        color: row.kind === "round" ? THEME.kind.assistant : spanColor(index.byId[row.id]),
+        node: row.kind === "span" ? index.byId[row.id] : row.round.node,
+        color: ROW_COLORS[row.kind](index.byId[row.id]),
       }));
       if (turn !== undefined && items.length === 0) {
         // A drilled span that did no work in this turn.
@@ -685,7 +686,7 @@ export class TimelineScreen implements Screen {
     if (sel.kind === "wait") {
       return { kind: "none" };
     }
-    if ((sel.kind === "item" && sel.row.kind === "round") || !this.hasChildRows(position)) {
+    if ((sel.kind === "item" && sel.row.kind !== "span") || !this.hasChildRows(position)) {
       return this.drillOrOpen();
     }
     if (this.isFolded(sel)) {
@@ -707,7 +708,7 @@ export class TimelineScreen implements Screen {
     if (sel?.kind !== "item") {
       return { kind: "none" };
     }
-    if (sel.row.kind === "round") {
+    if (sel.row.kind !== "span") {
       return { kind: "openScreen", screen: "trace", focusId: sel.row.id };
     }
     const isCurrentRoot = this.drillPath[this.drillPath.length - 1] === sel.row.id;
@@ -869,7 +870,10 @@ export class TimelineScreen implements Screen {
       return this.message;
     }
     let base: string;
-    if (sel.kind === "item") {
+    if (sel.kind === "item" && sel.row.kind === "hosted") {
+      // The timing note goes before the gist, which can run past the width.
+      base = `${hostedCallTitle(sel.row.call)}  ·  ${hostedTiming(sel.row)}  ·  ${sel.row.call.gist}`;
+    } else if (sel.kind === "item") {
       const label =
         (sel.row.kind === "span" ? this.threadLabel(sel.node) : undefined) ?? sel.node.summary;
       const self = sel.row.kind === "span" ? sel.row.span.selfMs : sel.row.round.durationMs;
@@ -907,6 +911,11 @@ export class TimelineScreen implements Screen {
       ]
         .filter((part) => part.length > 0)
         .join(" · ");
+    }
+    if (item.row.kind === "hosted") {
+      const { gist } = item.row.call;
+      const title = hostedCallTitle(item.row.call);
+      return gist === "" ? title : `${title} · ${gist}`;
     }
     return `${this.mark(item)}${this.threadLabel(item.node) ?? new RowLabel(item.node).computeText()}`;
   }
@@ -1008,17 +1017,25 @@ export class TimelineScreen implements Screen {
     const fold = this.isFolded(item) ? "▸ " : "";
     const glyphs = markGlyphs(marksForRow(this.marks, this.traceId, item.row.id));
     const mark = glyphs.length === 0 ? "" : `${glyphs} `;
-    return segment(`${marker}${indent}${fold}${mark}${this.rowText(item)}`, width, {
+    // A hosted row's gist goes in the bar column, which it has no bar for.
+    const text = item.row.kind === "hosted" ? hostedCallTitle(item.row.call) : this.rowText(item);
+    return segment(`${marker}${indent}${fold}${mark}${text}`, width, {
       style: isThread ? { fg: THEME.accent, bold: true } : { fg },
     });
   }
 
   private barPart(item: ItemRow, window: Interval, width: number, fg: string): Painted {
+    if (item.row.kind === "hosted") {
+      return segment(`  ${item.row.call.gist}`, width, { style: { fg: THEME.text } });
+    }
     const bar = new BarComponent([extentOf(item.row)], { running: isRunning(item.row) });
     return paint(bar.computeCells(window, width), { fg });
   }
 
   private statsPart(item: ItemRow, width: number): Painted {
+    if (item.row.kind === "hosted") {
+      return segment("—", width, { align: "right", style: { fg: THEME.muted } });
+    }
     const extent = extentOf(item.row);
     const tone = durationTone(extent.end - extent.start, this.thresholds);
     const text = `${this.statsText(item)}${hotMark(tone)}`;
@@ -1026,10 +1043,10 @@ export class TimelineScreen implements Screen {
   }
 
   private statsText(item: ItemRow): string {
-    if (item.row.kind === "round") {
-      return fmtDuration(item.row.round.durationMs, { minutes: true });
+    if (item.row.kind === "span") {
+      return new DurationCell(this.thresholds).computeText(item.row.span, 0).text;
     }
-    return new DurationCell(this.thresholds).computeText(item.row.span, 0).text;
+    return fmtDuration(item.row.round.durationMs, { minutes: true });
   }
 }
 
@@ -1127,9 +1144,21 @@ function waitText(turn: Turn, last: boolean): string {
   return last ? `⏸ waited ${waited}, then the run ended` : `⏸ waited ${waited} for the user`;
 }
 
+/** A hosted call has no time of its own, so it takes its LLM call's. */
 function extentOf(row: TimelineRow): Interval {
   return row.kind === "span" ? row.span.extent : { start: row.round.start, end: row.round.end };
 }
+
+/** The log has no time for a hosted call; the footer says so. */
+function hostedTiming(row: HostedRow): string {
+  return `ran inside LLM call ${row.round.index + 1} · no timing recorded`;
+}
+
+const ROW_COLORS: Record<TimelineRow["kind"], (node: TreeNode) => string> = {
+  span: spanColor,
+  round: () => THEME.kind.assistant,
+  hosted: () => THEME.kind.tool,
+};
 
 function isRunning(row: TimelineRow): boolean {
   return row.kind === "span" && row.span.running;

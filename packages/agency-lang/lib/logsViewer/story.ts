@@ -15,6 +15,7 @@ import {
 import { roundDeltas, type RoundDelta } from "./messageDelta.js";
 import { runPauses, type RunPause } from "./problems.js";
 import { decisionSummary } from "./decision.js";
+import { hostedCallsOf, type HostedCall } from "./hostedCalls.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
 import { ADMIN_KINDS, hasRunningWork } from "./timeline/spans.js";
@@ -51,6 +52,9 @@ export type ToolStoryRow = RowBase & {
    *  call, so the parameter's default applied. */
   droppedNulls: string[];
 };
+/** A tool the provider ran inside the call above it, such as its built-in
+ *  web search. It has no events of its own; its node is the call's. */
+export type HostedStoryRow = RowBase & { kind: "hosted"; call: HostedCall; round: Round };
 export type InterruptStoryRow = RowBase & {
   kind: "interrupt";
   interrupt: Interrupt;
@@ -79,6 +83,7 @@ export type StoryRow =
   | RoundStoryRow
   | UserStoryRow
   | ToolStoryRow
+  | HostedStoryRow
   | InterruptStoryRow
   | ErrorStoryRow
   | PauseStoryRow
@@ -486,6 +491,7 @@ export function storyOutline(trace: TreeNode, options: AdminOptions): StoryRow[]
     return ordered.flatMap((row) => [
       ...userRows(row, depth, lookups),
       { ...row, depth },
+      ...hostedRows(row, depth + 1),
       ...pauseRows(row, depth + 1, lookups),
       ...layOut(row.id, depth + 1),
     ]);
@@ -502,6 +508,22 @@ function rowTime(row: StoryRow): number {
   const event = row.node.event;
   const at = event === undefined ? row.node.firstTs : Date.parse(event.data.timestamp);
   return at === undefined || !Number.isFinite(at) ? Number.POSITIVE_INFINITY : at;
+}
+/** The tools the provider ran inside this call, before the tools it asked
+ *  the runtime to run. */
+function hostedRows(row: StoryRow, depth: number): HostedStoryRow[] {
+  if (row.kind !== "round") {
+    return [];
+  }
+  return hostedCallsOf(row.round).map((call) => ({
+    kind: "hosted",
+    id: call.id,
+    depth,
+    node: row.node,
+    orphan: row.orphan,
+    call,
+    round: row.round,
+  }));
 }
 /** The pause the run took under this interrupt, when it went to a person. */
 function pauseRows(row: StoryRow, depth: number, lookups: Lookups): PauseStoryRow[] {

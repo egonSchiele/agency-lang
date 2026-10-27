@@ -17,11 +17,14 @@ import {
   toolErrorMessages,
   toolResultText,
   toolStatusText,
+  type HostedStoryRow,
   type StoryRow,
   type ToolStoryRow,
   type Interrupt,
 } from "./story.js";
 import { decodeStructured } from "./structured.js";
+import { hostedCallTitle } from "./hostedCalls.js";
+import { stringsIn } from "./traceSearch.js";
 import { runPauses, traceErrors, type TraceError } from "./problems.js";
 import { roundsOf, type Round, type ThreadKey } from "./timeline/rounds.js";
 import { traceTurns, turnTimes, type Turn } from "./timeline/turns.js";
@@ -86,6 +89,9 @@ export type TranscriptBlock = BlockBase &
          *  advice appended. Set once the next round's input shows it. */
         modelSaw: string | undefined;
       }
+    /** A tool the provider ran inside the round, such as its web search.
+     *  The model read its result inside the call, so no message holds it. */
+    | { kind: "hosted"; row: HostedStoryRow }
     | ({ kind: "rewrite"; label: "CONTEXT COMPACTED" | "HISTORY CHANGED" } & HistoryRewrite)
   );
 type ToolBlock = Extract<TranscriptBlock, { kind: "tool" }>;
@@ -363,6 +369,9 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
       (row): row is ToolStoryRow => row.kind === "tool",
     );
     const toolBlocks = tools.map((row) => toolBlock(round, row, story, index));
+    const hostedBlocks = storyChildren(story, round.id)
+      .filter((row): row is HostedStoryRow => row.kind === "hosted")
+      .map((row): TranscriptBlock => ({ ...base, at: round.end, id: row.id, kind: "hosted", row }));
     const requests = message?.toolCalls ?? [];
     const paired = toolBlocks.map((block) => requestFor(block.row, tools, requests));
     blocks.push(
@@ -377,6 +386,7 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
         message,
         unpaired: requests.filter((request) => !paired.includes(request)),
       },
+      ...hostedBlocks,
       ...toolBlocks,
     );
     // What this round added to the thread's shown history: its input's
@@ -681,6 +691,8 @@ export function transcriptText(block: TranscriptBlock): string {
       ]
         .filter(Boolean)
         .join("\n");
+    case "hosted":
+      return [hostedCallTitle(block.row.call), ...stringsIn(block.row.call.details)].join("\n");
     case "rewrite":
       return `${block.label}: ${block.messagesBefore} messages → ${block.messagesAfter} · ${block.tokensBefore} → ${block.tokensAfter} tok`;
     case "history":

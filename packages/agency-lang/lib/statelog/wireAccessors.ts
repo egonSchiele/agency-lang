@@ -1,3 +1,4 @@
+import type { HostedToolResult } from "smoltalk";
 import type { DecisionLog, EventEnvelope } from "./wireTypes.js";
 
 /** Thin accessor layer over the wire format. Every place that reads
@@ -183,6 +184,19 @@ export function servedByOf(ev: EventEnvelope): string | undefined {
 /** The model's unsigned reasoning text on a promptCompletion. */
 export function reasoningOf(ev: EventEnvelope): string | undefined {
   return nonEmptyString(ev.data.completion?.reasoning);
+}
+
+/** The tools the provider ran during a promptCompletion, such as OpenAI's
+ *  or Anthropic's built-in web search. An entry without a tool name is
+ *  dropped. */
+export function hostedToolResultsOf(ev: EventEnvelope): HostedToolResult[] {
+  const results = ev.data.completion?.hostedToolResults;
+  if (!Array.isArray(results)) {
+    return [];
+  }
+  return results.filter(
+    (result): result is HostedToolResult => isRecord(result) && typeof result.tool === "string",
+  );
 }
 
 function nonEmptyString(value: unknown): string | undefined {

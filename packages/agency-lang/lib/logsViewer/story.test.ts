@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
 import { walkNodes, walkWithDepth } from "./forest.js";
-import { agentLoopTrace, event, loopEvents, sampleRunForest } from "./storyFixture.js";
+import { findRow } from "./detailTarget.js";
+import { payloadFor } from "./payload.js";
+import { payloadText } from "./payloadText.js";
+import {
+  agentLoopTrace,
+  event,
+  hostedSearchEvents,
+  loopEvents,
+  sampleRunForest,
+} from "./storyFixture.js";
 import {
   outlineRows,
   classifyTool,
@@ -346,5 +355,25 @@ describe("decision calls", () => {
     ])[0];
     const round = outlineRows(trace, STORY).find((row) => row.kind === "round");
     expect(round).toMatchObject({ gist: "decision · curious 86%" });
+  });
+  it("puts the provider's hosted calls under their LLM call, before the tools it asked for", () => {
+    const trace = buildForest(hostedSearchEvents())[0];
+    const rows = outlineRows(trace, STORY);
+    expect(rows.map((row) => `${row.depth} ${row.kind} ${row.id}`)).toEqual([
+      "0 user round:L:0:user",
+      "0 round round:L:0",
+      "1 hosted round:L:0:hosted:0",
+      "1 hosted round:L:0:hosted:1",
+      "1 tool read",
+      "0 round round:L:1",
+    ]);
+    // The raw view shows the provider's item for that call, not the whole LLM call.
+    const hosted = rows.find((row) => row.id === "round:L:0:hosted:1")!;
+    expect(payloadText(payloadFor(hosted, { raw: true }))).toContain('"id": "ws_2"');
+    expect(payloadText(payloadFor(hosted, { raw: true }))).not.toContain("ws_1");
+    expect(payloadText(payloadFor(hosted, { raw: false }))).toContain(
+      "HOSTED TOOL CALL · web_search",
+    );
+    expect(findRow(trace, "round:L:0:hosted:0")?.kind).toBe("hosted");
   });
 });

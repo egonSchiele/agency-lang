@@ -84,6 +84,12 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
         toolStatusText({ status: row.status, work: row.work }),
         fmtDuration(row.durationMs, { minutes: true }),
       ].join(" · ");
+    case "hosted":
+      return [
+        `Hosted tool call · ${row.call.tool}`,
+        row.call.status ?? "status not recorded",
+        `inside LLM call ${row.round.index + 1}`,
+      ].join(" · ");
     case "interrupt":
       return `Interrupt · ${row.interrupt.effect} · ${row.interrupt.outcome}`;
     case "error":

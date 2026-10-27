@@ -260,8 +260,13 @@ a failed request to a paid provider may still have cost money. An ffmpeg
 failure costs nothing, so it must not do that.
 
 The tests that run the real ffmpeg are in `lib/stdlib/speech.ffmpeg.test.ts`.
-They skip without ffmpeg, except in the `speech-ffmpeg` CI job, which sets
-`AGENCY_REQUIRE_FFMPEG=1`.
+They skip without ffmpeg, except in the `.github/workflows/speech-ffmpeg.yml`
+workflow, which sets `AGENCY_REQUIRE_FFMPEG=1`. That workflow is kept out of
+the main CI because installing ffmpeg from the Ubuntu mirror can take 20
+minutes. It runs weekly, on pull requests that change `ffmpeg.ts`,
+`speech.ts`, `wavFile.ts`, `abortable.ts`, or the test file, and by hand from
+the Actions tab. A change elsewhere that breaks these tests shows up in the
+weekly run.
 
 ### The address and the model name
 

@@ -14,6 +14,7 @@ import {
   type StructuredLine,
 } from "./structured.js";
 import {
+  rowEvents,
   toolErrorMessages,
   toolResultText,
   toolStatusText,
@@ -150,14 +151,7 @@ const ORPHAN_NOTE: PayloadLine[] = [
 /** The row's events as JSON. A hosted call has none of its own, so it
  *  shows the provider's items for that call. */
 function rawPayload(row: StoryRow): PayloadLine[] {
-  let events: unknown[];
-  if (row.kind === "hosted") {
-    events = row.call.raw;
-  } else if (row.node.event) {
-    events = [row.node.event];
-  } else {
-    events = row.node.children.flatMap((child) => (child.event ? [child.event] : []));
-  }
+  const events: unknown[] = row.kind === "hosted" ? row.call.raw : rowEvents(row);
   return events.flatMap((event) =>
     JSON.stringify(event, null, 2)
       .split("\n")

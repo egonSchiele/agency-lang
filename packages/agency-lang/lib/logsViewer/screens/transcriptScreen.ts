@@ -16,7 +16,7 @@ import {
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
 import { TOOL_STATUS_MARK, type ToolStatus } from "../story.js";
-import { hostedCallShortLabel } from "../hostedCalls.js";
+import { hostedCallShortLabel, owningRowId } from "../hostedCalls.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
   threadKey,
@@ -308,7 +308,7 @@ export class TranscriptScreen implements Screen {
       return;
     }
     const index = buildTreeIndex(trace);
-    const node = index.byId[parseRoundId(id)?.spanId ?? id];
+    const node = index.byId[parseRoundId(owningRowId(id))?.spanId ?? id];
     if (!node) {
       return;
     }

@@ -6,7 +6,7 @@
 // every screen can draw a row for each.
 import type { HostedToolResult } from "smoltalk";
 import { hostedToolResultsOf } from "../statelog/wireAccessors.js";
-import type { Round } from "./timeline/rounds.js";
+import type { EventEnvelope } from "./types.js";
 
 export type HostedCall = {
   /** `<round id>:hosted:<n>`, counting the round's hosted calls from 0. */
@@ -57,28 +57,42 @@ function failMark(call: HostedCall): string {
 
 /** Separates a hosted call's id suffix from its round's id. */
 const HOSTED_ID_INFIX = ":hosted:";
+const HOSTED_ID_SUFFIX = /:hosted:\d+$/;
 
-export function hostedCallsOf(round: Round): HostedCall[] {
-  const event = round.node.event;
-  if (event === undefined) {
-    return [];
-  }
+/** The calls recorded on one LLM call's completion event. `roundId` is the
+ *  id of the round that event is, so each call's id names its round. */
+export function hostedCallsIn(event: EventEnvelope, roundId: string): HostedCall[] {
   return hostedToolResultsOf(event)
     .flatMap((result) => callsIn(result))
-    .map((call, position) => ({ ...call, id: `${round.id}${HOSTED_ID_INFIX}${position}` }));
+    .map((call, position) => ({ ...call, id: `${roundId}${HOSTED_ID_INFIX}${position}` }));
+}
+
+/** The round a hosted call ran in, as a row id. Any other id comes back
+ *  unchanged. `round:L:0:hosted:1` gives `round:L:0`. A screen that does
+ *  not draw the hosted row focuses the LLM call that ran it instead. */
+export function owningRowId(id: string): string {
+  return id.replace(HOSTED_ID_SUFFIX, "");
 }
 
 /** The calls one result holds, each with its provider. A result whose raw
  *  items no reader knows (a router that reports only citations) becomes one
  *  call per recorded query, or one call when it recorded none. */
 function callsIn(result: HostedToolResult): ProvidedCall[] {
-  const items = (Array.isArray(result.raw) ? result.raw : []).filter(isItem);
+  const items = rawItems(result).filter(isItem);
   const known = items.filter((item) => Object.hasOwn(CALL_READERS, String(item.type)));
   const facts =
     known.length > 0
       ? known.map((item) => CALL_READERS[String(item.type)](item, result, items))
       : summaryCalls(result);
   return facts.map((call) => ({ ...call, provider: result.provider }));
+}
+
+/** `raw` as a list. Gemini records one grounding object, not a list. */
+function rawItems(result: HostedToolResult): unknown[] {
+  if (Array.isArray(result.raw)) {
+    return result.raw;
+  }
+  return result.raw === undefined || result.raw === null ? [] : [result.raw];
 }
 
 function openAiWebSearch(item: Item, result: HostedToolResult): CallFacts {
@@ -117,10 +131,18 @@ function searchQueries(action: Item): string[] {
 
 function anthropicToolUse(item: Item, result: HostedToolResult, items: Item[]): CallFacts {
   const input = isItem(item.input) ? item.input : {};
-  const answer = items.find((other) => other.tool_use_id === item.id && other !== item);
+  // A call with no id names no result; matching would pair it with any
+  // item that also has no `tool_use_id`.
+  const answer =
+    typeof item.id === "string"
+      ? items.find((other) => other.tool_use_id === item.id && other !== item)
+      : undefined;
   const content = answer?.content;
-  // A failed search's content is one error record, not a list of sources.
-  const failure = isItem(content) ? String(content.error_code ?? "error") : undefined;
+  // Every server tool's error is one record with an `error_code`. A
+  // successful web_fetch or code_execution result is an object too, so
+  // being an object does not mean it failed.
+  const failure =
+    isItem(content) && content.error_code !== undefined ? String(content.error_code) : undefined;
   const details: Record<string, unknown> = { ...input };
   if (Array.isArray(content)) {
     details.sources = content.filter(isItem).map((source) => ({
@@ -133,7 +155,7 @@ function anthropicToolUse(item: Item, result: HostedToolResult, items: Item[]): 
   }
   const facts = {
     tool: typeof item.name === "string" ? item.name : result.tool,
-    gist: typeof input.query === "string" ? input.query : "",
+    gist: stringOr(input.query) || stringOr(input.url),
     failed: failure !== undefined,
     details,
   };
@@ -143,14 +165,18 @@ function anthropicToolUse(item: Item, result: HostedToolResult, items: Item[]): 
   return { ...facts, status: facts.failed ? "failed" : "completed", raw: [item, answer] };
 }
 
+/** The provider does not say which query found which source (Gemini's
+ *  grounding lists them once for the whole call), so every query's row
+ *  shows all of the call's sources. */
 function summaryCalls(result: HostedToolResult): CallFacts[] {
-  const base = { tool: result.tool, status: undefined, failed: false, raw: [] };
+  const base = { tool: result.tool, status: undefined, failed: false, raw: rawItems(result) };
   const sources = result.sources ?? result.citations ?? [];
   const queries = result.queries ?? [];
   if (queries.length === 0) {
     return [{ ...base, gist: "", details: { sources } }];
   }
-  return queries.map((query) => ({ ...base, gist: query, details: { query } }));
+  const shared = sources.length > 0 ? { sources } : {};
+  return queries.map((query) => ({ ...base, gist: query, details: { query, ...shared } }));
 }
 
 function isItem(value: unknown): value is Item {

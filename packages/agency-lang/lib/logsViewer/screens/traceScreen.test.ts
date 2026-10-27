@@ -615,3 +615,8 @@ it("labels each hosted call and searches it by its own queries", () => {
   expect(filtered).toContain("web_search agency language");
   expect(filtered).not.toContain("web_search open https");
 });
+it("sends focus for a hosted call it does not draw to the LLM call that ran it", () => {
+  const screen = make(buildForest(hostedSearchEvents()));
+  screen.setFocus("round:L:0:hosted:9");
+  expect(screen.focusId()).toBe("round:L:0");
+});

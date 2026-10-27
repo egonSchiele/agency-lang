@@ -19,6 +19,7 @@ import {
   walkNodes,
   type TreeIndex,
 } from "../forest.js";
+import { hostedCallsIn, type HostedCall } from "../hostedCalls.js";
 import { childEvent } from "../spanText.js";
 import type { TreeNode } from "../types.js";
 import type { DecisionLog } from "../../statelog/wireTypes.js";
@@ -58,6 +59,9 @@ export type Round = {
   /** What a decision model was sent and answered; undefined for a text call
    *  and for logs from before the field was recorded. */
   decision: DecisionLog | undefined;
+  /** The tools the provider ran itself inside this call, such as a web
+   *  search. Read once here so every screen draws the same rows. */
+  hostedCalls: HostedCall[];
   node: TreeNode;
 };
 
@@ -146,8 +150,9 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
   const ownLabel = identity === null ? legacyLabel : (recordedLabel ?? undefined);
   const cachedTokens = tokensCached(event);
   const allInput = contextTokens(event);
+  const id = roundId(parent.id, ordinal);
   return {
-    id: roundId(parent.id, ordinal),
+    id,
     spanId: parent.id,
     ordinal,
     thread,
@@ -168,6 +173,7 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     contextTokens: allInput,
     costUsd: cost(event),
     decision: decisionOf(event),
+    hostedCalls: hostedCallsIn(event, id),
     node: leafNode,
   };
 }

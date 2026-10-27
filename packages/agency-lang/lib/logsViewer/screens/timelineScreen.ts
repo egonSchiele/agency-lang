@@ -3,7 +3,7 @@ import { THEME, durationTone, toneStyle, hotMark } from "../theme.js";
 import { fmtTokens, fmtUsd } from "../format.js";
 import { roundsOf, parseRoundId, type Round } from "../timeline/rounds.js";
 import { timelineRows, rowIdFor, type HostedRow, type TimelineRow } from "../timeline/rows.js";
-import { hostedCallTitle } from "../hostedCalls.js";
+import { hostedCallTitle, owningRowId } from "../hostedCalls.js";
 import { ancestorsOf } from "../forest.js";
 import {
   cursorBindings,
@@ -418,7 +418,7 @@ export class TimelineScreen implements Screen {
     if (direct !== undefined) {
       return direct;
     }
-    const node = this.index?.byId[parseRoundId(id)?.spanId ?? id];
+    const node = this.index?.byId[parseRoundId(owningRowId(id))?.spanId ?? id];
     if (node === undefined || this.index === undefined) {
       return undefined;
     }

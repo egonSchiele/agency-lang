@@ -734,4 +734,9 @@ describe("the call list and header", () => {
     expect(after).toContain("completed · run by openai-responses inside LLM call 1");
     expect(after).toContain('queries: ["agency language","agency docs"]');
   });
+  it("sends focus for a hosted call it does not draw to the LLM call that ran it", () => {
+    const screen = make(buildForest(hostedSearchEvents()));
+    screen.setFocus("round:L:0:hosted:9");
+    expect(screen.focusId()).toBe("round:L:0");
+  });
 });

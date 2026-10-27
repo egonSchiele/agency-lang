@@ -14,7 +14,7 @@ import {
 import { TableComponent, type TableColumn } from "../../tui/table.js";
 import { ancestorsOf, buildTreeIndex, walkNodes } from "../forest.js";
 import { fmtTokens, fmtUsd } from "../format.js";
-import { hostedCallShortLabel, hostedCallTitle } from "../hostedCalls.js";
+import { hostedCallShortLabel, hostedCallTitle, owningRowId } from "../hostedCalls.js";
 import {
   cursorBindings,
   helpFrom,
@@ -24,7 +24,7 @@ import {
 } from "../keymap.js";
 import { payloadFor } from "../payload.js";
 import { fmtDuration } from "../spanText.js";
-import { outlineRows, threadComplete, type StoryRow } from "../story.js";
+import { outlineRows, rowEvents, threadComplete, type StoryRow } from "../story.js";
 import { THEME, costTone, durationTone, hotMark, toneStyle } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { parseRoundId } from "../timeline/rounds.js";
@@ -491,7 +491,7 @@ export class TraceScreen implements Screen {
     const trace = this.trace();
     if (!target && trace) {
       const index = buildTreeIndex(trace);
-      const node = index.byId[parseRoundId(id)?.spanId ?? id];
+      const node = index.byId[parseRoundId(owningRowId(id))?.spanId ?? id];
       if (node) {
         target =
           this.allRows.find((row) => travels(row) && walkNodes(node).includes(row.node)) ??
@@ -731,11 +731,8 @@ function searchText(row: StoryRow): string {
   if (row.kind === "hosted") {
     return [hostedCallTitle(row.call), ...stringsIn(row.call.details)].join("\n");
   }
-  const events = row.node.event
-    ? [row.node.event]
-    : row.node.children.flatMap((child) => (child.event ? [child.event] : []));
   return [
-    ...events.flatMap((event) => stringsIn(event.data)),
+    ...rowEvents(row).flatMap((event) => stringsIn(event.data)),
     ...stringsIn(row.kind === "user" ? row.text : row.node.summary),
   ].join("\n");
 }

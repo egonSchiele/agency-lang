@@ -268,18 +268,22 @@ A call to a decision model such as Laya is not a chat: the model receives a stat
 
 Some providers run tools themselves during a model call. OpenAI's and Anthropic's built-in web search are examples. The runtime never runs these tools, so the log has no `toolCallStart` or `toolCall` event for them. smoltalk records them on the call's `promptCompletion`, under `completion.hostedToolResults`. Each entry names the tool and the provider, and keeps the provider's own items in `raw`.
 
-`hostedCalls.ts` is the one place the viewer reads that field. `hostedCallsOf(round)` returns one `HostedCall` per call the provider made. `CALL_READERS` is a table keyed by the type of a raw item:
+`hostedCalls.ts` is the one place the viewer reads that field. `roundsOf` calls `hostedCallsIn` once per round and keeps the result on `round.hostedCalls`, one `HostedCall` per call the provider made. Every screen draws its rows from that list. `CALL_READERS` is a table keyed by the type of a raw item:
 
 | Raw item | Provider | One call per | Gist |
 | --- | --- | --- | --- |
 | `web_search_call` | OpenAI Responses | item | the queries, `open <url>`, or `find "<pattern>" in <url>` |
-| `server_tool_use` | Anthropic | item, paired with the `web_search_tool_result` whose `tool_use_id` names it | the query |
+| `server_tool_use` | Anthropic | item, paired with the result item whose `tool_use_id` names it | the query, or the URL for `web_fetch` |
 
-A result with no raw item the table knows, such as a router that reports only citations, becomes one call per recorded query, or one call when it recorded no query. To support another provider, add a reader to the table.
+An Anthropic call failed only when its result has an `error_code`. A successful `web_fetch` or `code_execution` result is an object too, so being an object is not a failure. A call with no `id` is paired with no result.
+
+A result with no raw item the table knows becomes one call per recorded query, or one call when it recorded no query. Gemini's grounding is one example, and a router that reports only citations is another. The provider does not say which query found which source, so each query's row lists all of the call's sources, and `r` shows the whole raw record. To support another provider, add a reader to the table.
 
 The trace outline (`kind: "hosted"`), the timeline (`HostedRow`), and the transcript (a `hosted` block) put these calls under their LLM call, before the tools that call asked the runtime for. A title names a call `HOSTED TOOL CALL · <tool>` (`hostedCallTitle`), so it is never read as a tool the runtime ran: the trace details, the transcript box, and the timeline row and footer all use it. The trace outline and the transcript call list are too narrow for that title next to the queries, so they read `hosted · web_search`.
 
-The log has no time for a hosted call. The timeline draws no bar for one. It prints the call's gist in the bar column, its duration column reads `—`, and the footer says `ran inside LLM call 5 · no timing recorded`. A hosted row has no event of its own; its node is its LLM call's. So the trace search matches a hosted row by its own title and details, and `r` shows that call's raw items, not the whole LLM call.
+The log has no time for a hosted call. The timeline draws no bar for one. It prints the call's gist in the bar column, its duration column reads `—`, and the footer says `ran inside LLM call 5 · no timing recorded`. A hosted row has no event of its own; its node is its LLM call's. So `rowEvents` gives a hosted row no events. The trace search matches it by its own title and details, `r` shows that call's raw items, not the whole LLM call, and `agency logs session` puts those items under `providerItems`.
+
+The trace draws hosted rows in both the story and machinery views. A screen asked to focus a hosted call it does not draw focuses the LLM call that ran it: `owningRowId` turns `round:L:0:hosted:1` into `round:L:0`. Without it, `parseRoundId` would read the hosted id as round `L:0:hosted`, find no such span, and leave focus where it was.
 
 ## Resumed runs
 

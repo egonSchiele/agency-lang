@@ -376,4 +376,12 @@ describe("decision calls", () => {
     );
     expect(findRow(trace, "round:L:0:hosted:0")?.kind).toBe("hosted");
   });
+  it("puts hosted calls under their LLM call in the machinery view too", () => {
+    const rows = outlineRows(buildForest(hostedSearchEvents())[0], RAW);
+    const round = rows.findIndex((row) => row.id === "round:L:0");
+    expect(rows.slice(round + 1, round + 3).map((row) => `${row.depth} ${row.id}`)).toEqual([
+      `${rows[round].depth + 1} round:L:0:hosted:0`,
+      `${rows[round].depth + 1} round:L:0:hosted:1`,
+    ]);
+  });
 });

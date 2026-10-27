@@ -2,7 +2,7 @@
 // for an llmCall that holds several, and one row per tool the provider ran
 // inside a round. Round and hosted rows are a drawing decision, so they live
 // outside spans.ts and take no part in self-time.
-import { hostedCallsOf, type HostedCall } from "../hostedCalls.js";
+import { owningRowId, type HostedCall } from "../hostedCalls.js";
 import { parseRoundId, type Round } from "./rounds.js";
 import type { TimelineSpan } from "./spans.js";
 
@@ -49,6 +49,10 @@ export function rowIdFor(
   const isDrawn = (id: string): boolean => rows.some((row) => row.id === id);
   if (isDrawn(focusId)) {
     return focusId;
+  }
+  const owner = owningRowId(focusId);
+  if (owner !== focusId) {
+    return rowIdFor(owner, rows, rounds);
   }
   const parsed = parseRoundId(focusId);
   const isKnownRound = rounds.some((round) => round.id === focusId);
@@ -108,7 +112,7 @@ function rowsFor(
 /** The round's row, then the tools the provider ran inside it. */
 function placeRound(round: Round, depth: number): Placed {
   const row: RoundRow = { kind: "round", id: round.id, depth, round };
-  const hosted: HostedRow[] = hostedCallsOf(round).map((call) => ({
+  const hosted: HostedRow[] = round.hostedCalls.map((call) => ({
     kind: "hosted",
     id: call.id,
     depth: depth + 1,

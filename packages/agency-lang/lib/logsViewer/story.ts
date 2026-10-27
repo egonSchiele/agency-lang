@@ -15,7 +15,7 @@ import {
 import { roundDeltas, type RoundDelta } from "./messageDelta.js";
 import { runPauses, type RunPause } from "./problems.js";
 import { decisionSummary } from "./decision.js";
-import { hostedCallsOf, type HostedCall } from "./hostedCalls.js";
+import type { HostedCall } from "./hostedCalls.js";
 import { childEvent, completionOutcome, spanDetail, toolArgSummary } from "./spanText.js";
 import { roundsOf, type Round } from "./timeline/rounds.js";
 import { ADMIN_KINDS, hasRunningWork } from "./timeline/spans.js";
@@ -458,9 +458,23 @@ function lookupsFor(trace: TreeNode): Lookups {
 }
 export function forestOutline(trace: TreeNode, options: AdminOptions): StoryRow[] {
   const lookups = lookupsFor(trace);
-  return walkWithDepth(trace, (node) => !options.admin && ADMIN_KINDS.includes(node.label)).map(
-    (placed) => rowFor({ ...lookups, ...placed }),
+  return walkWithDepth(trace, (node) => !options.admin && ADMIN_KINDS.includes(node.label)).flatMap(
+    (placed) => {
+      const row = rowFor({ ...lookups, ...placed });
+      return [row, ...hostedRows(row, placed.depth + 1)];
+    },
   );
+}
+/** The log events a row stands for: its own event, or its span's direct
+ *  children. A hosted call has none; its LLM call's event is the round's. */
+export function rowEvents(row: StoryRow): EventEnvelope[] {
+  if (row.kind === "hosted") {
+    return [];
+  }
+  if (row.node.event) {
+    return [row.node.event];
+  }
+  return row.node.children.flatMap((child) => (child.event ? [child.event] : []));
 }
 export function outlineRows(trace: TreeNode, options: OutlineOptions): StoryRow[] {
   return (options.machinery ? forestOutline : storyOutline)(trace, options);
@@ -515,7 +529,7 @@ function hostedRows(row: StoryRow, depth: number): HostedStoryRow[] {
   if (row.kind !== "round") {
     return [];
   }
-  return hostedCallsOf(row.round).map((call) => ({
+  return row.round.hostedCalls.map((call) => ({
     kind: "hosted",
     id: call.id,
     depth,

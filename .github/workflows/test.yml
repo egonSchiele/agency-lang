@@ -280,10 +280,10 @@ jobs:
       # pass/fail picture (and coverage from the shards that did finish).
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     env:
-      SHARD_COUNT: "7"
+      SHARD_COUNT: "8"
 
     steps:
     - name: Checkout repository

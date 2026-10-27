@@ -12,6 +12,13 @@ name: Real-LLM tests (post-merge)
 on:
   push:
     branches: [ "main" ]
+    # Prose no code or test reads. docs/site and skills/ are not here:
+    # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    paths-ignore:
+      - "packages/agency-lang/docs/dev/**"
+      - "packages/agency-lang/docs/misc/**"
+      - "packages/agency-lang/docs/superpowers/**"
+      - "**/CHANGELOG.md"
 
 permissions:
   contents: read

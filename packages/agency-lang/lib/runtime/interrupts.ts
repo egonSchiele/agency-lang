@@ -601,9 +601,10 @@ function renderVerdict(
         `instead.`,
     };
   }
-  // propagated or noResponse — surface to the user. The checkpoint is taken
-  // by whoever the interrupt is returned to, and its checkpointCreated event
-  // lists this interrupt.
+  // propagated or noResponse — surface to the user. The prompt runner, a
+  // batch, and the guard gate log checkpointCreated with this interrupt when
+  // they take the checkpoint. An `interrupt` statement's own checkpoint
+  // (agencyInterrupt.ts, interruptReturn.mustache) logs nothing yet.
   const intr = interrupt({
     effect,
     message,

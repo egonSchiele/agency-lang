@@ -102,13 +102,8 @@ export type StatelogConfig = {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 
-// === Token / cost types ===
+// === Interrupt types ===
 
-// `cachedInputTokens` are tokens READ from an existing cache entry;
-// `cacheCreationInputTokens` are tokens WRITTEN to a new one. Providers bill
-// them at different rates (a write costs more than ordinary input, a read
-// costs far less), so a breakdown that omits either cannot explain its own
-// total.
 /** What the interrupt events say about an interrupt, so a log reader sees
  *  what was raised without finding another event for it. */
 export type InterruptSummary = { effect: string; message: string; data: any };
@@ -121,6 +116,13 @@ export type CheckpointInterrupt = InterruptSummary & {
   debugger?: boolean;
 };
 
+// === Token / cost types ===
+
+// `cachedInputTokens` are tokens READ from an existing cache entry;
+// `cacheCreationInputTokens` are tokens WRITTEN to a new one. Providers bill
+// them at different rates (a write costs more than ordinary input, a read
+// costs far less), so a breakdown that omits either cannot explain its own
+// total.
 export type TokenUsage = {
   inputTokens?: number;
   outputTokens?: number;
@@ -1252,9 +1254,10 @@ export class StatelogClient {
     checkpointId: number;
     reason: "interrupt" | "explicit" | "failure" | "fork" | "race" | "pause";
     sourceLocation?: { moduleId: string; scopeName: string; stepPath: string };
-    /** The interrupts the run stopped for, when it stopped for any. The
-     *  handler chain logs every interrupt raised through it; this also
-     *  covers the ones made outside it, such as a debugger stop. */
+    /** The interrupts the run stopped for. Set by the prompt runner, a
+     *  batch (tool calls, fork, race), and the guard gate. The handler
+     *  chain logs every interrupt raised through it; this also covers the
+     *  ones made outside it, such as a debugger stop. */
     interrupts?: CheckpointInterrupt[];
   }): Promise<void> {
     await this.post({

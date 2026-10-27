@@ -1,0 +1,29 @@
+import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
+
+import { fakeRepl } from "./loop.js"
+
+// A turn that stops on an interrupt no handler answers did not finish, so
+// `_sessionOnSubmit` hands the interrupts back to the REPL and never calls
+// `afterTurn`, which is where the session save starts.
+
+effect test::stop { line: string }
+
+let records = 0
+
+def turn(line: string): boolean {
+  if (line == "stop") {
+    interrupt test::stop("Stop the turn here?", { line: line })
+  }
+  return true
+}
+
+def recordTurn(line: string): any {
+  records = records + 1
+  return null
+}
+
+node main() {
+  _installSessionHooks(turn, recordTurn)
+  const replies = fakeRepl(_sessionOnSubmit)
+  return { replies: replies, records: records }
+}

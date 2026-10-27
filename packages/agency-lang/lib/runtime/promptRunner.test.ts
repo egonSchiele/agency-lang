@@ -324,6 +324,7 @@ describe("PromptRunner.parallel", () => {
 
   it("merges interrupts from multiple branches into kind='interrupts' with one shared checkpoint", async () => {
     let cpCount = 0;
+    const logged: any[] = [];
     const ctx: any = {
       checkpoints: {
         create: () => {
@@ -339,7 +340,6 @@ describe("PromptRunner.parallel", () => {
       }),
       beforeCheckpoint: [],
     };
-    const logged: any[] = [];
     const { parallel } = makeRunner({ ctx });
     const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
       const raised = { ...fakeInterrupt(item), interruptId: item, effect: `fx::${item}` };

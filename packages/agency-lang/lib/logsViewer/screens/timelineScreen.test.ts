@@ -10,6 +10,8 @@ import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { THEME } from "../theme.js";
 import { benchForest, leaf, sessionTrace, span, trace } from "../timeline/fixture.js";
 import { TimelineScreen } from "../screens/timelineScreen.js";
+import { hostedSearchEvents } from "../storyFixture.js";
+import { buildForest } from "../tree.js";
 import type { TreeNode } from "../types.js";
 
 const viewport = { rows: 24, cols: 120 };
@@ -812,5 +814,28 @@ describe("turns across follow updates and searches", () => {
     view.setData(roots);
     expect(view.focusId()).toBe("bash1");
     expect(frame(view)).toContain("bash · pip install");
+  });
+  it("draws a row for each hosted call under its LLM call, with no bar", () => {
+    const view = new TimelineScreen(buildForest(hostedSearchEvents()), "T", DEFAULT_THRESHOLDS);
+    const shown = frame(view);
+    // The label is the title; the queries go where a bar would be.
+    expect(shown).toMatch(/HOSTED TOOL CALL · web_search\s+agency language · agency docs\s+—/);
+    const lines = shown.split("\n");
+    const order = [
+      "LLM call 1",
+      "open https://example.com/docs",
+      "read · notes.md",
+      "LLM call 2",
+    ].map((text) => lines.findIndex((line) => line.includes(text)));
+    expect(order).toEqual([...order].sort((first, second) => first - second));
+    view.setFocus("round:L:0:hosted:1");
+    expect(view.focusId()).toBe("round:L:0:hosted:1");
+    // The footer says why the row has no bar.
+    expect(frame(view)).toContain("ran inside LLM call 1 · no timing recorded");
+    expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
+      kind: "openScreen",
+      screen: "trace",
+      focusId: "round:L:0:hosted:1",
+    });
   });
 });

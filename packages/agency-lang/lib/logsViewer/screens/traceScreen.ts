@@ -14,6 +14,7 @@ import {
 import { TableComponent, type TableColumn } from "../../tui/table.js";
 import { ancestorsOf, buildTreeIndex, walkNodes } from "../forest.js";
 import { fmtTokens, fmtUsd } from "../format.js";
+import { hostedCallShortLabel, hostedCallTitle, owningRowId } from "../hostedCalls.js";
 import {
   cursorBindings,
   helpFrom,
@@ -23,7 +24,7 @@ import {
 } from "../keymap.js";
 import { payloadFor } from "../payload.js";
 import { fmtDuration } from "../spanText.js";
-import { outlineRows, threadComplete, type StoryRow } from "../story.js";
+import { outlineRows, rowEvents, threadComplete, type StoryRow } from "../story.js";
 import { THEME, costTone, durationTone, hotMark, toneStyle } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { parseRoundId } from "../timeline/rounds.js";
@@ -341,12 +342,13 @@ export class TraceScreen implements Screen {
       this.quick === "errors" &&
       !(
         row.kind === "error" ||
-        (row.kind === "tool" && ["failed", "rejected"].includes(row.status))
+        (row.kind === "tool" && ["failed", "rejected"].includes(row.status)) ||
+        (row.kind === "hosted" && row.call.failed)
       )
     ) {
       return false;
     }
-    if (this.quick === "tools" && row.kind !== "tool") {
+    if (this.quick === "tools" && row.kind !== "tool" && row.kind !== "hosted") {
       return false;
     }
     if (this.quick === "interrupts" && row.kind !== "interrupt" && row.kind !== "pause") {
@@ -355,14 +357,7 @@ export class TraceScreen implements Screen {
     if (!this.filter) {
       return true;
     }
-    const events = row.node.event
-      ? [row.node.event]
-      : row.node.children.flatMap((child) => (child.event ? [child.event] : []));
-    const text = [
-      ...events.flatMap((event) => stringsIn(event.data)),
-      ...stringsIn(row.kind === "user" ? row.text : row.node.summary),
-    ].join("\n");
-    return text.toLowerCase().includes(this.filter.toLowerCase());
+    return searchText(row).toLowerCase().includes(this.filter.toLowerCase());
   }
   private select(id: string): void {
     if (id !== this.cursorId) {
@@ -496,7 +491,7 @@ export class TraceScreen implements Screen {
     const trace = this.trace();
     if (!target && trace) {
       const index = buildTreeIndex(trace);
-      const node = index.byId[parseRoundId(id)?.spanId ?? id];
+      const node = index.byId[parseRoundId(owningRowId(id))?.spanId ?? id];
       if (node) {
         target =
           this.allRows.find((row) => travels(row) && walkNodes(node).includes(row.node)) ??
@@ -701,7 +696,7 @@ export class TraceScreen implements Screen {
         cell: (row) => {
           const duration = durationOf(row);
           if (duration === undefined) {
-            return row.kind === "tool" ? "—" : "";
+            return row.kind === "tool" || row.kind === "hosted" ? "—" : "";
           }
           return fmtDuration(duration) + hotMark(durationTone(duration, this.thresholds));
         },
@@ -730,8 +725,19 @@ export class TraceScreen implements Screen {
     ];
   }
 }
+/** A hosted call shares its LLM call's event, so it is searched by its own
+ *  facts; otherwise every hosted row of a call would match what the call does. */
+function searchText(row: StoryRow): string {
+  if (row.kind === "hosted") {
+    return [hostedCallTitle(row.call), ...stringsIn(row.call.details)].join("\n");
+  }
+  return [
+    ...rowEvents(row).flatMap((event) => stringsIn(event.data)),
+    ...stringsIn(row.kind === "user" ? row.text : row.node.summary),
+  ].join("\n");
+}
 function travels(row: StoryRow): boolean {
-  return ["round", "tool", "subagent", "llmGroup"].includes(row.kind);
+  return ["round", "tool", "hosted", "subagent", "llmGroup"].includes(row.kind);
 }
 function rowAncestors(rows: StoryRow[], row: StoryRow): StoryRow[] {
   const ancestors: StoryRow[] = [];
@@ -791,6 +797,15 @@ function rowBodyPieces(
           },
         },
         { text: row.argSummary, style: { fg: THEME.text } },
+      ];
+    case "hosted":
+      return [
+        ...prefix,
+        {
+          text: `${hostedCallShortLabel(row.call)} `,
+          style: { fg: row.call.failed ? THEME.kind.error : THEME.kind.tool },
+        },
+        { text: row.call.gist, style: { fg: THEME.text } },
       ];
     case "interrupt":
       return [

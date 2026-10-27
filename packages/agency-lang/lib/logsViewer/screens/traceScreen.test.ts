@@ -7,7 +7,13 @@ import { render } from "../../tui/render/renderer.js";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { walkNodes } from "../forest.js";
 import { outlineRows } from "../story.js";
-import { agentLoopTrace, event, loopEvents, sampleRunForest } from "../storyFixture.js";
+import {
+  agentLoopTrace,
+  event,
+  hostedSearchEvents,
+  loopEvents,
+  sampleRunForest,
+} from "../storyFixture.js";
 import { buildForest } from "../tree.js";
 import { TraceScreen } from "./traceScreen.js";
 const viewport = { rows: 40, cols: 140 };
@@ -593,4 +599,24 @@ it("shows who answered an interrupt, the pause under it, and a span with no pare
   expect(shown).toContain("ops::deploy approved by user");
   expect(shown).toContain("── paused 14.2s · resumed ──");
   expect(shown).toMatch(/scheduleTask\s+· parent span not in this log/);
+});
+it("labels each hosted call and searches it by its own queries", () => {
+  const screen = make(buildForest(hostedSearchEvents()));
+  const shown = text(screen);
+  expect(shown).toContain("hosted · web_search agency language");
+  expect(shown).toContain("hosted · web_search open https://example");
+  // The details pane titles it in full.
+  expect(shown).not.toContain("HOSTED TOOL CALL");
+  screen.setFocus("round:L:0:hosted:0");
+  expect(text(screen)).toContain("HOSTED TOOL CALL · web_search");
+  // A search for one query matches that call's row, not its sibling's.
+  screen.applySearch("agency docs");
+  const filtered = text(screen);
+  expect(filtered).toContain("web_search agency language");
+  expect(filtered).not.toContain("web_search open https");
+});
+it("sends focus for a hosted call it does not draw to the LLM call that ran it", () => {
+  const screen = make(buildForest(hostedSearchEvents()));
+  screen.setFocus("round:L:0:hosted:9");
+  expect(screen.focusId()).toBe("round:L:0");
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Comment } from "../runDirectory/comments.js";
 import { expandRow, unresolvedCommentText } from "./rowText.js";
 import { outlineRows } from "./story.js";
-import { agentLoopTrace, event } from "./storyFixture.js";
+import { agentLoopTrace, event, hostedSearchEvents } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 
 describe("expandRow", () => {
@@ -19,6 +19,13 @@ describe("expandRow", () => {
     expect(expanded.text).toContain(`  ${expanded.header}`);
     expect(expanded.json.events.length).toBeGreaterThan(0);
     expect(expanded.json.kind).toBe("round");
+  });
+
+  it("gives a hosted call the provider's items for that call, not its LLM call's event", () => {
+    const hostedTrace = buildForest(hostedSearchEvents())[0];
+    const expanded = expandRow(hostedTrace, "round:L:0:hosted:1")!;
+    expect(expanded.json.events).toEqual([]);
+    expect(expanded.json.providerItems).toEqual([expect.objectContaining({ id: "ws_2" })]);
   });
 
   it("expands a tool with its name and status, and lists comments after the payload", () => {

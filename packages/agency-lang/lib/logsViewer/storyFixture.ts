@@ -74,3 +74,67 @@ export function loopEvents(): EventEnvelope[] {
 export function agentLoopTrace(): TreeNode {
   return buildForest(loopEvents())[0];
 }
+/** One LLM call that ran two of OpenAI's web searches itself, then asked
+ *  the runtime for one `read`, then a call that answered. */
+export function hostedSearchEvents(): EventEnvelope[] {
+  const messages = [{ role: "user", content: "what is agency?" }];
+  return [
+    event("promptCompletion", 100, "L", null, {
+      messages,
+      timeTaken: 90,
+      completion: {
+        output: "",
+        toolCalls: [{ id: "c1", name: "read", arguments: { path: "notes.md" } }],
+        hostedToolResults: [
+          {
+            tool: "web_search",
+            provider: "openai-responses",
+            queries: ["agency language"],
+            callCount: 2,
+            raw: [
+              {
+                id: "ws_1",
+                type: "web_search_call",
+                status: "completed",
+                action: {
+                  type: "search",
+                  query: "agency language",
+                  queries: ["agency language", "agency docs"],
+                },
+              },
+              {
+                id: "ws_2",
+                type: "web_search_call",
+                status: "completed",
+                action: { type: "open_page", url: "https://example.com/docs" },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    event("toolCallStart", 101, "read", "L", {
+      toolName: "read",
+      toolCallId: "c1",
+      args: { path: "notes.md" },
+    }),
+    event("toolCall", 102, "read", "L", {
+      toolName: "read",
+      toolCallId: "c1",
+      output: "notes",
+      timeTaken: 1,
+    }),
+    event("promptCompletion", 200, "L", null, {
+      messages: [
+        ...messages,
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c1", name: "read", arguments: { path: "notes.md" } }],
+        },
+        { role: "tool", toolCallId: "c1", name: "read", content: "notes" },
+      ],
+      completion: { output: "Agency is a language." },
+    }),
+  ];
+}

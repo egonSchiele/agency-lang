@@ -59,7 +59,7 @@ jobs:
       # still shows the results from the others.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
 
     steps:
     - name: Checkout repository
@@ -97,12 +97,12 @@ jobs:
     - name: Build docs
       if: matrix.shard == 1
       run: pnpm run docs
-    - name: Unit tests (agency-lang, shard ${{ matrix.shard }}/4)
+    - name: Unit tests (agency-lang, shard ${{ matrix.shard }}/3)
       working-directory: packages/agency-lang
       # Call vitest directly via `pnpm exec`: `pnpm run test:run -- --shard`
       # passes the `--` through to vitest, which then reads `--shard` as a file
       # filter and silently runs the whole suite.
-      run: pnpm exec vitest run --shard=${{ matrix.shard }}/4
+      run: pnpm exec vitest run --shard=${{ matrix.shard }}/3
     - name: Unit tests (sibling packages)
       # The sibling packages hold only a handful of tests each, so run them
       # once rather than per shard. `-r run` skips the workspace root, and the
@@ -185,6 +185,9 @@ jobs:
   # Integration tests (tarball install, bundlers, CLI, StateLog, stdlib
   # sandbox). These are node-22-only and independent of the unit suite, so
   # they run in parallel with `unit-tests` rather than serially behind it.
+  # Inside the job, tests/integration/runAll.mjs runs the scripts in four
+  # groups at once (it says which scripts may share a group), so the step
+  # takes as long as tests/integration/cli, about 3.5 min, and not the sum.
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -204,19 +207,15 @@ jobs:
         cache: 'pnpm'
     - run: pnpm install
     - run: make ci
-    - name: Integration tests (tarball install, bundlers, CLI)
+    - name: Integration tests
+      working-directory: packages/agency-lang
       env:
         TMPDIR: ${{ runner.temp }}
+        # stdlib-sandbox/run.mjs skips itself unless CI is set.
+        CI: "true"
       run: |
-        cd packages/agency-lang
         npm pack
-        node tests/integration/smoke/test.mjs ./agency-lang-*.tgz
-        node tests/integration/bundlers/test-esbuild.mjs ./agency-lang-*.tgz
-        node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
-        node tests/integration/cli/test.mjs ./agency-lang-*.tgz
-        node tests/integration/cli-lang/test.mjs ./agency-lang-*.tgz
-        node tests/integration/cli-tier2/test.mjs ./agency-lang-*.tgz
-        node tests/integration/serve/test.mjs ./agency-lang-*.tgz
+        node tests/integration/runAll.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: Main-only CLI command integration tests
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -227,19 +226,6 @@ jobs:
         npm pack
         node tests/integration/cli-main/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
-    - name: StateLog integration tests
-      working-directory: packages/agency-lang
-      run: node tests/integration/statelog/test.mjs
-    - name: Eval-run integration tests
-      working-directory: packages/agency-lang
-      run: node tests/integration/eval-run/test.mjs
-      timeout-minutes: 5
-    - name: Stdlib sandbox tests
-      working-directory: packages/agency-lang
-      env:
-        CI: "true"
-      run: node tests/integration/stdlib-sandbox/run.mjs
-      timeout-minutes: 10
 
   # Smoke tests for the agents bundled under lib/agents/ (deterministic LLM
   # provider, no API key). Catches wiring regressions like duplicate tool names
@@ -294,10 +280,10 @@ jobs:
       # pass/fail picture (and coverage from the shards that did finish).
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7]
 
     env:
-      SHARD_COUNT: "8"
+      SHARD_COUNT: "7"
 
     steps:
     - name: Checkout repository

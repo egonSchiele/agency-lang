@@ -770,9 +770,12 @@ node main() {
   );
   assertIncludes(badConfig, "Error loading config from");
 
-  // Valid explicit configs run (forwarded and root forms). --help keeps these
-  // no-LLM; config precedence is proven by the deterministic orchestration
-  // tests, and these two prove installed-tree isolation on the real wiring.
+  // A valid explicit config runs. --help keeps this no-LLM; config precedence
+  // is proven by the deterministic orchestration tests, and this run proves
+  // installed-tree isolation on the real wiring. Only the forwarded form is
+  // run here: each configured run recompiles the agent (about 18s on CI), and
+  // the root `-c` form merges into the same value at the top of the launcher
+  // (lib/cli/runBundledAgent.ts), which scripts/agency.test.ts covers.
   writeFile(dir, "sentinel-cfg.json", JSON.stringify({
     client: { defaultModel: "gpt-4o-mini" },
   }));
@@ -781,11 +784,6 @@ node main() {
     "./node_modules/.bin/agency agent --config sentinel-cfg.json --help 2>&1",
   );
   assertIncludes(forwardedConfigHelp, "--max-cost");
-  const rootConfigHelp = run(
-    dir,
-    "./node_modules/.bin/agency -c sentinel-cfg.json agent --help 2>&1",
-  );
-  assertIncludes(rootConfigHelp, "--max-cost");
 
   // The installed tree is byte-for-byte unchanged, and a plain invocation
   // still works afterwards (no configured build leaked into the fast path).

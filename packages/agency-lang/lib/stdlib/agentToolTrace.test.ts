@@ -71,6 +71,15 @@ describe("task lists", () => {
     ).toBe("✗ Tool failed  todoWrite\n  │ Update refused");
   });
 
+  it("falls back for sparse task arrays supplied by JavaScript", () => {
+    expect(
+      formatAgentTrace(
+        { kind: "toolEnd", toolName: "todoWrite", value: Array(1), outcome: "plain" },
+        plain,
+      ),
+    ).toBe("· Tool returned  todoWrite\n  │ [null]");
+  });
+
   it.each([
     null,
     {},
@@ -154,6 +163,17 @@ describe("web searches", () => {
     expect(output).not.toContain("\x1b");
     expect(output).not.toMatch(/✓|finished|raw must stay hidden/);
     expect(output).toContain("  │ · one\n  │ · two");
+  });
+
+  it("omits blank hosted queries without changing valid query text", () => {
+    const render = (queries: string[]) =>
+      formatAgentTrace({ kind: "hostedSearch", result: { tool: "web_search", queries } }, plain);
+    expect(render(["", " \t\n "])).toBe(
+      "⌕ Web search  web_search\n  │ Provider not reported\n  │ Queries not reported",
+    );
+    expect(render(["", '  "release notes"  ', "  "])).toBe(
+      '⌕ Web search  web_search\n  │ Provider not reported · 1 query\n  │ ·   "release notes"  ',
+    );
   });
 
   it.each([null, {}, { tool: "code_interpreter" }])(

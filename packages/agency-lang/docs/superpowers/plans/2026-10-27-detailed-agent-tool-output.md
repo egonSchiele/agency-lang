@@ -65,7 +65,7 @@ The first task's text is struck through in a terminal that supports it. The exam
 - Print one block per hosted `web_search` record. Keep the provider spelling reported by the record. Preserve each query's order and punctuation, including embedded quotes. Do not add JSON brackets or another layer of quotes.
 - Show `1 query` or `N queries` only for a nonempty, valid query list. When queries are absent or empty, show `Queries not reported`; do not substitute `callCount` or say zero searches ran. Missing provider text becomes `Provider not reported`.
 - Recognize the client tools `web_search_tavily` and `web_search_brave`. At start, print `⌕ Searching web  <toolName>` with the provider label and the single `query`. At end, print a separately named completion or failure block using the generic result preview. Do not cache the query to pair the events.
-- Query text wraps and is never cut to the generic argument limit. Malformed client arguments use the generic start display. Malformed hosted query entries are omitted without throwing; if none remain, use `Queries not reported`.
+- Query text wraps and is never cut to the generic argument limit. Malformed client arguments use the generic start display. Malformed or blank hosted query entries are omitted without throwing; if none remain, use `Queries not reported`.
 - Source cards, citation lists, provider-specific raw status decoding, and search timing are outside this change. A neutral hosted header must never turn into a success check merely because the LLM call ended.
 
 **Other tools and warnings**
@@ -242,4 +242,4 @@ it("does not turn a failed update into a checklist", () => {
 
 ## Verification
 
-Implemented in the task worktree. The targeted unit run passed 45 tests, and the scripted Agency-JS fixture passed in interactive, quiet, verbose, and debug modes. The required build, TypeScript checks, formatting check, and structural/browser lint passed. Output was inspected at 40 and 80 columns with color enabled and disabled. No model or web requests were made. The full Agency suite remains for CI, as required by the repository instructions.
+Implemented in the task worktree. The targeted unit run passed 47 tests, and the scripted Agency-JS fixture passed in interactive, quiet, verbose, and debug modes. The required build, TypeScript checks, formatting check, and structural/browser lint passed. Output was inspected at 40 and 80 columns with color enabled and disabled. No model or web requests were made. The full Agency suite remains for CI, as required by the repository instructions.

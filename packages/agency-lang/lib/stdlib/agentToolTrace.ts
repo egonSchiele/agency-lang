@@ -131,7 +131,7 @@ function describeEvent(event: AgentTraceEvent): TraceBlock | null {
 function isTodoList(value: unknown): value is Todo[] {
   return (
     Array.isArray(value) &&
-    value.every(
+    Array.from(value).every(
       (todo) =>
         isPlainObject(todo) &&
         typeof todo.id === "string" &&
@@ -173,7 +173,9 @@ function describeHostedSearch(result: unknown): TraceBlock | null {
       ? result.provider
       : "Provider not reported";
   const queries: string[] = Array.isArray(result.queries)
-    ? result.queries.filter((query): query is string => typeof query === "string")
+    ? result.queries.filter(
+        (query): query is string => typeof query === "string" && query.trim().length > 0,
+      )
     : [];
   return describeSearch("⌕ Web search", "web_search", provider, queries);
 }

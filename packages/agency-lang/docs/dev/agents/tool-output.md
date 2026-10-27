@@ -58,7 +58,7 @@ use blue text and an explicit status label. Plain output keeps the markers
 and words. Empty lists show `0/0 complete` and `No tasks`.
 
 Hosted searches print when `onLLMCallEnd` receives their records. Their
-neutral heading does not claim successful retrieval. Each valid query
+neutral heading does not claim successful retrieval. Each nonblank query
 string gets its own row. Missing queries show `Queries not reported`, and
 missing provider text shows `Provider not reported`. Raw provider results
 are not interpreted or printed.

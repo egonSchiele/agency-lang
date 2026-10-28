@@ -26,3 +26,48 @@ node anEmptyBlockGoesBack(): string {
   const reply = useLlmOptions({}) with approve
   return "${reply.includes("preset")} ${JSON.stringify(takePendingLlmOptions())}"
 }
+
+static const STUDIO_URL = "https://studio.ts.net:8090/v1"
+
+node aServerAddressAsksFirst(): string {
+  let asked: string[] = []
+  let urlNamed = false
+  let reply = ""
+  handle {
+    reply = useLlmOptions({ baseUrl: { mlx: STUDIO_URL } })
+  } with (intr) {
+    asked.push(intr.effect)
+    if (intr.effect == "agent::llmServer") {
+      urlNamed = intr.message.includes(STUDIO_URL) && intr.data.url == STUDIO_URL
+    }
+    return approve()
+  }
+  return "${asked.join(",")} ${urlNamed} ${JSON.stringify(takePendingLlmOptions())}"
+}
+
+node aRejectedServerRecordsNothing(): string {
+  let askedForOptions = false
+  let reply = ""
+  handle {
+    reply = useLlmOptions({ baseUrl: { mlx: STUDIO_URL } })
+  } with (intr) {
+    if (intr.effect == "agent::llmServer") {
+      return reject("not that server")
+    }
+    askedForOptions = true
+    return approve()
+  }
+  return "${reply.startsWith("Not set")} ${askedForOptions} ${takePendingLlmOptions() == null}"
+}
+
+node noServerAddressAsksNoServerQuestion(): string {
+  let asked: string[] = []
+  handle {
+    useLlmOptions(AVOID)
+  } with (intr) {
+    asked.push(intr.effect)
+    return approve()
+  }
+  takePendingLlmOptions()
+  return asked.join(",")
+}

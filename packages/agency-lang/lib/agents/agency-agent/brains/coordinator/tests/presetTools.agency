@@ -143,7 +143,7 @@ node baseUrlAsksFirst(): string {
     reply = savePreset("studio", { local: "mlx:org/repo", llmOptions: { baseUrl: { mlx: STUDIO_URL } } })
   } with (intr) {
     asked.push(intr.effect)
-    if (intr.effect == "agent::llmOptions") {
+    if (intr.effect == "agent::llmServer") {
       urlNamed = intr.message.includes(STUDIO_URL)
     }
     return approve()
@@ -161,7 +161,7 @@ node rejectedBaseUrlSavesNothing(): string {
   handle {
     reply = savePreset("studio", { local: "mlx:org/repo", llmOptions: { baseUrl: { mlx: STUDIO_URL } } })
   } with (intr) {
-    if (intr.effect == "agent::llmOptions") {
+    if (intr.effect == "agent::llmServer") {
       return reject("not that server")
     }
     if (intr.effect == "std::write") {
@@ -176,14 +176,14 @@ node presetWithoutBaseUrlAsksNothingNew(): string {
   if (!startFrom(START)) {
     return "not sandboxed"
   }
-  let askedForOptions = false
+  let askedForServer = false
   handle {
     savePreset("cheap", { provider: "openrouter" })
   } with (intr) {
-    if (intr.effect == "agent::llmOptions") {
-      askedForOptions = true
+    if (intr.effect == "agent::llmServer") {
+      askedForServer = true
     }
     return approve()
   }
-  return "${askedForOptions}"
+  return "${askedForServer}"
 }

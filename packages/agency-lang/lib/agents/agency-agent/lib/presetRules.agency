@@ -179,15 +179,28 @@ def cleanSlots(slots: Record<string, any>): PresetSlots {
   return Object.fromEntries([[canonicalSlot(slot), slots[slot]] for slot in setKeys(slots)])
 }
 
-// Null fields dropped, slot aliases renamed.
+// Null fields dropped, slot aliases renamed, and llmOptions cut down to
+// the block checkLlmOptions returns.
 def cleanPreset(value: any): Preset {
   const kept: Preset = filterEntries(value, \(fieldValue, field) -> fieldValue != null)
-  if (kept.slots == null) {
-    return kept
+  let cleaned: Preset = kept
+  if (kept.slots != null) {
+    cleaned = {
+      ...cleaned,
+      slots: cleanSlots(kept.slots)
+    }
+  }
+  if (kept.llmOptions == null) {
+    return cleaned
+  }
+  // checkPreset calls this only after llmOptionProblems found none.
+  const options = checkLlmOptions(kept.llmOptions)
+  if (options is failure(reason)) {
+    return cleaned
   }
   return {
-    ...kept,
-    slots: cleanSlots(kept.slots)
+    ...cleaned,
+    llmOptions: options.value
   }
 }
 

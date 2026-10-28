@@ -7,7 +7,7 @@
   "studio": {
     "local": "mlx:mlx-community/Qwen3-Coder-Next-4bit",
     "llmOptions": {
-      "baseUrl": { "mlx": "https://adits-mac-studio.tail25ed32.ts.net:8090/v1" }
+      "baseUrl": { "mlx": "https://my-mac.tailnet.ts.net:8090/v1" }
     }
   }
 }
@@ -59,7 +59,7 @@ Here is how a prompt injection would use that. The agent reads a web page that s
 So `savePreset` raises `agent::llmOptions` before it writes, when the block sets `baseUrl.mlx`. The message names the preset and the URL, and says what the address receives:
 
 ```
-Save preset "studio", which sends every chat request to https://adits-mac-studio.tail25ed32.ts.net:8090/v1? That server sees the whole conversation and writes the model's replies.
+Save preset "studio", which sends every chat request to https://my-mac.tailnet.ts.net:8090/v1? That server sees the whole conversation and writes the model's replies.
 ```
 
 A rejection returns "Not saved: …" and writes nothing. The recommended policy has no rule for `agent::llmOptions`, so the user answers it.
@@ -137,8 +137,8 @@ In `lib/agents/agency-agent/brains/coordinator/skills/presets.md`:
 - Add one example:
 
 ```
-User: save a preset called studio that uses qwen3 coder on my mac studio at https://adits-mac-studio.tail25ed32.ts.net:8090/v1
-savePreset("studio", { local: "mlx:mlx-community/Qwen3-Coder-Next-4bit", llmOptions: { baseUrl: { mlx: "https://adits-mac-studio.tail25ed32.ts.net:8090/v1" } } })
+User: save a preset called studio that uses qwen3 coder on my mac studio at https://my-mac.tailnet.ts.net:8090/v1
+savePreset("studio", { local: "mlx:mlx-community/Qwen3-Coder-Next-4bit", llmOptions: { baseUrl: { mlx: "https://my-mac.tailnet.ts.net:8090/v1" } } })
 ```
 
 In `lib/agents/agency-agent/lib/args.agency:101`, the `--local` help text says MLX models need a server "on http://127.0.0.1:8080 (or MLX_BASE_URL)". Change it to "(or MLX_BASE_URL, or a preset's llmOptions.baseUrl.mlx)".
@@ -200,7 +200,7 @@ On the Mac Studio, with a model served and `tailscale serve` pointing at it:
 
 1. Add the `studio` preset to a client's `~/.agency-agent/settings.json` by hand. Start `agency agent --preset studio` with `MLX_BASE_URL` unset, and ask it something. The Mac Studio's `agency local serve` prints a line for the request. The capabilities line in the agent's header matches what the same preset shows on the Mac Studio.
 2. Run `/preset` with a hosted preset, then ask again. Nothing reaches the Mac Studio, which shows the URL was removed.
-3. In a fresh session, ask in plain words: "create a preset called studio2 that uses mlx:mlx-community/Qwen3-Coder-Next-4bit with the mlx base url set to https://adits-mac-studio.tail25ed32.ts.net:8090/v1". The agent asks with the decision 2 message, then asks to write `settings.json`. The saved preset has both `local` and `llmOptions.baseUrl.mlx`. Ask again without naming a model, and the agent asks which model to use instead of saving a preset with no model.
+3. In a fresh session, ask in plain words: "create a preset called studio2 that uses mlx:mlx-community/Qwen3-Coder-Next-4bit with the mlx base url set to https://my-mac.tailnet.ts.net:8090/v1". The agent asks with the decision 2 message, then asks to write `settings.json`. The saved preset has both `local` and `llmOptions.baseUrl.mlx`. Ask again without naming a model, and the agent asks which model to use instead of saving a preset with no model.
 4. Ask the agent to save a preset with `baseUrl: { openRouter: "…" }`. The tool replies "Not saved" with the message from decision 1, and nothing is asked.
 
 Then build with `make` and run the built CLI once, to confirm the agent starts with the preset.

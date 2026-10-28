@@ -11,7 +11,7 @@ import { SETTINGS_PATH } from "./config.agency"
 // PresetSlots is imported only because the generated schema for Preset
 // refers to it. Without the import, presets.js fails to load.
 // Imported only so the inlined Preset schema can find it (#1283).
-import { LlmOptions } from "./llmOptions.agency"
+import { LlmOptions, serverUrlOf } from "./llmOptions.agency"
 import { Preset, PresetSlots, checkPreset } from "./presetRules.agency"
 import { isPlainObject } from "./utils.agency"
 import { Settings } from "./settings.agency"
@@ -243,6 +243,28 @@ export def startPreset(flag: string, settings: Settings) {
     print(color.yellow(warning))
   }
   setActivePreset(choice.value.name)
+}
+
+export def serverNotice(table: PresetTable, active: string): string {
+  """
+  A line naming the MLX server the active preset sends chat requests to,
+  or "" when it names none. The header shows it at every start, because
+  a default preset applies with no flag, and an address can reach
+  settings.json without savePreset's approval: by hand, or through a
+  plain file write.
+
+  @param table - The preset table
+  @param active - The active preset's name, or ""
+  """
+  const preset = savedEntry(table.presets, active)
+  if (preset == null) {
+    return ""
+  }
+  const url = serverUrlOf(preset.llmOptions)
+  if (url == "") {
+    return ""
+  }
+  return "Chat requests go to ${url}, from the \"${active}\" preset."
 }
 
 export def presetListing(table: PresetTable, active: string): PresetListing {

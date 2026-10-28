@@ -3,7 +3,7 @@ import { _isHttpUrl } from "./httpUrl.js";
 
 describe("_isHttpUrl", () => {
   it("accepts an https URL with a port and a path", () => {
-    expect(_isHttpUrl("https://adits-mac-studio.tail25ed32.ts.net:8090/v1")).toBe(true);
+    expect(_isHttpUrl("https://my-mac.tailnet.ts.net:8090/v1")).toBe(true);
   });
 
   it("accepts an http URL", () => {

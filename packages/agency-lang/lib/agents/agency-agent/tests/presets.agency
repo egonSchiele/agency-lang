@@ -9,6 +9,7 @@ import {
   setPresetTable,
   presetListLines,
   readPresetTable,
+  serverNotice,
  } from "../lib/presets.agency"
 import { SETTINGS_PATH } from "../lib/config.agency"
 
@@ -194,4 +195,12 @@ node deleteRemovesANullEntry(): string {
 node saveRefusesAMalformedPresetsValue(): boolean {
   const edited = applyPresetEdit({ presets: "nope" }, { kind: "save", name: "cheap", preset: { provider: "openai" } })
   return isFailure(edited)
+}
+
+node serverNoticeNamesTheAddress(): string {
+  const read = readPresetTable({
+    studio: { local: "mlx:org/repo", llmOptions: { baseUrl: { mlx: "https://studio.ts.net:8090/v1" } } },
+    cheap: { provider: "openrouter" }
+  })
+  return "${serverNotice(read, "studio")} | ${serverNotice(read, "cheap")} | ${serverNotice(read, "")}"
 }

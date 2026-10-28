@@ -82,6 +82,19 @@ node checkDropsNullsAndRenamesAliases(): string {
   return JSON.stringify(checked.value)
 }
 
+// The same block a tool call or a hand edit gives: an unknown nested key
+// and a nested null.
+node checkTrimsLlmOptions(): string {
+  const checked = checkPreset("x", {
+    provider: "openrouter",
+    llmOptions: { openRouter: { provider: { ignore: ["a"] }, extra: 1 }, baseUrl: { mlx: null } }
+  }, false)
+  if (isFailure(checked)) {
+    return "failed: ${checked.error}"
+  }
+  return JSON.stringify(checked.value)
+}
+
 node checkNamesThePreset(): string {
   const checked = checkPreset("x", { maxToolCallRounds: 0 }, true)
   if (isFailure(checked)) {

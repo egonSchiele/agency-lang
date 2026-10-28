@@ -7,7 +7,7 @@
 */
 // Imported only so the inlined PresetInput schema can find it (#1283).
 import { LlmOptions } from "../../lib/llmOptions.agency"
-import { Preset, PresetInput, checkPreset } from "../../lib/presetRules.agency"
+import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
 import {
   PresetEdit,
   PresetEditOutcome,
@@ -20,9 +20,7 @@ import {
   setPresetTable,
  } from "../../lib/presets.agency"
 import { readSettingsFile, writeSettingsFile } from "../../lib/settings.agency"
-// Imported for the agent::llmOptions effect declared beside it, which
-// savePreset raises too.
-import { useLlmOptions } from "./llmOptionTools.agency"
+import { confirmServerUrl } from "./llmOptionTools.agency"
 
 def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
   const loaded = readSettingsFile()
@@ -51,29 +49,6 @@ def saveReply(name: string, outcome: PresetEditOutcome): string {
   return "${verb} the '${name}' preset.${stillDefault} ${useItHint(name)}"
 }
 
-// "" when the preset does not set llmOptions.baseUrl.mlx.
-def presetServerUrl(preset: Preset): string {
-  const options: any = preset.llmOptions
-  if (options == null || options.baseUrl == null || options.baseUrl.mlx == null) {
-    return ""
-  }
-  return options.baseUrl.mlx
-}
-
-// The server at that address receives every chat request and writes the
-// model's replies, so the user sees the address before it is saved. The
-// write approval alone would show it buried in the whole settings file.
-def confirmServerUrl(name: string, preset: Preset): Result<boolean> {
-  const url = presetServerUrl(preset)
-  if (url == "") {
-    return success(true)
-  }
-  return interrupt agent::llmOptions("Save preset \"${name}\", which sends every chat request to ${url}? That server sees the whole conversation and writes the model's replies.", {
-    options: preset.llmOptions
-  })
-  return success(true)
-}
-
 export def listPresets(): string {
   """
   List the saved agent presets as JSON: each preset's settings, the
@@ -99,7 +74,9 @@ export def savePreset(name: string, preset: PresetInput): string {
   if (checked is failure(reason)) {
     return "Not saved: ${reason}"
   }
-  const confirmed = confirmServerUrl(name, checked.value)
+  // The std::write approval alone would show the address buried in the
+  // whole settings file.
+  const confirmed = confirmServerUrl("Save preset \"${name}\"?", checked.value.llmOptions)
   if (confirmed is failure(reason)) {
     return "Not saved: ${reason}"
   }

@@ -74,16 +74,31 @@ reported when the preset is saved or loaded.
 
 The address still needs an approval that names it. Each request carries
 the whole conversation, and the server writes the model's replies, so it
-chooses which tools the agent calls. `useLlmOptions` prints the block in
-its approval. `savePreset` raises its own approval, described under "How
-the tools write".
+chooses which tools the agent calls. `useLlmOptions` and `savePreset`
+both call `confirmServerUrl`, which raises `agent::llmServer` with the
+address as its data, `{ url: "https://studio.ts.net:8090/v1" }`, before
+anything else. It is a separate effect from `agent::llmOptions`, so a
+policy rule that approves option changes, such as a new OpenRouter
+routing, does not also approve a server. A rule can still approve one
+address by matching on `url`. The recommended policy has no rule for
+either effect, so the user answers both. `useLlmOptions` then raises
+`agent::llmOptions` as before, so setting an address asks twice.
 
 `checkLlmOptions` returns the block it was given, cut down to the keys a
 checked cast `as LlmOptions!` keeps (`keptByCast`). The cast drops a
 nested key its type does not have, so `{ "openRouter": { "extra": 1 } }`
 comes back as `{ "openRouter": {} }`. The block is not the cast's own
 value, because the cast also fills each optional field it was not given
-with `null`.
+with `null`. `checkPreset` puts this block in the preset it returns, so a
+saved or loaded preset gets the same cut as `useLlmOptions` and the
+top-level `model.llmOptions`.
+
+When the active preset sets an address, the interactive header prints it
+(`serverNotice`): `Chat requests go to https://studio.ts.net:8090/v1, from
+the "studio" preset.` A preset marked `default` applies with no flag, and
+an address can reach `settings.json` without `savePreset`, by a hand edit
+or a plain file write, so the header is the one place every path shows
+up. A one-shot run prints no header, so it does not show the line.
 
 Keys with another owner are refused. `model`, `provider`, and the two tool
 limits have fields of their own, `reasoningEffort` comes from `--effort`,
@@ -152,12 +167,11 @@ Neither call uses `with approve`. The policy handler decides the read and
 the write. A one-shot run rejects them, and the tool replies "Not saved".
 
 Before it writes a preset whose block sets `baseUrl.mlx`, `savePreset`
-raises `agent::llmOptions` with a message that names the preset and the
+raises `agent::llmServer` with a message that names the preset and the
 address. The `std::write` approval alone would show the address buried in
 the whole file, and a policy rule that approves writes under the agent
-home would skip even that. The recommended policy has no rule for
-`agent::llmOptions`, so the user answers it. A rejection replies "Not
-saved" and writes nothing.
+home would skip even that. A rejection replies "Not saved" and writes
+nothing.
 
 A preset may be named `constructor`, so every lookup by name goes through
 `savedEntry`, which reads a key only when the record has it.

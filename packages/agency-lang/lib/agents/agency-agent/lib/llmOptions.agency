@@ -96,6 +96,19 @@ def isServerUrl(value: any): boolean {
   return typeof value == "string" && _isHttpUrl(value)
 }
 
+export def serverUrlOf(options: any): string {
+  """
+  The MLX server address a block sets in baseUrl.mlx, or "" when it sets
+  none.
+
+  @param options - A block checkLlmOptions accepted, or null
+  """
+  if (!isPlainObject(options) || !isPlainObject(options.baseUrl) || !isServerUrl(options.baseUrl.mlx)) {
+    return ""
+  }
+  return options.baseUrl.mlx
+}
+
 // The shape check would drop another provider's URL without a word, so
 // this names it first.
 def baseUrlProblems(value: any): string[] {

@@ -84,7 +84,7 @@
     {
       "nodeName": "baseUrlAsksFirst",
       "input": "",
-      "expectedOutput": "\"agent::llmOptions,std::read,std::write true true {\\\"local\\\":\\\"mlx:org/repo\\\",\\\"llmOptions\\\":{\\\"baseUrl\\\":{\\\"mlx\\\":\\\"https://studio.ts.net:8090/v1\\\"}}}\"",
+      "expectedOutput": "\"agent::llmServer,std::read,std::write true true {\\\"local\\\":\\\"mlx:org/repo\\\",\\\"llmOptions\\\":{\\\"baseUrl\\\":{\\\"mlx\\\":\\\"https://studio.ts.net:8090/v1\\\"}}}\"",
       "evaluationCriteria": [
         {
           "type": "exact"

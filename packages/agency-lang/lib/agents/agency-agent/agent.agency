@@ -17,7 +17,7 @@ import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
-import { activePreset, startPreset } from "./lib/presets.agency"
+import { activePreset, activePresetName, presetTable, serverNotice, startPreset } from "./lib/presets.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
 import { chooseSession, startSession } from "./lib/resume.agency"
 import { pickModelsForAgent } from "./lib/session.agency"
@@ -214,6 +214,10 @@ node main() {
     setTitle("Agency Agent")
     clearScreen()
     print(getHeader(brain.name))
+    const notice = serverNotice(presetTable(), activePresetName())
+    if (notice != "") {
+      print(color.yellow(notice))
+    }
     runSession(true) {
       startInteractive(startAgent, positionalQuery)
     }

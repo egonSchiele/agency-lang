@@ -81,8 +81,8 @@ useLlmOptions({ openRouter: { provider: { only: ["fireworks"], allowFallbacks: f
 savePreset("glm-fw", { provider: "openrouter", pin: "z-ai/glm-5.3-flash", llmOptions: { openRouter: { provider: { only: ["fireworks"], allowFallbacks: false } } } })
 ```
 
-User: save a preset called studio that uses qwen3 coder on my mac studio at https://adits-mac-studio.tail25ed32.ts.net:8090/v1
+User: save a preset called studio that uses qwen3 coder on my mac studio at https://my-mac.tailnet.ts.net:8090/v1
 
 ```
-savePreset("studio", { local: "mlx:mlx-community/Qwen3-Coder-Next-4bit", llmOptions: { baseUrl: { mlx: "https://adits-mac-studio.tail25ed32.ts.net:8090/v1" } } })
+savePreset("studio", { local: "mlx:mlx-community/Qwen3-Coder-Next-4bit", llmOptions: { baseUrl: { mlx: "https://my-mac.tailnet.ts.net:8090/v1" } } })
 ```

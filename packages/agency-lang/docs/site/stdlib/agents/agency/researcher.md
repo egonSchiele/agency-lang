@@ -31,7 +31,7 @@ Return the Agency researcher's tools: the bundled documentation, read-only
 ### agencyResearcherAgent
 
 ```ts
-@guarded(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime, keepDraft: keepDraft)
 agencyResearcherAgent(
   question: string,
   context: string = "",
@@ -41,6 +41,7 @@ agencyResearcherAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
+  keepDraft: boolean = true,
 ): Result<string>
 ```
 
@@ -55,6 +56,7 @@ Answer a question about the Agency language from the bundled documentation,
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param keepDraft - When false, a run the budget cut short is a failure naming the budget, even when a draft was saved; the draft is in the failure's data as `draft`
 
 **Parameters:**
 
@@ -68,6 +70,7 @@ Answer a question about the Agency language from the bundled documentation,
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
+| keepDraft | `boolean` | true |
 
 **Returns:** `Result<string>`
 

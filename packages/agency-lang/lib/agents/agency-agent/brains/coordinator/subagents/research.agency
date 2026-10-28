@@ -62,6 +62,7 @@ export handoff def researchAgent(
       maxTime: timeBudget(maxSeconds, 10m),
       session: "research",
       extraTools: [...researchTools, question],
+      keepDraft: false,
     )
   } else {
     answer = researcherAgent(
@@ -71,14 +72,17 @@ export handoff def researchAgent(
       maxTime: timeBudget(maxSeconds, 30m),
       session: "research",
       extraTools: researchTools,
+      keepDraft: false,
     )
   }
-  // The answer is the user's reply as written. A coordinator follow-up
-  // read it as a message to itself and wrote about it ("the report above
-  // stands") to a user who never saw it. A failure still hands back, so
-  // the coordinator can say what is unfinished. researchTurn calls this
-  // from code, where there is no llm() call to end.
-  if (_insideToolCall()) {
+  // A finished answer is the user's reply as written. A coordinator
+  // follow-up read it as a message to itself and wrote about it ("the
+  // report above stands") to a user who never saw it. A run the budget cut
+  // short is a failure (keepDraft: false), not a draft passed off as the
+  // answer, so it hands back like any failure and the coordinator can say
+  // what is unfinished. researchTurn calls this from code, where there is
+  // no llm() call to end.
+  if (_insideToolCall() && isSuccess(answer)) {
     endTurn()
   }
   return answer

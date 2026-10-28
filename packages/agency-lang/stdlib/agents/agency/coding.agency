@@ -232,9 +232,11 @@ export def buildTools(strict: boolean = false, projectTools: boolean = true): an
     checker,
     parseAST,
     ...project,
-    // A repeat fetch returns the stored page, so the model gets no refresh.
-    fetch.partial(refresh: false),
-    fetchJSON.partial(refresh: false),
+    // fetch and fetchJSON keep refresh: an API's answer can change between
+    // two calls, as a job's status does. A page read with fetchMarkdown does
+    // not, and a model offered refresh re-downloads pages it already has.
+    fetch,
+    fetchJSON,
     fetchMarkdown.partial(refresh: false),
     skills,
   ]

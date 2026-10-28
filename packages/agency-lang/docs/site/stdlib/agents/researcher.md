@@ -39,7 +39,7 @@ export type ResearchEvalInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L343))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L363))
 
 ## Functions
 
@@ -60,7 +60,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 ### researcherAgent
 
 ```ts
-@guarded(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime, keepDraft: keepDraft)
 researcherAgent(
   task: string,
   context: string = "",
@@ -72,6 +72,7 @@ researcherAgent(
   session: string = "",
   extraTools: any[] = [],
   history: ThreadMessage[] = [],
+  keepDraft: boolean = true,
 ): Result<string>
 ```
 
@@ -90,6 +91,7 @@ Answer a research question from web and Wikipedia sources and return a
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param keepDraft - When false, a run the budget cut short is a failure naming the budget, even when a draft was saved; the draft is in the failure's data as `draft`
 
 **Parameters:**
 
@@ -105,9 +107,10 @@ Answer a research question from web and Wikipedia sources and return a
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
 | history | `ThreadMessage[]` | [] |
+| keepDraft | `boolean` | true |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L279))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L297))

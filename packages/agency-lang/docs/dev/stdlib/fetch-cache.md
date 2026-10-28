@@ -37,8 +37,8 @@ hands them to a model and wants a fresh page.
   `fetchMarkdown` asks for the stored result on its first line, before it
   raises its interrupt, and takes `refresh: boolean = false`.
 
-The cache is one object in the run's globals, under the `__internal`
-module as `__fetchCache` (`globalstore.md`). That store is what every
+The cache is one object in the run's globals, in a module of its own,
+`__fetchCache` (`FETCH_CACHE_MODULE`, `globalstore.md`). That store is what every
 tool call of a run shares, what a fork branch gets a copy of, and what
 every checkpoint serializes, which is the whole requirement: a fetch in
 one tool round must be known in the next, a branch must see the parent's
@@ -65,8 +65,18 @@ such as a data connector reading an API through `fetchJSON`
 and expects a fresh answer; the model called the connector, not the
 fetch, so a repeat is the connector's business.
 
-**Only a GET with no body.** A POST is an action, and two POSTs to one
-URL are two actions.
+**Only a GET with no body and no headers.** A POST is an action, and two
+POSTs to one URL are two actions. Headers can change the answer: `Accept`
+picks JSON or HTML, and `Authorization` picks whose data. Keeping them in
+the key would put a credential in the globals, so a request that sets any
+header is always fetched. `{}` counts as none.
+
+**A model is told a repeat returns the earlier response.** `refresh`'s
+description says so, so a model fetching something that changes, such as
+a job's status from an API, knows to pass `refresh: true`. The researcher
+and the Agency coding agent bind `refresh` on `fetchMarkdown` only,
+because a page does not change within a conversation; the coding agent's
+`fetch` and `fetchJSON` keep it.
 
 **Only this conversation.** An entry records the thread whose
 conversation the fetch's result went to, and a hit needs that thread to
@@ -99,7 +109,10 @@ the one the trace's prompts took.
 **A hit asks no one.** The Agency function checks the cache before it
 raises `std::http::fetchMarkdown`. Nothing is fetched on a hit, so there
 is nothing to approve, and a policy that prompts on fetches does not
-prompt for a page it already allowed.
+prompt for a page it already allowed. For the same reason a hit skips the
+`allowedDomains` check: a call whose list would refuse the URL still gets
+the stored page. That page is already in the conversation, so nothing new
+reaches it.
 
 **The stored results are capped at 500,000 characters**
 (`MAX_CACHED_CHARS`). The cache rides in every checkpoint beside the
@@ -107,8 +120,15 @@ spill store (`spill.md`), whose cap of 1,000,000 comes from the 10 MB
 hosted resume limit, so the two together leave room for two copies and
 escaping. Past the cap the oldest entries go. A result larger than the
 whole cap is not kept. A URL with no entry is fetched again, so a dropped
-entry only costs a request. An entry from a checkpoint saved before
-results were stored has no result and misses the same way.
+entry only costs a request.
+
+**What storing pages costs.** Each page is in the thread as a tool
+result too, so a checkpoint carries it twice. A trace stores each globals
+module as one chunk whenever it changes. `__internal` changes on every
+model call, because the token stats live there, so the cache is kept in
+its own module: its chunk is stored again only when a fetch adds a page,
+up to the 500,000-character cap each time. The spill store, in
+`__internal`, is stored again on most steps.
 
 **A failure is not recorded.** `remember` skips a failure result, so a
 page that timed out or returned 404 can be tried again. A rejected
@@ -126,9 +146,9 @@ have the sharing and serialization it needs.
 
 ## Tests
 
-- `lib/runtime/fetchCache.test.ts`: the key, the three conditions, the
-  thread rule, a JSON result (`null` included), the cap, and an entry
-  with no result, against a test run.
+- `lib/runtime/fetchCache.test.ts`: the key, the conditions (headers
+  among them), the thread rule, a JSON result (`null` included), the cap,
+  and the module the cache is kept in, against a test run.
 - `tests/agency-js/fetch-cache`: the fetch mocks answer a `www.` URL with
   one body and a bare URL with another, and the cache treats the two as
   one page, so a stored result is told from a fresh fetch by its body. A

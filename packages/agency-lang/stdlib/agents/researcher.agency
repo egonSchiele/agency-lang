@@ -16,7 +16,7 @@
   source instead of looking it up again. See
   docs/dev/agents/research-loop.md.
 */
-import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { AGENT_SPILL_OVER, llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, spillTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
@@ -118,6 +118,24 @@ Patch these specific gaps and keep everything else as it is. Where a finding alr
 """
 }
 
+// The gaps a review cut short had found, from the findings it saved (the
+// failure's `draft`), as lines for the fix. "" when it saved none, or saved
+// something that is not a Feedback list.
+def gapsFoundBeforeStop(data: any): string {
+  if (data == null || !(data.draft is Feedback[])) {
+    return ""
+  }
+  const gaps = filter(data.draft, \finding -> finding.error)
+  if (gaps.length == 0) {
+    return ""
+  }
+  return """
+Before it stopped, it found these gaps:
+
+${renderFeedback(success(gaps))}
+"""
+}
+
 def checkGrounding(task: string, startedAt: number, answer: any): Critique {
   // An attempt that could not produce an answer is reported, not
   // reviewed: accepting it ends the loop, and the failure reaches the
@@ -158,7 +176,7 @@ def checkGrounding(task: string, startedAt: number, answer: any): Critique {
       accepted: false,
       feedback: """
 The review of your answer could not finish (${err}), so your sources were not all confirmed.
-
+${gapsFoundBeforeStop(reviewed.data)}
 Check that every claim is backed by a source you fetched, cite it, and fix any claim you cannot back.
 """
     }
@@ -275,7 +293,7 @@ def researchLoop(
   }
 }
 
-@guarded(cost: maxCost, time: maxTime)
+@guarded(cost: maxCost, time: maxTime, keepDraft: keepDraft)
 export handoff def researcherAgent(
   task: string,
   context: string = "",
@@ -287,6 +305,7 @@ export handoff def researcherAgent(
   session: string = "",
   extraTools: any[] = [],
   history: ThreadMessage[] = [],
+  keepDraft: boolean = true,
 ): Result<string> {
   """
   Answer a research question from web and Wikipedia sources and return a
@@ -304,6 +323,7 @@ export handoff def researcherAgent(
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param keepDraft - When false, a run the budget cut short is a failure naming the budget, even when a draft was saved; the draft is in the failure's data as `draft`
   """
 
   // Return position: when the budget runs out, the best answer revise had

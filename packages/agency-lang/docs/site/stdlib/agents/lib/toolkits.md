@@ -223,7 +223,7 @@ Return tools that retrieve a named web resource: one HTTP fetch and the
 
   The fetch has `refresh` bound to false. A repeat fetch in the same
   conversation returns the stored page, and a model offered `refresh`
-  re-downloaded pages it already had (trace dMgeO_0u).
+  re-downloads pages it already has.
 
 **Returns:** `any[]`
 

@@ -5,7 +5,6 @@
  * See docs/dev/stdlib/fetch-cache.md.
  */
 import type { Run } from "./asyncContext.js";
-import { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 
 /** One fetched URL: how the model spelled it, which tool fetched it, the
@@ -32,16 +31,23 @@ export type FetchCache = {
   count: number;
 };
 
-/** The global the cache is kept in. The globals of a run are shared by
- *  its tool calls, copied into a fork branch, and serialized with every
- *  checkpoint, which is what the cache needs (globalstore.md). */
-const CACHE_KEY = "__fetchCache";
+/** Where the cache is kept: a module of its own in the run's globals. The
+ *  globals of a run are shared by its tool calls, copied into a fork
+ *  branch, and serialized with every checkpoint, which is what the cache
+ *  needs (globalstore.md). Not under `__internal`: a trace stores each
+ *  module's globals as one chunk, and `__internal` changes on every model
+ *  call (the token stats), which would store every cached page again each
+ *  time. In its own module the pages are stored again only when a fetch
+ *  changes the cache. */
+export const FETCH_CACHE_MODULE = "__fetchCache";
+const CACHE_KEY = "cache";
 
 /** What a fetch looks like to the cache. */
 export type FetchRequest = {
   url: string;
   method: string;
   body: unknown;
+  headers?: Record<string, unknown>;
   tool: string;
 };
 
@@ -64,10 +70,14 @@ export function normalizeFetchUrl(url: string): string | null {
   return `${parsed.protocol.toLowerCase()}//${host}${port}${path}${parsed.search}`;
 }
 
-/** Only a read with no body is cached: a POST is an action, and two POSTs
- *  to one URL are two actions. */
+/** Only a read with no body and no headers is cached. A POST is an
+ *  action, and two POSTs to one URL are two actions. Headers can change
+ *  the answer (`Accept`, `Authorization`), and keeping them in the key
+ *  would put a credential in the globals, so a request that sets any is
+ *  always fetched. */
 function isCacheable(request: FetchRequest): boolean {
-  return request.method.toUpperCase() === "GET" && request.body == null;
+  const noHeaders = request.headers == null || Object.keys(request.headers).length === 0;
+  return request.method.toUpperCase() === "GET" && request.body == null && noHeaders;
 }
 
 /** Where the tool loop records what it knows about a tool call: on the
@@ -118,11 +128,10 @@ function directToolCall(run: Run, request: FetchRequest): ToolCallRecord | null 
 }
 
 function readCache(run: Run): FetchCache {
-  const existing = run.globals.get(GlobalStore.INTERNAL_MODULE, CACHE_KEY) as
-    FetchCache | undefined;
+  const existing = run.globals.get(FETCH_CACHE_MODULE, CACHE_KEY) as FetchCache | undefined;
   if (existing !== undefined) return existing;
   const fresh: FetchCache = { entries: {}, count: 0 };
-  run.globals.set(GlobalStore.INTERNAL_MODULE, CACHE_KEY, fresh);
+  run.globals.set(FETCH_CACHE_MODULE, CACHE_KEY, fresh);
   return fresh;
 }
 
@@ -153,8 +162,6 @@ export function cachedFetch(
   if (key === null) return null;
   const entry = readCache(run).entries[key];
   if (entry === undefined || !fetchedInConversation(call.conversation, entry.threadId)) return null;
-  // A checkpoint saved before results were stored has entries without one.
-  if (!("value" in entry)) return null;
   return { value: entry.value };
 }
 
@@ -165,11 +172,11 @@ function sizeOf(value: unknown): number {
 /** Drop the oldest entries until the stored results fit in the cap. */
 function evictOldest(cache: FetchCache): void {
   const entries = Object.entries(cache.entries).sort(([, a], [, b]) => a.ordinal - b.ordinal);
-  let total = entries.reduce((sum, [, entry]) => sum + (entry.size ?? 0), 0);
+  let total = entries.reduce((sum, [, entry]) => sum + entry.size, 0);
   for (const [key, entry] of entries) {
     if (total <= MAX_CACHED_CHARS) return;
     delete cache.entries[key];
-    total -= entry.size ?? 0;
+    total -= entry.size;
   }
 }
 

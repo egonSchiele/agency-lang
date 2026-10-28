@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   cachedFetch,
+  FETCH_CACHE_MODULE,
   MAX_CACHED_CHARS,
   normalizeFetchUrl,
   recordToolCall,
   recordFetch,
   type FetchRequest,
 } from "./fetchCache.js";
-import { GlobalStore } from "./state/globalStore.js";
 import { MessageThread } from "./state/messageThread.js";
 import { inFrameOf, makeMockCtx } from "./__tests__/testHelpers.js";
 import { runAsToolInvocation } from "./toolInvocation.js";
@@ -100,6 +100,44 @@ describe("cachedFetch and recordFetch", () => {
     });
   });
 
+  it("never caches a request that sets headers", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      const withHeaders = {
+        ...get("https://example.com/api"),
+        headers: { Accept: "application/json" },
+      };
+      await inToolCall(run, thread, async (run) => {
+        recordFetch(run, get("https://example.com/api"), "<html>the page</html>");
+        // The same URL asking for JSON is another answer, not a repeat.
+        expect(cachedFetch(run, withHeaders, false)).toBeNull();
+        recordFetch(run, withHeaders, { json: true });
+        expect(cachedFetch(run, get("https://example.com/api"), false)).toEqual({
+          value: "<html>the page</html>",
+        });
+        // Empty headers are no headers.
+        expect(cachedFetch(run, { ...get("https://example.com/api"), headers: {} }, false)).toEqual(
+          {
+            value: "<html>the page</html>",
+          },
+        );
+      });
+    });
+  });
+
+  it("keeps the cache in a globals module of its own, not __internal", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      await inToolCall(run, thread, async (run) => {
+        recordFetch(run, get("https://example.com/a"), "a page");
+      });
+      expect(
+        run.globals.get(FETCH_CACHE_MODULE, "cache").entries["https://example.com/a"].value,
+      ).toBe("a page");
+      expect(run.globals.get("__internal", "__fetchCache")).toBeUndefined();
+    });
+  });
+
   it("drops the oldest results past the cap, and never keeps one larger than the cap", async () => {
     await inTestFrame(async (run) => {
       const thread = run.threads.getOrCreateActive();
@@ -117,20 +155,6 @@ describe("cachedFetch and recordFetch", () => {
         recordFetch(run, get("https://example.com/big"), "x".repeat(MAX_CACHED_CHARS + 1));
         expect(cachedFetch(run, get("https://example.com/big"), false)).toBeNull();
         expect(cachedFetch(run, get("https://example.com/3"), false)).toEqual({ value: half });
-      });
-    });
-  });
-
-  it("misses on an entry from a checkpoint saved before results were stored", async () => {
-    await inTestFrame(async (run) => {
-      const thread = run.threads.getOrCreateActive();
-      await inToolCall(run, thread, async (run) => {
-        recordFetch(run, get("https://example.com/old"), "a page");
-        const cache = run.globals.get(GlobalStore.INTERNAL_MODULE, "__fetchCache") as any;
-        const entry = cache.entries["https://example.com/old"];
-        delete entry.value;
-        delete entry.size;
-        expect(cachedFetch(run, get("https://example.com/old"), false)).toBeNull();
       });
     });
   });

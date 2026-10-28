@@ -180,13 +180,25 @@ then runs another attempt, or returns the last one when attempts run out.
 
 **A review cut short is not a clean pass either.** A reviewer whose budget
 runs out after it saved some findings hands back findings for the points
-it reached, and nothing in them marks the rest as unchecked. In trace
-iA6rvAcr the reviewer saved only its satisfied points, then wrote that two
-questions were "largely ungrounded" and ran out before saving that, so
-the answer passed. `reviewAgent` therefore passes `keepDraft: failOpen` to
-its guard: with `failOpen: false` the trip is a failure naming the budget,
-and `checkGrounding` sends the answer back as for a review that could not
-run. The saved findings are in the failure's data as `draft`.
+it reached, and nothing in them marks the rest as unchecked. So
+`reviewAgent` passes `keepDraft: failOpen` to its guard: with
+`failOpen: false` the trip is a failure naming the budget, with the saved
+findings in its data as `draft`. `checkGrounding` sends the answer back as
+for a review that could not run, and adds the gaps the saved findings name
+(`gapsFoundBeforeStop`), since those are what the fix needs. A draft that
+is not a `Feedback[]` adds nothing.
+
+A reviewer that always runs past its cap now rejects every attempt, and
+`revise` spends all of them before returning the last, still unreviewed.
+
+**The coordinator's research call fails on a budget trip.** `researchAgent`
+(`lib/agents/agency-agent/brains/coordinator/subagents/research.agency`)
+ends the turn with the researcher's answer (`endTurn`), so a draft the
+guard returned as a success would reach the user as the reply, with the
+note meant for a model. It passes `keepDraft: false` to `researcherAgent`
+and `agencyResearcherAgent`, so a trip is a failure, the handoff hands
+back with "stopped before finishing", and the coordinator says what is
+unfinished from the work above.
 
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the

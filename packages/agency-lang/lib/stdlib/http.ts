@@ -301,11 +301,16 @@ export function _cachedFetch(
   urlPath: string,
   method: string,
   body: unknown,
+  headers: Record<string, unknown>,
   refresh: boolean,
   tool: string,
 ): { value: unknown } | null {
   const run = currentRun();
-  return cachedFetch(run, { url: resolveUrl(baseUrl, urlPath), method, body, tool }, refresh);
+  return cachedFetch(
+    run,
+    { url: resolveUrl(baseUrl, urlPath), method, body, headers, tool },
+    refresh,
+  );
 }
 
 /** Record a completed fetch and its result in the run's fetch cache. A
@@ -313,7 +318,14 @@ export function _cachedFetch(
 function remember(
   run: Run,
   result: unknown,
-  request: { baseUrl: string; urlPath: string; method: string; body: unknown; tool: string },
+  request: {
+    baseUrl: string;
+    urlPath: string;
+    method: string;
+    body: unknown;
+    headers: Record<string, unknown>;
+    tool: string;
+  },
 ): void {
   if (isFailure(result)) return;
   recordFetch(
@@ -322,6 +334,7 @@ function remember(
       url: resolveUrl(request.baseUrl, request.urlPath),
       method: request.method,
       body: request.body,
+      headers: request.headers,
       tool: request.tool,
     },
     result,
@@ -351,7 +364,7 @@ export async function _fetch(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetch" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetch" });
   return result;
 }
 
@@ -435,7 +448,7 @@ export async function _fetchJSON(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchJSON" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetchJSON" });
   return result;
 }
 
@@ -519,7 +532,7 @@ export async function _fetchMarkdown(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchMarkdown" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetchMarkdown" });
   return result;
 }
 

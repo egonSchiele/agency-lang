@@ -274,7 +274,9 @@ export function detectVariableChanges(
   const prevStore = prev.globals.store ?? {};
   const currStore = curr.globals.store ?? {};
   for (const moduleId of Object.keys(currStore)) {
-    if (moduleId === GlobalStore.INTERNAL_MODULE) continue;
+    // Runtime state, not program variables: `__internal` and the fetch
+    // cache's `__fetchCache`.
+    if (moduleId.startsWith("__")) continue;
     const prevMod = prevStore[moduleId] ?? {};
     const currMod = currStore[moduleId] ?? {};
     for (const change of diffObject(prevMod, currMod)) {

@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "savedGapsAreListed",
+      "input": "",
+      "expectedOutput": "\"\\nBefore it stopped, it found these gaps:\\n\\nError: Q2 has no source (source: https://example.com/q2)\\n\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the error findings a cut-short review saved are listed for the fix"
+    },
+    {
+      "nodeName": "noGapsAddNothing",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a cut-short review that saved no error findings adds nothing"
+    },
+    {
+      "nodeName": "aDraftThatIsNotFeedbackAddsNothing",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a draft that is not a Feedback list adds nothing"
+    },
+    {
+      "nodeName": "noDataAddsNothing",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a failure with no data adds nothing"
+    }
+  ]
+}

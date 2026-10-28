@@ -251,8 +251,8 @@ export function refusalMessage(
 
 /** The result cap of one `llm()` call: per-call `maxToolResultChars`, else
  *  the branch default (setLlmOptions), else agency.json, else the default.
- *  `0` disables. What happens to a result over the cap is `overCapFor`
- *  in toolInvocation.ts. */
+ *  `0` disables. What happens to a result over the cap is
+ *  `capToolResultForLlm` in toolInvocation.ts. */
 export function resultCap(
   perCall: number | undefined,
   branch: number | undefined,

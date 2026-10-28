@@ -46,7 +46,10 @@ export function formatTypeHint(
         : `${el}[]`;
     }
     case "stringLiteralType":
-      return `"${vt.value}"`;
+      // Agency reads a string literal type up to the next quote with no
+      // escapes, so its value is written raw for Agency and escaped for
+      // TypeScript.
+      return target === "ts" ? JSON.stringify(vt.value) : `"${vt.value}"`;
     case "numberLiteralType":
       return vt.value;
     case "booleanLiteralType":

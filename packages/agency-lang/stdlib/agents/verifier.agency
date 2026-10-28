@@ -6,7 +6,7 @@
   text without touching the file system, use reviewAgent instead.
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
-import { llmOptions } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { guarded } from "std::decorators"
@@ -65,6 +65,7 @@ def judgeCriteria(
     model: model,
     provider: provider,
     tools: [...buildTools(), ...extraTools, saveDraft],
+    spillToolResultsOver: AGENT_SPILL_OVER,
   ),
   )
 }

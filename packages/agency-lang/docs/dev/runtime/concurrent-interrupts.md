@@ -389,16 +389,20 @@ The per-tool branchFn body (in `prompt.ts`) derives a `callSlug` of `<index>_<to
 2. Allocates the same branch (`stack.getOrCreateBranch("tool_<callSlug>")`) that `runBatch` already created — idempotent.
 3. Runs `b.step("…start")` to fire `onToolCallStart`, then `b.step("…logStart")`.
 4. Runs `b.step("…invoke")` which calls `runInvokeStep` — that's where the handler runs and where `stack.setResultOnBranch` / `setInterruptOnBranch` / `deleteBranch` get called depending on outcome.
-5. Runs `b.step("…end")` to fire `onToolCallEnd`.
-6. Runs `b.step("…log")` to emit the `toolCall` statelog event.
+5. Runs `b.step("…end")` to fire `onToolCallEnd` for success, failure, or rejection. Interrupts and aborted results skip this step.
+6. For a success, runs `b.step("…log")` to emit the `toolCall` statelog event. Failure and rejection bookkeeping already ran inside `.invoke`.
 
 The two refusal guards are documented in [`docs/dev/agents/tool-loop-guards.md`](../agents/tool-loop-guards.md).
 
 If any of these `b.step` bodies returns interrupts, `BranchRunner.step` collects them on `b.interrupts`, the rest of the body short-circuits via `if (b.interrupts) return`, and the runBatch child's invoke returns the collected array.
 
-Important rule preserved from the pre-refactor code: **don't `deleteBranch` on a tool success during the parallel loop**. A previous version did, and it broke multi-cycle resumes when one tool succeeded and another interrupted: on resume, the deleted branch had no `existing.result`, so the cached short-circuit didn't fire, and runPrompt re-invoked the tool, pushing a duplicate `toolMessage` to the saved `messagesJSON`. OpenAI then rejected the request with `Duplicate value for 'tool_call_id'`. Branches are cleaned up by `popBranches()` (called by `runBatch` on the no-interrupt success path).
-
-`deleteBranch` IS still called on failure/crash/reject paths inside `runInvokeStep` — that's pre-existing behaviour and is fine because the body subsequently returns and `runBatch` doesn't try to touch the deleted branch (it doesn't `setResultOnBranch` when `recordBranchOutcomes` is false).
+Completed invocations keep their result on the branch, including failures,
+converted crashes, and rejections. If a sibling interrupts, the checkpoint
+keeps that result and the completed step keys. Resume skips `.invoke` and
+can finish a pending `.end` step without repeating the tool or its reply.
+`runBatch` clears the branches with `popBranches()` when the batch finishes
+without interrupts. Thrown cancellations still delete their branch and
+propagate immediately.
 
 ### LLM tool calls + fork
 

@@ -102,6 +102,20 @@ export type StatelogConfig = {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 
+// === Interrupt types ===
+
+/** What the interrupt events say about an interrupt, so a log reader sees
+ *  what was raised without finding another event for it. */
+export type InterruptSummary = { effect: string; message: string; data: any };
+
+/** One interrupt a checkpoint was taken for, as `checkpointCreated` logs it. */
+export type CheckpointInterrupt = InterruptSummary & {
+  interruptId: string;
+  origin: string;
+  /** Set when the debugger raised it to stop the run. */
+  debugger?: boolean;
+};
+
 // === Token / cost types ===
 
 // `cachedInputTokens` are tokens READ from an existing cache entry;
@@ -1190,7 +1204,7 @@ export class StatelogClient {
      *  was being approved/rejected without having to correlate with
      *  a separate `interruptThrown` event (which doesn't fire for
      *  synchronously-resolved interrupts like `with approve`). */
-    interrupt?: { effect: string; message: string; data: any };
+    interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({
       type: "handlerDecision",
@@ -1217,7 +1231,7 @@ export class StatelogClient {
     timeTaken?: number;
     /** Optional summary of the interrupt being resolved. See
      *  `handlerDecision.interrupt` for rationale. */
-    interrupt?: { effect: string; message: string; data: any };
+    interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({
       type: "interruptResolved",
@@ -1235,16 +1249,23 @@ export class StatelogClient {
     checkpointId,
     reason,
     sourceLocation,
+    interrupts,
   }: {
     checkpointId: number;
     reason: "interrupt" | "explicit" | "failure" | "fork" | "race" | "pause";
     sourceLocation?: { moduleId: string; scopeName: string; stepPath: string };
+    /** The interrupts the run stopped for. Set by the prompt runner, a
+     *  batch (tool calls, fork, race), and the guard gate. The handler
+     *  chain logs every interrupt raised through it; this also covers the
+     *  ones made outside it, such as a debugger stop. */
+    interrupts?: CheckpointInterrupt[];
   }): Promise<void> {
     await this.post({
       type: "checkpointCreated",
       checkpointId,
       reason,
       sourceLocation,
+      interrupts,
     });
   }
 

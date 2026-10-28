@@ -4,8 +4,16 @@ name: Node.js CI
 on:
   push:
     branches: [ "main" ]
+    # Prose no code or test reads. docs/site and skills/ are not here:
+    # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    paths-ignore: &docs-only
+      - "packages/agency-lang/docs/dev/**"
+      - "packages/agency-lang/docs/misc/**"
+      - "packages/agency-lang/docs/superpowers/**"
+      - "**/CHANGELOG.md"
   pull_request:
     branches: [ "main" ]
+    paths-ignore: *docs-only
 
 # Workflow-level permissions are read-only by default. Each job opts into
 # additional scopes only when it needs them.
@@ -51,7 +59,7 @@ jobs:
       # still shows the results from the others.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
 
     steps:
     - name: Checkout repository
@@ -89,48 +97,18 @@ jobs:
     - name: Build docs
       if: matrix.shard == 1
       run: pnpm run docs
-    - name: Unit tests (agency-lang, shard ${{ matrix.shard }}/4)
+    - name: Unit tests (agency-lang, shard ${{ matrix.shard }}/3)
       working-directory: packages/agency-lang
       # Call vitest directly via `pnpm exec`: `pnpm run test:run -- --shard`
       # passes the `--` through to vitest, which then reads `--shard` as a file
       # filter and silently runs the whole suite.
-      run: pnpm exec vitest run --shard=${{ matrix.shard }}/4
+      run: pnpm exec vitest run --shard=${{ matrix.shard }}/3
     - name: Unit tests (sibling packages)
       # The sibling packages hold only a handful of tests each, so run them
       # once rather than per shard. `-r run` skips the workspace root, and the
       # filter drops the already-sharded agency-lang suite.
       if: matrix.shard == 1
       run: pnpm --filter '!agency-lang' -r --if-present --stream run test:run
-
-  # The speech tests that run the real ffmpeg. The unit shards have no ffmpeg,
-  # so these cases skip there. Here AGENCY_REQUIRE_FFMPEG=1 makes them fail
-  # instead of skip, so removing the install step turns this job red. No
-  # `make`: the tests run from source.
-  speech-ffmpeg:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      with:
-        persist-credentials: false
-    - name: Set up pnpm
-      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-      with:
-        run_install: false
-    - name: Set up Node.js
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-      with:
-        node-version: 22.13.0
-        cache: 'pnpm'
-    - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-    - run: pnpm install
-    - name: Speech tests with ffmpeg
-      working-directory: packages/agency-lang
-      env:
-        AGENCY_REQUIRE_FFMPEG: "1"
-      run: pnpm exec vitest run lib/stdlib/speech.ffmpeg.test.ts
 
   # Node 23.x build check. The full unit suite runs on 22.x only (see
   # `unit-tests`); this confirms the toolchain still installs, builds, and
@@ -207,9 +185,14 @@ jobs:
   # Integration tests (tarball install, bundlers, CLI, StateLog, stdlib
   # sandbox). These are node-22-only and independent of the unit suite, so
   # they run in parallel with `unit-tests` rather than serially behind it.
+  # Inside the job, tests/integration/runAll.mjs runs the scripts in four
+  # groups at once (it says which scripts may share a group), so the step
+  # takes as long as tests/integration/cli, about 3.5 min, and not the sum.
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # runAll.mjs keeps every group's time limits under 22 min (its
+    # RUNNER_BUDGET_MINUTES); change the two together.
+    timeout-minutes: 25
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -226,19 +209,15 @@ jobs:
         cache: 'pnpm'
     - run: pnpm install
     - run: make ci
-    - name: Integration tests (tarball install, bundlers, CLI)
+    - name: Integration tests
+      working-directory: packages/agency-lang
       env:
         TMPDIR: ${{ runner.temp }}
+        # stdlib-sandbox/run.mjs skips itself unless CI is set.
+        CI: "true"
       run: |
-        cd packages/agency-lang
         npm pack
-        node tests/integration/smoke/test.mjs ./agency-lang-*.tgz
-        node tests/integration/bundlers/test-esbuild.mjs ./agency-lang-*.tgz
-        node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
-        node tests/integration/cli/test.mjs ./agency-lang-*.tgz
-        node tests/integration/cli-lang/test.mjs ./agency-lang-*.tgz
-        node tests/integration/cli-tier2/test.mjs ./agency-lang-*.tgz
-        node tests/integration/serve/test.mjs ./agency-lang-*.tgz
+        node tests/integration/runAll.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: Main-only CLI command integration tests
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -249,19 +228,6 @@ jobs:
         npm pack
         node tests/integration/cli-main/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
-    - name: StateLog integration tests
-      working-directory: packages/agency-lang
-      run: node tests/integration/statelog/test.mjs
-    - name: Eval-run integration tests
-      working-directory: packages/agency-lang
-      run: node tests/integration/eval-run/test.mjs
-      timeout-minutes: 5
-    - name: Stdlib sandbox tests
-      working-directory: packages/agency-lang
-      env:
-        CI: "true"
-      run: node tests/integration/stdlib-sandbox/run.mjs
-      timeout-minutes: 10
 
   # Smoke tests for the agents bundled under lib/agents/ (deterministic LLM
   # provider, no API key). Catches wiring regressions like duplicate tool names

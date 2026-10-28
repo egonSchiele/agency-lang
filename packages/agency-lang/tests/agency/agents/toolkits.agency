@@ -44,7 +44,9 @@ def allBundles(): any[] {
 // Every agent that runs commands or fetches pages can get a long result
 // back as a notice naming readSpill, so each carries the two readers, and
 // each carries them once: a provider rejects a duplicate tool name before
-// the request is sent.
+// the request is sent. Each agent also sets spillToolResultsOver, which
+// throws at the first llm() call when readSpill is missing, so an agent
+// that dropped the readers would fail outright.
 def agentToolLists(): any[] {
   return [
     codingTools(),

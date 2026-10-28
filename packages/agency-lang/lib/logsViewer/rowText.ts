@@ -10,7 +10,7 @@ import { anchorFor } from "./marks.js";
 import { payloadFor } from "./payload.js";
 import { payloadText } from "./payloadText.js";
 import { fmtDuration } from "./spanText.js";
-import { toolStatusText, type StoryRow } from "./story.js";
+import { rowEvents, toolStatusText, type StoryRow } from "./story.js";
 import { modelText, roundsOf } from "./timeline/rounds.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 
@@ -26,6 +26,8 @@ export type ExpandedRow = {
     header: string;
     anchor: ReturnType<typeof anchorFor>;
     events: EventEnvelope[];
+    /** A hosted call's own items from the provider; it has no events. */
+    providerItems?: unknown[];
     comments: CommentThread[];
   };
 };
@@ -43,9 +45,6 @@ export function expandRow(
   const header = headerLine(row, trace);
   const body = payloadText(payloadFor(row, { raw: false, trace, comments: [...threads] }));
   const text = [address, `  ${header}`, ...body.split("\n").map((line) => `  ${line}`)].join("\n");
-  const events = row.node.event
-    ? [row.node.event]
-    : row.node.children.flatMap((child) => (child.event ? [child.event] : []));
   return {
     address,
     kind: row.kind,
@@ -56,7 +55,8 @@ export function expandRow(
       kind: row.kind,
       header,
       anchor: anchorFor(row),
-      events,
+      events: rowEvents(row),
+      ...(row.kind === "hosted" ? { providerItems: row.call.raw } : {}),
       comments: [...threads],
     },
   };
@@ -83,6 +83,12 @@ function headerLine(row: StoryRow, trace: TreeNode): string {
         `Tool · ${row.name}`,
         toolStatusText({ status: row.status, work: row.work }),
         fmtDuration(row.durationMs, { minutes: true }),
+      ].join(" · ");
+    case "hosted":
+      return [
+        `Hosted tool call · ${row.call.tool}`,
+        row.call.status ?? "status not recorded",
+        `inside LLM call ${row.round.index + 1}`,
       ].join(" · ");
     case "interrupt":
       return `Interrupt · ${row.interrupt.effect} · ${row.interrupt.outcome}`;

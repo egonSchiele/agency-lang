@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FrameRecorder } from "../../tui/output/recorder.js";
 import { layout } from "../../tui/layout.js";
 import { render } from "../../tui/render/renderer.js";
-import { sampleRunForest, event, loopEvents } from "../storyFixture.js";
+import { sampleRunForest, event, hostedSearchEvents, loopEvents } from "../storyFixture.js";
 import { buildForest } from "../tree.js";
 import { transcriptBlocks } from "../transcript.js";
 import { TranscriptScreen } from "./transcriptScreen.js";
@@ -716,5 +716,27 @@ describe("the call list and header", () => {
     expect(after).toContain(`path: ${"x".repeat(200)}`);
     expect(after).toContain("── WHAT THE MODEL READ");
     expect(after).toContain("aaa [tool result truncated]");
+  });
+  it("boxes each hosted call after its reply and opens its queries on Enter", () => {
+    const screen = make(buildForest(hostedSearchEvents()));
+    const before = text(screen);
+    expect(before).toContain("HOSTED TOOL CALL · web_search");
+    expect(before).toContain("hosted · web_search");
+    expect(before).toContain("agency language · agency docs");
+    expect(before.indexOf("ASSISTANT · LLM call 1")).toBeLessThan(
+      before.indexOf("HOSTED TOOL CALL"),
+    );
+    expect(before.indexOf("HOSTED TOOL CALL")).toBeLessThan(before.indexOf("TOOL CALL · read"));
+    screen.setFocus("round:L:0:hosted:0");
+    expect(screen.focusId()).toBe("round:L:0:hosted:0");
+    press(screen, "enter");
+    const after = text(screen);
+    expect(after).toContain("completed · run by openai-responses inside LLM call 1");
+    expect(after).toContain('queries: ["agency language","agency docs"]');
+  });
+  it("sends focus for a hosted call it does not draw to the LLM call that ran it", () => {
+    const screen = make(buildForest(hostedSearchEvents()));
+    screen.setFocus("round:L:0:hosted:9");
+    expect(screen.focusId()).toBe("round:L:0");
   });
 });

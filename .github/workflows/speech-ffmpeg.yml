@@ -1,0 +1,69 @@
+# Security: all actions pinned to SHA. Mirrors the policy in test.yml.
+#
+# The speech tests that run the real ffmpeg. The unit shards have no ffmpeg,
+# so these cases skip there. Here AGENCY_REQUIRE_FFMPEG=1 makes them fail
+# instead of skip, so removing the install step turns this job red. No
+# `make`: the tests run from source.
+#
+# This is not part of test.yml because installing ffmpeg from the Ubuntu
+# mirror can take 20 minutes or hang. So it runs weekly, on pull requests
+# that touch the code it tests, and by hand from the Actions tab.
+name: Speech ffmpeg tests
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    # The files that decide how ffmpeg is started and fed. speech.ts imports
+    # many more; a break in one of those shows up in the weekly run.
+    paths:
+      - "packages/agency-lang/lib/stdlib/ffmpeg.ts"
+      - "packages/agency-lang/lib/stdlib/speech.ts"
+      - "packages/agency-lang/lib/stdlib/speechPieces.ts"
+      - "packages/agency-lang/lib/stdlib/wavFile.ts"
+      - "packages/agency-lang/lib/stdlib/abortable.ts"
+      - "packages/agency-lang/lib/stdlib/abortReason.ts"
+      - "packages/agency-lang/lib/runtime/audioFormats.ts"
+      - "packages/agency-lang/lib/host/host.ts"
+      - "packages/agency-lang/lib/host/node/nodeHost.ts"
+      - "packages/agency-lang/lib/stdlib/speech.ffmpeg.test.ts"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/speech-ffmpeg.yml"
+
+permissions:
+  contents: read
+
+# A new push to a PR cancels that PR's older run. A run on main, by hand or
+# by schedule, is never cancelled.
+concurrency:
+  group: speech-ffmpeg-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  speech-ffmpeg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.13.0
+        cache: 'pnpm'
+    - name: Install ffmpeg
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+    - run: pnpm install
+    - name: Speech tests with ffmpeg
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_REQUIRE_FFMPEG: "1"
+      run: pnpm exec vitest run lib/stdlib/speech.ffmpeg.test.ts

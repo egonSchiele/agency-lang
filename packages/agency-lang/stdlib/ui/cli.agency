@@ -58,13 +58,14 @@ export def repl(
   Each iteration prints `prompt`, awaits one line of input (full line
   editing, history, bracketed paste), and calls `onSubmit(line)`.
   Returning false exits; returning a non-empty string prints it;
-  anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
+  returning a list of interrupts prints each one and says the turn has no
+  reply; anything else is ignored. Also exits on Ctrl+D (EOF) or Ctrl+C at an
   idle prompt. Type `/paste` (TTY only) to open a multi-line editor:
   Enter inserts a newline, Ctrl+D submits the whole buffer as one
   message, and Ctrl+C / Esc cancels.
 
   @param status - Callback returning {left, right, context}
-  @param onSubmit - Called with the submitted line; return false to exit or a string to print
+  @param onSubmit - Called with the submitted line; return false to exit, a string to print, or the interrupts that stopped the turn
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a JSON history file; loaded at start and saved on exit. Empty string disables persistence.
   @param historyMax - Trim history to this many most-recent entries

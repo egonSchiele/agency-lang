@@ -388,7 +388,7 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
     routes to the agents that know the language. Leave it false for every
     other language.
   """
-  announce("code agent", userMsg)
+  announce("codeAgent", userMsg)
   const originalUserMsg = userMsg
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {

@@ -16,7 +16,7 @@ import { writeFileSync } from "fs";
 // Capture every tool-role message the model sees, via onLLMCallStart:
 // each round's request carries the tool results of the previous round.
 const makeCapture = () => {
-  const state = { toolMessages: [], toolStarts: 0, lastMessages: [] };
+  const state = { toolMessages: [], toolStarts: 0, toolEnds: [], lastMessages: [] };
   const callbacks = {
     onLLMCallStart: ({ messages }) => {
       state.lastMessages = messages;
@@ -29,6 +29,9 @@ const makeCapture = () => {
     },
     onToolCallStart: () => {
       state.toolStarts += 1;
+    },
+    onToolCallEnd: ({ toolName, result }) => {
+      state.toolEnds.push({ toolName, rejected: result?.rejected === true });
     },
   };
   return { state, callbacks };
@@ -48,6 +51,7 @@ const results = {};
   results.handlerRejects = {
     result: result.data,
     toolStarts: state.toolStarts,
+    toolEnds: state.toolEnds,
     reasonSeen: seen(state, "Tool call rejected: no tools for you"),
     noRetrySuffixSeen: seen(state, "Do not call this tool with the same arguments again"),
     identicalRetryRefused: seen(state, "was already rejected and will not be executed"),
@@ -60,6 +64,7 @@ const results = {};
 {
   const { state, callbacks } = makeCapture();
   const paused = await interactiveReject({ callbacks });
+  const endsAtPause = [...state.toolEnds];
   const pausedWithInterrupt =
     Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
   const resumed = await respondToInterrupts(
@@ -68,6 +73,8 @@ const results = {};
     { metadata: { callbacks } },
   );
   results.interactiveReject = {
+    endsAtPause,
+    toolEnds: state.toolEnds,
     pausedWithInterrupt,
     result: resumed.data,
     reasonSeen: seen(state, "Tool call rejected: b is forbidden today"),
@@ -122,6 +129,7 @@ const results = {};
 {
   const { state, callbacks } = makeCapture();
   const paused = await parallelRejectAndPause({ callbacks });
+  const endsAtPause = [...state.toolEnds];
   const pausedWithInterrupt =
     Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
   const resumed = await respondToInterrupts(paused.data, [approve()], {
@@ -131,6 +139,8 @@ const results = {};
     .filter((m) => m.role === "tool")
     .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
   results.parallelRejectAndPause = {
+    endsAtPause,
+    toolEnds: state.toolEnds,
     pausedWithInterrupt,
     result: resumed.data,
     toolMessagesInFinalRequest: toolContents.length,

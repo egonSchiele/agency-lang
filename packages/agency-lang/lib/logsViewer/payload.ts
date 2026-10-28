@@ -5,6 +5,7 @@ import {
   tokensCacheWrite,
 } from "../statelog/wireAccessors.js";
 import { fmtTokens, fmtUsd } from "./format.js";
+import { hostedCallTitle } from "./hostedCalls.js";
 import { childEvent, fmtDuration } from "./spanText.js";
 import {
   decodeStructured,
@@ -13,12 +14,14 @@ import {
   type StructuredLine,
 } from "./structured.js";
 import {
+  rowEvents,
   toolErrorMessages,
   toolResultText,
   toolStatusText,
   type StoryRow,
   type RoundStoryRow,
   type ToolStoryRow,
+  type HostedStoryRow,
   type InterruptStoryRow,
   type ErrorStoryRow,
   type LlmGroupStoryRow,
@@ -74,6 +77,7 @@ const PAYLOADS: PayloadMakers = {
   round: roundPayload,
   user: (row) => [{ kind: "heading", text: "USER", tone: "user" }, ...valuePayload(row.text)],
   tool: toolPayload,
+  hosted: hostedPayload,
   interrupt: interruptPayload,
   error: errorPayload,
   pause: (row) => [
@@ -144,10 +148,10 @@ const ORPHAN_NOTE: PayloadLine[] = [
     text: "The log may have been written before span ids survived a resume, cut off mid-write, still being written, or this is a subprocess whose parent span is in another file.",
   },
 ];
+/** The row's events as JSON. A hosted call has none of its own, so it
+ *  shows the provider's items for that call. */
 function rawPayload(row: StoryRow): PayloadLine[] {
-  const events = row.node.event
-    ? [row.node.event]
-    : row.node.children.flatMap((child) => (child.event ? [child.event] : []));
+  const events: unknown[] = row.kind === "hosted" ? row.call.raw : rowEvents(row);
   return events.flatMap((event) =>
     JSON.stringify(event, null, 2)
       .split("\n")
@@ -405,6 +409,20 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
     );
   }
   return output;
+}
+/** A tool the provider ran inside an LLM call. The log has no timing or
+ *  result text for it, only what the provider reported. */
+function hostedPayload(row: HostedStoryRow): PayloadLine[] {
+  const { call } = row;
+  const status = call.status ?? "status not recorded";
+  return [
+    { kind: "heading", text: hostedCallTitle(call), tone: call.failed ? "error" : "tool" },
+    {
+      kind: "meta",
+      text: `${status} · run by ${call.provider || "the provider"} inside LLM call ${row.round.index + 1}`,
+    },
+    ...valuePayload(call.details),
+  ];
 }
 /** The recorded arguments with the dropped ones restored as `name: null`.
  *  Arguments recorded as anything but an object are shown as recorded. */

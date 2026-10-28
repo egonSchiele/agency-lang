@@ -14,10 +14,12 @@
   the oldest output goes, and reading its name back says it is no longer
   available.
 
-  When an `llm()` call offers `readSpill`, the tool loop uses the same store
-  for any tool result over the `maxToolResultChars` cap, so a long page from
-  `fetchMarkdown` reaches the model the same way: a preview and a name.
-  When it does not, the loop cuts the result at the cap.
+  When an `llm()` call sets `spillToolResultsOver`, the tool loop uses the
+  same store for any tool result longer than that or than
+  `maxToolResultChars`, so a long page from `fetchMarkdown` reaches the
+  model the same way: a preview and a name. The call's tools must then
+  include `readSpill`. Without the option, the loop cuts a long result at
+  `maxToolResultChars`, whatever the tools are.
 
   Two tools read saved output back: `readSpill` for the whole text or a
   slice of lines, and `grepSpill` to search it. Both take a name, never a

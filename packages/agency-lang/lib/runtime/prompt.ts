@@ -93,7 +93,6 @@ import {
 import { isAborted } from "./abortedResult.js";
 import {
   assertUniqueToolNames,
-  capToolResultForLlm,
   dropNullDefaultedArgs,
   failureTier,
   invokeOnFreshThreadStore,
@@ -108,9 +107,9 @@ import {
   unwrapToolResultForLlm,
   toolArgumentsFor,
   callFromOutside,
-  overCapFor,
+  spillSettings,
+  toolResultCapper,
 } from "./toolInvocation.js";
-import { spillReaders } from "./toolOutputStore.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -608,6 +607,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     tools: _extractedTools,
     memory: memoryOption,
     maxToolResultChars: callMaxToolResultChars,
+    spillToolResultsOver: callSpillOver,
     maxRepeatedToolCalls: ccMaxRepeatedToolCalls,
     maxToolCallRounds: ccMaxToolCallRounds,
     retries: ccRetries,
@@ -624,6 +624,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       memory?: boolean | { model?: string };
       replyLimits?: ReplyLimits;
       maxToolResultChars?: number;
+      spillToolResultsOver?: number;
       maxRepeatedToolCalls?: number;
       maxToolCallRounds?: number;
       label?: string;
@@ -688,9 +689,9 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   const clientConfig = withHostKeys(ctx.host.settings, hosted);
 
   const toolResultCap = resultCap(callMaxToolResultChars, stackMaxToolResultChars, ctx);
-  const readers = spillReaders(exposedFunctions);
-  const capForLlm = (value: any, tool: AgencyFunction) =>
-    capToolResultForLlm(value, toolResultCap, overCapFor(run, readers, tool));
+  // Throws before the first request, so nothing reaches smoltalk.
+  const spill = spillSettings(run, callSpillOver, stackDefaults, exposedFunctions);
+  const capForLlm = toolResultCapper(toolResultCap, spill);
 
   // Restore or initialize messages.
   //
@@ -973,7 +974,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         marks,
         rejected: true,
       });
-      stack.deleteBranch(branchKey);
+      stack.setResultOnBranch(branchKey, toolResult);
       return { toolResult, invokeOutcome: "rejected" };
     };
 
@@ -1015,7 +1016,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       } else {
         pushMessage(TIER_SUFFIX[tier]);
       }
-      stack.deleteBranch(branchKey);
+      stack.setResultOnBranch(branchKey, toolResult);
       return { toolResult, invokeOutcome: "failed" };
     };
 
@@ -1528,17 +1529,6 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           });
           const verdict: GateVerdict = self.runnerState.gateVerdicts[invocationKey];
 
-          // Recorded inside the invoke step. A completed non-success
-          // invocation (failed, rejected, crashed) already answered the
-          // model, so on replay there is nothing left to run. A success
-          // falls through: its remaining steps no-op via completedSteps.
-          // An interrupted invocation records nothing — its invoke step
-          // re-runs on resume to consume the user's response.
-          const priorOutcome: string | undefined = self.runnerState.invokeOutcomes[invocationKey];
-          if (priorOutcome !== undefined && priorOutcome !== "success") {
-            return;
-          }
-
           // A refused call never reaches the tool: no start/end hooks,
           // no failure count, one notice message in its own step (the
           // step key matches the verdict, e.g. `.removed`).
@@ -1607,8 +1597,6 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           // that logged its toolCallStart. Forgotten once the tool is done.
           const spanId = branchRun.log.reopenSpan("toolExecution", self.runnerState, invocationKey);
           let toolResult: any;
-          let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
-            "success";
 
           // Persist the measured tool execution duration in
           // self.runnerState so resume (where the invoke step is
@@ -1658,22 +1646,20 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             await pr.invokeTool(b, `round.${round}.tool.${callSlug}.invoke`, call, async () => {
               const outcome = await runInvokeStep(call);
               toolResult = outcome.toolResult;
-              invokeOutcome = outcome.invokeOutcome;
-              if (outcome.invokeOutcome === "success") {
-                self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
-              }
               // Inside the idempotent invoke step, so a resume does not
-              // count the same run twice. The interrupted outcome is
-              // never recorded: its invoke step re-runs on resume, and a
-              // recorded outcome would short-circuit that re-run.
+              // count the same run twice. Interrupted calls keep this
+              // step pending until they resume and settle.
               if (outcome.invokeOutcome !== "interrupted") {
+                self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
                 noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
                 self.runnerState.invokeOutcomes[invocationKey] = outcome.invokeOutcome;
               }
               return outcome.interrupts;
             });
 
-            if (b.interrupts || invokeOutcome !== "success") return;
+            if (b.interrupts) {
+              return;
+            }
 
             // On resume after an end-hook bailout, the `invoke` step is
             // skipped and `toolResult` is undefined. Restore it from the
@@ -1681,6 +1667,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
             // the bailout, so the end-hook sees the actual tool output.
             if (toolResult === undefined) {
               toolResult = stack.getBranch(branchKey)?.result?.result;
+            }
+            // A guard abort is still unwinding to its owner, not a
+            // completed call. Thrown cancellations already bypass this path.
+            if (isAborted(toolResult)) {
+              return;
             }
 
             // Reuse the persisted duration so onToolCallEnd /
@@ -1699,6 +1690,12 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
                 stateStack: branchStack,
               });
             });
+            // Failures and rejections already wrote their own log/reply in
+            // the invoke step. Read its persisted outcome so replay follows
+            // the same path. Only successes write the toolCall event.
+            if (self.runnerState.invokeOutcomes[invocationKey] !== "success") {
+              return;
+            }
             // Wrap the toolCall log in its own b.step so it's idempotent
             // when pr.parallel re-runs a fully-completed branch on resume
             // (e.g. after a later `nextLlmCall` step bails). Without this

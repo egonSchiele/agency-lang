@@ -1,12 +1,22 @@
 // The rows the timeline draws: the kernel's spans, plus one bar per round
-// for an llmCall that holds several. Round rows are a drawing decision, so
-// they live outside spans.ts and take no part in self-time.
+// for an llmCall that holds several, and one row per tool the provider ran
+// inside a round. Round and hosted rows are a drawing decision, so they live
+// outside spans.ts and take no part in self-time.
+import { owningRowId, type HostedCall } from "../hostedCalls.js";
 import { parseRoundId, type Round } from "./rounds.js";
 import type { TimelineSpan } from "./spans.js";
 
 export type SpanRow = { kind: "span"; id: string; depth: number; span: TimelineSpan };
 export type RoundRow = { kind: "round"; id: string; depth: number; round: Round };
-export type TimelineRow = SpanRow | RoundRow;
+/** A tool the provider ran inside `round`. The log records no time for it. */
+export type HostedRow = {
+  kind: "hosted";
+  id: string;
+  depth: number;
+  round: Round;
+  call: HostedCall;
+};
+export type TimelineRow = SpanRow | RoundRow | HostedRow;
 
 /** A span and the spans nested under it. */
 type SpanBlock = { span: TimelineSpan; children: SpanBlock[] };
@@ -39,6 +49,10 @@ export function rowIdFor(
   const isDrawn = (id: string): boolean => rows.some((row) => row.id === id);
   if (isDrawn(focusId)) {
     return focusId;
+  }
+  const owner = owningRowId(focusId);
+  if (owner !== focusId) {
+    return rowIdFor(owner, rows, rounds);
   }
   const parsed = parseRoundId(focusId);
   const isKnownRound = rounds.some((round) => round.id === focusId);
@@ -95,9 +109,17 @@ function rowsFor(
   return inOrder.flatMap((entry) => entry.rows);
 }
 
+/** The round's row, then the tools the provider ran inside it. */
 function placeRound(round: Round, depth: number): Placed {
   const row: RoundRow = { kind: "round", id: round.id, depth, round };
-  return { start: round.start, tieBreak: ROUND_BEFORE_SPAN, rows: [row] };
+  const hosted: HostedRow[] = round.hostedCalls.map((call) => ({
+    kind: "hosted",
+    id: call.id,
+    depth: depth + 1,
+    round,
+    call,
+  }));
+  return { start: round.start, tieBreak: ROUND_BEFORE_SPAN, rows: [row, ...hosted] };
 }
 
 /** Only direct tool children can belong to a call in this scope. */

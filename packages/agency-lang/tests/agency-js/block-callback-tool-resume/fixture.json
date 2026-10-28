@@ -1,4 +1,13 @@
 {
   "finalData": "done",
-  "llmCallCount": 3
+  "llmCallCount": 3,
+  "toolStarts": [
+    "interruptTool",
+    "noopTool"
+  ],
+  "endsAtPause": [],
+  "toolEnds": [
+    "interruptTool",
+    "noopTool"
+  ]
 }

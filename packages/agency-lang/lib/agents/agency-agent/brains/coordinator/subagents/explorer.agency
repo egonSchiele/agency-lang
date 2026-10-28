@@ -36,7 +36,7 @@ export handoff def explorerAgent(
   @param maxDollars - spend cap in dollars, when the user gave one; null
     for the default ($20).
   """
-  announce("explorer", userMsg)
+  announce("explorerAgent", userMsg)
   return stdExplorerAgent(
     question: userMsg,
     maxCost: maxDollars ?? $20.00,

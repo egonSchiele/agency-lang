@@ -4,6 +4,15 @@
 */
 import { bundledDocsDir } from "std::skills"
 
+/** The `spillToolResultsOver` every agent that carries the spill readers
+  passes to its llm() call. A tool result longer than this, or longer than
+  the call's maxToolResultChars, is saved in the run, and the model gets a
+  preview and a name to read the rest with. 100,000 is the default
+  maxToolResultChars, so with that limit or a lower one, an agent saves
+  exactly the results it saved before this option existed. With a higher
+  limit or none, it now saves anything over 100,000. */
+export static const AGENT_SPILL_OVER = 100000
+
 /** Approves reads of the docs that ship in this package and rejects every
   other interrupt. Run a worker under it when it may look up syntax but
   must not write, run commands, or escape a budget trip. The stdlib eval
@@ -37,6 +46,7 @@ export def llmOptions(
   thinking: boolean = false,
   validationRetries: number = 0,
   maxToolCallRounds: number = 0,
+  spillToolResultsOver: number = 0,
 ): any {
   """
   Build an llm options object with an optional model override. Returns a
@@ -52,6 +62,7 @@ export def llmOptions(
   @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
   @param validationRetries - How many times to resend a structured-output call whose answer failed schema validation, or 0 for none
   @param maxToolCallRounds - Tool-call rounds the call may use, or 0 for the configured default
+  @param spillToolResultsOver - Save a tool result longer than this or than maxToolResultChars in the run and send the model a preview, or 0 to cut long results instead. The tools must include readSpill
   """
   const options: any = {
     tools: tools
@@ -76,6 +87,9 @@ export def llmOptions(
   }
   if (maxToolCallRounds > 0) {
     options.maxToolCallRounds = maxToolCallRounds
+  }
+  if (spillToolResultsOver > 0) {
+    options.spillToolResultsOver = spillToolResultsOver
   }
   return options
 }

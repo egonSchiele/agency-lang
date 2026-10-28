@@ -7,6 +7,7 @@
 import {
   isSpillReader,
   outputNotice,
+  spillReaders,
   storeOutput,
   type SpillReaders,
   type ToolIdentity,
@@ -155,48 +156,93 @@ export function stringifyToolResult(result: any, indent?: number): string {
   }
 }
 
-/** What the loop does with a tool result over the cap. */
-export type OverCap =
-  /** The model has no `readSpill`, so a saved result could not be read
-   *  back: cut it at the cap. */
-  | { kind: "cut" }
-  /** The result came from `readSpill` or `grepSpill`, so its text is
-   *  already saved: cut it and point at a smaller slice, rather than save
-   *  a second copy under a new name. */
-  | { kind: "slice" }
-  /** Save it whole and give the model a notice naming it. */
-  | { kind: "save"; run: Run; readers: SpillReaders };
+/** What the call's `spillToolResultsOver` says: save a result longer than
+ *  `over` in the run, and name the readers by the names the model sees. */
+export type SpillSettings = { over: number; run: Run; readers: SpillReaders };
 
-/** How the loop treats an over-cap result from `tool`, given the readers
- *  the call offers (null when it offers no `readSpill`). */
-export function overCapFor(run: Run, readers: SpillReaders | null, tool: ToolIdentity): OverCap {
-  if (readers === null) return { kind: "cut" };
-  if (isSpillReader(tool)) return { kind: "slice" };
-  return { kind: "save", run, readers };
+/** The spill settings of one `llm()` call, or null when
+ *  `spillToolResultsOver` is unset or not above 0. The tool list is read
+ *  only to refuse a call whose model could not read a saved result back,
+ *  and to name the readers; it never changes what happens to a result.
+ *  `branchDefaults` is what `setLlmOptions` set, which may not carry the
+ *  option: as a default, it would make every later call without the
+ *  readers throw. `LlmDefaults` has no such key, but a TypeScript caller
+ *  can still put one there. See docs/dev/stdlib/spill.md. */
+export function spillSettings(
+  run: Run,
+  perCall: number | undefined,
+  branchDefaults: object,
+  tools: ToolIdentity[],
+): SpillSettings | null {
+  if ("spillToolResultsOver" in branchDefaults) {
+    throw new Error("spillToolResultsOver is set per llm() call, not with setLlmOptions.");
+  }
+  if (perCall === undefined || !(perCall > 0)) return null;
+  const readers = spillReaders(tools);
+  if (readers === null) {
+    const offered = tools.map((tool) => tool.name).join(", ");
+    throw new Error(
+      `llm() was given spillToolResultsOver, but its tools (${offered}) do not include ` +
+        `readSpill from std::spill, so the model could not read a saved result back. ` +
+        `Add readSpill and grepSpill to the tools, for example with spillTools() from ` +
+        `std::agents/lib/toolkits.`,
+    );
+  }
+  return { over: perCall, run, readers };
 }
 
-/** Cap a tool result for the LLM. Returns the ORIGINAL value untouched
- *  when its serialized form is within `cap` characters (so smoltalk
- *  serializes it exactly as before) or when the cap is disabled (`cap <= 0`
- *  or non-finite). Over the cap, `overCap` decides: the result is cut with
- *  a marker, or saved in the run's output store and replaced by the notice
- *  `safeBash` gives for long command output. */
-export function capToolResultForLlm(result: any, cap: number, overCap: OverCap): any {
-  if (!Number.isFinite(cap) || cap <= 0) return result;
+const SLICE_NOTE =
+  " The output is still saved whole: read a smaller slice with offset and limit, or narrow the search.";
+
+/** `text` cut so that it and the truncation marker after it fit in
+ *  `limit` characters. A limit too small for the marker gets the start of
+ *  the text alone, which is more use to the model than part of a marker. */
+function cutAt(text: string, limit: number, note: string): string {
+  const marker = (shown: number) =>
+    `\n\n[tool result truncated: showing ${shown} of ${text.length} chars]${note}`;
+  const shown = limit - marker(limit).length;
+  if (shown <= 0) return text.slice(0, limit);
+  return text.slice(0, shown) + marker(shown);
+}
+
+/** Cap a tool result for the LLM. `cap` is `maxToolResultChars`, a ceiling
+ *  on what the model receives (`0` or less, or non-finite, means none).
+ *  With `spill` set, a result over the spill value or the cap is saved in
+ *  the run's output store and replaced by a notice that fits the cap;
+ *  without it, a result over the cap is cut. A reader's own result is
+ *  never saved again. A result within the limits is returned as the
+ *  ORIGINAL value, so smoltalk serializes it exactly as before. */
+export function capToolResultForLlm(
+  result: any,
+  cap: number,
+  spill: SpillSettings | null,
+  tool: ToolIdentity,
+): any {
+  const ceiling = Number.isFinite(cap) && cap > 0 ? cap : Infinity;
+  const saveOver = spill === null ? ceiling : Math.min(spill.over, ceiling);
   const text = stringifyToolResult(result);
-  if (text.length <= cap) return result;
-  if (overCap.kind === "save") {
+  if (isSpillReader(tool)) {
+    // Its text is already saved: cut it, never save a copy under a new name.
+    return text.length > saveOver ? cutAt(text, saveOver, SLICE_NOTE) : result;
+  }
+  if (spill !== null && text.length > saveOver) {
     // An object is saved indented, so its JSON has lines that readSpill's
     // offset and limit, and grepSpill, can work on.
     const saved = stringifyToolResult(result, 2);
-    return outputNotice(saved, storeOutput(overCap.run, saved), null, overCap.readers);
+    const notice = outputNotice(saved, storeOutput(spill.run, saved), null, spill.readers, ceiling);
+    // The notice already fits unless the cap is too small for the text
+    // around its preview; then the cap still wins.
+    return notice.slice(0, ceiling);
   }
-  const marker = `[tool result truncated: showing ${cap} of ${text.length} chars]`;
-  if (overCap.kind === "cut") return text.slice(0, cap) + `\n\n${marker}`;
-  return (
-    text.slice(0, cap) +
-    `\n\n${marker} The output is still saved whole: read a smaller slice with offset and limit, or narrow the search.`
-  );
+  if (text.length <= ceiling) return result;
+  return cutAt(text, ceiling, "");
+}
+
+/** `capToolResultForLlm` with one `llm()` call's cap and spill settings
+ *  fixed: what the loop runs every tool result, failure message, and
+ *  rejection reason through. */
+export function toolResultCapper(cap: number, spill: SpillSettings | null) {
+  return (result: any, tool: ToolIdentity) => capToolResultForLlm(result, cap, spill, tool);
 }
 
 /** LLMs routinely emit an explicit `null` for an optional tool argument

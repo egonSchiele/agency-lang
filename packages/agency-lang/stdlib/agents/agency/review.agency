@@ -9,7 +9,7 @@
 import { TypeCheckReport, typecheck, parseAST } from "std::agency"
 import { Feedback, mergeFeedback, failOpenFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
-import { llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared"
+import { AGENT_SPILL_OVER, llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared"
 import { agencyDocTools, webTools, spillTools } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
 import { agentSkill } from "std::skills"
@@ -199,6 +199,7 @@ def judgeAgainstTask(
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools).concat([saveDraft]),
+      spillToolResultsOver: AGENT_SPILL_OVER,
       hostedTools: hostedSearchTools(model, provider),
       validationRetries: 2,
     ),

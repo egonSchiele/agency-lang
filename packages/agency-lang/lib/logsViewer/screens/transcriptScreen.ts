@@ -16,6 +16,7 @@ import {
 import { fmtDuration } from "../spanText.js";
 import { THEME } from "../theme.js";
 import { TOOL_STATUS_MARK, type ToolStatus } from "../story.js";
+import { hostedCallShortLabel, owningRowId } from "../hostedCalls.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import {
   threadKey,
@@ -52,10 +53,10 @@ const LAYOUT = {
 type BlockLines = { id: string; start: number; lines: Painted[] };
 /** Blocks Enter opens: the ones that hold something back until asked, and
  *  a thread row, which folds its group. */
-const EXPANDABLE = ["system", "tool", "thread"];
+const EXPANDABLE = ["system", "tool", "hosted", "thread"];
 /** Blocks drawn as a box. A turn or thread divider, a pause and a rewrite
  *  are rules across the pane, not messages. */
-const BOXED = ["system", "user", "handback", "assistant", "tool", "history", "error"];
+const BOXED = ["system", "user", "handback", "assistant", "tool", "hosted", "history", "error"];
 
 export class TranscriptScreen implements Screen {
   readonly screenName = "transcript" as const;
@@ -275,7 +276,7 @@ export class TranscriptScreen implements Screen {
   }
   focusId(): string | undefined {
     const block = this.selected();
-    return block?.kind === "tool" ? block.id : block?.roundId;
+    return block?.kind === "tool" || block?.kind === "hosted" ? block.id : block?.roundId;
   }
   /** The block as a row of the trace: a tool is its span, an assistant
    *  reply is its round, a user message is the round's user turn. A system
@@ -285,7 +286,7 @@ export class TranscriptScreen implements Screen {
     if (block === undefined) {
       return undefined;
     }
-    if (block.kind === "tool") {
+    if (block.kind === "tool" || block.kind === "hosted") {
       return block.id;
     }
     if (block.kind === "assistant") {
@@ -307,7 +308,7 @@ export class TranscriptScreen implements Screen {
       return;
     }
     const index = buildTreeIndex(trace);
-    const node = index.byId[parseRoundId(id)?.spanId ?? id];
+    const node = index.byId[parseRoundId(owningRowId(id))?.spanId ?? id];
     if (!node) {
       return;
     }
@@ -689,6 +690,9 @@ function blockStats(block: TranscriptBlock): string {
       block.row.durationMs === undefined ? "no duration" : fmtDuration(block.row.durationMs);
     return `${block.outputLines} ${block.outputLines === 1 ? "line" : "lines"} · ${duration}`;
   }
+  if (block.kind === "hosted") {
+    return `run by ${block.row.call.provider || "the provider"} · no timing`;
+  }
   return "";
 }
 /** Only a problem gets a mark in the call list; a plain result does not. */
@@ -709,6 +713,8 @@ function spineLabel(block: TranscriptBlock, hasGroups: boolean): string {
     }
     case "tool":
       return `${indent}${toolMark(block.row.status)}${block.row.name}`;
+    case "hosted":
+      return `${indent}${hostedCallShortLabel(block.row.call)}`;
     case "thread":
       return `${indent}Thread · ${block.label}`;
     case "turn": {
@@ -747,7 +753,8 @@ function outlineLevel(block: TranscriptBlock, hasGroups: boolean): number {
   if (block.kind === "thread") {
     return base;
   }
-  return base + (block.kind === "tool" ? 2 : 1) - (hasGroups ? 0 : 1);
+  const underCall = block.kind === "tool" || block.kind === "hosted";
+  return base + (underCall ? 2 : 1) - (hasGroups ? 0 : 1);
 }
 function spineColor(block: TranscriptBlock): string {
   const role = block.kind === "history" ? block.message.role : block.kind;
@@ -768,14 +775,15 @@ function spineColor(block: TranscriptBlock): string {
   }
   if (
     role === "error" ||
-    (block.kind === "tool" && ["failed", "rejected"].includes(block.row.status))
+    (block.kind === "tool" && ["failed", "rejected"].includes(block.row.status)) ||
+    (block.kind === "hosted" && block.row.call.failed)
   ) {
     return THEME.kind.error;
   }
   if (block.kind === "tool" && block.row.status === "awaitingApproval") {
     return THEME.kind.interrupt;
   }
-  if (block.kind === "tool") {
+  if (block.kind === "tool" || block.kind === "hosted") {
     return THEME.kind.tool;
   }
   return block.kind === "system" ? THEME.chrome : THEME.text;

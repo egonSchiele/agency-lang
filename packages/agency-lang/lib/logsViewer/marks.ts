@@ -96,6 +96,8 @@ export function anchorFor(row: StoryRow): Anchor {
       return { at, name: "user turn" };
     case "tool":
       return { at, name: row.name };
+    case "hosted":
+      return { at, thread: row.round.threadLabel, name: row.call.tool };
     case "interrupt":
       return { at, name: row.interrupt.effect };
     case "llmGroup":

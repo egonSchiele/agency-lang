@@ -179,15 +179,16 @@ response.
 
 ## A result over the cap
 
-When the call offers `readSpill`, a tool result longer than
-`maxToolResultChars` is not cut. The loop saves the whole text in the
-run's output store and sends the model the same preview `safeBash` gives
-for long command output: a few lines from each end and a name to read the
-rest with `readSpill`. A result from `readSpill` or `grepSpill` itself is
-already saved, so it is cut with a marker saying to read a smaller slice.
-When the call offers no `readSpill`, the result is cut at the cap with the
-`[tool result truncated]` marker. The store, its cap, and the readers are
-in `docs/dev/stdlib/spill.md`.
+A tool result longer than `maxToolResultChars` is cut at the cap with the
+`[tool result truncated]` marker, which counts toward the cap. When the
+call sets `spillToolResultsOver`, a result longer than that or than the cap
+is not cut: the loop saves the whole text in the run's output store and
+sends the model the same preview `safeBash` gives for long command output,
+a few lines from each end and a name to read the rest with `readSpill`. A
+result from `readSpill` or `grepSpill` itself is already saved, so it is
+cut with a marker saying to read a smaller slice. Which tools the call
+offers never changes any of this. The rules, the store, and the readers
+are in `docs/dev/stdlib/spill.md`.
 
 ## Tests
 

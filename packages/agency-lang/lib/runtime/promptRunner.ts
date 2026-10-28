@@ -4,7 +4,7 @@ import { debugStep, whileBusy, type StopLocation } from "./debugger.js";
 import { isInsideCallback } from "./hooks.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
-import { hasInterrupts, type Interrupt } from "./interrupts.js";
+import { checkpointInterrupts, hasInterrupts, type Interrupt } from "./interrupts.js";
 import { runBatch, type RunBatchResult } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -343,6 +343,7 @@ export class PromptRunner {
         scopeName: cp.scopeName,
         stepPath: cp.stepPath,
       },
+      interrupts: checkpointInterrupts(interrupts),
     });
     throw new PromptBailout(interrupts);
   }
@@ -501,7 +502,7 @@ export class PromptRunner {
         beforeCheckpoint: () => {
           this.opts.self.messagesJSON = this.opts.snapshotMessages();
         },
-        onCheckpoint: (cpId) => {
+        onCheckpoint: (cpId, interrupts) => {
           const cp = this.opts.ctx.checkpoints.get(cpId)!;
           run.log.checkpointCreated({
             checkpointId: cpId,
@@ -511,6 +512,7 @@ export class PromptRunner {
               scopeName: cp.scopeName,
               stepPath: cp.stepPath,
             },
+            interrupts: checkpointInterrupts(interrupts),
           });
         },
       },

@@ -18,7 +18,7 @@ Return the researcher's tools: the encyclopedia and fetch tools that need
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L9))
 
 ### researcherAgent
 
@@ -36,4 +36,4 @@ Research a topic in depth and give a response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/composable/researcher.agency#L39))

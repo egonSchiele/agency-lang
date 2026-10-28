@@ -42,7 +42,7 @@ export handoff def oracleAgent(
   @param maxDollars - spend cap in dollars, when the user gave one; null
     for the default ($20).
   """
-  announce("oracle", userMsg)
+  announce("oracleAgent", userMsg)
   return stdOracleAgent(
     question: userMsg,
     maxCost: maxDollars ?? $20.00,

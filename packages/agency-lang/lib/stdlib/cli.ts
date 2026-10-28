@@ -10,6 +10,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./prompts.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
+import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
@@ -153,8 +154,17 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
   history.unshift(entry);
 }
 
+/** What the REPL prints for a turn's reply: a non-empty string as is,
+ *  and a list of interrupts as the notice that the turn stopped on them.
+ *  Anything else prints nothing. */
+function replyOutput(reply: unknown): string | undefined {
+  if (typeof reply === "string" && reply.length > 0) return reply;
+  if (hasInterrupts(reply)) return escapedTurnText(reply);
+  return undefined;
+}
+
 /** Drives the line-mode REPL loop. Per iteration: prompt → await
- *  user input → call `onSubmit` → print any non-empty string return
+ *  user input → call `onSubmit` → print its reply (see `replyOutput`)
  *  → exit when `onSubmit` returns `false` or the user hits Ctrl+D /
  *  Ctrl+C at an idle prompt.
  *
@@ -1519,9 +1529,8 @@ export async function _runLineRepl(
       }
       stopActiveSpinner();
       if (reply === false) break;
-      if (typeof reply === "string" && reply.length > 0) {
-        process.stdout.write(reply + "\n");
-      }
+      const shown = replyOutput(reply);
+      if (shown !== undefined) process.stdout.write(shown + "\n");
       const tokensAfter = readTokenSnapshot(replCtx);
       // Per-turn footer (WL2). Reads the same `status` callback the
       // TUI's status bar uses, plus our locally-tracked turn stats
@@ -1765,6 +1774,7 @@ export const _internal = {
   packOptions,
   renderInterruptFooter,
   stickyInterruptPrompt,
+  replyOutput,
 };
 
 export function _clearScreen(): void {

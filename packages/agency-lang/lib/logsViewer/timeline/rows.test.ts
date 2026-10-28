@@ -148,6 +148,12 @@ describe("timelineRows", () => {
 });
 
 describe("rowIdFor", () => {
+  it("lands a hosted call that is not drawn on the round that ran it", () => {
+    const { rows, rounds } = describeRows(
+      trace([span("llmCall", [completion(1000)], { id: "L" })]),
+    );
+    expect(rowIdFor("round:L:0:hosted:3", rows, rounds)).toBe("round:L:0");
+  });
   it("lands a lone round on its own row", () => {
     const { rows, rounds } = describeRows(
       trace([span("llmCall", [completion(1000)], { id: "L" })]),

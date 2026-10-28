@@ -1,5 +1,6 @@
 import { contentText, type ToolCallRequest } from "../statelog/wireAccessors.js";
 import { fmtTokens, fmtUsd } from "./format.js";
+import { hostedCallTitle } from "./hostedCalls.js";
 import {
   ARGUMENT_PREVIEW_CHARS,
   cutArguments,
@@ -95,6 +96,8 @@ export function transcriptPayload(
       ];
     case "tool":
       return toolPayload(block, expanded, options);
+    case "hosted":
+      return hostedPayload(block, expanded);
     case "history":
       return [
         {
@@ -267,6 +270,37 @@ function resultPreview(block: Extract<TranscriptBlock, { kind: "tool" }>): Paylo
   ];
 }
 
+/** A tool the provider ran inside the call above it. Collapsed, the box
+ *  says what it did in one line; Enter shows the trace's detail for it. */
+function hostedPayload(
+  block: Extract<TranscriptBlock, { kind: "hosted" }>,
+  expanded: boolean,
+): PayloadLine[] {
+  const { call } = block.row;
+  const heading: PayloadLine = {
+    kind: "heading",
+    tone: call.failed ? "error" : "tool",
+    text: hostedCallTitle(call),
+  };
+  if (expanded) {
+    return [heading, ...payloadFor(block.row, { raw: false }).slice(1)];
+  }
+  return [
+    heading,
+    ...(call.gist === ""
+      ? []
+      : [
+          {
+            kind: "text" as const,
+            text: call.gist,
+            indent: 0,
+            role: "plain" as const,
+            oneRow: true,
+          },
+        ]),
+    { kind: "meta", text: "(Enter opens)" },
+  ];
+}
 /** Where a rewrite starts. A thread that was only cut short has no first
  *  changed message to point at, so it reads as cut after its last one. */
 function changedWhere(block: { firstChangedAt: number; messagesAfter: number }): string {

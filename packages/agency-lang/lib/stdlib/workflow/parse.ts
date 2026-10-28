@@ -5,7 +5,7 @@
  * resolve's job.
  */
 import { isReservedInternalName } from "../../reservedNames.js";
-import { isIdentifier, isObject, REF_PATH, type Problem, type Workflow } from "./types.js";
+import { isIdentifier, isObject, REF_PATH, refsIn, type Problem, type Workflow } from "./types.js";
 
 export type ParseResult =
   { workflow: Workflow; problems: [] } | { workflow: null; problems: Problem[] };
@@ -44,17 +44,7 @@ function ownerOf(step: Json): string | null {
   return typeof step.id === "string" ? step.id : null;
 }
 
-/** Problems with every `$ref`-shaped object inside `value`, all reported on `field`. */
-function refProblems(step: string | null, field: string, value: unknown): Problem[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => refProblems(step, field, item));
-  }
-  if (!isObject(value)) {
-    return [];
-  }
-  if (!("$ref" in value)) {
-    return Object.values(value).flatMap((item) => refProblems(step, field, item));
-  }
+function refShapeProblems(step: string | null, field: string, value: Json): Problem[] {
   if (Object.keys(value).length !== 1) {
     return [problem(step, field, "a reference must have exactly one key, $ref")];
   }
@@ -64,6 +54,43 @@ function refProblems(step: string | null, field: string, value: unknown): Proble
     return [];
   }
   return [problem(step, field, `reference ${JSON.stringify(path)} is not a well-formed path`)];
+}
+
+/** Keys that cannot be written into the program. An object holding a
+ *  reference is built from its keys as names, so they must be identifiers;
+ *  any other object is lifted whole, which refuses only `__proto__`. */
+function keyProblems(step: string | null, field: string, value: Json): Problem[] {
+  const holdsRef = refsIn(value).length > 0;
+  return Object.keys(value).flatMap((key) => {
+    if (key === "__proto__") {
+      return [problem(step, field, 'an object may not have the key "__proto__"')];
+    }
+    if (holdsRef && !isIdentifier(key)) {
+      const message = `key "${key}" is not an identifier; an object that holds a reference needs identifier keys`;
+      return [problem(step, field, message)];
+    }
+    return [];
+  });
+}
+
+/** Problems with a value written into the program, all reported on `field`:
+ *  a malformed reference, a key that cannot be written, or a number with no
+ *  literal. */
+function valueProblems(step: string | null, field: string, value: unknown): Problem[] {
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return [problem(step, field, `${value} cannot be written as a number literal`)];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => valueProblems(step, field, item));
+  }
+  if (!isObject(value)) {
+    return [];
+  }
+  if ("$ref" in value) {
+    return refShapeProblems(step, field, value);
+  }
+  const nested = Object.values(value).flatMap((item) => valueProblems(step, field, item));
+  return [...keyProblems(step, field, value), ...nested];
 }
 
 /** The property names an `inputs` type declares, nested ones included.
@@ -100,6 +127,9 @@ const stepsRule: Rule = (value) => {
   if (!Array.isArray(value.steps)) {
     return [problem(null, "steps", "steps must be a list")];
   }
+  if (value.steps.length === 0) {
+    return [problem(null, "steps", "steps must hold at least one step")];
+  }
   return value.steps.flatMap((step, index) =>
     isObject(step) ? [] : [problem(null, `steps[${index}]`, `step ${index + 1} must be an object`)],
   );
@@ -127,7 +157,7 @@ const toolStepRule: StepRule = (step, owner) => {
   const argNameProblems = args.flatMap(([name]) =>
     nameProblems(owner, `args.${name}`, "argument name", name),
   );
-  const argRefProblems = args.flatMap(([name, arg]) => refProblems(owner, `args.${name}`, arg));
+  const argRefProblems = args.flatMap(([name, arg]) => valueProblems(owner, `args.${name}`, arg));
   return [...moduleProblems, ...toolProblems, ...argNameProblems, ...argRefProblems];
 };
 
@@ -143,7 +173,7 @@ const llmStepRule: StepRule = (step, owner) => {
       ? []
       : [problem(owner, "prompt", "prompt must be a non-empty string")];
   const contextProblems = Array.isArray(step.context)
-    ? step.context.flatMap((item, index) => refProblems(owner, `context[${index}]`, item))
+    ? step.context.flatMap((item, index) => valueProblems(owner, `context[${index}]`, item))
     : [problem(owner, "context", "context must be a list")];
   const outputProblems =
     typeof step.output === "string"
@@ -175,7 +205,7 @@ const STEP_RULES: StepRule[] = [idRule, kindRule];
 const eachStepRule: Rule = (value) =>
   stepsOf(value).flatMap((step) => STEP_RULES.flatMap((rule) => rule(step, ownerOf(step))));
 
-const resultRule: Rule = (value) => refProblems(null, "result", value.result);
+const resultRule: Rule = (value) => valueProblems(null, "result", value.result);
 
 const limitsRule: Rule = (value) => {
   if (value.limits === undefined) {

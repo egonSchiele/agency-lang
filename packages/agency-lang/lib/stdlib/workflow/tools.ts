@@ -13,7 +13,7 @@ import type { ToolRef } from "./types.js";
 
 /** The module text is written into an import line, so it may hold no quote,
  *  backslash, space, or newline. */
-const MODULE_PATH = /^[A-Za-z0-9_@:./-]+$/;
+export const MODULE_PATH = /^[A-Za-z0-9_@:./-]+$/;
 
 /** Agency's own stdlib is compiled from the package root, so its ids start
  *  here. A user file in a folder named `stdlib` has a longer id and stays

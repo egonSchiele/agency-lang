@@ -1,3 +1,4 @@
+import type { Code } from "../template.js";
 import { variableNameParser } from "../../parsers/parsers.js";
 import { isReservedInternalName } from "../../reservedNames.js";
 
@@ -138,4 +139,17 @@ export type ResolvedWorkflow = {
   result: ResolvedValue | null;
   limits: Limits | null;
   warnings: Problem[];
+};
+
+/** The step and field a generated statement belongs to. */
+export type Owner = { step: string; field: string | null };
+export type Fragment = { code: Code; owner: Owner | null };
+/** A type the program declares. Its text is canonicalized in render. */
+export type TypeDecl = { name: string; text: string; owner: Owner | null };
+export type Lowered = {
+  imports: string[];
+  types: TypeDecl[];
+  body: Fragment[];
+  result: Code;
+  guard: Limits | null;
 };

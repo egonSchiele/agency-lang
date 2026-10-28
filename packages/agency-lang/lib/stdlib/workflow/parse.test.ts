@@ -114,6 +114,42 @@ describe("parseWorkflow", () => {
     ]);
   });
 
+  it("refuses a value that cannot be written as a literal", () => {
+    const withProto = JSON.parse('{ "__proto__": 1 }');
+    // Infinity last: each helper copies through JSON, which would turn it into null.
+    const wf = withArg(withArg(mealPlan, "add", "section", withProto), "list", "query", 1e400);
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "list",
+        field: "args.query",
+        message: "Infinity cannot be written as a number literal",
+      },
+      { step: "add", field: "args.section", message: 'an object may not have the key "__proto__"' },
+    ]);
+  });
+
+  it("refuses a non-identifier key in an object that holds a reference", () => {
+    const wf = withArg(mealPlan, "add", "items", { "a-b": { $ref: "steps.meals" } });
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "add",
+        field: "args.items",
+        message:
+          'key "a-b" is not an identifier; an object that holds a reference needs identifier keys',
+      },
+    ]);
+  });
+
+  it("accepts any key in an object that holds no reference", () => {
+    expect(parseWorkflow(withArg(mealPlan, "add", "section", { "a-b": 1 })).problems).toEqual([]);
+  });
+
+  it("refuses a workflow with no steps", () => {
+    expect(parseWorkflow(withFields(mealPlan, { steps: [], result: "x" })).problems).toEqual([
+      { step: null, field: "steps", message: "steps must hold at least one step" },
+    ]);
+  });
+
   it("refuses an llm step with an empty prompt", () => {
     expect(parseWorkflow(withStep(mealPlan, 3, { prompt: "" })).problems).toEqual([
       { step: "meals", field: "prompt", message: "prompt must be a non-empty string" },

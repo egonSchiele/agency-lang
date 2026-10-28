@@ -153,3 +153,6 @@ export type Lowered = {
   result: Code;
   guard: Limits | null;
 };
+
+/** Source lines `from` to `to` (1-based, inclusive) belong to `owner`. */
+export type Range = { from: number; to: number; owner: Owner };

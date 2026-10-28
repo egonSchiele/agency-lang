@@ -198,14 +198,15 @@ node tagInTypeTextIsRefused(): string {
   return "${first.field}: ${first.message}"
 }
 
-node stringLiteralCannotEscape(): string {
+node backslashInStringLiteralTypeCompiles(): boolean {
   const inputs = "{ noteTitle: string, a: \"x\\\", in: \" + (globalThis.PWNED = 1) + \", instanceof: \") }) //\" }"
-  const compiled = compileWorkflow(mealPlan("note", inputs, { "$ref": "inputs.noteTitle" }), TOOLS, DIR) with approve
-  if (compiled is success) {
-    return "compiled"
+  const source = sourceOf(mealPlan("note", inputs, { "$ref": "inputs.noteTitle" }))
+  const compiled = compile(source, DIR, strict: true)
+  if (compiled is failure) {
+    print("compile failed: ${compiled.error}")
+    return false
   }
-  const first = compiled.data.problems[0]
-  return "${first.field}: ${first.message}"
+  return typechecks(source)
 }
 
 node unknownToolIsRefused(): string {

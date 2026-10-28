@@ -1,6 +1,5 @@
 import { color } from "@/utils/termcolors.js";
 import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
-import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
 import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
@@ -189,7 +188,9 @@ function mapTypeToSchemaInner(
         // dropped from toJSONSchema(...).
         let inner2 = inner;
         if (prop.description) {
-          inner2 += `.describe("${escape(prop.description)}")`;
+          // JSON.stringify escapes a backslash and a line break, which a raw
+          // description would leave to end the TypeScript string early.
+          inner2 += `.describe(${JSON.stringify(prop.description)})`;
         }
         // Optional key (a `T | null` property): in validation/parse mode make
         // the key optional and coalesce a missing key to null, so

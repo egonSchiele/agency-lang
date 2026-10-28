@@ -45,8 +45,6 @@ Workflow text reaches the generated source through three doors:
 
 Type text may not carry a `@validate` or `@jsonSchema` tag. A `@validate` names a function the generated program would call, and the workflow would be choosing it from the tools it imports.
 
-A string-literal type in that text may not hold a backslash or a line break. The compiler writes such a value between quotes without escaping it, so a backslash would end the string early in the compiled TypeScript. #1293 fixes the compiler; this refusal can go when it lands.
-
 A reference becomes an expression built from a generated name, `.value`, and a path that matched `REF_PATH`. A list or object argument that holds a reference is built by `list()` and `record()` from generated hole names. Its keys are written as names, so an object that holds a reference must have identifier keys.
 
 ## Why the scaffold is fixed text

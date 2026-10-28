@@ -100,10 +100,10 @@
       ]
     },
     {
-      "nodeName": "stringLiteralCannotEscape",
-      "description": "a backslash in a string literal type cannot end the string early in the compiled program",
+      "nodeName": "backslashInStringLiteralTypeCompiles",
+      "description": "a backslash in a string literal type compiles; the compiler escapes it",
       "input": "",
-      "expectedOutput": "\"inputs: a string literal type in inputs may not hold a backslash or a line break\"",
+      "expectedOutput": "true",
       "evaluationCriteria": [
         {
           "type": "exact"

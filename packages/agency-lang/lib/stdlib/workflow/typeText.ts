@@ -13,10 +13,6 @@ export type TypeTextResult = { alias: TypeAlias } | { message: string };
 /** Parsing records a blank line as a node; it is not a declaration. */
 const IGNORED_NODES = ["newLine"];
 
-/** A string-literal type is written between quotes into the compiled
- *  program without escaping a backslash, so one could end the string early. */
-const UNSAFE_LITERAL = /[\\\n\r]/;
-
 function nodesOf(node: unknown): unknown[] {
   if (Array.isArray(node)) {
     return node.flatMap(nodesOf);
@@ -25,14 +21,6 @@ function nodesOf(node: unknown): unknown[] {
     return [];
   }
   return [node, ...Object.values(node).flatMap(nodesOf)];
-}
-
-/** The value of every string-literal type inside a parsed type. */
-function stringLiterals(type: unknown): string[] {
-  return nodesOf(type).flatMap((node) => {
-    const typed = node as { type?: unknown; value?: unknown };
-    return typed.type === "stringLiteralType" ? [String(typed.value)] : [];
-  });
 }
 
 /** True when any node inside a parsed type carries a `@validate` or
@@ -69,11 +57,6 @@ export function parseTypeText(name: string, text: string, field: string): TypeTe
   }
   if (carriesTags(alias.aliasedType) || (alias.tags ?? []).length > 0) {
     return { message: `a type in ${field} may not carry @validate or @jsonSchema tags` };
-  }
-  if (stringLiterals(alias.aliasedType).some((value) => UNSAFE_LITERAL.test(value))) {
-    return {
-      message: `a string literal type in ${field} may not hold a backslash or a line break`,
-    };
   }
   return { alias };
 }

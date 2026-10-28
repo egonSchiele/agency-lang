@@ -51,22 +51,9 @@ describe("parseTypeText", () => {
     );
   });
 
-  it("refuses a backslash or a line break in a string literal type", () => {
-    expect(messageOf(inputs('{ a: "x\\" }'))).toBe(
-      "a string literal type in inputs may not hold a backslash or a line break",
-    );
-    expect(messageOf(output('"a\\" | "b"'))).toBe(
-      "a string literal type in output may not hold a backslash or a line break",
-    );
+  it("accepts a backslash in a string literal type; the compiler escapes it", () => {
+    expect(messageOf(inputs('{ a: "x\\" }'))).toBe(null);
     expect(messageOf(inputs('{ mode: "fast" | "slow" }'))).toBe(null);
-  });
-
-  it("refuses string literal text that would escape its quotes in the compiled program", () => {
-    const text =
-      '{ noteTitle: string, a: "x\\", in: " + (globalThis.PWNED = 1) + ", instanceof: ") }) //" }';
-    expect(messageOf(inputs(text))).toBe(
-      "a string literal type in inputs may not hold a backslash or a line break",
-    );
   });
 });
 

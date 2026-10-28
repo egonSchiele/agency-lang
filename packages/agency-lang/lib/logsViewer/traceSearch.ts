@@ -73,7 +73,7 @@ export function parsePickerQuery(query: string): PickerQuery {
   if (space === -1) {
     return { agentPrefix: rest, text: "" };
   }
-  return { agentPrefix: rest.slice(0, space), text: rest.slice(space + 1) };
+  return { agentPrefix: rest.slice(0, space), text: rest.slice(space + 1).trimStart() };
 }
 
 /** Keeps traces whose recorded name starts with `prefix`, case-sensitively.

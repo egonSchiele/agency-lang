@@ -103,6 +103,9 @@ describe("parsePickerQuery", () => {
       text: "time out",
     });
   });
+  it("extra spaces after the prefix are not part of the text", () => {
+    expect(parsePickerQuery("agent:x   ask")).toEqual({ agentPrefix: "x", text: "ask" });
+  });
   it("agent: in the middle of a query is just text", () => {
     expect(parsePickerQuery("see agent:x")).toEqual({
       agentPrefix: undefined,

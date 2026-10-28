@@ -19,12 +19,12 @@ Nothing else changes. No new events, no new stdlib function, no new screens, no 
 
 - **Which name.** The last `agentName` event in file order whose `name` is a string. This is the same rule `agency eval extract` (`lib/eval/extract.ts:126-131`) and the runs explorer (`lib/runsExplorer/mine.ts:168`) use. A trace with no such event has no name.
 - **Prefix match, case-sensitive.** `agent:X` keeps a trace when its name starts with `X`. Prefix rather than exact so the list narrows as you type, and so `agent:agency-agent/` selects a whole family. A trace with no name never matches an `agent:` query. A prompt that mentions the name does not count.
-- **Query grammar.** If the query starts with `agent:`, the name prefix runs to the first space or the end of the query. Whatever follows that space is the text query. Agent names cannot contain spaces (`lib/statelog/agentName.ts:13`), so this split is unambiguous. A query that does not start with `agent:` is a plain text search, exactly as today.
+- **Query grammar.** If the query starts with `agent:`, the name prefix runs to the first space or the end of the query. Whatever follows that space, with leading spaces dropped, is the text query. Agent names cannot contain spaces (`lib/statelog/agentName.ts:13`), so this split is unambiguous. A query that does not start with `agent:` is a plain text search, exactly as today.
 - **Hits and the snippet.** The hits column and the "first hit" line come from the text part only. With `agent:` and no text, there is no hits column and no snippet, but the "N of M match" count still shows.
 - **Opening a trace.** Enter carries only the text part of the query into the trace screen's search, because the trace screen searches rows, not names. With no text part it carries nothing, as today with an empty query.
-- **Column width.** The Agent column takes the width of the longest name plus one gap cell, capped at 26 cells. Longer names are clipped with the table's existing ellipsis. The full name is visible in the trace's `agentName` event on the trace screen.
+- **Column width.** The Agent column takes the width of the longest name or the header, plus one gap cell, capped at 26 cells. Longer names are clipped with the table's existing ellipsis. The full name is visible in the trace's `agentName` event on the trace screen.
 - **Column position.** Between `Started (local)` and `duration`.
-- **Safety.** Names are untrusted text from the log. The table's cell painter already escapes style tags and control characters, which is how the ask column is drawn today.
+- **Safety.** Names are untrusted text from the log. The table's cell painter escapes style tags and the ESC character, which is how the ask column is drawn today. Other control characters pass through, for every column; that is an existing gap in `lib/tui/paint.ts`, not one this change opens.
 
 ## Out of scope
 

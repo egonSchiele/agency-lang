@@ -207,12 +207,20 @@ it("shows an agent column only when some trace has a name", () => {
   expect(text).toContain("agency-agent/coordinator");
 });
 
+it("a short name does not cut off the column header", () => {
+  const roots = buildForest(
+    traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "bot" }),
+  );
+  expect(renderPicker(roots)).toMatch(/\bagent\s+duration/);
+});
+
 it("clips a long name so the ask column stays on screen", () => {
   const roots = buildForest(
     traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "a".repeat(200) }),
   );
   const text = renderPicker(roots);
   expect(text).toContain("ask for A");
+  expect(text).toContain("a".repeat(24) + "…");
   expect(text).not.toContain("a".repeat(30));
 });
 

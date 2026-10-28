@@ -349,7 +349,7 @@ export class TracePicker implements View {
       {
         key: "agent",
         header: "agent",
-        width: Math.min(LAYOUT.agentMaxWidth, 1 + Math.max(...lengths)),
+        width: Math.min(LAYOUT.agentMaxWidth, 1 + Math.max("agent".length, ...lengths)),
         cell: (summary) => summary.agentName ?? "",
       },
     ];

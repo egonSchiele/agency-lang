@@ -1,4 +1,5 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
+import { _isLogging } from "agency-lang/stdlib-lib/statelog.js"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
@@ -19,7 +20,7 @@ import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
 import { activePreset, startPreset } from "./lib/presets.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
-import { chooseSession, startSession } from "./lib/resume.agency"
+import { chooseSession, incognitoProblem, startIncognito, startSession } from "./lib/resume.agency"
 import { pickModelsForAgent } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
@@ -188,13 +189,12 @@ node main() {
   // The launcher already turned logging off; here the agent's own records
   // go too. Incognito takes the one-shot path: no session, so nothing saved.
   const incognito = args.flags.incognito
-  if (incognito && (args.flags.continue || args.flags.resume != null)) {
-    print(
-      color.red(
-        "--incognito sessions are not saved, so they cannot continue or resume one.",
-      ),
-    )
-    _exit(1)
+  if (incognito) {
+    const problem = incognitoProblem(args.flags.continue, args.flags.resume ?? null, _isLogging())
+    if (problem != "") {
+      print(color.red(problem))
+      _exit(1)
+    }
   }
   // Everything above is process-level: model resolution feeds the memory
   // layer, and memory, MCP, and the settings reads behind them must run
@@ -203,7 +203,9 @@ node main() {
   if (!isOneShot) {
     installSessionHooks()
     setSlashPalette(mergedPalette())
-    if (!incognito) {
+    if (incognito) {
+      startIncognito()
+    } else {
       startSession(
         chooseSession(args.flags.continue, args.flags.resume ?? null),
         brain,

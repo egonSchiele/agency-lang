@@ -2,13 +2,24 @@
 
 An interactive `agency agent` run is saved after every completed turn, and a
 later run can pick it up with `--continue` or `--resume`. The exception is an
-`--incognito` run: `agent.agency` skips `startSession`, so `_current` stays
-null and `recordTurn` returns null after every turn, the same path a one-shot
-run takes. That also skips the title call, since the title would never be
-saved. The saved thing is
-a runtime checkpoint, not a transcript: restoring it brings back the
-conversation, every subagent's session thread, the agent's `let` globals,
-and the LLM options, and execution continues from the saved point.
+`--incognito` run: `agent.agency` calls `startIncognito` in place of
+`startSession`, so `_current` stays null and `recordTurn` returns null after
+every turn, the same path a one-shot run takes. That also skips the title
+call, since the title would never be saved. `startIncognito` sets a flag so
+`/rename` can say the session is not saved.
+
+The launcher turns logging off for `--incognito`. The agent checks this
+itself before it starts: `incognitoProblem` refuses the run when
+`_isLogging()` (from `lib/stdlib/statelog.ts`) says the statelog still
+records. That happens when the agent is started without the launcher, for
+example `agency run lib/agents/agency-agent/agent.agency --incognito`,
+which keeps the logging the agent was built with. Without the check the
+header would say nothing is logged while `log.jsonl` fills up.
+
+The saved thing is a runtime checkpoint, not a transcript: restoring it
+brings back the conversation, every subagent's session thread, the agent's
+`let` globals, and the LLM options, and execution continues from the saved
+point.
 
 ## Files
 

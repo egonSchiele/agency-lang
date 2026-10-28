@@ -61,6 +61,15 @@ export async function _setAgentName(name: string): Promise<void> {
   await frame.log.agentName({ name: String(name) });
 }
 
+/** Whether this run's statelog records anything. False when `observability`
+ *  is off, which makes every statelog client a no-op, and outside an Agency
+ *  frame. */
+export function _isLogging(): boolean {
+  const frame = currentRunOrNone();
+  if (!frame) return false;
+  return frame.ctx.getStatelogSink().observability;
+}
+
 export async function _evalValue(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;

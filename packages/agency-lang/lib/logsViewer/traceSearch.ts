@@ -58,6 +58,35 @@ export function textFilter(query: string, hits: TraceHit[]): TraceFilter {
   };
 }
 
+/** The picker's query split in two: an `agent:` prefix at the start names
+ *  a recorded agent name to match, up to the first space; the rest is text. */
+export type PickerQuery = { agentPrefix: string | undefined; text: string };
+
+const AGENT_PREFIX = "agent:";
+
+export function parsePickerQuery(query: string): PickerQuery {
+  if (!query.startsWith(AGENT_PREFIX)) {
+    return { agentPrefix: undefined, text: query };
+  }
+  const rest = query.slice(AGENT_PREFIX.length);
+  const space = rest.indexOf(" ");
+  if (space === -1) {
+    return { agentPrefix: rest, text: "" };
+  }
+  return { agentPrefix: rest.slice(0, space), text: rest.slice(space + 1) };
+}
+
+/** Keeps traces whose recorded name starts with `prefix`, case-sensitively.
+ *  A trace with no name never passes, so a prompt that mentions a name
+ *  does not count. */
+export function agentFilter(prefix: string): TraceFilter {
+  return {
+    id: "agent",
+    label: `${AGENT_PREFIX}${prefix}`,
+    accepts: (summary) => summary.agentName !== undefined && summary.agentName.startsWith(prefix),
+  };
+}
+
 export function applyFilters(summaries: TraceSummary[], filters: TraceFilter[]): TraceSummary[] {
   return summaries.filter((summary) => filters.every((filter) => filter.accepts(summary)));
 }

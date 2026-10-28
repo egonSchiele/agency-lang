@@ -1,11 +1,11 @@
 [
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://www.example.com/about", "allowedDomains": ["example.com"] } } },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/about/#history", "allowedDomains": ["www.example.com"] } } },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/about", "refresh": true } } },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/other" } } },
-  { "return": "done" },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/about" } } },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/branch" } } },
-  { "toolCall": { "name": "fetchMarkdown", "args": { "url": "https://example.com/branch/" } } },
-  { "return": "done" }
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://www.example.com/about", "allowedDomains": ["example.com"]}}},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://example.com/about/#history", "allowedDomains": ["www.example.com"]}}},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://example.com/about", "refresh": true}}},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://example.com/other"}}},
+  {"return": "done"},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://www.example.com/about"}}},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://www.example.com/branch"}}},
+  {"toolCall": {"name": "fetchMarkdown", "args": {"url": "https://example.com/branch/"}}},
+  {"return": "done"}
 ]

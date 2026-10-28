@@ -1,4 +1,7 @@
 {
-  "kinds": ["page", "note"],
+  "kinds": [
+    "www",
+    "www"
+  ],
   "llmCalls": 3
 }

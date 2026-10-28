@@ -705,8 +705,18 @@ def _withBudgetNote(value: any, name: string, trip: any): any {
      saved anywhere on the stack when the guard tripped, of whatever type
      the frame that saved it returns, or `null`.
 
+  With `keepDraft` false, rule 2 does not apply: every trip is a failure,
+  and `draft` is the value that reached the guard when one did. That is for
+  a caller that must not take a partial result for a finished one, such as
+  a review cut short, whose findings cannot be told from a clean review's.
+
   See docs/dev/agents/subagent-budgets.md. */
-export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
+export def _budgetOutcome(
+  name: string,
+  guarded: Result,
+  trip: any,
+  keepDraft: boolean = true,
+): Result {
   """
   Internal: turn a budgeted agent's guard Result and trip into the Result
   its caller reports. Use the @guarded decorator, not this function.
@@ -717,14 +727,19 @@ export def _budgetOutcome(name: string, guarded: Result, trip: any): Result {
     }
     return guarded
   }
-  if (isSuccess(guarded) && guarded.value != "" && guarded.value != null) {
+  const reached = isSuccess(guarded) && guarded.value != "" && guarded.value != null
+  if (reached && keepDraft) {
     return success(_withBudgetNote(guarded.value, name, trip))
+  }
+  let draft = trip.draftValue
+  if (reached) {
+    draft = guarded.value
   }
   // Built from the trip, never from `guarded`: a guard whose finalize
   // returned an empty local hands back success(null), which has no error.
   return failure(_describeTrip(trip), {
     dimension: trip.dimension,
     limit: trip.limit,
-    draft: trip.draftValue
+    draft: draft
   })
 }

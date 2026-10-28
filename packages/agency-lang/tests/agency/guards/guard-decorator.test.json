@@ -155,6 +155,30 @@
         }
       ],
       "description": "The writing reviewer's main pass, run after its parallel side passes, hands its saved findings and the side findings to the guard."
+    },
+    {
+      "nodeName": "strictTripWithFindingsIsAFailure",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out|draft:half a finding\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "With keepDraft false, a trip is a failure even with findings saved, and the failure carries them."
+    },
+    {
+      "nodeName": "strictFinishIsTheAnswer",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:DONE\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "keepDraft false changes nothing for a body that finishes."
     }
   ]
 }

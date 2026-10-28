@@ -37,8 +37,10 @@ export function _readSpill(name: string, offset: number, limit: number): string 
   return sliceLines(saved(name), offset, limit);
 }
 
-/** Lines matching `pattern` in one saved output. */
-export function _grepSpill(pattern: string, name: string, maxResults: number): GrepMatch[] {
+/** One pattern's matches, when a search names several. */
+export type PatternMatches = { pattern: string; matches: GrepMatch[] };
+
+function grepOne(text: string, pattern: string, name: string, maxResults: number): GrepMatch[] {
   const plan = compileGrepQuery({
     pattern,
     flags: "",
@@ -47,5 +49,24 @@ export function _grepSpill(pattern: string, name: string, maxResults: number): G
     filesOnly: false,
     invert: false,
   });
-  return firstMatchingLines(saved(name), plan, maxResults).map((hit) => ({ file: name, ...hit }));
+  return firstMatchingLines(text, plan, maxResults).map((hit) => ({ file: name, ...hit }));
+}
+
+/** Lines matching `pattern` in one saved output. With `morePatterns`,
+ *  every pattern is searched and the matches come back grouped by pattern,
+ *  `maxResults` for each, so one call can cover several topics. */
+export function _grepSpill(
+  pattern: string,
+  name: string,
+  maxResults: number,
+  morePatterns: string[] = [],
+): GrepMatch[] | PatternMatches[] {
+  const text = saved(name);
+  if (morePatterns.length === 0) {
+    return grepOne(text, pattern, name, maxResults);
+  }
+  return [pattern, ...morePatterns].map((each) => ({
+    pattern: each,
+    matches: grepOne(text, each, name, maxResults),
+  }));
 }

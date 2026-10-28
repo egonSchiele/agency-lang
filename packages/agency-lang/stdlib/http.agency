@@ -4,11 +4,12 @@
   in 30 seconds, headers and body together, fails with a message naming the
   URL and the limit; `timeout` raises the limit per call, and `0` removes it.
 
-  When a model calls one of these as a tool, a GET of a URL the same
-  conversation already fetched is not fetched again: the tool returns a
-  short note saying the content is in the conversation above, and
-  `refresh: true` fetches anyway. Fetches from Agency code are never
-  cached. See docs/dev/stdlib/fetch-cache.md.
+  When a model calls one of these as a tool, a GET with no body or headers
+  of a URL the same conversation already fetched is not fetched again: the
+  tool returns what the first fetch returned, and `refresh: true` fetches
+  anyway.
+  Fetches from Agency code are never cached. See
+  docs/dev/stdlib/fetch-cache.md.
 
   ```ts
   import { fetch, fetchJSON } from "std::http"
@@ -24,8 +25,8 @@
 // The `__internal_*` exports remain in `lib/stdlib/http.ts` for the
 // migration window.
 import {
+  _cachedFetch,
   _fetch,
-  _fetchCacheNote,
   _fetchJSON,
   _fetchMarkdown,
   _fetchTarget,
@@ -67,13 +68,13 @@ export def fetch(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
   """
-  // A GET this conversation already made comes back as a note, before
-  // any interrupt: nothing is fetched, so there is nothing to approve.
-  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetch")
-  if (alreadyFetched != null) {
-    return success(alreadyFetched)
+  // A GET this conversation already made returns the stored result,
+  // before any interrupt: nothing is fetched, so there is nothing to approve.
+  const cached = _cachedFetch(baseUrl, path, method, body, headers, refresh, "fetch")
+  if (cached != null) {
+    return success(cached.value)
   }
   // Where the request goes, as words a policy rule can match: the scheme,
   // and whether the host is public or on this machine or its network.
@@ -114,13 +115,13 @@ export def fetchJSON(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
   """
-  // A GET this conversation already made comes back as a note, before
-  // any interrupt: nothing is fetched, so there is nothing to approve.
-  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetchJSON")
-  if (alreadyFetched != null) {
-    return success(alreadyFetched)
+  // A GET this conversation already made returns the stored result,
+  // before any interrupt: nothing is fetched, so there is nothing to approve.
+  const cached = _cachedFetch(baseUrl, path, method, body, headers, refresh, "fetchJSON")
+  if (cached != null) {
+    return success(cached.value)
   }
   // Where the request goes, as words a policy rule can match: the scheme,
   // and whether the host is public or on this machine or its network.
@@ -161,13 +162,13 @@ export def fetchMarkdown(
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
   """
-  // A GET this conversation already made comes back as a note, before
-  // any interrupt: nothing is fetched, so there is nothing to approve.
-  const alreadyFetched = _fetchCacheNote(baseUrl, path, method, body, refresh, "fetchMarkdown")
-  if (alreadyFetched != null) {
-    return success(alreadyFetched)
+  // A GET this conversation already made returns the stored result,
+  // before any interrupt: nothing is fetched, so there is nothing to approve.
+  const cached = _cachedFetch(baseUrl, path, method, body, headers, refresh, "fetchMarkdown")
+  if (cached != null) {
+    return success(cached.value)
   }
   // Where the request goes, as words a policy rule can match: the scheme,
   // and whether the host is public or on this machine or its network.

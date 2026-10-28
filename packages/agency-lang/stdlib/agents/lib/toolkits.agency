@@ -264,9 +264,13 @@ export def webTools(): any[] {
   effects for a policy to cover: in trace wX5GvrUq the user's policy
   approved two of them, the model used the third, and 26 of 57 minutes
   went to approval prompts (ADI-44).
+
+  The fetch has `refresh` bound to false. A repeat fetch in the same
+  conversation returns the stored page, and a model offered `refresh`
+  re-downloads pages it already has.
   """
   return [
-    fetchMarkdown,
+    fetchMarkdown.partial(refresh: false),
     wikipediaSearch.rename("wikipedia_search"),
     wikipediaSummary.rename("wikipedia_summary"),
     wikipediaArticle.rename("wikipedia_article"),

@@ -232,9 +232,12 @@ export def buildTools(strict: boolean = false, projectTools: boolean = true): an
     checker,
     parseAST,
     ...project,
+    // fetch and fetchJSON keep refresh: an API's answer can change between
+    // two calls, as a job's status does. A page read with fetchMarkdown does
+    // not, and a model offered refresh re-downloads pages it already has.
     fetch,
     fetchJSON,
-    fetchMarkdown,
+    fetchMarkdown.partial(refresh: false),
     skills,
   ]
 }

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  fetchCacheNote,
+  cachedFetch,
+  FETCH_CACHE_MODULE,
+  MAX_CACHED_CHARS,
   normalizeFetchUrl,
   recordToolCall,
   recordFetch,
@@ -63,20 +65,96 @@ describe("normalizeFetchUrl", () => {
   });
 });
 
-describe("fetchCacheNote and recordFetch", () => {
-  it("a second GET of the same page in a tool call gets the note, whichever spelling", async () => {
+describe("cachedFetch and recordFetch", () => {
+  it("a second GET of the same page in a tool call gets the stored result, whichever spelling", async () => {
     await inTestFrame(async (run) => {
       const thread = run.threads.getOrCreateActive();
       await inToolCall(run, thread, async (run) => {
-        expect(fetchCacheNote(run, get("https://www.example.com/about"), false)).toBeNull();
-        recordFetch(run, get("https://www.example.com/about"));
+        expect(cachedFetch(run, get("https://www.example.com/about"), false)).toBeNull();
+        recordFetch(run, get("https://www.example.com/about"), "the about page");
       });
       await inToolCall(run, thread, async (run) => {
-        const note = fetchCacheNote(run, get("https://example.com/about/#x"), false);
-        expect(note).toContain("Already fetched this URL earlier in this conversation");
-        expect(note).toContain("Use what it returned then");
-        expect(note).toContain("fetchMarkdown call 1, as https://www.example.com/about");
-        expect(note).toContain("refresh: true");
+        expect(cachedFetch(run, get("https://example.com/about/#x"), false)).toEqual({
+          value: "the about page",
+        });
+      });
+    });
+  });
+
+  it("keeps a JSON result as it was, null included", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      const json = { url: "https://example.com/api", method: "GET", body: null, tool: "fetchJSON" };
+      const empty = { ...json, url: "https://example.com/empty" };
+      await inToolCall(
+        run,
+        thread,
+        async (run) => {
+          recordFetch(run, json, { items: [1, 2] });
+          recordFetch(run, empty, null);
+          expect(cachedFetch(run, json, false)).toEqual({ value: { items: [1, 2] } });
+          expect(cachedFetch(run, empty, false)).toEqual({ value: null });
+        },
+        { module: "stdlib/http.agency", registeredName: "fetchJSON" },
+      );
+    });
+  });
+
+  it("never caches a request that sets headers", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      const withHeaders = {
+        ...get("https://example.com/api"),
+        headers: { Accept: "application/json" },
+      };
+      await inToolCall(run, thread, async (run) => {
+        recordFetch(run, get("https://example.com/api"), "<html>the page</html>");
+        // The same URL asking for JSON is another answer, not a repeat.
+        expect(cachedFetch(run, withHeaders, false)).toBeNull();
+        recordFetch(run, withHeaders, { json: true });
+        expect(cachedFetch(run, get("https://example.com/api"), false)).toEqual({
+          value: "<html>the page</html>",
+        });
+        // Empty headers are no headers.
+        expect(cachedFetch(run, { ...get("https://example.com/api"), headers: {} }, false)).toEqual(
+          {
+            value: "<html>the page</html>",
+          },
+        );
+      });
+    });
+  });
+
+  it("keeps the cache in a globals module of its own, not __internal", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      await inToolCall(run, thread, async (run) => {
+        recordFetch(run, get("https://example.com/a"), "a page");
+      });
+      expect(
+        run.globals.get(FETCH_CACHE_MODULE, "cache").entries["https://example.com/a"].value,
+      ).toBe("a page");
+      expect(run.globals.get("__internal", "__fetchCache")).toBeUndefined();
+    });
+  });
+
+  it("drops the oldest results past the cap, and never keeps one larger than the cap", async () => {
+    await inTestFrame(async (run) => {
+      const thread = run.threads.getOrCreateActive();
+      const half = "x".repeat(MAX_CACHED_CHARS / 2);
+      await inToolCall(run, thread, async (run) => {
+        recordFetch(run, get("https://example.com/1"), half);
+        recordFetch(run, get("https://example.com/2"), half);
+        recordFetch(run, get("https://example.com/3"), half);
+        // The first page went to make room, so it is fetched again.
+        expect(cachedFetch(run, get("https://example.com/1"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/2"), false)).toEqual({ value: half });
+        expect(cachedFetch(run, get("https://example.com/3"), false)).toEqual({ value: half });
+        // A result too large to keep replaces nothing else, and its URL
+        // misses, so the next call fetches it.
+        recordFetch(run, get("https://example.com/big"), "x".repeat(MAX_CACHED_CHARS + 1));
+        expect(cachedFetch(run, get("https://example.com/big"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/3"), false)).toEqual({ value: half });
       });
     });
   });
@@ -85,35 +163,35 @@ describe("fetchCacheNote and recordFetch", () => {
     await inTestFrame(async (run) => {
       const thread = run.threads.getOrCreateActive();
       await inToolCall(run, thread, async (run) => {
-        recordFetch(run, get("https://example.com/a"));
-        expect(fetchCacheNote(run, get("https://example.com/a"), true)).toBeNull();
+        recordFetch(run, get("https://example.com/a"), "a page");
+        expect(cachedFetch(run, get("https://example.com/a"), true)).toBeNull();
         const post = { url: "https://example.com/a", method: "POST", body: "x", tool: "fetch" };
-        recordFetch(run, post);
-        expect(fetchCacheNote(run, post, false)).toBeNull();
+        recordFetch(run, post, "a page");
+        expect(cachedFetch(run, post, false)).toBeNull();
         // The same URL through another fetch function is not this tool.
-        expect(fetchCacheNote(run, get("https://example.com/a", "fetch"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/a", "fetch"), false)).toBeNull();
       });
       // A tool of its own that fetches through fetchMarkdown, such as a
-      // data connector, is handed the page, never the note.
+      // data connector, always gets a fresh fetch.
       const connector = { module: "stdlib/data/hackernews.agency", registeredName: "topStories" };
       await inToolCall(
         run,
         thread,
         async (run) => {
-          expect(fetchCacheNote(run, get("https://example.com/a"), false)).toBeNull();
-          recordFetch(run, get("https://example.com/c"));
+          expect(cachedFetch(run, get("https://example.com/a"), false)).toBeNull();
+          recordFetch(run, get("https://example.com/c"), "a page");
         },
         connector,
       );
       await inToolCall(run, thread, async (run) => {
-        expect(fetchCacheNote(run, get("https://example.com/c"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/c"), false)).toBeNull();
       });
-      // The same run, outside a tool call: the page was fetched, and the
-      // note is still withheld, because this is a program fetching.
-      expect(fetchCacheNote(run, get("https://example.com/a"), false)).toBeNull();
-      recordFetch(run, get("https://example.com/b"));
+      // The same run, outside a tool call: the page was fetched, and it
+      // is fetched again, because this is a program fetching.
+      expect(cachedFetch(run, get("https://example.com/a"), false)).toBeNull();
+      recordFetch(run, get("https://example.com/b"), "a page");
       await inToolCall(run, thread, async (run) => {
-        expect(fetchCacheNote(run, get("https://example.com/b"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/b"), false)).toBeNull();
       });
     });
   });
@@ -122,31 +200,31 @@ describe("fetchCacheNote and recordFetch", () => {
     await inTestFrame(async (run) => {
       const parent = run.threads.getOrCreateActive();
       await inToolCall(run, parent, async (run) => {
-        recordFetch(run, get("https://example.com/parent"));
+        recordFetch(run, get("https://example.com/parent"), "a page");
       });
       // A subthread starts with its parent's messages, so the page is in
       // its conversation.
       const child = run.threads.createAndReturnSubthread();
       await inToolCall(run, child, async (run) => {
-        expect(fetchCacheNote(run, get("https://example.com/parent"), false)).not.toBeNull();
-        recordFetch(run, get("https://example.com/child"));
+        expect(cachedFetch(run, get("https://example.com/parent"), false)).not.toBeNull();
+        recordFetch(run, get("https://example.com/child"), "a page");
       });
       // The parent never saw the child's fetch.
       await inToolCall(run, parent, async (run) => {
-        expect(fetchCacheNote(run, get("https://example.com/child"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/child"), false)).toBeNull();
       });
       // A fresh thread shares no messages with either.
       const other = run.threads.createAndReturnThread();
       await inToolCall(run, other, async (run) => {
-        expect(fetchCacheNote(run, get("https://example.com/parent"), false)).toBeNull();
+        expect(cachedFetch(run, get("https://example.com/parent"), false)).toBeNull();
       });
       // A thread the store does not know has no lineage, so the cache
       // misses and records nothing the next call could hit.
       const unknown = new MessageThread();
       expect(run.threads.lineageOf(unknown)).toEqual([]);
       await inToolCall(run, unknown, async (run) => {
-        recordFetch(run, get("https://example.com/unknown"));
-        expect(fetchCacheNote(run, get("https://example.com/unknown"), false)).toBeNull();
+        recordFetch(run, get("https://example.com/unknown"), "a page");
+        expect(cachedFetch(run, get("https://example.com/unknown"), false)).toBeNull();
       });
     });
   });

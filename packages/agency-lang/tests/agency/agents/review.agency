@@ -26,3 +26,23 @@ node trippedReviewFailsOpenByDefault(): string {
   }
   return "success:${findings.value.length}"
 }
+
+// The judge saves one finding, then runs past the budget. The finding
+// covers only part of the work, so with failOpen: false the review is a
+// failure, which carries the finding in its data.
+node cutShortReviewIsAFailureWhenNotFailOpen(): string {
+  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms, failOpen: false)
+  if (isFailure(findings)) {
+    return "failure:${findings.data.draft.length}"
+  }
+  return "success:${findings.value.length}"
+}
+
+// The same review with the default failOpen: the saved finding.
+node cutShortReviewReturnsItsFindingsByDefault(): string {
+  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms)
+  if (isFailure(findings)) {
+    return "failure"
+  }
+  return "success:${findings.value.length}"
+}

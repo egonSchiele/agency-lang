@@ -5,7 +5,7 @@ import {
   readCause,
 } from "../runtime/errors.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
-import { fetchCacheNote, recordFetch } from "../runtime/fetchCache.js";
+import { cachedFetch, recordFetch } from "../runtime/fetchCache.js";
 import { failure, isFailure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -290,38 +290,55 @@ export async function __internal_fetch(
 }
 
 /**
- * The note a fetch tool returns instead of fetching, when this
+ * The stored result a fetch tool returns instead of fetching, when this
  * conversation already fetched the URL, or null when the fetch should
  * run. Called by the Agency fetch functions before they raise their
  * interrupt, so a cache hit asks no one. `tool` is the function's name,
  * for the record. See lib/runtime/fetchCache.ts.
  */
-export function _fetchCacheNote(
+export function _cachedFetch(
   baseUrl: string,
   urlPath: string,
   method: string,
   body: unknown,
+  headers: Record<string, unknown>,
   refresh: boolean,
   tool: string,
-): string | null {
+): { value: unknown } | null {
   const run = currentRun();
-  return fetchCacheNote(run, { url: resolveUrl(baseUrl, urlPath), method, body, tool }, refresh);
+  return cachedFetch(
+    run,
+    { url: resolveUrl(baseUrl, urlPath), method, body, headers, tool },
+    refresh,
+  );
 }
 
-/** Record a completed fetch in the run's fetch cache. A failure is not a
- *  fetch, so it is not recorded. */
+/** Record a completed fetch and its result in the run's fetch cache. A
+ *  failure is not a fetch, so it is not recorded. */
 function remember(
   run: Run,
   result: unknown,
-  request: { baseUrl: string; urlPath: string; method: string; body: unknown; tool: string },
+  request: {
+    baseUrl: string;
+    urlPath: string;
+    method: string;
+    body: unknown;
+    headers: Record<string, unknown>;
+    tool: string;
+  },
 ): void {
   if (isFailure(result)) return;
-  recordFetch(run, {
-    url: resolveUrl(request.baseUrl, request.urlPath),
-    method: request.method,
-    body: request.body,
-    tool: request.tool,
-  });
+  recordFetch(
+    run,
+    {
+      url: resolveUrl(request.baseUrl, request.urlPath),
+      method: request.method,
+      body: request.body,
+      headers: request.headers,
+      tool: request.tool,
+    },
+    result,
+  );
 }
 
 /** ALS-reading replacement for `__internal_fetch`. */
@@ -347,7 +364,7 @@ export async function _fetch(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetch" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetch" });
   return result;
 }
 
@@ -431,7 +448,7 @@ export async function _fetchJSON(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchJSON" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetchJSON" });
   return result;
 }
 
@@ -515,7 +532,7 @@ export async function _fetchMarkdown(
     body,
     timeoutMs,
   );
-  remember(run, result, { baseUrl, urlPath, method, body, tool: "fetchMarkdown" });
+  remember(run, result, { baseUrl, urlPath, method, body, headers, tool: "fetchMarkdown" });
   return result;
 }
 
@@ -651,15 +668,21 @@ function withoutWww(host: string): string {
 }
 
 export function checkAllowedDomains(url: string, allowedDomains: string[]): string | null {
+  // A model's tool call can carry the list as JSON text, "[]", when a
+  // provider stringifies arguments. Say so, not "Invalid URL".
+  if (!Array.isArray(allowedDomains)) {
+    return `allowedDomains must be a list of domain names, got ${JSON.stringify(allowedDomains)}.`;
+  }
   if (allowedDomains.length === 0) return null;
+  let hostname: string;
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    const allowed = allowedDomains.map((d) => withoutWww(d.toLowerCase()));
-    if (!allowed.includes(withoutWww(hostname))) {
-      return `Domain "${hostname}" is not in allowedDomains.`;
-    }
-    return null;
+    hostname = new URL(url).hostname.toLowerCase();
   } catch {
     return `Invalid URL: "${url}"`;
   }
+  const allowed = allowedDomains.map((d) => withoutWww(d.toLowerCase()));
+  if (!allowed.includes(withoutWww(hostname))) {
+    return `Domain "${hostname}" is not in allowedDomains.`;
+  }
+  return null;
 }

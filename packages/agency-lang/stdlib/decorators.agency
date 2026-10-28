@@ -19,6 +19,9 @@ time budget. To write your own, see [Decorators](/guide/decorators).
   `saveDraft`, or handed up through a `finalize`, with a line appended to
   a string saying it may be unfinished. With nothing saved, the result is
   a failure naming the budget, "its time budget of 30m ran out".
+  `keepDraft: false` makes every budget trip that failure, with the saved
+  draft in its data, for a caller that must not take a partial result for
+  a finished one.
 
   ```ts
   import { guarded } from "std::decorators"
@@ -38,6 +41,7 @@ export decorator def guarded(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
+  keepDraft: boolean = true,
   call: Call,
   block: (args: object) -> any,
 ): Result raises <std::guard> {
@@ -50,6 +54,7 @@ export decorator def guarded(
   @param cost - Spend cap in dollars, or null for none
   @param time - Working-time cap, or null for none
   @param label - The guard's label; the function's name when null
+  @param keepDraft - When false, a budget that runs out is always a failure naming the budget, with any saved draft in the failure's data as `draft`
   """
   const name = label ?? call.name
   let trip: any = null
@@ -67,5 +72,5 @@ export decorator def guarded(
     trip = intr.data
     return reject()
   }
-  return _budgetOutcome(name, result, trip)
+  return _budgetOutcome(name, result, trip, keepDraft)
 }

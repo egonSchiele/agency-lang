@@ -26,6 +26,7 @@ guarded(
   cost: number | null = null,
   time: number | null = null,
   label: string | null = null,
+  keepDraft: boolean = true,
   call: Call,
   block: (args: object) -> any,
 ): Result raises <std::guard>
@@ -39,6 +40,7 @@ Run the decorated function under a cost and time budget, labelled with
   @param cost - Spend cap in dollars, or null for none
   @param time - Working-time cap, or null for none
   @param label - The guard's label; the function's name when null
+  @param keepDraft - When false, a budget that runs out is always a failure naming the budget, with any saved draft in the failure's data as `draft`
 
 The `@guarded` decorator: the `guard` block put around a whole function,
   with three rules added. If the body finishes, its result is the result
@@ -47,6 +49,9 @@ The `@guarded` decorator: the `guard` block put around a whole function,
   `saveDraft`, or handed up through a `finalize`, with a line appended to
   a string saying it may be unfinished. With nothing saved, the result is
   a failure naming the budget, "its time budget of 30m ran out".
+  `keepDraft: false` makes every budget trip that failure, with the saved
+  draft in its data, for a caller that must not take a partial result for
+  a finished one.
 
   ```ts
   import { guarded } from "std::decorators"
@@ -70,6 +75,7 @@ The `@guarded` decorator: the `guard` block put around a whole function,
 | cost | `number \| null` | null |
 | time | `number \| null` | null |
 | label | `string \| null` | null |
+| keepDraft | `boolean` | true |
 | call | [Call](index.md#call) |  |
 | block | `(args: Record<string, any>) => any` |  |
 
@@ -77,4 +83,4 @@ The `@guarded` decorator: the `guard` block put around a whole function,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/decorators.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/decorators.agency#L40))

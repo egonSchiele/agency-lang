@@ -6,33 +6,39 @@ request carried about 600,000 tokens. The repeated-call guard
 (`tool-loop-guards.md`) never fired, because the repeats differed in how
 `allowedDomains` was spelled. The fetch cache is the fix (ADI-45): when a
 model tool call GETs a URL that the same conversation already fetched, the
-tool returns this instead of the page:
+tool returns what the first fetch returned, with no request and no
+interrupt.
 
-> Already fetched this URL earlier in this conversation (fetchMarkdown
-> call 2, as https://www.3blue1brown.com/about). Use what it returned
-> then. Fetch it again only if you expect it to have changed, by passing
-> `refresh: true`.
+**The result, not a pointer to it.** A short note saying "you already
+fetched this, use what it returned" saves the tokens of a second copy,
+but only if the model can find the first one. It often cannot: tool
+results in a thread carry no number to look up, compaction may have
+summarized the result away, and a small model loses a page 40 messages
+back. A model that cannot find it fetches again with `refresh: true`, so
+the note cost a round and saved nothing. The stored result costs the same
+tokens as that second fetch, and it costs no request, no approval, and no
+round.
 
-The note is short on purpose: the page is already in the model's context,
-and a second copy is what cost the tokens. It says when the page was
-fetched, not where it is: with memory on, compaction may have summarized
-the earlier result, and "in the conversation above" would then be wrong.
-`refresh: true` is the way out either way.
+**The model is not offered `refresh`.** The agent toolkits bind it
+(`fetchMarkdown.partial(refresh: false)` in `webTools()`, and the three
+fetch tools of the Agency coding agent), so the parameter is not in the
+schema the model sees. The fetch functions keep it for a program that
+hands them to a model and wants a fresh page.
 
 ## Where it is
 
-- `lib/runtime/fetchCache.ts`: `normalizeFetchUrl`, `fetchCacheNote`,
+- `lib/runtime/fetchCache.ts`: `normalizeFetchUrl`, `cachedFetch`,
   `recordFetch`, `recordToolCall`, and `fetchedInConversation`. Pure
   functions over the run, with no Node import, so they run in a browser.
-- `lib/stdlib/http.ts`: `_fetchCacheNote`, which the Agency functions
+- `lib/stdlib/http.ts`: `_cachedFetch`, which the Agency functions
   call, and `remember`, which the three `_fetch*` helpers call after a
-  fetch that did not fail.
+  fetch that did not fail, with its result.
 - `stdlib/http.agency`: each of `fetch`, `fetchJSON`, and
-  `fetchMarkdown` asks for the note on its first line, before it raises
-  its interrupt, and takes `refresh: boolean = false`.
+  `fetchMarkdown` asks for the stored result on its first line, before it
+  raises its interrupt, and takes `refresh: boolean = false`.
 
-The cache is one object in the run's globals, under the `__internal`
-module as `__fetchCache` (`globalstore.md`). That store is what every
+The cache is one object in the run's globals, in a module of its own,
+`__fetchCache` (`FETCH_CACHE_MODULE`, `globalstore.md`). That store is what every
 tool call of a run shares, what a fork branch gets a copy of, and what
 every checkpoint serializes, which is the whole requirement: a fetch in
 one tool round must be known in the next, a branch must see the parent's
@@ -46,7 +52,7 @@ trailing slash. The query stays, since `?page=2` is another page, and so
 does the port. The trace's repeats were the same page with a slash, a
 `www.`, or a fragment added.
 
-**Only the model's own fetch is cached.** `fetchCacheNote` and
+**Only the model's own fetch is cached.** `cachedFetch` and
 `recordFetch` do nothing unless the fetch function itself is the tool the
 model called (`directToolCall`: the record the loop left on
 `run.toolInvocationStack` names a function from `stdlib/http.agency`
@@ -56,21 +62,30 @@ the same URL in a loop is polling, not repeating itself, and gets the
 page every time. And a tool of its own that fetches on its own account,
 such as a data connector reading an API through `fetchJSON`
 (`connectorFetch` in `stdlib/data/connector.agency`), expects JSON back
-and would break on a note; the model called the connector, not the
+and expects a fresh answer; the model called the connector, not the
 fetch, so a repeat is the connector's business.
 
-**Only a GET with no body.** A POST is an action, and two POSTs to one
-URL are two actions.
+**Only a GET with no body and no headers.** A POST is an action, and two
+POSTs to one URL are two actions. Headers can change the answer: `Accept`
+picks JSON or HTML, and `Authorization` picks whose data. Keeping them in
+the key would put a credential in the globals, so a request that sets any
+header is always fetched. `{}` counts as none.
+
+**A model is told a repeat returns the earlier response.** `refresh`'s
+description says so, so a model fetching something that changes, such as
+a job's status from an API, knows to pass `refresh: true`. The researcher
+and the Agency coding agent bind `refresh` on `fetchMarkdown` only,
+because a page does not change within a conversation; the coding agent's
+`fetch` and `fetchJSON` keep it.
 
 **Only this conversation.** An entry records the thread whose
 conversation the fetch's result went to, and a hit needs that thread to
 be the current conversation's thread or one of its ancestors. A subthread
 starts with its parent's messages, so a page the parent fetched is in its
-context; a fresh `thread` shares nothing, so a reviewer on its own thread
-fetches the page itself. The note says the content is in the
-conversation above, and this rule is what makes that true. The cache
-therefore keeps no content, only the URL as the model first wrote it, the
-tool, the thread, and the fetch's number in the run.
+context, and a second fetch of it is a repeat. A fresh `thread` shares
+nothing, so a reviewer on its own thread, checking the sources, fetches
+the page itself. An entry keeps the URL as the model first wrote it, the
+tool, the thread, the fetch's number in the run, and the result.
 
 A tool body cannot find that thread by itself: the tool loop runs every
 body on a fresh, empty thread store (`invokeOnFreshThreadStore`), so that
@@ -83,18 +98,37 @@ a lookup and registers nothing: it runs before every tool call and the
 store is saved in every checkpoint, so a thread the store does not know
 (an `llm()` call given its own `messages`) gets an empty lineage and the
 cache misses. `recordFetch` files an entry under the first id;
-`fetchCacheNote` hits when the entry's thread is anywhere in the list.
+`cachedFetch` hits when the entry's thread is anywhere in the list.
 
 The record is written on every pass through `runInvokeStep`, so a fetch
 that pauses on its approval interrupt and resumes from outside finds it
 again: `remember` then runs on the resumed pass, and the next call for
-the URL gets the note. `tests/agency-js/fetch-cache-resume` is that path,
+the URL gets the stored result. `tests/agency-js/fetch-cache-resume` is that path,
 the one the trace's prompts took.
 
 **A hit asks no one.** The Agency function checks the cache before it
 raises `std::http::fetchMarkdown`. Nothing is fetched on a hit, so there
 is nothing to approve, and a policy that prompts on fetches does not
-prompt for a page it already allowed.
+prompt for a page it already allowed. For the same reason a hit skips the
+`allowedDomains` check: a call whose list would refuse the URL still gets
+the stored page. That page is already in the conversation, so nothing new
+reaches it.
+
+**The stored results are capped at 500,000 characters**
+(`MAX_CACHED_CHARS`). The cache rides in every checkpoint beside the
+spill store (`spill.md`), whose cap of 1,000,000 comes from the 10 MB
+hosted resume limit, so the two together leave room for two copies and
+escaping. Past the cap the oldest entries go. A result larger than the
+whole cap is not kept. A URL with no entry is fetched again, so a dropped
+entry only costs a request.
+
+**What storing pages costs.** Each page is in the thread as a tool
+result too, so a checkpoint carries it twice. A trace stores each globals
+module as one chunk whenever it changes. `__internal` changes on every
+model call, because the token stats live there, so the cache is kept in
+its own module: its chunk is stored again only when a fetch adds a page,
+up to the 500,000-character cap each time. The spill store, in
+`__internal`, is stored again on most steps.
 
 **A failure is not recorded.** `remember` skips a failure result, so a
 page that timed out or returned 404 can be tried again. A rejected
@@ -112,17 +146,20 @@ have the sharing and serialization it needs.
 
 ## Tests
 
-- `lib/runtime/fetchCache.test.ts`: the key, the three conditions, and
-  the thread rule, against a test run.
-- `tests/agency-js/fetch-cache`: a scripted model calls `fetchMarkdown`
-  on the same page in two spellings (page, then note), with
-  `refresh: true` (page), and then from a fork branch, which sees the
-  parent's fetch and its own; a second node fetches from code twice and
-  gets the page both times. The tool results are read back from the
-  thread with `getThread`.
+- `lib/runtime/fetchCache.test.ts`: the key, the conditions (headers
+  among them), the thread rule, a JSON result (`null` included), the cap,
+  and the module the cache is kept in, against a test run.
+- `tests/agency-js/fetch-cache`: the fetch mocks answer a `www.` URL with
+  one body and a bare URL with another, and the cache treats the two as
+  one page, so a stored result is told from a fresh fetch by its body. A
+  scripted model calls `fetchMarkdown` on the same page in two spellings
+  (fetched, then stored), with `refresh: true` (fetched), and then from a
+  fork branch, which sees the parent's fetch and its own; a second node
+  fetches from code in both spellings and gets a fresh fetch both times.
+  The tool results are read back from the thread with `getThread`.
 - `tests/agency-js/fetch-cache-resume`: the first fetch has no handler,
   so it pauses on its interrupt; the test approves it from TypeScript and
-  resumes, and the second call for the same page gets the note.
+  resumes, and the second call for the same page gets the stored result.
 - `evals/researcher/thom-yorke-how-he-learned` has a `no-repeated-retrieval`
   grader that counts tool calls, so a cache hit still counts there as a
   call; it is the floor under this cache, as its README says.

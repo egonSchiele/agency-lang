@@ -10,11 +10,12 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
   in 30 seconds, headers and body together, fails with a message naming the
   URL and the limit; `timeout` raises the limit per call, and `0` removes it.
 
-  When a model calls one of these as a tool, a GET of a URL the same
-  conversation already fetched is not fetched again: the tool returns a
-  short note saying the content is in the conversation above, and
-  `refresh: true` fetches anyway. Fetches from Agency code are never
-  cached. See docs/dev/stdlib/fetch-cache.md.
+  When a model calls one of these as a tool, a GET with no body or headers
+  of a URL the same conversation already fetched is not fetched again: the
+  tool returns what the first fetch returned, and `refresh: true` fetches
+  anyway.
+  Fetches from Agency code are never cached. See
+  docs/dev/stdlib/fetch-cache.md.
 
   ```ts
   import { fetch, fetchJSON } from "std::http"
@@ -43,7 +44,7 @@ export type HttpMethod =
   | "DELETE"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L43))
 
 ## Effects
 
@@ -60,7 +61,7 @@ effect std::http::fetch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L36))
 
 ### std::http::fetchJSON
 
@@ -75,7 +76,7 @@ effect std::http::fetchJSON {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L38))
 
 ### std::http::fetchMarkdown
 
@@ -90,7 +91,7 @@ effect std::http::fetchMarkdown {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L40))
 
 ## Functions
 
@@ -118,7 +119,7 @@ Fetch a URL and return the response as text.
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -143,7 +144,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L51))
 
 ### fetchJSON
 
@@ -169,7 +170,7 @@ Fetch a URL and return the response parsed as JSON.
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -194,7 +195,7 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L98))
 
 ### fetchMarkdown
 
@@ -220,7 +221,7 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
   @param method - The HTTP method
   @param body - Request body: a string is sent as-is, a non-string is sent as JSON
   @param timeout - Time limit in milliseconds for the whole request (default 30000); 0 means no limit
-  @param refresh - Fetch again even if this conversation already fetched this URL
+  @param refresh - A repeat GET, with no body or headers, of a URL this conversation already fetched returns the earlier response; pass true to fetch it again
 
 On abort, Agency tears down the in-flight HTTP request and body read. The
   abort surfaces as an AgencyCancelledError that propagates out of the
@@ -245,4 +246,4 @@ On abort, Agency tears down the in-flight HTTP request and body read. The
 
 **Needs:** `network`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/http.agency#L145))

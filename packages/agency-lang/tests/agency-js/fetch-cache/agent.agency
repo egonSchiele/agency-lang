@@ -2,19 +2,21 @@
 // replies in llmMocks.json have the model call fetchMarkdown on the same
 // page in two spellings, then with refresh, then on another page; then a
 // fork branch fetches the parent's page and a page of its own, twice.
-// The tool results are read back from each conversation's thread: the
-// page, or the note that stands in for it. The branch runs on a subthread,
-// which starts with the parent's messages, so its list repeats the
-// parent's four results before its own three.
+// The tool results are read back from each conversation's thread. The
+// branch runs on a subthread, which starts with the parent's messages, so
+// its list repeats the parent's four results before its own three.
 import { fetchMarkdown } from "std::http"
 import { currentThreadId, getThread, ThreadMessage } from "std::thread"
 
+// The mocks answer a www. URL with one body and a bare URL with another.
+// The cache treats the two spellings as one page and returns the body it
+// stored, so a stored result can be told apart from a fresh fetch.
 def kindOf(text: string): string {
-  if (text.startsWith("Already fetched")) {
-    return "note"
+  if (text.includes("from www")) {
+    return "www"
   }
   if (text.includes("a page")) {
-    return "page"
+    return "bare"
   }
   return "other: ${text}"
 }
@@ -49,7 +51,7 @@ def resultKind(result: Result): string {
 }
 
 node fromCode(): string[] {
-  const first = fetchMarkdown("https://example.com/status") with approve
+  const first = fetchMarkdown("https://www.example.com/status") with approve
   const second = fetchMarkdown("https://example.com/status") with approve
   return [resultKind(first), resultKind(second)]
 }

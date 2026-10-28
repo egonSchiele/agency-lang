@@ -1,38 +1,53 @@
 /**
  * The per-run fetch cache: a URL a model tool call fetched once is not
- * fetched again in the same conversation. The second call gets a short
- * note saying the content is already in the conversation above.
+ * fetched again in the same conversation. The second call gets the
+ * stored result, with no request and no interrupt.
  * See docs/dev/stdlib/fetch-cache.md.
  */
 import type { Run } from "./asyncContext.js";
-import { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 
 /** One fetched URL: how the model spelled it, which tool fetched it, the
- *  thread whose conversation holds the content, and the fetch's number
- *  in the run, so the note can point at it. */
+ *  thread whose conversation it was fetched for, the fetch's number in
+ *  the run (the oldest is dropped first), the result, and the result's
+ *  size in characters. */
 export type FetchCacheEntry = {
   url: string;
   tool: string;
   threadId: string | null;
   ordinal: number;
+  value: unknown;
+  size: number;
 };
+
+/** The most result text the cache keeps, in characters. The cache rides
+ *  in every checkpoint beside the spill store, whose cap of 1,000,000 is
+ *  set by the hosted resume limit (spill.md), so the two together stay
+ *  under it with room for two copies. */
+export const MAX_CACHED_CHARS = 500_000;
 
 export type FetchCache = {
   entries: Record<string, FetchCacheEntry>;
   count: number;
 };
 
-/** The global the cache is kept in. The globals of a run are shared by
- *  its tool calls, copied into a fork branch, and serialized with every
- *  checkpoint, which is what the cache needs (globalstore.md). */
-const CACHE_KEY = "__fetchCache";
+/** Where the cache is kept: a module of its own in the run's globals. The
+ *  globals of a run are shared by its tool calls, copied into a fork
+ *  branch, and serialized with every checkpoint, which is what the cache
+ *  needs (globalstore.md). Not under `__internal`: a trace stores each
+ *  module's globals as one chunk, and `__internal` changes on every model
+ *  call (the token stats), which would store every cached page again each
+ *  time. In its own module the pages are stored again only when a fetch
+ *  changes the cache. */
+export const FETCH_CACHE_MODULE = "__fetchCache";
+const CACHE_KEY = "cache";
 
 /** What a fetch looks like to the cache. */
 export type FetchRequest = {
   url: string;
   method: string;
   body: unknown;
+  headers?: Record<string, unknown>;
   tool: string;
 };
 
@@ -55,10 +70,14 @@ export function normalizeFetchUrl(url: string): string | null {
   return `${parsed.protocol.toLowerCase()}//${host}${port}${path}${parsed.search}`;
 }
 
-/** Only a read with no body is cached: a POST is an action, and two POSTs
- *  to one URL are two actions. */
+/** Only a read with no body and no headers is cached. A POST is an
+ *  action, and two POSTs to one URL are two actions. Headers can change
+ *  the answer (`Accept`, `Authorization`), and keeping them in the key
+ *  would put a credential in the globals, so a request that sets any is
+ *  always fetched. */
 function isCacheable(request: FetchRequest): boolean {
-  return request.method.toUpperCase() === "GET" && request.body == null;
+  const noHeaders = request.headers == null || Object.keys(request.headers).length === 0;
+  return request.method.toUpperCase() === "GET" && request.body == null && noHeaders;
 }
 
 /** Where the tool loop records what it knows about a tool call: on the
@@ -109,11 +128,10 @@ function directToolCall(run: Run, request: FetchRequest): ToolCallRecord | null 
 }
 
 function readCache(run: Run): FetchCache {
-  const existing = run.globals.get(GlobalStore.INTERNAL_MODULE, CACHE_KEY) as
-    FetchCache | undefined;
+  const existing = run.globals.get(FETCH_CACHE_MODULE, CACHE_KEY) as FetchCache | undefined;
   if (existing !== undefined) return existing;
   const fresh: FetchCache = { entries: {}, count: 0 };
-  run.globals.set(GlobalStore.INTERNAL_MODULE, CACHE_KEY, fresh);
+  run.globals.set(FETCH_CACHE_MODULE, CACHE_KEY, fresh);
   return fresh;
 }
 
@@ -126,42 +144,66 @@ function fetchedInConversation(conversation: string[], threadId: string | null):
 }
 
 /**
- * The note a tool call gets instead of the content when this conversation
- * already fetched the URL, or `null` when the fetch should run: the fetch
- * function is not the tool the model called, the request is not a plain
- * GET, the call asked for a refresh, or the URL was not fetched in this
- * conversation before.
+ * The stored result a tool call gets when this conversation already
+ * fetched the URL, or `null` when the fetch should run: the fetch function
+ * is not the tool the model called, the request is not a plain GET, the
+ * call asked for a refresh, or the URL was not fetched in this
+ * conversation before (or its result was dropped to make room). The
+ * result is wrapped because a JSON body can itself be `null`.
  */
-export function fetchCacheNote(run: Run, request: FetchRequest, refresh: boolean): string | null {
+export function cachedFetch(
+  run: Run,
+  request: FetchRequest,
+  refresh: boolean,
+): { value: unknown } | null {
   const call = directToolCall(run, request);
   if (refresh || call === null || !isCacheable(request)) return null;
   const key = normalizeFetchUrl(request.url);
   if (key === null) return null;
   const entry = readCache(run).entries[key];
   if (entry === undefined || !fetchedInConversation(call.conversation, entry.threadId)) return null;
-  // The note says when, not where: with memory on, compaction may have
-  // summarized the earlier result, so "above" is not always true.
-  return (
-    `Already fetched this URL earlier in this conversation (${entry.tool} call ${entry.ordinal}, ` +
-    `as ${entry.url}). Use what it returned then. Fetch it again only if you expect it to ` +
-    `have changed, by passing \`refresh: true\`.`
-  );
+  return { value: entry.value };
 }
 
-/** Record a fetch that completed, so the next call for the same URL in
- *  this conversation gets the note. Call it after the fetch succeeded:
- *  a failed fetch is not recorded, so the model may try the URL again. */
-export function recordFetch(run: Run, request: FetchRequest): void {
+function sizeOf(value: unknown): number {
+  return typeof value === "string" ? value.length : (JSON.stringify(value)?.length ?? 0);
+}
+
+/** Drop the oldest entries until the stored results fit in the cap. */
+function evictOldest(cache: FetchCache): void {
+  const entries = Object.entries(cache.entries).sort(([, a], [, b]) => a.ordinal - b.ordinal);
+  let total = entries.reduce((sum, [, entry]) => sum + entry.size, 0);
+  for (const [key, entry] of entries) {
+    if (total <= MAX_CACHED_CHARS) return;
+    delete cache.entries[key];
+    total -= entry.size;
+  }
+}
+
+/** Record a fetch that completed and its result, so the next call for
+ *  the same URL in this conversation gets the result back. Call it after
+ *  the fetch succeeded: a failed fetch is not recorded, so the model may
+ *  try the URL again. A result larger than the whole cap is not kept, and
+ *  that URL is fetched again next time. */
+export function recordFetch(run: Run, request: FetchRequest, value: unknown): void {
   const call = directToolCall(run, request);
   if (call === null || !isCacheable(request)) return;
   const key = normalizeFetchUrl(request.url);
   if (key === null) return;
   const cache = readCache(run);
+  const size = sizeOf(value);
+  if (size > MAX_CACHED_CHARS) {
+    delete cache.entries[key];
+    return;
+  }
   cache.count += 1;
   cache.entries[key] = {
     url: request.url,
     tool: request.tool,
     threadId: call.conversation[0] ?? null,
     ordinal: cache.count,
+    value,
+    size,
   };
+  evictOldest(cache);
 }

@@ -1,4 +1,4 @@
-import type { Workflow } from "./types.js";
+import type { Signature, ToolRef, Workflow } from "./types.js";
 
 /** The spec's meal plan example, with modules relative to the test's dir. */
 export const mealPlan: Workflow = {
@@ -84,3 +84,30 @@ export function withArg(
 export function withFields(wf: unknown, patch: Record<string, unknown>): Record<string, any> {
   return { ...copy(wf as Record<string, unknown>), ...patch };
 }
+
+export const mealRefs: ToolRef[] = [
+  { module: "./notes.agency", name: "searchNotes" },
+  { module: "./notes.agency", name: "readNote" },
+  { module: "./lists.agency", name: "findLists" },
+  { module: "./lists.agency", name: "addListItems" },
+];
+
+function signature(text: string, returnType: string | null): Signature {
+  return { signature: text, returnType, docstring: null };
+}
+
+export const mealSignatures: Record<string, Signature> = {
+  "./notes.agency.searchNotes": signature(
+    "searchNotes(query: string): Result<Note[]>",
+    "Result<Note[]>",
+  ),
+  "./notes.agency.readNote": signature("readNote(id: string): Result<Note>", "Result<Note>"),
+  "./lists.agency.findLists": signature(
+    "findLists(query: string): Result<ListSummary[]>",
+    "Result<ListSummary[]>",
+  ),
+  "./lists.agency.addListItems": signature(
+    "addListItems(listId: string, items: string[], section: string): Result<string>",
+    "Result<string>",
+  ),
+};

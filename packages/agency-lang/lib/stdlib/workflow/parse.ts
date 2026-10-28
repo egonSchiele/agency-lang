@@ -69,7 +69,7 @@ function refProblems(step: string | null, field: string, value: unknown): Proble
 /** The property names an `inputs` type declares, nested ones included.
  *  String literal types are removed first so a colon inside one is not read
  *  as a property. */
-function inputNames(text: string): string[] {
+export function inputNames(text: string): string[] {
   const withoutStrings = text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
   const matches = withoutStrings.matchAll(/([^\s{},;:?|&()<>[\]]+)\s*\??\s*:/g);
   return [...matches].map((match) => match[1]);

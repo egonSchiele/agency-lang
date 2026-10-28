@@ -81,3 +81,61 @@ export function refsIn(value: unknown): Ref[] {
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/** What `describe` says about one tool, keyed by `"<module>.<name>"`. */
+export type Signature = { signature: string; returnType: string | null; docstring: string | null };
+
+/** A checked reference. `path` is the text after the root name, such as
+ *  `[0].id`, `.body`, or the empty string. */
+export type InputRef = { kind: "input"; name: string; path: string };
+export type StepRef = { kind: "step"; step: string; path: string };
+export type ResolvedRef = InputRef | StepRef;
+
+/** A JSON value with no reference anywhere inside it. */
+export type Literal = { kind: "literal"; value: unknown };
+/** A list or an object with a reference somewhere inside it. */
+export type ResolvedList = { kind: "list"; items: ResolvedValue[] };
+export type ResolvedEntry = { key: string; value: ResolvedValue };
+export type ResolvedRecord = { kind: "record"; entries: ResolvedEntry[] };
+export type ResolvedValue = Literal | ResolvedRef | ResolvedList | ResolvedRecord;
+
+/** One generated `const`: its name, the field it came from, and its value. */
+export type Binding = { local: string; field: string; value: ResolvedValue };
+
+/** `value` is the local that holds the step's value. */
+export type ResolvedToolStep = {
+  id: string;
+  kind: "tool";
+  value: string;
+  module: string;
+  tool: string;
+  returnsResult: boolean;
+  bindings: Binding[];
+  argOrder: string[];
+};
+
+/** `outputType` is the type text as written, `typeName` the alias it is declared as. */
+export type ResolvedLlmStep = {
+  id: string;
+  kind: "llm";
+  value: string;
+  prompt: string;
+  outputType: string;
+  typeName: string;
+  bindings: Binding[];
+  model: string | null;
+  provider: string | null;
+};
+export type ResolvedStep = ResolvedToolStep | ResolvedLlmStep;
+
+export type ImportGroup = { module: string; names: string[] };
+
+export type ResolvedWorkflow = {
+  name: string;
+  inputsType: string;
+  imports: ImportGroup[];
+  steps: ResolvedStep[];
+  result: ResolvedValue | null;
+  limits: Limits | null;
+  warnings: Problem[];
+};

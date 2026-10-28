@@ -8,12 +8,14 @@
  * adds the shared session, the REPL formatting rules, and the memory and
  * todo tools the agent gives its specialists.
  */
+import { _insideToolCall } from "agency-lang/stdlib-lib/thread.js"
 import { question } from "std::agent"
 import { agencyResearcherAgent } from "std::agents/agency/researcher"
 import { memoryTools, planningTools } from "std::agents/lib/toolkits"
 import { researcherAgent } from "std::agents/researcher"
 import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
+import { endTurn } from "std::thread"
 
 import { announce } from "../lib/announce.agency"
 import { timeBudget } from "../lib/budgets.agency"
@@ -51,8 +53,9 @@ export handoff def researchAgent(
   """
   announce("researchAgent", userMsg)
   setMemoryId("research")
+  let answer: Result<string> = failure("no research ran")
   if (agencyTopic) {
-    return agencyResearcherAgent(
+    answer = agencyResearcherAgent(
       question: userMsg,
       context: replStyle,
       maxCost: maxDollars ?? $10.00,
@@ -60,13 +63,23 @@ export handoff def researchAgent(
       session: "research",
       extraTools: [...researchTools, question],
     )
+  } else {
+    answer = researcherAgent(
+      task: userMsg,
+      context: replStyle,
+      maxCost: maxDollars ?? $50.00,
+      maxTime: timeBudget(maxSeconds, 30m),
+      session: "research",
+      extraTools: researchTools,
+    )
   }
-  return researcherAgent(
-    task: userMsg,
-    context: replStyle,
-    maxCost: maxDollars ?? $50.00,
-    maxTime: timeBudget(maxSeconds, 30m),
-    session: "research",
-    extraTools: researchTools,
-  )
+  // The answer is the user's reply as written. A coordinator follow-up
+  // read it as a message to itself and wrote about it ("the report above
+  // stands") to a user who never saw it. A failure still hands back, so
+  // the coordinator can say what is unfinished. researchTurn calls this
+  // from code, where there is no llm() call to end.
+  if (_insideToolCall()) {
+    endTurn()
+  }
+  return answer
 }

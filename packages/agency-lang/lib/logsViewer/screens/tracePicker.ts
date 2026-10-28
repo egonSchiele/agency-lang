@@ -21,6 +21,8 @@ import {
   traceTexts,
   searchTraces,
   textFilter,
+  agentFilter,
+  parsePickerQuery,
   applyFilters,
   type TraceText,
   type TraceHit,
@@ -38,13 +40,22 @@ const LAYOUT = {
   tokensWidth: 8,
   costWidth: 9,
   hitsWidth: 5,
+  // Longest name plus its gap; longer names clip, the full name is on
+  // the trace screen.
+  agentMaxWidth: 26,
 };
 export type TracePickerOptions = {
   currentTraceId: string;
   annotations: Record<string, string>;
   thresholds: ViewerThresholds;
 };
-type ShownTraces = { summaries: TraceSummary[]; hits: TraceHit[]; searching: boolean };
+type ShownTraces = {
+  summaries: TraceSummary[];
+  hits: TraceHit[];
+  searching: boolean;
+  /** The text part of the query; hits and the carried search come from it. */
+  text: string;
+};
 export class TracePicker implements View {
   private marks: RowMarks = emptyMarks();
   readonly viewName = "tracePicker" as const;
@@ -171,12 +182,19 @@ export class TracePicker implements View {
     return helpFrom(this.editing ? this.editingBindings() : this.browsingBindings());
   }
   private shown(): ShownTraces {
-    const hits = searchTraces(this.texts, this.query);
-    const searching = this.query.length > 0;
-    const filters = searching
-      ? [textFilter(this.query, hits), ...this.extraFilters]
-      : this.extraFilters;
-    return { summaries: applyFilters(this.summaries, filters), hits, searching };
+    const { agentPrefix, text } = parsePickerQuery(this.query);
+    const hits = searchTraces(this.texts, text);
+    const filters = [
+      ...(text.length > 0 ? [textFilter(text, hits)] : []),
+      ...(agentPrefix === undefined ? [] : [agentFilter(agentPrefix)]),
+      ...this.extraFilters,
+    ];
+    return {
+      summaries: applyFilters(this.summaries, filters),
+      hits,
+      searching: this.query.length > 0,
+      text,
+    };
   }
   private appendToQuery(text: string): void {
     this.query += text;
@@ -199,8 +217,9 @@ export class TracePicker implements View {
     if (!this.shown().summaries.some((summary) => summary.traceId === this.cursorTraceId)) {
       return { kind: "none" };
     }
-    if (this.query.length > 0) {
-      return { kind: "selectTrace", traceId: this.cursorTraceId, query: this.query };
+    const { text } = parsePickerQuery(this.query);
+    if (text.length > 0) {
+      return { kind: "selectTrace", traceId: this.cursorTraceId, query: text };
     }
     return { kind: "selectTrace", traceId: this.cursorTraceId };
   }
@@ -264,6 +283,7 @@ export class TracePicker implements View {
         cell: (summary) =>
           summary.startedAt === undefined ? "—" : fmtStartedAt(summary.startedAt),
       },
+      ...this.agentColumn(),
       {
         key: "duration",
         header: "duration",
@@ -295,7 +315,7 @@ export class TracePicker implements View {
         cellStyle: (summary) => toneStyle(costTone(summary.costUsd, thresholds)),
       },
     ];
-    if (shown.searching) {
+    if (shown.text.length > 0) {
       columns.push({
         key: "hits",
         header: "hits",
@@ -315,5 +335,23 @@ export class TracePicker implements View {
       ],
     });
     return columns;
+  }
+  /** Present only when some trace is named. Sized over every trace, not
+   *  the shown ones, so the column does not jump as the query changes. */
+  private agentColumn(): TableColumn<TraceSummary>[] {
+    const lengths = this.summaries.flatMap((summary) =>
+      summary.agentName === undefined ? [] : [summary.agentName.length],
+    );
+    if (lengths.length === 0) {
+      return [];
+    }
+    return [
+      {
+        key: "agent",
+        header: "agent",
+        width: Math.min(LAYOUT.agentMaxWidth, 1 + Math.max(...lengths)),
+        cell: (summary) => summary.agentName ?? "",
+      },
+    ];
   }
 }

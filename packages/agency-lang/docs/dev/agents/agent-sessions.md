@@ -1,7 +1,11 @@
 # Saved sessions: save and resume for `agency agent`
 
 An interactive `agency agent` run is saved after every completed turn, and a
-later run can pick it up with `--continue` or `--resume`. The saved thing is
+later run can pick it up with `--continue` or `--resume`. The exception is an
+`--incognito` run: `agent.agency` skips `startSession`, so `_current` stays
+null and `recordTurn` returns null after every turn, the same path a one-shot
+run takes. That also skips the title call, since the title would never be
+saved. The saved thing is
 a runtime checkpoint, not a transcript: restoring it brings back the
 conversation, every subagent's session thread, the agent's `let` globals,
 and the LLM options, and execution continues from the saved point.

@@ -185,6 +185,17 @@ node main() {
     )
     _exit(1)
   }
+  // The launcher already turned logging off; here the agent's own records
+  // go too. Incognito takes the one-shot path: no session, so nothing saved.
+  const incognito = args.flags.incognito
+  if (incognito && (args.flags.continue || args.flags.resume != null)) {
+    print(
+      color.red(
+        "--incognito sessions are not saved, so they cannot continue or resume one.",
+      ),
+    )
+    _exit(1)
+  }
   // Everything above is process-level: model resolution feeds the memory
   // layer, and memory, MCP, and the settings reads behind them must run
   // before the policy handler exists or they prompt. A restore keeps
@@ -192,10 +203,12 @@ node main() {
   if (!isOneShot) {
     installSessionHooks()
     setSlashPalette(mergedPalette())
-    startSession(
-      chooseSession(args.flags.continue, args.flags.resume ?? null),
-      brain,
-    )
+    if (!incognito) {
+      startSession(
+        chooseSession(args.flags.continue, args.flags.resume ?? null),
+        brain,
+      )
+    }
   }
 
   if (isOneShot) {
@@ -214,8 +227,15 @@ node main() {
     setTitle("Agency Agent")
     clearScreen()
     print(getHeader(brain.name))
+    if (incognito) {
+      print(
+        color.yellow(
+          "Incognito: nothing from this session is logged or saved. Your messages still go to the model provider.",
+        ),
+      )
+    }
     runSession(true) {
-      startInteractive(startAgent, positionalQuery)
+      startInteractive(startAgent, positionalQuery, saveHistory: !incognito)
     }
   }
 }

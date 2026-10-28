@@ -18,6 +18,7 @@ import {
   _evalOutputs,
   _evalRecord,
   _finalEvalOutput,
+  _isLogging,
   _setAgentName,
   _turnStart,
   logReplTurn,
@@ -137,6 +138,23 @@ describe("std::statelog eval annotations", () => {
 
     expect(spies.turnStart).toHaveBeenCalledWith({ message: "do the same for modem.ai" });
     await expect(_turnStart("outside a frame")).resolves.toBeUndefined();
+  });
+
+  it("isLogging reports the run's observability setting", async () => {
+    const seen: boolean[] = [];
+    for (const observability of [true, false]) {
+      const ctx = new RuntimeContext({
+        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability },
+        smoltalkDefaults: {},
+        dirname: "/tmp",
+      });
+      const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+      await runInTestContext(ctx, new StateStack(), threads, async () => {
+        seen.push(_isLogging());
+      });
+    }
+    expect(seen).toEqual([true, false]);
+    expect(_isLogging()).toBe(false);
   });
 
   it("a REPL logs a turn for a message and not for a slash command", async () => {

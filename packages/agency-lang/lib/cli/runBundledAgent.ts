@@ -38,17 +38,21 @@ const currentDir = path.dirname(new URL(import.meta.url).pathname);
 const LAUNCH_FLAG_POLICIES: Record<
   string,
   {
+    /** False for a boolean flag, which never takes the next token. */
+    takesValue: boolean;
     /** Budget values may be negative numbers, which look like flags. */
     acceptsNegativeNumber: boolean;
   }
 > = {
-  trace: { acceptsNegativeNumber: false },
-  log: { acceptsNegativeNumber: false },
-  "agent-home": { acceptsNegativeNumber: false },
-  workdir: { acceptsNegativeNumber: false },
-  "max-cost": { acceptsNegativeNumber: true },
-  "max-time": { acceptsNegativeNumber: true },
-  config: { acceptsNegativeNumber: false },
+  trace: { takesValue: true, acceptsNegativeNumber: false },
+  log: { takesValue: true, acceptsNegativeNumber: false },
+  "agent-home": { takesValue: true, acceptsNegativeNumber: false },
+  workdir: { takesValue: true, acceptsNegativeNumber: false },
+  "max-cost": { takesValue: true, acceptsNegativeNumber: true },
+  "max-time": { takesValue: true, acceptsNegativeNumber: true },
+  config: { takesValue: true, acceptsNegativeNumber: false },
+  // Logging is decided when the runtime starts, so incognito must be too.
+  incognito: { takesValue: false, acceptsNegativeNumber: false },
 };
 
 const NEGATIVE_NUMBER = /^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/;
@@ -72,6 +76,10 @@ function scanLaunchValues(args: readonly string[]): Record<string, string> {
     if (policy === undefined) continue;
     if (equalsIndex !== -1) {
       values[name] = token.slice(equalsIndex + 1);
+      continue;
+    }
+    if (!policy.takesValue) {
+      values[name] = "";
       continue;
     }
     const next = args[index + 1];
@@ -99,6 +107,9 @@ export type ResolvedAgentLaunch = {
   budgetInput: { maxCost?: string; maxTime?: string };
   /** A forwarded `--config <path>`; wins over the root-level `-c`. */
   configPath?: string;
+  /** Why the flags cannot be used together, or null. Only `--incognito`
+   *  with `--log` or `--trace` today. */
+  conflict: string | null;
 };
 
 /** Launch behavior callers may set; test seams live in the separate
@@ -153,12 +164,22 @@ export function resolveAgentLaunchArgs(args: readonly string[]): ResolvedAgentLa
       flags.logFile = scanned.log === "" ? "log.jsonl" : scanned.log;
     }
   }
+  // The agent's own parser refuses a value on a boolean flag, so presence
+  // is enough.
+  const incognito = scanned.incognito !== undefined;
+  const conflicts = ["log", "trace"].filter((flag) => scanned[flag] !== undefined);
   const home = scanned["agent-home"];
   const nonEmpty = (value: string | undefined) =>
     value !== undefined && value !== "" ? value : undefined;
   const workdir = scanned.workdir;
+  const configOverrides = applyCliFlags({}, flags);
+  if (incognito) {
+    // Every statelog client starts switched off, whatever the agent was
+    // compiled with or an inherited override says.
+    configOverrides.observability = false;
+  }
   return {
-    configOverrides: applyCliFlags({}, flags),
+    configOverrides,
     agentHome: home !== undefined && home !== "" ? path.resolve(home) : null,
     workdir: workdir !== undefined && workdir !== "" ? path.resolve(workdir) : null,
     budgetInput: {
@@ -166,6 +187,10 @@ export function resolveAgentLaunchArgs(args: readonly string[]): ResolvedAgentLa
       maxTime: nonEmpty(scanned["max-time"]),
     },
     configPath: nonEmpty(scanned.config),
+    conflict:
+      incognito && conflicts.length > 0
+        ? `--incognito records nothing, so it cannot be used with --${conflicts[0]}.`
+        : null,
   };
 }
 
@@ -189,6 +214,12 @@ export function runBundledAgent(
     budget = resolveBudget(launchArgs.budgetInput);
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
+    launcher.exit(2);
+    return;
+  }
+
+  if (launchArgs.conflict !== null) {
+    console.error(`Error: ${launchArgs.conflict}`);
     launcher.exit(2);
     return;
   }

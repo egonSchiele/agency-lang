@@ -88,6 +88,27 @@ describe("resolveAgentLaunchArgs: trace/log → configOverrides", () => {
   });
 });
 
+describe("resolveAgentLaunchArgs: --incognito", () => {
+  it("turns observability off and takes no value", () => {
+    const resolved = resolveAgentLaunchArgs(["--incognito", "what is this repo?"]);
+    expect(resolved.configOverrides).toEqual({ observability: false });
+    expect(resolved.conflict).toBeNull();
+  });
+  it("cannot be combined with --log or --trace", () => {
+    expect(resolveAgentLaunchArgs(["--incognito", "--log"]).conflict).toBe(
+      "--incognito records nothing, so it cannot be used with --log.",
+    );
+    expect(resolveAgentLaunchArgs(["--trace", "t.trace", "--incognito"]).conflict).toBe(
+      "--incognito records nothing, so it cannot be used with --trace.",
+    );
+  });
+  it("is off when absent", () => {
+    const resolved = resolveAgentLaunchArgs(["-p", "hi"]);
+    expect(resolved.configOverrides).toEqual({});
+    expect(resolved.conflict).toBeNull();
+  });
+});
+
 describe("resolveAgentLaunchArgs: agent-home", () => {
   it("--agent-home <dir> → absolute path, space and attached forms", () => {
     expect(resolveAgentLaunchArgs(["--agent-home", "/x/home"]).agentHome).toBe("/x/home");
@@ -339,6 +360,39 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     spawnMock.mockClear();
     runBundledAgent({}, "agency-agent", ["-p", "hi"], {}, { spawn: spawnMock as never });
     expect((spawnMock.mock.calls[0][2] as { cwd?: string }).cwd).toBeUndefined();
+  });
+
+  it("--incognito beats an inherited override that turns logging on", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv(
+      CONFIG_OVERRIDES_ENV,
+      JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }),
+    );
+
+    runBundledAgent({}, "agency-agent", ["--incognito"], {}, { spawn: spawnMock as never });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]).observability).toBe(false);
+  });
+
+  it("--incognito with --log exits before spawn", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    const exitMock = vi.fn();
+    const errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    runBundledAgent(
+      {},
+      "agency-agent",
+      ["--incognito", "--log"],
+      {},
+      { spawn: spawnMock as never, exit: exitMock },
+    );
+
+    expect(errorMock).toHaveBeenCalledWith(
+      "Error: --incognito records nothing, so it cannot be used with --log.",
+    );
+    expect(exitMock).toHaveBeenCalledWith(2);
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("a --workdir that is not a directory exits before spawn", () => {

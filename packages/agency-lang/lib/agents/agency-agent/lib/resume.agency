@@ -36,6 +36,10 @@ let _current: SessionRecord | null = null
 // empty line is not recorded as a turn.
 let _turnDone = false
 
+// Set at startup by an --incognito run, which has no session, so
+// /rename can say why.
+let _incognito = false
+
 // Set by `/rename`: the record changed without a turn, and the title is
 // the user's now.
 let _renamed = false
@@ -67,6 +71,9 @@ export def markTurnDone() {
   Returns the line to show. The REPL saves after this line. */
 export def renameSession(title: string): string {
   const record = _current
+  if (record == null && _incognito) {
+    return "Incognito sessions are not saved, so there is nothing to rename."
+  }
   if (record == null) {
     return "No session to rename."
   }
@@ -78,6 +85,31 @@ export def renameSession(title: string): string {
   _renamed = true
   _titlePinned = true
   return "Session renamed: ${clean}"
+}
+
+/** An --incognito run has no session: nothing is saved and no title is
+  made. Marks the run so /rename can say why. */
+export def startIncognito() {
+  _incognito = true
+}
+
+export def incognitoProblem(continueFlag: boolean, resumeArg: string | null, logging: boolean): string {
+  """
+  Why an --incognito run cannot start, or "" when it can.
+
+  @param continueFlag - Whether --continue was passed
+  @param resumeArg - The --resume value, or null when absent
+  @param logging - Whether this run's statelog records anything
+  """
+  if (continueFlag || resumeArg != null) {
+    return "--incognito sessions are not saved, so they cannot continue or resume one."
+  }
+  // The launcher turns logging off. An agent started another way keeps
+  // the logging it was built with, and the header would be wrong.
+  if (logging) {
+    return "--incognito needs logging off, and this run has it on. Start it with agency agent --incognito."
+  }
+  return ""
 }
 
 /** Which saved session, if any, this run continues. `resumeArg` is the

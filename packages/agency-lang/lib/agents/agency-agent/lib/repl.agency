@@ -389,15 +389,17 @@ export def installSessionHooks() {
 }
 
 // Runs inside runSession's policy handler; the REPL installs none of its own.
-export def startInteractive(seedTarget: string, seedPrompt: string) {
+export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory: boolean = true) {
   if (seedPrompt != "") {
     runSeedTurn(seedTarget, seedPrompt)
   }
+  // "" turns the history file off, for an incognito session.
+  const historyFile = if saveHistory then HISTORY_PATH else ""
   repl(
     status: buildStatus,
     onSubmit: _sessionOnSubmit,
     prompt: "> ",
-    historyFile: HISTORY_PATH,
+    historyFile: historyFile,
     historyMax: 1000,
   )
   print(color.cyan("\nGoodbye!"))

@@ -884,6 +884,8 @@ export type ExportInfo = {
   name: string;
   kind: "def" | "node" | "type" | "const" | "reexport";
   signature: string;
+  /** The declared return type, printed on its own. Null when none is declared. */
+  returnType: string | null;
   docstring: string | null;
   effects: string[];
   destructive: boolean;

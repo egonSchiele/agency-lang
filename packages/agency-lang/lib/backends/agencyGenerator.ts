@@ -1280,6 +1280,12 @@ export class AgencyGenerator {
     return this.buildSignature(name, node, "", "display");
   }
 
+  /** The declared return type of a `def`/`node`, printed the way
+   *  `signatureOf` prints it, or null when none is declared. */
+  returnTypeOf(node: FunctionDefinition | GraphNodeDefinition): string | null {
+    return node.returnType ? this.renderType(node.returnType, "display") : null;
+  }
+
   /** Render the annotations that precede a type alias declaration. */
   declarationAnnotationPrefixOf(node: TypeAlias): string {
     return this.formatDocComment(node) + this.formatAttachedTags(node);

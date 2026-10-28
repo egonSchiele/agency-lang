@@ -197,6 +197,8 @@ export type ExportInfo = {
   name: string;
   kind: ExportKind;
   signature: string;
+  /** The declared return type of a def or node, else null. */
+  returnType: string | null;
   docstring: string | null;
   effects: string[];
   destructive: boolean;
@@ -324,6 +326,7 @@ function localExportInfos(
         name,
         kind: "def",
         signature: generator.signatureOf(node),
+        returnType: generator.returnTypeOf(node),
         docstring: node.docString ? docStringText(node.docString) : null,
         effects: effects[name] ?? [],
         destructive: node.markers?.destructive === true,
@@ -341,6 +344,7 @@ function localExportInfos(
         name,
         kind: "node",
         signature: generator.signatureOf(node),
+        returnType: generator.returnTypeOf(node),
         docstring: node.docString ? docStringText(node.docString) : null,
         effects: effects[name] ?? [],
         // Nodes carry no tool markers; only defs can be declared
@@ -359,6 +363,7 @@ function localExportInfos(
         name: node.aliasName,
         kind: "type",
         signature: generator.signatureOf(node),
+        returnType: null,
         docstring: node.docComment ? docCommentText(node.docComment) : null,
         effects: [],
         destructive: false,
@@ -381,6 +386,7 @@ function localExportInfos(
         name,
         kind: "const" as const,
         signature: `${node.declKind} ${name}${node.pattern ? "" : typeStr}`,
+        returnType: null,
         docstring: null,
         effects: [],
         destructive: false,
@@ -493,6 +499,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
     name: localName,
     kind: "reexport",
     signature: spelled,
+    returnType: null,
     docstring: null,
     effects: ["unknown"],
     destructive: false,

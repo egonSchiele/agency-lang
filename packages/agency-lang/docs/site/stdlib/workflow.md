@@ -40,7 +40,7 @@ export type WorkflowLimits = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L39))
 
 ### Workflow
 
@@ -63,7 +63,7 @@ export type Workflow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L47))
 
 ### WorkflowProblem
 
@@ -80,7 +80,7 @@ export type WorkflowProblem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L59))
 
 ### WorkflowFailure
 
@@ -93,7 +93,7 @@ export type WorkflowFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L66))
 
 ## Functions
 
@@ -127,4 +127,36 @@ Generate the Agency source text of a workflow's program. This returns text, not 
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L126))
+
+### checkWorkflow
+
+```ts
+checkWorkflow(
+  workflow: Workflow,
+  tools: any[],
+  dir: string = "",
+): Result<WorkflowProblem[], WorkflowFailure>
+```
+
+Check a workflow without running it, and report every problem by step and field. A wrong argument name, a missing argument, a wrong type, or a path into a step's value that does not exist is a type error in the generated program, reported on the step and argument it came from. Succeeds with the warnings, such as a tool that declares no return type. Reading a local tool's module asks for approval.
+
+  @param workflow - The workflow to check
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| workflow | [Workflow](#workflow) |  |
+| tools | `any[]` |  |
+| dir | `string` | "" |
+
+**Returns:** `Result<WorkflowProblem[], WorkflowFailure>`
+
+**Throws:** `std::read`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L142))

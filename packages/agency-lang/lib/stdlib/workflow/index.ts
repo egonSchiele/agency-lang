@@ -49,7 +49,7 @@ function describeProblem({ step, field, message }: Problem): string {
 }
 
 /** A failure whose message lists the problems and whose data carries them. */
-function problemsFailure(problems: Problem[]): ResultFailure {
+export function _problemsFailure(problems: Problem[]): ResultFailure {
   const message = `the workflow has problems:\n${problems.map(describeProblem).join("\n")}`;
   return failure(message, { problems });
 }
@@ -109,12 +109,12 @@ export function _compileWorkflowSource(
   signatures: Record<string, Signature>,
 ): ResultSuccess | ResultFailure {
   const result = compileWorkflowSource(value, refs, signatures);
-  return result.compiled === null ? problemsFailure(result.problems) : success(result.compiled);
+  return result.compiled === null ? _problemsFailure(result.problems) : success(result.compiled);
 }
 
 /** A failure for one problem that belongs to the whole workflow. */
 export function _workflowFailure(message: string): ResultFailure {
-  return problemsFailure([{ step: null, field: null, message }]);
+  return _problemsFailure([{ step: null, field: null, message }]);
 }
 
 export function _problemsFromDiagnostics(diagnostics: Diagnostic[], ranges: Range[]): Problem[] {

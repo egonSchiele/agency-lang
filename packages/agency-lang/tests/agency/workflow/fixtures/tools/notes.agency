@@ -31,3 +31,12 @@ export def splitLines(text: string): string[] {
   """
   return text.split("\n")
 }
+
+export def untyped(q: string) {
+  """
+  Return the query in a list, with no declared return type.
+
+  @param q - The query
+  """
+  return [q]
+}

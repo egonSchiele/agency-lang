@@ -1,10 +1,12 @@
-import { describe, ExportInfo } from "std::agency"
+import { compile, describe, typecheck, ExportInfo } from "std::agency"
 import { read } from "std::index"
 import { Json } from "std::validation"
 
 import {
   _compileWorkflowSource,
   _pickSignatures,
+  _problemsFailure,
+  _problemsFromDiagnostics,
   _signatureSources,
   _toolRefs,
   _workflowFailure,
@@ -134,4 +136,35 @@ export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: str
     return failure(compiled.error, compiled.data)
   }
   return success(compiled.value.source)
+}
+
+@capabilities(fileRead)
+export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<WorkflowProblem[], WorkflowFailure> {
+  """
+  Check a workflow without running it, and report every problem by step and field. A wrong argument name, a missing argument, a wrong type, or a path into a step's value that does not exist is a type error in the generated program, reported on the step and argument it came from. Succeeds with the warnings, such as a tool that declares no return type. Reading a local tool's module asks for approval.
+
+  @param workflow - The workflow to check
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const compiled = _compileWithRanges(workflow, tools, dir)
+  if (compiled is failure) {
+    return failure(compiled.error, compiled.data)
+  }
+  const source = compiled.value.source
+  // The typecheck runs first: its errors carry a line and a payload, so each
+  // one is mapped to its step and field. A strict compile reports the same
+  // errors as one message, so it runs second, for what is left.
+  const report = typecheck(source, dir: dir, strict: true)
+  if (report is failure) {
+    return _workflowFailure(report.error)
+  }
+  if (report.value.errors.length > 0) {
+    return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.value.ranges))
+  }
+  const program = compile(source, dir, strict: true)
+  if (program is failure) {
+    return _workflowFailure(program.error)
+  }
+  return success(compiled.value.warnings)
 }

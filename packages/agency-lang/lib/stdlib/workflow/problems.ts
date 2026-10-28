@@ -5,6 +5,7 @@
  */
 import type { Problem, Range } from "./types.js";
 
+/** `loc.line` is 0-based, as the typechecker reports it. */
 export type Diagnostic = {
   message: string;
   loc?: { line: number };
@@ -21,7 +22,7 @@ function fieldOf(range: Range, diagnostic: Diagnostic): string | null {
 
 export function problemsFromDiagnostics(diagnostics: Diagnostic[], ranges: Range[]): Problem[] {
   return diagnostics.map((diagnostic) => {
-    const line = diagnostic.loc?.line;
+    const line = diagnostic.loc === undefined ? undefined : diagnostic.loc.line + 1;
     const range = ranges.find(
       (candidate) => line !== undefined && candidate.from <= line && line <= candidate.to,
     );

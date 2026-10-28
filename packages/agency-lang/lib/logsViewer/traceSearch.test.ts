@@ -106,6 +106,9 @@ describe("parsePickerQuery", () => {
   it("extra spaces after the prefix are not part of the text", () => {
     expect(parsePickerQuery("agent:x   ask")).toEqual({ agentPrefix: "x", text: "ask" });
   });
+  it("the keyword ignores case and leading spaces; the name prefix keeps both", () => {
+    expect(parsePickerQuery("  Agent:Bot x")).toEqual({ agentPrefix: "Bot", text: "x" });
+  });
   it("agent: in the middle of a query is just text", () => {
     expect(parsePickerQuery("see agent:x")).toEqual({
       agentPrefix: undefined,

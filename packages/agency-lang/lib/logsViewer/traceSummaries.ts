@@ -17,7 +17,7 @@ export type TraceSummary = {
   ask: string | undefined;
   annotation: string | undefined;
   hasError: boolean;
-  agentName?: string;
+  agentName: string | undefined;
 };
 
 export function traceSummaries(

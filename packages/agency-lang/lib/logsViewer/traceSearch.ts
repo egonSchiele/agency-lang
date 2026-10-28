@@ -65,10 +65,12 @@ export type PickerQuery = { agentPrefix: string | undefined; text: string };
 const AGENT_PREFIX = "agent:";
 
 export function parsePickerQuery(query: string): PickerQuery {
-  if (!query.startsWith(AGENT_PREFIX)) {
+  // The keyword is forgiving, like the text search; the name is not.
+  const trimmed = query.trimStart();
+  if (!trimmed.toLowerCase().startsWith(AGENT_PREFIX)) {
     return { agentPrefix: undefined, text: query };
   }
-  const rest = query.slice(AGENT_PREFIX.length);
+  const rest = trimmed.slice(AGENT_PREFIX.length);
   const space = rest.indexOf(" ");
   if (space === -1) {
     return { agentPrefix: rest, text: "" };

@@ -49,6 +49,19 @@ export type OpenRouterOptions = {
   provider?: OpenRouterProviderPreferences
 }
 
+/** The base URL for each provider that takes one. Each field is
+ *  optional. A provider left out uses the URL from `agency.json`, or its
+ *  default. */
+export type LlmBaseUrls = {
+  openAiCompat?: string;
+  openRouter?: string;
+  deepInfra?: string;
+  liteLlm?: string;
+  mlx?: string;
+  ollama?: string;
+  typesafe?: string
+}
+
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
  *  model name. Set it only when the name doesn't imply a provider (e.g.
@@ -73,6 +86,12 @@ export type OpenRouterOptions = {
  *  into the provider's request body as given, for a request field Agency
  *  has no option for, such as `{ top_k: 5 }`.
  *
+ *  `baseUrl` sets the base URLs to use for the providers it names, for
+ *  example `{ mlx: "http://studio.local:8090/v1" }` to reach an MLX
+ *  server on another machine. A later `setLlmOptions` call with `baseUrl`
+ *  replaces this one whole. A provider it leaves out uses the URL from
+ *  `agency.json`, or its default.
+ *
  *  Setting a field to `null` removes it, so the value `agency.json` gives
  *  it, if any, applies again. To turn OpenRouter routing off entirely,
  *  pass `openRouter: {}`. */
@@ -88,6 +107,7 @@ export type LlmDefaults = {
   maxToolCallRounds?: number;
   maxRepeatedToolCalls?: number;
   openRouter?: OpenRouterOptions;
+  baseUrl?: LlmBaseUrls;
   rawAttributes?: any;
   retries?: number;
   timeout?: number;

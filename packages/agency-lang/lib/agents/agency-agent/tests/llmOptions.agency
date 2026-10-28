@@ -67,3 +67,36 @@ node noWarningForRoutingAlone(): string {
 node noWarningForOneProvider(): string {
   return mixedProviderWarning({ temperature: 0.2 }, ["openrouter", "openrouter", ""])
 }
+
+node acceptsMlxBaseUrl(): string {
+  return verdict({ baseUrl: { mlx: "https://studio.ts.net:8090/v1" } })
+}
+
+node acceptsEmptyAndNullBaseUrl(): string {
+  return "${verdict({ baseUrl: {} })} ${verdict({ baseUrl: { mlx: null } })}"
+}
+
+node rejectsOtherProviderBaseUrl(): string {
+  return verdict({ baseUrl: { openRouter: "https://example.com" } })
+}
+
+node rejectsUrlWithoutScheme(): string {
+  return verdict({ baseUrl: { mlx: "studio:8090/v1" } })
+}
+
+node rejectsSchemeAlone(): string {
+  return verdict({ baseUrl: { mlx: "https://" } })
+}
+
+node rejectsNonStringUrl(): string {
+  return verdict({ baseUrl: { mlx: 8090 } })
+}
+
+node dropsUnknownNestedKeys(): string {
+  const checked = checkLlmOptions({ openRouter: { provider: { ignore: ["x"] }, extra: 1 } })
+  if (checked is failure(reason)) {
+    return "no: ${reason}"
+  }
+  const block: any = checked.value
+  return JSON.stringify(block.openRouter)
+}

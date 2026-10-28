@@ -1,9 +1,11 @@
 /** @module
   @summary The llm() options a preset or a session can set beside its
-  models: OpenRouter routing, thinking, sampling, and retries. One block,
+  models: OpenRouter routing, thinking, sampling, retries, and the MLX
+  server's address. One block,
   so the next provider option needs no agent change. The shapes mirror
   LlmDefaults in std::llm.
 */
+import { _isHttpUrl } from "agency-lang/stdlib-lib/httpUrl.js"
 import { _schemaProblems } from "agency-lang/stdlib-lib/schemaProblems.js"
 
 import { setLlmOptions, LlmDefaults, OpenRouterOptions } from "std::llm"
@@ -21,6 +23,12 @@ export type ReplyLimitsOption = {
   limitAnswers?: boolean
 }
 
+/** Only mlx: every other provider sends an API key with each request,
+  and a base URL would send that key to the address. */
+export type BaseUrlOption = {
+  mlx?: string
+}
+
 export type LlmOptions = {
   openRouter?: OpenRouterOptions;
   thinking?: ThinkingOption;
@@ -28,7 +36,8 @@ export type LlmOptions = {
   replyLimits?: ReplyLimitsOption;
   retries?: number;
   timeout?: number;
-  validationRetries?: number
+  validationRetries?: number;
+  baseUrl?: BaseUrlOption
 }
 
 // Left out because each has a home of its own: model, provider,
@@ -45,6 +54,7 @@ export static const LLM_OPTION_KEYS: string[] = [
   "retries",
   "timeout",
   "validationRetries",
+  "baseUrl",
 ]
 
 // The options a provider other than the one they were written for may
@@ -55,8 +65,8 @@ static const PROVIDER_SENSITIVE_KEYS: string[] = ["thinking", "temperature"]
   optional field the model did not fill. */
 export def checkLlmOptions(value: any): Result<LlmOptions> {
   """
-  Check a block of llm() options. Returns the block, or a failure naming
-  each problem.
+  Check a block of llm() options. Returns the block without any nested
+  field its type does not have, or a failure naming each problem.
 
   @param value - The block to check
   """
@@ -70,22 +80,81 @@ export def checkLlmOptions(value: any): Result<LlmOptions> {
   if (unknown.length > 0) {
     return failure(unknown.join("; "))
   }
-  const problems = [shapeProblem(key, set[key]) for key in Object.keys(set)]
-  const wrong = [problem for problem in problems if problem != ""]
+  const urlProblems = baseUrlProblems(set.baseUrl)
+  if (urlProblems.length > 0) {
+    return failure(urlProblems.join("; "))
+  }
+  const checks = [shapeCheck(key, set[key]) for key in Object.keys(set)]
+  const wrong = [check.problem for check in checks if check.problem != ""]
   if (wrong.length > 0) {
     return failure(wrong.join("; "))
   }
-  return success(set)
+  return success(Object.fromEntries([[check.key, check.value] for check in checks]))
 }
 
-// One key at a time, so the problem can name the key. "" when it fits.
-def shapeProblem(key: string, value: any): string {
+def isServerUrl(value: any): boolean {
+  return typeof value == "string" && _isHttpUrl(value)
+}
+
+// The shape check would drop another provider's URL without a word, so
+// this names it first.
+def baseUrlProblems(value: any): string[] {
+  if (!isPlainObject(value)) {
+    return []
+  }
+  const others = [
+    "baseUrl.${key}: only baseUrl.mlx can be set. Other providers send an API key, which would go to that address."
+    for key in Object.keys(value)
+    if key != "mlx" && value[key] != null
+  ]
+  if (value.mlx == null || isServerUrl(value.mlx)) {
+    return others
+  }
+  return [...others, "baseUrl.mlx: must be an http:// or https:// address, such as https://my-mac.tailnet.ts.net:8090/v1"]
+}
+
+type ShapeCheck = {
+  key: string;
+  problem: string;
+  value: any
+}
+
+// The given value, without the keys the cast dropped and without nulls.
+// The cast drops each nested key its type does not have, but it also
+// fills each optional field it was not given with null, so its own value
+// would add those nulls to the block.
+def keptByCast(given: any, cast: any): any {
+  if (!isPlainObject(given) || !isPlainObject(cast)) {
+    return given
+  }
+  const castKeys = Object.keys(cast)
+  return Object.fromEntries(
+    [
+      [key, keptByCast(given[key], cast[key])]
+      for key in Object.keys(given)
+      if castKeys.includes(key) && given[key] != null
+    ],
+  )
+}
+
+// One key at a time, so the problem can name the key. The problem is ""
+// when the value fits.
+def shapeCheck(key: string, value: any): ShapeCheck {
   const single: any = Object.fromEntries([[key, value]])
   const checked = single as LlmOptions!
   if (checked is failure(reason)) {
-    return _schemaProblems(reason, single) ?? "${key} has the wrong shape for that option"
+    return {
+      key: key,
+      problem: _schemaProblems(reason, single) ?? "${key} has the wrong shape for that option",
+      value: null
+    }
   }
-  return ""
+  const cast: any = checked.value
+  return {
+    key: key,
+    problem: "",
+    value: keptByCast(value, cast[key])
+  }
 }
 
 /** The nulls remove whatever an earlier block set, so a switch replaces

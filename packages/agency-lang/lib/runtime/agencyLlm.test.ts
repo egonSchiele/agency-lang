@@ -425,4 +425,49 @@ describe("agency.llm — OpenRouter and raw request options", () => {
     });
     expect("replyLimits" in toSmolConfig(config)).toBe(false);
   });
+
+  const STUDIO = "http://studio:8090/v1";
+  const bakedMlx: Partial<SmolConfig> = {
+    model: "baked-model",
+    provider: "mlx",
+    baseUrl: { liteLlm: "http://lite" },
+  };
+
+  it("a setLlmOptions base URL reaches the call", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ baseUrl: { mlx: STUDIO } });
+      return agency.llm("hi");
+    }, bakedMlx);
+    expect(toSmolConfig(config).baseUrl?.mlx).toBe(STUDIO);
+  });
+
+  it("a setLlmOptions base URL keeps the baked URLs of other providers", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ baseUrl: { mlx: STUDIO } });
+      return agency.llm("hi");
+    }, bakedMlx);
+    expect(toSmolConfig(config).baseUrl?.liteLlm).toBe("http://lite");
+  });
+
+  it("setLlmOptions with a null baseUrl brings back the baked URLs", async () => {
+    const config = await recordedConfig(
+      async () => {
+        _setLlmOptions({ baseUrl: { mlx: STUDIO } });
+        _setLlmOptions({ baseUrl: null } as any);
+        return agency.llm("hi");
+      },
+      { ...bakedMlx, baseUrl: { mlx: "http://baked:8080/v1" } },
+    );
+    expect(toSmolConfig(config).baseUrl?.mlx).toBe("http://baked:8080/v1");
+  });
+
+  it("a second setLlmOptions baseUrl replaces the first whole", async () => {
+    const config = await recordedConfig(async () => {
+      _setLlmOptions({ baseUrl: { mlx: STUDIO } });
+      _setLlmOptions({ baseUrl: { ollama: "http://box:11434" } });
+      return agency.llm("hi");
+    }, bakedMlx);
+    expect(toSmolConfig(config).baseUrl?.mlx).toBeUndefined();
+    expect(toSmolConfig(config).baseUrl?.ollama).toBe("http://box:11434");
+  });
 });

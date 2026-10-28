@@ -130,6 +130,76 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "acceptsMlxBaseUrl",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "acceptsEmptyAndNullBaseUrl",
+      "input": "",
+      "expectedOutput": "\"ok ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsOtherProviderBaseUrl",
+      "input": "",
+      "expectedOutput": "\"no: baseUrl.openRouter: only baseUrl.mlx can be set. Other providers send an API key, which would go to that address.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsUrlWithoutScheme",
+      "input": "",
+      "expectedOutput": "\"no: baseUrl.mlx: must be an http:// or https:// address, such as https://my-mac.tailnet.ts.net:8090/v1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsSchemeAlone",
+      "input": "",
+      "expectedOutput": "\"no: baseUrl.mlx: must be an http:// or https:// address, such as https://my-mac.tailnet.ts.net:8090/v1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectsNonStringUrl",
+      "input": "",
+      "expectedOutput": "\"no: baseUrl.mlx: must be an http:// or https:// address, such as https://my-mac.tailnet.ts.net:8090/v1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "dropsUnknownNestedKeys",
+      "input": "",
+      "expectedOutput": "\"{\\\"provider\\\":{\\\"ignore\\\":[\\\"x\\\"]}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

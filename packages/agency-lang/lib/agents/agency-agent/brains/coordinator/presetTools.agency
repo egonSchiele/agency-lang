@@ -7,7 +7,7 @@
 */
 // Imported only so the inlined PresetInput schema can find it (#1283).
 import { LlmOptions } from "../../lib/llmOptions.agency"
-import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
+import { Preset, PresetInput, checkPreset } from "../../lib/presetRules.agency"
 import {
   PresetEdit,
   PresetEditOutcome,
@@ -20,6 +20,9 @@ import {
   setPresetTable,
  } from "../../lib/presets.agency"
 import { readSettingsFile, writeSettingsFile } from "../../lib/settings.agency"
+// Imported for the agent::llmOptions effect declared beside it, which
+// savePreset raises too.
+import { useLlmOptions } from "./llmOptionTools.agency"
 
 def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
   const loaded = readSettingsFile()
@@ -48,6 +51,29 @@ def saveReply(name: string, outcome: PresetEditOutcome): string {
   return "${verb} the '${name}' preset.${stillDefault} ${useItHint(name)}"
 }
 
+// "" when the preset does not set llmOptions.baseUrl.mlx.
+def presetServerUrl(preset: Preset): string {
+  const options: any = preset.llmOptions
+  if (options == null || options.baseUrl == null || options.baseUrl.mlx == null) {
+    return ""
+  }
+  return options.baseUrl.mlx
+}
+
+// The server at that address receives every chat request and writes the
+// model's replies, so the user sees the address before it is saved. The
+// write approval alone would show it buried in the whole settings file.
+def confirmServerUrl(name: string, preset: Preset): Result<boolean> {
+  const url = presetServerUrl(preset)
+  if (url == "") {
+    return success(true)
+  }
+  return interrupt agent::llmOptions("Save preset \"${name}\", which sends every chat request to ${url}? That server sees the whole conversation and writes the model's replies.", {
+    options: preset.llmOptions
+  })
+  return success(true)
+}
+
 export def listPresets(): string {
   """
   List the saved agent presets as JSON: each preset's settings, the
@@ -63,13 +89,18 @@ export def savePreset(name: string, preset: PresetInput): string {
   limits the user can start the agent with. The user approves reading and
   writing settings.json. In a one-shot run nothing is saved. This does not
   switch the current session. Replacing the default preset keeps it the
-  default. llmOptions takes the same fields as useLlmOptions.
+  default. llmOptions takes the same fields as useLlmOptions. The user
+  also approves a preset that sets llmOptions.baseUrl.mlx.
 
   @param name - Lowercase letters, digits, and hyphens, starting with a letter, e.g. cheap
-  @param preset - Only the fields the user asked for. For a local model, set local, and optionally slots.embedding, and nothing else.
+  @param preset - Only the fields the user asked for. For a local model, set local and do not set provider, pin, slots.main, or slots.reasoning. slots.embedding, the tool limits, and llmOptions may be set with it.
   """
   const checked = checkPreset(name, preset, false)
   if (checked is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  const confirmed = confirmServerUrl(name, checked.value)
+  if (confirmed is failure(reason)) {
     return "Not saved: ${reason}"
   }
   const saved = editPresets({

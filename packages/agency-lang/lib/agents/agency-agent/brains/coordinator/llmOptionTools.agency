@@ -27,6 +27,7 @@ export def useLlmOptions(options: LlmOptions): string {
     allowFallbacks: false } uses only one.
   - thinking ({ enabled, budgetTokens }), temperature, retries, timeout,
     validationRetries.
+  - baseUrl.mlx: where the MLX server is, when it runs on another machine.
 
   @param options - Only the fields the user asked for
   """

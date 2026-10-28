@@ -20,7 +20,9 @@ Set only the fields the user asked for.
   reasoning, `embedding` is memory embeddings and must be written
   `provider/model`, such as `openai/text-embedding-3-small`.
 - `local`: a local model name, `hf:` URI, `.gguf` path, `mlx:` URI, or
-  model directory. With `local`, set nothing else except `slots.embedding`.
+  model directory. With `local`, do not set `provider`, `pin`,
+  `slots.main`, or `slots.reasoning`. `slots.embedding`, the tool limits,
+  and `llmOptions` may be set with it.
 - `maxToolCallRounds`: the most tool-call rounds in one turn, a whole number above zero.
 - `maxToolResultChars`: the most characters of one tool result you see.
   `0` means no cap.
@@ -28,6 +30,11 @@ Set only the fields the user asked for.
   `useLlmOptions` takes. The common one is `openRouter.provider`, which
   picks the companies OpenRouter may send calls to, such as
   `{ openRouter: { provider: { ignore: ["open-inference"] } } }`.
+- `llmOptions.baseUrl.mlx`: the address of an MLX server on another
+  machine, such as `{ baseUrl: { mlx: "https://my-mac.tailnet.ts.net:8090/v1" } }`.
+  It only matters with an `mlx:` model in `local`. When the user gives
+  an address but no model, ask which model that server is serving.
+  Saving a preset with an address asks the user first.
 
 ## Tools
 
@@ -72,4 +79,10 @@ User: use fireworks only for glm, and save that as a preset called glm-fw
 ```
 useLlmOptions({ openRouter: { provider: { only: ["fireworks"], allowFallbacks: false } } })
 savePreset("glm-fw", { provider: "openrouter", pin: "z-ai/glm-5.3-flash", llmOptions: { openRouter: { provider: { only: ["fireworks"], allowFallbacks: false } } } })
+```
+
+User: save a preset called studio that uses qwen3 coder on my mac studio at https://my-mac.tailnet.ts.net:8090/v1
+
+```
+savePreset("studio", { local: "mlx:mlx-community/Qwen3-Coder-Next-4bit", llmOptions: { baseUrl: { mlx: "https://my-mac.tailnet.ts.net:8090/v1" } } })
 ```

@@ -40,6 +40,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "aServerAddressAsksFirst",
+      "input": "",
+      "expectedOutput": "\"agent::llmServer,agent::llmOptions true {\\\"baseUrl\\\":{\\\"mlx\\\":\\\"https://studio.ts.net:8090/v1\\\"}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRejectedServerRecordsNothing",
+      "input": "",
+      "expectedOutput": "\"true false true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noServerAddressAsksNoServerQuestion",
+      "input": "",
+      "expectedOutput": "\"agent::llmOptions\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

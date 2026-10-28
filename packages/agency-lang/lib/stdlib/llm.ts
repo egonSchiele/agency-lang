@@ -1,7 +1,7 @@
 import type { HostFiles, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { currentRunOrNone, getRuntimeContext } from "../runtime/asyncContext.js";
-import { modelProviderOverride } from "../runtime/llmConfig.js";
+import { modelProviderOverride, type LlmBaseUrls } from "../runtime/llmConfig.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { LOCAL_PROVIDERS, mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
@@ -49,6 +49,11 @@ export type LlmDefaults = RetryConfig & {
   maxRepeatedToolCalls?: number;
   /** Which companies OpenRouter may send the call to. Other providers ignore it. */
   openRouter?: OpenRouterOptions;
+  /** The base URLs to use for the providers it names. A later
+   *  `setLlmOptions` call with `baseUrl` replaces this one whole. A
+   *  provider it leaves out uses the URL from `agency.json`, or its
+   *  default. */
+  baseUrl?: LlmBaseUrls;
   /** Spread into the provider's request body as given. */
   rawAttributes?: Record<string, unknown>;
 };

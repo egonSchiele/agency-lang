@@ -129,3 +129,61 @@ node saveRefreshesTheTable(): string {
   } with approve
   return Object.keys(presetTable().presets).join(",")
 }
+
+static const STUDIO_URL = "https://studio.ts.net:8090/v1"
+
+node baseUrlAsksFirst(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let asked: string[] = []
+  let urlNamed = false
+  let reply = ""
+  handle {
+    reply = savePreset("studio", { local: "mlx:org/repo", llmOptions: { baseUrl: { mlx: STUDIO_URL } } })
+  } with (intr) {
+    asked.push(intr.effect)
+    if (intr.effect == "agent::llmServer") {
+      urlNamed = intr.message.includes(STUDIO_URL)
+    }
+    return approve()
+  }
+  const saved = presetTable().presets["studio"]
+  return "${asked.join(",")} ${urlNamed} ${reply.startsWith("Created")} ${JSON.stringify(saved)}"
+}
+
+node rejectedBaseUrlSavesNothing(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let wrote = false
+  let reply = ""
+  handle {
+    reply = savePreset("studio", { local: "mlx:org/repo", llmOptions: { baseUrl: { mlx: STUDIO_URL } } })
+  } with (intr) {
+    if (intr.effect == "agent::llmServer") {
+      return reject("not that server")
+    }
+    if (intr.effect == "std::write") {
+      wrote = true
+    }
+    return approve()
+  }
+  return "${fileText() == START} ${reply.startsWith("Not saved:")} ${wrote}"
+}
+
+node presetWithoutBaseUrlAsksNothingNew(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let askedForServer = false
+  handle {
+    savePreset("cheap", { provider: "openrouter" })
+  } with (intr) {
+    if (intr.effect == "agent::llmServer") {
+      askedForServer = true
+    }
+    return approve()
+  }
+  return "${askedForServer}"
+}

@@ -80,6 +80,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "baseUrlAsksFirst",
+      "input": "",
+      "expectedOutput": "\"agent::llmServer,std::read,std::write true true {\\\"local\\\":\\\"mlx:org/repo\\\",\\\"llmOptions\\\":{\\\"baseUrl\\\":{\\\"mlx\\\":\\\"https://studio.ts.net:8090/v1\\\"}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedBaseUrlSavesNothing",
+      "input": "",
+      "expectedOutput": "\"true true false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetWithoutBaseUrlAsksNothingNew",
+      "input": "",
+      "expectedOutput": "\"false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

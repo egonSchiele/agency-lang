@@ -220,6 +220,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "serverNoticeNamesTheAddress",
+      "input": "",
+      "expectedOutput": "\"Chat requests go to https://studio.ts.net:8090/v1, from the \\\"studio\\\" preset. |  | \"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

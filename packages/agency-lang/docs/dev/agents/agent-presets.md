@@ -60,7 +60,45 @@ an `llmOptions` block: `llm()` options for the models beside it, such as
 `{ "openRouter": { "provider": { "ignore": ["open-inference"] } } }`. The
 block is defined in `lib/llmOptions.agency` and may hold the keys in
 `LLM_OPTION_KEYS`: `openRouter`, `thinking`, `temperature`, `replyLimits`,
-`retries`, `timeout`, and `validationRetries`.
+`retries`, `timeout`, `validationRetries`, and `baseUrl`.
+
+`baseUrl` may only hold `mlx`, the address of an MLX server on another
+machine, such as `{ "baseUrl": { "mlx": "https://studio.ts.net:8090/v1" } }`.
+Every other provider sends an API key with each request, so a block with
+`{ "baseUrl": { "openRouter": "https://example.com" } }` would send the
+OpenRouter key to example.com. The mlx client sends a placeholder key.
+`checkLlmOptions` refuses the other providers with a message, and
+requires the `mlx` value to parse as an `http` or `https` URL
+(`_isHttpUrl`). It runs on every path a block comes in by, so a typo is
+reported when the preset is saved or loaded.
+
+The address still needs an approval that names it. Each request carries
+the whole conversation, and the server writes the model's replies, so it
+chooses which tools the agent calls. `useLlmOptions` and `savePreset`
+both call `confirmServerUrl`, which raises `agent::llmServer` with the
+address as its data, `{ url: "https://studio.ts.net:8090/v1" }`, before
+anything else. It is a separate effect from `agent::llmOptions`, so a
+policy rule that approves option changes, such as a new OpenRouter
+routing, does not also approve a server. A rule can still approve one
+address by matching on `url`. The recommended policy has no rule for
+either effect, so the user answers both. `useLlmOptions` then raises
+`agent::llmOptions` as before, so setting an address asks twice.
+
+`checkLlmOptions` returns the block it was given, cut down to the keys a
+checked cast `as LlmOptions!` keeps (`keptByCast`). The cast drops a
+nested key its type does not have, so `{ "openRouter": { "extra": 1 } }`
+comes back as `{ "openRouter": {} }`. The block is not the cast's own
+value, because the cast also fills each optional field it was not given
+with `null`. `checkPreset` puts this block in the preset it returns, so a
+saved or loaded preset gets the same cut as `useLlmOptions` and the
+top-level `model.llmOptions`.
+
+When the active preset sets an address, the interactive header prints it
+(`serverNotice`): `Chat requests go to https://studio.ts.net:8090/v1, from
+the "studio" preset.` A preset marked `default` applies with no flag, and
+an address can reach `settings.json` without `savePreset`, by a hand edit
+or a plain file write, so the header is the one place every path shows
+up. A one-shot run prints no header, so it does not show the line.
 
 Keys with another owner are refused. `model`, `provider`, and the two tool
 limits have fields of their own, `reasoningEffort` comes from `--effort`,
@@ -128,6 +166,13 @@ The tools use `readSettingsFile` and `writeSettingsFile` rather than
 Neither call uses `with approve`. The policy handler decides the read and
 the write. A one-shot run rejects them, and the tool replies "Not saved".
 
+Before it writes a preset whose block sets `baseUrl.mlx`, `savePreset`
+raises `agent::llmServer` with a message that names the preset and the
+address. The `std::write` approval alone would show the address buried in
+the whole file, and a policy rule that approves writes under the agent
+home would skip even that. A rejection replies "Not saved" and writes
+nothing.
+
 A preset may be named `constructor`, so every lookup by name goes through
 `savedEntry`, which reads a key only when the record has it.
 
@@ -151,3 +196,7 @@ same way.
 - A `pin` with no `provider` resolves to `openai`, as `--model` does.
 - `--max-cost` and `--max-time` cannot be in a preset: the launcher reads
   them before the agent process starts and does not read `settings.json`.
+- A preset's `baseUrl.mlx` reaches only `llm()` calls. The speech, image,
+  and vision functions find the server with `mlxBaseUrl()`, which reads
+  `agency.json` and `MLX_BASE_URL`. A subprocess does not inherit the
+  branch's `llm()` defaults.

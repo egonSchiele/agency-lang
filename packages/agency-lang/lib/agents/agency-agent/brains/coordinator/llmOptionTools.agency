@@ -1,7 +1,7 @@
 /** @module
   @summary The coordinator's tool for llm() options.
 */
-import { LlmOptions, checkLlmOptions } from "../../lib/llmOptions.agency"
+import { LlmOptions, checkLlmOptions, serverUrlOf } from "../../lib/llmOptions.agency"
 import { requestSessionLlmOptions } from "../../lib/session.agency"
 
 /** Changing llm() options can send the rest of the session to another
@@ -9,6 +9,27 @@ import { requestSessionLlmOptions } from "../../lib/session.agency"
   policy matches it, so it goes to the user. */
 effect agent::llmOptions {
   options: any
+}
+
+/** An MLX server address in the options decides who sees the whole
+  conversation and writes the model's replies. It gets an effect of its
+  own so a policy rule that approves agent::llmOptions, for routing or
+  sampling changes, never approves a server too. */
+effect agent::llmServer {
+  url: string
+}
+
+/** Ask before options that send chat requests to another server. A
+  success when the options set no server. */
+export def confirmServerUrl(question: string, options: any): Result<boolean> {
+  const url = serverUrlOf(options)
+  if (url == "") {
+    return success(true)
+  }
+  return interrupt agent::llmServer("${question} Every chat request would go to ${url}. That server sees the whole conversation and writes the model's replies.", {
+    url: url
+  })
+  return success(true)
 }
 
 /** A tool runs in a branch, and setLlmOptions there would change only that
@@ -27,11 +48,17 @@ export def useLlmOptions(options: LlmOptions): string {
     allowFallbacks: false } uses only one.
   - thinking ({ enabled, budgetTokens }), temperature, retries, timeout,
     validationRetries.
+  - baseUrl.mlx: where the MLX server is, when it runs on another machine.
+    The user approves the address separately.
 
   @param options - Only the fields the user asked for
   """
   const checked = checkLlmOptions(options)
   if (checked is failure(reason)) {
+    return "Not set: ${reason}"
+  }
+  const confirmed = confirmServerUrl("Switch this session to another model server?", checked.value)
+  if (confirmed is failure(reason)) {
     return "Not set: ${reason}"
   }
   return interrupt agent::llmOptions("Set these llm() options for this session? ${JSON.stringify(checked.value)}", {

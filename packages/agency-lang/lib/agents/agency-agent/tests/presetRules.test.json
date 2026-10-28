@@ -162,6 +162,16 @@
       ]
     },
     {
+      "nodeName": "checkTrimsLlmOptions",
+      "input": "",
+      "expectedOutput": "\"{\\\"provider\\\":\\\"openrouter\\\",\\\"llmOptions\\\":{\\\"openRouter\\\":{\\\"provider\\\":{\\\"ignore\\\":[\\\"a\\\"]}},\\\"baseUrl\\\":{}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "checkNamesThePreset",
       "input": "",
       "expectedOutput": "\"preset 'x': maxToolCallRounds must be a whole number above zero\"",

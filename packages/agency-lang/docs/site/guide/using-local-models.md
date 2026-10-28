@@ -230,6 +230,46 @@ These work the same way they do for a GGUF model, with one difference. Agency do
 
 A run sends the model name to the server, so the two must agree. `agency local resolve <name>` prints the name Agency will send.
 
+### Use a server on another machine
+
+`agency local serve` only answers requests made on the machine it runs on. To use it from another computer, put something in front of it that the other computer can reach. With [Tailscale](https://tailscale.com), run this on the machine with the server:
+
+```bash
+tailscale serve --bg --https=8090 http://127.0.0.1:8080
+```
+
+The other machines on your tailnet can now reach the server at an address such as `https://my-mac.tailnet.ts.net:8090/v1`.
+
+On the other computer, you can point Agency at that address in two ways. The first is the `MLX_BASE_URL` environment variable, which every command reads:
+
+```bash
+MLX_BASE_URL=https://my-mac.tailnet.ts.net:8090/v1 agency agent --local mlx:mlx-community/Qwen3-Coder-Next-4bit
+```
+
+The second is a preset for `agency agent`, saved in `~/.agency-agent/settings.json`:
+
+```json
+{
+  "presets": {
+    "studio": {
+      "local": "mlx:mlx-community/Qwen3-Coder-Next-4bit",
+      "llmOptions": {
+        "baseUrl": { "mlx": "https://my-mac.tailnet.ts.net:8090/v1" }
+      }
+    }
+  }
+}
+```
+
+`agency agent --preset studio` then sends every chat request to that machine. You can also ask the agent to save the preset for you. It asks you to approve the address first, because the server at that address sees the whole conversation and writes the model's replies. A preset can only set the address of an MLX server. Other providers send an API key with each request, and the key would go to that address.
+
+The preset only changes where the agent's chat requests go. These still use `MLX_BASE_URL`, or the default address on this machine:
+
+- The speech, image, and vision functions in the standard library, and `agency-lang/local`. When one of them cannot reach a server, its error names the address it tried.
+- Agency code that the agent runs in a subprocess.
+
+A program you compile yourself can set the address in `agency.local.json`, under `client.baseUrl.mlx`.
+
 ### Use a model you already have
 
 ```bash

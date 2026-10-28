@@ -1,3 +1,31 @@
+## Oct 26 2026 — v0.34.0
+
+### Breaking
+
+- **Spilling long tool results is its own `llm()` option, `spillToolResultsOver`.** Offering `readSpill` in the tools no longer turns spilling on by itself. Without the option, a long result is cut at `maxToolResultChars`.
+
+### Language
+
+- **Decorators can see which function they wrap and whether they are inside a tool call.** Each function gets an id that is unique across invocations, and the decorator can see the id, so it can track behavior per-function (eg how many times this function has been called).
+- **A `destructive` call inside a loop, `if`, `match`, `handle`, or `with` no longer reports `destructiveRan: true` when the callee refused cleanly.**
+
+### Runtime
+
+- **`maxToolResultChars` is a hard ceiling.** Tool results are truncated to `maxToolResultChars`.
+- **`llm()` takes an `openRouter` option for choosing providers,** and `agency.json` takes `client.openRouter`.
+- **Each call logs which provider served it and what the model reasoned.** The logs viewer shows it, eg `z-ai/glm-5.3-flash via OpenInference`.
+
+### Standard Library
+
+- **`runFunction` in `std::agency` calls an exported function from a module, file, or source text** in a subprocess, with no entry node needed. It keeps handlers, validators, Results, and run limits.
+- **`learn` turns exported Agency functions into typed tools**. You can hand an agency file to the agency agent and ask it to "learn" it.
+
+### Agent
+
+- **The coordinator can learn tools mid-conversation** using the `learn` feature above.
+- **Sessions and presets can carry an `llmOptions` block,** for example to avoid an OpenRouter provider.
+- **Tool calls and printed more nicely to the terminal**, and there's custom rendering for some tools like web searches and todos.
+
 ## Oct 24 2026 — v0.33.0
 
 ### Breaking

@@ -21,7 +21,7 @@ describe("lowerWorkflow", () => {
       'import { readNote, searchNotes } from "./notes.agency"',
     ]);
     expect(lowered.types).toEqual([
-      { name: "Inputs", text: "{ noteTitle: string }", owner: null },
+      { name: "Inputs", text: "{ noteTitle: string }", owner: { step: null, field: "inputs" } },
       { name: "Step_meals_output", text: "string[]", owner: { step: "meals", field: "output" } },
     ]);
     expect(lowered.body.slice(0, 2).map(print)).toEqual([

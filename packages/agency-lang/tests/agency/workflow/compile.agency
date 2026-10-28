@@ -188,6 +188,16 @@ node typeTextCannotSmuggle(): string {
   return "${first.field}: ${first.message}"
 }
 
+node stringLiteralCannotEscape(): string {
+  const inputs = "{ noteTitle: string, a: \"x\\\", in: \" + (globalThis.PWNED = 1) + \", instanceof: \") }) //\" }"
+  const compiled = compileWorkflow(mealPlan("note", inputs, { "$ref": "inputs.noteTitle" }), TOOLS, DIR) with approve
+  if (compiled is success) {
+    return "compiled"
+  }
+  const first = compiled.data.problems[0]
+  return "${first.field}: ${first.message}"
+}
+
 node unknownToolIsRefused(): string {
   const workflow: Workflow = {
     format: 1,

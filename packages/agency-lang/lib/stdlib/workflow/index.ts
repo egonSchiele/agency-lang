@@ -11,9 +11,14 @@ import { problemsFromDiagnostics, type Diagnostic } from "./problems.js";
 import { renderWorkflow } from "./render.js";
 import { resolveWorkflow, signatureKey } from "./resolve.js";
 import { toolRefs } from "./tools.js";
-import type { Problem, Range, Signature, ToolRef } from "./types.js";
+import type { Owner, Problem, Range, Signature, ToolRef } from "./types.js";
 
-export type Compiled = { source: string; ranges: Range[]; warnings: Problem[] };
+export type Compiled = {
+  source: string;
+  ranges: Range[];
+  typeOwners: Record<string, Owner>;
+  warnings: Problem[];
+};
 export type CompileResult =
   { compiled: Compiled; problems: [] } | { compiled: null; problems: Problem[] };
 
@@ -38,6 +43,7 @@ export function compileWorkflowSource(
   const compiled = {
     source: rendered.source,
     ranges: rendered.ranges,
+    typeOwners: rendered.typeOwners,
     warnings: resolved.resolved.warnings,
   };
   return { compiled, problems: [] };
@@ -117,6 +123,10 @@ export function _workflowFailure(message: string): ResultFailure {
   return _problemsFailure([{ step: null, field: null, message }]);
 }
 
-export function _problemsFromDiagnostics(diagnostics: Diagnostic[], ranges: Range[]): Problem[] {
-  return problemsFromDiagnostics(diagnostics, ranges);
+export function _problemsFromDiagnostics(
+  diagnostics: Diagnostic[],
+  ranges: Range[],
+  typeOwners: Record<string, Owner>,
+): Problem[] {
+  return problemsFromDiagnostics(diagnostics, ranges, typeOwners);
 }

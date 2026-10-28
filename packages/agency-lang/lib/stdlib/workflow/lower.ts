@@ -138,7 +138,10 @@ function typeDecls(resolved: ResolvedWorkflow): TypeDecl[] {
       ? [{ name: step.typeName, text: step.outputType, owner: { step: step.id, field: "output" } }]
       : [],
   );
-  return [{ name: "Inputs", text: resolved.inputsType, owner: null }, ...outputs];
+  return [
+    { name: "Inputs", text: resolved.inputsType, owner: { step: null, field: "inputs" } },
+    ...outputs,
+  ];
 }
 
 export function lowerWorkflow(resolved: ResolvedWorkflow): Lowered {

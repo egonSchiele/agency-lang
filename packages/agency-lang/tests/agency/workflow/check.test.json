@@ -65,6 +65,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "wrongArgumentTypeNamesTheArgument",
+      "description": "an argument of the wrong type is reported on that argument",
+      "input": "",
+      "expectedOutput": "\"text/args.id\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badResultPathNamesTheResult",
+      "description": "a bad path in result is reported on the result field",
+      "input": "",
+      "expectedOutput": "\"null/result\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badOutputTypeNamesTheStep",
+      "description": "an llm output type that names no type is reported on that step's output",
+      "input": "",
+      "expectedOutput": "\"m/output\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

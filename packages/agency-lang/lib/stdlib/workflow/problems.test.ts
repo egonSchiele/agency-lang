@@ -36,6 +36,38 @@ describe("problemsFromDiagnostics", () => {
     ).toEqual([{ step: "note", field: "args", message: "m" }]);
   });
 
+  it("takes a mistyped argument's name from the payload's param", () => {
+    const diagnostic = {
+      message: "Type 'string[]' is not assignable to parameter 'section'.",
+      loc: { line: 4 },
+      params: { actual: "string[]", expected: "string", fn: "addListItems", param: "section" },
+    };
+    expect(problemsFromDiagnostics([diagnostic], ranges)).toEqual([
+      { step: "note", field: "args.section", message: diagnostic.message },
+    ]);
+  });
+
+  it("maps a result line to the result field", () => {
+    const withResult: Range[] = [
+      ...ranges,
+      { from: 9, to: 9, owner: { step: null, field: "result" } },
+    ];
+    expect(problemsFromDiagnostics([{ message: "m", loc: { line: 8 } }], withResult)).toEqual([
+      { step: null, field: "result", message: "m" },
+    ]);
+  });
+
+  it("maps a diagnostic with no line to the type its context names", () => {
+    const owners = { Step_m_output: { step: "m", field: "output" } };
+    const diagnostic = {
+      message: "Type alias 'Nope' is not defined",
+      params: { alias: "Nope", context: "Step_m_output" },
+    };
+    expect(problemsFromDiagnostics([diagnostic], ranges, owners)).toEqual([
+      { step: "m", field: "output", message: diagnostic.message },
+    ]);
+  });
+
   it("keeps a diagnostic with no owner", () => {
     expect(
       problemsFromDiagnostics([{ message: "m", loc: { line: 40 } }, { message: "n" }], ranges),

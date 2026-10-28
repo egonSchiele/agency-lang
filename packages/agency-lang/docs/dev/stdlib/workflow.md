@@ -43,6 +43,8 @@ Workflow text reaches the generated source through three doors:
 2. **A name** (a step id, tool name, argument name, input name) passes `isIdentifier` in parse. `statement()` in `shapes.ts` checks it again before it writes it into a shape. Every generated statement comes from the `SHAPES` table through `statement()`.
 3. **Type text** (`inputs`, and an LLM step's `output`) is parsed as `type <Name> = <text>`. The result must be exactly one type alias with that name. The line written into the program is that alias printed by `signatureOf`, the printer `describe` uses. `describe` is not called, because its effects pass resolves imports and the type text could carry an import line.
 
+A string-literal type in that text may not hold a backslash or a line break. The type parser keeps a backslash as an ordinary character, and the compiler writes the value between quotes without escaping it. A value ending in a backslash would then end the string early in the compiled TypeScript, and the text after it would run as code when the module loads.
+
 A reference becomes an expression built from a generated name, `.value`, and a path that matched `REF_PATH`. A list or object argument that holds a reference is built by `list()` and `record()` from generated hole names. Its keys are written as names, so an object that holds a reference must have identifier keys.
 
 ## Why the scaffold is fixed text
@@ -76,9 +78,11 @@ const step_note_query = inputs.noteTitle
 const step_note = searchNotes(query: step_note_query)
 ```
 
-A type error in an argument then lands on that argument's line. `render.ts` counts the lines of each fragment's print and records the range each one covers. `problemsFromDiagnostics` finds the range that holds a diagnostic's line. A diagnostic's line is 0-based and the ranges are 1-based.
+A type error in an argument then lands on that argument's line. `render.ts` counts the lines of each fragment's print and records the range each one covers. The type declarations and the `return success(...)` line get ranges too, owned by `inputs`, a step's `output`, and `result`. `problemsFromDiagnostics` finds the range that holds a diagnostic's line. A diagnostic's line is 0-based and the ranges are 1-based.
 
-A wrong argument name is reported on the call line, which belongs to the field `args`. When the diagnostic's `params` carry a `name`, the field becomes `args.<name>`. The name is read from the payload. The message text is not parsed.
+A diagnostic about a type alias can come with no line. Its `params.context` names the alias, and `typeOwners` maps that name to `inputs` or the step's `output`.
+
+A wrong argument name or type is reported on the call line, which belongs to the field `args`. The argument comes from the diagnostic's `params`: `name` is the name the call wrote, and `param` is the parameter an argument of the wrong type was matched to. The field becomes `args.<argument>`. The message text is not parsed.
 
 `checkWorkflow` runs `typecheck` before `compile`. A strict compile reports type errors too, but as one message with no line, so it runs second.
 
@@ -88,7 +92,7 @@ The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise
 
 ## Tool modules
 
-`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`, and a `node_modules` path becomes `pkg::<name>`. Any other path is rewritten relative to the workflow's `dir`. A host that runs in a different directory from the one it compiled in gets "outside the workflow directory" for its local tools.
+`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`, and a `node_modules` path becomes `pkg::<name>`. Any other path is rewritten relative to the workflow's `dir`. The path is resolved against the working directory at run time. A host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
 
 The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, and a runtime builtin are refused, because none has a name that can be imported.
 

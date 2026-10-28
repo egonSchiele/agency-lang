@@ -89,6 +89,17 @@
       ]
     },
     {
+      "nodeName": "stringLiteralCannotEscape",
+      "description": "a backslash in a string literal type cannot end the string early in the compiled program",
+      "input": "",
+      "expectedOutput": "\"inputs: a string literal type in inputs may not hold a backslash or a line break\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "unknownToolIsRefused",
       "description": "a std tool the host did not pass is refused",
       "input": "",

@@ -104,3 +104,33 @@ node noReturnTypeIsAWarning(): string {
   }
   return "${warnings[0].step}/${warnings[0].field}"
 }
+
+node wrongArgumentTypeNamesTheArgument(): string {
+  return firstProblem(twoSteps(goodNoteArgs(), { id: { "$ref": "steps.note" } }))
+}
+
+node badResultPathNamesTheResult(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "readFirst",
+    description: "Read the first note that matches a title.",
+    inputs: "{ noteTitle: string }",
+    steps: [{ id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: goodNoteArgs() }],
+    result: { "$ref": "steps.note[0].nope" }
+  }
+  return firstProblem(workflow)
+}
+
+node badOutputTypeNamesTheStep(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "summarize",
+    description: "Summarize the first matching note.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: goodNoteArgs() },
+      { id: "m", kind: "llm", prompt: "Summarize the note.", context: [{ "$ref": "steps.note[0].body" }], output: "Nope" }
+    ]
+  }
+  return firstProblem(workflow)
+}

@@ -75,6 +75,7 @@ type ToolRef = {
 type Compiled = {
   source: string;
   ranges: Json;
+  typeOwners: Json;
   warnings: WorkflowProblem[]
 }
 
@@ -160,7 +161,7 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
     return _workflowFailure(report.error)
   }
   if (report.value.errors.length > 0) {
-    return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.value.ranges))
+    return _problemsFailure(_problemsFromDiagnostics(report.value.errors, compiled.value.ranges, compiled.value.typeOwners))
   }
   const program = compile(source, dir, strict: true)
   if (program is failure) {

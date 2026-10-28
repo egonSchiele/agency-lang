@@ -3,7 +3,7 @@
  * field whose lines they fall in. The field a wrong argument name belongs to
  * comes from the diagnostic's structured payload, never from its message.
  */
-import type { Problem, Range } from "./types.js";
+import type { Owner, Problem, Range } from "./types.js";
 
 /** `loc.line` is 0-based, as the typechecker reports it. */
 export type Diagnostic = {
@@ -12,27 +12,46 @@ export type Diagnostic = {
   params?: Record<string, string | number>;
 };
 
-function fieldOf(range: Range, diagnostic: Diagnostic): string | null {
-  const name = diagnostic.params?.name;
-  if (range.owner.field === "args" && typeof name === "string") {
-    return `args.${name}`;
-  }
-  return range.owner.field;
+/** The argument a diagnostic on a call line is about: the name the call
+ *  wrote (an unknown or aliased argument), else the parameter it was matched
+ *  to (an argument of the wrong type). */
+function argumentOf(diagnostic: Diagnostic): string | null {
+  const params = diagnostic.params ?? {};
+  const name = params.name ?? params.param;
+  return typeof name === "string" && name !== "" ? name : null;
 }
 
-export function problemsFromDiagnostics(diagnostics: Diagnostic[], ranges: Range[]): Problem[] {
+function fieldOf(owner: Owner, diagnostic: Diagnostic): string | null {
+  const argument = argumentOf(diagnostic);
+  return owner.field === "args" && argument !== null ? `args.${argument}` : owner.field;
+}
+
+/** The owner of the lines that hold a diagnostic, or of the declared type its
+ *  `context` names when it has no line. */
+function ownerOf(
+  diagnostic: Diagnostic,
+  ranges: Range[],
+  typeOwners: Record<string, Owner>,
+): Owner | null {
+  const loc = diagnostic.loc;
+  if (loc !== undefined) {
+    const line = loc.line + 1;
+    return ranges.find((range) => range.from <= line && line <= range.to)?.owner ?? null;
+  }
+  const context = diagnostic.params?.context;
+  return typeof context === "string" ? (typeOwners[context] ?? null) : null;
+}
+
+export function problemsFromDiagnostics(
+  diagnostics: Diagnostic[],
+  ranges: Range[],
+  typeOwners: Record<string, Owner> = {},
+): Problem[] {
   return diagnostics.map((diagnostic) => {
-    const line = diagnostic.loc === undefined ? undefined : diagnostic.loc.line + 1;
-    const range = ranges.find(
-      (candidate) => line !== undefined && candidate.from <= line && line <= candidate.to,
-    );
-    if (range === undefined) {
+    const owner = ownerOf(diagnostic, ranges, typeOwners);
+    if (owner === null) {
       return { step: null, field: null, message: diagnostic.message };
     }
-    return {
-      step: range.owner.step,
-      field: fieldOf(range, diagnostic),
-      message: diagnostic.message,
-    };
+    return { step: owner.step, field: fieldOf(owner, diagnostic), message: diagnostic.message };
   });
 }

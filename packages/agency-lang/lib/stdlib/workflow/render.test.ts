@@ -5,10 +5,12 @@ import type { Lowered, Owner } from "./types.js";
 
 const oa: Owner = { step: "a", field: "args.q" };
 const ob: Owner = { step: "a", field: "args" };
+const inputsOwner: Owner = { step: null, field: "inputs" };
+const resultOwner: Owner = { step: null, field: "result" };
 
 const lowered: Lowered = {
   imports: ['import { f } from "./f.agency"'],
-  types: [{ name: "Inputs", text: "{ q: string }", owner: null }],
+  types: [{ name: "Inputs", text: "{ q: string }", owner: inputsOwner }],
   body: [
     { code: _parseStatements("const a = 1"), owner: oa },
     { code: _parseStatements("if (a is failure) {\n  return a\n}"), owner: ob },
@@ -19,7 +21,7 @@ const lowered: Lowered = {
 
 const withInputs = (text: string): Lowered => ({
   ...lowered,
-  types: [{ name: "Inputs", text, owner: null }],
+  types: [{ name: "Inputs", text, owner: inputsOwner }],
 });
 
 describe("renderWorkflow", () => {
@@ -58,8 +60,10 @@ describe("renderWorkflow", () => {
       "  }",
     ]);
     expect(r.ranges).toEqual([
+      { from: 4, to: 6, owner: inputsOwner },
       { from: 9, to: 9, owner: oa },
       { from: 10, to: 12, owner: ob },
+      { from: 13, to: 13, owner: resultOwner },
     ]);
   });
 
@@ -77,8 +81,10 @@ describe("renderWorkflow", () => {
       "  }",
     ]);
     expect(r.ranges).toEqual([
+      { from: 4, to: 6, owner: inputsOwner },
       { from: 10, to: 10, owner: oa },
       { from: 11, to: 13, owner: ob },
+      { from: 14, to: 14, owner: resultOwner },
     ]);
   });
 
@@ -121,6 +127,57 @@ describe("renderWorkflow", () => {
     expect(renderWorkflow(withInputs("{ a: ")).problems).toEqual([
       { step: null, field: "inputs", message: "inputs must be one object type" },
     ]);
+  });
+
+  it("names the owner of each declared type", () => {
+    const types = [
+      ...lowered.types,
+      { name: "Step_m_output", text: "string[]", owner: { step: "m", field: "output" } },
+    ];
+    expect(renderWorkflow({ ...lowered, types }).typeOwners).toEqual({
+      Inputs: inputsOwner,
+      Step_m_output: { step: "m", field: "output" },
+    });
+  });
+
+  it("refuses a backslash in a string literal type", () => {
+    expect(renderWorkflow(withInputs('{ a: "x\\" }')).problems).toEqual([
+      {
+        step: null,
+        field: "inputs",
+        message: "a string literal type in inputs may not hold a backslash or a line break",
+      },
+    ]);
+  });
+
+  it("refuses string literal text that would escape its quotes in the compiled program", () => {
+    const text =
+      '{ noteTitle: string, a: "x\\", in: " + (globalThis.PWNED = 1) + ", instanceof: ") }) //" }';
+    expect(renderWorkflow(withInputs(text)).problems).toEqual([
+      {
+        step: null,
+        field: "inputs",
+        message: "a string literal type in inputs may not hold a backslash or a line break",
+      },
+    ]);
+  });
+
+  it("refuses a backslash in an llm output type, naming the step", () => {
+    const types = [
+      ...lowered.types,
+      { name: "Step_m_output", text: '"a\\" | "b"', owner: { step: "m", field: "output" } },
+    ];
+    expect(renderWorkflow({ ...lowered, types }).problems).toEqual([
+      {
+        step: "m",
+        field: "output",
+        message: "a string literal type in output may not hold a backslash or a line break",
+      },
+    ]);
+  });
+
+  it("accepts a plain string literal type", () => {
+    expect(renderWorkflow(withInputs('{ mode: "fast" | "slow" }')).problems).toEqual([]);
   });
 
   it("refuses an llm output type the same way, naming the step", () => {

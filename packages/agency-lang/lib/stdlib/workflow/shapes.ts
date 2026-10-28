@@ -18,10 +18,9 @@ export const SHAPES = {
   call: "const {{value}} = {{tool}}({{args}})",
   check:
     'if ({{value}} is failure) {\n  return failure("step {{id}} ({{tool}}): ${{{value}}.error}", { step: #id, cause: {{value}} })\n}',
-  // A tool typed with a plain value can still fail (a thrown error becomes a
-  // failure), but its type has no `.error`, so the message reads it through
-  // an unchecked cast to `any`, which emits nothing. A cast to `Result` is
-  // refused (AG1014) and would not be narrowed to a failure anyway (AG2009).
+  // For a tool whose declared type is not a Result: the value can still be
+  // a failure, but its type has no `.error`, so the message reads it through
+  // a cast.
   checkPlain:
     'if ({{value}} is failure) {\n  return failure("step {{id}} ({{tool}}): ${({{value}} as any).error}", { step: #id, cause: {{value}} })\n}',
   llm: "const {{value}}: {{outputType}} = thread {\n  return llm(#prompt{{options}})\n}",

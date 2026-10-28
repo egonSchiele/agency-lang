@@ -7,17 +7,27 @@ import type { Owner, Problem, Range } from "./types.js";
 
 /** `loc.line` is 0-based, as the typechecker reports it. */
 export type Diagnostic = {
+  code: string;
   message: string;
   loc?: { line: number };
   params?: Record<string, string | number>;
 };
 
-/** The argument a diagnostic on a call line is about: the name the call
- *  wrote (an unknown or aliased argument), else the parameter it was matched
- *  to (an argument of the wrong type). */
+/** The diagnostics about one argument of a call, and the payload field that
+ *  names the argument: `name` is the name the call wrote, `param` the
+ *  parameter a mistyped argument was matched to. */
+const ARGUMENT_DIAGNOSTICS: Record<string, "name" | "param"> = {
+  AG6012: "name", // not an accepted named argument
+  AG6013: "name", // duplicate named argument
+  AG6014: "name", // named argument of the wrong type
+  AG6019: "param", // argument not assignable to its parameter
+  AG6025: "name", // unknown named argument
+  AG6026: "name", // named argument conflicts with a positional one
+};
+
 function argumentOf(diagnostic: Diagnostic): string | null {
-  const params = diagnostic.params ?? {};
-  const name = params.name ?? params.param;
+  const field = ARGUMENT_DIAGNOSTICS[diagnostic.code];
+  const name = field === undefined ? undefined : diagnostic.params?.[field];
   return typeof name === "string" && name !== "" ? name : null;
 }
 

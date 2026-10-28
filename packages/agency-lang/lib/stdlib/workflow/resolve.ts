@@ -5,7 +5,7 @@
  * semantic problem is found here: a tool the host did not pass, a reference
  * that points forward or at nothing, and two generated names that coincide.
  */
-import { inputNames } from "./parse.js";
+import { inputNames } from "./typeText.js";
 import {
   isRef,
   refsIn,
@@ -255,14 +255,13 @@ function binding(local: string, field: string, value: unknown): Binding {
 function resolveToolStep(step: ToolStep, signatures: Record<string, Signature>): ResolvedStep {
   const stepNames = names(step.id);
   const argOrder = sortedArgs(step);
-  const returnType = signatures[signatureKey(step.module, step.tool)].returnType ?? "";
   return {
     id: step.id,
     kind: "tool",
     value: stepNames.value,
     module: step.module,
     tool: step.tool,
-    returnsResult: /^Result(<|$)/.test(returnType),
+    returnsResult: signatures[signatureKey(step.module, step.tool)].returnsResult,
     bindings: argOrder.map((arg) => binding(stepNames.arg(arg), `args.${arg}`, step.args[arg])),
     argOrder,
   };

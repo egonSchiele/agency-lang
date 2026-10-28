@@ -107,11 +107,16 @@ compileWorkflow(
 ): Result<string, WorkflowFailure>
 ```
 
-Generate the Agency source text of a workflow's program. This returns text, not a compiled program. A workflow that is malformed, names a tool not in the list, or points a reference forward fails with every problem, each naming its step and field. Reading a local tool's module asks for approval.
+Generate the Agency source of a workflow's program. A malformed workflow fails with every problem, each naming its step and field.
 
   @param workflow - The workflow to generate a program for
   @param tools - The functions the workflow may call. A step may only name one of these
   @param dir - The directory a workflow's local modules are named relative to
+
+The source is text, not a compiled program: hand it to `compile` or
+  `typecheck` from `std::agency`, or to `checkWorkflow`, which does both and
+  maps each error back to its step. Reading a local tool's module raises
+  `std::read`.
 
 **Parameters:**
 
@@ -127,7 +132,7 @@ Generate the Agency source text of a workflow's program. This returns text, not 
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L131))
 
 ### checkWorkflow
 
@@ -139,11 +144,17 @@ checkWorkflow(
 ): Result<WorkflowProblem[], WorkflowFailure>
 ```
 
-Check a workflow without running it, and report every problem by step and field. A wrong argument name, a missing argument, a wrong type, or a path into a step's value that does not exist is a type error in the generated program, reported on the step and argument it came from. Succeeds with the warnings, such as a tool that declares no return type. Reading a local tool's module asks for approval.
+Check a workflow without running it. Fails with every problem, each naming its step and field; succeeds with the warnings, such as a tool that declares no return type.
 
   @param workflow - The workflow to check
   @param tools - The functions the workflow may call. A step may only name one of these
   @param dir - The directory a workflow's local modules are named relative to
+
+Every problem the generator and the typechecker can find, in one pass,
+  so an author fixes them together. A wrong argument name, a missing
+  argument, a wrong type, or a path into a step's value that does not exist
+  is a type error in the generated program, reported on the step and field
+  it came from. Reading a local tool's module raises `std::read`.
 
 **Parameters:**
 
@@ -159,4 +170,4 @@ Check a workflow without running it, and report every problem by step and field.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L152))

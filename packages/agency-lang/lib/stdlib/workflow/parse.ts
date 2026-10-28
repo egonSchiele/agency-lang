@@ -1,255 +1,232 @@
 /**
  * Stage 1 of the workflow generator: a JSON value becomes a typed
- * `Workflow`, or the list of every shape problem in it. This stage knows
- * only shape. Whether a tool exists or a reference points backwards is
- * resolve's job.
+ * `Workflow`, or the list of every shape problem in it. The shape is a zod
+ * schema; the rules zod cannot say (a name is an identifier, a reference
+ * path is well formed, type text parses) are refinements on it. Whether a
+ * tool exists or a reference points backwards is resolve's job.
  */
+import { z } from "zod";
 import { isReservedInternalName } from "../../reservedNames.js";
+import { parseTypeText } from "./typeText.js";
 import { isIdentifier, isObject, REF_PATH, refsIn, type Problem, type Workflow } from "./types.js";
 
 export type ParseResult =
   { workflow: Workflow; problems: [] } | { workflow: null; problems: Problem[] };
 
-type Json = Record<string, unknown>;
-type Rule = (value: Json) => Problem[];
-type StepRule = (step: Json, owner: string | null) => Problem[];
+type Issue = { path: PropertyKey[]; message: string };
 
 const LIMIT_FIELDS = ["maxCost", "maxTime"];
 
-function problem(step: string | null, field: string | null, message: string): Problem {
-  return { step, field, message };
-}
-
 /** The message for a name that is not an identifier, or null when it is one. */
-function nameMessage(label: string, text: unknown): string | null {
-  if (typeof text !== "string") {
-    return `${label} must be a string`;
-  }
+function nameMessage(label: string, text: string): string | null {
   if (isReservedInternalName(text)) {
     return `${label} "${text}" is reserved: names that start with two underscores belong to the compiler`;
   }
   return isIdentifier(text) ? null : `${label} "${text}" is not an identifier`;
 }
 
-function nameProblems(step: string | null, field: string, label: string, text: unknown): Problem[] {
-  const message = nameMessage(label, text);
-  return message === null ? [] : [problem(step, field, message)];
+function identifier(label: string) {
+  return z.string({ error: `${label} must be a string` }).superRefine((text, ctx) => {
+    const message = nameMessage(label, text);
+    if (message !== null) {
+      ctx.addIssue({ code: "custom", message });
+    }
+  });
 }
 
-function stepsOf(value: Json): Json[] {
-  return Array.isArray(value.steps) ? value.steps.filter(isObject) : [];
-}
-
-function ownerOf(step: Json): string | null {
-  return typeof step.id === "string" ? step.id : null;
-}
-
-function refShapeProblems(step: string | null, field: string, value: Json): Problem[] {
+function refMessages(value: Record<string, unknown>): string[] {
   if (Object.keys(value).length !== 1) {
-    return [problem(step, field, "a reference must have exactly one key, $ref")];
+    return ["a reference must have exactly one key, $ref"];
   }
   const path = value.$ref;
   const root = typeof path === "string" ? path.split(/[.[]/)[1] : "";
   if (typeof path === "string" && REF_PATH.test(path) && isIdentifier(root)) {
     return [];
   }
-  return [problem(step, field, `reference ${JSON.stringify(path)} is not a well-formed path`)];
+  return [`reference ${JSON.stringify(path)} is not a well-formed path`];
 }
 
 /** Keys that cannot be written into the program. An object holding a
  *  reference is built from its keys as names, so they must be identifiers;
  *  any other object is lifted whole, which refuses only `__proto__`. */
-function keyProblems(step: string | null, field: string, value: Json): Problem[] {
+function keyMessages(value: Record<string, unknown>): string[] {
   const holdsRef = refsIn(value).length > 0;
   return Object.keys(value).flatMap((key) => {
     if (key === "__proto__") {
-      return [problem(step, field, 'an object may not have the key "__proto__"')];
+      return ['an object may not have the key "__proto__"'];
     }
     if (holdsRef && !isIdentifier(key)) {
-      const message = `key "${key}" is not an identifier; an object that holds a reference needs identifier keys`;
-      return [problem(step, field, message)];
+      return [
+        `key "${key}" is not an identifier; an object that holds a reference needs identifier keys`,
+      ];
     }
     return [];
   });
 }
 
-/** Problems with a value written into the program, all reported on `field`:
- *  a malformed reference, a key that cannot be written, or a number with no
- *  literal. */
-function valueProblems(step: string | null, field: string, value: unknown): Problem[] {
+/** Everything wrong with a value written into the program: a malformed
+ *  reference, a key that cannot be written, or a number with no literal. */
+function valueMessages(value: unknown): string[] {
   if (typeof value === "number" && !Number.isFinite(value)) {
-    return [problem(step, field, `${value} cannot be written as a number literal`)];
+    return [`${value} cannot be written as a number literal`];
   }
   if (Array.isArray(value)) {
-    return value.flatMap((item) => valueProblems(step, field, item));
+    return value.flatMap(valueMessages);
   }
   if (!isObject(value)) {
     return [];
   }
   if ("$ref" in value) {
-    return refShapeProblems(step, field, value);
+    return refMessages(value);
   }
-  const nested = Object.values(value).flatMap((item) => valueProblems(step, field, item));
-  return [...keyProblems(step, field, value), ...nested];
+  return [...keyMessages(value), ...Object.values(value).flatMap(valueMessages)];
 }
 
-/** The property names an `inputs` type declares, nested ones included.
- *  String literal types are removed first so a colon inside one is not read
- *  as a property. */
-export function inputNames(text: string): string[] {
-  const withoutStrings = text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
-  const matches = withoutStrings.matchAll(/([^\s{},;:?|&()<>[\]]+)\s*\??\s*:/g);
-  return [...matches].map((match) => match[1]);
-}
-
-const formatRule: Rule = (value) =>
-  value.format === 1
-    ? []
-    : [problem(null, "format", `format must be 1, got ${JSON.stringify(value.format)}`)];
-
-const nameRule: Rule = (value) => nameProblems(null, "name", "name", value.name);
-
-const descriptionRule: Rule = (value) =>
-  typeof value.description === "string"
-    ? []
-    : [problem(null, "description", "description must be a string")];
-
-const inputsRule: Rule = (value) => {
-  if (typeof value.inputs !== "string") {
-    return [problem(null, "inputs", "inputs must be a string holding an object type")];
+const value = z.unknown().superRefine((item, ctx) => {
+  for (const message of valueMessages(item)) {
+    ctx.addIssue({ code: "custom", message });
   }
-  return inputNames(value.inputs).flatMap((name) =>
-    nameProblems(null, "inputs", "input name", name),
-  );
-};
+});
 
-const stepsRule: Rule = (value) => {
-  if (!Array.isArray(value.steps)) {
-    return [problem(null, "steps", "steps must be a list")];
-  }
-  if (value.steps.length === 0) {
-    return [problem(null, "steps", "steps must hold at least one step")];
-  }
-  return value.steps.flatMap((step, index) =>
-    isObject(step) ? [] : [problem(null, `steps[${index}]`, `step ${index + 1} must be an object`)],
-  );
-};
-
-const duplicateIdRule: Rule = (value) => {
-  const ids = stepsOf(value).map(ownerOf);
-  return ids.flatMap((id, index) =>
-    id !== null && ids.indexOf(id) < index
-      ? [problem(id, "id", `step id "${id}" is used by an earlier step`)]
-      : [],
-  );
-};
-
-const idRule: StepRule = (step, owner) => nameProblems(owner, "id", "step id", step.id);
-
-const toolStepRule: StepRule = (step, owner) => {
-  const moduleProblems =
-    typeof step.module === "string" ? [] : [problem(owner, "module", "module must be a string")];
-  const toolProblems = nameProblems(owner, "tool", "tool name", step.tool);
-  if (!isObject(step.args)) {
-    return [...moduleProblems, ...toolProblems, problem(owner, "args", "args must be an object")];
-  }
-  const args = Object.entries(step.args);
-  const argNameProblems = args.flatMap(([name]) =>
-    nameProblems(owner, `args.${name}`, "argument name", name),
-  );
-  const argRefProblems = args.flatMap(([name, arg]) => valueProblems(owner, `args.${name}`, arg));
-  return [...moduleProblems, ...toolProblems, ...argNameProblems, ...argRefProblems];
-};
-
-function optionalString(step: Json, owner: string | null, field: string): Problem[] {
-  return step[field] == null || typeof step[field] === "string"
-    ? []
-    : [problem(owner, field, `${field} must be a string`)];
-}
-
-const llmStepRule: StepRule = (step, owner) => {
-  const promptProblems =
-    typeof step.prompt === "string" && step.prompt !== ""
-      ? []
-      : [problem(owner, "prompt", "prompt must be a non-empty string")];
-  const contextProblems = Array.isArray(step.context)
-    ? step.context.flatMap((item, index) => valueProblems(owner, `context[${index}]`, item))
-    : [problem(owner, "context", "context must be a list")];
-  const outputProblems =
-    typeof step.output === "string"
-      ? []
-      : [problem(owner, "output", "output must be a string holding a type")];
-  return [
-    ...promptProblems,
-    ...contextProblems,
-    ...outputProblems,
-    ...optionalString(step, owner, "model"),
-    ...optionalString(step, owner, "provider"),
-  ];
-};
-
-const KIND_RULES: Record<string, StepRule> = { tool: toolStepRule, llm: llmStepRule };
-
-const kindRule: StepRule = (step, owner) => {
-  const kindRuleFor = typeof step.kind === "string" ? KIND_RULES[step.kind] : undefined;
-  if (kindRuleFor === undefined) {
-    return [
-      problem(owner, "kind", `kind must be "tool" or "llm", got ${JSON.stringify(step.kind)}`),
-    ];
-  }
-  return kindRuleFor(step, owner);
-};
-
-const STEP_RULES: StepRule[] = [idRule, kindRule];
-
-const eachStepRule: Rule = (value) =>
-  stepsOf(value).flatMap((step) => STEP_RULES.flatMap((rule) => rule(step, ownerOf(step))));
-
-const resultRule: Rule = (value) => valueProblems(null, "result", value.result);
-
-const limitsRule: Rule = (value) => {
-  if (value.limits == null) {
-    return [];
-  }
-  if (!isObject(value.limits)) {
-    return [problem(null, "limits", "limits must be an object")];
-  }
-  return Object.entries(value.limits).flatMap(([key, limit]) => {
-    if (!LIMIT_FIELDS.includes(key)) {
-      return [
-        problem(
-          null,
-          `limits.${key}`,
-          `limits has no field "${key}"; it takes maxCost and maxTime`,
-        ),
-      ];
+/** Type text must parse as the declaration render will write; an `inputs`
+ *  type must be an object whose top-level names are identifiers. */
+function typeText(name: string, field: string, missing: string) {
+  return z.string({ error: missing }).superRefine((text, ctx) => {
+    const parsed = parseTypeText(name, text, field);
+    if ("message" in parsed) {
+      ctx.addIssue({ code: "custom", message: parsed.message });
+      return;
     }
-    // Limits are written into the guard line as text, so only a finite number may pass.
-    return typeof limit === "number" && Number.isFinite(limit)
-      ? []
-      : [problem(null, `limits.${key}`, `limits.${key} must be a finite number`)];
+    if (parsed.alias.aliasedType.type !== "objectType") {
+      return;
+    }
+    for (const property of parsed.alias.aliasedType.properties) {
+      const message = nameMessage("input name", property.key);
+      if (message !== null) {
+        ctx.addIssue({ code: "custom", message });
+      }
+    }
   });
-};
+}
 
-const RULES: Rule[] = [
-  formatRule,
-  nameRule,
-  descriptionRule,
-  inputsRule,
-  stepsRule,
-  eachStepRule,
-  duplicateIdRule,
-  resultRule,
-  limitsRule,
-];
+/** Argument names are written into the call line, so each is an identifier. */
+const args = z
+  .custom<Record<string, unknown>>(isObject, { error: "args must be an object" })
+  .superRefine((record, ctx) => {
+    for (const [name, item] of Object.entries(record)) {
+      const messages = [nameMessage("argument name", name), ...valueMessages(item)];
+      for (const message of messages) {
+        if (message !== null) {
+          ctx.addIssue({ code: "custom", message, path: [name] });
+        }
+      }
+    }
+  });
 
-export function parseWorkflow(value: unknown): ParseResult {
-  if (!isObject(value)) {
-    return { workflow: null, problems: [problem(null, null, "a workflow must be a JSON object")] };
+const toolStep = z.object({
+  id: identifier("step id"),
+  kind: z.literal("tool"),
+  module: z.string({ error: "module must be a string" }),
+  tool: identifier("tool name"),
+  args,
+});
+
+const PROMPT_MESSAGE = "prompt must be a non-empty string";
+
+const llmStep = z.object({
+  id: identifier("step id"),
+  kind: z.literal("llm"),
+  prompt: z.string({ error: PROMPT_MESSAGE }).min(1, { error: PROMPT_MESSAGE }),
+  context: z.array(value, { error: "context must be a list" }),
+  output: typeText("Output", "output", "output must be a string holding a type"),
+  model: z.string({ error: "model must be a string" }).nullish(),
+  provider: z.string({ error: "provider must be a string" }).nullish(),
+});
+
+const step = z.discriminatedUnion("kind", [toolStep, llmStep], {
+  error: (issue) =>
+    isObject(issue.input)
+      ? `kind must be "tool" or "llm", got ${JSON.stringify(issue.input.kind)}`
+      : "a step must be an object",
+});
+
+const steps = z
+  .array(step, { error: "steps must be a list" })
+  .min(1, { error: "steps must hold at least one step" })
+  .superRefine((list, ctx) => {
+    const ids = list.map((item) => item.id);
+    ids.forEach((id, index) => {
+      if (ids.indexOf(id) < index) {
+        const message = `step id "${id}" is used by an earlier step`;
+        ctx.addIssue({ code: "custom", message, path: [index, "id"] });
+      }
+    });
+  });
+
+const finite = z.number().refine(Number.isFinite);
+
+/** Limits are written into the guard line as text, so only a finite number may pass. */
+const limits = z
+  .record(z.string(), z.unknown(), { error: "limits must be an object" })
+  .superRefine((record, ctx) => {
+    for (const [key, limit] of Object.entries(record)) {
+      if (!LIMIT_FIELDS.includes(key)) {
+        const message = `limits has no field "${key}"; it takes maxCost and maxTime`;
+        ctx.addIssue({ code: "custom", message, path: [key] });
+      } else if (!finite.safeParse(limit).success) {
+        const message = `limits.${key} must be a finite number`;
+        ctx.addIssue({ code: "custom", message, path: [key] });
+      }
+    }
+  })
+  .nullish();
+
+const workflow = z.object({
+  format: z.literal(1, {
+    error: (issue) => `format must be 1, got ${JSON.stringify(issue.input)}`,
+  }),
+  name: identifier("name"),
+  description: z.string({ error: "description must be a string" }),
+  inputs: typeText("Inputs", "inputs", "inputs must be a string holding an object type"),
+  steps,
+  result: value.optional(),
+  limits,
+});
+
+/** A problem's place from an issue's path: `steps[i]...` belongs to that
+ *  step, named by its id when it has one; anything else to the workflow. */
+function problemAt(raw: Record<string, unknown>, issue: Issue): Problem {
+  const [root, index, ...rest] = issue.path;
+  if (root === "steps" && typeof index === "number") {
+    const item = Array.isArray(raw.steps) ? raw.steps[index] : undefined;
+    const id = isObject(item) && typeof item.id === "string" ? item.id : null;
+    const field = rest.length === 0 ? `steps[${index}]` : fieldText(rest);
+    return { step: id, field, message: issue.message };
   }
-  const problems = RULES.flatMap((rule) => rule(value));
-  if (problems.length > 0) {
-    return { workflow: null, problems };
+  return { step: null, field: fieldText(issue.path), message: issue.message };
+}
+
+/** `args.query`, `context[0]`, `limits.maxCost`. */
+function fieldText(path: PropertyKey[]): string {
+  return path.reduce<string>((text, segment) => {
+    if (typeof segment === "number") {
+      return `${text}[${segment}]`;
+    }
+    return text === "" ? String(segment) : `${text}.${String(segment)}`;
+  }, "");
+}
+
+export function parseWorkflow(raw: unknown): ParseResult {
+  if (!isObject(raw)) {
+    return {
+      workflow: null,
+      problems: [{ step: null, field: null, message: "a workflow must be a JSON object" }],
+    };
   }
-  return { workflow: value as Workflow, problems: [] };
+  const result = workflow.safeParse(raw);
+  if (!result.success) {
+    return { workflow: null, problems: result.error.issues.map((issue) => problemAt(raw, issue)) };
+  }
+  const parsed: Workflow = result.data;
+  return { workflow: parsed, problems: [] };
 }

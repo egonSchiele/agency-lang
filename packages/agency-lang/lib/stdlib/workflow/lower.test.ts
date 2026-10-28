@@ -59,6 +59,7 @@ describe("lowerWorkflow", () => {
       "./lists.agency.findLists": {
         signature: "findLists(query: string): string[]",
         returnType: "string[]",
+        returnsResult: false,
         docstring: null,
       },
     };

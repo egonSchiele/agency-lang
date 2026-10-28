@@ -22,7 +22,15 @@ import type { Tag } from "../types/tag.js";
 import { moduleDescription } from "../utils/moduleDoc.js";
 import { patternBinders } from "../runtime/template/hygiene.js";
 import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
-import type { ExportFromStatement, NamedExportBody } from "../types.js";
+import type {
+  ExportFromStatement,
+  FunctionDefinition,
+  GraphNodeDefinition,
+  NamedExportBody,
+  TypeAliasEntry,
+} from "../types.js";
+import { aliasTableFrom } from "../runtime/template/aliasTable.js";
+import { safeResolveType } from "../typeChecker/assignability.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
 import { deepCopy } from "../utils.js";
@@ -199,6 +207,8 @@ export type ExportInfo = {
   signature: string;
   /** The declared return type of a def or node, else null. */
   returnType: string | null;
+  /** True when a def or node returns a `Result`, with aliases resolved. */
+  returnsResult: boolean;
   docstring: string | null;
   effects: string[];
   destructive: boolean;
@@ -276,6 +286,7 @@ function describeSource(source: string, visited: string[]): DescribeResult {
     : source;
   const effects = getEffectsFromSource(effectsSource);
   const generator = new AgencyGenerator();
+  const aliases = aliasTableFrom(program.nodes);
   const exports: ExportInfo[] = [];
   const hiddenNames: string[] = [];
   for (const node of program.nodes) {
@@ -291,7 +302,7 @@ function describeSource(source: string, visited: string[]): DescribeResult {
     if (isHidden((node as { tags?: Tag[] }).tags)) {
       hiddenNames.push(...exportedNamesOf(node));
     }
-    exports.push(...localExportInfos(node, generator, effects));
+    exports.push(...localExportInfos(node, generator, effects, aliases));
   }
   return {
     info: { description: moduleDescription(program.docComment), exports },
@@ -311,10 +322,20 @@ function exportedNamesOf(node: AgencyNode): string[] {
   return [];
 }
 
+/** True when a declared return type is a `Result`, through the module's own
+ *  aliases: `def f(): NoteResult` with `type NoteResult = Result<Note>`. */
+function returnsResult(
+  node: FunctionDefinition | GraphNodeDefinition,
+  aliases: Record<string, TypeAliasEntry>,
+): boolean {
+  return node.returnType != null && safeResolveType(node.returnType, aliases).type === "resultType";
+}
+
 function localExportInfos(
   node: AgencyNode,
   generator: AgencyGenerator,
   effects: Record<string, string[]>,
+  aliases: Record<string, TypeAliasEntry>,
 ): ExportInfo[] {
   // Deliberate, unlike the throw below: that guards unknown KINDS.
   if (isHidden((node as { tags?: Tag[] }).tags)) return [];
@@ -327,6 +348,7 @@ function localExportInfos(
         kind: "def",
         signature: generator.signatureOf(node),
         returnType: generator.returnTypeOf(node),
+        returnsResult: returnsResult(node, aliases),
         docstring: node.docString ? docStringText(node.docString) : null,
         effects: effects[name] ?? [],
         destructive: node.markers?.destructive === true,
@@ -345,6 +367,7 @@ function localExportInfos(
         kind: "node",
         signature: generator.signatureOf(node),
         returnType: generator.returnTypeOf(node),
+        returnsResult: returnsResult(node, aliases),
         docstring: node.docString ? docStringText(node.docString) : null,
         effects: effects[name] ?? [],
         // Nodes carry no tool markers; only defs can be declared
@@ -364,6 +387,7 @@ function localExportInfos(
         kind: "type",
         signature: generator.signatureOf(node),
         returnType: null,
+        returnsResult: false,
         docstring: node.docComment ? docCommentText(node.docComment) : null,
         effects: [],
         destructive: false,
@@ -387,6 +411,7 @@ function localExportInfos(
         kind: "const" as const,
         signature: `${node.declKind} ${name}${node.pattern ? "" : typeStr}`,
         returnType: null,
+        returnsResult: false,
         docstring: null,
         effects: [],
         destructive: false,
@@ -500,6 +525,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
     kind: "reexport",
     signature: spelled,
     returnType: null,
+    returnsResult: false,
     docstring: null,
     effects: ["unknown"],
     destructive: false,

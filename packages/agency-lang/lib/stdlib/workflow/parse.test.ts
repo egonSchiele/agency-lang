@@ -162,9 +162,14 @@ describe("parseWorkflow", () => {
     ]);
   });
 
-  it("refuses an input name that is not an identifier", () => {
-    expect(parseWorkflow(withFields(mealPlan, { inputs: "{ 1x: string }" })).problems).toEqual([
-      { step: null, field: "inputs", message: 'input name "1x" is not an identifier' },
+  it("refuses a reserved input name", () => {
+    expect(parseWorkflow(withFields(mealPlan, { inputs: "{ __x: string }" })).problems).toEqual([
+      {
+        step: null,
+        field: "inputs",
+        message:
+          'input name "__x" is reserved: names that start with two underscores belong to the compiler',
+      },
     ]);
   });
 
@@ -185,6 +190,40 @@ describe("parseWorkflow", () => {
         message: 'limits has no field "steps"; it takes maxCost and maxTime',
       },
     ]);
+  });
+
+  it("accepts a workflow with no result and no limits", () => {
+    const { result, limits, ...bare } = mealPlan;
+    expect(parseWorkflow(bare).problems).toEqual([]);
+  });
+
+  it("refuses a tag in type text, naming the field", () => {
+    const tagged = "{\n  @validate(addListItems)\n  noteTitle: string\n}";
+    expect(parseWorkflow(withFields(mealPlan, { inputs: tagged })).problems).toEqual([
+      {
+        step: null,
+        field: "inputs",
+        message: "a type in inputs may not carry @validate or @jsonSchema tags",
+      },
+    ]);
+    expect(parseWorkflow(withStep(mealPlan, 3, { output: tagged })).problems).toEqual([
+      {
+        step: "meals",
+        field: "output",
+        message: "a type in output may not carry @validate or @jsonSchema tags",
+      },
+    ]);
+  });
+
+  it("does not read a nested property name as an input", () => {
+    const nested = withFields(mealPlan, { inputs: "{ a: { noteTitle: string } }" });
+    expect(parseWorkflow(nested).problems).toEqual([]);
+  });
+
+  it("carries the parser's message for type text that does not parse", () => {
+    const problems = parseWorkflow(withFields(mealPlan, { inputs: "{ a: " })).problems;
+    expect(problems).toHaveLength(1);
+    expect(problems[0].message).toMatch(/^inputs must be one object type: .+/);
   });
 
   it("reads null as absent for the optional fields", () => {

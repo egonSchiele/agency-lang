@@ -55,9 +55,15 @@ function localModule(tool: AgencyFunction, dir: string, cwd: string): string {
 
 function moduleText(tool: AgencyFunction, dir: string, cwd: string): string {
   const origin = moduleIdToOrigin(tool.module);
-  const isShared =
-    origin.startsWith("pkg::") || (origin.startsWith("std::") && STDLIB_ID.test(tool.module));
-  const text = isShared ? origin : localModule(tool, dir, cwd);
+  if (origin.startsWith("pkg::")) {
+    // `describe` cannot read a package's source from a re-export line, so
+    // the tool's return type would be unknown.
+    throw new Error(
+      `tool "${tool.name}" comes from the package "${origin}"; package tools are not supported yet`,
+    );
+  }
+  const isStdlib = origin.startsWith("std::") && STDLIB_ID.test(tool.module);
+  const text = isStdlib ? origin : localModule(tool, dir, cwd);
   if (!MODULE_PATH.test(text)) {
     throw new Error(
       `tool "${tool.name}" comes from a module path that cannot be written in an import`,

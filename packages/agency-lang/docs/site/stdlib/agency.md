@@ -241,6 +241,8 @@ export type ExportInfo = {
   signature: string;
   /** The declared return type, printed on its own. Null when none is declared. */
   returnType?: string;
+  /** True when a def or node returns a `Result`, with the module's own aliases resolved. */
+  returnsResult: boolean;
   docstring?: string;
   effects: string[];
   destructive: boolean;
@@ -261,7 +263,7 @@ export type ModuleInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L897))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L899))
 
 ### AST
 
@@ -284,7 +286,7 @@ export type AST = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L950))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L952))
 
 ### Code
 
@@ -306,7 +308,7 @@ export type Code = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1008))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1010))
 
 ### HoleInfo
 
@@ -320,7 +322,7 @@ export type HoleInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1015))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1017))
 
 ## Effects
 
@@ -374,7 +376,7 @@ effect std::run {
 export static const CLI_NOT_AVAILABLE = "The agency command line is not available here. Use the tools instead: typecheck(source) or typecheckFile(dir, filename) for type errors; testFile(dir, filename) to run a .test.json harness (write the files it tests first); runFile(dir, filename, node) to run a program; parseAST, format, describe for source analysis."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1246))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1248))
 
 ## Functions
 
@@ -872,7 +874,7 @@ module doc comment's one-line summary.
 
 **Returns:** `Result<ModuleInfo>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L907))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L909))
 
 ### typecheckFile
 
@@ -903,7 +905,7 @@ Type-check an Agency file on disk. The file is read from dir/filename,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L922))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L924))
 
 ### parseAST
 
@@ -923,7 +925,7 @@ Parse Agency source code into an abstract syntax tree.
 
 **Returns:** `Result<AST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L956))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L958))
 
 ### writeAST
 
@@ -962,7 +964,7 @@ Output is canonical formatter output (the same style as `pnpm run fmt`):
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L969))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L971))
 
 ### format
 
@@ -982,7 +984,7 @@ Format Agency source code with the standard Agency formatter.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L995))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L997))
 
 ### loadTemplate
 
@@ -1009,7 +1011,7 @@ Load an Agency file containing holes as a template.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1024))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1026))
 
 ### holesOf
 
@@ -1029,7 +1031,7 @@ The unfilled holes in a template, in the order they appear. Each entry has the h
 
 **Returns:** `HoleInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1043))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1045))
 
 ### fill
 
@@ -1051,7 +1053,7 @@ Fill holes in a template. Plain values become literals and are never parsed; Cod
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1052))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1054))
 
 ### combine
 
@@ -1075,7 +1077,7 @@ Merge several Code fragments into one, in order. Use this to build one
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1065))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1067))
 
 ### toSource
 
@@ -1095,7 +1097,7 @@ Print a Code value back to Agency source, including any unfilled holes.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1078))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1080))
 
 ### parseExpr
 
@@ -1115,7 +1117,7 @@ Parse a single Agency expression into a Code fragment that can fill an expr hole
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1087))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1089))
 
 ### parseStatements
 
@@ -1135,7 +1137,7 @@ Parse a list of Agency statements into a Code fragment that can fill a statement
 
 **Returns:** `Result<Code>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1096))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1098))
 
 ### formatFile
 
@@ -1165,7 +1167,7 @@ Read and write happen inside the same interrupt, so approving it approves both.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1110))
 
 ### walkAST
 
@@ -1194,7 +1196,7 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor
 
 **Returns:** [AST](#ast)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1134))
 
 ### getNodesOfType
 
@@ -1216,7 +1218,7 @@ Parse Agency source code and return every AST node whose `type` field matches an
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1154))
 
 ### getImports
 
@@ -1236,7 +1238,7 @@ Return every import statement in the source (i.e. `import { x } from "..."`).
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1167))
 
 ### getFunctions
 
@@ -1256,7 +1258,7 @@ Return every function definition (`def foo(...) { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1176))
 
 ### getGraphNodes
 
@@ -1276,7 +1278,7 @@ Return every graph node definition (`node main() { ... }`) in the source.
 
 **Returns:** `Result<any[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1183))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1185))
 
 ### filterImports
 
@@ -1328,7 +1330,7 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 
 **Returns:** `Result<{ source: string; filtered: boolean }>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1210))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1212))
 
 ### getVersion
 
@@ -1340,7 +1342,7 @@ Get the current version of the Agency standard library.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1238))
 
 ### cliHandles
 
@@ -1360,7 +1362,7 @@ Whether `cli` runs this agency subcommand in-process.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1250))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1252))
 
 ### cli
 
@@ -1386,4 +1388,4 @@ Run an `agency <subcommand> <file>` command line through the matching function: 
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1259))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L1261))

@@ -28,7 +28,7 @@ if (step_text is failure) {
 
 The generator is four pure functions in `lib/stdlib/workflow/`, one file each:
 
-1. `parse.ts` checks the JSON's shape and returns a typed `Workflow`. Its rules are a list of functions, and the stage concatenates their problems.
+1. `parse.ts` checks the JSON's shape and returns a typed `Workflow`. The shape is a zod schema. The rules zod cannot state, such as a name being an identifier or a reference path being well formed, are refinements on it. Every issue becomes a problem named by step and field, from the issue's path.
 2. `resolve.ts` checks the workflow against the host's tools and their signatures. It finds a tool the host did not pass, a reference to a later step or an unknown input, and generated names that collide. Its output holds every fact the next stage needs.
 3. `lower.ts` turns each generated statement into a template fragment that records the step and field it belongs to.
 4. `render.ts` prints each fragment, places the prints in a fixed scaffold, and works out which lines each fragment covers from the same prints.
@@ -39,11 +39,13 @@ The generator is four pure functions in `lib/stdlib/workflow/`, one file each:
 
 Workflow text reaches the generated source through three doors:
 
-1. **A value** (an argument, the prompt, a context label) goes through `literal()` in `shapes.ts`. It calls `liftValue`, which turns the value into a literal node and never parses it. This happens before the value reaches `fill`. `fill` grafts any value shaped like a `Code` fragment as code, so a JSON argument handed to it directly could inject code.
-2. **A name** (a step id, tool name, argument name, input name) passes `isIdentifier` in parse. `statement()` in `shapes.ts` checks it again before it writes it into a shape. Every generated statement comes from the `SHAPES` table through `statement()`.
-3. **Type text** (`inputs`, and an LLM step's `output`) is parsed as `type <Name> = <text>`. The result must be exactly one type alias with that name. The line written into the program is that alias printed by `signatureOf`, the printer `describe` uses. `describe` is not called, because its effects pass resolves imports and the type text could carry an import line.
+1. **A value** (an argument, the prompt, a context label) goes through `literal()` in `shapes.ts`, which calls `liftValue`. That turns the value into a literal node and never parses it. It happens before `fill`, because `fill` grafts a value shaped like a `Code` fragment as code.
+2. **A name** (a step id, tool name, argument name, input name) passes `isIdentifier` in parse. `statement()` in `shapes.ts` checks it again before writing it into a shape. Every generated statement comes from the `SHAPES` table through `statement()`.
+3. **Type text** (`inputs`, and an LLM step's `output`) goes through `typeText.ts`. It is parsed as `type <Name> = <text>` with the real type parser; the result must be exactly one type alias with that name, and the line written into the program is that alias printed by `signatureOf`, the printer `describe` uses. Parse runs this check and reads the input names from the same parse, so a nested property is never an input. Render prints from the same parse.
 
-A string-literal type in that text may not hold a backslash or a line break. The type parser keeps a backslash as an ordinary character, and the compiler writes the value between quotes without escaping it. A value ending in a backslash would then end the string early in the compiled TypeScript, and the text after it would run as code when the module loads.
+Type text may not carry a `@validate` or `@jsonSchema` tag. A `@validate` names a function the generated program would call, and the workflow would be choosing it from the tools it imports.
+
+A string-literal type in that text may not hold a backslash or a line break. The compiler writes such a value between quotes without escaping it, so a backslash would end the string early in the compiled TypeScript. #1293 fixes the compiler; this refusal can go when it lands.
 
 A reference becomes an expression built from a generated name, `.value`, and a path that matched `REF_PATH`. A list or object argument that holds a reference is built by `list()` and `record()` from generated hole names. Its keys are written as names, so an object that holds a reference must have identifier keys.
 
@@ -60,14 +62,16 @@ Resolve also refuses a tool whose name the scaffold or the shapes use, such as `
 
 ## Return types and the failure check
 
-Every tool step is followed by a check that stops the workflow on a failure and names the step. Every tool gets the check, because Agency turns a thrown error into a failure. A tool typed `string[]` can still fail.
+Every tool step is followed by a check that stops the workflow on a failure and names the step. Every tool gets the check, because Agency turns a thrown error into a failure, so a tool typed `string[]` can still fail.
 
-The tool's return type comes from the `returnType` field `describe` prints. It decides two things:
+Whether a tool returns a `Result` comes from the `returnsResult` flag `describe` prints. `describe` resolves the declared return type through the module's own aliases, so `def find(): NoteResult` with `type NoteResult = Result<Note>` counts. The flag decides two things:
 
 1. A reference into a step that returns a `Result` adds `.value`. A reference into a plain value does not.
-2. A tool not typed `Result` gets the `checkPlain` shape. A plain type has no `.error`, so its message reads `(step_x as any).error`. A cast to `Result` is refused (AG1014).
+2. A tool not typed `Result` gets the `checkPlain` shape, whose message reads `(step_x as any).error`, because a plain type has no `.error`.
 
 A tool with no declared return type, or `any`, gets a warning. References into its value are only checked at run time.
+
+`describe` can read a return type only from source it can see. It cannot read a `pkg::` module from a re-export line, or a local file a tool module re-exports from, so both are refused: a package tool in `toolRefs`, and a re-exported name in `_pickSignatures`.
 
 ## Line ranges and diagnostics
 
@@ -82,7 +86,7 @@ A type error in an argument then lands on that argument's line. `render.ts` coun
 
 A diagnostic about a type alias can come with no line. Its `params.context` names the alias, and `typeOwners` maps that name to `inputs` or the step's `output`.
 
-A wrong argument name or type is reported on the call line, which belongs to the field `args`. The argument comes from the diagnostic's `params`: `name` is the name the call wrote, and `param` is the parameter an argument of the wrong type was matched to. The field becomes `args.<argument>`. The message text is not parsed.
+A diagnostic on the call line belongs to the field `args`. When its code is one of the argument diagnostics in `ARGUMENT_DIAGNOSTICS` (`problems.ts`), the field becomes `args.<argument>`, with the argument read from the payload field that table names: `name` for the name the call wrote, `param` for the parameter a mistyped argument was matched to. The message text is never parsed.
 
 `checkWorkflow` runs `typecheck` before `compile`. A strict compile reports type errors too, but as one message with no line, so it runs second.
 
@@ -92,9 +96,9 @@ The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise
 
 ## Tool modules
 
-`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`, and a `node_modules` path becomes `pkg::<name>`. Any other path is rewritten relative to the workflow's `dir`. The path is resolved against the working directory at run time. A host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
+`toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`. Any other path is rewritten relative to the workflow's `dir`, resolved against the working directory at run time, so a host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
 
-The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, and a runtime builtin are refused, because none has a name that can be imported.
+The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused.
 
 ## Not built yet
 

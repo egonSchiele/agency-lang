@@ -89,6 +89,17 @@
       ]
     },
     {
+      "nodeName": "tagInTypeTextIsRefused",
+      "description": "a @validate tag in type text is refused, naming the field",
+      "input": "",
+      "expectedOutput": "\"inputs: a type in inputs may not carry @validate or @jsonSchema tags\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "stringLiteralCannotEscape",
       "description": "a backslash in a string literal type cannot end the string early in the compiled program",
       "input": "",

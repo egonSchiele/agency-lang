@@ -22,7 +22,8 @@ export type Compiled = {
 export type CompileResult =
   { compiled: Compiled; problems: [] } | { compiled: null; problems: Problem[] };
 
-/** Parse, resolve, lower, and render, stopping at the first stage with problems. */
+/** Parse, resolve, lower, and render, stopping at the first stage with problems.
+ *  Render finds none: everything it writes passed parse. */
 export function compileWorkflowSource(
   value: unknown,
   refs: ToolRef[],
@@ -37,9 +38,6 @@ export function compileWorkflowSource(
     return { compiled: null, problems: resolved.problems };
   }
   const rendered = renderWorkflow(lowerWorkflow(resolved.resolved));
-  if (rendered.source === null) {
-    return { compiled: null, problems: rendered.problems };
-  }
   const compiled = {
     source: rendered.source,
     ranges: rendered.ranges,
@@ -87,24 +85,32 @@ export function _signatureSources(refs: ToolRef[]): SignatureSource[] {
 
 type DescribedExport = { name: string; kind: string } & Signature;
 
-const FUNCTION_KINDS = ["def", "reexport"];
-
 /** Each of `source`'s names, keyed by module and name, from what `describe`
- *  said about the module. */
+ *  said about the module. A name the module re-exports from another local
+ *  file is refused: `describe` cannot read that file, so the return type
+ *  would be unknown. */
 export function _pickSignatures(
   source: SignatureSource,
   exports: DescribedExport[],
 ): ResultSuccess | ResultFailure {
   const signatures: Record<string, Signature> = {};
   for (const name of source.names) {
-    const found = exports.find(
-      (entry) => entry.name === name && FUNCTION_KINDS.includes(entry.kind),
-    );
-    if (found === undefined) {
+    const found = exports.find((entry) => entry.name === name);
+    if (found === undefined || (found.kind !== "def" && found.kind !== "reexport")) {
       return failure(`"${source.module}" exports no function named "${name}"`);
     }
-    const { signature, returnType, docstring } = found;
-    signatures[signatureKey(source.module, name)] = { signature, returnType, docstring };
+    if (found.kind === "reexport") {
+      return failure(
+        `"${source.module}" re-exports "${name}" from another file; pass a def the module itself defines`,
+      );
+    }
+    const { signature, returnType, returnsResult, docstring } = found;
+    signatures[signatureKey(source.module, name)] = {
+      signature,
+      returnType,
+      returnsResult,
+      docstring,
+    };
   }
   return success(signatures);
 }

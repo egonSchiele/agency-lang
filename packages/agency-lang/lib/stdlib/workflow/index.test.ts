@@ -119,6 +119,7 @@ describe("_pickSignatures", () => {
     kind,
     signature: `${name}()`,
     returnType,
+    returnsResult: returnType !== null && returnType.startsWith("Result"),
     docstring: null,
   });
 
@@ -129,8 +130,21 @@ describe("_pickSignatures", () => {
       exportInfo("T", "type", null),
     ]);
     expect(result.success && result.value).toEqual({
-      "./a.agency.f": { signature: "f()", returnType: "string", docstring: null },
+      "./a.agency.f": {
+        signature: "f()",
+        returnType: "string",
+        returnsResult: false,
+        docstring: null,
+      },
     });
+  });
+
+  it("refuses a name the module re-exports from another file", () => {
+    const group = { module: "./a.agency", names: ["f"], reExport: null };
+    const result = _pickSignatures(group, [exportInfo("f", "reexport", null)]);
+    expect(!result.success && result.error).toBe(
+      '"./a.agency" re-exports "f" from another file; pass a def the module itself defines',
+    );
   });
 
   it("fails when the module exports no function by that name", () => {

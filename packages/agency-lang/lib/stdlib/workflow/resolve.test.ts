@@ -160,6 +160,7 @@ describe("resolveWorkflow", () => {
       "./lists.agency.findLists": {
         signature: "findLists(query: string): string[]",
         returnType: "string[]",
+        returnsResult: false,
         docstring: null,
       },
     };
@@ -173,6 +174,7 @@ describe("resolveWorkflow", () => {
       "./notes.agency.searchNotes": {
         signature: "searchNotes(query: string)",
         returnType: null,
+        returnsResult: false,
         docstring: null,
       },
     };
@@ -216,6 +218,7 @@ describe("resolveWorkflow", () => {
       "./notes.agency.failure": {
         signature: "failure(): string",
         returnType: "string",
+        returnsResult: false,
         docstring: null,
       },
     };
@@ -236,6 +239,7 @@ describe("resolveWorkflow", () => {
       "./notes.agency.step_note": {
         signature: "step_note(): string",
         returnType: "string",
+        returnsResult: false,
         docstring: null,
       },
     };

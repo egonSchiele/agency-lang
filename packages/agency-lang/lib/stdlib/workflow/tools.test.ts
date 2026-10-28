@@ -35,10 +35,10 @@ describe("toolRefs", () => {
     ]);
   });
 
-  it("maps a package file to pkg::", () => {
-    expect(toolRefs([fn("speak", "node_modules/kokoro/index.agency")], DIR, CWD)).toEqual([
-      { module: "pkg::kokoro", name: "speak" },
-    ]);
+  it("refuses a package tool", () => {
+    expect(() => toolRefs([fn("speak", "node_modules/kokoro/index.agency")], DIR, CWD)).toThrow(
+      'tool "speak" comes from the package "pkg::kokoro"; package tools are not supported yet',
+    );
   });
 
   it("treats a user folder named stdlib as a local file", () => {

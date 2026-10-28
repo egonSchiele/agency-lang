@@ -15,17 +15,19 @@ export type ToolStep = {
   tool: string;
   args: Record<string, unknown>;
 };
+/** `model` and `provider` read null as absent. */
 export type LlmStep = {
   id: string;
   kind: "llm";
   prompt: string;
   context: unknown[];
   output: string;
-  model?: string;
-  provider?: string;
+  model?: string | null;
+  provider?: string | null;
 };
 export type Step = ToolStep | LlmStep;
 export type Limits = { maxCost?: number; maxTime?: number };
+/** `result` and `limits` read null as absent. */
 export type Workflow = {
   format: 1;
   name: string;
@@ -33,7 +35,7 @@ export type Workflow = {
   inputs: string;
   steps: Step[];
   result?: unknown;
-  limits?: Limits;
+  limits?: Limits | null;
 };
 
 /** A tool the host passed, as an import line spells it: `module` is
@@ -83,8 +85,14 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** What `describe` says about one tool, keyed by `"<module>.<name>"`. */
-export type Signature = { signature: string; returnType: string | null; docstring: string | null };
+/** What `describe` says about one tool, keyed by `"<module>.<name>"`.
+ *  `returnsResult` is resolved through the tool module's own aliases. */
+export type Signature = {
+  signature: string;
+  returnType: string | null;
+  returnsResult: boolean;
+  docstring: string | null;
+};
 
 /** A checked reference. `path` is the text after the root name, such as
  *  `[0].id`, `.body`, or the empty string. */

@@ -2,7 +2,15 @@ import { traceEvents } from "./traceFixture.js";
 // traceSearch.test.ts
 import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
-import { applyFilters, searchTraces, stringsIn, textFilter, traceTexts } from "./traceSearch.js";
+import {
+  agentFilter,
+  applyFilters,
+  parsePickerQuery,
+  searchTraces,
+  stringsIn,
+  textFilter,
+  traceTexts,
+} from "./traceSearch.js";
 import { traceSummaries } from "./traceSummaries.js";
 
 describe("stringsIn", () => {
@@ -76,5 +84,70 @@ describe("searchTraces", () => {
     const hits = searchTraces(texts, "archiveNotes");
     const shown = applyFilters(summaries, [textFilter("archiveNotes", hits), onlyB]);
     expect(shown.map((summary) => summary.traceId)).toEqual(["B"]);
+  });
+});
+
+describe("parsePickerQuery", () => {
+  it("a plain query is all text", () => {
+    expect(parsePickerQuery("hello world")).toEqual({
+      agentPrefix: undefined,
+      text: "hello world",
+    });
+  });
+  it("agent: alone is an empty prefix and no text", () => {
+    expect(parsePickerQuery("agent:")).toEqual({ agentPrefix: "", text: "" });
+  });
+  it("the prefix ends at the first space and the rest is text", () => {
+    expect(parsePickerQuery("agent:agency-agent/ time out")).toEqual({
+      agentPrefix: "agency-agent/",
+      text: "time out",
+    });
+  });
+  it("extra spaces after the prefix are not part of the text", () => {
+    expect(parsePickerQuery("agent:x   ask")).toEqual({ agentPrefix: "x", text: "ask" });
+  });
+  it("the keyword ignores case and leading spaces; the name prefix keeps both", () => {
+    expect(parsePickerQuery("  Agent:Bot x")).toEqual({ agentPrefix: "Bot", text: "x" });
+  });
+  it("agent: in the middle of a query is just text", () => {
+    expect(parsePickerQuery("see agent:x")).toEqual({
+      agentPrefix: undefined,
+      text: "see agent:x",
+    });
+  });
+});
+
+describe("agentFilter", () => {
+  const summaries = traceSummaries(
+    buildForest([
+      ...traceEvents("A", {
+        answer: "ok",
+        toolOutput: "ok",
+        agentName: "agency-agent/coordinator",
+      }),
+      ...traceEvents("B", { answer: "ok", toolOutput: "ok", agentName: "Agency-agent/x" }),
+      ...traceEvents("C", { answer: "ok", toolOutput: "ok" }),
+    ]),
+    {},
+  );
+  it("keeps names that start with the prefix, case-sensitively, and drops unnamed traces", () => {
+    const kept = applyFilters(summaries, [agentFilter("agency-agent/")]).map((s) => s.traceId);
+    expect(kept).toEqual(["A"]);
+  });
+  it("an empty prefix keeps every named trace", () => {
+    expect(applyFilters(summaries, [agentFilter("")]).map((s) => s.traceId)).toEqual(["A", "B"]);
+  });
+  it("a name mentioned only in a prompt does not count", () => {
+    const [summaryD] = traceSummaries(
+      buildForest(
+        traceEvents("D", {
+          answer: "ok",
+          toolOutput: "ok",
+          ask: "run agency-agent/coordinator please",
+        }),
+      ),
+      {},
+    );
+    expect(applyFilters([summaryD], [agentFilter("agency-agent")])).toEqual([]);
   });
 });

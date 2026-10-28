@@ -33,4 +33,7 @@ export type TreeNode = {
   // It sits at the trace root; the viewer says so rather than guessing
   // where it belongs.
   parentMissing?: boolean;
+  // Trace roots only: the name from the last `agentName` event in file
+  // order, the rule `eval extract` and the runs explorer also use.
+  agentName?: string;
 };

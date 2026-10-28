@@ -1,8 +1,15 @@
 import type { EventEnvelope } from "./types.js";
-export type TraceContents = { answer: string; toolOutput: string; ask?: string };
+export type TraceContents = {
+  answer: string;
+  toolOutput: string;
+  ask?: string;
+  /** When set, one `agentName` event follows `agentStart`. */
+  agentName?: string;
+};
 export function traceEvents(traceId: string, contents: TraceContents): EventEnvelope[] {
   const data = [
     { type: "agentStart", entryNode: "main" },
+    ...(contents.agentName === undefined ? [] : [{ type: "agentName", name: contents.agentName }]),
     {
       type: "promptCompletion",
       model: '"m"',

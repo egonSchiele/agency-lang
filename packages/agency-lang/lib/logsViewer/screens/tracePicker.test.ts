@@ -187,3 +187,75 @@ it("pasted text filters traces and is carried into the selected trace", () => {
     query: "archiveNotes(",
   });
 });
+
+function namedForest(): TreeNode[] {
+  return buildForest([
+    ...traceEvents("A", {
+      answer: "ok",
+      toolOutput: "done",
+      agentName: "agency-agent/coordinator",
+    }),
+    ...traceEvents("B", { answer: "ok", toolOutput: "done", agentName: "agency-agent/explorer" }),
+    ...traceEvents("C", { answer: "agency-agent/coordinator", toolOutput: "done" }),
+  ]);
+}
+
+it("shows an agent column only when some trace has a name", () => {
+  expect(renderPicker(threeTraceForest())).not.toMatch(/\bagent\s+duration/);
+  const text = renderPicker(namedForest());
+  expect(text).toMatch(/Started \(local\)\s+agent\s+duration/);
+  expect(text).toContain("agency-agent/coordinator");
+});
+
+it("a short name does not cut off the column header", () => {
+  const roots = buildForest(
+    traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "bot" }),
+  );
+  expect(renderPicker(roots)).toMatch(/\bagent\s+duration/);
+});
+
+it("clips a long name so the ask column stays on screen", () => {
+  const roots = buildForest(
+    traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "a".repeat(200) }),
+  );
+  const text = renderPicker(roots);
+  expect(text).toContain("ask for A");
+  expect(text).toContain("a".repeat(24) + "…");
+  expect(text).not.toContain("a".repeat(30));
+});
+
+it("agent: keeps only traces whose recorded name starts with the prefix", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/c");
+  const text = renderOf(picker);
+  expect(text).toContain("1 of 3 match");
+  expect(text).toContain("ask for A");
+  expect(text).not.toContain("ask for C"); // C only mentions the name in its answer
+  expect(text).not.toContain("hits"); // no text part, so no hits column
+});
+
+it("agent: with nothing after it lists every named trace", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:");
+  expect(renderOf(picker)).toContain("2 of 3 match");
+});
+
+it("text after the agent prefix searches the matching traces and is carried into the trace", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/ ask for B");
+  expect(renderOf(picker)).toContain("1 of 3 match");
+  expect(renderOf(picker)).toContain("hits");
+  press(picker, "Enter");
+  expect(press(picker, "Enter")).toEqual({ kind: "selectTrace", traceId: "B", query: "ask for B" });
+});
+
+it("Enter after an agent-only query carries no text query", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/e");
+  press(picker, "Enter");
+  expect(press(picker, "Enter")).toEqual({ kind: "selectTrace", traceId: "B" });
+});

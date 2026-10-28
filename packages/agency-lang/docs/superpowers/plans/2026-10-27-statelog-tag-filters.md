@@ -1,208 +1,365 @@
-# StateLog Tag Filters Implementation Plan
+# Agent Names in the Trace Picker Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Find complete traces by their recorded agent name and string key/value tags, keeping the trace picker compact.
+**Goal:** Show each trace's recorded agent name in the logs viewer's trace picker, and let an `agent:` prefix in the picker's search keep only traces whose name starts with the typed text.
 
-**Architecture:** Reuse `runMetadata.custom`. A writer-owned `customSource` marker distinguishes defaults from explicit updates; one pure reader resolves explicit values over defaults in file order. Extend existing `TraceFilter`, `TableComponent`, `DetailScreen`, keybindings, and view actions.
+**Architecture:** Record the name on the trace root while `buildForest` walks events in file order. Copy it onto `TraceSummary`. The picker adds one fixed-width column and parses an `agent:` prefix out of its query into a second `TraceFilter`, which runs through the existing `applyFilters`. No new events, screens, keys, or stdlib functions.
 
-**Tech Stack:** Agency, TypeScript, existing TUI components, Vitest, deterministic Agency-JS fixtures. No new dependencies.
+**Tech Stack:** TypeScript, the existing `lib/tui` table, Vitest.
 
-**Spec:** [Agent names and run tags in the logs viewer](/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/statelog-tag-filters/packages/agency-lang/docs/superpowers/specs/2026-10-27-statelog-tag-filters-design.md). Read it together with the [existing-capabilities review](/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/statelog-tag-filters/packages/agency-lang/docs/superpowers/plans/2026-10-27-statelog-tag-filters-existing-capabilities-review.md); this spec resolves the review's precedence question.
+**Spec:** `docs/superpowers/specs/2026-10-27-statelog-tag-filters-design.md` (same worktree). This plan supersedes the earlier five-task plan with the same file name; the review that led to the cut is `2026-10-27-statelog-tag-filters-review-2.md` beside this file.
 
-## Global constraints
+## Background: how the picker works today
 
-- Work in the existing `codex/statelog-tag-filters` worktree. This document is the requested deliverable; implementation requires a subsequent instruction.
-- Reuse `custom: Record<string, string>`. Preserve `tags: string[]` separately. Add no `tagValues`, scalar widening, legacy boolean conversion, or configuration schema changes.
-- Explicit keys override defaults regardless of later resume/subprocess emissions. Later updates within the same class replace supplied keys; omitted keys remain.
-- Write `customSource: "defaults" | "explicit"` only as event context. Unmarked historical custom records are defaults; unknown markers contribute no custom update.
-- Preserve the custom dictionary's identity until normal redaction. Protect only the metadata event's reserved type/source literals from redaction.
-- Keep names last-valid-string per trace. No root-name field, automatic family tags, or new eval/Explorer fields.
-- Keep one primary picker row per trace; Overview is unchanged. Reuse existing rendering and filtering components.
-- Preserve current text-query reopening and all-trace `<`/`>` behavior. Applied metadata selection persists.
-- No checkpoint, handler, runtime tag-store, IPC, or value-tag changes. No hosted-server compatibility claim beyond the inspected client paths.
-- Use types, objects, arrays, and static imports. Add no dependencies or symlink support.
-- Generate stdlib documentation from source comments through `make`. Edit developer docs, not user-facing guides or generated source directly.
-- Save verification output. Run focused tests and deterministic fixtures, not the full Agency suite or paid model calls.
-- Format only changed TypeScript paths before each task's typecheck. Use a commit-message file and `git commit -F`; never amend or force push.
+Read this before the tasks. It is everything an executor needs to know about the code being changed.
 
-## Review focus
+**From file to tree.** `agency logs file.jsonl` parses every line into an `EventEnvelope` (`lib/logsViewer/types.ts`). `buildForest` in `lib/logsViewer/tree.ts` turns those events into one `TreeNode` per trace, with spans and event leaves under it. Pass 2 of `buildForest` (`tree.ts:146-161`) visits events in file order and attaches each as a leaf. Pass 4 then sorts every node's children by timestamp, so after `buildForest` returns, walking the tree no longer gives file order. `walkNodes` in `forest.ts` is also a stack walk and visits children in reverse. That is why the name must be captured in pass 2, not read back from the tree later.
 
-1. Resume and subprocess starts must not reset explicit values, including `""`. Tasks 1 and 2 pin this.
-2. Value redaction must not erase or promote the source marker, and whole-object redaction must remain effective. Tasks 1 and 2 pin this.
-3. Historical, malformed, interleaved, and misleading-timestamp events must resolve deterministically. Tasks 1 and 3 pin this.
-4. Long names, tags, and active text search must fit a 100-column picker without extra rows. Task 3 pins this.
-5. Nested details, canceled drafts, follow refresh, typing, and zero matches must keep the correct trace and filter state. Tasks 3 and 4 pin this.
+**From tree to picker row.** `traceSummaries` in `lib/logsViewer/traceSummaries.ts` makes one `TraceSummary` per trace root: start time, duration, rounds, tokens, cost, the first ask, an annotation, and whether an error occurred. The picker (`lib/logsViewer/screens/tracePicker.ts`) renders those summaries as rows of a `TableComponent` (`lib/tui/table.ts`). The columns are declared as data in `columns()` (`tracePicker.ts:259-316`): a fixed width per column, a header, and a cell function. The `what` column is `"flex"` and takes whatever width is left. The table clips long cells with an ellipsis and escapes style tags in cell text (the existing test "an ask that looks like a style tag is drawn as written" covers this).
 
-## Existing capabilities and file responsibilities
+**Search and filters.** Pressing `/` puts the picker in editing mode, and each typed character is appended to `this.query`. `shown()` (`tracePicker.ts:180-186`) computes which traces are listed: it runs `searchTraces` over `traceTexts` (every string in every event) to get hits, builds a `textFilter` from those hits, and passes `[textFilter, ...this.extraFilters]` to `applyFilters` (`traceSearch.ts:58-60`), which keeps a summary only if every filter accepts it. `extraFilters` is an existing, currently empty slot. A `TraceFilter` is `{ id, label, accepts(summary) }`. When the query is non-empty the picker shows a `hits` column, a "N of M match" count, and a "first hit" snippet line. Enter on a row returns `{ kind: "selectTrace", traceId, query }` and the shell opens the trace screen with that query applied as a row search.
 
-| Area | Files | Change |
-| --- | --- | --- |
-| Event contract and reader | New `lib/statelog/runMetadata.ts`, `.test.ts`; `lib/statelogClient.ts`, its tests and redaction tests; `eslint.config.js` | Validate string dictionaries, mark origin, derive effective trace metadata, and register the browser-safe module |
-| Agency setter | `stdlib/statelog.agency`, `lib/stdlib/statelog.ts`, `.test.ts` | Thin setter through the current logger |
-| Integration | New `tests/agency-js/set-statelog-tags/{agent.agency,test.js,fixture.json,agency.json}`; existing config/codegen/IPC tests | Prove existing custom forwarding and new precedence through actual execution |
-| Reader integration | `lib/logsViewer/{types,tree,traceSummaries,summary}.ts`, their tests | Attach metadata computed before tree reordering |
-| Display | `screens/tracePicker.ts`, `views/detailScreen.ts`, `detailTarget.ts`, `screens/chrome.ts`, `run.ts`, matching tests | Compact columns and existing detail view for metadata |
-| Metadata filters | New `lib/logsViewer/traceFilters.ts`, `views/traceFiltersView.ts`, matching tests; existing `traceSearch.ts` | Convert selections to existing predicates and provide a small draft editor |
-| Session integration | `views/view.ts`, `run.ts`, `run.shell.test.ts` | Applied selection, view actions, keyboard dispatch, focus |
-| Documentation | `docs/dev/hosting/statelog.md`, `docs/dev/runtime/config.md`, `docs/dev/cli/logs-viewer.md` | Storage, precedence, API scope, and controls |
+**Where agent names come from.** `setAgentName` in `std::statelog` posts an event `{ type: "agentName", name }` (`lib/statelogClient.ts:1046-1051`). The Agency agent calls it at startup. Two readers already pick the name out of a trace with the same rule, last valid string in file order: `lastAgentName` in `lib/eval/extract.ts:126-131` and the runs explorer in `lib/runsExplorer/mine.ts:168`.
 
-No production changes are expected in the config schema, compiler encoding, IPC, eval extractor, Runs Explorer, or `std::tag`. Tests should verify reuse rather than add adapters for those paths.
+**Tests.** `lib/logsViewer/traceFixture.ts` builds a small synthetic trace with `traceEvents(traceId, { answer, toolOutput, ask? })`. Picker tests render through `renderOf` and read the frame as text. One snapshot test renders the searched picker at 120 columns; its forest has no agent names, so the new column must stay hidden there and the snapshot must not change.
 
-## Declarative boundaries
+## Global Constraints
 
-| Caller supplies | Boundary owns |
-| --- | --- |
-| A dictionary and source | Metadata writer owns reserved fields and normal emission |
-| Ordered envelopes | Pure metadata reader owns validation, per-key precedence, and name extraction |
-| Applied selection | Predicate builder returns existing `TraceFilter` records |
-| Column definitions | Existing table owns measurement, clipping, and painting |
-| A detail target | Existing detail screen resolves and renders row or trace metadata |
-| Apply/cancel action | Session commits selection; overlay owns only a draft |
+- Change only `lib/logsViewer/**` and `docs/dev/cli/logs-viewer.md`. No stdlib, runtime, config, or statelog client changes.
+- No new event types or fields. The name comes from the existing `agentName` event.
+- The Agent column appears only when at least one trace in the file has a name.
+- Name matching is a case-sensitive prefix match on the recorded name. A trace with no name never matches.
+- The `agent:` prefix is recognised only at the start of the query. The name prefix ends at the first space.
+- Hits, the snippet, and the query carried into the trace screen come from the text part only.
+- The column is between `Started (local)` and `duration`, width `min(26, longest name + 1)`.
+- Use types, objects, and arrays; no interfaces, Maps, or Sets.
+- Format only the files you changed: `npx prettier --write <files>`. Never run `pnpm run fmt:ts` from this worktree; its glob reaches sibling worktrees.
+- Run `pnpm run typecheck` after every task, before its commit. Save every test and typecheck run to a file under `/tmp/`.
+- Commit with a message file: `git commit -F /tmp/msg.txt`. Never amend or force push.
+- Rebase the branch onto current `main` before Task 1. The branch forks from `b77f92377`, before PR #1289.
 
-Keep source classification and merging in the metadata reader. Consumers receive effective tags, never mutable default/explicit dictionaries. Do not add a second filter engine, layout engine, payload painter, or configurable serialization framework.
+## Review Focus
 
-## Execution preflight
+1. A trace that renames itself (two `agentName` events) must show the later name, even when the later event has an earlier timestamp. Task 1 pins this.
+2. A log with no names must render exactly as today, including the 120-column snapshot. Task 3 pins this.
+3. A 200-character name must not push the `what` column off screen. Task 3 pins the clip.
+4. `agent:` with nothing after it must list every named trace, not zero traces. Task 2 pins this.
+5. Pressing Enter after `/agent:x hello` must carry `hello`, not `agent:x hello`, into the trace screen. Task 3 pins this.
 
-- [ ] Read the spec, review, package instructions, and the four contributing guides. Preserve the user's untracked `2026-10-27-statelog-tag-filters-review.md`.
-- [ ] Before the lifecycle fixture, read the interrupt lifecycle instructions and `docs/site/guide/{interrupts,handlers,effects,policies}.md`, plus `docs/dev/runtime/{interrupts,checkpointing,subprocess-ipc}.md`. Use public resume APIs and normal handlers.
-- [ ] Install worktree dependencies only if absent: `pnpm install --frozen-lockfile > /tmp/statelog-tags-install.log 2>&1` from the worktree repository root. Require exit 0; do not alter the lockfile.
-- [ ] Run a focused baseline once, saving output: `pnpm test:run lib/statelogClient.test.ts lib/stdlib/statelog.test.ts lib/logsViewer/traceSearch.test.ts lib/logsViewer/screens/tracePicker.test.ts > /tmp/statelog-tags-baseline.log 2>&1`. Resolve existing failures before feature work. The prior audit passed 167 focused tests at the same code base; that is historical evidence, not feature validation.
+---
 
-## Task 1: Define source-aware custom metadata and its reader
+### Task 1: Record the agent name on the trace root
 
-**Files:** New `lib/statelog/runMetadata.ts`, `.test.ts`; `lib/statelogClient.ts`, `.test.ts`, `.redaction.test.ts`; `eslint.config.js`.
+**Files:**
+- Modify: `lib/logsViewer/types.ts:10-36` (`TreeNode`)
+- Modify: `lib/logsViewer/tree.ts:146-161` (pass 2 of `buildForest`)
+- Modify: `lib/logsViewer/traceSummaries.ts`
+- Modify: `lib/logsViewer/traceFixture.ts`
+- Test: `lib/logsViewer/tree.test.ts`, `lib/logsViewer/traceSummaries.test.ts`
 
-**Interfaces produced:**
+**Interfaces:**
+- Produces: `TreeNode.agentName?: string`, set only on `nodeKind: "trace"` roots. `TraceSummary.agentName?: string`. `TraceContents.agentName?: string` in the fixture, which emits one `agentName` event after `agentStart` when given.
+
+- [ ] **Step 1: Extend the fixture**
+
+In `traceFixture.ts`, add `agentName?: string` to `TraceContents`. When set, insert `{ type: "agentName", name: contents.agentName }` into `data` directly after the `agentStart` entry, so it gets the next timestamp in sequence.
+
+- [ ] **Step 2: Write the failing tree tests**
+
+In `tree.test.ts`:
 
 ```ts
-type RunTags = Record<string, string>;
-type CustomSource = "defaults" | "explicit";
-type TraceMetadata = { agentName?: string; tags: RunTags };
+it("records the last agentName event on the trace root, in file order", () => {
+  const events = traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "first" });
+  // A later event in the file with an EARLIER timestamp still wins: file order, not time.
+  events.push({
+    ...events[1],
+    data: { type: "agentName", name: "second", timestamp: new Date(0).toISOString() },
+  });
+  expect(buildForest(events)[0].agentName).toBe("second");
+});
 
-validateRunTags(value: unknown): RunTags;
-isCustomSource(value: unknown): value is CustomSource;
-traceMetadataById(events: readonly EventEnvelope[]): Record<string, TraceMetadata>;
+it("ignores an agentName event whose name is not a string", () => {
+  const events = traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "kept" });
+  events.push({ ...events[1], data: { type: "agentName", name: 7, timestamp: new Date(9000).toISOString() } });
+  expect(buildForest(events)[0].agentName).toBe("kept");
+});
 
-// Existing StatelogClient method gains an optional second argument:
-runMetadata(
-  metadata: RunMetadata & { moduleName?: string; entryNode?: string },
-  customSource?: CustomSource,
-): Promise<void>;
+it("a trace with no agentName event has no name", () => {
+  expect(buildForest(traceEvents("A", { answer: "hi", toolOutput: "out" }))[0].agentName).toBeUndefined();
+});
 ```
 
-Default the writer's second argument to `"defaults"`. Keep the two accumulation dictionaries private to `runMetadata.ts`; callers only receive effective metadata. The reader visits the supplied envelopes once in input order and returns independent entries per trace.
+- [ ] **Step 3: Write the failing summary test**
 
-- [ ] Add failing reader tests: defaults `{project:"configured",region:"east"}`, explicit `{project:"website"}`, then defaults `{project:"resumed",region:"west"}` yield `{project:"website",region:"west"}`. Later explicit `{project:"review"}` wins. Explicit `""` stays explicit. Omitted keys survive and independent traces never share values.
-- [ ] Add historical/malformed tests: absent source means defaults; unknown/null source is ignored; non-record custom is ignored; valid string siblings survive invalid entries; legacy labels are not converted; valid names retain last-string behavior. Interleave sibling spans and reverse timestamps to prove file order.
-- [ ] Add validator tests for original-object identity, empty patch, empty key/value, null-prototype records, own `constructor`/`prototype`, and atomic rejection of `__proto__`, arrays, null, nested values, numbers, booleans, and undefined. Saved malformed data is tolerated as the spec defines; writer input is strict.
-- [ ] Run new tests and confirm failures for missing behavior; save output to `/tmp/statelog-tags-1-red.log`.
-- [ ] Implement the pure reader and validator. Use safe own-property operations for trace IDs and tag keys. Do not walk the rendered span tree or infer origin from `entryNode`.
-- [ ] Add `lib/statelog/runMetadata.ts` to `BROWSER_FILES` in `eslint.config.js`, because the logger imports its runtime predicate. Keep the module free of Node dependencies and import envelope types with `import type`.
-- [ ] Extend `runMetadata` to write `{ ...metadata, type: "runMetadata", customSource }`. Existing `agentStart` uses the default source. Assert injected top-level type/source cannot replace these fields, while nested custom keys with those names remain user data.
-- [ ] In `post()`, after normal redaction, restore only `type` and `customSource` for an original metadata body with a recognized source. Reuse `isCustomSource`; do not exempt custom values or extend generic post options.
-- [ ] Test real sink bytes for default/explicit markers, unchanged custom identity, whole-dictionary redaction, and `redact("explicit")`, `redact("runMetadata")`, and `redact("defaults", "explicit")`. The source/type remain correct; identical strings inside custom still redact. Feed saved envelopes into the reader and assert defaults never become explicit.
-- [ ] Run `pnpm test:run lib/statelog/runMetadata.test.ts lib/statelogClient.test.ts lib/statelogClient.redaction.test.ts > /tmp/statelog-tags-1.log 2>&1`; require exit 0. Format changed TypeScript files, run `pnpm run typecheck > /tmp/statelog-tags-1-types.log 2>&1` and `node scripts/lint-browser-reach.mjs > /tmp/statelog-tags-1-browser.log 2>&1`; require exit 0.
-- [ ] Commit with message file: `feat: distinguish default and explicit custom run metadata`.
+In `traceSummaries.test.ts`:
 
-## Task 2: Add the Agency setter and verify lifecycle precedence
+```ts
+it("carries the trace root's agent name", () => {
+  const roots = buildForest(traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "agency-agent/coordinator" }));
+  expect(traceSummaries(roots, {})[0].agentName).toBe("agency-agent/coordinator");
+});
+```
 
-**Files:** `stdlib/statelog.agency`, `lib/stdlib/statelog.ts`, `.test.ts`; new fixture directory above; `lib/config/config.test.ts`, `lib/backends/statelog.codegen.test.ts`, `lib/runtime/ipc.test.ts` only for focused coverage.
+- [ ] **Step 4: Run the tests and confirm they fail**
 
-**Consumes:** Task 1's `RunTags`, validator, writer, and `traceMetadataById`.
+Run: `pnpm test:run lib/logsViewer/tree.test.ts lib/logsViewer/traceSummaries.test.ts > /tmp/picker-agent-1-red.log 2>&1`
+Expected: the four new tests fail; the existing ones pass.
 
-**Produces:**
+- [ ] **Step 5: Implement**
 
-```agency
-export def setTags(tags: Record<string, string>) {
-  _setRunTags(tags)
+In `types.ts`, add to `TreeNode`, with a comment saying it is set on trace roots only:
+
+```ts
+agentName?: string;
+```
+
+In `tree.ts` pass 2, inside the `for (const evt of events)` loop and before the `HIDDEN_EVENT_TYPES` check, when `evt.data.type === "agentName"` and `typeof evt.data.name === "string"`, set `traces[evt.trace_id].agentName = evt.data.name`. Later events overwrite earlier ones, which gives last-in-file-order for free.
+
+In `traceSummaries.ts`, add `agentName?: string` to `TraceSummary` and set `agentName: root.agentName` in `summarize`.
+
+- [ ] **Step 6: Run the tests and confirm they pass**
+
+Run: `pnpm test:run lib/logsViewer/tree.test.ts lib/logsViewer/traceSummaries.test.ts > /tmp/picker-agent-1.log 2>&1`
+Expected: exit 0.
+
+- [ ] **Step 7: Typecheck, format, commit**
+
+Run: `pnpm run typecheck > /tmp/picker-agent-1-types.log 2>&1` (exit 0), then `npx prettier --write` on the five changed files.
+
+```bash
+git add lib/logsViewer/types.ts lib/logsViewer/tree.ts lib/logsViewer/traceSummaries.ts lib/logsViewer/traceFixture.ts lib/logsViewer/tree.test.ts lib/logsViewer/traceSummaries.test.ts
+git commit -F /tmp/msg.txt   # "feat: record each trace's agent name on its summary"
+```
+
+---
+
+### Task 2: Parse the `agent:` prefix and build its filter
+
+**Files:**
+- Modify: `lib/logsViewer/traceSearch.ts`
+- Test: `lib/logsViewer/traceSearch.test.ts`
+
+**Interfaces:**
+- Consumes: `TraceSummary.agentName` from Task 1.
+- Produces, exported from `traceSearch.ts`:
+
+```ts
+export type PickerQuery = { agentPrefix: string | undefined; text: string };
+/** Splits "agent:NAME rest" into its two parts. Any other query is all text. */
+export function parsePickerQuery(query: string): PickerQuery;
+/** Keeps traces whose recorded name starts with `prefix`. Unnamed traces never pass. */
+export function agentFilter(prefix: string): TraceFilter;
+```
+
+`parsePickerQuery` rules, from the spec: if `query` starts with `agent:`, `agentPrefix` is the text after `agent:` up to the first space (or the end), and `text` is everything after that first space (or `""`). Otherwise `agentPrefix` is `undefined` and `text` is the whole query. `agentFilter` returns `{ id: "agent", label: \`agent:${prefix}\`, accepts }`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add a `describe("parsePickerQuery")` and a `describe("agentFilter")` to `traceSearch.test.ts`:
+
+```ts
+it("a plain query is all text", () => {
+  expect(parsePickerQuery("hello world")).toEqual({ agentPrefix: undefined, text: "hello world" });
+});
+it("agent: alone is an empty prefix and no text", () => {
+  expect(parsePickerQuery("agent:")).toEqual({ agentPrefix: "", text: "" });
+});
+it("the prefix ends at the first space and the rest is text", () => {
+  expect(parsePickerQuery("agent:agency-agent/ time out")).toEqual({ agentPrefix: "agency-agent/", text: "time out" });
+});
+it("agent: in the middle of a query is just text", () => {
+  expect(parsePickerQuery("see agent:x")).toEqual({ agentPrefix: undefined, text: "see agent:x" });
+});
+
+// agentFilter, over summaries built with traceEvents(..., { agentName }):
+it("keeps names that start with the prefix, case-sensitively, and drops unnamed traces", () => {
+  // A: "agency-agent/coordinator", B: "Agency-agent/x", C: no name
+  const kept = applyFilters(summaries, [agentFilter("agency-agent/")]).map((s) => s.traceId);
+  expect(kept).toEqual(["A"]);
+});
+it("an empty prefix keeps every named trace", () => {
+  expect(applyFilters(summaries, [agentFilter("")]).map((s) => s.traceId)).toEqual(["A", "B"]);
+});
+it("a name mentioned only in a prompt does not count", () => {
+  // D: no name, ask "run agency-agent/coordinator please"
+  expect(applyFilters([summaryD], [agentFilter("agency-agent")])).toEqual([]);
+});
+```
+
+- [ ] **Step 2: Run the tests and confirm they fail**
+
+Run: `pnpm test:run lib/logsViewer/traceSearch.test.ts > /tmp/picker-agent-2-red.log 2>&1`
+Expected: the new tests fail because the exports do not exist.
+
+- [ ] **Step 3: Implement `parsePickerQuery` and `agentFilter` in `traceSearch.ts`**
+
+Pure functions, no state. `accepts` is `summary.agentName !== undefined && summary.agentName.startsWith(prefix)`.
+
+- [ ] **Step 4: Run the tests and confirm they pass**
+
+Run: `pnpm test:run lib/logsViewer/traceSearch.test.ts > /tmp/picker-agent-2.log 2>&1`
+Expected: exit 0.
+
+- [ ] **Step 5: Typecheck, format, commit**
+
+Run: `pnpm run typecheck > /tmp/picker-agent-2-types.log 2>&1` (exit 0), `npx prettier --write lib/logsViewer/traceSearch.ts lib/logsViewer/traceSearch.test.ts`.
+
+```bash
+git add lib/logsViewer/traceSearch.ts lib/logsViewer/traceSearch.test.ts
+git commit -F /tmp/msg.txt   # "feat: parse an agent: prefix out of the picker query"
+```
+
+---
+
+### Task 3: Show the column and apply the filter in the picker
+
+**Files:**
+- Modify: `lib/logsViewer/screens/tracePicker.ts` (`LAYOUT`, `shown()`, `openSelected()`, `render()`, `columns()`)
+- Test: `lib/logsViewer/screens/tracePicker.test.ts`
+
+**Interfaces:**
+- Consumes: `parsePickerQuery`, `agentFilter` (Task 2); `TraceSummary.agentName` (Task 1); fixture `agentName` (Task 1).
+- Produces: no new exports. `ShownTraces` gains `text: string` (the text part) so `render()` and `columns()` can decide hits visibility from it.
+
+- [ ] **Step 1: Write the failing picker tests**
+
+Add a helper to the test file:
+
+```ts
+function namedForest(): TreeNode[] {
+  return buildForest([
+    ...traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "agency-agent/coordinator" }),
+    ...traceEvents("B", { answer: "ok", toolOutput: "done", agentName: "agency-agent/explorer" }),
+    ...traceEvents("C", { answer: "agency-agent/coordinator", toolOutput: "done" }),
+  ]);
 }
 ```
 
-The private TypeScript helper is `_setRunTags(tags: RunTags): Promise<void>`. It validates first, returns for an empty patch or absent frame, and otherwise calls `frame.log.runMetadata({ custom: tags }, "explicit")`, retaining the exact dictionary reference.
-
-- [ ] Add failing unit tests: current branch logger receives custom plus explicit source; valid frameless calls emit nothing; invalid frameless calls throw; empty patches emit nothing; validation failure emits no partial event.
-- [ ] Run them and save the expected failures to `/tmp/statelog-tags-2-red.log`.
-- [ ] Implement the wrapper and its source docstrings. Explain string values, patching, defaults, trace scope, logging prerequisites, the separate value-tag API, and import aliasing. No new runtime state.
-- [ ] Add direct config/codegen tests showing the existing `log.metadata.custom` record survives unchanged. Pin current `__proto__` stripping. Extend IPC tests with custom defaults and its existing explicit-child-log-file/disabled-observability exceptions, without changing forwarding code.
-- [ ] Add the deterministic Agency-JS fixture using `set-agent-name` for logging and `subprocess-pause-basic` for the subprocess handler. Consult `subprocess-statelog-runid` for resume assertions, but do not copy its explicit child `logFile` argument because that bypasses inheritance. Enable parent observability and a file sink, configure `custom: {project:"configured", region:"east"}`, and keep legacy `tags:["interactive"]`.
-- [ ] In one case, set `{project:"website", owner:"parent"}`, then raise a deterministic interrupt. The JS harness uses the public `respondToInterrupts` API. Assert one trace ID, repeated default emissions, exactly one setter event, preserved handler behavior, expected ordinary return value, and effective `project="website"` before and after resume.
-- [ ] In another case, launch a real subprocess on the inherited sink after the parent setter. Omit the child's `logFile` argument. Assert its startup defaults leave `project="website"`. Have the child explicitly set `{owner:"child"}`; assert it overrides only that explicit key. Then raise a deterministic child interrupt and resume through the public API. Assert the parent and child resume defaults preserve both explicit keys. Approve only `std::run` in the parent handler and allow the child's interrupt to reach the caller.
-- [ ] The fixture's JS harness should parse the saved file with the production parser and reader. Include a redacted string and a whole redacted custom dictionary through the public setter. Assert the final file and effective tags, not a mock call alone.
-- [ ] Run `pnpm test:run lib/stdlib/statelog.test.ts lib/config/config.test.ts lib/backends/statelog.codegen.test.ts lib/runtime/ipc.test.ts > /tmp/statelog-tags-2.log 2>&1`. Run `make > /tmp/statelog-tags-2-build.log 2>&1`, then `pnpm run agency test js tests/agency-js/set-statelog-tags > /tmp/statelog-tags-2-agency-js.log 2>&1`. Require exit 0 for each.
-- [ ] Review generated output, format changed TypeScript files, run `pnpm run typecheck > /tmp/statelog-tags-2-types.log 2>&1`, and commit with message file `feat: expose explicit StateLog run tags`.
-
-## Task 3: Add compact metadata display using the existing detail view
-
-**Files:** `lib/logsViewer/{types,tree,traceSummaries,summary,detailTarget}.ts`; `screens/{tracePicker,chrome}.ts`; `views/{detailScreen,view}.ts`; `run.ts`; related tests.
-
-**Consumes:** `traceMetadataById` and `TraceMetadata`.
-
-**Produces:**
-- Optional `TreeNode.traceMetadata: TraceMetadata` on trace roots, plus `TraceSummary.agentName?: string` and `tags: RunTags`.
-- `DetailTarget = { kind: "row"; rowId: string } | { kind: "traceMetadata"; traceId: string }` in `detailTarget.ts`.
-- `DetailScreen(roots, target: DetailTarget, thresholds)`, with a focus accessor returning `{traceId: string; rowId?: string} | undefined`.
-- `ViewAction` gains `{ kind: "openTraceMetadata"; traceId: string }`; existing row-detail actions retain their meaning.
-
-- [ ] Add failing tree/summary tests that compare roots against the pure reader for interleaved traces, reordered span trees, misleading timestamps, no metadata, and historical custom records.
-- [ ] Call `traceMetadataById(events)` once before tree reordering and attach results to roots. This extra linear pass keeps reducer state out of tree construction. Summaries and views read effective metadata only.
-- [ ] Add bounded Agent and optional Tags columns to the current picker table. Use the spec's widths and drop order. Include custom pairs in the existing event summary while retaining legacy label summaries.
-- [ ] Extend `DetailScreen` with the target union. Resolve by target on every `setData`; build metadata `PayloadLine[]` and feed the existing `paintPayload`. Reuse raw JSON, copy, cache, and scroll behavior. Do not manufacture a story/event row for merged metadata.
-- [ ] Update existing constructor call sites/tests to use row targets. Metadata targets expose their trace ID and no row ID. Update `focusedRow` and the header's target resolution to honor overlay origin, including a picker selection different from the open trace. Keep comment controls unavailable without a real row.
-- [ ] Add `I` through the existing binding/action tables for picker selection and open trace, guarded against query typing. Include the selected agent name in the existing header. A missing target produces a stale-detail message and safe back behavior.
-- [ ] Test 100-column rendering with a 200-character name, long tags, and active search. Assert no new primary-row wrapping, prompt space, Hits visibility, and access to full values through metadata detail. Test escaping ANSI/style-like input using existing safe rendering.
-- [ ] Test ordinary detail/comment behavior, metadata raw/copy/scroll, follow refresh, stale targets, and opening metadata over a non-current picker trace. Verify header and session focus name that selected trace. An existing untagged trace must show its ID and an empty metadata state, not immediately close as a missing row.
-- [ ] Run `pnpm test:run lib/logsViewer/tree.test.ts lib/logsViewer/traceSummaries.test.ts lib/logsViewer/summary.test.ts lib/logsViewer/screens/tracePicker.test.ts lib/logsViewer/detailTarget.test.ts lib/logsViewer/views/detailScreen.test.ts lib/logsViewer/run.shell.test.ts > /tmp/statelog-tags-3.log 2>&1`; require exit 0.
-- [ ] Format changed TypeScript files, run `pnpm run typecheck > /tmp/statelog-tags-3-types.log 2>&1`, and commit with message file `feat: show run metadata in the existing log viewer`.
-
-## Task 4: Add metadata selection through existing filters and overlays
-
-**Files:** New `lib/logsViewer/traceFilters.ts`, `.test.ts`, `views/traceFiltersView.ts`, `.test.ts`; `screens/tracePicker.ts`, `views/view.ts`, `run.ts`, picker and shell tests.
-
-**Interfaces produced:**
+Then:
 
 ```ts
-type TagCondition = { key: string; value: string };
-type MetadataSelection = { agentNames: string[]; tags: TagCondition[] };
-type MetadataChoice =
-  | { kind: "agent"; name: string }
-  | { kind: "tag"; key: string; value: string };
+it("shows an agent column only when some trace has a name", () => {
+  expect(renderPicker(threeTraceForest())).not.toMatch(/\bagent\s+duration/);   // header absent
+  const text = renderPicker(namedForest());
+  expect(text).toMatch(/Started \(local\)\s+agent\s+duration/);
+  expect(text).toContain("agency-agent/coordinator");
+});
 
-metadataFilters(selection: MetadataSelection): TraceFilter[];
-metadataChoices(
-  summaries: readonly TraceSummary[],
-  selection: MetadataSelection,
-): MetadataChoice[];
-toggleMetadataChoice(
-  selection: MetadataSelection,
-  choice: MetadataChoice,
-): MetadataSelection;
+it("clips a long name so the ask column stays on screen", () => {
+  const roots = buildForest(traceEvents("A", { answer: "ok", toolOutput: "done", agentName: "a".repeat(200) }));
+  const text = renderOf(new TracePicker(roots, { currentTraceId: "A", annotations: {}, thresholds: DEFAULT_THRESHOLDS }));
+  expect(text).toContain("ask for A");
+  expect(text).not.toContain("a".repeat(30));
+});
+
+it("agent: keeps only traces whose recorded name starts with the prefix", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/c");
+  const text = renderOf(picker);
+  expect(text).toContain("1 of 3 match");
+  expect(text).toContain("ask for A");
+  expect(text).not.toContain("ask for C");   // C only mentions the name in its answer
+  expect(text).not.toContain("hits");        // no text part, so no hits column
+});
+
+it("agent: with nothing after it lists every named trace", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:");
+  expect(renderOf(picker)).toContain("2 of 3 match");
+});
+
+it("text after the agent prefix searches the matching traces and is carried into the trace", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/ ask for B");
+  expect(renderOf(picker)).toContain("1 of 3 match");
+  expect(renderOf(picker)).toContain("hits");
+  press(picker, "Enter");
+  expect(press(picker, "Enter")).toEqual({ kind: "selectTrace", traceId: "B", query: "ask for B" });
+});
+
+it("Enter after an agent-only query carries no text query", () => {
+  const picker = makePicker(namedForest());
+  press(picker, "/");
+  type(picker, "agent:agency-agent/e");
+  press(picker, "Enter");
+  expect(press(picker, "Enter")).toEqual({ kind: "selectTrace", traceId: "B" });
+});
 ```
 
-The pure functions own exact matching, stable choice ordering, and one selected value per key. Serialize structured values for stable IDs; do not concatenate unescaped key/value strings.
+- [ ] **Step 2: Run the tests and confirm they fail**
 
-The filter overlay uses `viewName: "traceFilters"` and takes roots, a draft selection, and an optional originating trace ID. With zero matches, the origin is absent and the header shows no selected trace; filter controls remain available. It renders a Clear row and typed choices using the existing table and cursor/keybinding helpers.
+Run: `pnpm test:run lib/logsViewer/screens/tracePicker.test.ts > /tmp/picker-agent-3-red.log 2>&1`
+Expected: the six new tests fail; all existing tests, including the 120-column snapshot, pass.
 
-Extend `ViewAction` with `{ kind: "openTraceFilters"; traceId?: string }` and `{ kind: "applyTraceFilters"; selection: MetadataSelection }`. Add `TracePicker.setMetadataSelection(selection: MetadataSelection): void`. Add `metadataSelection: MetadataSelection` and `onClearMetadataSelection: () => void` to `TracePickerOptions`. The session's synchronous `applyMetadataSelection(selection)` operation stores selection and updates any existing picker. Both the apply action and clear callback use it. The picker setter updates its local snapshot without calling the callback.
+- [ ] **Step 3: Implement in `tracePicker.ts`**
 
-- [ ] Add failing predicate tests: names OR; keys AND; metadata plus text AND through existing `applyFilters`; empty selection; missing key versus empty string; exact case; own `constructor`; prompt-only name mentions excluded. Choice derivation includes selected but absent values and avoids ID collisions.
-- [ ] Add failing draft tests: toggling names, replacing a value for one key, clear, Enter commit, Escape cancel, and draft isolation from applied selection.
-- [ ] Run failing tests to `/tmp/statelog-tags-4-red.log`, then implement the pure functions and small filter view. Keep filter composition in `traceSearch.ts` unchanged.
-- [ ] Connect picker `F` to the overlay. Apply via one shell action, close the overlay, update the picker, and retain its selected trace if still matched. Store only metadata selection in session state.
-- [ ] Render match counts for metadata-only filtering as well as text search. Preserve current zero-result behavior. Keep `escape(): boolean`: clear text first; otherwise, if metadata selection is active, call `onClearMetadataSelection()` and return true; otherwise return false for existing back behavior. Do not change the shared escape protocol.
-- [ ] Recompute choices on follow without discarding selected absent choices or unapplied drafts. Keep the originating trace ID for filter/header focus. Reopening the picker receives current applied metadata selection.
-- [ ] Add shell tests covering apply/cancel, follow, reopen, zero matches, and clear. Type `FIX` in search and assert no overlay opens. Assert Trace-screen `F`, lowercase `f`, text-query reset on picker reconstruction, and all-trace `<`/`>` navigation remain unchanged.
-- [ ] Run `pnpm test:run lib/logsViewer/traceFilters.test.ts lib/logsViewer/views/traceFiltersView.test.ts lib/logsViewer/traceSearch.test.ts lib/logsViewer/screens/tracePicker.test.ts lib/logsViewer/run.shell.test.ts > /tmp/statelog-tags-4.log 2>&1`; require exit 0.
-- [ ] Format changed TypeScript files, run `pnpm run typecheck > /tmp/statelog-tags-4-types.log 2>&1`, and commit with message file `feat: filter log traces by names and custom tags`.
+- Add `agentMaxWidth: 26` to `LAYOUT`.
+- Change `ShownTraces` to `{ summaries; hits; searching; text: string }`.
+- In `shown()`: `const { agentPrefix, text } = parsePickerQuery(this.query)`. Hits come from `searchTraces(this.texts, text)`. Filters are, in order: `textFilter(text, hits)` only when `text.length > 0`, `agentFilter(agentPrefix)` only when `agentPrefix !== undefined`, then `...this.extraFilters`. `searching` stays `this.query.length > 0`.
+- In `openSelected()`: carry `query: text` only when `text.length > 0`, otherwise omit it. Get `text` from `parsePickerQuery(this.query)`.
+- In `columns()`: push the `hits` column only when `shown.text.length > 0`. After the `started` column, when `this.summaries.some((s) => s.agentName !== undefined)`, push:
 
-## Task 5: Document and verify the complete path
+```ts
+{
+  key: "agent",
+  header: "agent",
+  width: Math.min(LAYOUT.agentMaxWidth, 1 + Math.max(...this.summaries.map((s) => s.agentName?.length ?? 0))),
+  cell: (summary) => summary.agentName ?? "",
+}
+```
 
-**Files:** Developer docs listed above; source docstrings if corrections are needed.
+The width test uses all summaries, not only the shown ones, so the column does not jump as the user types. The `first hit` line in `render()` already reads `shown.hits`, which is empty with no text part, so it needs no change.
 
-- [ ] Document the two source classes, historical fallback, string-only custom values, last-recorded names, no deletion, logging prerequisites, and complete-trace scope. Include the resume/subprocess example with explicit values preserved.
-- [ ] Document picker controls, one-row display, metadata details, metadata filter persistence, and unchanged text-query/trace-stepping behavior. State the local-reader guarantee without claiming hosted merge support.
-- [ ] Run the affected focused Vitest files once as a combined selection, save output to `/tmp/statelog-tags-final-tests.log`, and require exit 0. Re-run the deterministic fixture if source changed after Task 2.
-- [ ] If stdlib changed since the last build, run `make > /tmp/statelog-tags-final-build.log 2>&1`. Run `pnpm run typecheck > /tmp/statelog-tags-final-types.log 2>&1`, `pnpm run lint:structure > /tmp/statelog-tags-final-structure.log 2>&1`, and `pnpm run fmt:ts:check > /tmp/statelog-tags-final-format.log 2>&1`. Require exit 0; report pre-existing failures separately.
-- [ ] Inspect the real log read-only at `/Users/adityabhargava/agency-lang/packages/agency-lang/log.oct26.jsonl` if still present. Verify exact agent-name filtering without rewriting it. Inspect the fixture output for custom tags and precedence. Do not copy private logs into the repository.
-- [ ] Check `git diff --check` and review scope against the anti-pattern catalog: one metadata reader, existing predicates/table/detail painter, no duplicate storage, and no runtime state for annotations. Commit docs with a message file.
-- [ ] Request an independent review of the complete change. Report checks and any unverified hosted behavior. PR creation belongs to a later implementation instruction, not this planning task.
+- [ ] **Step 4: Run the tests and confirm they pass**
+
+Run: `pnpm test:run lib/logsViewer/screens/tracePicker.test.ts lib/logsViewer/run.shell.test.ts > /tmp/picker-agent-3.log 2>&1`
+Expected: exit 0, and no snapshot was rewritten (`git status` shows no change under `__snapshots__`).
+
+- [ ] **Step 5: Look at it once with the real log**
+
+Run: `pnpm run agency logs /Users/adityabhargava/agency-lang/packages/agency-lang/log.oct26.jsonl` if that file still exists (it is untracked in the main checkout; do not copy it into the worktree). Press `t` if the picker is not already open, confirm the `agent` column shows `agency-agent/coordinator` on the agent's rows, type `/agent:agency-agent/`, and confirm the match count drops to the named traces. Quit with `q`. This is a look, not a test; note anything odd in the commit message.
+
+- [ ] **Step 6: Typecheck, format, commit**
+
+Run: `pnpm run typecheck > /tmp/picker-agent-3-types.log 2>&1` (exit 0), `npx prettier --write lib/logsViewer/screens/tracePicker.ts lib/logsViewer/screens/tracePicker.test.ts`.
+
+```bash
+git add lib/logsViewer/screens/tracePicker.ts lib/logsViewer/screens/tracePicker.test.ts
+git commit -F /tmp/msg.txt   # "feat: show agent names in the trace picker and filter on them with agent:"
+```
+
+---
+
+### Task 4: Document the column and the prefix
+
+**Files:**
+- Modify: `docs/dev/cli/logs-viewer.md:75-87` (the trace picker section)
+
+- [ ] **Step 1: Update the picker section**
+
+Add two short paragraphs after the one that begins "A `TraceFilter` declares an ID, label and a predicate" (line 83):
+
+- One on the Agent column: where the name comes from (the last `agentName` event in file order, recorded on the trace root in pass 2 of `buildForest` because later passes reorder the tree), when the column is shown, its width cap, and that the same rule is used by `eval extract` and the runs explorer.
+- One on the `agent:` prefix: the grammar (start of query, prefix to the first space, the rest is text), prefix matching and why (narrows as you type, selects a family), that hits and the carried query come from the text part only, and that `parsePickerQuery` and `agentFilter` in `traceSearch.ts` own this.
+
+Also extend the first sentence of the section (line 77), which lists the picker's columns, to include the agent name.
+
+Write in plain sentences. No history, no test narration.
+
+- [ ] **Step 2: Final checks**
+
+Run, saving each to `/tmp/`: `pnpm run typecheck`, `pnpm run lint:structure`, `npx prettier --check` on every `.ts` file changed in Tasks 1 to 3, and `pnpm test:run lib/logsViewer/tree.test.ts lib/logsViewer/traceSummaries.test.ts lib/logsViewer/traceSearch.test.ts lib/logsViewer/screens/tracePicker.test.ts lib/logsViewer/run.shell.test.ts`. All exit 0. Run `git diff --check`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/dev/cli/logs-viewer.md
+git commit -F /tmp/msg.txt   # "docs: describe the picker's agent column and agent: search prefix"
+```
+
+Then push the branch and open the PR. The PR body should say what the user sees (the column and the prefix), name the two prior review files as the reason the scope is this small, and leave the owner to merge.

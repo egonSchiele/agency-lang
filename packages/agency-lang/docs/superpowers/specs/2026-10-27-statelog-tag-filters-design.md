@@ -1,141 +1,31 @@
-# Agent names and run tags in the logs viewer
+# Agent names in the trace picker
 
-**Status:** Revised design for the requested plan. This replaces the earlier `tagValues` proposal. Implementation has not started.
+**Status:** Design for the small slice chosen on 2026-10-27. It replaces the earlier key/value tag design, which is kept in git history. Implementation has not started.
 
-## Outcome and scope
+## The problem
 
-Make Agency-agent runs easy to find in a JSONL file containing many traces. Show recorded agent names and string key/value run tags in the trace picker, and let users filter by either or both. Keep one primary row per trace. Overview's per-call layout stays unchanged.
+A statelog JSONL file often holds hundreds of traces from different programs. The Agency agent names its runs with `setAgentName` (`lib/agents/agency-agent/agent.agency:117`), so every one of its traces already carries an `agentName` event. The trace picker does not show that name and has no way to filter on it except the free-text `/` search, which also matches a prompt that happens to mention the word.
 
-The user requires `std::statelog.setTags`, reuse of existing `runMetadata.custom` and viewer components, and explicit setter values that override configured defaults after resume and subprocess starts.
+## What changes
 
-The [existing-capabilities review](/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/statelog-tag-filters/packages/agency-lang/docs/superpowers/plans/2026-10-27-statelog-tag-filters-existing-capabilities-review.md) records the source inspection. Existing configuration, code generation, runtime forwarding, logging sinks, and transport already carry `custom: Record<string, string>`. The picker already has `TraceFilter`, AND composition, text search, declarative table columns, and an overlay stack.
+Two things, both in the single-file logs viewer:
 
-String values, per-key patching, the historical-log rule, and the UI details below are design choices for this revision. Richer value types and deletion are outside this change.
+1. **An Agent column in the trace picker.** Each row shows the trace's recorded agent name. The column appears only when at least one trace in the file has a name, so files from plain programs look as they do today.
+2. **An `agent:` prefix in the picker's search.** Typing `/agent:agency-agent/` lists every trace whose name starts with `agency-agent/`. Text after the first space is an ordinary text search over the same traces, so `/agent:agency-agent/coordinator timeout` finds coordinator runs that mention "timeout".
 
-## Public API and existing configuration
+Nothing else changes. No new events, no new stdlib function, no new screens, no new keys.
 
-```agency
-import { setAgentName, setTags } from "std::statelog"
+## Rules
 
-node main() {
-  setAgentName("agency-agent/coordinator")
-  setTags({ family: "agency-agent", project: "agency-lang" })
-  setTags({ project: "website" })
-}
-```
+- **Which name.** The last `agentName` event in file order whose `name` is a string. This is the same rule `agency eval extract` (`lib/eval/extract.ts:126-131`) and the runs explorer (`lib/runsExplorer/mine.ts:168`) use. A trace with no such event has no name.
+- **Prefix match, case-sensitive.** `agent:X` keeps a trace when its name starts with `X`. Prefix rather than exact so the list narrows as you type, and so `agent:agency-agent/` selects a whole family. A trace with no name never matches an `agent:` query. A prompt that mentions the name does not count.
+- **Query grammar.** If the query starts with `agent:`, the name prefix runs to the first space or the end of the query. Whatever follows that space is the text query. Agent names cannot contain spaces (`lib/statelog/agentName.ts:13`), so this split is unambiguous. A query that does not start with `agent:` is a plain text search, exactly as today.
+- **Hits and the snippet.** The hits column and the "first hit" line come from the text part only. With `agent:` and no text, there is no hits column and no snippet, but the "N of M match" count still shows.
+- **Opening a trace.** Enter carries only the text part of the query into the trace screen's search, because the trace screen searches rows, not names. With no text part it carries nothing, as today with an empty query.
+- **Column width.** The Agent column takes the width of the longest name plus one gap cell, capped at 26 cells. Longer names are clipped with the table's existing ellipsis. The full name is visible in the trace's `agentName` event on the trace screen.
+- **Column position.** Between `Started (local)` and `duration`.
+- **Safety.** Names are untrusted text from the log. The table's cell painter already escapes style tags and control characters, which is how the ask column is drawn today.
 
-The final explicit tags are `family="agency-agent"` and `project="website"`. Supplied keys replace earlier explicit values. Omitted keys remain. Empty strings are values; an empty patch emits nothing. The setter returns nothing, like `setAgentName`.
+## Out of scope
 
-With logging enabled, users can already configure defaults:
-
-```json
-{
-  "observability": true,
-  "log": {
-    "logFile": "./runs.jsonl",
-    "metadata": {
-      "tags": ["interactive"],
-      "custom": {
-        "project": "configured",
-        "environment": "development"
-      }
-    }
-  }
-}
-```
-
-Keep this configuration schema unchanged. `tags: string[]` remains a separate legacy label field. Do not convert labels to booleans or introduce `tagValues`.
-
-Validate the setter as an ordinary string dictionary, accepting plain and null-prototype records and their own enumerable string entries. Reject arrays, null, non-string values, and the key `__proto__`. Permit empty keys and empty string values, as the existing custom configuration does. Preserve `constructor` and `prototype` as own data keys without prototype mutation. Invalid input fails atomically without echoing values. Validation returns the original object so whole-object redaction still works.
-
-A valid call outside an Agency frame is a no-op, following `setAgentName`. Invalid input still fails there. Observability and sink settings retain their existing behavior.
-
-`std::tag.setTags(value, tags)` continues to tag individual values. Programs importing both functions can alias the run setter as `setRunTags`. No changes to the value-tag system are needed.
-
-## Event contract and precedence
-
-Store all run-tag values in the existing `data.custom` dictionary. Add one writer-owned discriminator outside that dictionary:
-
-```json
-{"type":"runMetadata","customSource":"defaults","custom":{"project":"configured"}}
-{"type":"runMetadata","customSource":"explicit","custom":{"project":"website"}}
-```
-
-`customSource` is event context, not configurable user metadata. It says how to interpret `custom` only. Other metadata fields retain their current meaning.
-
-Extend `StatelogClient.runMetadata(metadata, customSource = "defaults")`. Existing `agentStart` calls therefore emit `"defaults"`. The new stdlib setter passes `"explicit"`. Construct the event with reserved `type` and `customSource` after the supplied metadata so an extra top-level JavaScript property cannot replace them. Do not mutate the client's configured metadata.
-
-The reader processes each trace's events in file order and keeps two private dictionaries:
-
-- Defaults: later default events replace supplied default keys.
-- Explicit values: later explicit events replace supplied explicit keys.
-
-Effective tags are defaults overlaid with explicit values. Presence of an explicit key wins even when its value is the empty string. Neither class deletes omitted keys. A new explicit call can change an earlier explicit value. A default event can never overwrite an explicit key.
-
-| Event sequence for one trace | Effective tags |
-| --- | --- |
-| Defaults `project="configured", environment="dev"` | `project="configured", environment="dev"` |
-| Explicit `project="website"` | `project="website", environment="dev"` |
-| Resume emits the same defaults | `project="website", environment="dev"` |
-| Subprocess emits defaults `project="child", region="west"` | `project="website", environment="dev", region="west"` |
-| Subprocess explicitly sets `project="review"` | `project="review", environment="dev", region="west"` |
-
-The synthetic child-default example tests precedence independently of inheritance. On the normal shared-sink path, subprocesses inherit the parent's configured metadata today. Keep that forwarding unchanged and test the real path as well.
-
-### Historical and malformed events
-
-Treat an absent `customSource` as `"defaults"`. Thus existing custom metadata remains visible and filterable, and later unmarked values replace earlier unmarked values per key. Historical events do not reveal whether a low-level caller intended a default or an explicit update. Do not infer it from `entryNode`.
-
-An unknown, null, or otherwise invalid source marker contributes no custom update. Ignore a malformed custom dictionary, including a whole-dictionary redaction placeholder. Within a saved dictionary, ignore non-string entries and `__proto__` while retaining valid siblings. Ignore inherited properties. Preserve the prior valid state.
-
-These rules apply only to custom-tag extraction. Separate `agentName` events keep their existing last-valid-string-in-file-order rule. This feature does not introduce a root-agent identity.
-
-### Redaction and transport
-
-Use the existing `post()` serialization and redaction path. Preserve the original custom dictionary until that path runs. Its values and the whole dictionary remain redactable.
-
-Protect the fixed `runMetadata` discriminator and known `customSource` values from value redaction. After redaction, restore only these two reserved fields when the original body has `type="runMetadata"` and a recognized source. Never restore the original `custom` or spread the original body back over redacted data. This prevents a replacement such as `redact("defaults", "explicit")` from promoting configuration into explicit updates.
-
-The event remains format version 1 with an additive field. File, stdout, and HTTP continue using the same serialized envelope. This plan guarantees the local reader's behavior, including a downloaded file in its supplied order. The hosted server and hosted viewer's merge semantics are not verified here.
-
-## Runtime scope
-
-The tags describe one trace across branches and subprocesses sharing that trace. A reader reconstructs precedence from the saved events. Resume does not need to replay completed setters.
-
-Do not add tag state to the runtime, checkpoints, or IPC. Do not mutate configuration to remember setter calls. This keeps handler registration and restoration unchanged.
-
-A separate trace is independent. Rewind into a new trace, or a file containing only the resumed segment, cannot recover annotations absent from that file. This delivery does not add annotation replay or copy earlier metadata into new traces.
-
-## Dense display through existing components
-
-The changed list is the trace picker shown for a mixed JSONL file. Add Agent and, when space permits, Tags columns to its existing `TableComponent`. Format tag cells as `key="value"`, with deterministic key ordering. Use existing safe text painting and clipping.
-
-Keep Started, Agent, Duration, Cost, active-search Hits, and the prompt visible at the supported minimum of 100 columns. Cap Agent at 25 cells including its gap, and reserve at least 24 prompt content cells plus its gap. Existing fixed widths leave 26 prompt cells at 100 columns with Hits present. Drop optional columns in this order: Tags, Context, LLM calls. Omit Agent entirely when all traces lack a name. Add no metadata annotation rows.
-
-Uppercase `I` opens full metadata for the selected picker trace or the open trace. Reuse `DetailScreen` with a typed trace-metadata target. Reuse its `PayloadLine` rendering, wrapping, scrolling, raw JSON, copying, and follow refresh. Show the trace ID, name, and effective tags. An event-detail target still behaves exactly as before.
-
-A metadata detail target has a trace ID but no commentable row ID. Header, comment controls, and session focus must use that target's trace ID, including when it is opened over a picker selection different from the underlying trace. Keep the selected agent name in the existing header without adding a row.
-
-Update the existing `runMetadata` event summary to include `custom`. Retain legacy label display.
-
-## Filters through the existing predicate interface
-
-Uppercase `F` on the picker opens a small filter overlay. Use the existing table, cursor bindings, declarative key tables, and view actions. Do not build a new query parser or filtering engine.
-
-The overlay lists observed agent names and key/value pairs from all current trace summaries. Include selected choices even when they no longer occur. Space toggles a choice. Enter applies the draft; Escape cancels it. A Clear filters row empties the draft.
-
-Multiple selected names combine with OR. Different selected tag keys combine with AND. At most one value is selected per key; choosing another replaces it. Names and tag values match exactly and case-sensitively. A tag predicate requires an own key. Metadata predicates compose with existing text search through `TraceFilter` and `applyFilters`.
-
-The viewer session owns the applied metadata selection. The overlay owns its draft. One apply action updates the session and the current picker. Reopening the picker and follow refresh retain metadata selection. Keep the current text-query reopening behavior and existing all-trace next/previous navigation.
-
-The picker displays its match count whenever text or metadata filters are active. Retain selection by trace ID when it still matches; otherwise select the first match. Enter does nothing with zero matches. The filter control remains available. A filter overlay opened with no matching trace has no originating trace ID, and its header shows no selected trace.
-
-On the picker, Escape clears text editing/search first, then metadata selection, then follows current back behavior. Overlay Escape cancels the overlay before reaching the picker. Preserve Trace-screen `F` and lowercase `f` follow. While typing a query, `F` and `I` are query characters.
-
-## Boundaries and acceptance
-
-Implement only the setter, metadata event/reader contract, and local viewer integration. Keep legacy label configuration, compiler encoding, runtime forwarding, public eval records, Runs Explorer controls, and `std::tag` behavior intact. Automatic family tagging is outside this plan; existing agent names already identify historical Agency-agent traces.
-
-Acceptance requires focused tests for precedence after real resume and subprocess starts, historical records, redaction, ordered extraction, compact display, and filter lifecycle. Use deterministic Agency-JS fixtures without model calls. Run `make` after stdlib changes, focused tests, type checks, structural lint, and formatting checks. Save command output.
-
-Update stdlib source docstrings and developer docs. Generate the stdlib reference through `make`; do not hand-edit generated pages or user-facing guide pages.
+Key/value run tags, a `setTags` stdlib function, a metadata overlay, a metadata detail view, and any change to the runs explorer or the hosted viewer. These wait until a program actually writes key/value metadata.

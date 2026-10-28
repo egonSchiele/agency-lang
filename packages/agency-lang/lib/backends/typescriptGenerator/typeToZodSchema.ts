@@ -137,7 +137,9 @@ function mapTypeToSchemaInner(
   } else if (variableType.type === "arrayType") {
     return `z.array(${recurse(variableType.elementType)})`;
   } else if (variableType.type === "stringLiteralType") {
-    return `z.literal("${variableType.value.replace(/"/g, '\\"')}")`;
+    // JSON.stringify escapes a backslash too. Agency keeps one as an ordinary
+    // character, and left raw it would end the TypeScript string early.
+    return `z.literal(${JSON.stringify(variableType.value)})`;
   } else if (variableType.type === "numberLiteralType") {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "booleanLiteralType") {

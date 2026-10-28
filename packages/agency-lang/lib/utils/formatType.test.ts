@@ -79,3 +79,18 @@ describe("raises on a function type", () => {
     expect(variableTypeToString(fn(readSet), {}, false)).not.toMatch(/raises/);
   });
 });
+
+describe("string literal types", () => {
+  const literal: VariableType = { type: "stringLiteralType", value: "x\\" };
+
+  it("escapes the value for TypeScript", () => {
+    expect(formatTypeHint(literal, undefined, "ts")).toBe('"x\\\\"');
+    expect(formatTypeHint({ type: "stringLiteralType", value: "a\nb" }, undefined, "ts")).toBe(
+      '"a\\nb"',
+    );
+  });
+
+  it("writes the value as Agency reads it back", () => {
+    expect(formatTypeHint(literal)).toBe('"x\\"');
+  });
+});

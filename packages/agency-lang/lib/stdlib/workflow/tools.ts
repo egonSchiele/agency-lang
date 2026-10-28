@@ -5,7 +5,7 @@
  * `agent/notes.agency`). This file turns each one into the module text an
  * import line uses, which is also what a workflow's `module` field says.
  */
-import { isAbsolute, relative, resolve } from "path";
+import path from "#path";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { moduleIdToOrigin } from "../../runtime/origin.js";
 import { assertUniqueToolNames } from "../../runtime/toolInvocation.js";
@@ -44,8 +44,8 @@ function checkImportable(tool: unknown, index: number): AgencyFunction {
 }
 
 function localModule(tool: AgencyFunction, dir: string, cwd: string): string {
-  const fromDir = relative(resolve(cwd, dir), resolve(cwd, tool.module));
-  if (fromDir === ".." || fromDir.startsWith("../") || isAbsolute(fromDir)) {
+  const fromDir = path.relative(path.resolve(cwd, dir), path.resolve(cwd, tool.module));
+  if (fromDir === ".." || fromDir.startsWith("../") || path.isAbsolute(fromDir)) {
     throw new Error(
       `tool "${tool.name}" is defined in "${tool.module}", outside the workflow directory`,
     );

@@ -152,6 +152,13 @@ describe("checkAllowedDomains", () => {
     expect(result).toContain("Invalid URL");
   });
 
+  // Trace H9ORq4lL: a provider sent the list as the text "[]", and every
+  // valid URL was reported as invalid.
+  it("names allowedDomains, not the URL, when the list is not a list", () => {
+    const result = checkAllowedDomains("https://example.com/a", "[]" as unknown as string[]);
+    expect(result).toBe('allowedDomains must be a list of domain names, got "[]".');
+  });
+
   it("treats a host and its www subdomain as one site, either way round", () => {
     expect(checkAllowedDomains("https://www.example.com/a", ["example.com"])).toBeNull();
     expect(checkAllowedDomains("https://example.com/a", ["www.example.com"])).toBeNull();

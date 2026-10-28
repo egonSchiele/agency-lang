@@ -1,7 +1,7 @@
 /**
  * The per-run fetch cache: a URL a model tool call fetched once is not
- * fetched again in the same conversation. The second call gets a short
- * note saying the content is already in the conversation above.
+ * fetched again in the same conversation. The second call gets the
+ * stored result, with no request and no interrupt.
  * See docs/dev/stdlib/fetch-cache.md.
  */
 import type { Run } from "./asyncContext.js";
@@ -9,14 +9,23 @@ import { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 
 /** One fetched URL: how the model spelled it, which tool fetched it, the
- *  thread whose conversation holds the content, and the fetch's number
- *  in the run, so the note can point at it. */
+ *  thread whose conversation it was fetched for, the fetch's number in
+ *  the run (the oldest is dropped first), the result, and the result's
+ *  size in characters. */
 export type FetchCacheEntry = {
   url: string;
   tool: string;
   threadId: string | null;
   ordinal: number;
+  value: unknown;
+  size: number;
 };
+
+/** The most result text the cache keeps, in characters. The cache rides
+ *  in every checkpoint beside the spill store, whose cap of 1,000,000 is
+ *  set by the hosted resume limit (spill.md), so the two together stay
+ *  under it with room for two copies. */
+export const MAX_CACHED_CHARS = 500_000;
 
 export type FetchCache = {
   entries: Record<string, FetchCacheEntry>;
@@ -126,42 +135,68 @@ function fetchedInConversation(conversation: string[], threadId: string | null):
 }
 
 /**
- * The note a tool call gets instead of the content when this conversation
- * already fetched the URL, or `null` when the fetch should run: the fetch
- * function is not the tool the model called, the request is not a plain
- * GET, the call asked for a refresh, or the URL was not fetched in this
- * conversation before.
+ * The stored result a tool call gets when this conversation already
+ * fetched the URL, or `null` when the fetch should run: the fetch function
+ * is not the tool the model called, the request is not a plain GET, the
+ * call asked for a refresh, or the URL was not fetched in this
+ * conversation before (or its result was dropped to make room). The
+ * result is wrapped because a JSON body can itself be `null`.
  */
-export function fetchCacheNote(run: Run, request: FetchRequest, refresh: boolean): string | null {
+export function cachedFetch(
+  run: Run,
+  request: FetchRequest,
+  refresh: boolean,
+): { value: unknown } | null {
   const call = directToolCall(run, request);
   if (refresh || call === null || !isCacheable(request)) return null;
   const key = normalizeFetchUrl(request.url);
   if (key === null) return null;
   const entry = readCache(run).entries[key];
   if (entry === undefined || !fetchedInConversation(call.conversation, entry.threadId)) return null;
-  // The note says when, not where: with memory on, compaction may have
-  // summarized the earlier result, so "above" is not always true.
-  return (
-    `Already fetched this URL earlier in this conversation (${entry.tool} call ${entry.ordinal}, ` +
-    `as ${entry.url}). Use what it returned then. Fetch it again only if you expect it to ` +
-    `have changed, by passing \`refresh: true\`.`
-  );
+  // A checkpoint saved before results were stored has entries without one.
+  if (!("value" in entry)) return null;
+  return { value: entry.value };
 }
 
-/** Record a fetch that completed, so the next call for the same URL in
- *  this conversation gets the note. Call it after the fetch succeeded:
- *  a failed fetch is not recorded, so the model may try the URL again. */
-export function recordFetch(run: Run, request: FetchRequest): void {
+function sizeOf(value: unknown): number {
+  return typeof value === "string" ? value.length : (JSON.stringify(value)?.length ?? 0);
+}
+
+/** Drop the oldest entries until the stored results fit in the cap. */
+function evictOldest(cache: FetchCache): void {
+  const entries = Object.entries(cache.entries).sort(([, a], [, b]) => a.ordinal - b.ordinal);
+  let total = entries.reduce((sum, [, entry]) => sum + (entry.size ?? 0), 0);
+  for (const [key, entry] of entries) {
+    if (total <= MAX_CACHED_CHARS) return;
+    delete cache.entries[key];
+    total -= entry.size ?? 0;
+  }
+}
+
+/** Record a fetch that completed and its result, so the next call for
+ *  the same URL in this conversation gets the result back. Call it after
+ *  the fetch succeeded: a failed fetch is not recorded, so the model may
+ *  try the URL again. A result larger than the whole cap is not kept, and
+ *  that URL is fetched again next time. */
+export function recordFetch(run: Run, request: FetchRequest, value: unknown): void {
   const call = directToolCall(run, request);
   if (call === null || !isCacheable(request)) return;
   const key = normalizeFetchUrl(request.url);
   if (key === null) return;
   const cache = readCache(run);
+  const size = sizeOf(value);
+  if (size > MAX_CACHED_CHARS) {
+    delete cache.entries[key];
+    return;
+  }
   cache.count += 1;
   cache.entries[key] = {
     url: request.url,
     tool: request.tool,
     threadId: call.conversation[0] ?? null,
     ordinal: cache.count,
+    value,
+    size,
   };
+  evictOldest(cache);
 }

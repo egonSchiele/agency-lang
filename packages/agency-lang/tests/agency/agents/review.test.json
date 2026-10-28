@@ -67,6 +67,78 @@
           "delayMs": 60000
         }
       ]
+    },
+    {
+      "nodeName": "cutShortReviewIsAFailureWhenNotFailOpen",
+      "description": "a review cut short after saving a finding is a failure with failOpen: false, carrying the finding",
+      "input": "",
+      "expectedOutput": "\"failure:1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "saveDraft",
+            "args": {
+              "value": [
+                {
+                  "error": false,
+                  "feedback": "the task is stated"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "return": [
+            {
+              "error": true,
+              "feedback": "never seen"
+            }
+          ],
+          "delayMs": 60000
+        }
+      ]
+    },
+    {
+      "nodeName": "cutShortReviewReturnsItsFindingsByDefault",
+      "description": "the same review returns its saved finding by default",
+      "input": "",
+      "expectedOutput": "\"success:1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "saveDraft",
+            "args": {
+              "value": [
+                {
+                  "error": false,
+                  "feedback": "the task is stated"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "return": [
+            {
+              "error": true,
+              "feedback": "never seen"
+            }
+          ],
+          "delayMs": 60000
+        }
+      ]
     }
   ]
 }

@@ -232,9 +232,10 @@ export def buildTools(strict: boolean = false, projectTools: boolean = true): an
     checker,
     parseAST,
     ...project,
-    fetch,
-    fetchJSON,
-    fetchMarkdown,
+    // A repeat fetch returns the stored page, so the model gets no refresh.
+    fetch.partial(refresh: false),
+    fetchJSON.partial(refresh: false),
+    fetchMarkdown.partial(refresh: false),
     skills,
   ]
 }

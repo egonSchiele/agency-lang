@@ -39,6 +39,18 @@ describe("spill", () => {
     });
   });
 
+  it("searches several patterns in one call, grouping the matches by pattern", () => {
+    withRun(() => {
+      const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+      const name = /full output saved as (\S+) ---/.exec(_keepOutput(text, 0))![1];
+      expect(_grepSpill("line 7$", name, 10, ["line 12$", "no such line"])).toEqual([
+        { pattern: "line 7$", matches: [{ file: name, line: 8, text: "line 7" }] },
+        { pattern: "line 12$", matches: [{ file: name, line: 13, text: "line 12" }] },
+        { pattern: "no such line", matches: [] },
+      ]);
+    });
+  });
+
   it("refuses a name that is not a saved output name", () => {
     withRun(() => {
       for (const bad of ["../x.log", "/etc/passwd", ".hidden.log", "notes.txt", "a/b.log"]) {

@@ -147,14 +147,17 @@ def checkGrounding(task: string, startedAt: number, answer: any): Critique {
     maxTime: reviewTime,
     failOpen: false,
   )
-  // A review that could not run (its budget ran out with no findings
-  // saved, or the model failed) is not a clean pass. Accepting the answer
-  // would report it as checked when nothing checked it.
+  // A review that could not run or did not finish (its budget ran out,
+  // or the model failed) is not a clean pass. Findings saved before the
+  // budget ran out cover only the points checked so far, so the review
+  // is strict (failOpen: false) and they come back as a failure too.
+  // Accepting the answer would report it as checked when nothing checked
+  // all of it.
   if (reviewed is failure(err)) {
     return {
       accepted: false,
       feedback: """
-The review of your answer could not finish (${err}), so nothing confirmed your sources.
+The review of your answer could not finish (${err}), so your sources were not all confirmed.
 
 Check that every claim is backed by a source you fetched, cite it, and fix any claim you cannot back.
 """

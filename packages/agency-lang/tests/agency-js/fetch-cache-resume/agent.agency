@@ -1,19 +1,22 @@
 // The fetch cache across a pause and resume (docs/dev/stdlib/fetch-cache.md).
 // No handler answers the fetch's interrupt here, so the first fetch pauses
 // the run; test.js approves it from TypeScript and resumes. The second call
-// for the same page, on the resumed pass, must get the note: the record the
-// tool loop leaves for the cache is written on every pass, and the fetch is
-// remembered when it completes after the approval. The tool results are
-// read back from the thread.
+// for the same page, on the resumed pass, must get the stored page: the
+// record the tool loop leaves for the cache is written on every pass, and
+// the fetch is remembered when it completes after the approval. The tool
+// results are read back from the thread.
 import { fetchMarkdown } from "std::http"
 import { currentThreadId, getThread } from "std::thread"
 
+// The mocks answer a www. URL with one body and a bare URL with another.
+// The cache treats the two spellings as one page and returns the body it
+// stored, so a stored result can be told apart from a fresh fetch.
 def kindOf(text: string): string {
-  if (text.startsWith("Already fetched")) {
-    return "note"
+  if (text.includes("from www")) {
+    return "www"
   }
   if (text.includes("a page")) {
-    return "page"
+    return "bare"
   }
   return "other: ${text}"
 }

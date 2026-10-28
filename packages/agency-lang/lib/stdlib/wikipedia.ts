@@ -71,7 +71,7 @@ export async function _article(
   title: string,
 ): Promise<{ title: string; text: string; url: string }> {
   const host = currentHost();
-  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&redirects=1&titles=${encodeURIComponent(title)}&format=json`;
   const response = await wikiFetch(host, url);
   if (!response.ok) {
     throw new Error(

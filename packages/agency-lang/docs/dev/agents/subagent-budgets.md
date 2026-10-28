@@ -104,6 +104,13 @@ model calling the agent as a tool only sees a failure's message. The tool
 loop's `recordFailure` (`lib/runtime/prompt.ts`) shows `failed.error` and
 never `data`, so a draft in the data would be lost to the coordinator.
 
+`keepDraft: false` on the decorator turns rule 2 off: every trip is the
+rule-3 failure, and `draft` in its data is the value that reached the
+guard when one did. It is for a caller that must not take a partial result
+for a finished one. A review cut short is the case: its saved findings
+cover only the points it checked, and nothing in them says the rest were
+never checked.
+
 The message in rule 3 is built from the trip, never from the guard's
 Result. A guard whose `finalize` returned an empty local hands back
 `success(null)`, which has no error to reuse.
@@ -168,8 +175,18 @@ answer as reviewed. So the two loops that act on a review call it with
 `failOpen: false`: the writing rewrite (`docs/dev/agents/writing-rewrite-agent.md`)
 and the researcher's grounding check (`checkGrounding`,
 `stdlib/agents/researcher.agency`), which turns the failure into a
-rejection telling the model its sources were not confirmed. `revise` then
-runs another attempt, or returns the last one when attempts run out.
+rejection telling the model its sources were not all confirmed. `revise`
+then runs another attempt, or returns the last one when attempts run out.
+
+**A review cut short is not a clean pass either.** A reviewer whose budget
+runs out after it saved some findings hands back findings for the points
+it reached, and nothing in them marks the rest as unchecked. In trace
+iA6rvAcr the reviewer saved only its satisfied points, then wrote that two
+questions were "largely ungrounded" and ran out before saving that, so
+the answer passed. `reviewAgent` therefore passes `keepDraft: failOpen` to
+its guard: with `failOpen: false` the trip is a failure naming the budget,
+and `checkGrounding` sends the answer back as for a review that could not
+run. The saved findings are in the failure's data as `draft`.
 
 **Known gap: a trip during `sleep()` bypasses the handler** (ticket
 ADI-137). A time guard that fires while `sleep()` is running cancels the
@@ -217,7 +234,9 @@ rule 2 reports it.
   `revise` answer with and without a thread, an outer budget that runs
   out inside an inner decorated call, a label override, a finished
   answer, an empty answer, an empty list, a failure the body returns, and
-  the reviewer and writing-reviewer shapes returning their saved findings.
+  the reviewer and writing-reviewer shapes returning their saved findings,
+  and with `keepDraft: false` a trip after findings were saved returning a
+  failure that carries them, and a finished body its answer.
 - `tests/agency/guards/revise-salvages-completed-attempt.agency`: `revise`
   under a guard that trips in the check, in a first attempt with and
   without a saved draft, or in a later attempt, and the

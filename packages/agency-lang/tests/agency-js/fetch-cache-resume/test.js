@@ -10,7 +10,7 @@ import { ToolCall } from "smoltalk";
 const usage = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
 const cost = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
 const rounds = [
-  [new ToolCall("c1", "fetchMarkdown", { url: "https://example.com/about" })],
+  [new ToolCall("c1", "fetchMarkdown", { url: "https://www.example.com/about" })],
   [new ToolCall("c2", "fetchMarkdown", { url: "https://example.com/about/#top" })],
   [],
 ];

@@ -59,8 +59,10 @@ Review a work product against a task and return findings. error=true marks
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param failOpen - When true, a review that could not run (budget with
     nothing saved, policy, model error) returns no findings instead of a
-    failure. Pass false to get the failure, for callers that must not
-    mistake a failed review for a clean one
+    failure, and a review the budget cut short returns the findings it
+    saved. Pass false to get a failure in both cases, for callers that must
+    not mistake a failed or partial review for a clean one: the findings a
+    cut-short review saved are in the failure's data as `draft`
 
 **Parameters:**
 

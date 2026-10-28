@@ -157,6 +157,20 @@ def reviewUnderBudget(): Result<string[]> {
   }
 }
 
+// The strict reviewer: findings saved before the trip cover only part of
+// the work, so the trip is a failure that carries them.
+@guarded(cost: $5, time: 10s, label: "strictReviewerShape", keepDraft: false)
+def strictReviewUnderBudget(): Result<string[]> {
+  thread(label: "strictReviewerShape", session: "") {
+    return savesFindingsThenTrips()
+  }
+}
+
+@guarded(cost: $5, time: 10s, keepDraft: false)
+def strictFinishes(): Result<string> {
+  return "DONE"
+}
+
 def reviewerShape(): Result<string[]> {
   const reviewed = reviewUnderBudget()
   if (isFailure(reviewed)) {
@@ -254,4 +268,12 @@ node writingReviewTripReturnsSavedFindings(): string {
     return "failure:${r.error}"
   }
   return "success:${r.value}"
+}
+
+node strictTripWithFindingsIsAFailure(): string {
+  return describeStop(strictReviewUnderBudget())
+}
+
+node strictFinishIsTheAnswer(): string {
+  return describe(strictFinishes())
 }

@@ -11,10 +11,10 @@ Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown.
   URL and the limit; `timeout` raises the limit per call, and `0` removes it.
 
   When a model calls one of these as a tool, a GET of a URL the same
-  conversation already fetched is not fetched again: the tool returns a
-  short note saying the content is in the conversation above, and
-  `refresh: true` fetches anyway. Fetches from Agency code are never
-  cached. See docs/dev/stdlib/fetch-cache.md.
+  conversation already fetched is not fetched again: the tool returns
+  what the first fetch returned, and `refresh: true` fetches anyway.
+  Fetches from Agency code are never cached. See
+  docs/dev/stdlib/fetch-cache.md.
 
   ```ts
   import { fetch, fetchJSON } from "std::http"

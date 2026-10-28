@@ -1,17 +1,20 @@
 {
   "tool": [
-    "page",
-    "note",
-    "page",
-    "page",
+    "www",
+    "www",
+    "bare",
+    "bare",
     "branch:",
-    "page",
-    "note",
-    "page",
-    "page",
-    "note",
-    "page",
-    "note"
+    "www",
+    "www",
+    "bare",
+    "bare",
+    "bare",
+    "www",
+    "www"
   ],
-  "code": ["page", "page"]
+  "code": [
+    "www",
+    "bare"
+  ]
 }

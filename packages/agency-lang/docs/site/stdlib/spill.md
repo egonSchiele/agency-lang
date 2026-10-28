@@ -104,14 +104,20 @@ Read saved tool output, named in a "full output saved as" notice. Returns the wh
 ### grepSpill
 
 ```ts
-grepSpill(pattern: string, filename: string, maxResults: number = 100): Result
+grepSpill(
+  pattern: string,
+  filename: string,
+  maxResults: number = 100,
+  morePatterns: string[] = [],
+): Result
 ```
 
-Search saved tool output for a regular expression. Each match comes back with its line number and line text. Patterns use JavaScript regex syntax.
+Search saved tool output for a regular expression. Each match comes back with its line number and line text. Patterns use JavaScript regex syntax. To look for several things at once, put the others in morePatterns: one call searches them all and returns each pattern's matches under it.
 
   @param pattern - The regular expression to search for
   @param filename - The name from a "full output saved as" notice. A name only, never a path.
-  @param maxResults - Most matches to return
+  @param maxResults - Most matches to return, for each pattern
+  @param morePatterns - More regular expressions to search for in the same call
 
 **Parameters:**
 
@@ -120,6 +126,7 @@ Search saved tool output for a regular expression. Each match comes back with it
 | pattern | `string` |  |
 | filename | `string` |  |
 | maxResults | `number` | 100 |
+| morePatterns | `string[]` | [] |
 
 **Returns:** `Result`
 

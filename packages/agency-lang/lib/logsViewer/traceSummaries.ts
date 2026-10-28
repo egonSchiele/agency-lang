@@ -17,6 +17,7 @@ export type TraceSummary = {
   ask: string | undefined;
   annotation: string | undefined;
   hasError: boolean;
+  agentName?: string;
 };
 
 export function traceSummaries(
@@ -45,5 +46,6 @@ function summarize(root: TreeNode, annotation: string | undefined): TraceSummary
     ask: askText ?? undefined,
     annotation,
     hasError: walkNodes(root).some((node) => node.event?.data.type === "error"),
+    agentName: root.agentName,
   };
 }

@@ -143,6 +143,9 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   const pairedStarts = pairedPromptStarts(events);
   let leafCounter = 0;
   for (const evt of events) {
+    if (evt.data.type === "agentName" && typeof evt.data.name === "string") {
+      traces[evt.trace_id].agentName = evt.data.name;
+    }
     if (HIDDEN_EVENT_TYPES.has(evt.data.type)) continue;
     if (evt.data.type === "promptStart" && pairedStarts.has(evt)) continue;
     const traceRoot = traces[evt.trace_id];

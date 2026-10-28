@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildForest } from "./tree.js";
+import { traceEvents } from "./traceFixture.js";
 import { EventEnvelope, TreeNode } from "./types.js";
 
 const evt = (over: Partial<EventEnvelope>): EventEnvelope => ({
@@ -523,4 +524,28 @@ describe("promptStart pairing", () => {
     ]);
     expect(forest[0].children[0].label).toBe("threadEndHooks");
   });
+});
+
+it("records the last agentName event on the trace root, in file order", () => {
+  const events = traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "first" });
+  // A later event in the file with an EARLIER timestamp still wins: file order, not time.
+  events.push({
+    ...events[1],
+    data: { type: "agentName", name: "second", timestamp: new Date(0).toISOString() },
+  });
+  expect(buildForest(events)[0].agentName).toBe("second");
+});
+
+it("ignores an agentName event whose name is not a string", () => {
+  const events = traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "kept" });
+  events.push({
+    ...events[1],
+    data: { type: "agentName", name: 7, timestamp: new Date(9000).toISOString() },
+  });
+  expect(buildForest(events)[0].agentName).toBe("kept");
+});
+
+it("a trace with no agentName event has no name", () => {
+  const roots = buildForest(traceEvents("A", { answer: "hi", toolOutput: "out" }));
+  expect(roots[0].agentName).toBeUndefined();
 });

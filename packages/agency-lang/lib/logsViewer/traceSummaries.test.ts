@@ -24,3 +24,10 @@ it("does not read inherited annotations", () => {
   const root = buildForest(traceEvents("__proto__", { answer: "hi", toolOutput: "out" }));
   expect(traceSummaries(root, {})[0].annotation).toBeUndefined();
 });
+
+it("carries the trace root's agent name", () => {
+  const roots = buildForest(
+    traceEvents("A", { answer: "hi", toolOutput: "out", agentName: "agency-agent/coordinator" }),
+  );
+  expect(traceSummaries(roots, {})[0].agentName).toBe("agency-agent/coordinator");
+});

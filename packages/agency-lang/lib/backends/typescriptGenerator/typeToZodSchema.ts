@@ -1,6 +1,5 @@
 import { color } from "@/utils/termcolors.js";
 import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
-import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
 import { applyValueArgs, isValueParamInstantiation } from "@/typeChecker/valueParamSubstitution.js";
@@ -137,7 +136,9 @@ function mapTypeToSchemaInner(
   } else if (variableType.type === "arrayType") {
     return `z.array(${recurse(variableType.elementType)})`;
   } else if (variableType.type === "stringLiteralType") {
-    return `z.literal("${variableType.value.replace(/"/g, '\\"')}")`;
+    // JSON.stringify escapes a backslash too. Agency keeps one as an ordinary
+    // character, and left raw it would end the TypeScript string early.
+    return `z.literal(${JSON.stringify(variableType.value)})`;
   } else if (variableType.type === "numberLiteralType") {
     return `z.literal(${variableType.value})`;
   } else if (variableType.type === "booleanLiteralType") {
@@ -187,7 +188,9 @@ function mapTypeToSchemaInner(
         // dropped from toJSONSchema(...).
         let inner2 = inner;
         if (prop.description) {
-          inner2 += `.describe("${escape(prop.description)}")`;
+          // JSON.stringify escapes a backslash and a line break, which a raw
+          // description would leave to end the TypeScript string early.
+          inner2 += `.describe(${JSON.stringify(prop.description)})`;
         }
         // Optional key (a `T | null` property): in validation/parse mode make
         // the key optional and coalesce a missing key to null, so

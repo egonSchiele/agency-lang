@@ -1,0 +1,55 @@
+{
+  "sourceFile": "incognito.agency",
+  "tests": [
+    {
+      "nodeName": "startsWithNoProblem",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refusesContinue",
+      "input": "",
+      "expectedOutput": "\"--incognito sessions are not saved, so they cannot continue or resume one.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refusesResume",
+      "input": "",
+      "expectedOutput": "\"true true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refusesWhenLoggingIsOn",
+      "input": "",
+      "expectedOutput": "\"--incognito needs logging off, and this run has it on. Start it with agency agent --incognito.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "renameSaysWhy",
+      "input": "",
+      "expectedOutput": "\"No session to rename. | Incognito sessions are not saved, so there is nothing to rename.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

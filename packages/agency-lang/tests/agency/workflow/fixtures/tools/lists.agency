@@ -1,0 +1,25 @@
+/** One list in the lists app. */
+export type ListSummary = {
+  id: string;
+  title: string
+}
+
+export def findLists(query: string): Result<ListSummary[]> {
+  """
+  Find lists whose title matches the query.
+
+  @param query - Text to match against list titles
+  """
+  return success([{ id: "l1", title: query }])
+}
+
+export def addListItems(listId: string, items: string[], section: string): Result<string> {
+  """
+  Add items to a section of a list.
+
+  @param listId - The list to add to
+  @param items - The items to add
+  @param section - The section to add them under
+  """
+  return success("added ${items.length} items to ${listId}/${section}")
+}

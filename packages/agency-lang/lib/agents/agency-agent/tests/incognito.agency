@@ -1,0 +1,24 @@
+import { incognitoProblem, renameSession, startIncognito } from "../lib/resume.agency"
+
+node startsWithNoProblem(): string {
+  return incognitoProblem(false, null, false)
+}
+
+node refusesContinue(): string {
+  return incognitoProblem(true, null, false)
+}
+
+// A bare --resume is "", which opens the picker.
+node refusesResume(): string {
+  return "${incognitoProblem(false, "", false) != ""} ${incognitoProblem(false, "abc", false) != ""}"
+}
+
+node refusesWhenLoggingIsOn(): string {
+  return incognitoProblem(false, null, true)
+}
+
+node renameSaysWhy(): string {
+  const before = renameSession("a title")
+  startIncognito()
+  return "${before} | ${renameSession("a title")}"
+}

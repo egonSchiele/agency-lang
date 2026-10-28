@@ -629,6 +629,21 @@ describe("_describe (reify)", () => {
     expect(article?.effects).toEqual([]);
   });
 
+  it("prints the declared return type on its own", () => {
+    const info = _describe(
+      "export def f(q: string): Result<string[]> { return success([q]) }\nexport def g(q: string) { return q }",
+    );
+    expect(info.exports.map((e) => [e.name, e.returnType])).toEqual([
+      ["f", "Result<string[]>"],
+      ["g", null],
+    ]);
+  });
+
+  it("gives a type alias no return type", () => {
+    const info = _describe(source);
+    expect(info.exports.find((e) => e.name === "Article")?.returnType).toBe(null);
+  });
+
   it("prints a type alias signature without the export keyword", () => {
     const info = _describe(source);
     const article = info.exports.find((e) => e.name === "Article");

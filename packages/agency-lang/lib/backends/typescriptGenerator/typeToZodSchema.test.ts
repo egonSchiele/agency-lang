@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { mapTypeToZodSchema, mapTypeToValidationSchema, appendMeta } from "./typeToZodSchema.js";
 import { VariableType } from "../../types.js";
 import type { Tag } from "../../types/tag.js";
@@ -333,5 +334,62 @@ describe("never (bottom type) maps to z.never()", () => {
 
   it("maps never to z.never() on the validation path", () => {
     expect(mapTypeToValidationSchema(never, {})).toBe("z.never()");
+  });
+});
+
+// Agency reads a string literal type up to the next quote, so its value can
+// end in a backslash. Written between quotes unescaped, that backslash would
+// end the TypeScript string early and let the next literal run as code.
+describe("string literal types are written as escaped TypeScript strings", () => {
+  const literal = (value: string): VariableType => ({ type: "stringLiteralType", value });
+  const evaluate = (schemaText: string) => new Function("z", `return ${schemaText}`)(z);
+
+  it("keeps a trailing backslash inside the string", () => {
+    const schema = evaluate(mapTypeToValidationSchema(literal("x\\"), {}));
+    expect(schema.safeParse("x\\").success).toBe(true);
+  });
+
+  it("keeps a line break inside the string", () => {
+    const schema = evaluate(mapTypeToValidationSchema(literal("a\nb"), {}));
+    expect(schema.safeParse("a\nb").success).toBe(true);
+  });
+
+  it("never runs a later literal as code", () => {
+    const objectType: VariableType = {
+      type: "objectType",
+      properties: [
+        { key: "a", value: literal("x\\") },
+        { key: "in", value: literal(" + (globalThis.__literalEscapeProbe = 1) + ") },
+        { key: "instanceof", value: literal(") }) //") },
+      ],
+    };
+    const schema = evaluate(mapTypeToValidationSchema(objectType, {}));
+    expect((globalThis as Record<string, unknown>).__literalEscapeProbe).toBe(undefined);
+    const value = {
+      a: "x\\",
+      in: " + (globalThis.__literalEscapeProbe = 1) + ",
+      instanceof: ") }) //",
+    };
+    expect(schema.safeParse(value).success).toBe(true);
+  });
+});
+
+describe("property descriptions are written as escaped TypeScript strings", () => {
+  const evaluate = (schemaText: string) => new Function("z", `return ${schemaText}`)(z);
+  const described = (description: string): VariableType => ({
+    type: "objectType",
+    properties: [{ key: "a", value: { type: "primitiveType", value: "string" }, description }],
+  });
+
+  it("keeps a trailing backslash and a line break inside the description", () => {
+    const schema = evaluate(mapTypeToValidationSchema(described("path C:\\\nnext"), {}));
+    expect(schema.shape.a.description).toBe("path C:\\\nnext");
+  });
+
+  it("never runs a description as code", () => {
+    const payload = 'x\\", in: " + (globalThis.__descriptionEscapeProbe = 1) + "';
+    const schema = evaluate(mapTypeToValidationSchema(described(payload), {}));
+    expect((globalThis as Record<string, unknown>).__descriptionEscapeProbe).toBe(undefined);
+    expect(schema.shape.a.description).toBe(payload);
   });
 });

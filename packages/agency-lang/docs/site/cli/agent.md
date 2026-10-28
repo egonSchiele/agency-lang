@@ -39,6 +39,24 @@ accept.
 
 A tripped budget exits with code 3, distinct from `1` (crash) and `2` (usage error), so scripts can tell an overrun apart from a failure.
 
+## Incognito sessions
+
+`agency agent --incognito` starts a session that leaves no record of itself:
+
+- no log: no `log.jsonl`, nothing on stdout, and nothing sent to a statelog server, whatever the agent was built with
+- no saved session, so it does not show up in `--resume`
+- no input history: your lines are not added to the history file, and up-arrow does not recall earlier sessions
+
+Programs the agent runs from its shell inherit the setting, so they log nothing either.
+
+Incognito only stops Agency's own records. Your messages still go to the model provider, and files the agent writes because you asked it to are still written.
+
+You can only turn it on when the agent starts, not partway through a session. It cannot be combined with `--log`, `--trace`, `--continue`, or `--resume`. To make it your habit, use a shell alias:
+
+```
+alias agent-private='agency agent --incognito'
+```
+
 ## The agent home directory
 
 The agent keeps its state — `settings.json`, `policy.json`, and conversation history — in `~/.agency-agent`. You can point it at a different directory:

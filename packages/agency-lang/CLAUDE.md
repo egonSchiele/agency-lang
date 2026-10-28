@@ -337,6 +337,7 @@ Other process docs:
 - `docs/dev/stdlib/spill.md` — `std::spill`: long tool output kept in the run's globals beside the fetch cache, so it is per run and rides in every checkpoint; the two name-only tools that read it back, found by module and registered name, and which agents carry them; the cap, bounded by the hosted resume limit, and the "no longer available" rule; the three things the loop's result cap does (save, cut a reader's own result, cut when there is no reader); why an object result is saved indented; and why there are no effects.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
 - `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the designTool pipeline and the plain writeTool, the save gate both publish through, and runTool.
+- `docs/dev/stdlib/workflow.md` — `std::workflow`: a JSON step list compiled to an Agency program through parse, resolve, lower, and render; the three doors workflow text enters by, why the scaffold is fixed text and the naming rules that keep template hygiene from renaming a binder, why return types come from `describe` and the check for a plain return, one local per argument, the line ranges from per-fragment prints, and the payload rule for diagnostics.
 
 ### LLM plumbing
 

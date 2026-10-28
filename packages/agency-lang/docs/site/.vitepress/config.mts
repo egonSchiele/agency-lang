@@ -486,6 +486,7 @@ export default defineConfig({
               ],
             },
             { text: "wikipedia", link: "/stdlib/wikipedia" },
+            { text: "workflow", link: "/stdlib/workflow" },
           ],
         },
       ],

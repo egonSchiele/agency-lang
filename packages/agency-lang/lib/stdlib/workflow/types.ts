@@ -35,6 +35,11 @@ export type Workflow = {
   limits?: Limits;
 };
 
+/** A tool the host passed, as an import line spells it: `module` is
+ *  `std::<name>`, `pkg::<name>`, or `./<path>` relative to the workflow's
+ *  directory. */
+export type ToolRef = { module: string; name: string };
+
 /** A reference path: a root, a name, then `.field` and `[n]` segments. */
 export const REF_PATH =
   /^(inputs|steps)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;

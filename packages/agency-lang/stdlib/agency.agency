@@ -884,6 +884,10 @@ export type ExportInfo = {
   name: string;
   kind: "def" | "node" | "type" | "const" | "reexport";
   signature: string;
+  /** The declared return type, printed on its own. Null when none is declared. */
+  returnType: string | null;
+  /** True when a def or node returns a `Result`, with the module's own aliases resolved. */
+  returnsResult: boolean;
   docstring: string | null;
   effects: string[];
   destructive: boolean;

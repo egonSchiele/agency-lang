@@ -1,0 +1,42 @@
+/** A note in the notes app. */
+export type Note = {
+  id: string;
+  title: string;
+  body: string
+}
+
+export def searchNotes(query: string): Result<Note[]> {
+  """
+  Find notes whose title matches the query.
+
+  @param query - Text to match against note titles
+  """
+  return success([{ id: "n1", title: query, body: "Monday: soup\nTuesday: salad" }])
+}
+
+export def readNote(id: string): Result<Note> {
+  """
+  Read one note by its id.
+
+  @param id - The note's id
+  """
+  return success({ id: id, title: "Groceries 2026", body: "Monday: soup\nTuesday: salad" })
+}
+
+export def splitLines(text: string): string[] {
+  """
+  Split text into its lines.
+
+  @param text - The text to split
+  """
+  return text.split("\n")
+}
+
+export def untyped(q: string) {
+  """
+  Return the query in a list, with no declared return type.
+
+  @param q - The query
+  """
+  return [q]
+}

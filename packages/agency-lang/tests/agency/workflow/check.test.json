@@ -1,0 +1,103 @@
+{
+  "tests": [
+    {
+      "nodeName": "cleanWorkflowHasNoProblems",
+      "description": "a workflow that typechecks has no problems and no warnings",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badPathNamesStepAndArgument",
+      "description": "a reference to a field the type does not have names the step and argument",
+      "input": "",
+      "expectedOutput": "\"text/args.id\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongArgumentNameNamesTheArgument",
+      "description": "a wrong argument name is reported on that argument, read from the diagnostic payload",
+      "input": "",
+      "expectedOutput": "\"note/args.querry\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownToolIsRefusedBeforeCompile",
+      "description": "a tool the host did not pass is refused before anything compiles",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "forwardReferenceIsRefused",
+      "description": "a reference to a later step names the step and argument",
+      "input": "",
+      "expectedOutput": "\"note/args.query\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noReturnTypeIsAWarning",
+      "description": "a tool with no declared return type is a warning, not a problem",
+      "input": "",
+      "expectedOutput": "\"u/tool\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongArgumentTypeNamesTheArgument",
+      "description": "an argument of the wrong type is reported on that argument",
+      "input": "",
+      "expectedOutput": "\"text/args.id\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badResultPathNamesTheResult",
+      "description": "a bad path in result is reported on the result field",
+      "input": "",
+      "expectedOutput": "\"null/result\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badOutputTypeNamesTheStep",
+      "description": "an llm output type that names no type is reported on that step's output",
+      "input": "",
+      "expectedOutput": "\"m/output\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

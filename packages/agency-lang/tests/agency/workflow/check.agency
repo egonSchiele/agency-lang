@@ -1,0 +1,136 @@
+import { checkWorkflow, Workflow, WorkflowProblem } from "std::workflow"
+import { Json } from "std::validation"
+import { searchNotes, readNote, untyped } from "./fixtures/tools/notes.agency"
+
+const DIR = __dirname + "/fixtures/tools"
+const TOOLS = [searchNotes, readNote, untyped]
+
+/** Two steps: search, then read the first match with `textArgs`. */
+def twoSteps(noteArgs: Json, textArgs: Json): Workflow {
+  return {
+    format: 1,
+    name: "readFirst",
+    description: "Read the first note that matches a title.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: noteArgs },
+      { id: "text", kind: "tool", module: "./notes.agency", tool: "readNote", args: textArgs }
+    ]
+  }
+}
+
+def goodNoteArgs(): Json {
+  return { query: { "$ref": "inputs.noteTitle" } }
+}
+
+def goodTextArgs(): Json {
+  return { id: { "$ref": "steps.note[0].id" } }
+}
+
+/** `step/field` of the first problem, or what went wrong instead. */
+def firstProblem(workflow: Workflow): string {
+  const checked = checkWorkflow(workflow, TOOLS, DIR) with approve
+  if (checked is success) {
+    return "no problems"
+  }
+  const first = checked.data.problems[0]
+  print("first problem: ${JSON.stringify(first)}")
+  return "${first.step}/${first.field}"
+}
+
+def firstMessage(workflow: Workflow): string {
+  const checked = checkWorkflow(workflow, TOOLS, DIR) with approve
+  if (checked is success) {
+    return "no problems"
+  }
+  return checked.data.problems[0].message
+}
+
+node cleanWorkflowHasNoProblems(): boolean {
+  const checked = checkWorkflow(twoSteps(goodNoteArgs(), goodTextArgs()), TOOLS, DIR) with approve
+  if (checked is failure) {
+    print("problems: ${JSON.stringify(checked.data)}")
+    return false
+  }
+  return checked.value.length == 0
+}
+
+node badPathNamesStepAndArgument(): string {
+  return firstProblem(twoSteps(goodNoteArgs(), { id: { "$ref": "steps.note[0].title2" } }))
+}
+
+node wrongArgumentNameNamesTheArgument(): string {
+  return firstProblem(twoSteps({ querry: { "$ref": "inputs.noteTitle" } }, goodTextArgs()))
+}
+
+node unknownToolIsRefusedBeforeCompile(): boolean {
+  const workflow: Workflow = {
+    format: 1,
+    name: "shell",
+    description: "Run a command.",
+    inputs: "{ command: string }",
+    steps: [{ id: "run", kind: "tool", module: "std::shell", tool: "bash", args: { command: { "$ref": "inputs.command" } } }]
+  }
+  return firstMessage(workflow).includes("not among the tools passed")
+}
+
+node forwardReferenceIsRefused(): string {
+  const workflow = twoSteps({ query: { "$ref": "steps.text.title" } }, goodTextArgs())
+  if (!firstMessage(workflow).includes("comes after")) {
+    return firstMessage(workflow)
+  }
+  return firstProblem(workflow)
+}
+
+node noReturnTypeIsAWarning(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "untypedFirst",
+    description: "Read a note named by an untyped tool.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "u", kind: "tool", module: "./notes.agency", tool: "untyped", args: { q: { "$ref": "inputs.noteTitle" } } },
+      { id: "text", kind: "tool", module: "./notes.agency", tool: "readNote", args: { id: { "$ref": "steps.u[0]" } } }
+    ]
+  }
+  const checked = checkWorkflow(workflow, TOOLS, DIR) with approve
+  if (checked is failure) {
+    print("problems: ${JSON.stringify(checked.data)}")
+    return "failed"
+  }
+  const warnings: WorkflowProblem[] = checked.value
+  if (warnings.length == 0) {
+    return "no warnings"
+  }
+  return "${warnings[0].step}/${warnings[0].field}"
+}
+
+node wrongArgumentTypeNamesTheArgument(): string {
+  return firstProblem(twoSteps(goodNoteArgs(), { id: { "$ref": "steps.note" } }))
+}
+
+node badResultPathNamesTheResult(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "readFirst",
+    description: "Read the first note that matches a title.",
+    inputs: "{ noteTitle: string }",
+    steps: [{ id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: goodNoteArgs() }],
+    result: { "$ref": "steps.note[0].nope" }
+  }
+  return firstProblem(workflow)
+}
+
+node badOutputTypeNamesTheStep(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "summarize",
+    description: "Summarize the first matching note.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: goodNoteArgs() },
+      { id: "m", kind: "llm", prompt: "Summarize the note.", context: [{ "$ref": "steps.note[0].body" }], output: "Nope" }
+    ]
+  }
+  return firstProblem(workflow)
+}

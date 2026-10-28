@@ -373,3 +373,23 @@ describe("string literal types are written as escaped TypeScript strings", () =>
     expect(schema.safeParse(value).success).toBe(true);
   });
 });
+
+describe("property descriptions are written as escaped TypeScript strings", () => {
+  const evaluate = (schemaText: string) => new Function("z", `return ${schemaText}`)(z);
+  const described = (description: string): VariableType => ({
+    type: "objectType",
+    properties: [{ key: "a", value: { type: "primitiveType", value: "string" }, description }],
+  });
+
+  it("keeps a trailing backslash and a line break inside the description", () => {
+    const schema = evaluate(mapTypeToValidationSchema(described("path C:\\\nnext"), {}));
+    expect(schema.shape.a.description).toBe("path C:\\\nnext");
+  });
+
+  it("never runs a description as code", () => {
+    const payload = 'x\\", in: " + (globalThis.__descriptionEscapeProbe = 1) + "';
+    const schema = evaluate(mapTypeToValidationSchema(described(payload), {}));
+    expect((globalThis as Record<string, unknown>).__descriptionEscapeProbe).toBe(undefined);
+    expect(schema.shape.a.description).toBe(payload);
+  });
+});

@@ -254,6 +254,10 @@ describe("resolveWorkflow", () => {
     expect(resolve(wf).resolved!.steps[3]).toMatchObject({ model: "gpt-5", provider: "openai" });
   });
 
+  it("reads a null result as absent", () => {
+    expect(resolve(withFields(mealPlan, { result: null })).resolved!.result).toBe(null);
+  });
+
   it("uses a literal result and no limits as given", () => {
     const { limits: _limits, ...wf } = withFields(mealPlan, { result: "done" });
     const r = resolve(wf).resolved!;

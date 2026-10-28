@@ -1,0 +1,114 @@
+{
+  "tests": [
+    {
+      "nodeName": "mealPlanCompiles",
+      "description": "the meal plan compiles to the expected statements",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "generatedProgramTypechecks",
+      "description": "the generated meal plan program typechecks in strict mode",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "generatedProgramCompiles",
+      "description": "the generated meal plan program compiles in strict mode",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noLimitsTypechecks",
+      "description": "a workflow with no limits has no guard and typechecks",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "plainReturnHasNoValue",
+      "description": "a tool with a plain return is checked but never unwrapped with .value",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stepNamedFailureIsHarmless",
+      "description": "a step named failure declares step_failure and typechecks",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "literalIsNeverCode",
+      "description": "a string argument with ${, triple quotes, and a brace stays a string",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "typeTextCannotSmuggle",
+      "description": "inputs text carrying a second declaration is refused",
+      "input": "",
+      "expectedOutput": "\"inputs: inputs must be one object type\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownToolIsRefused",
+      "description": "a std tool the host did not pass is refused",
+      "input": "",
+      "expectedOutput": "\"tool \\\"bash\\\" from \\\"std::shell\\\" is not among the tools passed to this workflow\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "isDeterministic",
+      "description": "the same workflow compiles to the same source twice",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

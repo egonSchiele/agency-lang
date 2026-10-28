@@ -64,6 +64,8 @@ describe("lowerWorkflow", () => {
     };
     const body = printAll(resolved(mealPlan, signatures));
     expect(body).toContain("if (step_list is failure) {");
+    // A plain type has no `.error`; the unchecked cast changes only what the checker sees.
+    expect(body).toContain('"step list (findLists): ${(step_list as any).error}",');
     expect(body).toContain("const step_add_listId = step_list[0].id\n");
     expect(body).not.toContain("step_list.value");
   });

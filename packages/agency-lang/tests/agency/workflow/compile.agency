@@ -1,0 +1,209 @@
+import { compileWorkflow, Workflow } from "std::workflow"
+import { compile, typecheck } from "std::agency"
+import { Json } from "std::validation"
+import { searchNotes, readNote, splitLines } from "./fixtures/tools/notes.agency"
+import { findLists, addListItems } from "./fixtures/tools/lists.agency"
+
+const DIR = __dirname + "/fixtures/tools"
+const TOOLS = [searchNotes, readNote, splitLines, findLists, addListItems]
+
+/** The spec's meal plan, with the first step's id and the inputs text as parameters. */
+def mealPlan(noteId: string, inputs: string, query: Json): Workflow {
+  return {
+    format: 1,
+    name: "updateMealPlanFromNote",
+    description: "Copy this week's meal plan from the groceries note to the weekly meal plan list.",
+    inputs: inputs,
+    steps: [
+      {
+        id: noteId,
+        kind: "tool",
+        module: "./notes.agency",
+        tool: "searchNotes",
+        args: { query: query }
+      },
+      {
+        id: "text",
+        kind: "tool",
+        module: "./notes.agency",
+        tool: "readNote",
+        args: { id: { "$ref": "steps.${noteId}[0].id" } }
+      },
+      {
+        id: "list",
+        kind: "tool",
+        module: "./lists.agency",
+        tool: "findLists",
+        args: { query: "weekly meal plan" }
+      },
+      {
+        id: "meals",
+        kind: "llm",
+        prompt: "The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names.",
+        context: [{ "$ref": "steps.text.body" }],
+        output: "string[]"
+      },
+      {
+        id: "add",
+        kind: "tool",
+        module: "./lists.agency",
+        tool: "addListItems",
+        args: {
+          listId: { "$ref": "steps.list[0].id" },
+          items: { "$ref": "steps.meals" },
+          section: "Meals"
+        }
+      }
+    ],
+    result: { "$ref": "steps.add" },
+    limits: { maxCost: 1, maxTime: 300000 }
+  }
+}
+
+def standardPlan(): Workflow {
+  return mealPlan("note", "{ noteTitle: string }", { "$ref": "inputs.noteTitle" })
+}
+
+def withoutLimits(workflow: Workflow): Workflow {
+  return {
+    format: workflow.format,
+    name: workflow.name,
+    description: workflow.description,
+    inputs: workflow.inputs,
+    steps: workflow.steps,
+    result: workflow.result
+  }
+}
+
+def sourceOf(workflow: Workflow): string {
+  const compiled = compileWorkflow(workflow, TOOLS, DIR) with approve
+  if (compiled is failure) {
+    print("compileWorkflow failed: ${compiled.error} ${JSON.stringify(compiled.data)}")
+    return ""
+  }
+  return compiled.value
+}
+
+def typechecks(source: string): boolean {
+  const report = typecheck(source, dir: DIR, strict: true)
+  if (report is failure) {
+    print("typecheck failed: ${report.error}")
+    return false
+  }
+  if (report.value.errors.length > 0) {
+    print("type errors: ${JSON.stringify(report.value.errors)}\n${source}")
+    return false
+  }
+  return true
+}
+
+def containsAll(source: string, pieces: string[]): boolean {
+  for (piece in pieces) {
+    if (!source.includes(piece)) {
+      print("missing: ${piece}\n${source}")
+      return false
+    }
+  }
+  return true
+}
+
+node mealPlanCompiles(): boolean {
+  const source = sourceOf(standardPlan())
+  const ok = containsAll(source, [
+    "import { readNote, searchNotes } from \"./notes.agency\"",
+    "import { addListItems, findLists } from \"./lists.agency\"",
+    "type Step_meals_output = string[]",
+    "export node main(inputs: Inputs): Result {",
+    "const step_note_query = inputs.noteTitle",
+    "const step_note = searchNotes(query: step_note_query)",
+    "if (step_note is failure)",
+    "const step_text_id = step_note.value[0].id",
+    "const step_meals: Step_meals_output = thread {",
+    "return guard(time: 300000, cost: 1)",
+    "return success(step_add.value)"
+  ])
+  return ok && source.includes("type Inputs = {") && !source.includes("__hyg")
+}
+
+node generatedProgramTypechecks(): boolean {
+  return typechecks(sourceOf(standardPlan()))
+}
+
+node generatedProgramCompiles(): boolean {
+  const compiled = compile(sourceOf(standardPlan()), DIR, strict: true)
+  if (compiled is failure) {
+    print("compile failed: ${compiled.error}")
+    return false
+  }
+  return true
+}
+
+node noLimitsTypechecks(): boolean {
+  const source = sourceOf(withoutLimits(standardPlan()))
+  return !source.includes("guard") && typechecks(source)
+}
+
+node plainReturnHasNoValue(): boolean {
+  const workflow: Workflow = {
+    format: 1,
+    name: "lines",
+    description: "Split the first matching note into lines.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: { query: { "$ref": "inputs.noteTitle" } } },
+      { id: "lines", kind: "tool", module: "./notes.agency", tool: "splitLines", args: { text: { "$ref": "steps.note[0].body" } } }
+    ]
+  }
+  const source = sourceOf(workflow)
+  const ok = containsAll(source, ["if (step_lines is failure)", "return success(step_lines)"])
+  return ok && !source.includes("step_lines.value") && typechecks(source)
+}
+
+node stepNamedFailureIsHarmless(): boolean {
+  const source = sourceOf(mealPlan("failure", "{ noteTitle: string }", { "$ref": "inputs.noteTitle" }))
+  return containsAll(source, ["const step_failure = searchNotes("]) && typechecks(source)
+}
+
+node literalIsNeverCode(): boolean {
+  const source = sourceOf(mealPlan("note", "{ noteTitle: string }", "\${evil} \"\"\" }"))
+  if (!source.includes("const step_note_query = \"")) {
+    print(source)
+    return false
+  }
+  const compiled = compile(source, DIR, strict: true)
+  if (compiled is failure) {
+    print("compile failed: ${compiled.error}")
+    return false
+  }
+  return typechecks(source)
+}
+
+node typeTextCannotSmuggle(): string {
+  const inputs = "{ noteTitle: string }\nexport node evil() { return 1 }"
+  const compiled = compileWorkflow(mealPlan("note", inputs, { "$ref": "inputs.noteTitle" }), TOOLS, DIR) with approve
+  if (compiled is success) {
+    return "compiled"
+  }
+  const first = compiled.data.problems[0]
+  return "${first.field}: ${first.message}"
+}
+
+node unknownToolIsRefused(): string {
+  const workflow: Workflow = {
+    format: 1,
+    name: "shell",
+    description: "Run a command.",
+    inputs: "{ command: string }",
+    steps: [{ id: "run", kind: "tool", module: "std::shell", tool: "bash", args: { command: { "$ref": "inputs.command" } } }]
+  }
+  const compiled = compileWorkflow(workflow, TOOLS, DIR) with approve
+  if (compiled is success) {
+    return "compiled"
+  }
+  return compiled.data.problems[0].message
+}
+
+node isDeterministic(): boolean {
+  const first = sourceOf(standardPlan())
+  return first != "" && first == sourceOf(standardPlan())
+}

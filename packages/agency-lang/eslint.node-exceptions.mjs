@@ -76,9 +76,10 @@ export const NODE_ONLY = {
   "lib/stdlib/template.ts": "std::template fills a template, which runs the compiler",
   "lib/stdlib/prompts.ts": "the line-mode prompts read the terminal through the prompts package",
   "lib/stdlib/vision.ts": "std::vision runs through local models",
+  "lib/stdlib/workflow/**":
+    "std::workflow builds its program from template fragments and parses type text, which runs the compiler",
   "lib/stdlib/visionFiles.ts": "local models",
   "lib/utils/sha256.node.ts":
     "Node crypto; the browser condition of #sha256 picks sha256.portable.ts",
-  "lib/utils/path.node.ts":
-    "Node path; the browser condition of #path picks path.portable.ts",
+  "lib/utils/path.node.ts": "Node path; the browser condition of #path picks path.portable.ts",
 };

@@ -92,11 +92,9 @@ function toolFragments(step: ResolvedToolStep, steps: StepsById): Fragment[] {
     .map((arg, index) => `${arg}: ${step.bindings[index].local}`)
     .join(", ");
   const call = statement("call", { value: step.value, tool: step.tool, args }, {});
-  const check = statement(
-    "check",
-    { value: step.value, id: step.id, tool: step.tool },
-    { id: literal(step.id) },
-  );
+  const checkShape = step.returnsResult ? "check" : "checkPlain";
+  const checkNames = { value: step.value, id: step.id, tool: step.tool };
+  const check = statement(checkShape, checkNames, { id: literal(step.id) });
   return [
     ...step.bindings.map((binding) => bindingFragment(step, binding, steps)),
     { code: call, owner },

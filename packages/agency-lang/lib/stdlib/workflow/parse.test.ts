@@ -187,6 +187,14 @@ describe("parseWorkflow", () => {
     ]);
   });
 
+  it("reads null as absent for the optional fields", () => {
+    const wf = withStep(withFields(mealPlan, { limits: null, result: null }), 3, {
+      model: null,
+      provider: null,
+    });
+    expect(parseWorkflow(wf).problems).toEqual([]);
+  });
+
   it("reports every problem, not the first", () => {
     const wf = withStep(withStep(mealPlan, 0, { id: "a b" }), 1, { id: "c d" });
     expect(parseWorkflow(wf).problems.map((p) => p.step)).toEqual(["a b", "c d"]);

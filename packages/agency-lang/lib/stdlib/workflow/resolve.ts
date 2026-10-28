@@ -314,7 +314,7 @@ export function resolveWorkflow(
     inputsType: workflow.inputs,
     imports: importGroups(workflow),
     steps,
-    result: workflow.result === undefined ? null : resolveValue(workflow.result),
+    result: workflow.result == null ? null : resolveValue(workflow.result),
     limits: workflow.limits ?? null,
     warnings: untypedWarnings(context),
   };

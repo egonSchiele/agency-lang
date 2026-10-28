@@ -1,0 +1,137 @@
+import { describe, ExportInfo } from "std::agency"
+import { read } from "std::index"
+import { Json } from "std::validation"
+
+import {
+  _compileWorkflowSource,
+  _pickSignatures,
+  _signatureSources,
+  _toolRefs,
+  _workflowFailure,
+} from "agency-lang/stdlib-lib/workflow/index.js"
+
+/** @module
+  @summary Turn a workflow, a JSON list of steps, into an Agency program.
+  When you want an agent to do the same task the same way every time, a
+  skill is only a suggestion: the agent reads it and then decides what to
+  do. A workflow is a list of steps, as JSON, where each step calls a tool
+  or asks a model, and a later step's arguments can point at an earlier
+  step's result with `{ "$ref": "steps.note[0].id" }`. It is as fixed as
+  code and as easy to show a person as a skill.
+
+  A workflow is a thin layer over Agency: anything that needs behavior is
+  an Agency function the workflow calls. It is not a second language: it
+  has tool steps, LLM steps, and references, and nothing else.
+
+  ```ts
+  import { compileWorkflow } from "std::workflow"
+  import { searchNotes } from "./notes.agency"
+
+  const source = compileWorkflow(workflow, [searchNotes], __dirname)
+  print(source)
+  ```
+*/
+
+/** Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
+  milliseconds. The generated program wraps its steps in a guard with them. */
+export type WorkflowLimits = {
+  maxCost?: number;
+  maxTime?: number
+}
+
+/** A workflow: a name, a description, the inputs as an Agency object type
+  written as text, and the steps. `result` is a reference or a literal; the
+  last step's value is returned without it. */
+export type Workflow = {
+  format: number;
+  name: string;
+  description: string;
+  inputs: string;
+  steps: Json[];
+  result?: Json;
+  limits?: WorkflowLimits
+}
+
+/** One thing wrong with a workflow, named by step and field. `step` and
+  `field` are null only for a problem with the whole workflow. */
+export type WorkflowProblem = {
+  step: string | null;
+  field: string | null;
+  message: string
+}
+
+/** The data a refused workflow fails with. */
+export type WorkflowFailure = {
+  problems: WorkflowProblem[]
+}
+
+type ToolRef = {
+  module: string;
+  name: string
+}
+
+type Compiled = {
+  source: string;
+  ranges: Json;
+  warnings: WorkflowProblem[]
+}
+
+/** What `describe` says about each tool, keyed by module and name. A
+  `std::` module is described from a re-export line; a local module is
+  read from `dir`, which asks for approval. */
+@hidden
+@capabilities(fileRead)
+export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, ExportInfo>> {
+  let signatures: Record<string, ExportInfo> = {}
+  for (group in _signatureSources(refs)) {
+    let source = group.reExport
+    if (source == null) {
+      const text = read(group.module, dir)
+      if (text is failure) {
+        return text
+      }
+      source = text.value
+    }
+    const info = describe(source)
+    if (info is failure) {
+      return info
+    }
+    const picked = _pickSignatures(group, info.value.exports)
+    if (picked is failure) {
+      return picked
+    }
+    signatures = { ...signatures, ...picked.value }
+  }
+  return success(signatures)
+}
+
+/** The generated source, the lines each step owns, and the warnings. */
+@hidden
+@capabilities(fileRead)
+export def _compileWithRanges(workflow: Workflow, tools: any[], dir: string): Result<Compiled, WorkflowFailure> {
+  const refs = try _toolRefs(tools, dir)
+  if (refs is failure) {
+    return _workflowFailure(refs.error)
+  }
+  const signatures = _signatures(refs.value, dir)
+  if (signatures is failure) {
+    return _workflowFailure(signatures.error)
+  }
+  return _compileWorkflowSource(workflow, refs.value, signatures.value)
+}
+
+@capabilities(fileRead)
+export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<string, WorkflowFailure> {
+  """
+  Generate the Agency source text of a workflow's program. This returns text, not a compiled program. A workflow that is malformed, names a tool not in the list, or points a reference forward fails with every problem, each naming its step and field. Reading a local tool's module asks for approval.
+
+  @param workflow - The workflow to generate a program for
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const compiled = _compileWithRanges(workflow, tools, dir)
+  if (compiled is failure) {
+    return failure(compiled.error, compiled.data)
+  }
+  return success(compiled.value.source)
+}

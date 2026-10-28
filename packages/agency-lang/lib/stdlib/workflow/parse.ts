@@ -162,7 +162,7 @@ const toolStepRule: StepRule = (step, owner) => {
 };
 
 function optionalString(step: Json, owner: string | null, field: string): Problem[] {
-  return step[field] === undefined || typeof step[field] === "string"
+  return step[field] == null || typeof step[field] === "string"
     ? []
     : [problem(owner, field, `${field} must be a string`)];
 }
@@ -208,7 +208,7 @@ const eachStepRule: Rule = (value) =>
 const resultRule: Rule = (value) => valueProblems(null, "result", value.result);
 
 const limitsRule: Rule = (value) => {
-  if (value.limits === undefined) {
+  if (value.limits == null) {
     return [];
   }
   if (!isObject(value.limits)) {

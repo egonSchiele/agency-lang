@@ -24,6 +24,8 @@ if (step_text is failure) {
 }
 ```
 
+The program's `main` takes `inputs: Inputs!`. The `!` makes the node check its argument against the `Inputs` type before the first step runs, so `{ noteTitle: 5 }` fails with a message naming `inputs`, not a type error deep inside a step.
+
 ## The four stages
 
 The generator is four pure functions in `lib/stdlib/workflow/`, one file each:
@@ -44,6 +46,8 @@ Workflow text reaches the generated source through three doors:
 3. **Type text** (`inputs`, and an LLM step's `output`) goes through `typeText.ts`. It is parsed as `type <Name> = <text>` with the real type parser; the result must be exactly one type alias with that name, and the line written into the program is that alias printed by `signatureOf`, the printer `describe` uses. Parse runs this check and reads the input names from the same parse, so a nested property is never an input. Render prints from the same parse.
 
 Type text may not carry a `@validate` or `@jsonSchema` tag. A `@validate` names a function the generated program would call, and the workflow would be choosing it from the tools it imports.
+
+An LLM step's context values reach the model as text. Each one is bound to a local, then a second local holds what the model reads: the string itself when the value is a string, so a note body keeps its line breaks, and `JSON.stringify` of it otherwise. The prompt is the step's text followed by a label and that text local for each context value. The text local is a generated name like any other, `step_<id>_context<n>_text`, so `declaredBy` lists it and a step id that would coincide with it is refused.
 
 A reference becomes an expression built from a generated name, `.value`, and a path that matched `REF_PATH`. A list or object argument that holds a reference is built by `list()` and `record()` from generated hole names. Its keys are written as names, so an object that holds a reference must have identifier keys.
 
@@ -67,7 +71,7 @@ Whether a tool returns a `Result` comes from the `returnsResult` flag `describe`
 1. A reference into a step that returns a `Result` adds `.value`. A reference into a plain value does not.
 2. A tool not typed `Result` gets the `checkPlain` shape, whose message reads `(step_x as any).error`, because a plain type has no `.error`.
 
-A tool with no declared return type, or `any`, gets a warning. References into its value are only checked at run time.
+A tool whose return type says nothing about the value gets a warning: no declared type, `any`, or `Json`. References into its value are only checked at run time. The list is `UNTYPED_RETURNS` in `resolve.ts`.
 
 `describe` can read a return type only from source it can see. It cannot read a `pkg::` module from a re-export line, or a local file a tool module re-exports from, so both are refused: a package tool in `toolRefs`, and a re-exported name in `_pickSignatures`.
 
@@ -96,7 +100,7 @@ The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise
 
 `toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`. Any other path is rewritten relative to the workflow's `dir`, resolved against the working directory at run time, so a host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
 
-The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused.
+The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. The duplicate-name check runs only when every tool can be imported.
 
 ## Not built yet
 

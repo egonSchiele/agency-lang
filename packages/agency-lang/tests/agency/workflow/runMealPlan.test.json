@@ -22,7 +22,7 @@
     },
     {
       "nodeName": "pausedWorkflowResumes",
-      "description": "an interrupt no handler answers pauses the child; the resume finishes without a second model call",
+      "description": "an interrupt no handler answers pauses the child; the resume finishes the workflow",
       "input": "",
       "expectedOutput": "\"added 2 items to l1/Meals\"",
       "evaluationCriteria": [

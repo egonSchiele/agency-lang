@@ -110,13 +110,17 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 1. **Check.** `_checked` is the body `checkWorkflow` also uses: generate, typecheck, compile. It keeps the compiled program, so a run never compiles twice. A workflow with problems fails here and asks nothing.
 2. **Ask.** It raises `std::workflow::run` with the workflow's name, `dir`, and the inputs. The effect is tagged `@alwaysUnder(dir)` and `@always(name)`, so an "always" answer pins the directory and the workflow's name. The inputs are shown for the person to read. They are not pinned, since they change with every run. A rejection returns before any process starts, so `std::run` is never raised.
+
+   `dir` is resolved to an absolute path first, and the check and the run use that same path. A relative `dir` would pin text that names a different directory under a different working directory. The default `""` would pin the pattern `{,/**}`, which matches every absolute path and not the run it was given for. `read` in `std::index` raises its resolved directory for the same reason.
+
+   `name` is a field of the workflow value the caller passed. A caller, or a model calling `runWorkflow` as a tool, can give a new workflow a name the user already approved "always", and that workflow skips this one prompt. Every step still raises its own effects, and `std::run` still asks. The rule means "this workflow by name" only once workflows are loaded by name from a directory, which the spec leaves to part 3.
 3. **Run.** It calls `run` from `std::agency` on the compiled program's `main` with `{ inputs }`. `run` raises its own `std::run`. The wall clock is the workflow's `maxTime` plus 30 seconds (`wallClockFor` in `limits.ts`), or `null`, which lets `run` apply its own default. The workflow code does not restate that default. `run` succeeds with an envelope whose `data` is what `main` returned, so `runWorkflow` returns that `Result`: the last step's value, or the failure that stopped the workflow, which names the step.
 
 ## Interrupts and checkpoints
 
 The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`.
 
-The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, the resume finishes the workflow, and the one model mock means a resume that repeated the LLM step would fail.
+The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
 ## Tool modules
 

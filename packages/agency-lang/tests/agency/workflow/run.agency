@@ -1,6 +1,7 @@
 import { runWorkflow, Workflow } from "std::workflow"
 import { add, multiply } from "std::math"
 import { Json } from "std::validation"
+import { resolve } from "std::path"
 import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 const TOOLS = [add, multiply]
@@ -46,9 +47,11 @@ node mathWorkflowRuns(): Json {
   return result.value
 }
 
+/** The payload's `dir` is the default `""` resolved against the working directory. */
 node runPayload(): Json {
   runApproving(doubleSum(null), { a: 2, b: 3 }, TOOLS)
-  return getMutable("std::workflow::run", null)
+  const payload = getMutable("std::workflow::run", null)
+  return [payload.name, payload.dir == resolve(""), payload.inputs]
 }
 
 node wallClockFromMaxTime(): Json {

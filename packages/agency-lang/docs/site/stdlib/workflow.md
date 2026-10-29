@@ -44,7 +44,7 @@ export type WorkflowLimits = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L44))
 
 ### Workflow
 
@@ -67,7 +67,7 @@ export type Workflow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L52))
 
 ### WorkflowProblem
 
@@ -84,7 +84,7 @@ export type WorkflowProblem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L64))
 
 ### WorkflowFailure
 
@@ -97,7 +97,7 @@ export type WorkflowFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L71))
 
 ## Effects
 
@@ -113,7 +113,7 @@ effect std::workflow::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L108))
 
 ## Functions
 
@@ -152,7 +152,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L163))
 
 ### checkWorkflow
 
@@ -190,7 +190,7 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L215))
 
 ### runWorkflow
 
@@ -208,7 +208,7 @@ Run a workflow: check it, ask to run it, and run its program in a subprocess.
   @param workflow - The workflow to run
   @param inputs - The workflow's inputs, a value of its `inputs` type
   @param tools - The functions the workflow may call. A step may only name one of these
-  @param dir - The directory a workflow's local modules are named relative to
+  @param dir - The directory a workflow's local modules are named relative to. Resolved to an absolute path, which is what an "always" answer to `std::workflow::run` pins, along with the workflow's name
 
 Check, ask, run. The check compiles the program and the run uses it. The
   prompt comes after the check, so a workflow with problems asks nothing,
@@ -232,4 +232,4 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L237))

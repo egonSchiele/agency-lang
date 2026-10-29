@@ -27,22 +27,39 @@ node trippedReviewFailsOpenByDefault(): string {
   return "success:${findings.value.length}"
 }
 
+// The cut-short tests trip on cost, not time. A time limit raced the
+// first call and its saveDraft on a slow CI runner. Every mocked call
+// costs $0.000002 (SYNTHETIC_COST in lib/runtime/deterministicClient.ts),
+// so with this cap the first call stays under budget and the second goes
+// over, and the guard trips before the second reply is used.
+const CUT_SHORT_COST = 0.000003
+
 // The judge saves one finding, then runs past the budget. The finding
 // covers only part of the work, so with failOpen: false the review is a
 // failure, which carries the finding in its data.
 node cutShortReviewIsAFailureWhenNotFailOpen(): string {
-  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms, failOpen: false)
+  const findings = reviewAgent(
+    "the answer is 3",
+    "compute 1+1",
+    maxCost: CUT_SHORT_COST,
+    failOpen: false,
+  )
   if (isFailure(findings)) {
     return "failure:${findings.data.draft.length}"
   }
   return "success:${findings.value.length}"
 }
 
-// The same review with the default failOpen: the saved finding.
+// The same review with the default failOpen: the saved finding, and not
+// the second reply's "never seen".
 node cutShortReviewReturnsItsFindingsByDefault(): string {
-  const findings = reviewAgent("the answer is 3", "compute 1+1", maxTime: 100ms)
+  const findings = reviewAgent("the answer is 3", "compute 1+1", maxCost: CUT_SHORT_COST)
   if (isFailure(findings)) {
     return "failure"
   }
-  return "success:${findings.value.length}"
+  let texts: string[] = []
+  for (finding in findings.value) {
+    texts.push(finding.feedback)
+  }
+  return "success:${texts.join(" | ")}"
 }

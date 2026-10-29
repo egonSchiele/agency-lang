@@ -83,7 +83,7 @@ Whether a tool returns a `Result` comes from the `returnsResult` flag `describe`
 1. A reference into a step that returns a `Result` adds `.value`. A reference into a plain value does not.
 2. A tool not typed `Result` gets the `checkPlain` shape, whose message reads `(step_x as any).error`, because a plain type has no `.error`.
 
-A tool whose return type says nothing about the value gets a warning: no declared type, `any`, or `Json`. References into its value are only checked at run time. A `Result<Json>` gets the same warning, because a reference into the step reads `.value`, which is `Json`. The list is `UNTYPED` in `resolve.ts`, and `valueType` strips the `Result` wrapper before the lookup.
+A tool whose return type says nothing about the value gets a warning: no declared type, `any`, or `Json`. References into its value are only checked at run time. A `Result<Json>` gets the same warning, because a reference into the step reads `.value`, which is `Json`. So does a bare `Result`, whose value has no type. The list is `UNTYPED` in `resolve.ts`, and `valueType` strips the `Result` wrapper before the lookup.
 
 `describe` can read a return type only from source it can see. It cannot read a `pkg::` module from a re-export line, or a local file a tool module re-exports from, so both are refused: a package tool in `toolRefs`, and a re-exported name in `_pickSignatures`.
 

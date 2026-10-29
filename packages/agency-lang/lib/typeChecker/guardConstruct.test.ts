@@ -41,6 +41,17 @@ describe("guard construct — Result<T> typing (spec Part 4)", () => {
     expect(good).toHaveLength(0);
   });
 
+  it("passes a Result the block returns through, as try does", () => {
+    const src = (annotation: string) => `def f(): Result<number> { return success(1) }
+node main() {
+  const r = guard(cost: $1) { return f() }
+  if (isSuccess(r)) { const v: ${annotation} = r.value\n return "ok" }
+  return "f"
+}`;
+    expect(matching(src("number"), /not assignable/)).toHaveLength(0);
+    expect(matching(src("string"), /not assignable/).length).toBeGreaterThan(0);
+  });
+
   it("returns inside a NESTED block do not leak into the enclosing def's type", () => {
     // The def returns a string; the guard block returns a number. If the
     // block's return leaked into inference, the def annotation would error.

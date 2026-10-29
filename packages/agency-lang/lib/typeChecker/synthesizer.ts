@@ -868,12 +868,15 @@ const BLOCK_CALL_RESULT: Record<string, (element: VariableType) => VariableType>
   // (guardDesugar.ts + the TypeChecker constructor); _guard's own
   // annotation is the generic Result, so parameterize it from the
   // block. A direct `_guard` call with a block gets the same, correct,
-  // typing. The failure side stays `any`, the try-expression
-  // precedent: the err-side narrowing users rely on (`isFailure`,
+  // typing. A block that returns a Result<T> gives Result<T>, not
+  // Result<Result<T>>: the runtime passes a returned Result through
+  // unchanged, as it does for `try`. The failure side stays `any`, the
+  // try-expression precedent, and because a trip fails with the guard's
+  // own data: the err-side narrowing users rely on (`isFailure`,
   // `error.type`) is field-based, not type-based.
   _guard: (element) => ({
     type: "resultType",
-    successType: element,
+    successType: element.type === "resultType" ? element.successType : element,
     dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even

@@ -361,6 +361,11 @@ surfaces, trip keys, and frames run under the construct. `_guard`'s
 raised by this runtime machinery, invisible to the interrupt-statement
 walk. See docs/superpowers/specs/2026-07-17-guard-keyword-design.md.
 
+The construct's type is `Result<T>`, with `T` from the block's returns. A
+block that returns a `Result<T>` gives `Result<T>`, because the runtime
+passes a returned `Result` through unchanged, as it does for `try`
+(the `_guard` row of `BLOCK_CALL_RESULT` in `lib/typeChecker/synthesizer.ts`).
+
 ## Time trips (resumable guards, PR 3)
 
 Time budgets burn between paid actions, so the gates alone cannot catch

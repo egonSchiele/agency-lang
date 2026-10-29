@@ -1,0 +1,15 @@
+// A node checks its `!` parameters before its body runs, the way a function
+// does. A value that does not fit the type comes back as a failure, and the
+// node's onNodeStart callback does not fire.
+
+type Inputs = { noteTitle: string }
+
+export node main(inputs: Inputs!): Result {
+  return success("body ran with ${inputs.noteTitle}")
+}
+
+// A goto delivers its argument the way the exported wrapper does, so main
+// checks it the same way.
+export node start(raw: any) {
+  goto main(raw)
+}

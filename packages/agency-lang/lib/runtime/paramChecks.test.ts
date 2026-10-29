@@ -12,9 +12,9 @@ import { State } from "./state/stateStack.js";
 
 const run = {} as Run;
 
-function stubRunner() {
+function stubRunner(isNodeContext = false) {
   const halts: unknown[] = [];
-  return { halts, halt: (result: unknown) => halts.push(result) };
+  return { halts, isNodeContext, halt: (result: unknown) => halts.push(result) };
 }
 
 const number: ParamChecks[string] = {
@@ -88,6 +88,19 @@ describe("__checkParams", () => {
     }
     expect(thirdCalls).toEqual([]);
     expect(frame.args).toEqual({ first: 1, second: "two", third: 3 });
+  });
+
+  it("halts a node with its messages beside the failure, the shape a node returns", async () => {
+    const runner = stubRunner(true);
+    const nodeRun = { threads: { label: "the node's threads" } } as unknown as Run;
+    const frame = { args: { count: "three" } };
+    await __checkParams(nodeRun, runner, frame, "main", { count: number }, ["count"]);
+    expect(runner.halts).toHaveLength(1);
+    const halted = runner.halts[0] as { messages: unknown; data: unknown };
+    expect(halted.messages).toBe(nodeRun.threads);
+    expect(isFailure(halted.data) && halted.data.error).toBe(
+      'Argument "count" of main must be number, but received the text "three".',
+    );
   });
 
   it("checks only the named parameters", async () => {

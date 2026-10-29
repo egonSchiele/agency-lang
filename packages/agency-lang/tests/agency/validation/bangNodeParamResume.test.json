@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "bodyRaise",
+      "description": "A node's validator runs once when the node pauses in its body and resumes",
+      "input": "\"09:00\"",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":true,\"value\":[\"09:00\",1]}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    },
+    {
+      "nodeName": "checkedValue",
+      "description": "A node's body sees the checked value after a resume, not the raw argument",
+      "input": "{ \"type\": \"daily\", \"extra\": 1 }",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":true,\"value\":{\"type\":\"daily\"}}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

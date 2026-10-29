@@ -104,10 +104,16 @@ describe("toolRefs", () => {
     );
   });
 
-  it("refuses two tools with the same name, pointing at .rename()", () => {
-    const { problems } = toolRefs([fn("a", "agent/a.agency"), fn("a", "agent/b.agency")], DIR, CWD);
-    expect(problems).toHaveLength(1);
-    expect(problems[0].message).toContain(".rename(");
+  it("refuses two tools with the same name, naming both modules", () => {
+    const tools = [fn("a", "agent/a.agency"), fn("a", "agent/b.agency"), fn("c", "agent/b.agency")];
+    expect(toolRefs(tools, DIR, CWD)).toEqual({
+      refs: null,
+      problems: [
+        problem(
+          'tools "a" from "./a.agency" and "./b.agency" have the same name; a workflow imports each tool by its name',
+        ),
+      ],
+    });
   });
 
   it("reports every tool that cannot be imported, in order", () => {

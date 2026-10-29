@@ -136,11 +136,16 @@ node badOutputTypeNamesTheStep(): string {
   return firstProblem(workflow)
 }
 
-node everyBadToolIsReported(): number {
+node everyBadToolIsReported(): string {
   const badTools = [searchNotes.partial(query: "x"), findLists.rename("find"), readNote]
   const checked = checkWorkflow(twoSteps(goodNoteArgs(), goodTextArgs()), badTools, DIR) with approve
   if (checked is success) {
-    return 0
+    return "no problems"
   }
-  return checked.data.problems.length
+  const problems: WorkflowProblem[] = checked.data.problems
+  let messages: string[] = []
+  for (problem in problems) {
+    messages.push(problem.message)
+  }
+  return messages.join(" | ")
 }

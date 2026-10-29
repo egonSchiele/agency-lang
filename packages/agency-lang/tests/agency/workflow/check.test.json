@@ -101,9 +101,9 @@
     },
     {
       "nodeName": "everyBadToolIsReported",
-      "description": "every tool that cannot be imported is reported at once",
+      "description": "every tool that cannot be imported is reported at once, in order",
       "input": "",
-      "expectedOutput": "2",
+      "expectedOutput": "\"tool \\\"searchNotes\\\" is a partial; pass the original def | tool \\\"find\\\" is renamed from \\\"findLists\\\"; pass the original def\"",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -45,8 +45,18 @@ const PROGRAM_NAMES = [
   "JSON",
 ];
 
-/** Return types that tell the typechecker nothing about the value. */
-const UNTYPED_RETURNS = [null, "any", "Json"];
+/** Types that tell the typechecker nothing about a value. */
+const UNTYPED = [null, "any", "Json"];
+
+/** `Result<Json>` and `Result<Json, string>` give `Json` as the value's type. */
+const RESULT_OF = /^Result<\s*([^,<>]+?)\s*(?:,[^>]*)?>$/;
+
+/** The type a reference into the step reads: the declared type, or the
+ *  value type inside a `Result`, since the reference goes through `.value`. */
+function valueType(returnType: string | null): string | null {
+  const inner = returnType === null ? null : RESULT_OF.exec(returnType);
+  return inner === null ? returnType : inner[1];
+}
 
 function untypedReason(returnType: string | null): string {
   return returnType === null ? "declares no return type" : `returns ${returnType}`;
@@ -260,7 +270,7 @@ const RULES: Rule[] = [toolRule, referenceRule, collisionRule];
 function untypedWarnings({ workflow, signatures }: Context): Problem[] {
   return toolSteps(workflow).flatMap((step) => {
     const returnType = signatures[signatureKey(step.module, step.tool)].returnType;
-    if (!UNTYPED_RETURNS.includes(returnType)) {
+    if (!UNTYPED.includes(valueType(returnType))) {
       return [];
     }
     const message = `step "${step.id}": "${step.tool}" ${untypedReason(returnType)}, so references into its value are checked at run time`;

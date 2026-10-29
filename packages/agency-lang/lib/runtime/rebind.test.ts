@@ -18,6 +18,7 @@ function stubRunner() {
   const state = { halted: false, haltResult: undefined as unknown };
   return {
     state,
+    isNodeContext: false,
     halt: (result: unknown) => {
       state.halted = true;
       state.haltResult = result;

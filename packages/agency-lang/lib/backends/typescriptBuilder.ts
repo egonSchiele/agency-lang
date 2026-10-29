@@ -2306,8 +2306,6 @@ export class TypeScriptBuilder {
     return `__${functionName}_paramChecks`;
   }
 
-  /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
-   *  followed by the halted return. */
   /** The rebind statement a decorated body's block starts with: one
    *  `__rebindParameters` call over a table of the function's parameters,
    *  each default as a thunk compiled here so it sees the function's scope,
@@ -2355,7 +2353,15 @@ export class TypeScriptBuilder {
     ]);
   }
 
-  private checkParamsCall(functionName: string, names: string[]): TsNode[] {
+  /** `await __checkParams(__run, runner, __stack, "name", __name_paramChecks, names)`
+   *  and the halted return, over the `!` parameters; nothing when none is
+   *  checked. Functions and nodes both start with it (see the "step 0"
+   *  section of docs/dev/language/validation-annotations.md). */
+  private checkParamsCall(functionName: string, parameters: FunctionParameter[]): TsNode[] {
+    const names = parameters.filter(isCheckedParam).map((param) => param.name);
+    if (names.length === 0) {
+      return [];
+    }
     return [
       ts.awaitCall(ts.id("__checkParams"), [
         ts.runtime.run,
@@ -2498,11 +2504,6 @@ export class TypeScriptBuilder {
     // Pinned checkpoint at entry (enables result.retry and error-to-failure wrapping)
     setupStmts.push(this.buildResultCheckpointSetup());
 
-    // The names of the `!` parameters, checked from step 0 against the
-    // module-level table `paramChecksDecl` emits. See the "step 0" section
-    // of docs/dev/language/validation-annotations.md.
-    const checkedNames = parameters.filter(isCheckedParam).map((param) => param.name);
-
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // Step 0 runs once and is skipped by a resume whose counter is past it.
     // It checks the `!` parameters (a validator claims a frame, so it must
@@ -2513,7 +2514,7 @@ export class TypeScriptBuilder {
       ts.runnerHookStep({
         id: 0,
         body: [
-          ...(checkedNames.length === 0 ? [] : this.checkParamsCall(functionName, checkedNames)),
+          ...this.checkParamsCall(functionName, parameters),
           this.tracking.init(!!opts.inDestructiveFunction),
           ts.callHook("onFunctionStart", {
             functionName: ts.str(functionName),
@@ -3217,11 +3218,10 @@ export class TypeScriptBuilder {
     // runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(body);
 
-    // Body steps occupy substep ids 1..N. Id 0 is reserved for the
-    // onNodeStart hook (wrapped in runner.hook for idempotency on
+    // Body steps occupy substep ids 1..N. Id 0 is the start hook
+    // (`nodeStartHook`, wrapped in runner.hook for idempotency on
     // resume). onNodeEnd sits at id N+1.
     const bodyCode = this.processBodyAsParts(body, 1);
-    const onNodeStartId = 0;
     const onNodeEndId = bodyCode.length + 1;
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
@@ -3324,13 +3324,7 @@ export class TypeScriptBuilder {
           ctx: ts.id("__ctx"),
           stack: ts.raw("__ctx.stateStack"),
           threads: $(ts.id("__setupData")).prop("threads").done(),
-          body: [
-            ts.runnerHookStep({
-              id: onNodeStartId,
-              body: [ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) })],
-            }),
-            ...bodyCode,
-          ],
+          body: [this.nodeStartHook(nodeName, parameters), ...bodyCode],
         }),
         ts.raw("if (runner.halted) return runner.haltResult;"),
         ts.runnerHookStep({
@@ -3411,7 +3405,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    return $(ts.id("graph"))
+    const graphNode = $(ts.id("graph"))
       .prop("node")
       .call([
         ts.str(nodeName),
@@ -3420,6 +3414,20 @@ export class TypeScriptBuilder {
         }),
       ])
       .done();
+    return ts.statements([...this.paramChecksDecl(nodeName, parameters), graphNode]);
+  }
+
+  /** Substep 0 of a node: the `!` parameter checks, as in a function's
+   *  step 0, then the onNodeStart hook. A refused argument halts the node
+   *  before the hook fires. */
+  private nodeStartHook(nodeName: string, parameters: FunctionParameter[]): TsNode {
+    return ts.runnerHookStep({
+      id: 0,
+      body: [
+        ...this.checkParamsCall(nodeName, parameters),
+        ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+      ],
+    });
   }
 
   /** If the enclosing function/node has returnTypeValidated, wrap value in __validateType */

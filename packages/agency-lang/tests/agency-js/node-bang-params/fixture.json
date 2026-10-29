@@ -1,0 +1,22 @@
+{
+  "finalData": {
+    "refused": {
+      "succeeded": false,
+      "namesTheArgument": true,
+      "started": []
+    },
+    "accepted": {
+      "result": {
+        "__type": "resultType",
+        "success": true,
+        "value": "body ran with Groceries 2026"
+      },
+      "started": ["main"]
+    },
+    "viaGoto": {
+      "succeeded": false,
+      "namesTheArgument": true,
+      "started": ["start"]
+    }
+  }
+}

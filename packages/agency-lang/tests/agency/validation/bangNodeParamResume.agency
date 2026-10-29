@@ -1,0 +1,27 @@
+// A node checks its `!` parameters once, before its body runs. When the
+// node pauses on an interrupt and resumes, the resume skips the check and
+// keeps the checked value.
+
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+effect test::confirm { tag: string }
+
+def checkStamp(value: string): Result<string> {
+  setMutable("stamp", getMutable("stamp", 0) + 1)
+  return success(value)
+}
+
+@validate(checkStamp)
+type Stamp = string
+
+node bodyRaise(when: Stamp!): Result {
+  interrupt test::confirm("Go ahead?", { tag: "node" })
+  return success([when, getMutable("stamp", 0)])
+}
+
+// zod drops the unknown key, and the body must see the stripped value after
+// the resume too.
+node checkedValue(spec: { type: "daily" }!): Result {
+  interrupt test::confirm("Go ahead?", { tag: "spec" })
+  return success(spec)
+}

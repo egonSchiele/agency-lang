@@ -340,6 +340,15 @@ failure on the first miss, and stores the checked value back on each
 pass. The body's steps see the halt and skip, and the function returns
 the failure.
 
+A node checks its `!` parameters the same way, in its substep 0 before
+`onNodeStart` (`nodeStartHook` in `typescriptBuilder.ts`), with the same
+checks table. A node's result is `{ messages, data }`, so `__checkParams`
+reads `runner.isNodeContext` and, in a node, halts with the refusal as
+`data`. A refused argument skips the node's body and its `onNodeStart`
+callback. The node's arguments are copied from the graph state only
+when the node is not resuming, so a resume keeps the checked values the
+way a function's first-entry store does.
+
 The message names each field inside the argument that did not fit, read
 from zod's issue list. An optional field is a union with `null`, and its
 `null` option only says the value was not null, so it is set aside before

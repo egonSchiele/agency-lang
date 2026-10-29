@@ -8,7 +8,6 @@
 import path from "#path";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { moduleIdToOrigin } from "../../runtime/origin.js";
-import { assertUniqueToolNames } from "../../runtime/toolInvocation.js";
 import type { Problem, ToolRef } from "./types.js";
 
 export type ToolRefsResult =
@@ -83,7 +82,7 @@ function moduleText(tool: AgencyFunction, dir: string, cwd: string): ModuleOutco
 }
 
 /** The ref for one tool, or the problem that refuses it. */
-type ToolOutcome = { ref: ToolRef | null; problem: Problem | null };
+type ToolOutcome = { ref: ToolRef; problem: null } | { ref: null; problem: Problem };
 
 const wholeWorkflow = (message: string): Problem => ({ step: null, field: null, message });
 
@@ -99,6 +98,21 @@ function toolOutcome(tool: unknown, index: number, dir: string, cwd: string): To
   return { ref: { module: module.text, name: checked.fn.name }, problem: null };
 }
 
+/** A workflow imports each tool by its name, so two tools with one name
+ *  cannot both be imported. One problem per repeated name, reported at the
+ *  first tool that has it and naming the next one. */
+function duplicateNames(refs: ToolRef[]): Problem[] {
+  return refs.flatMap((ref, index) => {
+    const isFirst = refs.findIndex((other) => other.name === ref.name) === index;
+    const second = refs.find((other, i) => i > index && other.name === ref.name);
+    if (!isFirst || second === undefined) {
+      return [];
+    }
+    const message = `tools "${ref.name}" from "${ref.module}" and "${second.module}" have the same name; a workflow imports each tool by its name`;
+    return [wholeWorkflow(message)];
+  });
+}
+
 /** One `ToolRef` per function value. `dir` is the workflow's directory and
  *  `cwd` the working directory the tools were compiled in; a relative `dir`
  *  is read against `cwd`. Every tool that cannot be imported is reported,
@@ -109,13 +123,7 @@ export function toolRefs(tools: unknown[], dir: string, cwd: string): ToolRefsRe
   if (problems.length > 0) {
     return { refs: null, problems };
   }
-  const refs = outcomes.map(({ ref }) => ref!);
-  try {
-    assertUniqueToolNames(refs);
-  } catch (error) {
-    // The runtime's check throws; here its message is a problem like any other.
-    const message = error instanceof Error ? error.message : String(error);
-    return { refs: null, problems: [wholeWorkflow(message)] };
-  }
-  return { refs, problems: [] };
+  const refs = outcomes.flatMap(({ ref }) => (ref === null ? [] : [ref]));
+  const duplicates = duplicateNames(refs);
+  return duplicates.length > 0 ? { refs: null, problems: duplicates } : { refs, problems: [] };
 }

@@ -1,5 +1,6 @@
 import { compile, describe, run, typecheck, CompiledProgram, ExportInfo } from "std::agency"
 import { read } from "std::index"
+import { resolve } from "std::path"
 import { Json } from "std::validation"
 
 import {
@@ -96,7 +97,13 @@ type Checked = {
 // Running a workflow. Raised after the check and before the subprocess
 // starts, so a rejection starts nothing. An "always" answer pins the
 // workflow directory and the workflow's name; the inputs are shown and
-// never pinned, since they change with every run.
+// never pinned, since they change with every run. `dir` is always an
+// absolute path: a relative one would pin text that means a different
+// directory under a different working directory, and the default `""`
+// would give the pattern `{,/**}`, which matches every absolute path.
+// `name` is a field of the workflow value the caller passed, so until
+// workflows are loaded by name from a directory, the rule means "any
+// workflow with this name".
 @alwaysUnder(dir)
 @always(name)
 effect std::workflow::run {
@@ -235,15 +242,16 @@ export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: stri
   @param workflow - The workflow to run
   @param inputs - The workflow's inputs, a value of its `inputs` type
   @param tools - The functions the workflow may call. A step may only name one of these
-  @param dir - The directory a workflow's local modules are named relative to
+  @param dir - The directory a workflow's local modules are named relative to. Resolved to an absolute path, which is what an "always" answer to `std::workflow::run` pins, along with the workflow's name
   """
-  const checked = _checked(workflow, tools, dir)
+  const where = resolve(dir)
+  const checked = _checked(workflow, tools, where)
   if (checked is failure) {
     return failure(checked.error, checked.data)
   }
   return interrupt std::workflow::run("Run the workflow ${workflow.name}?", {
     name: workflow.name,
-    dir: dir,
+    dir: where,
     inputs: inputs
   })
   const ran = run(compiled: checked.value.program, node: "main", args: { inputs: inputs }, wallClock: checked.value.wallClock)

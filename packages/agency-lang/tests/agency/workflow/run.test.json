@@ -15,7 +15,7 @@
       "nodeName": "runPayload",
       "description": "std::workflow::run carries the name, dir, and inputs",
       "input": "",
-      "expectedOutput": "{\"name\":\"doubleSum\",\"dir\":\"\",\"inputs\":{\"a\":2,\"b\":3}}",
+      "expectedOutput": "[\"doubleSum\",true,{\"a\":2,\"b\":3}]",
       "evaluationCriteria": [
         {
           "type": "exact"

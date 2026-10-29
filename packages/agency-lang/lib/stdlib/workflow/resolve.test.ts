@@ -236,6 +236,40 @@ describe("resolveWorkflow", () => {
     ]);
   });
 
+  it("warns on a tool that returns Result<Json>, whose value is untyped", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result<Json, string>",
+        returnType: "Result<Json, string>",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    const r = resolve(mealPlan, mealRefs, signatures);
+    expect(r.resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Result<Json, string>, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
+  it("does not warn on a Result of a typed value", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result<Note[]>",
+        returnType: "Result<Note[]>",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([]);
+  });
+
   it("prefixes every generated name", () => {
     const wf = withStep(withArg(mealPlan, "text", "id", { $ref: "steps.failure[0].id" }), 0, {
       id: "failure",

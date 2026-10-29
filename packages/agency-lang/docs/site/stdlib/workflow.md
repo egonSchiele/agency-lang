@@ -32,14 +32,12 @@ When you want an agent to do the same task the same way every time, a
 
 ### WorkflowLimits
 
-Caps on one run of a workflow, or on one step: `maxCost` in dollars and
-  `maxTime` in milliseconds, each a positive number. The generated program
-  wraps the whole body, or that step, in a guard with them.
+Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
+  milliseconds. The generated program wraps its steps in a guard with them.
 
 ```ts
-/** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
-  `maxTime` in milliseconds, each a positive number. The generated program
-  wraps the whole body, or that step, in a guard with them. */
+/** Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
+  milliseconds. The generated program wraps its steps in a guard with them. */
 export type WorkflowLimits = {
   maxCost?: number;
   maxTime?: number
@@ -115,7 +113,7 @@ effect std::workflow::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L108))
 
 ## Functions
 
@@ -154,7 +152,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L163))
 
 ### checkWorkflow
 
@@ -192,7 +190,7 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L215))
 
 ### runWorkflow
 
@@ -210,7 +208,7 @@ Run a workflow: check it, ask to run it, and run its program in a subprocess.
   @param workflow - The workflow to run
   @param inputs - The workflow's inputs, a value of its `inputs` type
   @param tools - The functions the workflow may call. A step may only name one of these
-  @param dir - The directory a workflow's local modules are named relative to
+  @param dir - The directory a workflow's local modules are named relative to. Resolved to an absolute path, which is what an "always" answer to `std::workflow::run` pins, along with the workflow's name
 
 Check, ask, run. The check compiles the program and the run uses it. The
   prompt comes after the check, so a workflow with problems asks nothing,
@@ -234,4 +232,4 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L237))

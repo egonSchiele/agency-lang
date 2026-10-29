@@ -1,6 +1,6 @@
 # Workflows: step lists that compile to Agency programs
 
-Status: draft, revised 2026-10-27 after review. Created 2026-10-26.
+Status: part 1 (the generator, `compileWorkflow`, `checkWorkflow`) shipped in #1292. Revised 2026-10-28 with the owner's answers for the rest; decisions 16 to 25 and "The parts" record them. Created 2026-10-26.
 
 ## The problem
 
@@ -70,6 +70,26 @@ These came out of the design conversation and are settled. Each one records the 
 **14. The generator is built as stages over data, in the shape of the compiler.** Parse, resolve, lower, print. Each stage is a pure function from one data shape to the next, and the problems it can find are reported there. *Why:* this is the shape the Agency compiler has (parser, preprocessor passes, builder, printer), and it is what keeps a future step kind a local change: a conditional touches the parse shape, one resolve rule, and one lowering function, and nothing else. The stages are described under "How the generator is built".
 
 **15. Hand-written helpers follow the anti-pattern catalog, and in particular the rule that imperative code sits behind a declarative interface.** The specific choices: validation is a list of rule functions concatenated, not one loop; a step's generated lines are a list of pieces that each know their owner, and the line map is derived from that list, never from a running counter; the field a type error belongs to comes from the diagnostic's structured payload, never from its message text; duplicate tool names are caught by the tool loop's own `assertUniqueToolNames`; an identifier is whatever the parser's `identifierParser` accepts; and a tool's return type comes from a `returnType` field that `describe` prints from the AST, so no caller re-parses a signature string. *Why:* these are the places a first draft of the plan put imperative or duplicated code, and each has an existing declarative home.
+
+**16. A run asks two questions: `std::workflow::run`, then `std::run`.** *Why:* `std::run`'s payload names a generated module, which a policy cannot tie to a workflow. `std::workflow::run` carries the workflow's name and directory, so it is the prompt a person reads and the rule a policy pins. The toolbox asks its two the same way.
+
+**17. A workflow's inputs are checked with `!`.** The generated program declares `main(inputs: Inputs!)`, so a value that does not fit the `inputs` type fails before the first step, with a message naming the field. *Why:* it is the language's own way to check a parameter, and the check runs where the value is used. It needs nodes to honour `!`, which they did not; #1297 fixes that.
+
+**18. A context value that is a string reaches the model as its text. Any other value reaches it as JSON.** *Why:* a note body sent as JSON is one line with every line break written as `\n`, which is harder for a model to read. The generated code decides per value with `if v is string then v else JSON.stringify(v)`, because the generator does not know a reference's type.
+
+**19. Partials and renamed functions stay refused.** The host passes the original defs. *Why:* the owner decided against writing a partial's bound values into the generated call.
+
+**20. Limits apply to the whole workflow and to each step.** A step's `limits` has the same shape as the workflow's and lowers to a `guard` around that step's call in the generated code. *Why:* the tool is defined elsewhere (BMO's tools already exist), but the call is in the generated program, so the generator can put the guard around it. A method that attaches limits to a function value, `tool.guard(maxTime: 1m)`, would help a host that hands tools to `llm()`; it is a separate language feature and workflows do not need it. A guard around a call that returns a `Result` passes that `Result` through at run time, but the type checker types it `Result<Result<T>>`; the type checker is fixed to match, as `try` already does, before step limits are built.
+
+**21. A limit must be a positive number, and `maxTime` at most one hour less 30 seconds.** *Why:* `guard` turns a negative limit into "no limit", so `maxCost: -1` would silently remove the cap. The subprocess gets the workflow's `maxTime` plus 30 seconds of wall clock (the toolbox's headroom), so the guard trips and reports before the process is killed, and `run` refuses more than an hour. With no workflow `maxTime`, the subprocess gets `run`'s default of 60 seconds.
+
+**22. `runWorkflow` checks, then asks, then runs the program the check compiled.** *Why:* asking a person to approve a workflow that fails its own check wastes a prompt, and compiling twice could read the tool modules twice.
+
+**23. Saving runs the full check, and the workflow's own `name` names its directory.** `writeWorkflow(workflow, tools, dir)` compiles and typechecks the workflow before anything is written. *Why:* a saved workflow should be one that compiles. The check needs the tool list, because the program imports the tools and the generator reads their signatures. A separate `name` parameter would be a second name that could disagree with the workflow's.
+
+**24. A saved workflow's inputs schema is computed when it is saved and stored in `meta.json`.** *Why:* only compiled code can turn the `inputs` type into a JSON Schema, which means a subprocess and a `std::run` prompt. Computing it at save time means `workflowTools` reads files instead of starting one subprocess per workflow each time a host builds its tool list. The toolbox stores its request schema the same way.
+
+**25. A child process inherits the host's config.** Today only environment variables, the log settings, and `client.providerModules` reach it; `client.defaultModel`, `client.baseUrl`, and the rest of `agency.json` do not, because they are written into a program when it is compiled and the child is compiled with a fixed sandbox config. The parent will send its whole resolved config when it starts the child. That is a change to `run`, in its own PR. A client set from TypeScript with `setLLMClient` is an object and cannot be copied; reaching it would mean the child sends each model call back to the parent. That waits for a host that needs it: BMO sets its client from TypeScript only in a test.
 
 ## Goals
 
@@ -160,11 +180,11 @@ Here is the meal plan example:
 | `inputs` | An Agency object type, as text. It becomes the `Inputs` type of the generated program and the parameter schema of the tool. |
 | `steps` | The steps, run in order. |
 | `result` | Optional. A reference or a literal that is the workflow's return value. Without it, the last step's value is returned. |
-| `limits` | Optional. `maxCost` in dollars and `maxTime` in milliseconds, applied as a `guard` around the steps. |
+| `limits` | Optional. `maxCost` in dollars and `maxTime` in milliseconds, applied as a `guard` around the steps. Each is a positive number; `maxTime` is at most 3570000 (one hour less 30 seconds). |
 
 ### Steps
 
-Every step has an `id`, an identifier unique within the workflow, and a `kind`.
+Every step has an `id`, an identifier unique within the workflow, and a `kind`. Any step may also have `limits`, with the same fields and rules as the workflow's, which cap that one step: `"limits": { "maxTime": 120000, "maxCost": 5 }` lets the step run two minutes and spend five dollars.
 
 **A tool step** has `module`, the module the tool is imported from; `tool`, the function's name in that module; and `args`, an object of named arguments. `module` is a `std::` module name or a path to an `.agency` file relative to the directory the host passes at run time. The step's value is what the tool returned, with a `Result` unwrapped (see "Results" below).
 
@@ -201,7 +221,7 @@ import { Json } from "std::validation"
 type Inputs = { noteTitle: string }
 type Step_meals_output = string[]
 
-export node main(inputs: Inputs): Result {
+export node main(inputs: Inputs!): Result {
   return guard(time: 300000, cost: 1) {
     const step_note_query = inputs.noteTitle
     const step_note = searchNotes(query: step_note_query)
@@ -219,8 +239,9 @@ export node main(inputs: Inputs): Result {
       return failure("step list (findLists): ${step_list.error}", { step: "list", cause: step_list })
     }
     const step_meals_context1 = step_text.value.body
+    const step_meals_context1_text = if step_meals_context1 is string then step_meals_context1 else JSON.stringify(step_meals_context1)
     const step_meals: Step_meals_output = thread {
-      return llm("The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names." + "\n\nContext 1 (steps.text.body):\n" + JSON.stringify(step_meals_context1))
+      return llm("The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names." + "\n\nContext 1 (steps.text.body):\n" + step_meals_context1_text)
     }
     const step_add_items = step_meals
     const step_add_listId = step_list.value[0].id
@@ -246,6 +267,20 @@ What to notice:
 - Every argument is bound to its own local before the call, one line per field, so a type error on an argument maps to that field of that step.
 - Every generated name starts with `step_` (or `Step_` for a type). A step named `failure` or `llm` then produces `step_failure`, which shadows nothing. The description is not written into the source; it is set on the tool value when the workflow is offered as a tool.
 - The program always ends in `return success(...)`, because `main` is typed `Result` and a plain value or an unwrapped `.value` would not typecheck without a guard.
+- `inputs` is declared `Inputs!`, so `{ noteTitle: 5 }` fails before the first step (decision 17).
+- A context value that is a string, like the note body, reaches the model as its text. Anything else is sent as JSON (decision 18).
+- A step with `limits` gets a guard around its call, named after the step, followed by the same failure check:
+
+  ```ts
+  const step_add = guard(label: "add", time: 120000, cost: 5) {
+    return addListItems(items: step_add_items, listId: step_add_listId, section: step_add_section)
+  }
+  if (step_add is failure) {
+    return failure("step add (addListItems): ${step_add.error}", { step: "add", cause: step_add })
+  }
+  ```
+
+  A guard passes a `Result` its block returns through unchanged, so a tool's own failure and a trip both land in the one check. It wraps any other value in `success(...)`, so a step with `limits` always holds a `Result`, and a reference into it reads `.value` even when its tool returns a plain value. A trip raises `std::guard` first, as any guard does, so the user's handlers can give the step more budget. An LLM step with `limits` declares its typed reply inside the guard, so the structured-output schema still comes from the output type.
 - `inputsSchema` exists so the tool wrapper can show the model the workflow's inputs. It is the same trick `std::toolbox` uses with its `requestSchema` node.
 
 ## How the generator is built
@@ -306,7 +341,7 @@ When a user wants to say what happens on failure, that is a future step kind tha
 
 ### Typed returns matter
 
-A reference into a step's value is typechecked only as far as the tool's return type goes. A tool that returns `Result<Note[]>` gives the typechecker everything. A tool that returns `any` or `Json` gives it nothing, and a wrong path becomes a run-time failure. `checkWorkflow` reports an untyped return as a warning so the author knows.
+A reference into a step's value is typechecked only as far as the tool's return type goes. A tool that returns `Result<Note[]>` gives the typechecker everything. A tool that declares no return type, or returns `any` or `Json`, gives it nothing, and a wrong path becomes a run-time failure. `checkWorkflow` reports all three as a warning so the author knows.
 
 ## Tools and modules
 
@@ -324,7 +359,7 @@ For a module that is a user file, `module` is a path relative to `dir`, the dire
 
 ## Checking a workflow
 
-`checkWorkflow(workflow, tools)` returns every problem it can find, so the author fixes them in one pass:
+`checkWorkflow(workflow, tools, dir)` returns every problem it can find, so the author fixes them in one pass. That includes every tool in the list that cannot be imported (a partial, a renamed function, a package tool), reported together:
 
 - the format version, the name, and that every step id is an identifier used once;
 - every `kind` is one the format knows;
@@ -340,9 +375,12 @@ The check runs nothing and raises no interrupt beyond the reads the compile need
 
 `runWorkflow(workflow, inputs, tools, dir)`:
 
-1. Raises `std::workflow::run` with the workflow's name, its directory when it was loaded from one, and the inputs. A policy pins "this workflow may run" here. Each tool step still raises its own effects.
-2. Runs `checkWorkflow` and fails with the problems if there are any.
-3. Calls `compileWorkflow`, then `runCode(source, "main", { inputs: inputs }, dir: dir)`.
+1. Checks the workflow, as `checkWorkflow` does, and fails with the problems if there are any. The check compiles the program, and the run uses that program (decision 22).
+2. Raises `std::workflow::run` with the workflow's name, `dir`, and the inputs. A policy pins "this workflow may run" here. Each tool step still raises its own effects.
+3. Runs the program's `main` with `run`, passing `{ inputs: inputs }` and a wall clock of the workflow's `maxTime` plus 30 seconds, or 60 seconds with no `maxTime` (decision 21). `run` raises `std::run`.
+4. Returns what `main` returned: the result's value, or the failure that stopped the workflow, which names the step.
+
+`recommended` approves neither `std::workflow::run` nor `std::run`: each starts code, so each stays with the prompt, the way `std::toolbox::save` does.
 
 The subprocess machinery does the rest. Interrupts from any step go up the parent's handler chain and the user's policy answers them. An interrupt no handler answers pauses the child, which checkpoints and exits, and the interrupt surfaces to the user as any interrupt does. A resume starts a fresh child from the checkpoint. The workflow's `limits` are a `guard` inside the generated code, and `runCode`'s own limits cap the process.
 
@@ -362,7 +400,9 @@ return runWorkflow
   .withParamSchema("inputs", inputsSchema)
 ```
 
-`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
+`inputsSchema` comes from running the generated program's `inputsSchema` node once, so the model sees `noteTitle: string` and not `inputs: object`. For a saved workflow it is read from `meta.json`, where `writeWorkflow` stored it (decision 24). A workflow is a program with a `main`; the tool is one function that runs it. Nothing is extracted from the source.
+
+A checkpoint does not keep a schema set with `.withParamSchema`: the reviver saves a function value's name, description, and bound arguments, but not its parameter schemas (`lib/runtime/revivers/functionRefReviver.ts`). After a resume, the model would see the tool's `inputs` as any JSON value. The agent's learned tools have the same gap. The reviver is fixed to save and re-apply the schema before `workflowTool` is built.
 
 `workflowTools(dir, tools)` lists a directory and builds one tool per saved workflow. A host with a handful of workflows adds these to its model's tool list, so "do the meal plan thing" is one ordinary tool choice. A workflow's name must not collide with a tool already in `tools`; `workflowTools` refuses one that does, since it has both lists in hand.
 
@@ -381,7 +421,9 @@ A workflow lives in a directory, one subdirectory per workflow, the way a toolbo
     meta.json
 ```
 
-`workflow.json` is the format above. `meta.json` holds when it was saved and by what. The directory name is the only name.
+`workflow.json` is the format above. `meta.json` holds when it was saved, by what, and the inputs schema (decision 24). The directory name is the workflow's own `name`, and there is no other.
+
+`writeWorkflow(workflow, tools, dir)` runs the full check, compile and typecheck, before it writes anything, so only a workflow that compiles is saved (decision 23). `runWorkflow` checks again at run time, because a tool may change after the save.
 
 Two effects gate the directory, following `std::toolbox`:
 
@@ -403,16 +445,20 @@ type WorkflowEntry = { name: string; dir: string; workflow: Workflow; meta: Work
 type CatalogEntry = { module: string; name: string; description: string;
                       params: CatalogParam[]; returns: string }
 
-compileWorkflow(workflow: Workflow, tools: any[]): Result<string>
-checkWorkflow(workflow: Workflow, tools: any[]): Result<null, { problems: WorkflowProblem[] }>
+type WorkflowFailure = { problems: WorkflowProblem[] }
+
+compileWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<string, WorkflowFailure>
+checkWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<WorkflowProblem[], WorkflowFailure>
 runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: string = ""): Result<Json>
 workflowTool(workflow: Workflow, tools: any[], dir: string = ""): any
 workflowTools(dir: string, tools: any[]): Result<any[]>
-catalog(tools: any[]): CatalogEntry[]
+catalog(tools: any[], dir: string = ""): Result<CatalogEntry[]>
 loadWorkflow(name: string, dir: string): Result<WorkflowEntry>
 listWorkflows(dir: string): Result<WorkflowEntry[]>
-writeWorkflow(name: string, workflow: Workflow, dir: string): Result<WorkflowEntry>
+writeWorkflow(workflow: Workflow, tools: any[], dir: string): Result<WorkflowEntry>
 ```
+
+`checkWorkflow` succeeds with the warnings, such as a tool that declares no return type. `runWorkflow` fails with the check's problems, with the failure of the step that stopped the workflow (its `data` names the step and carries the tool's failure as `cause`), or with a `run` limit failure.
 
 `compileWorkflow` returns Agency source as text, not a `CompiledProgram`. Its docstring says so in the first line, since `std::agency` has a `compile` that returns a program handle.
 
@@ -443,6 +489,16 @@ Tests:
 - A paused workflow, resumed, that finishes. This is the subprocess resume test with a workflow as the program.
 - The generator is deterministic: compile the same workflow twice and compare the source.
 
+## The parts
+
+The MVP ships in three parts, each its own PR. Each part needs some small language or runtime fixes first, and each fix is its own PR.
+
+1. **Part 1, the generator** (#1292, merged): the format, parse, resolve, lower, render, `compileWorkflow`, and `checkWorkflow`.
+2. **Part 2, running**: `runWorkflow` and `std::workflow::run`, `Inputs!`, context strings as text, step limits, every bad tool reported at once, positive limits, and the warning for a `Json` return. Before it: #1297 (nodes check `!`) and the type checker fix for a guard around a `Result` (decision 20).
+3. **Part 3, saving and offering**: `writeWorkflow`, `loadWorkflow`, `listWorkflows`, the `scan` and `save` effects, the inputs schema in `meta.json`, `workflowTool`, `workflowTools`, and `catalog`. Before it: the reviver fix for `.withParamSchema`.
+
+Two more changes are needed before BMO can run a workflow against its real tools, and neither is part of a workflow PR: the config a child inherits (decision 25), and `allowedImports` for TypeScript files in the import closure.
+
 ## The end goal
 
 This connects to BMO. BMO runs on an iPad on a fridge, and the owner pictures a drag-and-drop builder there: each block is a tool call or an LLM call, a dropdown picks the tool, fields take the inputs, and wires connect a block's output to a later block's input. That GUI is BMO's job, but the format is shaped for it: a block is a step, a wire is a `$ref`, the dropdown reads `catalog`, and the fields are `args`. Steps stay flat records with no expressions in them because a GUI can draw a `$ref` and cannot draw a string with code in it.
@@ -456,18 +512,18 @@ Marked so the owner can check them while reading:
 - References are `{ "$ref": path }` objects, not `$`-prefixed strings, so a literal string can never be mistaken for one.
 - `inputs` and an LLM step's `output` are Agency type text, not JSON Schema, because they become types in the generated program and the typechecker checks them.
 - A tool step's `Result` is unwrapped and a failure stops the workflow with a message naming the step. The generator decides whether to emit the check from the tool's return type.
-- An LLM step gets its values through `context`, appended to the prompt as labelled JSON blocks, and runs in its own `thread`.
-- `runWorkflow` raises `std::workflow::run` before the subprocess starts, in addition to each step's own effects.
+- An LLM step gets its values through `context`, appended to the prompt as labelled blocks (a string as its text, anything else as JSON), and runs in its own `thread`.
+- `runWorkflow` checks the workflow, then raises `std::workflow::run` before the subprocess starts, in addition to each step's own effects.
 - The generator is Template Agency fragments, not string building, so a filler is never parsed as code.
 - `workflowTool` is a partial of `runWorkflow` with the inputs schema attached. Nothing is learned or extracted from the source.
 - Adding a step kind bumps `format`.
 - A tool list with a repeated name, a partial, or a renamed function is refused.
 - The generator records a line-to-step map so type errors are reported by step and field.
 
-## Open questions for the owner
+## Questions the owner answered
 
-1. `runCode` raises `std::run` for every subprocess, and `runWorkflow` raises `std::workflow::run` before it. A user with no policy answers both before the first step. Is the second gate worth that, for the name it carries, or should `std::workflow::run` be dropped and policies pin `std::run`'s `module` field instead?
-2. Should `context` values in an LLM step be appended as JSON (exact, but noisy for a long note body) or as plain text when the value is a string?
+1. Both gates stay: `std::workflow::run` carries the name a policy pins, and `std::run` follows it (decision 16).
+2. A string context value is sent as its text, anything else as JSON (decision 18).
 
 ## Left to the builder
 

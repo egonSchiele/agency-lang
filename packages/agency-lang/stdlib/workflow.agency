@@ -38,8 +38,9 @@ import {
   caller's handlers, so a policy decides what the workflow may do.
 */
 
-/** Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
-  milliseconds. The generated program wraps its steps in a guard with them. */
+/** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
+  `maxTime` in milliseconds, each a positive number. The generated program
+  wraps the whole body, or that step, in a guard with them. */
 export type WorkflowLimits = {
   maxCost?: number;
   maxTime?: number

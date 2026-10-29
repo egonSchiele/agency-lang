@@ -32,19 +32,21 @@ When you want an agent to do the same task the same way every time, a
 
 ### WorkflowLimits
 
-Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
-  milliseconds. The generated program wraps its steps in a guard with them.
+Caps on one run of a workflow, or on one step: `maxCost` in dollars and
+  `maxTime` in milliseconds, each a positive number. The generated program
+  wraps the whole body, or that step, in a guard with them.
 
 ```ts
-/** Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in
-  milliseconds. The generated program wraps its steps in a guard with them. */
+/** Caps on one run of a workflow, or on one step: `maxCost` in dollars and
+  `maxTime` in milliseconds, each a positive number. The generated program
+  wraps the whole body, or that step, in a guard with them. */
 export type WorkflowLimits = {
   maxCost?: number;
   maxTime?: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L44))
 
 ### Workflow
 
@@ -67,7 +69,7 @@ export type Workflow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L52))
 
 ### WorkflowProblem
 
@@ -84,7 +86,7 @@ export type WorkflowProblem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L64))
 
 ### WorkflowFailure
 
@@ -97,7 +99,7 @@ export type WorkflowFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L71))
 
 ## Effects
 
@@ -113,7 +115,7 @@ effect std::workflow::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L102))
 
 ## Functions
 
@@ -152,7 +154,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L157))
 
 ### checkWorkflow
 
@@ -190,7 +192,7 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L209))
 
 ### runWorkflow
 
@@ -232,4 +234,4 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L231))

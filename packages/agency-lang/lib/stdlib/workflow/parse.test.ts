@@ -231,10 +231,10 @@ describe("parseWorkflow", () => {
   });
 
   it("accepts limits on a step and keeps them", () => {
-    const wf = withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 5 } });
+    const wf = withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 0.5 } });
     const parsed = parseWorkflow(wf);
     expect(parsed.problems).toEqual([]);
-    expect(parsed.workflow!.steps[4]).toMatchObject({ limits: { maxTime: 120000, maxCost: 5 } });
+    expect(parsed.workflow!.steps[4]).toMatchObject({ limits: { maxTime: 120000, maxCost: 0.5 } });
   });
 
   it("names the step for a bad step limit", () => {
@@ -272,6 +272,18 @@ describe("parseWorkflow", () => {
       [],
     );
     expect(parseWorkflow(withStep(noLimits, 4, { limits: { maxCost: 1 } })).problems).toEqual([]);
+  });
+
+  it("refuses a step maxCost above the workflow's maxCost", () => {
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { maxCost: 5 } })).problems).toEqual([
+      {
+        step: "add",
+        field: "limits.maxCost",
+        message:
+          "limits.maxCost (5) is more than the workflow's maxCost (1), so the workflow's guard would trip first",
+      },
+    ]);
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { maxCost: 1 } })).problems).toEqual([]);
   });
 
   it("accepts a workflow with no result and no limits", () => {

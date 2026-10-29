@@ -184,7 +184,7 @@ Here is the meal plan example:
 
 ### Steps
 
-Every step has an `id`, an identifier unique within the workflow, and a `kind`. Any step may also have `limits`, with the same fields and rules as the workflow's, which cap that one step: `"limits": { "maxTime": 120000, "maxCost": 5 }` lets the step run two minutes and spend five dollars.
+Every step has an `id`, an identifier unique within the workflow, and a `kind`. Any step may also have `limits`, with the same fields and rules as the workflow's, which cap that one step: `"limits": { "maxTime": 120000, "maxCost": 0.5 }` lets the step run two minutes and spend fifty cents. A step's limit may be no larger than the workflow's, and a step `maxTime` needs a workflow `maxTime`, because the workflow's guard would trip first, or the subprocess would be killed, and neither failure names the step.
 
 **A tool step** has `module`, the module the tool is imported from; `tool`, the function's name in that module; and `args`, an object of named arguments. `module` is a `std::` module name or a path to an `.agency` file relative to the directory the host passes at run time. The step's value is what the tool returned, with a `Result` unwrapped (see "Results" below).
 
@@ -274,7 +274,7 @@ What to notice:
 - A step with `limits` gets a guard around its call, named after the step, followed by the same failure check:
 
   ```ts
-  const step_add = guard(label: "add", time: 120000, cost: 5) {
+  const step_add = guard(label: "add", time: 120000, cost: 0.5) {
     return addListItems(items: step_add_items, listId: step_add_listId, section: step_add_section)
   }
   if (step_add is failure) {

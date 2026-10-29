@@ -120,12 +120,12 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 A workflow's `limits` and a step's `limits` take the same two fields, `maxCost` in dollars and `maxTime` in milliseconds, and pass the same rules in parse: each is a positive finite number, and `maxTime` is at most `MAX_TIME` in `limits.ts`, which is `run`'s wall clock ceiling less the 30-second headroom, so the subprocess wall clock never exceeds the ceiling. A guard reads a negative number as "no limit", which is why zero and negatives are refused. A limit must also print as a plain decimal, `PLAIN_DECIMAL` in `limits.ts`: `0.0000001` prints as `1e-7`, which is not an Agency number literal, so parse refuses it and the `limits` token check accepts only that form.
 
-A step's `maxTime` needs a workflow `maxTime` at least as large. The subprocess wall clock and the guard around `main` both come from the workflow's `maxTime`, so a step limit above it would never trip: the process would be killed at the wall clock, or the outer guard would trip first, and either failure names no step. Parse refuses the step limit instead, in a message that says what to set.
+A step's limit may be no larger than the workflow's, because the guard around `main` would trip first and its failure names no step. A step's `maxTime` also needs a workflow `maxTime`: the subprocess wall clock comes from the workflow's `maxTime`, so without one the process is killed at `run`'s default, again naming no step. A step `maxCost` needs no workflow `maxCost`, since nothing else caps cost. Parse refuses a step limit that could not trip, in a message that says what to set.
 
 The workflow's limits become the guard around `main`'s body, written into the scaffold by render. A step's limits become a guard around that one step, named after it:
 
 ```
-const step_add = guard(label: "add", time: 120000, cost: 5) {
+const step_add = guard(label: "add", time: 120000, cost: 0.5) {
   return addListItems(items: step_add_items, listId: step_add_listId, section: step_add_section)
 }
 if (step_add is failure) {

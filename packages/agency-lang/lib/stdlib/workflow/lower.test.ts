@@ -105,7 +105,7 @@ describe("lowerWorkflow", () => {
 
   it("guards a tool step that has limits, then checks it", () => {
     const lowered = lowerWorkflow(
-      resolved(withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 5 } })),
+      resolved(withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 0.5 } })),
     );
     const add = lowered.body.filter((f) => f.owner?.step === "add" && f.owner.field === "args");
     expect(add.map((f) => f.owner)).toEqual([
@@ -113,7 +113,7 @@ describe("lowerWorkflow", () => {
       { step: "add", field: "args" },
     ]);
     const [guardText, checkText] = add.map((f) => _toSource(f.code));
-    expect(guardText).toContain('const step_add = guard(label: "add", time: 120000, cost: 5) {');
+    expect(guardText).toContain('const step_add = guard(label: "add", time: 120000, cost: 0.5) {');
     expect(guardText).toContain("  return addListItems(");
     expect(guardText).toContain("    section: step_add_section,");
     expect(guardText).toContain("\n}\n");

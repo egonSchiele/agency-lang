@@ -200,16 +200,19 @@ const steps = z
     });
   });
 
-/** A step's time limit is reached only if the workflow's `maxTime`, which
- *  sets the subprocess wall clock and the guard around `main`, is at least
- *  as large. Otherwise the process is killed or the outer guard trips, and
- *  the failure names no step. The message, or null when the step is covered. */
-function stepTimeMessage(stepTime: number, workflowTime: unknown): string | null {
-  if (typeof workflowTime !== "number") {
-    return `limits.maxTime needs the workflow to set a maxTime of at least ${stepTime}; the subprocess wall clock comes from the workflow's maxTime`;
+/** A step's limit can trip only if the workflow's own limit does not trip
+ *  first, so it may be no larger. A step `maxTime` also needs a workflow
+ *  `maxTime`, which sets the subprocess wall clock; with no workflow
+ *  `maxCost`, nothing else caps cost. The message, or null when the step's
+ *  limit can trip. */
+function stepLimitMessage(key: string, stepLimit: number, workflowLimit: unknown): string | null {
+  if (typeof workflowLimit !== "number") {
+    return key === "maxTime"
+      ? `limits.maxTime needs the workflow to set a maxTime of at least ${stepLimit}; the subprocess wall clock comes from the workflow's maxTime`
+      : null;
   }
-  if (stepTime > workflowTime) {
-    return `limits.maxTime (${stepTime}) is more than the workflow's maxTime (${workflowTime}), so the workflow's guard would trip first`;
+  if (stepLimit > workflowLimit) {
+    return `limits.${key} (${stepLimit}) is more than the workflow's ${key} (${workflowLimit}), so the workflow's guard would trip first`;
   }
   return null;
 }
@@ -228,13 +231,15 @@ const workflow = z
   })
   .superRefine((parsed, ctx) => {
     parsed.steps.forEach((step, index) => {
-      const stepTime = step.limits?.maxTime;
-      if (typeof stepTime !== "number") {
-        return;
-      }
-      const message = stepTimeMessage(stepTime, parsed.limits?.maxTime);
-      if (message !== null) {
-        ctx.addIssue({ code: "custom", message, path: ["steps", index, "limits", "maxTime"] });
+      for (const key of LIMIT_FIELDS) {
+        const stepLimit = step.limits?.[key];
+        if (typeof stepLimit !== "number") {
+          continue;
+        }
+        const message = stepLimitMessage(key, stepLimit, parsed.limits?.[key]);
+        if (message !== null) {
+          ctx.addIssue({ code: "custom", message, path: ["steps", index, "limits", key] });
+        }
       }
     });
   });

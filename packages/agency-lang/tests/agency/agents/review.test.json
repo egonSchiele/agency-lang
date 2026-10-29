@@ -99,16 +99,15 @@
               "error": true,
               "feedback": "never seen"
             }
-          ],
-          "delayMs": 60000
+          ]
         }
       ]
     },
     {
       "nodeName": "cutShortReviewReturnsItsFindingsByDefault",
-      "description": "the same review returns its saved finding by default",
+      "description": "the same review returns its saved finding by default, not the reply after it",
       "input": "",
-      "expectedOutput": "\"success:1\"",
+      "expectedOutput": "\"success:the task is stated\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -135,8 +134,7 @@
               "error": true,
               "feedback": "never seen"
             }
-          ],
-          "delayMs": 60000
+          ]
         }
       ]
     }

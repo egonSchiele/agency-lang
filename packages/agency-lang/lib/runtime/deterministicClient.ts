@@ -92,7 +92,8 @@ const FALLBACK_SCOPE = "*";
 // Synthetic non-zero usage/cost so tests that only assert "value is
 // nonzero" still pass under the deterministic client. Tests that assert
 // on exact token counts or precise costs are using a real LLM and won't
-// hit this code path.
+// hit this code path. The cut-short tests in tests/agency/agents/review.agency
+// set a cost cap between one and two of these calls.
 const SYNTHETIC_USAGE = {
   inputTokens: 1,
   outputTokens: 1,

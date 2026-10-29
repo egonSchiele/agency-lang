@@ -24,7 +24,7 @@ if (step_text is failure) {
 }
 ```
 
-The program's `main` takes `inputs: Inputs!`. The `!` makes the node check its argument against the `Inputs` type before the first step runs, so `{ noteTitle: 5 }` fails with a message naming `inputs`, not a type error deep inside a step.
+The program's `main` takes `inputs: Inputs!`. The `!` makes the node check its argument against the `Inputs` type before the first step runs, so `{ noteTitle: 5 }` fails with a message naming `inputs` before any step runs.
 
 ## The four stages
 

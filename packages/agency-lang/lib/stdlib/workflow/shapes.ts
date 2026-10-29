@@ -24,8 +24,10 @@ export const SHAPES = {
   checkPlain:
     'if ({{value}} is failure) {\n  return failure("step {{id}} ({{tool}}): ${({{value}} as any).error}", { step: #id, cause: {{value}} })\n}',
   llm: "const {{value}}: {{outputType}} = thread {\n  return llm(#prompt{{options}})\n}",
+  // What the model reads for a context value: a string as itself, anything else as JSON.
+  contextText:
+    "const {{local}} = if {{value}} is string then {{value}} else JSON.stringify({{value}})",
   concat: "#left + #right",
-  stringify: "JSON.stringify(#v)",
   local: "{{name}}",
 } as const;
 

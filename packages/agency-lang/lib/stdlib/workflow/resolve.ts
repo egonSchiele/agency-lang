@@ -59,6 +59,7 @@ export function names(id: string) {
     value: `step_${id}`,
     arg: (name: string) => `step_${id}_${name}`,
     context: (index: number) => `step_${id}_context${index + 1}`,
+    contextText: (index: number) => `step_${id}_context${index + 1}_text`,
     typeName: `Step_${id}_output`,
   };
 }
@@ -197,12 +198,20 @@ function declaredBy(step: Step): Declared[] {
     }));
     return [value, ...args];
   }
-  const contexts = step.context.map((_, index) => ({
-    name: stepNames.context(index),
-    step: step.id,
-    field: `context[${index}]`,
-    what: `context value ${index + 1} of step "${step.id}"`,
-  }));
+  const contexts = step.context.flatMap((_, index) => [
+    {
+      name: stepNames.context(index),
+      step: step.id,
+      field: `context[${index}]`,
+      what: `context value ${index + 1} of step "${step.id}"`,
+    },
+    {
+      name: stepNames.contextText(index),
+      step: step.id,
+      field: `context[${index}]`,
+      what: `the text of context value ${index + 1} of step "${step.id}"`,
+    },
+  ]);
   const typeName = {
     name: stepNames.typeName,
     step: step.id,
@@ -280,9 +289,10 @@ function resolveLlmStep(step: LlmStep): ResolvedStep {
     prompt: step.prompt,
     outputType: step.output,
     typeName: stepNames.typeName,
-    bindings: step.context.map((value, index) =>
-      binding(stepNames.context(index), `context[${index}]`, value),
-    ),
+    bindings: step.context.map((value, index) => ({
+      ...binding(stepNames.context(index), `context[${index}]`, value),
+      text: stepNames.contextText(index),
+    })),
     model: step.model ?? null,
     provider: step.provider ?? null,
   };

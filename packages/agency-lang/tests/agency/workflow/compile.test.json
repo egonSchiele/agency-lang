@@ -131,6 +131,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "contextTextTypechecks",
+      "description": "a string, a list, and an object context value all typecheck as text",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

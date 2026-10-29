@@ -80,10 +80,14 @@ describe("lowerWorkflow", () => {
         { step: "meals", field: "context[0]" },
       ],
       [
+        "const step_meals_context1_text = if step_meals_context1 is string then step_meals_context1 else JSON.stringify(step_meals_context1)\n",
+        { step: "meals", field: "context[0]" },
+      ],
+      [
         [
           "const step_meals: Step_meals_output = thread {",
           "  return llm(",
-          `    "${mealPlan.steps[3].kind === "llm" ? mealPlan.steps[3].prompt : ""}" + "\\n\\nContext 1 (steps.text.body):\\n" + JSON.stringify(step_meals_context1),`,
+          `    "${mealPlan.steps[3].kind === "llm" ? mealPlan.steps[3].prompt : ""}" + "\\n\\nContext 1 (steps.text.body):\\n" + step_meals_context1_text,`,
           '    model: "gpt-5",',
           "  )",
           "}",

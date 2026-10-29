@@ -220,6 +220,19 @@ describe("resolveWorkflow", () => {
     expect(steps[0].bindings[0].local).toBe("step_failure_query");
   });
 
+  it("refuses a step id that produces a context value's text local", () => {
+    const renamed = withStep(mealPlan, 4, { id: "meals_context1_text" });
+    const wf = withFields(renamed, { result: { $ref: "steps.meals_context1_text" } });
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "meals_context1_text",
+        field: "id",
+        message:
+          'step id "meals_context1_text" produces the same local as the text of context value 1 of step "meals"',
+      },
+    ]);
+  });
+
   it("refuses a step id that produces another step's local", () => {
     const renamed = withStep(mealPlan, 2, { id: "note_query" });
     const wf = withArg(renamed, "add", "listId", { $ref: "steps.note_query[0].id" });

@@ -104,7 +104,7 @@ const agencyPackageRoot = path.resolve(__dirname, "..", "..", "..");
 // Hardcoded ceilings clamp any user-supplied limit value to a safe maximum.
 // See docs/superpowers/specs/2026-05-09-subprocess-resource-limits-design.md.
 
-const LIMIT_CEILINGS = {
+export const LIMIT_CEILINGS = {
   wallClock: 60 * 60 * 1000, // 1h in ms
   memory: 4 * 1024 * 1024 * 1024, // 4gb in bytes
   ipcPayload: 1024 * 1024 * 1024, // 1gb in bytes

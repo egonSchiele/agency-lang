@@ -27,7 +27,8 @@ describe("resolveWorkflow", () => {
       value: "step_text",
       module: "./notes.agency",
       tool: "readNote",
-      returnsResult: true,
+      holdsResult: true,
+      limits: null,
       bindings: [
         {
           local: "step_text_id",
@@ -165,7 +166,31 @@ describe("resolveWorkflow", () => {
       },
     };
     const list = resolve(mealPlan, mealRefs, signatures).resolved!.steps[2];
-    expect(list.kind === "tool" && list.returnsResult).toBe(false);
+    expect(list.kind === "tool" && list.holdsResult).toBe(false);
+  });
+
+  it("holds a Result when a plain-returning step has limits", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./lists.agency.findLists": {
+        signature: "findLists(query: string): string[]",
+        returnType: "string[]",
+        returnsResult: false,
+        docstring: null,
+      },
+    };
+    const limited = withStep(mealPlan, 2, { limits: { maxTime: 1000 } });
+    const list = resolve(limited, mealRefs, signatures).resolved!.steps[2];
+    expect(list.holdsResult).toBe(true);
+    expect(list.limits).toEqual({ maxTime: 1000 });
+  });
+
+  it("reads empty limits as none, and gives an llm step a Result only with limits", () => {
+    const empty = resolve(withStep(mealPlan, 3, { limits: {} })).resolved!.steps[3];
+    expect(empty.limits).toBe(null);
+    expect(empty.holdsResult).toBe(false);
+    const limited = resolve(withStep(mealPlan, 3, { limits: { maxCost: 2 } })).resolved!.steps[3];
+    expect(limited.holdsResult).toBe(true);
   });
 
   it("warns on a tool with no return type", () => {

@@ -11,6 +11,7 @@ import {
   refsIn,
   type Binding,
   type ImportGroup,
+  type Limits,
   type LlmStep,
   type Problem,
   type ResolvedRef,
@@ -43,6 +44,7 @@ const PROGRAM_NAMES = [
   "llm",
   "schema",
   "JSON",
+  "guard",
 ];
 
 /** Types that tell the typechecker nothing about a value. */
@@ -286,16 +288,27 @@ function binding(local: string, field: string, value: unknown): Binding {
   return { local, field, value: resolveValue(value) };
 }
 
+/** A step's limits, or null when none is set. */
+function stepLimits(step: Step): Limits | null {
+  const limits = step.limits ?? null;
+  if (limits === null || (limits.maxCost === undefined && limits.maxTime === undefined)) {
+    return null;
+  }
+  return limits;
+}
+
 function resolveToolStep(step: ToolStep, signatures: Record<string, Signature>): ResolvedStep {
   const stepNames = names(step.id);
   const argOrder = sortedArgs(step);
+  const limits = stepLimits(step);
   return {
     id: step.id,
     kind: "tool",
     value: stepNames.value,
     module: step.module,
     tool: step.tool,
-    returnsResult: signatures[signatureKey(step.module, step.tool)].returnsResult,
+    holdsResult: signatures[signatureKey(step.module, step.tool)].returnsResult || limits !== null,
+    limits,
     bindings: argOrder.map((arg) => binding(stepNames.arg(arg), `args.${arg}`, step.args[arg])),
     argOrder,
   };
@@ -303,11 +316,14 @@ function resolveToolStep(step: ToolStep, signatures: Record<string, Signature>):
 
 function resolveLlmStep(step: LlmStep): ResolvedStep {
   const stepNames = names(step.id);
+  const limits = stepLimits(step);
   return {
     id: step.id,
     kind: "llm",
     value: stepNames.value,
     reply: stepNames.reply,
+    holdsResult: limits !== null,
+    limits,
     prompt: step.prompt,
     outputType: step.output,
     typeName: stepNames.typeName,

@@ -5,9 +5,9 @@
  * so the counts cannot disagree with the text.
  */
 import { _toSource, type Code } from "../template.js";
-import { literal } from "./shapes.js";
+import { guardArgs } from "./shapes.js";
 import { parseTypeText, printType } from "./typeText.js";
-import type { Limits, Lowered, Owner, Range, TypeDecl } from "./types.js";
+import type { Lowered, Owner, Range, TypeDecl } from "./types.js";
 
 export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record<string, Owner> };
 
@@ -48,16 +48,6 @@ const INDENT = "  ";
 const TOKEN = /\{\{(imports|types|guardArgs|body)\}\}/g;
 const BODY_TOKEN = "{{body}}";
 const TYPES_TOKEN = "{{types}}";
-
-function numberText(value: number): string {
-  return _toSource(literal(value)).trim();
-}
-
-function guardArgs(limits: Limits): string {
-  const time = limits.maxTime === undefined ? [] : [`time: ${numberText(limits.maxTime)}`];
-  const cost = limits.maxCost === undefined ? [] : [`cost: ${numberText(limits.maxCost)}`];
-  return [...time, ...cost].join(", ");
-}
 
 function printLines(code: Code): string[] {
   return _toSource(code).replace(/\n$/, "").split("\n");
@@ -107,7 +97,7 @@ function typeLine(decl: TypeDecl): string {
 export function renderWorkflow(lowered: Lowered): RenderResult {
   const typeLines = lowered.types.map(typeLine);
   const limits = lowered.guard;
-  const args = limits === null ? "" : guardArgs(limits);
+  const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
   const depth = args === "" ? 1 : 2;
   const prints = lowered.body.map((fragment) => printLines(fragment.code));

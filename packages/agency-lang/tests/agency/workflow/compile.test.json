@@ -142,6 +142,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "guardedStepsTypecheck",
+      "description": "steps with limits are guarded and the program still typechecks, including a reference through a guarded plain value",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

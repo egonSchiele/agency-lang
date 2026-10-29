@@ -8,14 +8,17 @@ export type Problem = { step: string | null; field: string | null; message: stri
 
 export type Ref = { $ref: string };
 
+export type Limits = { maxCost?: number; maxTime?: number };
+/** `limits` reads null as absent. */
 export type ToolStep = {
   id: string;
   kind: "tool";
   module: string;
   tool: string;
   args: Record<string, unknown>;
+  limits?: Limits | null;
 };
-/** `model` and `provider` read null as absent. */
+/** `model`, `provider`, and `limits` read null as absent. */
 export type LlmStep = {
   id: string;
   kind: "llm";
@@ -24,9 +27,9 @@ export type LlmStep = {
   output: string;
   model?: string | null;
   provider?: string | null;
+  limits?: Limits | null;
 };
 export type Step = ToolStep | LlmStep;
-export type Limits = { maxCost?: number; maxTime?: number };
 /** `result` and `limits` read null as absent. */
 export type Workflow = {
   format: 1;
@@ -114,14 +117,17 @@ export type Binding = { local: string; field: string; value: ResolvedValue };
  *  it: the string itself, or JSON for anything else. */
 export type ContextBinding = Binding & { text: string };
 
-/** `value` is the local that holds the step's value. */
+/** `value` is the local that holds the step's value. `holdsResult` says
+ *  that local holds a `Result`: the tool returns one, or the step has
+ *  limits and so runs inside a guard, which always gives a `Result`. */
 export type ResolvedToolStep = {
   id: string;
   kind: "tool";
   value: string;
   module: string;
   tool: string;
-  returnsResult: boolean;
+  holdsResult: boolean;
+  limits: Limits | null;
   bindings: Binding[];
   argOrder: string[];
 };
@@ -134,6 +140,8 @@ export type ResolvedLlmStep = {
   kind: "llm";
   value: string;
   reply: string;
+  holdsResult: boolean;
+  limits: Limits | null;
   prompt: string;
   outputType: string;
   typeName: string;

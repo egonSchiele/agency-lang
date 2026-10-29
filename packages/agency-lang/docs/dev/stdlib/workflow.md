@@ -116,6 +116,29 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
    `name` is a field of the workflow value the caller passed. A caller, or a model calling `runWorkflow` as a tool, can give a new workflow a name the user already approved "always", and that workflow skips this one prompt. Every step still raises its own effects, and `std::run` still asks. The rule means "this workflow by name" only once workflows are loaded by name from a directory, which the spec leaves to part 3.
 3. **Run.** It calls `run` from `std::agency` on the compiled program's `main` with `{ inputs }`. `run` raises its own `std::run`. The wall clock is the workflow's `maxTime` plus 30 seconds (`wallClockFor` in `limits.ts`), or `null`, which lets `run` apply its own default. The workflow code does not restate that default. `run` succeeds with an envelope whose `data` is what `main` returned, so `runWorkflow` returns that `Result`: the last step's value, or the failure that stopped the workflow, which names the step.
 
+## Limits and the step guard
+
+A workflow's `limits` and a step's `limits` take the same two fields, `maxCost` in dollars and `maxTime` in milliseconds, and pass the same rules in parse: each is a positive finite number, and `maxTime` is at most `MAX_TIME` in `limits.ts`, which is `run`'s wall clock ceiling less the 30-second headroom, so the subprocess wall clock never exceeds the ceiling. A guard reads a negative number as "no limit", which is why zero and negatives are refused. A limit must also print as a plain decimal, `PLAIN_DECIMAL` in `limits.ts`: `0.0000001` prints as `1e-7`, which is not an Agency number literal, so parse refuses it and the `limits` token check accepts only that form.
+
+A step's limit may be no larger than the workflow's, because the guard around `main` would trip first and its failure names no step. A step's `maxTime` also needs a workflow `maxTime`: the subprocess wall clock comes from the workflow's `maxTime`, so without one the process is killed at `run`'s default, again naming no step. A step `maxCost` needs no workflow `maxCost`, since nothing else caps cost. Parse refuses a step limit that could not trip, in a message that says what to set.
+
+The workflow's limits become the guard around `main`'s body, written into the scaffold by render. A step's limits become a guard around that one step, named after it:
+
+```
+const step_add = guard(label: "add", time: 120000, cost: 0.5) {
+  return addListItems(items: step_add_items, listId: step_add_listId, section: step_add_section)
+}
+if (step_add is failure) {
+  return failure("step add (addListItems): ${step_add.error}", { step: "add", cause: step_add })
+}
+```
+
+Both guards write their limits through `guardArgs` in `shapes.ts`, the one place a limit becomes code. Render joins its pieces for the workflow guard; lower prefixes each with `, ` for a step guard, and the `limits` token check accepts only that form.
+
+A guard always gives a `Result`: a `Result` the block returns passes through, and any other value is wrapped in `success(...)`. So a step with limits holds a `Result` whatever its tool returns. Resolve records this as `holdsResult`, true when the tool returns a `Result` or the step has limits, and lower reads a reference into such a step through `.value`. A trip raises `std::guard` first. A rejection makes the guard return a failure, and the step's ordinary check turns that into the workflow's failure, naming the step and carrying the guard's failure as `cause`.
+
+A guarded LLM step is the same `thread` block inside the guard, with `return <reply>` as its last line instead of an assignment: a `return` inside the thread returns from the guard block, so the guard's `Result` holds the typed reply. The last line is a checked text token on the `llmThread` shape, because a code hole filled with code that names the reply would make template hygiene rename the binder.
+
 ## Interrupts and checkpoints
 
 The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`.
@@ -130,4 +153,4 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 ## Not built yet
 
-The spec covers these: step `limits` and the guard around a step, offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, saving and loading workflows, and the `scan` and `save` effects.
+The spec covers these: offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, saving and loading workflows, and the `scan` and `save` effects.

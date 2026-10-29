@@ -1,0 +1,11 @@
+export def slowEcho(text: string): string {
+  """
+  Return the text after two seconds. It exists to outlast a step's time
+  limit: the fake clock does not reach a child process, so a test leaves a
+  wide margin between this sleep and the limit it trips.
+
+  @param text - The text to return
+  """
+  sleep(2s)
+  return text
+}

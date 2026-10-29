@@ -110,6 +110,9 @@ export type ResolvedValue = Literal | ResolvedRef | ResolvedList | ResolvedRecor
 
 /** One generated `const`: its name, the field it came from, and its value. */
 export type Binding = { local: string; field: string; value: ResolvedValue };
+/** A context value and `text`, the local that holds it as the model sees
+ *  it: the string itself, or JSON for anything else. */
+export type ContextBinding = Binding & { text: string };
 
 /** `value` is the local that holds the step's value. */
 export type ResolvedToolStep = {
@@ -131,7 +134,7 @@ export type ResolvedLlmStep = {
   prompt: string;
   outputType: string;
   typeName: string;
-  bindings: Binding[];
+  bindings: ContextBinding[];
   model: string | null;
   provider: string | null;
 };

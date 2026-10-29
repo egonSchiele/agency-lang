@@ -11,6 +11,7 @@ import { MODULE_PATH } from "./tools.js";
 import {
   isIdentifier,
   type Binding,
+  type ContextBinding,
   type Fragment,
   type ImportGroup,
   type Lowered,
@@ -102,11 +103,19 @@ function toolFragments(step: ResolvedToolStep, steps: StepsById): Fragment[] {
   ];
 }
 
-/** The prompt text, then for each context value a label and its JSON, joined with `+`. */
+/** The `const` that holds a context value as the model reads it. */
+function contextTextFragment(step: ResolvedLlmStep, binding: ContextBinding): Fragment {
+  return {
+    code: statement("contextText", { local: binding.text, value: binding.local }, {}),
+    owner: { step: step.id, field: binding.field },
+  };
+}
+
+/** The prompt text, then for each context value a label and its text, joined with `+`. */
 function promptCode(step: ResolvedLlmStep): Code {
   const contexts = step.bindings.flatMap((binding, index) => [
     literal(`\n\nContext ${index + 1}${refLabel(binding.value)}:\n`),
-    expression("stringify", {}, { v: expression("local", { name: binding.local }, {}) }),
+    expression("local", { name: binding.text }, {}),
   ]);
   return [literal(step.prompt), ...contexts].reduce((left, right) =>
     expression("concat", {}, { left, right }),
@@ -126,8 +135,12 @@ function llmFragments(step: ResolvedLlmStep, steps: StepsById): Fragment[] {
     values.provider = literal(step.provider);
   }
   const names = { value: step.value, outputType: step.typeName, options: options.join("") };
+  const contexts = step.bindings.flatMap((binding) => [
+    bindingFragment(step, binding, steps),
+    contextTextFragment(step, binding),
+  ]);
   return [
-    ...step.bindings.map((binding) => bindingFragment(step, binding, steps)),
+    ...contexts,
     { code: statement("llm", names, values), owner: { step: step.id, field: "prompt" } },
   ];
 }

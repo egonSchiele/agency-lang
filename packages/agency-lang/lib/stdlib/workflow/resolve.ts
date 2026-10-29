@@ -45,8 +45,26 @@ const PROGRAM_NAMES = [
   "JSON",
 ];
 
-/** Return types that tell the typechecker nothing about the value. */
-const UNTYPED_RETURNS = [null, "any"];
+/** Types that tell the typechecker nothing about a value. */
+const UNTYPED = [null, "any", "Json"];
+
+/** `Result<Json>` and `Result<Json, string>` give `Json` as the value's type. */
+const RESULT_OF = /^Result<\s*([^,<>]+?)\s*(?:,[^>]*)?>$/;
+
+/** The type a reference into the step reads: the declared type, or the
+ *  value type inside a `Result`, since the reference goes through `.value`.
+ *  A bare `Result` says nothing about its value. */
+function valueType(returnType: string | null): string | null {
+  if (returnType === "Result") {
+    return "any";
+  }
+  const inner = returnType === null ? null : RESULT_OF.exec(returnType);
+  return inner === null ? returnType : inner[1];
+}
+
+function untypedReason(returnType: string | null): string {
+  return returnType === null ? "declares no return type" : `returns ${returnType}`;
+}
 
 /** Every name a step declares. The prefix is what makes any identifier safe
  *  as a step id: a step named `failure` declares `step_failure`. */
@@ -55,6 +73,7 @@ export function names(id: string) {
     value: `step_${id}`,
     arg: (name: string) => `step_${id}_${name}`,
     context: (index: number) => `step_${id}_context${index + 1}`,
+    contextText: (index: number) => `step_${id}_context${index + 1}_text`,
     typeName: `Step_${id}_output`,
   };
 }
@@ -193,12 +212,20 @@ function declaredBy(step: Step): Declared[] {
     }));
     return [value, ...args];
   }
-  const contexts = step.context.map((_, index) => ({
-    name: stepNames.context(index),
-    step: step.id,
-    field: `context[${index}]`,
-    what: `context value ${index + 1} of step "${step.id}"`,
-  }));
+  const contexts = step.context.flatMap((_, index) => [
+    {
+      name: stepNames.context(index),
+      step: step.id,
+      field: `context[${index}]`,
+      what: `context value ${index + 1} of step "${step.id}"`,
+    },
+    {
+      name: stepNames.contextText(index),
+      step: step.id,
+      field: `context[${index}]`,
+      what: `the text of context value ${index + 1} of step "${step.id}"`,
+    },
+  ]);
   const typeName = {
     name: stepNames.typeName,
     step: step.id,
@@ -240,10 +267,10 @@ const RULES: Rule[] = [toolRule, referenceRule, collisionRule];
 function untypedWarnings({ workflow, signatures }: Context): Problem[] {
   return toolSteps(workflow).flatMap((step) => {
     const returnType = signatures[signatureKey(step.module, step.tool)].returnType;
-    if (!UNTYPED_RETURNS.includes(returnType)) {
+    if (!UNTYPED.includes(valueType(returnType))) {
       return [];
     }
-    const message = `step "${step.id}": "${step.tool}" declares no return type, so references into its value are checked at run time`;
+    const message = `step "${step.id}": "${step.tool}" ${untypedReason(returnType)}, so references into its value are checked at run time`;
     return [{ step: step.id, field: "tool", message }];
   });
 }
@@ -276,9 +303,10 @@ function resolveLlmStep(step: LlmStep): ResolvedStep {
     prompt: step.prompt,
     outputType: step.output,
     typeName: stepNames.typeName,
-    bindings: step.context.map((value, index) =>
-      binding(stepNames.context(index), `context[${index}]`, value),
-    ),
+    bindings: step.context.map((value, index) => ({
+      ...binding(stepNames.context(index), `context[${index}]`, value),
+      text: stepNames.contextText(index),
+    })),
     model: step.model ?? null,
     provider: step.provider ?? null,
   };

@@ -190,6 +190,81 @@ describe("resolveWorkflow", () => {
     ]);
   });
 
+  it("warns on a tool that returns Json", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Json",
+        returnType: "Json",
+        returnsResult: false,
+        docstring: null,
+      },
+    };
+    const r = resolve(mealPlan, mealRefs, signatures);
+    expect(r.resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Json, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
+  it("warns on a tool that returns Result<Json>, whose value is untyped", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result<Json, string>",
+        returnType: "Result<Json, string>",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    const r = resolve(mealPlan, mealRefs, signatures);
+    expect(r.resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Result<Json, string>, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
+  it("warns on a tool that returns a bare Result", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result",
+        returnType: "Result",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Result, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
+  it("does not warn on a Result of a typed value", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result<Note[]>",
+        returnType: "Result<Note[]>",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([]);
+  });
+
   it("prefixes every generated name", () => {
     const wf = withStep(withArg(mealPlan, "text", "id", { $ref: "steps.failure[0].id" }), 0, {
       id: "failure",
@@ -197,6 +272,19 @@ describe("resolveWorkflow", () => {
     const steps = resolve(wf).resolved!.steps;
     expect(steps[0].value).toBe("step_failure");
     expect(steps[0].bindings[0].local).toBe("step_failure_query");
+  });
+
+  it("refuses a step id that produces a context value's text local", () => {
+    const renamed = withStep(mealPlan, 4, { id: "meals_context1_text" });
+    const wf = withFields(renamed, { result: { $ref: "steps.meals_context1_text" } });
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "meals_context1_text",
+        field: "id",
+        message:
+          'step id "meals_context1_text" produces the same local as the text of context value 1 of step "meals"',
+      },
+    ]);
   });
 
   it("refuses a step id that produces another step's local", () => {

@@ -112,9 +112,9 @@ export def _signatures(refs: ToolRef[], dir: string): Result<Record<string, Expo
 @hidden
 @capabilities(fileRead)
 export def _compileWithRanges(workflow: Workflow, tools: any[], dir: string): Result<Compiled, WorkflowFailure> {
-  const refs = try _toolRefs(tools, dir)
+  const refs = _toolRefs(tools, dir)
   if (refs is failure) {
-    return _workflowFailure(refs.error)
+    return failure(refs.error, refs.data)
   }
   const signatures = _signatures(refs.value, dir)
   if (signatures is failure) {

@@ -1,6 +1,7 @@
 import { checkWorkflow, Workflow, WorkflowProblem } from "std::workflow"
 import { Json } from "std::validation"
 import { searchNotes, readNote, untyped } from "./fixtures/tools/notes.agency"
+import { findLists } from "./fixtures/tools/lists.agency"
 
 const DIR = __dirname + "/fixtures/tools"
 const TOOLS = [searchNotes, readNote, untyped]
@@ -133,4 +134,18 @@ node badOutputTypeNamesTheStep(): string {
     ]
   }
   return firstProblem(workflow)
+}
+
+node everyBadToolIsReported(): string {
+  const badTools = [searchNotes.partial(query: "x"), findLists.rename("find"), readNote]
+  const checked = checkWorkflow(twoSteps(goodNoteArgs(), goodTextArgs()), badTools, DIR) with approve
+  if (checked is success) {
+    return "no problems"
+  }
+  const problems: WorkflowProblem[] = checked.data.problems
+  let messages: string[] = []
+  for (problem in problems) {
+    messages.push(problem.message)
+  }
+  return messages.join(" | ")
 }

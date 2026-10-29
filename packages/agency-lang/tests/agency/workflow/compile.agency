@@ -113,7 +113,7 @@ node mealPlanCompiles(): boolean {
     "import { readNote, searchNotes } from \"./notes.agency\"",
     "import { addListItems, findLists } from \"./lists.agency\"",
     "type Step_meals_output = string[]",
-    "export node main(inputs: Inputs): Result {",
+    "export node main(inputs: Inputs!): Result {",
     "const step_note_query = inputs.noteTitle",
     "const step_note = searchNotes(query: step_note_query)",
     "if (step_note is failure)",
@@ -227,4 +227,19 @@ node unknownToolIsRefused(): string {
 node isDeterministic(): boolean {
   const first = sourceOf(standardPlan())
   return first != "" && first == sourceOf(standardPlan())
+}
+
+/** The meal plan with three context values on `meals`: a string, a list, and an object. */
+node contextTextTypechecks(): boolean {
+  const plan = standardPlan()
+  const steps: Json[] = []
+  for (step in plan.steps) {
+    if (step.id == "meals") {
+      steps.push({ ...step, context: [{ "$ref": "steps.text.body" }, { "$ref": "steps.list" }, { "$ref": "steps.text" }] })
+    } else {
+      steps.push(step)
+    }
+  }
+  const workflow: Workflow = { ...plan, steps: steps }
+  return typechecks(sourceOf(workflow))
 }

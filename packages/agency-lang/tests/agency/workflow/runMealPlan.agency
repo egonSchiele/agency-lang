@@ -2,6 +2,7 @@ import { runWorkflow, Workflow } from "std::workflow"
 import { Json } from "std::validation"
 import { searchNotes, readNote } from "./fixtures/tools/notes.agency"
 import { findLists, addListItems } from "./fixtures/tools/lists.agency"
+import { slowEcho } from "./fixtures/tools/slow.agency"
 
 const DIR = __dirname + "/fixtures/tools"
 const TOOLS = [searchNotes, readNote, findLists, addListItems]
@@ -76,4 +77,33 @@ node pausedWorkflowResumes(): Json {
     return null
   }
   return result.value
+}
+
+/** One step whose tool sleeps two seconds under a 100 ms limit. The guard
+  trips, the handler rejects `std::guard`, and the step's check turns the
+  guard's failure into the workflow's, naming the step and the cause. */
+node stepLimitTrips(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "slowOne",
+    description: "Echo text slowly.",
+    inputs: "{ text: string }",
+    steps: [{ id: "slow", kind: "tool", module: "./slow.agency", tool: "slowEcho", args: { text: { "$ref": "inputs.text" } }, limits: { maxTime: 100 } }]
+  }
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, { text: "hi" }, [slowEcho], DIR)
+  } with (intr) {
+    if (isPlumbing(intr.effect)) {
+      return approve()
+    }
+    if (intr.effect == "std::guard") {
+      return reject()
+    }
+  }
+  if (result is success) {
+    print("unexpected success: ${JSON.stringify(result.value)}")
+    return null
+  }
+  return [result.data.step, result.data.cause.data.type]
 }

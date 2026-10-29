@@ -44,6 +44,17 @@
           ]
         }
       ]
+    },
+    {
+      "nodeName": "stepLimitTrips",
+      "description": "a step's time limit trips its guard; the workflow fails naming the step and the timeout",
+      "input": "",
+      "expectedOutput": "[\"slow\",\"timeoutFailure\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

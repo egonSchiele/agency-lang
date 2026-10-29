@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { isReservedInternalName } from "../../reservedNames.js";
+import { MAX_TIME } from "./limits.js";
 import { parseTypeText } from "./typeText.js";
 import { isIdentifier, isObject, REF_PATH, refsIn, type Problem, type Workflow } from "./types.js";
 
@@ -123,12 +124,44 @@ const args = z
     }
   });
 
+/** A limit is written into a guard line as text, and a guard reads a
+ *  negative number as "no limit", so only a positive finite number passes. */
+const positive = z.number().refine((limit) => Number.isFinite(limit) && limit > 0);
+
+/** The message for one limit field, or null when it is acceptable. */
+function limitMessage(key: string, limit: unknown): string | null {
+  if (!LIMIT_FIELDS.includes(key)) {
+    return `limits has no field "${key}"; it takes maxCost and maxTime`;
+  }
+  if (!positive.safeParse(limit).success) {
+    return `limits.${key} must be a positive number`;
+  }
+  if (key === "maxTime" && (limit as number) > MAX_TIME) {
+    return `limits.maxTime must be at most ${MAX_TIME} (one hour less 30 seconds)`;
+  }
+  return null;
+}
+
+/** The same rules for the workflow's limits and a step's. */
+const limits = z
+  .record(z.string(), z.unknown(), { error: "limits must be an object" })
+  .superRefine((record, ctx) => {
+    for (const [key, limit] of Object.entries(record)) {
+      const message = limitMessage(key, limit);
+      if (message !== null) {
+        ctx.addIssue({ code: "custom", message, path: [key] });
+      }
+    }
+  })
+  .nullish();
+
 const toolStep = z.object({
   id: identifier("step id"),
   kind: z.literal("tool"),
   module: z.string({ error: "module must be a string" }),
   tool: identifier("tool name"),
   args,
+  limits,
 });
 
 const PROMPT_MESSAGE = "prompt must be a non-empty string";
@@ -141,6 +174,7 @@ const llmStep = z.object({
   output: typeText("Output", "output", "output must be a string holding a type"),
   model: z.string({ error: "model must be a string" }).nullish(),
   provider: z.string({ error: "provider must be a string" }).nullish(),
+  limits,
 });
 
 const step = z.discriminatedUnion("kind", [toolStep, llmStep], {
@@ -162,24 +196,6 @@ const steps = z
       }
     });
   });
-
-const finite = z.number().refine(Number.isFinite);
-
-/** Limits are written into the guard line as text, so only a finite number may pass. */
-const limits = z
-  .record(z.string(), z.unknown(), { error: "limits must be an object" })
-  .superRefine((record, ctx) => {
-    for (const [key, limit] of Object.entries(record)) {
-      if (!LIMIT_FIELDS.includes(key)) {
-        const message = `limits has no field "${key}"; it takes maxCost and maxTime`;
-        ctx.addIssue({ code: "custom", message, path: [key] });
-      } else if (!finite.safeParse(limit).success) {
-        const message = `limits.${key} must be a finite number`;
-        ctx.addIssue({ code: "custom", message, path: [key] });
-      }
-    }
-  })
-  .nullish();
 
 const workflow = z.object({
   format: z.literal(1, {

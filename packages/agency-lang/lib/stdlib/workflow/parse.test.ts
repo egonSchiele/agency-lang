@@ -183,11 +183,53 @@ describe("parseWorkflow", () => {
     expect(
       parseWorkflow(withFields(mealPlan, { limits: { maxCost: null, steps: 3 } })).problems,
     ).toEqual([
-      { step: null, field: "limits.maxCost", message: "limits.maxCost must be a finite number" },
+      { step: null, field: "limits.maxCost", message: "limits.maxCost must be a positive number" },
       {
         step: null,
         field: "limits.steps",
         message: 'limits has no field "steps"; it takes maxCost and maxTime',
+      },
+    ]);
+  });
+
+  it("refuses a limit that is not positive", () => {
+    expect(parseWorkflow(withFields(mealPlan, { limits: { maxCost: -1 } })).problems).toEqual([
+      { step: null, field: "limits.maxCost", message: "limits.maxCost must be a positive number" },
+    ]);
+    expect(parseWorkflow(withFields(mealPlan, { limits: { maxTime: 0 } })).problems).toEqual([
+      { step: null, field: "limits.maxTime", message: "limits.maxTime must be a positive number" },
+    ]);
+  });
+
+  it("caps maxTime below run's one-hour ceiling", () => {
+    expect(parseWorkflow(withFields(mealPlan, { limits: { maxTime: 3570001 } })).problems).toEqual([
+      {
+        step: null,
+        field: "limits.maxTime",
+        message: "limits.maxTime must be at most 3570000 (one hour less 30 seconds)",
+      },
+    ]);
+    expect(parseWorkflow(withFields(mealPlan, { limits: { maxTime: 3570000 } })).problems).toEqual(
+      [],
+    );
+  });
+
+  it("accepts limits on a step and keeps them", () => {
+    const wf = withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 5 } });
+    const parsed = parseWorkflow(wf);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.workflow!.steps[4]).toMatchObject({ limits: { maxTime: 120000, maxCost: 5 } });
+  });
+
+  it("names the step for a bad step limit", () => {
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { maxTime: -5 } })).problems).toEqual([
+      { step: "add", field: "limits.maxTime", message: "limits.maxTime must be a positive number" },
+    ]);
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { retries: 3 } })).problems).toEqual([
+      {
+        step: "add",
+        field: "limits.retries",
+        message: 'limits has no field "retries"; it takes maxCost and maxTime',
       },
     ]);
   });

@@ -8,14 +8,17 @@ export type Problem = { step: string | null; field: string | null; message: stri
 
 export type Ref = { $ref: string };
 
+export type Limits = { maxCost?: number; maxTime?: number };
+/** `limits` reads null as absent. */
 export type ToolStep = {
   id: string;
   kind: "tool";
   module: string;
   tool: string;
   args: Record<string, unknown>;
+  limits?: Limits | null;
 };
-/** `model` and `provider` read null as absent. */
+/** `model`, `provider`, and `limits` read null as absent. */
 export type LlmStep = {
   id: string;
   kind: "llm";
@@ -24,9 +27,9 @@ export type LlmStep = {
   output: string;
   model?: string | null;
   provider?: string | null;
+  limits?: Limits | null;
 };
 export type Step = ToolStep | LlmStep;
-export type Limits = { maxCost?: number; maxTime?: number };
 /** `result` and `limits` read null as absent. */
 export type Workflow = {
   format: 1;

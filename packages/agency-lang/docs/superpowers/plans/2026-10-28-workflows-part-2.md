@@ -4,18 +4,18 @@
 
 **Goal:** `runWorkflow` runs a checked workflow's generated program in a subprocess, behind a `std::workflow::run` prompt. The generated program checks its inputs with `!`, sends string context to the model as text, and puts a guard around any step that has its own limits.
 
-**Architecture:** Part 1's four stages stay as they are. Parse learns step limits and refuses limits that are not positive. Resolve records two new facts per step: whether its local holds a `Result`, and its limits. Lower writes a guarded call from new rows in the `SHAPES` table. `stdlib/workflow.agency` gains `runWorkflow`, which runs the program that the check compiled, through `run` from `std::agency`. No new runtime code. Task 1 is a one-line type checker fix that ships first as its own PR.
+**Architecture:** Part 1's four stages stay as they are. Parse learns step limits and refuses limits that are not positive. Resolve records two new facts per step: whether its local holds a `Result`, and its limits. Lower writes a guarded call from new rows in the `SHAPES` table. `stdlib/workflow.agency` gains `runWorkflow`, which runs the program that the check compiled, through `run` from `std::agency`. No new runtime code. Task 1, a type checker fix, is done and open as its own PR, #1298.
 
 **Tech Stack:** Agency stdlib conventions, Template Agency's TypeScript twins (`lib/stdlib/template.ts`), `std::agency`'s `compile`, `typecheck`, and `run`, zod v4 in parse, vitest for the TypeScript stages, Agency execution tests for the Agency side, and the deterministic LLM client (`useTestLLMProvider` with `llmMocks`) for the one LLM step.
 
-**Spec:** `docs/superpowers/specs/2026-10-26-workflows-design.md`. Read decisions 16 to 25, "The generated program", "Running a workflow", and "The parts" before starting. Part 1's plan, `docs/superpowers/plans/2026-10-27-workflows-mvp.md`, explains the stages, and `docs/dev/stdlib/workflow.md` is their dev doc.
+**Spec:** [/Users/adityabhargava/agency-lang/packages/agency-lang/worktree-workflows-2/packages/agency-lang/docs/superpowers/specs/2026-10-26-workflows-design.md](/Users/adityabhargava/agency-lang/packages/agency-lang/worktree-workflows-2/packages/agency-lang/docs/superpowers/specs/2026-10-26-workflows-design.md) (`docs/superpowers/specs/2026-10-26-workflows-design.md` in the repo). Read decisions 16 to 25, "The generated program", "Running a workflow", and "The parts" before starting. Part 1's plan, `docs/superpowers/plans/2026-10-27-workflows-mvp.md`, explains the stages, and `docs/dev/stdlib/workflow.md` is their dev doc.
 
 ## Before you start
 
-Two fixes must land on main first:
+Both prerequisite fixes are done:
 
-1. **#1297, nodes check `!` parameters.** Without it, `main(inputs: Inputs!)` compiles but checks nothing. Tasks 6 and 7 need it. Its tests are in that PR.
-2. **Task 1 of this plan, the guard type.** It ships as its own PR, on its own branch from main. Task 5 needs it merged.
+1. **#1297, nodes check `!` parameters.** Merged into main. Without it, `main(inputs: Inputs!)` would compile but check nothing. Tasks 6 and 7 need it, and this branch was cut before it merged, so merge main into this branch before Task 6.
+2. **Task 1 of this plan, the guard type.** Done, and open for review as #1298 (branch `adit/guard-result-type`). Task 5 needs it merged.
 
 Tasks 2, 3, and 4 need neither and can start at once. Build the worktree with `make` once before the first Agency test.
 
@@ -24,7 +24,7 @@ Tasks 2, 3, and 4 need neither and can start at once. Build the worktree with `m
 - **How part 1 builds a program.** `compileWorkflowSource` in `lib/stdlib/workflow/index.ts` runs parse, resolve, lower, and render. Every statement the generator writes comes from a row of `SHAPES` in `lib/stdlib/workflow/shapes.ts`, through `statement()` or `expression()`. A `{{name}}` token takes a name and is checked as an identifier (or against a fixed list of forms, such as `TOKEN_CHECKS.options`). A `#name` hole takes a `Code` value, and `literal(value)` lifts workflow data so it is never parsed. Every name the program declares comes from `names(id)` in `lib/stdlib/workflow/resolve.ts` and must also be listed by `declaredBy`, so `collisionRule` can refuse two that coincide. That is what keeps template hygiene from renaming anything (`docs/dev/stdlib/workflow.md`, "Why the scaffold is fixed text").
 - **How `run` returns.** `run(compiled, node, args, wallClock: ...)` in `stdlib/agency.agency:178` raises `std::run`, starts the child, and succeeds with an envelope whose `.data` is what the node returned. `runTool` in `stdlib/toolbox.agency:1853` shows the unwrap: `if (ran is success(finished)) { result = finished.data }`. The node's `Result` crosses the process boundary as JSON, and `is failure` works on it. The default wall clock is 60 seconds and the ceiling is one hour (`_runOptions`, `stdlib/agency.agency:118`).
 - **How a child's interrupt reaches a person.** `docs/dev/runtime/subprocess-ipc.md`. The parent's handlers answer the child's interrupts. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces like any other, and a resume starts a fresh child from the checkpoint. A handler that returns nothing passes (`docs/site/guide/handlers.md:207`), so a test can approve the gates it expects and let everything else surface.
-- **How a guard behaves.** `docs/site/guide/guards.md`. `guard(label: "x", time: 120000, cost: 5) { ... }` returns a `Result`. At run time a block that returns a `Result` passes it through unchanged, and any other value is wrapped in `success(...)`. A trip raises `std::guard`. Rejecting it makes the guard return a failure whose `data.type` is `"timeoutFailure"` or `"guardFailure"`. A negative limit turns that dimension off (`stdlib/agency.agency:259`), which is why parse refuses one. Checked on 2026-10-28: the type checker types a guard around a `Result`-returning call as `Result<Result<T>>`, while the runtime gives the call's own `Result`. Task 1 fixes the type checker.
+- **How a guard behaves.** `docs/site/guide/guards.md`. `guard(label: "x", time: 120000, cost: 5) { ... }` returns a `Result`. At run time a block that returns a `Result` passes it through unchanged, and any other value is wrapped in `success(...)`. A trip raises `std::guard`. Rejecting it makes the guard return a failure whose `data.type` is `"timeoutFailure"` or `"guardFailure"`. A negative limit turns that dimension off (`stdlib/agency.agency:259`), which is why parse refuses one. Checked on 2026-10-28: the type checker types a guard around a `Result`-returning call as `Result<Result<T>>`, while the runtime gives the call's own `Result`. Task 1 (#1298) fixes the type checker, including a `Result` named by a type alias and a block that returns a `Result` on one path and a plain value on another.
 - **How effects get "always" answers.** `@alwaysUnder(dir)` and `@always(name)` above an `effect` declaration pick the fields an "always" answer pins. `std::uploadImage` (`stdlib/image.agency:37`) carries both kinds, which is the precedent for `std::workflow::run`.
 - **Context values as text.** Checked on 2026-10-28: `if v is string then v else JSON.stringify(v)` typechecks for a `string`, a `string[]`, an object, and a value read through a narrowed `Result`. It produces the text itself for a string (line breaks intact) and JSON for anything else.
 - **Mocking the model in a test.** `docs/misc/TESTING.md`, "Deterministic LLM mode". A test case with `"useTestLLMProvider": true` and `"llmMocks": [{ "return": ["soup", "salad"] }]` answers each `llm()` call in order, including calls made in a child process (`tests/agency/subprocess/cost-child-spend-in-getcost.test.json`).
@@ -33,11 +33,11 @@ Tasks 2, 3, and 4 need neither and can start at once. Build the worktree with `m
 ## Global Constraints
 
 - The format version stays `1`. Step `limits` is a new optional field, not a new kind.
-- A limit is a positive finite number. `maxTime` is at most 3570000 (one hour less 30 seconds). The subprocess wall clock is `maxTime + 30000`, or 60000 when the workflow has no `maxTime`.
+- A limit is a positive finite number. `maxTime` is at most 3570000 (one hour less 30 seconds). The subprocess wall clock is `maxTime + 30000`, or `null` when the workflow has no `maxTime`, which gives `run` its own default of 60 seconds. The workflow code never restates `run`'s default or ceiling: both come from `LIMIT_CEILINGS` and `run`.
 - `std::workflow::run` is declared `{ name: string; dir: string; inputs: Json }` with `@alwaysUnder(dir)` and `@always(name)`.
 - `runWorkflow` checks, then raises `std::workflow::run`, then calls `run` on the program the check compiled. It never compiles twice.
-- Every generated statement comes from a `SHAPES` row through `statement()` or `expression()`. Every generated name comes from `names(id)` and is listed by `declaredBy`.
-- No new code under `lib/runtime/`. No `fs` import in `lib/stdlib/workflow/`.
+- Every generated statement comes from a `SHAPES` row through `statement()` or `expression()`. Every generated name comes from `names(id)` and is listed by `declaredBy`. The text of a guard's limits is written by one helper, `guardArgs` in `shapes.ts`, for the workflow guard and the step guard alike.
+- No new code under `lib/runtime/`, except exporting the existing `LIMIT_CEILINGS` from `lib/runtime/ipc.ts`. No `fs` import in `lib/stdlib/workflow/`.
 - No test makes a real model call. An LLM step in a test runs under `useTestLLMProvider` with `llmMocks`.
 - Before each commit: `pnpm run typecheck`, `pnpm run lint:structure`, and `npx prettier --check` on the changed TypeScript files. Run `make` after a change to a `stdlib/*.agency` file and before an Agency test that imports it.
 - Save every test run's output to a file and read the file. Run only the tests named in a step, plus the workflow tests (`npx vitest run lib/stdlib/workflow`, `tests/agency/workflow/`). CI runs the rest.
@@ -55,7 +55,7 @@ Tasks 2, 3, and 4 need neither and can start at once. Build the worktree with `m
 ## File structure
 
 - Modify `lib/typeChecker/synthesizer.ts` and `lib/typeChecker/guardConstruct.test.ts` (Task 1, its own PR), plus one sentence in `docs/dev/runtime/interrupts.md`.
-- Create `lib/stdlib/workflow/limits.ts` and `limits.test.ts`: the three limit numbers and `wallClockFor`.
+- Create `lib/stdlib/workflow/limits.ts` and `limits.test.ts`: `MAX_TIME`, `WALL_CLOCK_HEADROOM`, and `wallClockFor`. Export `LIMIT_CEILINGS` from `lib/runtime/ipc.ts`.
 - Modify `lib/stdlib/workflow/types.ts`, `parse.ts`, `tools.ts`, `resolve.ts`, `shapes.ts`, `lower.ts`, `render.ts`, `index.ts`, and their tests.
 - Modify `stdlib/workflow.agency`: the `std::workflow::run` effect, `_checked`, `checkWorkflow` on top of it, and `runWorkflow`.
 - Modify `tests/agency/workflow/fixtures/tools/lists.agency` (`addListItems` raises an interrupt). Create `tests/agency/workflow/fixtures/tools/slow.agency`.
@@ -65,6 +65,8 @@ Tasks 2, 3, and 4 need neither and can start at once. Build the worktree with `m
 ---
 
 ### Task 1: A guard around a `Result` has that `Result`'s type (its own PR)
+
+**Status: done.** Open for review as #1298 (branch `adit/guard-result-type`, worktree `/Users/adityabhargava/agency-lang/packages/agency-lang/worktree-guard-type`). The PR goes further than Step 3: `guardSuccessType` resolves type aliases and takes the success type from each `Result` among the block's returns, and the failure side stays `any`, because a trip fails with the guard's own data.
 
 **Files:**
 - Modify: `lib/typeChecker/synthesizer.ts:873` (the `_guard` row of `BLOCK_CALL_RESULT`)
@@ -76,7 +78,7 @@ Branch `adit/guard-result-type` from main, in its own worktree under `packages/a
 **Interfaces:**
 - Produces: a `guard` whose block returns a `Result<T>` has type `Result<T>`. A block returning anything else, including `any`, keeps today's `Result<element>`.
 
-- [ ] **Step 1: Write the failing test** in the `describe("guard construct — Result<T> typing ...")` block:
+- [x] **Step 1: Write the failing test** in the `describe("guard construct — Result<T> typing ...")` block:
 
 ```ts
 it("passes a Result the block returns through, as try does", () => {
@@ -91,21 +93,21 @@ node main() {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run lib/typeChecker/guardConstruct.test.ts > /tmp/wf2-t1.txt 2>&1; tail -20 /tmp/wf2-t1.txt`
 Expected: FAIL. The `number` case reports `Result<number>` is not assignable to `number`.
 
-- [ ] **Step 3: Change the `_guard` row** to return `element` unchanged when `element.type === "resultType"`, the way `synthTryExpression` does at `synthesizer.ts:625`. Keep the wrap for every other element. Update the row's comment to say a returned `Result` passes through, matching the runtime.
+- [x] **Step 3: Change the `_guard` row** to return `element` unchanged when `element.type === "resultType"`, the way `synthTryExpression` does at `synthesizer.ts:625`. Keep the wrap for every other element. Update the row's comment to say a returned `Result` passes through, matching the runtime.
 
-- [ ] **Step 4: Run the type checker tests, rebuild, and run the guard Agency tests**
+- [x] **Step 4: Run the type checker tests, rebuild, and run the guard Agency tests**
 
 Run: `npx vitest run lib/typeChecker > /tmp/wf2-t1.txt 2>&1; tail -5 /tmp/wf2-t1.txt; make > /tmp/wf2-make.txt 2>&1; tail -3 /tmp/wf2-make.txt; pnpm run agency test tests/agency/guards > /tmp/wf2-t1-agency.txt 2>&1; tail -5 /tmp/wf2-t1-agency.txt`
 Expected: all pass. `make` typechecks the stdlib, so a stdlib file that relied on the nested type shows up here.
 
-- [ ] **Step 5: Add one sentence to the guard construct section** of `docs/dev/runtime/interrupts.md`: the construct's type is `Result<T>` with `T` from the block's returns, and a block that returns a `Result` gives that `Result`'s type, because the runtime passes it through, as `try` does.
+- [x] **Step 5: Add one sentence to the guard construct section** of `docs/dev/runtime/interrupts.md`: the construct's type is `Result<T>` with `T` from the block's returns, and a block that returns a `Result` gives that `Result`'s type, because the runtime passes it through, as `try` does.
 
-- [ ] **Step 6: Commit, push, and open the PR.** Write the message and the PR description to files and pass them with `-F` and `--body-file`.
+- [x] **Step 6: Commit, push, and open the PR.** Write the message and the PR description to files and pass them with `-F` and `--body-file`.
 
 ---
 
@@ -117,13 +119,13 @@ Expected: all pass. `make` typechecks the stdlib, so a stdlib file that relied o
 - Test: `lib/stdlib/workflow/parse.test.ts`
 
 **Interfaces:**
-- Produces in `limits.ts`: `export const MAX_TIME = 3570000`, `export const WALL_CLOCK_HEADROOM = 30000`, `export const DEFAULT_WALL_CLOCK = 60000`, and `export function wallClockFor(limits: Limits | null): number`, which returns `limits.maxTime + WALL_CLOCK_HEADROOM` when `maxTime` is set and `DEFAULT_WALL_CLOCK` otherwise.
+- Produces in `limits.ts`: `export const WALL_CLOCK_HEADROOM = 30000`, `export const MAX_TIME = LIMIT_CEILINGS.wallClock - WALL_CLOCK_HEADROOM` (so the cap follows `run`'s ceiling instead of restating it), and `export function wallClockFor(limits: Limits | null): number | null`, which returns `limits.maxTime + WALL_CLOCK_HEADROOM` when `maxTime` is set and `null` otherwise. `run` reads `null` as its default, so the 60-second default is stated once, in `run`. `LIMIT_CEILINGS` in `lib/runtime/ipc.ts` becomes `export const`; nothing else there changes.
 - Produces in `types.ts`: `ToolStep.limits?: Limits | null` and `LlmStep.limits?: Limits | null`.
 - Parse rules: each limit field is a finite number greater than 0, and `maxTime` is at most `MAX_TIME`. The same schema checks the workflow's `limits` and a step's. Messages: `limits.<field> must be a positive number` and `limits.maxTime must be at most 3570000 (one hour less 30 seconds)`. A step's problem names that step and the field `limits.<field>`.
 
 - [ ] **Step 1: Write the failing tests**
 
-In `limits.test.ts`: `wallClockFor({ maxTime: 300000 })` is `330000`, `wallClockFor({ maxCost: 1 })` is `60000`, `wallClockFor(null)` is `60000`, and `wallClockFor({ maxTime: 3570000 })` is `3600000`.
+In `limits.test.ts`: `wallClockFor({ maxTime: 300000 })` is `330000`, `wallClockFor({ maxCost: 1 })` is `null`, `wallClockFor(null)` is `null`, `wallClockFor({ maxTime: MAX_TIME })` is `LIMIT_CEILINGS.wallClock`, and `MAX_TIME` is `3570000`.
 
 In `parse.test.ts`, using part 1's `withStep` helper:
 - `limits: { maxCost: -1 }` gives `{ step: null, field: "limits.maxCost", message: "limits.maxCost must be a positive number" }`.
@@ -156,8 +158,8 @@ Expected: PASS.
 - Test: `lib/stdlib/workflow/tools.test.ts`, `lib/stdlib/workflow/resolve.test.ts`, `tests/agency/workflow/check.agency` and `check.test.json`
 
 **Interfaces:**
-- Produces in `tools.ts`: `export type ToolRefsResult = { refs: ToolRef[]; problems: Problem[] }` and `toolRefs(tools: unknown[], dir: string, cwd: string): ToolRefsResult`. Each tool that cannot be imported adds one problem, `{ step: null, field: null, message }`, with part 1's message for that tool. When every tool can be imported, the duplicate-name check runs, and its message becomes one problem.
-- Produces in `index.ts`: `_toolRefs(tools: unknown[], dir: string): ResultSuccess | ResultFailure`, a success with the refs or `_problemsFailure(problems)`.
+- Produces in `tools.ts`: `export type ToolRefsResult = { refs: ToolRef[]; problems: [] } | { refs: null; problems: Problem[] }`, the same shape as `ParseResult` and `ResolveResult`, and `toolRefs(tools: unknown[], dir: string, cwd: string): ToolRefsResult`. Each tool that cannot be imported adds one problem, `{ step: null, field: null, message }`, with part 1's message for that tool. When every tool can be imported, the duplicate-name check runs, and its message becomes one problem.
+- Produces in `index.ts`: `_toolRefs(tools: unknown[], dir: string): ResultSuccess | ResultFailure`, a success with the refs or `_problemsFailure(problems)`, the same turn `_compileWorkflowSource` makes for `CompileResult`.
 - `stdlib/workflow.agency`: `_compileWithRanges` calls `_toolRefs` without `try`, and passes a failure through with `failure(refs.error, refs.data)`.
 - Resolve: `UNTYPED_RETURNS` becomes `[null, "any", "Json"]`. The warning for `null` keeps its words. For `any` and `Json` the message is `step "<id>": "<tool>" returns <type>, so references into its value are checked at run time`.
 
@@ -223,27 +225,29 @@ Expected: PASS.
 
 ### Task 5: A step with limits runs inside a guard
 
-Needs Task 1 merged into main and main merged into this branch.
+Needs #1298 (Task 1) merged into main, and main merged into this branch.
 
 **Files:**
-- Modify: `lib/stdlib/workflow/types.ts`, `lib/stdlib/workflow/resolve.ts`, `lib/stdlib/workflow/shapes.ts`, `lib/stdlib/workflow/lower.ts`
+- Modify: `lib/stdlib/workflow/types.ts`, `lib/stdlib/workflow/resolve.ts`, `lib/stdlib/workflow/shapes.ts`, `lib/stdlib/workflow/lower.ts`, `lib/stdlib/workflow/render.ts` (`guardArgs` moves out)
 - Test: `lib/stdlib/workflow/resolve.test.ts`, `lib/stdlib/workflow/shapes.test.ts`, `lib/stdlib/workflow/lower.test.ts`, `tests/agency/workflow/compile.agency` and `compile.test.json`
 
 **Interfaces:**
 - Produces in `types.ts`: `ResolvedToolStep` replaces `returnsResult` with `holdsResult: boolean` and gains `limits: Limits | null`. `ResolvedLlmStep` gains `holdsResult: boolean`, `limits: Limits | null`, and `reply: string`. `holdsResult` means the step's local holds a `Result`: for a tool step, the tool returns one or the step has limits; for an LLM step, the step has limits.
 - Resolve: a step's `limits` with neither field is `null`. `names(id).reply` is `step_<id>_reply`, listed by `declaredBy` (field `limits`) for an LLM step with limits. Add `"guard"` to `PROGRAM_NAMES`.
-- `SHAPES` gains three rows:
-  - `guardedCall`: `const {{value}} = guard(label: #label{{limits}}) {\n  return {{tool}}({{args}})\n}`
-  - `guardedLlm`: `const {{value}} = guard(label: #label{{limits}}) {\n  const {{reply}}: {{outputType}} = thread {\n    return llm(#prompt{{options}})\n  }\n  return {{reply}}\n}`
-  - `stepCheck`: `if ({{value}} is failure) {\n  return failure("step {{id}}: ${{{value}}.error}", { step: #id, cause: {{value}} })\n}`
-- `TOKEN_CHECKS.limits` accepts `, time: #time`, `, cost: #cost`, and `, time: #time, cost: #cost`. `#label` is `literal(step.id)`. `#time` and `#cost` are `literal(number)`. Checked on 2026-10-28: `_parseStatements` and `_toSource` print both guarded shapes exactly as written above.
-- Lower: a tool step with limits is the `guardedCall` fragment and a `check` fragment, both owned by `{ step, field: "args" }`. An LLM step with limits is the `guardedLlm` fragment (owner field `prompt`) and a `stepCheck` fragment. A reference into a step reads `.value` when `target.holdsResult`. The check after an unguarded tool call picks `check` or `checkPlain` by `holdsResult`, as it did by `returnsResult`.
+- `guardArgs(limits: Limits): string[]` moves from `render.ts` to `shapes.ts` and is exported. It returns the pieces `time: <n>` and `cost: <n>` for the limits that are set, each number printed through `literal`, as today. Render joins them with `, ` for the workflow guard, as it does now. Lower prefixes each with `, ` for a step guard. This is the one place that writes a limit into code.
+- `SHAPES` gains three small rows that compose with the rows part 1 has:
+  - `guarded`: `const {{value}} = guard(label: #label{{limits}}) {\n  #body\n}`. `#body` is a statements hole; `_fill` spreads a multi-statement `Code` into a block body (`docs/dev/language/template-agency.md`, "substituteInArray").
+  - `returnCall`: `return {{tool}}({{args}})`
+  - `returnLocal`: `return {{name}}`
+- `TOKEN_CHECKS.limits` accepts the empty string or `, ` followed by what `guardArgs` prints: each piece `time: <n>` or `cost: <n>`, `<n>` a text `Number()` reads as a finite number, joined by `, `. `#label` is `literal(step.id)`.
+- Lower: the body of a guarded tool step is `returnCall`. The body of a guarded LLM step is part 1's `llm` statement with `value: step.reply`, then `returnLocal` with `name: step.reply`; the reply is declared inside the guard so the structured-output schema still comes from the output type. Both bodies go into `guarded` as `#body`. A guarded step always holds a `Result`, so both are followed by part 1's `check`, with `tool` set to the tool's name for a tool step and to `llm` for an LLM step, so the message reads `step meals (llm): ...`. There is no separate guarded check shape. A tool step's two fragments are owned by `{ step, field: "args" }`; an LLM step's by `{ step, field: "prompt" }`. A reference into a step reads `.value` when `target.holdsResult`. The check after an unguarded tool call picks `check` or `checkPlain` by `holdsResult`, as it did by `returnsResult`.
+- Hygiene: `guarded` binds only `{{value}}`. A body never mentions its own step's value local (a tool body names arg locals, an LLM body names the reply and context locals, and `collisionRule` keeps `step_<id>_reply` distinct from `step_<id>`), so `fill` renames nothing. The shapes test below pins the printed text so a hygiene rename would show up as a changed line.
 
 - [ ] **Step 1: Write the failing tests**
 
-`shapes.test.ts`: `statement("guardedCall", { value: "step_add", tool: "addListItems", args: "items: step_add_items", limits: ", time: #time" }, { label: literal("add"), time: literal(120000) })` prints `const step_add = guard(label: "add", time: 120000) {` then `  return addListItems(items: step_add_items)` then `}`. `limits: ", retries: #r"` throws.
+`shapes.test.ts`: `guardArgs({ maxTime: 120000, maxCost: 5 })` is `["time: 120000", "cost: 5"]`. `statement("guarded", { value: "step_add", limits: ", time: 120000" }, { label: literal("add"), body: statement("returnCall", { tool: "addListItems", args: "items: step_add_items" }, {}) })` prints `const step_add = guard(label: "add", time: 120000) {` then `  return addListItems(items: step_add_items)` then `}`. The same with a two-statement body (an `llm` statement then `returnLocal`) prints both statements inside the braces, which pins that `_fill` spreads the body. `limits: ", retries: 3"` and `limits: ", time: abc"` throw.
 
-`lower.test.ts`: the meal plan with `limits: { maxTime: 120000, maxCost: 5 }` on `add` lowers that step to the guarded call and a `check`. With `limits: { maxTime: 60000 }` on `meals`, it lowers to `guardedLlm` with `step_meals_reply` and a `stepCheck`. `guardedPlainStepIsReadThroughValue`: a step `lines` calling `splitLines` with limits, then a step whose argument is `steps.lines[0]`, binds `const step_next_text = step_lines.value[0]`.
+`lower.test.ts`: the meal plan with `limits: { maxTime: 120000, maxCost: 5 }` on `add` lowers that step to the guarded call and a `check`. With `limits: { maxTime: 60000 }` on `meals`, it lowers to a guard whose body declares `step_meals_reply` and returns it, then a `check` whose message starts `step meals (llm):`. `guardedPlainStepIsReadThroughValue`: a step `lines` calling `splitLines` with limits, then a step whose argument is `steps.lines[0]`, binds `const step_next_text = step_lines.value[0]`.
 
 `resolve.test.ts`: `limits: {}` resolves to `null`. `splitLines` with limits has `holdsResult: true`, and without limits `holdsResult: false`.
 
@@ -259,7 +263,7 @@ Expected: FAIL. The shapes do not exist, and `holdsResult` is undefined.
 - [ ] **Step 4: Run the tests**
 
 Run: `npx vitest run lib/stdlib/workflow > /tmp/wf2-t5.txt 2>&1; tail -5 /tmp/wf2-t5.txt; pnpm run agency test tests/agency/workflow/compile.agency > /tmp/wf2-t5-agency.txt 2>&1; tail -5 /tmp/wf2-t5-agency.txt`
-Expected: PASS. If `guardedStepsTypecheck` fails with a `Result<Result<...>>` error, Task 1 is not on this branch.
+Expected: PASS. If `guardedStepsTypecheck` fails with a `Result<Result<...>>` error, #1298 is not on this branch.
 
 - [ ] **Step 5: Format, typecheck, lint, and commit.**
 
@@ -267,7 +271,7 @@ Expected: PASS. If `guardedStepsTypecheck` fails with a `Result<Result<...>>` er
 
 ### Task 6: `main` checks its inputs
 
-Needs #1297 merged into main and main merged into this branch.
+#1297 is merged into main. This branch was cut before it, so merge main into this branch before this task.
 
 **Files:**
 - Modify: `lib/stdlib/workflow/render.ts` (`SCAFFOLD`, `GUARDED_SCAFFOLD`)
@@ -301,7 +305,7 @@ Expected: PASS. Task 7 tests that the check runs.
 - Test: `lib/stdlib/workflow/index.test.ts`, `tests/agency/workflow/run.agency`, `tests/agency/workflow/run.test.json`
 
 **Interfaces:**
-- Produces in `index.ts`: `Compiled.wallClock: number`, set to `wallClockFor(resolved.limits)`.
+- Produces in `index.ts`: `Compiled.wallClock: number | null`, set to `wallClockFor(resolved.limits)`.
 - Produces in `stdlib/workflow.agency`:
   - The effect, declared after the imports with a comment saying what an "always" answer pins:
 
@@ -316,14 +320,14 @@ Expected: PASS. Task 7 tests that the check runs.
     ```
 
   - The import from `std::agency` adds `run` and `CompiledProgram`.
-  - `type Checked = { program: CompiledProgram; warnings: WorkflowProblem[]; wallClock: number }`, and the Agency `Compiled` type gains `wallClock: number`.
+  - `type Checked = { program: CompiledProgram; warnings: WorkflowProblem[]; wallClock: number | null }`, and the Agency `Compiled` type gains `wallClock: number | null`.
   - `@hidden @capabilities(fileRead) export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Checked, WorkflowFailure>`: today's `checkWorkflow` body, succeeding with the compiled program, the warnings, and the wall clock.
   - `checkWorkflow` becomes `_checked` plus `success(checked.value.warnings)`. Its signature and behavior do not change.
   - `@capabilities(fileRead, fileWrite, subprocess) export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: string = ""): Result<Json>`. It calls `_checked` and passes a failure through. Then it raises `return interrupt std::workflow::run("Run the workflow ${workflow.name}?", { name: workflow.name, dir: dir, inputs: inputs })`. Then it calls `run(compiled: checked.value.program, node: "main", args: { inputs: inputs }, wallClock: checked.value.wallClock)` and returns `finished.data` from a success, or the failure. The docstring's first line: `Run a workflow: check it, ask to run it, and run its program in a subprocess.` Then one `@param` line each.
 
 - [ ] **Step 1: Write the failing tests**
 
-`index.test.ts`: the compiled meal plan has `wallClock: 330000`, and with no limits `60000`.
+`index.test.ts`: the compiled meal plan has `wallClock: 330000`, and with no limits `null`.
 
 `run.agency` imports `runWorkflow` and `Workflow` from `std::workflow`, `add` and `multiply` from `std::math`, and the mutable helpers. A helper `doubleSum(limits: Json): Workflow` builds `{ format: 1, name: "doubleSum", description: "Add two numbers and double the sum.", inputs: "{ a: number; b: number }", steps: [sum, doubled], result: { "$ref": "steps.doubled" } }`, with `limits` when given. Step `sum` calls `add` from `std::math` with `{ a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } }`. Step `doubled` calls `multiply` with `{ a: { "$ref": "steps.sum" }, b: 2 }`. Every node starts with `setMutable("effects", [])`, since cases may share a process, and wraps its call in `handle { ... } with (intr) { ... }`, which appends `intr.effect` to the mutable list `"effects"`, saves `intr.data` under its effect name, and approves.
 
@@ -332,7 +336,7 @@ Expected: PASS. Task 7 tests that the check runs.
 | `mathWorkflowRuns` | run with `{ a: 2, b: 3 }`, return `result.value` | `10` |
 | `runPayload` | return the saved `std::workflow::run` data | `{"name":"doubleSum","dir":"","inputs":{"a":2,"b":3}}` |
 | `wallClockFromMaxTime` | run with `limits: { maxTime: 300000 }`, return the saved `std::run` `limits.wallClock` | `330000` |
-| `defaultWallClock` | run with no limits, same read | `60000` |
+| `defaultWallClock` | run with no limits, same read; `run` fills its default before it raises `std::run` (`stdlib/agency.agency:241`) | `60000` |
 | `badWorkflowAsksNothing` | run a workflow whose step names `subtract`, which is not passed; return `[isFailure(result), getMutable("effects", [])]` | `[true,[]]` |
 | `rejectedRunStartsNothing` | the handler rejects `std::workflow::run`; return `[isFailure(result), getMutable("effects", [])]` | `[true,["std::workflow::run"]]` |
 | `badInputsFailBeforeFirstStep` | run with `{ a: "two", b: 3 }`; return whether the error starts with `Argument "inputs" of main` | `true` |
@@ -406,4 +410,4 @@ Expected: PASS. Part 1's tests only compile and typecheck the tools, and an inte
 
 **Type consistency.** `ToolRefsResult` is defined in Task 3. `ContextBinding` in Task 4. `holdsResult`, `limits`, and `reply` on the resolved steps in Task 5. `Compiled.wallClock` and `Checked` in Task 7. Later tasks use these names.
 
-**Departures from part 1 to watch for in review.** `ResolvedToolStep.returnsResult` becomes `holdsResult`. `_toolRefs` returns a `Result` instead of throwing. `SHAPES.stringify` is deleted.
+**Departures from part 1 to watch for in review.** `ResolvedToolStep.returnsResult` becomes `holdsResult`. `_toolRefs` returns a `Result` instead of throwing. `SHAPES.stringify` is deleted. `guardArgs` moves from `render.ts` to `shapes.ts`, and `LIMIT_CEILINGS` in `lib/runtime/ipc.ts` is exported.

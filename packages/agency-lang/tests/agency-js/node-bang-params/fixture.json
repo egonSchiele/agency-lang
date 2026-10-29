@@ -1,11 +1,22 @@
 {
   "finalData": {
-    "refusedSucceeded": false,
-    "refusalNamesTheArgument": true,
+    "refused": {
+      "succeeded": false,
+      "namesTheArgument": true,
+      "started": []
+    },
     "accepted": {
-      "__type": "resultType",
-      "success": true,
-      "value": "body ran with Groceries 2026"
+      "result": {
+        "__type": "resultType",
+        "success": true,
+        "value": "body ran with Groceries 2026"
+      },
+      "started": ["main"]
+    },
+    "viaGoto": {
+      "succeeded": false,
+      "namesTheArgument": true,
+      "started": ["start"]
     }
   }
 }

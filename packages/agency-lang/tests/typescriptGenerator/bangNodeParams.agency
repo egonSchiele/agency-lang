@@ -1,0 +1,3 @@
+node main(count: number!) {
+  print(count)
+}

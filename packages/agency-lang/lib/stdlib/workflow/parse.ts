@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { isReservedInternalName } from "../../reservedNames.js";
-import { MAX_TIME } from "./limits.js";
+import { MAX_TIME, PLAIN_DECIMAL } from "./limits.js";
 import { parseTypeText } from "./typeText.js";
 import { isIdentifier, isObject, REF_PATH, refsIn, type Problem, type Workflow } from "./types.js";
 
@@ -136,6 +136,9 @@ function limitMessage(key: string, limit: unknown): string | null {
   if (!positive.safeParse(limit).success) {
     return `limits.${key} must be a positive number`;
   }
+  if (!PLAIN_DECIMAL.test(String(limit))) {
+    return `limits.${key} must be a number the program can write as a plain decimal such as 0.5; ${String(limit)} is not one`;
+  }
   if (key === "maxTime" && (limit as number) > MAX_TIME) {
     return `limits.maxTime must be at most ${MAX_TIME} (one hour less 30 seconds)`;
   }
@@ -197,17 +200,44 @@ const steps = z
     });
   });
 
-const workflow = z.object({
-  format: z.literal(1, {
-    error: (issue) => `format must be 1, got ${JSON.stringify(issue.input)}`,
-  }),
-  name: identifier("name"),
-  description: z.string({ error: "description must be a string" }),
-  inputs: typeText("Inputs", "inputs", "inputs must be a string holding an object type"),
-  steps,
-  result: value.optional(),
-  limits,
-});
+/** A step's time limit is reached only if the workflow's `maxTime`, which
+ *  sets the subprocess wall clock and the guard around `main`, is at least
+ *  as large. Otherwise the process is killed or the outer guard trips, and
+ *  the failure names no step. The message, or null when the step is covered. */
+function stepTimeMessage(stepTime: number, workflowTime: unknown): string | null {
+  if (typeof workflowTime !== "number") {
+    return `limits.maxTime needs the workflow to set a maxTime of at least ${stepTime}; the subprocess wall clock comes from the workflow's maxTime`;
+  }
+  if (stepTime > workflowTime) {
+    return `limits.maxTime (${stepTime}) is more than the workflow's maxTime (${workflowTime}), so the workflow's guard would trip first`;
+  }
+  return null;
+}
+
+const workflow = z
+  .object({
+    format: z.literal(1, {
+      error: (issue) => `format must be 1, got ${JSON.stringify(issue.input)}`,
+    }),
+    name: identifier("name"),
+    description: z.string({ error: "description must be a string" }),
+    inputs: typeText("Inputs", "inputs", "inputs must be a string holding an object type"),
+    steps,
+    result: value.optional(),
+    limits,
+  })
+  .superRefine((parsed, ctx) => {
+    parsed.steps.forEach((step, index) => {
+      const stepTime = step.limits?.maxTime;
+      if (typeof stepTime !== "number") {
+        return;
+      }
+      const message = stepTimeMessage(stepTime, parsed.limits?.maxTime);
+      if (message !== null) {
+        ctx.addIssue({ code: "custom", message, path: ["steps", index, "limits", "maxTime"] });
+      }
+    });
+  });
 
 /** A problem's place from an issue's path: `steps[i]...` belongs to that
  *  step, named by its id when it has one; anything else to the workflow. */

@@ -75,7 +75,18 @@ describe("guarded", () => {
   it("accepts only what guardArgs prints as limits", () => {
     const body = statement("returnCall", { tool: "f", args: "" }, {});
     const values = { label: literal("a"), body };
-    for (const limits of [", retries: 3", ", time: abc", "time: 1", ", time: 1,cost: 2"]) {
+    const refused = [", retries: 3", ", time: abc", "time: 1", ", time: 1,cost: 2"];
+    // A guard reads a negative number as "no limit"; an empty or hex
+    // number is finite to Number() but is not what guardArgs prints.
+    refused.push(
+      ", time: ",
+      ", time: -1",
+      ", time: 0",
+      ", time: 0x10",
+      ", cost: .5",
+      ", cost: 1e-7",
+    );
+    for (const limits of refused) {
       expect(() => statement("guarded", { value: "step_a", limits }, values)).toThrow("{{limits}}");
     }
     expect(() =>

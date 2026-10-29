@@ -214,6 +214,22 @@ describe("parseWorkflow", () => {
     );
   });
 
+  it("refuses a limit the program would write in exponent form", () => {
+    expect(
+      parseWorkflow(withFields(mealPlan, { limits: { maxCost: 0.0000001 } })).problems,
+    ).toEqual([
+      {
+        step: null,
+        field: "limits.maxCost",
+        message:
+          "limits.maxCost must be a number the program can write as a plain decimal such as 0.5; 1e-7 is not one",
+      },
+    ]);
+    expect(parseWorkflow(withFields(mealPlan, { limits: { maxCost: 0.000001 } })).problems).toEqual(
+      [],
+    );
+  });
+
   it("accepts limits on a step and keeps them", () => {
     const wf = withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 5 } });
     const parsed = parseWorkflow(wf);
@@ -232,6 +248,30 @@ describe("parseWorkflow", () => {
         message: 'limits has no field "retries"; it takes maxCost and maxTime',
       },
     ]);
+  });
+
+  it("refuses a step maxTime the workflow's maxTime does not cover", () => {
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { maxTime: 300001 } })).problems).toEqual([
+      {
+        step: "add",
+        field: "limits.maxTime",
+        message:
+          "limits.maxTime (300001) is more than the workflow's maxTime (300000), so the workflow's guard would trip first",
+      },
+    ]);
+    const { limits, ...noLimits } = mealPlan;
+    expect(parseWorkflow(withStep(noLimits, 4, { limits: { maxTime: 1000 } })).problems).toEqual([
+      {
+        step: "add",
+        field: "limits.maxTime",
+        message:
+          "limits.maxTime needs the workflow to set a maxTime of at least 1000; the subprocess wall clock comes from the workflow's maxTime",
+      },
+    ]);
+    expect(parseWorkflow(withStep(mealPlan, 4, { limits: { maxTime: 300000 } })).problems).toEqual(
+      [],
+    );
+    expect(parseWorkflow(withStep(noLimits, 4, { limits: { maxCost: 1 } })).problems).toEqual([]);
   });
 
   it("accepts a workflow with no result and no limits", () => {

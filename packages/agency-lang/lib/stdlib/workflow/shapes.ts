@@ -11,6 +11,7 @@
  */
 import { liftValue } from "../../runtime/template/lift.js";
 import { _fill, _parseExpr, _parseStatements, _toSource, type Code } from "../template.js";
+import { PLAIN_DECIMAL } from "./limits.js";
 import { isIdentifier, type Limits } from "./types.js";
 
 export const SHAPES = {
@@ -98,8 +99,8 @@ function isLimitList(text: string): boolean {
       return (
         sides.length === 2 &&
         ["time", "cost"].includes(sides[0]) &&
-        Number.isFinite(Number(sides[1])) &&
-        sides[1].trim() === sides[1]
+        PLAIN_DECIMAL.test(sides[1]) &&
+        Number(sides[1]) > 0
       );
     });
 }

@@ -46,6 +46,26 @@
       ]
     },
     {
+      "nodeName": "guardedLlmStepRuns",
+      "description": "an LLM step with limits hands its typed reply to the next step",
+      "input": "",
+      "expectedOutput": "\"added 2 items to l1/Meals\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            "soup",
+            "salad"
+          ]
+        }
+      ]
+    },
+    {
       "nodeName": "stepLimitTrips",
       "description": "a step's time limit trips its guard; the workflow fails naming the step and the timeout",
       "input": "",

@@ -118,7 +118,9 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 ## Limits and the step guard
 
-A workflow's `limits` and a step's `limits` take the same two fields, `maxCost` in dollars and `maxTime` in milliseconds, and pass the same rules in parse: each is a positive finite number, and `maxTime` is at most `MAX_TIME` in `limits.ts`, which is `run`'s wall clock ceiling less the 30-second headroom, so the subprocess wall clock never exceeds the ceiling. A guard reads a negative number as "no limit", which is why zero and negatives are refused.
+A workflow's `limits` and a step's `limits` take the same two fields, `maxCost` in dollars and `maxTime` in milliseconds, and pass the same rules in parse: each is a positive finite number, and `maxTime` is at most `MAX_TIME` in `limits.ts`, which is `run`'s wall clock ceiling less the 30-second headroom, so the subprocess wall clock never exceeds the ceiling. A guard reads a negative number as "no limit", which is why zero and negatives are refused. A limit must also print as a plain decimal, `PLAIN_DECIMAL` in `limits.ts`: `0.0000001` prints as `1e-7`, which is not an Agency number literal, so parse refuses it and the `limits` token check accepts only that form.
+
+A step's `maxTime` needs a workflow `maxTime` at least as large. The subprocess wall clock and the guard around `main` both come from the workflow's `maxTime`, so a step limit above it would never trip: the process would be killed at the wall clock, or the outer guard would trip first, and either failure names no step. Parse refuses the step limit instead, in a message that says what to set.
 
 The workflow's limits become the guard around `main`'s body, written into the scaffold by render. A step's limits become a guard around that one step, named after it:
 
@@ -135,7 +137,7 @@ Both guards write their limits through `guardArgs` in `shapes.ts`, the one place
 
 A guard always gives a `Result`: a `Result` the block returns passes through, and any other value is wrapped in `success(...)`. So a step with limits holds a `Result` whatever its tool returns. Resolve records this as `holdsResult`, true when the tool returns a `Result` or the step has limits, and lower reads a reference into such a step through `.value`. A trip raises `std::guard` first. A rejection makes the guard return a failure, and the step's ordinary check turns that into the workflow's failure, naming the step and carrying the guard's failure as `cause`.
 
-A guarded LLM step is the same `thread` block inside the guard, with `return <reply>` as its last line instead of an assignment: a `return` inside the thread returns from the guard block, so the guard's `Result` holds the typed reply. The last line is a checked text token on the `llmThread` shape. It was a hole first, and filling it with code that names the reply made template hygiene rename the binder.
+A guarded LLM step is the same `thread` block inside the guard, with `return <reply>` as its last line instead of an assignment: a `return` inside the thread returns from the guard block, so the guard's `Result` holds the typed reply. The last line is a checked text token on the `llmThread` shape, because a code hole filled with code that names the reply would make template hygiene rename the binder.
 
 ## Interrupts and checkpoints
 

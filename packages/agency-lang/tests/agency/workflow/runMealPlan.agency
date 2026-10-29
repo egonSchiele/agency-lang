@@ -79,6 +79,34 @@ node pausedWorkflowResumes(): Json {
   return result.value
 }
 
+/** The meal plan with `limits` on the LLM step, so the guard holds the typed reply. */
+def mealPlanWithGuardedLlm(): Workflow {
+  const plan = mealPlan()
+  const steps: Json[] = []
+  for (step in plan.steps) {
+    if (step.id == "meals") {
+      steps.push({ ...step, limits: { maxTime: 60000 } })
+    } else {
+      steps.push(step)
+    }
+  }
+  return { ...plan, steps: steps, limits: { maxTime: 60000 } }
+}
+
+/** A guarded LLM step returns its reply from inside the thread, inside the
+  guard. The next step gets the list, not the thread's messages. */
+node guardedLlmStepRuns(): Json {
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(mealPlanWithGuardedLlm(), { noteTitle: "Groceries" }, TOOLS, DIR)
+  } with approve
+  if (result is failure) {
+    print("failed: ${result.error}")
+    return null
+  }
+  return result.value
+}
+
 /** One step whose tool sleeps two seconds under a 100 ms limit. The guard
   trips, the handler rejects `std::guard`, and the step's check turns the
   guard's failure into the workflow's, naming the step and the cause. */
@@ -88,7 +116,8 @@ node stepLimitTrips(): Json {
     name: "slowOne",
     description: "Echo text slowly.",
     inputs: "{ text: string }",
-    steps: [{ id: "slow", kind: "tool", module: "./slow.agency", tool: "slowEcho", args: { text: { "$ref": "inputs.text" } }, limits: { maxTime: 100 } }]
+    steps: [{ id: "slow", kind: "tool", module: "./slow.agency", tool: "slowEcho", args: { text: { "$ref": "inputs.text" } }, limits: { maxTime: 100 } }],
+    limits: { maxTime: 5000 }
   }
   let result: Result<Json> = failure("not run")
   handle {

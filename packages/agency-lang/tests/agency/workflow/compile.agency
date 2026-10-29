@@ -261,7 +261,7 @@ node guardedStepsTypecheck(): boolean {
   }
   steps.push({ id: "lines", kind: "tool", module: "./notes.agency", tool: "splitLines", args: { text: { "$ref": "steps.text.body" } }, limits: { maxTime: 1000 } })
   steps.push({ id: "first", kind: "tool", module: "./notes.agency", tool: "splitLines", args: { text: { "$ref": "steps.lines[0]" } } })
-  const workflow: Workflow = { ...plan, steps: steps, result: { "$ref": "steps.first" } }
+  const workflow: Workflow = { ...plan, steps: steps, result: { "$ref": "steps.first" }, limits: { maxTime: 120000 } }
   const source = sourceOf(workflow)
   return containsAll(source, ["const step_first_text = step_lines.value[0]"]) && typechecks(source)
 }

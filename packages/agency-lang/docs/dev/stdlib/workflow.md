@@ -71,7 +71,7 @@ Whether a tool returns a `Result` comes from the `returnsResult` flag `describe`
 1. A reference into a step that returns a `Result` adds `.value`. A reference into a plain value does not.
 2. A tool not typed `Result` gets the `checkPlain` shape, whose message reads `(step_x as any).error`, because a plain type has no `.error`.
 
-A tool whose return type says nothing about the value gets a warning: no declared type, `any`, or `Json`. References into its value are only checked at run time. The list is `UNTYPED_RETURNS` in `resolve.ts`.
+A tool whose return type says nothing about the value gets a warning: no declared type, `any`, or `Json`. References into its value are only checked at run time. A `Result<Json>` gets the same warning, because a reference into the step reads `.value`, which is `Json`. The list is `UNTYPED` in `resolve.ts`, and `valueType` strips the `Result` wrapper before the lookup.
 
 `describe` can read a return type only from source it can see. It cannot read a `pkg::` module from a re-export line, or a local file a tool module re-exports from, so both are refused: a package tool in `toolRefs`, and a re-exported name in `_pickSignatures`.
 
@@ -100,7 +100,7 @@ The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise
 
 `toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value's `module` is a path relative to the working directory it was compiled in. A path under `stdlib/` becomes `std::<name>`. Any other path is rewritten relative to the workflow's `dir`, resolved against the working directory at run time, so a host that runs in a different directory from the one it compiled in can get "outside the workflow directory", or a path to the wrong file.
 
-The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. The duplicate-name check runs only when every tool can be imported.
+The module text is written into an import line, so it must match `MODULE_PATH`. A partial, a renamed function, a tool built by `createTool`, a runtime builtin, and a package tool are refused. Every tool that is refused is reported, as one problem each, so an author fixes the whole list at once. Two tools with the same name are refused next, in a problem that names both modules: an import line names a tool by its name, and renaming is refused, so the fix is to rename one def in its file.
 
 ## Not built yet
 

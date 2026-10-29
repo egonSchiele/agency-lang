@@ -54,8 +54,12 @@ const UNTYPED = [null, "any", "Json"];
 const RESULT_OF = /^Result<\s*([^,<>]+?)\s*(?:,[^>]*)?>$/;
 
 /** The type a reference into the step reads: the declared type, or the
- *  value type inside a `Result`, since the reference goes through `.value`. */
+ *  value type inside a `Result`, since the reference goes through `.value`.
+ *  A bare `Result` says nothing about its value. */
 function valueType(returnType: string | null): string | null {
+  if (returnType === "Result") {
+    return "any";
+  }
   const inner = returnType === null ? null : RESULT_OF.exec(returnType);
   return inner === null ? returnType : inner[1];
 }

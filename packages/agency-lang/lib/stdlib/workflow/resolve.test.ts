@@ -257,6 +257,26 @@ describe("resolveWorkflow", () => {
     ]);
   });
 
+  it("warns on a tool that returns a bare Result", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Result",
+        returnType: "Result",
+        returnsResult: true,
+        docstring: null,
+      },
+    };
+    expect(resolve(mealPlan, mealRefs, signatures).resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Result, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
   it("does not warn on a Result of a typed value", () => {
     const signatures = {
       ...mealSignatures,

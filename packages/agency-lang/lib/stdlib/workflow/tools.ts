@@ -25,24 +25,32 @@ const STDLIB_ID = /^stdlib\//;
 
 const RUNTIME_MODULE = "__runtime";
 
-/** The refusal for a tool value that cannot be imported, or null. */
-function importRefusal(tool: unknown, index: number): string | null {
+/** The function value a tool is, or the refusal that it cannot be imported. */
+type Importable = { fn: AgencyFunction; refusal: null } | { fn: null; refusal: string };
+
+function importable(tool: unknown, index: number): Importable {
   if (!AgencyFunction.isAgencyFunction(tool)) {
-    return `tool ${index + 1} is not an Agency function`;
+    return refused(`tool ${index + 1} is not an Agency function`);
   }
   if (tool.name !== tool.registeredName) {
-    return `tool "${tool.name}" is renamed from "${tool.registeredName}"; pass the original def`;
+    return refused(
+      `tool "${tool.name}" is renamed from "${tool.registeredName}"; pass the original def`,
+    );
   }
   if (tool.boundArgs !== null) {
-    return `tool "${tool.name}" is a partial; pass the original def`;
+    return refused(`tool "${tool.name}" is a partial; pass the original def`);
   }
   if (tool.created !== undefined) {
-    return `tool "${tool.name}" was built by createTool and cannot be imported`;
+    return refused(`tool "${tool.name}" was built by createTool and cannot be imported`);
   }
   if (tool.module === RUNTIME_MODULE) {
-    return `tool "${tool.name}" is built into the runtime and cannot be imported`;
+    return refused(`tool "${tool.name}" is built into the runtime and cannot be imported`);
   }
-  return null;
+  return { fn: tool, refusal: null };
+}
+
+function refused(refusal: string): Importable {
+  return { fn: null, refusal };
 }
 
 /** The module text for an import line, or the refusal. */
@@ -80,15 +88,15 @@ type ToolOutcome = { ref: ToolRef | null; problem: Problem | null };
 const wholeWorkflow = (message: string): Problem => ({ step: null, field: null, message });
 
 function toolOutcome(tool: unknown, index: number, dir: string, cwd: string): ToolOutcome {
-  const refusal = importRefusal(tool, index);
-  if (refusal !== null) {
-    return { ref: null, problem: wholeWorkflow(refusal) };
+  const checked = importable(tool, index);
+  if (checked.fn === null) {
+    return { ref: null, problem: wholeWorkflow(checked.refusal) };
   }
-  const module = moduleText(tool as AgencyFunction, dir, cwd);
+  const module = moduleText(checked.fn, dir, cwd);
   if (module.text === null) {
     return { ref: null, problem: wholeWorkflow(module.refusal) };
   }
-  return { ref: { module: module.text, name: (tool as AgencyFunction).name }, problem: null };
+  return { ref: { module: module.text, name: checked.fn.name }, problem: null };
 }
 
 /** One `ToolRef` per function value. `dir` is the workflow's directory and

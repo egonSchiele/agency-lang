@@ -858,25 +858,45 @@ function blockReturnType(
   return unionTypes(returnTypes);
 }
 
+/** What a guard's success carries when its block returns `element`. At run
+ *  time a returned Result passes through unchanged and any other value is
+ *  wrapped, so each Result among the returns, a type alias of one
+ *  included, gives its success type, and every other return gives itself. */
+function guardSuccessType(
+  element: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  const resolved = safeResolveType(element, aliases);
+  if (resolved.type === "resultType") {
+    return resolved.successType;
+  }
+  if (resolved.type === "unionType") {
+    return unionTypes(resolved.types.map((member) => guardSuccessType(member, aliases)));
+  }
+  return element;
+}
+
 /** Reserved calls whose type comes from their block's returns. The walk
  *  is shared (blockReturnType); only the wrapper differs. Adding
  *  another block-carrying reserved call is a row. Keying on the call
  *  name is shadow-proof: every key is in RESERVED_FUNCTION_NAMES. */
-const BLOCK_CALL_RESULT: Record<string, (element: VariableType) => VariableType> = {
+const BLOCK_CALL_RESULT: Record<
+  string,
+  (element: VariableType, aliases: Record<string, TypeAliasEntry>) => VariableType
+> = {
   // The guard construct's Result<T> precision. By synth time the
   // construct has desugared to `_guard(...)` carrying its block
   // (guardDesugar.ts + the TypeChecker constructor); _guard's own
   // annotation is the generic Result, so parameterize it from the
   // block. A direct `_guard` call with a block gets the same, correct,
   // typing. A block that returns a Result<T> gives Result<T>, not
-  // Result<Result<T>>: the runtime passes a returned Result through
-  // unchanged, as it does for `try`. The failure side stays `any`, the
-  // try-expression precedent, and because a trip fails with the guard's
-  // own data: the err-side narrowing users rely on (`isFailure`,
+  // Result<Result<T>> (guardSuccessType). The failure side stays `any`,
+  // the try-expression precedent, and because a trip fails with the
+  // guard's own data: the err-side narrowing users rely on (`isFailure`,
   // `error.type`) is field-based, not type-based.
-  _guard: (element) => ({
+  _guard: (element, aliases) => ({
     type: "resultType",
-    successType: element.type === "resultType" ? element.successType : element,
+    successType: guardSuccessType(element, aliases),
     dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even
@@ -911,7 +931,7 @@ function synthFunctionCall(
     : undefined;
   const calledBlock = blockOf(expr);
   if (wrapBlockResult !== undefined && calledBlock !== undefined) {
-    return wrapBlockResult(blockReturnType(calledBlock, scope, ctx));
+    return wrapBlockResult(blockReturnType(calledBlock, scope, ctx), ctx.getTypeAliases());
   }
   // Result constructors: parameterize ResultType from the argument so callers
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names

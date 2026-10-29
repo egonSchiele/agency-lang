@@ -1,0 +1,8 @@
+// A node checks its `!` parameters before its body runs, the way a function
+// does. A value that does not fit the type comes back as a failure.
+
+type Inputs = { noteTitle: string }
+
+export node main(inputs: Inputs!): Result {
+  return success("body ran with ${inputs.noteTitle}")
+}

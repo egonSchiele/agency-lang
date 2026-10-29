@@ -1,0 +1,11 @@
+{
+  "finalData": {
+    "refusedSucceeded": false,
+    "refusalNamesTheArgument": true,
+    "accepted": {
+      "__type": "resultType",
+      "success": true,
+      "value": "body ran with Groceries 2026"
+    }
+  }
+}

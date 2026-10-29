@@ -6,7 +6,7 @@ import { hasInterrupts } from "./interrupts.js";
 import type { Interrupt } from "./interrupts.js";
 import { __invalidArgument, describeValue } from "./invalidArgument.js";
 import { failure, isFailure, isSuccess } from "./result.js";
-import type { ResultValue } from "./result.js";
+import type { ResultFailure, ResultValue } from "./result.js";
 import { __validateType } from "./schema.js";
 import { __validateChainRecursive } from "./validateChain.js";
 import type { TypeValidationDescriptor } from "./validateChain.js";
@@ -44,15 +44,23 @@ export function __descriptorCheck(build: () => TypeValidationDescriptor): ParamC
 
 export type HaltingRunner = {
   halt(result: unknown): void;
+  readonly isNodeContext: boolean;
 };
 
 export type ArgFrame = {
   args: Record<string, unknown>;
 };
 
+/** A node's result is `{ messages, data }`, so a refused argument of a node
+ *  halts with the failure as the data, the shape a node's own `return`
+ *  halts with. A function halts with the failure itself. */
+function haltWith(run: Run, runner: HaltingRunner, refusal: ResultFailure): void {
+  runner.halt(runner.isNodeContext ? { messages: run.threads, data: refusal } : refusal);
+}
+
 /**
- * Check the named `!` parameters of a function in order, reading each raw
- * argument from the frame and writing the checked value back.
+ * Check the named `!` parameters of a function or node in order, reading
+ * each raw argument from the frame and writing the checked value back.
  *
  * A check that fails halts the runner with the invalid-argument failure
  * and stops: later parameters are not checked. A validator that raised an
@@ -87,7 +95,9 @@ export async function __checkParams(
       continue;
     }
     if (isFailure(outcome)) {
-      runner.halt(
+      haltWith(
+        run,
+        runner,
         __invalidArgument({
           functionName,
           paramName: name,
@@ -102,14 +112,18 @@ export async function __checkParams(
       throw outcome.toError();
     }
     if (hasInterrupts(outcome)) {
-      runner.halt(
+      haltWith(
+        run,
+        runner,
         failure(
           `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} raised an interrupt, and a parameter check cannot pause. Check the value with a cast on its own line before the call.`,
         ),
       );
       return;
     }
-    runner.halt(
+    haltWith(
+      run,
+      runner,
       failure(
         `Argument "${name}" of ${functionName} could not be checked: a validator for ${check.typeText} returned ${describeValue(outcome)} instead of a success or a failure.`,
       ),

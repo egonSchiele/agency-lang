@@ -3217,11 +3217,10 @@ export class TypeScriptBuilder {
     // runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(body);
 
-    // Body steps occupy substep ids 1..N. Id 0 is reserved for the
-    // onNodeStart hook (wrapped in runner.hook for idempotency on
+    // Body steps occupy substep ids 1..N. Id 0 is the start hook
+    // (`nodeStartHook`, wrapped in runner.hook for idempotency on
     // resume). onNodeEnd sits at id N+1.
     const bodyCode = this.processBodyAsParts(body, 1);
-    const onNodeStartId = 0;
     const onNodeEndId = bodyCode.length + 1;
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
@@ -3324,13 +3323,7 @@ export class TypeScriptBuilder {
           ctx: ts.id("__ctx"),
           stack: ts.raw("__ctx.stateStack"),
           threads: $(ts.id("__setupData")).prop("threads").done(),
-          body: [
-            ts.runnerHookStep({
-              id: onNodeStartId,
-              body: [ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) })],
-            }),
-            ...bodyCode,
-          ],
+          body: [this.nodeStartHook(nodeName, parameters), ...bodyCode],
         }),
         ts.raw("if (runner.halted) return runner.haltResult;"),
         ts.runnerHookStep({
@@ -3411,7 +3404,7 @@ export class TypeScriptBuilder {
       ),
     );
 
-    return $(ts.id("graph"))
+    const graphNode = $(ts.id("graph"))
       .prop("node")
       .call([
         ts.str(nodeName),
@@ -3420,6 +3413,21 @@ export class TypeScriptBuilder {
         }),
       ])
       .done();
+    return ts.statements([...this.paramChecksDecl(nodeName, parameters), graphNode]);
+  }
+
+  /** Substep 0 of a node: the `!` parameter checks, as in a function's
+   *  step 0, then the onNodeStart hook. A refused argument halts the node
+   *  before the hook fires. */
+  private nodeStartHook(nodeName: string, parameters: FunctionParameter[]): TsNode {
+    const checkedNames = parameters.filter(isCheckedParam).map((param) => param.name);
+    return ts.runnerHookStep({
+      id: 0,
+      body: [
+        ...(checkedNames.length === 0 ? [] : this.checkParamsCall(nodeName, checkedNames)),
+        ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+      ],
+    });
   }
 
   /** If the enclosing function/node has returnTypeValidated, wrap value in __validateType */

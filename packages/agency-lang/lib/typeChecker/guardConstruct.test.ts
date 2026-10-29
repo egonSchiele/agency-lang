@@ -41,6 +41,40 @@ describe("guard construct — Result<T> typing (spec Part 4)", () => {
     expect(good).toHaveLength(0);
   });
 
+  it("passes a Result the block returns through, as the runtime does", () => {
+    const src = (annotation: string) => `def f(): Result<number> { return success(1) }
+node main() {
+  const r = guard(cost: $1) { return f() }
+  if (isSuccess(r)) { const v: ${annotation} = r.value\n return "ok" }
+  return "f"
+}`;
+    expect(matching(src("number"), /not assignable/)).toHaveLength(0);
+    expect(matching(src("string"), /not assignable/).length).toBeGreaterThan(0);
+  });
+
+  it("passes a Result named by a type alias through", () => {
+    const src = (annotation: string) => `type R = Result<number>
+def f(): R { return success(1) }
+node main() {
+  const r = guard(cost: $1) { return f() }
+  if (isSuccess(r)) { const v: ${annotation} = r.value\n return "ok" }
+  return "f"
+}`;
+    expect(matching(src("number"), /not assignable/)).toHaveLength(0);
+    expect(matching(src("string"), /not assignable/).length).toBeGreaterThan(0);
+  });
+
+  it("takes the success type from each Result among the block's returns", () => {
+    const src = (annotation: string) => `def f(): Result<number> { return success(1) }
+node main() {
+  const r = guard(cost: $1) { if (true) { return f() }\n return 2 }
+  if (isSuccess(r)) { const v: ${annotation} = r.value\n return "ok" }
+  return "f"
+}`;
+    expect(matching(src("number"), /not assignable/)).toHaveLength(0);
+    expect(matching(src("string"), /not assignable/).length).toBeGreaterThan(0);
+  });
+
   it("returns inside a NESTED block do not leak into the enclosing def's type", () => {
     // The def returns a string; the guard block returns a number. If the
     // block's return leaked into inference, the def annotation would error.

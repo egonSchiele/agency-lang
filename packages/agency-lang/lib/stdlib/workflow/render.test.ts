@@ -40,7 +40,7 @@ describe("renderWorkflow", () => {
         "  q: string",
         "}",
         "",
-        "export node main(inputs: Inputs): Result {",
+        "export node main(inputs: Inputs!): Result {",
         "  const a = 1",
         "  if (a is failure) {",
         "    return a",
@@ -76,7 +76,7 @@ describe("renderWorkflow", () => {
     const r = renderWorkflow({ ...lowered, guard: { maxTime: 300000, maxCost: 1 } });
     const lines = r.source!.split("\n");
     expect(lines.slice(7, 15)).toEqual([
-      "export node main(inputs: Inputs): Result {",
+      "export node main(inputs: Inputs!): Result {",
       "  return guard(time: 300000, cost: 1) {",
       "    const a = 1",
       "    if (a is failure) {",

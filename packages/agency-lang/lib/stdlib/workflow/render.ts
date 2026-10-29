@@ -19,7 +19,7 @@ const SCAFFOLD = `import { Json } from "std::validation"
 
 {{types}}
 
-export node main(inputs: Inputs): Result {
+export node main(inputs: Inputs!): Result {
 {{body}}
 }
 
@@ -33,7 +33,7 @@ const GUARDED_SCAFFOLD = `import { Json } from "std::validation"
 
 {{types}}
 
-export node main(inputs: Inputs): Result {
+export node main(inputs: Inputs!): Result {
   return guard({{guardArgs}}) {
 {{body}}
   }

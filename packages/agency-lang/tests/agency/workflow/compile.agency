@@ -113,7 +113,7 @@ node mealPlanCompiles(): boolean {
     "import { readNote, searchNotes } from \"./notes.agency\"",
     "import { addListItems, findLists } from \"./lists.agency\"",
     "type Step_meals_output = string[]",
-    "export node main(inputs: Inputs): Result {",
+    "export node main(inputs: Inputs!): Result {",
     "const step_note_query = inputs.noteTitle",
     "const step_note = searchNotes(query: step_note_query)",
     "if (step_note is failure)",

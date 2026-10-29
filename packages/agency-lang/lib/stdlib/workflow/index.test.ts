@@ -12,7 +12,7 @@ const MEAL_PLAN_SOURCE = [
   "}",
   "type Step_meals_output = string[]",
   "",
-  "export node main(inputs: Inputs): Result {",
+  "export node main(inputs: Inputs!): Result {",
   "  return guard(time: 300000, cost: 1) {",
   "    const step_note_query = inputs.noteTitle",
   "    const step_note = searchNotes(query: step_note_query)",

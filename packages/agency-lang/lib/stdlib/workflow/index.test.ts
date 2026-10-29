@@ -95,6 +95,22 @@ describe("compileWorkflowSource", () => {
   });
 });
 
+describe("compileWorkflowSource wall clock", () => {
+  it("is the workflow's maxTime plus the headroom", () => {
+    const result = compileWorkflowSource(mealPlan, mealRefs, mealSignatures);
+    expect(result.compiled!.wallClock).toBe(330000);
+  });
+
+  it("is null with no maxTime, so run uses its own default", () => {
+    const result = compileWorkflowSource(
+      withFields(mealPlan, { limits: null }),
+      mealRefs,
+      mealSignatures,
+    );
+    expect(result.compiled!.wallClock).toBe(null);
+  });
+});
+
 describe("_signatureSources", () => {
   it("groups refs by module and writes a re-export line for a shared module", () => {
     const refs = [

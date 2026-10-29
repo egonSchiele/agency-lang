@@ -1,4 +1,4 @@
-import { compile, describe, typecheck, ExportInfo } from "std::agency"
+import { compile, describe, run, typecheck, CompiledProgram, ExportInfo } from "std::agency"
 import { read } from "std::index"
 import { Json } from "std::validation"
 
@@ -76,7 +76,28 @@ type Compiled = {
   source: string;
   ranges: Json;
   typeOwners: Json;
-  warnings: WorkflowProblem[]
+  warnings: WorkflowProblem[];
+  wallClock: number | null
+}
+
+/** A workflow that passed the check: its compiled program, the warnings,
+  and the subprocess wall clock (null for `run`'s default). */
+type Checked = {
+  program: CompiledProgram;
+  warnings: WorkflowProblem[];
+  wallClock: number | null
+}
+
+// Running a workflow. Raised after the check and before the subprocess
+// starts, so a rejection starts nothing. An "always" answer pins the
+// workflow directory and the workflow's name; the inputs are shown and
+// never pinned, since they change with every run.
+@alwaysUnder(dir)
+@always(name)
+effect std::workflow::run {
+  name: string;
+  dir: string;
+  inputs: Json
 }
 
 /** What `describe` says about each tool, keyed by module and name. A
@@ -143,20 +164,11 @@ export idempotent def compileWorkflow(workflow: Workflow, tools: any[], dir: str
   return success(compiled.value.source)
 }
 
-/** Every problem the generator and the typechecker can find, in one pass,
-  so an author fixes them together. A wrong argument name, a missing
-  argument, a wrong type, or a path into a step's value that does not exist
-  is a type error in the generated program, reported on the step and field
-  it came from. Reading a local tool's module raises `std::read`. */
+/** The check behind `checkWorkflow` and `runWorkflow`: generate, typecheck,
+  and compile, keeping the compiled program so a run never compiles twice. */
+@hidden
 @capabilities(fileRead)
-export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<WorkflowProblem[], WorkflowFailure> {
-  """
-  Check a workflow without running it. Fails with every problem, each naming its step and field; succeeds with the warnings, such as a tool that declares no return type.
-
-  @param workflow - The workflow to check
-  @param tools - The functions the workflow may call. A step may only name one of these
-  @param dir - The directory a workflow's local modules are named relative to
-  """
+export def _checked(workflow: Workflow, tools: any[], dir: string): Result<Checked, WorkflowFailure> {
   const compiled = _compileWithRanges(workflow, tools, dir)
   if (compiled is failure) {
     return failure(compiled.error, compiled.data)
@@ -176,5 +188,62 @@ export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: strin
   if (program is failure) {
     return _workflowFailure(program.error)
   }
-  return success(compiled.value.warnings)
+  return success({
+    program: program.value,
+    warnings: compiled.value.warnings,
+    wallClock: compiled.value.wallClock
+  })
+}
+
+/** Every problem the generator and the typechecker can find, in one pass,
+  so an author fixes them together. A wrong argument name, a missing
+  argument, a wrong type, or a path into a step's value that does not exist
+  is a type error in the generated program, reported on the step and field
+  it came from. Reading a local tool's module raises `std::read`. */
+@capabilities(fileRead)
+export idempotent def checkWorkflow(workflow: Workflow, tools: any[], dir: string = ""): Result<WorkflowProblem[], WorkflowFailure> {
+  """
+  Check a workflow without running it. Fails with every problem, each naming its step and field; succeeds with the warnings, such as a tool that declares no return type.
+
+  @param workflow - The workflow to check
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const checked = _checked(workflow, tools, dir)
+  if (checked is failure) {
+    return failure(checked.error, checked.data)
+  }
+  return success(checked.value.warnings)
+}
+
+/** Check, ask, run. The check compiles the program and the run uses it. The
+  prompt comes after the check, so a workflow with problems asks nothing,
+  and before `run`, so a rejection starts no process. `run` raises its own
+  `std::run`. The subprocess wall clock is the workflow's `maxTime` plus 30
+  seconds, or `run`'s default. The node's `Result` comes back as the data
+  of `run`'s envelope; its failure names the step that stopped the workflow. */
+@capabilities(fileRead, fileWrite, subprocess)
+export def runWorkflow(workflow: Workflow, inputs: Json, tools: any[], dir: string = ""): Result<Json> {
+  """
+  Run a workflow: check it, ask to run it, and run its program in a subprocess.
+
+  @param workflow - The workflow to run
+  @param inputs - The workflow's inputs, a value of its `inputs` type
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+  """
+  const checked = _checked(workflow, tools, dir)
+  if (checked is failure) {
+    return failure(checked.error, checked.data)
+  }
+  return interrupt std::workflow::run("Run the workflow ${workflow.name}?", {
+    name: workflow.name,
+    dir: dir,
+    inputs: inputs
+  })
+  const ran = run(compiled: checked.value.program, node: "main", args: { inputs: inputs }, wallClock: checked.value.wallClock)
+  if (ran is failure) {
+    return ran
+  }
+  return ran.value.data
 }

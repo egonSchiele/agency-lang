@@ -95,6 +95,22 @@ export type WorkflowFailure = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L66))
 
+## Effects
+
+### std::workflow::run
+
+```ts
+@alwaysUnder(dir)
+@always(name)
+effect std::workflow::run {
+  name: string;
+  dir: string;
+  inputs: Json
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L97))
+
 ## Functions
 
 ### compileWorkflow
@@ -132,7 +148,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L152))
 
 ### checkWorkflow
 
@@ -170,4 +186,46 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L204))
+
+### runWorkflow
+
+```ts
+runWorkflow(
+  workflow: Workflow,
+  inputs: Json,
+  tools: any[],
+  dir: string = "",
+): Result<Json>
+```
+
+Run a workflow: check it, ask to run it, and run its program in a subprocess.
+
+  @param workflow - The workflow to run
+  @param inputs - The workflow's inputs, a value of its `inputs` type
+  @param tools - The functions the workflow may call. A step may only name one of these
+  @param dir - The directory a workflow's local modules are named relative to
+
+Check, ask, run. The check compiles the program and the run uses it. The
+  prompt comes after the check, so a workflow with problems asks nothing,
+  and before `run`, so a rejection starts no process. `run` raises its own
+  `std::run`. The subprocess wall clock is the workflow's `maxTime` plus 30
+  seconds, or `run`'s default. The node's `Result` comes back as the data
+  of `run`'s envelope; its failure names the step that stopped the workflow.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| workflow | [Workflow](#workflow) |  |
+| inputs | [Json](validation.md#json) |  |
+| tools | `any[]` |  |
+| dir | `string` | "" |
+
+**Returns:** `Result<Json>`
+
+**Throws:** `std::workflow::run`, `std::run`, `std::guard`, `std::read`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L226))

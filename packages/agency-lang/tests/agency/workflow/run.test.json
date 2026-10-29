@@ -1,0 +1,92 @@
+{
+  "tests": [
+    {
+      "nodeName": "mathWorkflowRuns",
+      "description": "two std functions run in a subprocess and the workflow returns the last step",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "runPayload",
+      "description": "std::workflow::run carries the name, dir, and inputs",
+      "input": "",
+      "expectedOutput": "{\"name\":\"doubleSum\",\"dir\":\"\",\"inputs\":{\"a\":2,\"b\":3}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wallClockFromMaxTime",
+      "description": "the subprocess wall clock is maxTime plus 30 seconds",
+      "input": "",
+      "expectedOutput": "330000",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "defaultWallClock",
+      "description": "with no maxTime, run uses its own 60 second default",
+      "input": "",
+      "expectedOutput": "60000",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badWorkflowAsksNothing",
+      "description": "a workflow that fails the check raises no interrupt",
+      "input": "",
+      "expectedOutput": "[true,[]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedRunStartsNothing",
+      "description": "rejecting std::workflow::run starts no subprocess",
+      "input": "",
+      "expectedOutput": "[true,[\"std::workflow::run\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badInputsFailBeforeFirstStep",
+      "description": "inputs of the wrong type fail before the first step",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "inputsThatAreNotAnObject",
+      "description": "inputs that are not an object fail before the first step",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

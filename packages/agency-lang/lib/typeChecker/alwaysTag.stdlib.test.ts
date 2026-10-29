@@ -171,6 +171,9 @@ const EXPECTED: Record<string, string[]> = {
   "std::toolbox::removeStagedFile": ["root/**"],
   "std::toolbox::review": [],
   "std::toolbox::save": ["dir/**"],
+  // Running a workflow pins its name and its directory. The inputs change
+  // with every run, so they are never pinned.
+  "std::workflow::run": ["name", "dir/**"],
   "std::memory::enableMemory": [],
   "std::memory::disableMemory": [],
   "std::memory::remember": [],

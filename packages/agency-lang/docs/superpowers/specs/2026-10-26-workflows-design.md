@@ -240,8 +240,10 @@ export node main(inputs: Inputs!): Result {
     }
     const step_meals_context1 = step_text.value.body
     const step_meals_context1_text = if step_meals_context1 is string then step_meals_context1 else JSON.stringify(step_meals_context1)
-    const step_meals: Step_meals_output = thread {
-      return llm("The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names." + "\n\nContext 1 (steps.text.body):\n" + step_meals_context1_text)
+    let step_meals: Step_meals_output = null as Step_meals_output
+    thread {
+      const step_meals_reply: Step_meals_output = llm("The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names." + "\n\nContext 1 (steps.text.body):\n" + step_meals_context1_text)
+      step_meals = step_meals_reply
     }
     const step_add_items = step_meals
     const step_add_listId = step_list.value[0].id
@@ -262,7 +264,7 @@ export node inputsSchema(): Json {
 What to notice:
 
 - Each step is one statement, so an interrupt inside a step pauses the program at that step and a resume continues from it. This is the ordinary Agency resume story; nothing here is new.
-- The LLM step runs in its own `thread`, so its prompt does not land in any caller's conversation. Its output type is written as a type on the declaration, so the structured-output schema comes from the typechecker. Its context values are bound to locals before the block, because a `Result` narrowed by an `is failure` check is not narrowed inside a `thread` block (the typechecker reports AG2009 otherwise). An earlier form of this example, with inline arguments and unprefixed names, compiled on 2026-10-27 with stubbed tools; the plan's Task 7 pins this form.
+- The LLM step runs in its own `thread`, so its prompt does not land in any caller's conversation. The reply is a typed `const` inside the block, because only the type on an `llm()` call's own declaration gives it a structured-output schema. The step's local is a `let` declared before the block and assigned inside it, because a `thread` block's value is its message list and a `return` inside one returns from the enclosing node (found when part 2 first ran the meal plan, 2026-10-29). Its context values are bound to locals before the block, because a `Result` narrowed by an `is failure` check is not narrowed inside a `thread` block (the typechecker reports AG2009 otherwise). An earlier form of this example, with inline arguments and unprefixed names, compiled on 2026-10-27 with stubbed tools; the plan's Task 7 pins this form.
 - Every step value is a local, so a later step can reference any earlier one. There is no threading of a payload from state to state, which was the first thing AWS had to add variables to fix.
 - Every argument is bound to its own local before the call, one line per field, so a type error on an argument maps to that field of that step.
 - Every generated name starts with `step_` (or `Step_` for a type). A step named `failure` or `llm` then produces `step_failure`, which shadows nothing. The description is not written into the source; it is set on the tool value when the workflow is offered as a tool.

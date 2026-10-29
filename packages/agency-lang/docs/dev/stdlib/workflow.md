@@ -1,6 +1,6 @@
 # `std::workflow`
 
-A workflow is a JSON list of steps. Each step calls a tool or asks a model, and a later step's arguments can point at an earlier step's value. `compileWorkflow` turns a workflow into an Agency program. `checkWorkflow` typechecks and compiles that program and reports each problem by step and field. Nothing runs a workflow yet.
+A workflow is a JSON list of steps. Each step calls a tool or asks a model, and a later step's arguments can point at an earlier step's value. `compileWorkflow` turns a workflow into an Agency program. `checkWorkflow` typechecks and compiles that program and reports each problem by step and field. `runWorkflow` checks a workflow, asks, and runs its program in a subprocess.
 
 The format, and the two rules that keep it small, are in `docs/superpowers/specs/2026-10-26-workflows-design.md`.
 
@@ -47,6 +47,18 @@ Workflow text reaches the generated source through three doors:
 
 Type text may not carry a `@validate` or `@jsonSchema` tag. A `@validate` names a function the generated program would call, and the workflow would be choosing it from the tools it imports.
 
+An LLM step is a `let` of the output type, then a `thread` block that makes the call and assigns it:
+
+```
+let step_meals: Step_meals_output = null as Step_meals_output
+thread {
+  const step_meals_reply: Step_meals_output = llm("..." + step_meals_context1_text)
+  step_meals = step_meals_reply
+}
+```
+
+Three facts about `thread` decide this shape. A `thread` block's value is its message list, not what the block returns. A `return` inside the block returns from the enclosing node, so `const x = thread { return llm(...) }` would end `main` with the model's raw text. And only the type on an `llm()` call's own declaration gives the call a structured-output schema; a type on an outer `const` does not reach it. So the reply is a typed `const` inside the block, the step's local is a `let` declared before it, and the cast on `null` is the one way to declare a `let` of the output type with no value yet. The reply local, `step_<id>_reply`, is a generated name like any other.
+
 An LLM step's context values reach the model as text. Each one is bound to a local, then a second local holds what the model reads: the string itself when the value is a string, so a note body keeps its line breaks, and `JSON.stringify` of it otherwise. The prompt is the step's text followed by a label and that text local for each context value. The text local is a generated name like any other, `step_<id>_context<n>_text`, so `declaredBy` lists it and a step id that would coincide with it is refused.
 
 A reference becomes an expression built from a generated name, `.value`, and a path that matched `REF_PATH`. A list or object argument that holds a reference is built by `list()` and `record()` from generated hole names. Its keys are written as names, so an object that holds a reference must have identifier keys.
@@ -92,9 +104,19 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 `checkWorkflow` runs `typecheck` before `compile`. A strict compile reports type errors too, but as one message with no line, so it runs second.
 
+## Running a workflow
+
+`runWorkflow(workflow, inputs, tools, dir)` does three things in order:
+
+1. **Check.** `_checked` is the body `checkWorkflow` also uses: generate, typecheck, compile. It keeps the compiled program, so a run never compiles twice. A workflow with problems fails here and asks nothing.
+2. **Ask.** It raises `std::workflow::run` with the workflow's name, `dir`, and the inputs. The effect is tagged `@alwaysUnder(dir)` and `@always(name)`, so an "always" answer pins the directory and the workflow's name; the inputs are shown and never pinned, since they change with every run. A rejection returns before any process starts, so `std::run` is never raised.
+3. **Run.** It calls `run` from `std::agency` on the compiled program's `main` with `{ inputs }`. `run` raises its own `std::run`. The wall clock is the workflow's `maxTime` plus 30 seconds (`wallClockFor` in `limits.ts`), or `null`, which lets `run` apply its own default; the workflow code never restates `run`'s default. `run` succeeds with an envelope whose `data` is what `main` returned, so `runWorkflow` returns that `Result`: the last step's value, or the failure that stopped the workflow, which names the step.
+
 ## Interrupts and checkpoints
 
-The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. The generated program is ordinary Agency: each tool step raises the interrupts its tool raises, and a paused program resumes at its line like any other.
+The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise `std::read` once for each local module they read. `runWorkflow` raises `std::workflow::run`, then `run` raises `std::run`.
+
+The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits; the interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, the resume finishes the workflow, and the one model mock means a resume that repeated the LLM step would fail.
 
 ## Tool modules
 
@@ -104,4 +126,4 @@ The module text is written into an import line, so it must match `MODULE_PATH`. 
 
 ## Not built yet
 
-The spec covers these: `runWorkflow`, offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, saving and loading workflows, and the `std::workflow::run`, `scan`, and `save` effects.
+The spec covers these: step `limits` and the guard around a step, offering a workflow as a tool (`workflowTool`, `workflowTools`), `catalog`, saving and loading workflows, and the `scan` and `save` effects.

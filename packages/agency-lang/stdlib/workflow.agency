@@ -26,12 +26,16 @@ import {
   has tool steps, LLM steps, and references, and nothing else.
 
   ```ts
-  import { compileWorkflow } from "std::workflow"
+  import { checkWorkflow, runWorkflow } from "std::workflow"
   import { searchNotes } from "./notes.agency"
 
-  const source = compileWorkflow(workflow, [searchNotes], __dirname)
-  print(source)
+  const problems = checkWorkflow(workflow, [searchNotes], __dirname)
+  const result = runWorkflow(workflow, { noteTitle: "Groceries" }, [searchNotes], __dirname)
   ```
+
+  `runWorkflow` checks the workflow, asks with `std::workflow::run`, and
+  runs the program in a subprocess. Each step's interrupts reach the
+  caller's handlers, so a policy decides what the workflow may do.
 */
 
 /** Caps on one run of a workflow: `maxCost` in dollars and `maxTime` in

@@ -17,12 +17,16 @@ When you want an agent to do the same task the same way every time, a
   has tool steps, LLM steps, and references, and nothing else.
 
   ```ts
-  import { compileWorkflow } from "std::workflow"
+  import { checkWorkflow, runWorkflow } from "std::workflow"
   import { searchNotes } from "./notes.agency"
 
-  const source = compileWorkflow(workflow, [searchNotes], __dirname)
-  print(source)
+  const problems = checkWorkflow(workflow, [searchNotes], __dirname)
+  const result = runWorkflow(workflow, { noteTitle: "Groceries" }, [searchNotes], __dirname)
   ```
+
+  `runWorkflow` checks the workflow, asks with `std::workflow::run`, and
+  runs the program in a subprocess. Each step's interrupts reach the
+  caller's handlers, so a policy decides what the workflow may do.
 
 ## Types
 
@@ -40,7 +44,7 @@ export type WorkflowLimits = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L43))
 
 ### Workflow
 
@@ -63,7 +67,7 @@ export type Workflow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L51))
 
 ### WorkflowProblem
 
@@ -80,7 +84,7 @@ export type WorkflowProblem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L63))
 
 ### WorkflowFailure
 
@@ -93,7 +97,7 @@ export type WorkflowFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L70))
 
 ## Effects
 
@@ -109,7 +113,7 @@ effect std::workflow::run {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L101))
 
 ## Functions
 
@@ -148,7 +152,7 @@ The source is text, not a compiled program: hand it to `compile` or
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L156))
 
 ### checkWorkflow
 
@@ -186,7 +190,7 @@ Every problem the generator and the typechecker can find, in one pass,
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L208))
 
 ### runWorkflow
 
@@ -228,4 +232,4 @@ Check, ask, run. The check compiles the program and the run uses it. The
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L230))

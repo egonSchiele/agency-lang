@@ -13,6 +13,14 @@ export def findLists(query: string): Result<ListSummary[]> {
   return success([{ id: "l1", title: query }])
 }
 
+/** Adding to a list changes it, so the step asks first. A test rejects
+  this to stop a workflow at its last step, or leaves it unanswered so the
+  workflow pauses and resumes. */
+effect test::lists::add {
+  listId: string;
+  section: string
+}
+
 export def addListItems(listId: string, items: string[], section: string): Result<string> {
   """
   Add items to a section of a list.
@@ -21,5 +29,6 @@ export def addListItems(listId: string, items: string[], section: string): Resul
   @param items - The items to add
   @param section - The section to add them under
   """
+  return interrupt test::lists::add("Add ${items.length} items to ${listId}?", { listId: listId, section: section })
   return success("added ${items.length} items to ${listId}/${section}")
 }

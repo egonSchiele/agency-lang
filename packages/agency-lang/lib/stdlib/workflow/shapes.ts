@@ -23,7 +23,13 @@ export const SHAPES = {
   // a cast.
   checkPlain:
     'if ({{value}} is failure) {\n  return failure("step {{id}} ({{tool}}): ${({{value}} as any).error}", { step: #id, cause: {{value}} })\n}',
-  llm: "const {{value}}: {{outputType}} = thread {\n  return llm(#prompt{{options}})\n}",
+  // A thread block's value is its message list, and a `return` inside one
+  // returns from the enclosing node. So the step's local is declared before
+  // the block and assigned inside it. The reply is a typed `const` of its
+  // own, because only the type on an `llm()` call's declaration gives it a
+  // structured-output schema. The cast on `null` is the one way to declare a
+  // `let` of the output type with no value yet.
+  llm: "let {{value}}: {{outputType}} = null as {{outputType}}\nthread {\n  const {{reply}}: {{outputType}} = llm(#prompt{{options}})\n  {{value}} = {{reply}}\n}",
   // What the model reads for a context value: a string as itself, anything else as JSON.
   contextText:
     "const {{local}} = if {{value}} is string then {{value}} else JSON.stringify({{value}})",

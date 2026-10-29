@@ -134,7 +134,12 @@ function llmFragments(step: ResolvedLlmStep, steps: StepsById): Fragment[] {
   if (step.provider !== null) {
     values.provider = literal(step.provider);
   }
-  const names = { value: step.value, outputType: step.typeName, options: options.join("") };
+  const names = {
+    value: step.value,
+    reply: step.reply,
+    outputType: step.typeName,
+    options: options.join(""),
+  };
   const contexts = step.bindings.flatMap((binding) => [
     bindingFragment(step, binding, steps),
     contextTextFragment(step, binding),

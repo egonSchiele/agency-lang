@@ -1,0 +1,110 @@
+import { runWorkflow, Workflow } from "std::workflow"
+import { add, multiply } from "std::math"
+import { Json } from "std::validation"
+import { resolve } from "std::path"
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+const TOOLS = [add, multiply]
+
+/** Add two numbers, then double the sum. `limits` is the workflow's, when given. */
+def doubleSum(limits: Json): Workflow {
+  const workflow: Workflow = {
+    format: 1,
+    name: "doubleSum",
+    description: "Add two numbers and double the sum.",
+    inputs: "{ a: number; b: number }",
+    steps: [
+      { id: "sum", kind: "tool", module: "std::math", tool: "add", args: { a: { "$ref": "inputs.a" }, b: { "$ref": "inputs.b" } } },
+      { id: "doubled", kind: "tool", module: "std::math", tool: "multiply", args: { a: { "$ref": "steps.sum" }, b: 2 } }
+    ],
+    result: { "$ref": "steps.doubled" }
+  }
+  if (limits == null) {
+    return workflow
+  }
+  return { ...workflow, limits: limits }
+}
+
+/** Runs `workflow`, approving every interrupt and recording each one's
+  effect in "effects" and its data under the effect's name. */
+def runApproving(workflow: Workflow, inputs: Json, tools: any[]): Result<Json> {
+  setMutable("effects", [])
+  handle {
+    return runWorkflow(workflow, inputs, tools)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    setMutable(intr.effect, intr.data)
+    return approve()
+  }
+}
+
+node mathWorkflowRuns(): Json {
+  const result = runApproving(doubleSum(null), { a: 2, b: 3 }, TOOLS)
+  if (result is failure) {
+    print("failed: ${result.error}")
+    return null
+  }
+  return result.value
+}
+
+/** The payload's `dir` is the default `""` resolved against the working directory. */
+node runPayload(): Json {
+  runApproving(doubleSum(null), { a: 2, b: 3 }, TOOLS)
+  const payload = getMutable("std::workflow::run", null)
+  return [payload.name, payload.dir == resolve(""), payload.inputs]
+}
+
+node wallClockFromMaxTime(): Json {
+  runApproving(doubleSum({ maxTime: 300000 }), { a: 2, b: 3 }, TOOLS)
+  return getMutable("std::run", null).limits.wallClock
+}
+
+node defaultWallClock(): Json {
+  runApproving(doubleSum(null), { a: 2, b: 3 }, TOOLS)
+  return getMutable("std::run", null).limits.wallClock
+}
+
+node badWorkflowAsksNothing(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "subtractOne",
+    description: "Subtract.",
+    inputs: "{ a: number }",
+    steps: [{ id: "diff", kind: "tool", module: "std::math", tool: "subtract", args: { a: { "$ref": "inputs.a" }, b: 1 } }]
+  }
+  const result = runApproving(workflow, { a: 2 }, TOOLS)
+  return [isFailure(result), getMutable("effects", [])]
+}
+
+node rejectedRunStartsNothing(): Json {
+  setMutable("effects", [])
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(doubleSum(null), { a: 2, b: 3 }, TOOLS)
+  } with (intr) {
+    getMutable("effects", []).push(intr.effect)
+    if (intr.effect == "std::workflow::run") {
+      return reject()
+    }
+    return approve()
+  }
+  return [isFailure(result), getMutable("effects", [])]
+}
+
+def failsOnInputs(inputs: Json): boolean {
+  const result = runApproving(doubleSum(null), inputs, TOOLS)
+  if (result is success) {
+    print("unexpected success: ${JSON.stringify(result.value)}")
+    return false
+  }
+  print("error: ${result.error}")
+  return result.error.startsWith("Argument \"inputs\" of main")
+}
+
+node badInputsFailBeforeFirstStep(): boolean {
+  return failsOnInputs({ a: "two", b: 3 })
+}
+
+node inputsThatAreNotAnObject(): boolean {
+  return failsOnInputs("x")
+}

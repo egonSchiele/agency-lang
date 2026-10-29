@@ -49,10 +49,12 @@ const MEAL_PLAN_SOURCE = [
   "    }",
   "    const step_meals_context1 = step_text.value.body",
   "    const step_meals_context1_text = if step_meals_context1 is string then step_meals_context1 else JSON.stringify(step_meals_context1)",
-  "    const step_meals: Step_meals_output = thread {",
-  "      return llm(",
+  "    let step_meals: Step_meals_output = null as Step_meals_output",
+  "    thread {",
+  "      const step_meals_reply: Step_meals_output = llm(",
   '        "The note below ends with this week\'s meal plan, one meal per line. Return the meals as a list of strings, in order, without day names." + "\\n\\nContext 1 (steps.text.body):\\n" + step_meals_context1_text,',
   "      )",
+  "      step_meals = step_meals_reply",
   "    }",
   "    const step_add_items = step_meals",
   "    const step_add_listId = step_list.value[0].id",
@@ -92,6 +94,22 @@ describe("compileWorkflowSource", () => {
     expect(
       compileWorkflowSource(withFields(mealPlan, { format: 2 }), mealRefs, mealSignatures).problems,
     ).toEqual([{ step: null, field: "format", message: "format must be 1, got 2" }]);
+  });
+});
+
+describe("compileWorkflowSource wall clock", () => {
+  it("is the workflow's maxTime plus the headroom", () => {
+    const result = compileWorkflowSource(mealPlan, mealRefs, mealSignatures);
+    expect(result.compiled!.wallClock).toBe(330000);
+  });
+
+  it("is null with no maxTime, so run uses its own default", () => {
+    const result = compileWorkflowSource(
+      withFields(mealPlan, { limits: null }),
+      mealRefs,
+      mealSignatures,
+    );
+    expect(result.compiled!.wallClock).toBe(null);
   });
 });
 

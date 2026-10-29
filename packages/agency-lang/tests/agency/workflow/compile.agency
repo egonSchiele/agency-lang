@@ -118,7 +118,9 @@ node mealPlanCompiles(): boolean {
     "const step_note = searchNotes(query: step_note_query)",
     "if (step_note is failure)",
     "const step_text_id = step_note.value[0].id",
-    "const step_meals: Step_meals_output = thread {",
+    "let step_meals: Step_meals_output = null as Step_meals_output",
+    "const step_meals_reply: Step_meals_output = llm(",
+    "step_meals = step_meals_reply",
     "return guard(time: 300000, cost: 1)",
     "return success(step_add.value)"
   ])

@@ -1,0 +1,49 @@
+{
+  "tests": [
+    {
+      "nodeName": "rejectedStepStopsTheWorkflow",
+      "description": "rejecting a step's own interrupt stops the workflow with a failure that names the step",
+      "input": "",
+      "expectedOutput": "[true,\"add\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            "soup",
+            "salad"
+          ]
+        }
+      ]
+    },
+    {
+      "nodeName": "pausedWorkflowResumes",
+      "description": "an interrupt no handler answers pauses the child; the resume finishes the workflow",
+      "input": "",
+      "expectedOutput": "\"added 2 items to l1/Meals\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": [
+            "soup",
+            "salad"
+          ]
+        }
+      ]
+    }
+  ]
+}

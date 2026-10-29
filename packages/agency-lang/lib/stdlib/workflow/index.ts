@@ -5,6 +5,7 @@
  */
 import { currentHost } from "../../runtime/currentHost.js";
 import { failure, success, type ResultFailure, type ResultSuccess } from "../../runtime/result.js";
+import { wallClockFor } from "./limits.js";
 import { lowerWorkflow } from "./lower.js";
 import { parseWorkflow } from "./parse.js";
 import { problemsFromDiagnostics, type Diagnostic } from "./problems.js";
@@ -18,6 +19,8 @@ export type Compiled = {
   ranges: Range[];
   typeOwners: Record<string, Owner>;
   warnings: Problem[];
+  /** The subprocess limit for a run, or null for `run`'s default. */
+  wallClock: number | null;
 };
 export type CompileResult =
   { compiled: Compiled; problems: [] } | { compiled: null; problems: Problem[] };
@@ -43,6 +46,7 @@ export function compileWorkflowSource(
     ranges: rendered.ranges,
     typeOwners: rendered.typeOwners,
     warnings: resolved.resolved.warnings,
+    wallClock: wallClockFor(resolved.resolved.limits),
   };
   return { compiled, problems: [] };
 }

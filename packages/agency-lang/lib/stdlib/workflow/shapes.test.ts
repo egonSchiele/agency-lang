@@ -53,14 +53,24 @@ describe("statement", () => {
     const values = { prompt: literal("p"), model: literal("m") };
     const llm = statement(
       "llm",
-      { value: "step_a", outputType: "Step_a_output", options: ", model: #model" },
+      {
+        value: "step_a",
+        reply: "step_a_reply",
+        outputType: "Step_a_output",
+        options: ", model: #model",
+      },
       values,
     );
     expect(_toSource(llm)).toContain('llm("p", model: "m")');
     expect(() =>
       statement(
         "llm",
-        { value: "step_a", outputType: "Step_a_output", options: ", tools: #model" },
+        {
+          value: "step_a",
+          reply: "step_a_reply",
+          outputType: "Step_a_output",
+          options: ", tools: #model",
+        },
         values,
       ),
     ).toThrow("{{options}}");

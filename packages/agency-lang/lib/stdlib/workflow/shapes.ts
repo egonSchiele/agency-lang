@@ -10,8 +10,8 @@
  * lifts it to a literal node and never parses it.
  */
 import { liftValue } from "../../runtime/template/lift.js";
-import { _fill, _parseExpr, _parseStatements, type Code } from "../template.js";
-import { isIdentifier } from "./types.js";
+import { _fill, _parseExpr, _parseStatements, _toSource, type Code } from "../template.js";
+import { isIdentifier, type Limits } from "./types.js";
 
 export const SHAPES = {
   binding: "const {{local}} = #value",
@@ -23,13 +23,24 @@ export const SHAPES = {
   // a cast.
   checkPlain:
     'if ({{value}} is failure) {\n  return failure("step {{id}} ({{tool}}): ${({{value}} as any).error}", { step: #id, cause: {{value}} })\n}',
-  // A thread block's value is its message list, and a `return` inside one
-  // returns from the enclosing node. So the step's local is declared before
-  // the block and assigned inside it. The reply is a typed `const` of its
-  // own, because only the type on an `llm()` call's declaration gives it a
-  // structured-output schema. The cast on `null` is the one way to declare a
-  // `let` of the output type with no value yet.
-  llm: "let {{value}}: {{outputType}} = null as {{outputType}}\nthread {\n  const {{reply}}: {{outputType}} = llm(#prompt{{options}})\n  {{value}} = {{reply}}\n}",
+  // An LLM step. A thread block's value is its message list, and a `return`
+  // inside one returns from the enclosing function. So an unguarded step
+  // declares its local first (`letNull`) and assigns it inside the block,
+  // while a guarded step returns the reply from the block, which returns
+  // from the guard. `{{after}}` is that last line, as text: a hole filled
+  // with code that names the reply would make hygiene rename the binder.
+  // The reply is a typed `const` of its own, because only the type on an
+  // `llm()` call's declaration gives it a structured-output schema. The cast
+  // on `null` is the one way to declare a `let` of the output type with no
+  // value yet.
+  letNull: "let {{value}}: {{outputType}} = null as {{outputType}}",
+  llmThread:
+    "thread {\n  const {{reply}}: {{outputType}} = llm(#prompt{{options}})\n  {{after}}\n}",
+  // A step with limits: its call or thread runs inside a guard named after
+  // the step. `#body` is a statements hole, so a body of several statements
+  // spreads into the block.
+  guarded: "const {{value}} = guard(label: #label{{limits}}) {\n  #body\n}",
+  returnCall: "return {{tool}}({{args}})",
   // What the model reads for a context value: a string as itself, anything else as JSON.
   contextText:
     "const {{local}} = if {{value}} is string then {{value}} else JSON.stringify({{value}})",
@@ -57,9 +68,57 @@ function isArgList(text: string): boolean {
   });
 }
 
+/** The limit pieces a guard line takes, time first, each number printed as
+ *  a literal. The one place a limit becomes code, for the workflow guard
+ *  (render joins the pieces) and a step guard (lower prefixes each with `, `). */
+export function guardArgs(limits: Limits): string[] {
+  const time = limits.maxTime === undefined ? [] : [`time: ${numberText(limits.maxTime)}`];
+  const cost = limits.maxCost === undefined ? [] : [`cost: ${numberText(limits.maxCost)}`];
+  return [...time, ...cost];
+}
+
+function numberText(value: number): string {
+  return _toSource(literal(value)).trim();
+}
+
+/** Nothing, or `, ` then pieces as `guardArgs` prints them: `time: <n>` or
+ *  `cost: <n>`, joined by `, `, each `<n>` a finite number. */
+function isLimitList(text: string): boolean {
+  if (text === "") {
+    return true;
+  }
+  if (!text.startsWith(", ")) {
+    return false;
+  }
+  return text
+    .slice(2)
+    .split(", ")
+    .every((piece) => {
+      const sides = piece.split(": ");
+      return (
+        sides.length === 2 &&
+        ["time", "cost"].includes(sides[0]) &&
+        Number.isFinite(Number(sides[1])) &&
+        sides[1].trim() === sides[1]
+      );
+    });
+}
+
+/** `return <name>` or `<name> = <name>`, each name an identifier. */
+function isAfterLine(text: string): boolean {
+  const returned = /^return (\S+)$/.exec(text);
+  if (returned !== null) {
+    return isIdentifier(returned[1]);
+  }
+  const sides = text.split(" = ");
+  return sides.length === 2 && sides.every(isIdentifier);
+}
+
 const TOKEN_CHECKS: Record<string, (text: string) => boolean> = {
   args: isArgList,
   options: (text) => OPTION_FORMS.includes(text),
+  limits: isLimitList,
+  after: isAfterLine,
 };
 
 function substitute(shape: Shape, names: Record<string, string>): string {

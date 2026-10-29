@@ -245,3 +245,23 @@ node contextTextTypechecks(): boolean {
   const workflow: Workflow = { ...plan, steps: steps }
   return typechecks(sourceOf(workflow))
 }
+
+/** Limits on a tool step, an LLM step, and a plain-returning step read by a later one. */
+node guardedStepsTypecheck(): boolean {
+  const plan = standardPlan()
+  const steps: Json[] = []
+  for (step in plan.steps) {
+    if (step.id == "add") {
+      steps.push({ ...step, limits: { maxTime: 120000, maxCost: 5 } })
+    } else if (step.id == "meals") {
+      steps.push({ ...step, limits: { maxTime: 60000 } })
+    } else {
+      steps.push(step)
+    }
+  }
+  steps.push({ id: "lines", kind: "tool", module: "./notes.agency", tool: "splitLines", args: { text: { "$ref": "steps.text.body" } }, limits: { maxTime: 1000 } })
+  steps.push({ id: "first", kind: "tool", module: "./notes.agency", tool: "splitLines", args: { text: { "$ref": "steps.lines[0]" } } })
+  const workflow: Workflow = { ...plan, steps: steps, result: { "$ref": "steps.first" } }
+  const source = sourceOf(workflow)
+  return containsAll(source, ["const step_first_text = step_lines.value[0]"]) && typechecks(source)
+}

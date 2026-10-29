@@ -117,14 +117,17 @@ export type Binding = { local: string; field: string; value: ResolvedValue };
  *  it: the string itself, or JSON for anything else. */
 export type ContextBinding = Binding & { text: string };
 
-/** `value` is the local that holds the step's value. */
+/** `value` is the local that holds the step's value. `holdsResult` says
+ *  that local holds a `Result`: the tool returns one, or the step has
+ *  limits and so runs inside a guard, which always gives a `Result`. */
 export type ResolvedToolStep = {
   id: string;
   kind: "tool";
   value: string;
   module: string;
   tool: string;
-  returnsResult: boolean;
+  holdsResult: boolean;
+  limits: Limits | null;
   bindings: Binding[];
   argOrder: string[];
 };
@@ -137,6 +140,8 @@ export type ResolvedLlmStep = {
   kind: "llm";
   value: string;
   reply: string;
+  holdsResult: boolean;
+  limits: Limits | null;
   prompt: string;
   outputType: string;
   typeName: string;

@@ -6,7 +6,7 @@
  * accepted) and an import line (checked names and a checked module path).
  */
 import { _parseExpr, type Code } from "../template.js";
-import { expression, list, literal, record, statement } from "./shapes.js";
+import { expression, guardArgs, list, literal, record, statement } from "./shapes.js";
 import { MODULE_PATH } from "./tools.js";
 import {
   isIdentifier,
@@ -14,7 +14,9 @@ import {
   type ContextBinding,
   type Fragment,
   type ImportGroup,
+  type Limits,
   type Lowered,
+  type Owner,
   type ResolvedLlmStep,
   type ResolvedRef,
   type ResolvedStep,
@@ -50,7 +52,7 @@ function reference(ref: ResolvedRef, steps: StepsById): Code {
   if (!isIdentifier(target.value)) {
     throw new Error(`cannot write the step local "${target.value}"`);
   }
-  const unwrap = target.kind === "tool" && target.returnsResult ? ".value" : "";
+  const unwrap = target.holdsResult ? ".value" : "";
   return _parseExpr(`${target.value}${unwrap}${ref.path}`);
 }
 
@@ -87,19 +89,39 @@ function bindingFragment(step: ResolvedStep, binding: Binding, steps: StepsById)
   };
 }
 
+/** The `, time: …, cost: …` text a step guard adds after its label. */
+function limitsText(limits: Limits): string {
+  return guardArgs(limits)
+    .map((piece) => `, ${piece}`)
+    .join("");
+}
+
+/** `const <value> = guard(label: "<id>", <limits>) { <body> }`. */
+function guarded(step: ResolvedStep, limits: Limits, body: Code): Code {
+  const names = { value: step.value, limits: limitsText(limits) };
+  return statement("guarded", names, { label: literal(step.id), body });
+}
+
+/** The failure check after a step. `tool` names what the message blames. */
+function checkFragment(step: ResolvedStep, tool: string, owner: Owner): Fragment {
+  const shape = step.holdsResult ? "check" : "checkPlain";
+  const names = { value: step.value, id: step.id, tool };
+  return { code: statement(shape, names, { id: literal(step.id) }), owner };
+}
+
 function toolFragments(step: ResolvedToolStep, steps: StepsById): Fragment[] {
   const owner = { step: step.id, field: "args" };
   const args = step.argOrder
     .map((arg, index) => `${arg}: ${step.bindings[index].local}`)
     .join(", ");
-  const call = statement("call", { value: step.value, tool: step.tool, args }, {});
-  const checkShape = step.returnsResult ? "check" : "checkPlain";
-  const checkNames = { value: step.value, id: step.id, tool: step.tool };
-  const check = statement(checkShape, checkNames, { id: literal(step.id) });
+  const call =
+    step.limits === null
+      ? statement("call", { value: step.value, tool: step.tool, args }, {})
+      : guarded(step, step.limits, statement("returnCall", { tool: step.tool, args }, {}));
   return [
     ...step.bindings.map((binding) => bindingFragment(step, binding, steps)),
     { code: call, owner },
-    { code: check, owner },
+    checkFragment(step, step.tool, owner),
   ];
 }
 
@@ -134,19 +156,23 @@ function llmFragments(step: ResolvedLlmStep, steps: StepsById): Fragment[] {
   if (step.provider !== null) {
     values.provider = literal(step.provider);
   }
-  const names = {
-    value: step.value,
-    reply: step.reply,
-    outputType: step.typeName,
-    options: options.join(""),
-  };
+  const owner = { step: step.id, field: "prompt" };
+  const threadNames = { reply: step.reply, outputType: step.typeName, options: options.join("") };
   const contexts = step.bindings.flatMap((binding) => [
     bindingFragment(step, binding, steps),
     contextTextFragment(step, binding),
   ]);
+  if (step.limits === null) {
+    const declare = statement("letNull", { value: step.value, outputType: step.typeName }, {});
+    const names = { ...threadNames, after: `${step.value} = ${step.reply}` };
+    const thread = statement("llmThread", names, values);
+    return [...contexts, { code: declare, owner }, { code: thread, owner }];
+  }
+  const thread = statement("llmThread", { ...threadNames, after: `return ${step.reply}` }, values);
   return [
     ...contexts,
-    { code: statement("llm", names, values), owner: { step: step.id, field: "prompt" } },
+    { code: guarded(step, step.limits, thread), owner },
+    checkFragment(step, "llm", owner),
   ];
 }
 

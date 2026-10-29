@@ -84,8 +84,11 @@ describe("lowerWorkflow", () => {
         { step: "meals", field: "context[0]" },
       ],
       [
+        "let step_meals: Step_meals_output = null as Step_meals_output\n",
+        { step: "meals", field: "prompt" },
+      ],
+      [
         [
-          "let step_meals: Step_meals_output = null as Step_meals_output",
           "thread {",
           "  const step_meals_reply: Step_meals_output = llm(",
           `    "${mealPlan.steps[3].kind === "llm" ? mealPlan.steps[3].prompt : ""}" + "\\n\\nContext 1 (steps.text.body):\\n" + step_meals_context1_text,`,
@@ -98,6 +101,63 @@ describe("lowerWorkflow", () => {
         { step: "meals", field: "prompt" },
       ],
     ]);
+  });
+
+  it("guards a tool step that has limits, then checks it", () => {
+    const lowered = lowerWorkflow(
+      resolved(withStep(mealPlan, 4, { limits: { maxTime: 120000, maxCost: 5 } })),
+    );
+    const add = lowered.body.filter((f) => f.owner?.step === "add" && f.owner.field === "args");
+    expect(add.map((f) => f.owner)).toEqual([
+      { step: "add", field: "args" },
+      { step: "add", field: "args" },
+    ]);
+    const [guardText, checkText] = add.map((f) => _toSource(f.code));
+    expect(guardText).toContain('const step_add = guard(label: "add", time: 120000, cost: 5) {');
+    expect(guardText).toContain("  return addListItems(");
+    expect(guardText).toContain("    section: step_add_section,");
+    expect(guardText).toContain("\n}\n");
+    expect(checkText).toContain('"step add (addListItems): ${step_add.error}",');
+  });
+
+  it("guards an llm step that has limits, declaring the reply inside, then checks it", () => {
+    const lowered = lowerWorkflow(resolved(withStep(mealPlan, 3, { limits: { maxTime: 60000 } })));
+    const meals = lowered.body
+      .filter((f) => f.owner?.step === "meals" && f.owner.field === "prompt")
+      .map((f) => _toSource(f.code));
+    expect(meals[0]).toBe(
+      [
+        'const step_meals = guard(label: "meals", time: 60000) {',
+        "  thread {",
+        "    const step_meals_reply: Step_meals_output = llm(",
+        `      "${mealPlan.steps[3].kind === "llm" ? mealPlan.steps[3].prompt : ""}" + "\\n\\nContext 1 (steps.text.body):\\n" + step_meals_context1_text,`,
+        "    )",
+        "    return step_meals_reply",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(meals[1]).toContain('"step meals (llm): ${step_meals.error}",');
+    // The guard gives the step a Result, so a later reference reads through .value.
+    expect(printAll(resolved(withStep(mealPlan, 3, { limits: { maxTime: 60000 } })))).toContain(
+      "const step_add_items = step_meals.value\n",
+    );
+  });
+
+  it("reads a guarded plain-returning step through .value", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./lists.agency.findLists": {
+        signature: "findLists(query: string): string[]",
+        returnType: "string[]",
+        returnsResult: false,
+        docstring: null,
+      },
+    };
+    const body = printAll(resolved(withStep(mealPlan, 2, { limits: { maxCost: 1 } }), signatures));
+    expect(body).toContain("const step_add_listId = step_list.value[0].id\n");
+    expect(body).toContain('"step list (findLists): ${step_list.error}",');
   });
 
   it("references an llm step's value without .value", () => {

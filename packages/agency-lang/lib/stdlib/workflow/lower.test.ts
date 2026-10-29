@@ -85,11 +85,13 @@ describe("lowerWorkflow", () => {
       ],
       [
         [
-          "const step_meals: Step_meals_output = thread {",
-          "  return llm(",
+          "let step_meals: Step_meals_output = null as Step_meals_output",
+          "thread {",
+          "  const step_meals_reply: Step_meals_output = llm(",
           `    "${mealPlan.steps[3].kind === "llm" ? mealPlan.steps[3].prompt : ""}" + "\\n\\nContext 1 (steps.text.body):\\n" + step_meals_context1_text,`,
           '    model: "gpt-5",',
           "  )",
+          "  step_meals = step_meals_reply",
           "}",
           "",
         ].join("\n"),

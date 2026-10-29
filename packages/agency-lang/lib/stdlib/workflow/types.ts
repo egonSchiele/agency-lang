@@ -126,11 +126,14 @@ export type ResolvedToolStep = {
   argOrder: string[];
 };
 
-/** `outputType` is the type text as written, `typeName` the alias it is declared as. */
+/** `outputType` is the type text as written, `typeName` the alias it is
+ *  declared as, and `reply` the local inside the thread that holds the
+ *  model's typed answer. */
 export type ResolvedLlmStep = {
   id: string;
   kind: "llm";
   value: string;
+  reply: string;
   prompt: string;
   outputType: string;
   typeName: string;

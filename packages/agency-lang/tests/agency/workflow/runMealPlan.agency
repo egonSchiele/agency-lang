@@ -1,0 +1,79 @@
+import { runWorkflow, Workflow } from "std::workflow"
+import { Json } from "std::validation"
+import { searchNotes, readNote } from "./fixtures/tools/notes.agency"
+import { findLists, addListItems } from "./fixtures/tools/lists.agency"
+
+const DIR = __dirname + "/fixtures/tools"
+const TOOLS = [searchNotes, readNote, findLists, addListItems]
+
+/** The spec's meal plan, with no limits. */
+def mealPlan(): Workflow {
+  return {
+    format: 1,
+    name: "updateMealPlanFromNote",
+    description: "Copy this week's meal plan from the groceries note to the weekly meal plan list.",
+    inputs: "{ noteTitle: string }",
+    steps: [
+      { id: "note", kind: "tool", module: "./notes.agency", tool: "searchNotes", args: { query: { "$ref": "inputs.noteTitle" } } },
+      { id: "text", kind: "tool", module: "./notes.agency", tool: "readNote", args: { id: { "$ref": "steps.note[0].id" } } },
+      { id: "list", kind: "tool", module: "./lists.agency", tool: "findLists", args: { query: "weekly meal plan" } },
+      {
+        id: "meals",
+        kind: "llm",
+        prompt: "The note below ends with this week's meal plan, one meal per line. Return the meals as a list of strings, in order, without day names.",
+        context: [{ "$ref": "steps.text.body" }],
+        output: "string[]"
+      },
+      {
+        id: "add",
+        kind: "tool",
+        module: "./lists.agency",
+        tool: "addListItems",
+        args: { listId: { "$ref": "steps.list[0].id" }, items: { "$ref": "steps.meals" }, section: "Meals" }
+      }
+    ],
+    result: { "$ref": "steps.add" }
+  }
+}
+
+/** The effects every run of a workflow raises on its way to the steps. */
+def isPlumbing(effect: string): boolean {
+  return effect == "std::read" || effect == "std::workflow::run" || effect == "std::run"
+}
+
+node rejectedStepStopsTheWorkflow(): Json {
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(mealPlan(), { noteTitle: "Groceries" }, TOOLS, DIR)
+  } with (intr) {
+    if (isPlumbing(intr.effect)) {
+      return approve()
+    }
+    if (intr.effect == "test::lists::add") {
+      return reject()
+    }
+  }
+  if (result is success) {
+    print("unexpected success: ${JSON.stringify(result.value)}")
+    return null
+  }
+  return [result.error.startsWith("step add (addListItems):"), result.data.step]
+}
+
+/** The step's own interrupt is answered by nobody here, so it pauses the
+  child and surfaces to the test runner, which approves it. */
+node pausedWorkflowResumes(): Json {
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(mealPlan(), { noteTitle: "Groceries" }, TOOLS, DIR)
+  } with (intr) {
+    if (isPlumbing(intr.effect)) {
+      return approve()
+    }
+  }
+  if (result is failure) {
+    print("failed: ${result.error}")
+    return null
+  }
+  return result.value
+}

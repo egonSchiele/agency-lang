@@ -60,6 +60,7 @@ export function names(id: string) {
     arg: (name: string) => `step_${id}_${name}`,
     context: (index: number) => `step_${id}_context${index + 1}`,
     contextText: (index: number) => `step_${id}_context${index + 1}_text`,
+    reply: `step_${id}_reply`,
     typeName: `Step_${id}_output`,
   };
 }
@@ -212,13 +213,19 @@ function declaredBy(step: Step): Declared[] {
       what: `the text of context value ${index + 1} of step "${step.id}"`,
     },
   ]);
+  const reply = {
+    name: stepNames.reply,
+    step: step.id,
+    field: "prompt",
+    what: `the reply of step "${step.id}"`,
+  };
   const typeName = {
     name: stepNames.typeName,
     step: step.id,
     field: "output",
     what: `the output type of step "${step.id}"`,
   };
-  return [value, ...contexts, typeName];
+  return [value, ...contexts, reply, typeName];
 }
 
 /** Every generated name differs from every other and from every imported
@@ -286,6 +293,7 @@ function resolveLlmStep(step: LlmStep): ResolvedStep {
     id: step.id,
     kind: "llm",
     value: stepNames.value,
+    reply: stepNames.reply,
     prompt: step.prompt,
     outputType: step.output,
     typeName: stepNames.typeName,

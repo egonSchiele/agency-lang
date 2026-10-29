@@ -190,6 +190,27 @@ describe("resolveWorkflow", () => {
     ]);
   });
 
+  it("warns on a tool that returns Json", () => {
+    const signatures = {
+      ...mealSignatures,
+      "./notes.agency.searchNotes": {
+        signature: "searchNotes(query: string): Json",
+        returnType: "Json",
+        returnsResult: false,
+        docstring: null,
+      },
+    };
+    const r = resolve(mealPlan, mealRefs, signatures);
+    expect(r.resolved!.warnings).toEqual([
+      {
+        step: "note",
+        field: "tool",
+        message:
+          'step "note": "searchNotes" returns Json, so references into its value are checked at run time',
+      },
+    ]);
+  });
+
   it("prefixes every generated name", () => {
     const wf = withStep(withArg(mealPlan, "text", "id", { $ref: "steps.failure[0].id" }), 0, {
       id: "failure",

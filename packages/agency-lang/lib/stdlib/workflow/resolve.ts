@@ -46,7 +46,11 @@ const PROGRAM_NAMES = [
 ];
 
 /** Return types that tell the typechecker nothing about the value. */
-const UNTYPED_RETURNS = [null, "any"];
+const UNTYPED_RETURNS = [null, "any", "Json"];
+
+function untypedReason(returnType: string | null): string {
+  return returnType === null ? "declares no return type" : `returns ${returnType}`;
+}
 
 /** Every name a step declares. The prefix is what makes any identifier safe
  *  as a step id: a step named `failure` declares `step_failure`. */
@@ -243,7 +247,7 @@ function untypedWarnings({ workflow, signatures }: Context): Problem[] {
     if (!UNTYPED_RETURNS.includes(returnType)) {
       return [];
     }
-    const message = `step "${step.id}": "${step.tool}" declares no return type, so references into its value are checked at run time`;
+    const message = `step "${step.id}": "${step.tool}" ${untypedReason(returnType)}, so references into its value are checked at run time`;
     return [{ step: step.id, field: "tool", message }];
   });
 }

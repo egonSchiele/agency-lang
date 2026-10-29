@@ -98,6 +98,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "everyBadToolIsReported",
+      "description": "every tool that cannot be imported is reported at once",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

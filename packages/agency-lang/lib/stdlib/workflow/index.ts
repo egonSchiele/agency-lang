@@ -58,10 +58,11 @@ export function _problemsFailure(problems: Problem[]): ResultFailure {
   return failure(message, { problems });
 }
 
-/** The tools as import references. Throws on a tool that cannot be
- *  imported; the Agency caller turns that into a failure with `try`. */
-export function _toolRefs(tools: unknown[], dir: string): ToolRef[] {
-  return toolRefs(tools, dir, currentHost().system.cwd());
+/** The tools as import references, or a failure naming every tool that
+ *  cannot be imported. */
+export function _toolRefs(tools: unknown[], dir: string): ResultSuccess | ResultFailure {
+  const result = toolRefs(tools, dir, currentHost().system.cwd());
+  return result.refs === null ? _problemsFailure(result.problems) : success(result.refs);
 }
 
 /** One module's tools. `reExport` is the line `describe` reads for a shared

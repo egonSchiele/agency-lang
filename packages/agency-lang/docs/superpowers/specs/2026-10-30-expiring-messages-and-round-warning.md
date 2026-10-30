@@ -263,8 +263,8 @@ handoff nested in a handoff removes only its own persona.
 
 | `at` | The message is removed when | `key` |
 |---|---|---|
-| `llmCall` | the `llm()` call that owns it returns | the call's `llmCall` span id, which `reopenSpan` keeps stable across a resume |
-| `request` | the request it was added for has returned | the request step key (`first`, or `afterToolRound:<round>`) |
+| `llmCall` | the `llm()` call that owns it returns, ends the turn, or throws | a random id minted once per call and stored on the `runPrompt` frame as `self.llmCallKey`, so a resume reads the same one (a statelog span id would be `undefined` with logging off) |
+| `request` | the request it was added for has returned | the call's key plus the request step key, `<llmCallKey>:initialLlmCall` or `<llmCallKey>:round.<n>.nextLlmCall`, so two calls never share one |
 | `handoff` | the handoff dispatch's body returns | the handoff scope key, unchanged from today |
 
 A small module, `lib/runtime/state/messageMetadata.ts`, owns the type
@@ -285,11 +285,14 @@ TypeScript. Labels are allowed on every role, as today.
 `MessageThread` loses `messageLabels`, `messageScopes`, and every rule
 that existed to keep them aligned. What remains:
 
-- `push(message, label = null, expires = null)`. Writes `label` and
-  `expires` into the message's metadata and appends it. A system message
-  pushed while a handoff scope is open and with no explicit expiry gets
+- `push(message, label = null, expires = null)`. Writes the keys it was
+  given values for into the message's metadata and appends it; a key it
+  was not given is left as the message had it. A system message pushed
+  while a handoff scope is open and with no explicit expiry gets
   `{ at: "handoff", key: <current scope> }`, which is today's stamping
-  rule with a new home.
+  rule with a new home. Writes are copy-on-write (`withMetadata` returns
+  a new instance), because `adoptFrom` and `getMessages()` hand out the
+  same instances to more than one holder.
 - `expire(at, key)`. Removes every message whose expiry matches both
   fields. This is the only removal path for expiring messages.
 - `claimUnkeyed(at, key)`. Writes `key` into every message whose expiry
@@ -298,10 +301,18 @@ that existed to keep them aligned. What remains:
 - `labelAt(index)` stays for the two readers, reading the metadata.
 - `enterHandoffScope`, `exitHandoffScope`, `handoffDepth` stay. They
   describe which handoff is running, which the push rule needs.
-- `removeAt`, `replaceAt`, `removeMatching`, `setMessages`, and
-  `adoptFrom` become plain array operations. `setMessages` loses its
-  `labels` and `scopes` parameters; compaction no longer has to carry
-  anything beside the messages it keeps.
+- `replaceAt` copies the old message's `label` onto the new one, since
+  its two callers (`dropHandoffToolCall`, `endThreadWithAnswer`) pass a
+  freshly built assistant message. It does not copy `expires`: only
+  system and user messages may expire, and both callers replace an
+  assistant message.
+- `removeAt`, `removeMatching`, `setMessages`, and `adoptFrom` become
+  plain array operations. `setMessages` loses its `labels` and `scopes`
+  parameters.
+- `expiryOf` returns null for any role that may not expire, whatever its
+  JSON says. A seeded `messages:` array or a hand-edited checkpoint can
+  put `expires` on a tool message; `expire` and `claimUnkeyed` must never
+  touch one, or the tool call it answers is left without a result.
 - `removeHandoffScoped` and `scopeAt` are removed. `closeHandoff` calls
   `expire("handoff", key)`.
 
@@ -317,10 +328,18 @@ session saved before this change restores with its labels and its
 handoff tags. The checkpoint schema in `lib/runtime/state/schemas.ts`
 keeps both fields as optional for that reason.
 
-The statelog dump in `promptEvents.ts` already emits each message's JSON
-and zips the label on; with the label in the JSON, `withMessageLabels`
-becomes a redaction pass only. Statelog consumers that read `label` off a
-message keep working because the key name is unchanged.
+The statelog dump in `promptEvents.ts` strips `metadata` from each
+message's JSON and keeps writing the top-level `label` it writes today,
+so a logged message is byte-identical to before and the logs viewer and
+the `message-labels` fixtures keep reading the same field. Hook data
+(`onLLMCallStart` messages) and `getThread()` results do carry
+`metadata`; they are the live messages.
+
+Memory compaction keeps every expiring message out of the summarized
+range: a message that is about to be removed must not live on as prose
+in the summary. The summary replaces only the non-expiring messages of
+the older half; the expiring ones from that range are kept, in order,
+ahead of the tail.
 
 ### Subthreads and clones
 
@@ -382,13 +401,17 @@ same thread, but only an unkeyed message is claimed, and an unkeyed one
 can only come from Agency code that ran since the last call started, so
 the body's call claims only what the body pushed.
 
-At the end of the call, a new step `expireLlmCall` runs
-`expire("llmCall", key)` and refreshes `self.messagesJSON`. It runs at
-the point where the tool loop has finished and the answer is about to be
-returned, on both the no-schema path and the structured path. It is a
-step, not a `finally`, on purpose: the `finally` at the bottom of
-`runPrompt` also runs on an interrupt bailout, and a paused call is not
-over. Its warning must still be on the thread when the call resumes.
+At the end of the call, the `finally` at the bottom of `runPrompt`
+runs `expire("llmCall", key)` under the same guard that pops the frame:
+`shouldPop` is false only when the call is leaving paused on an
+interrupt (the three `kind === "interrupts"` returns and the
+`PromptBailout` catch), and a paused call is not over, so its warning
+stays for the resume. Every other exit expires: the no-schema return,
+the structured accept and failure, the `endTurn` return, an Esc cancel,
+and a guard failure. One site covers all of them, and a popped frame is
+never replayed, so no step is needed. A pause from `pauseSignal` never
+lands inside a tool loop (`docs/dev/runtime/pause.md`, "Statements that
+cannot take a pause"), so it is not an exit here.
 
 ### What stays separate, and the rule
 
@@ -428,6 +451,11 @@ const answer = llm("What is the capital of Peru?")
 `request` and `handoff` are not offered. A request is not something
 Agency code can stand inside, and a system message pushed inside a
 handoff body already expires with the handoff without being asked.
+
+An unkeyed `llmCall` message pushed inside a handoff body whose code
+makes no `llm()` call of its own is claimed by the caller's next call,
+which may be the next turn. That is the rule applied literally; the dev
+doc says so.
 `assistantMessage` and `toolMessage` do not take the argument, for the
 pairing reason above.
 
@@ -489,13 +517,25 @@ warnings fire at the boundary:
 - The final warning fires once, at the boundary where `remaining == 1`,
   when `finalWarning` is true.
 - When `remaining` (the threshold) is 1, only the final text is sent.
-- Nothing fires at `remaining == 0`. The next request offers no tools, so
-  the model can only answer.
+- Nothing fires at `remaining == 0`.
 
 With the agent's cap of 50 and the defaults: the first warning after
-round 47 (3 left), the final after round 49 (1 left). With plain
-`llm()`'s cap of 10: after round 7 and round 9. With a cap of 2: only the
-final warning, after round 1.
+round 46 (3 left), the final after round 48 (1 left). With plain
+`llm()`'s cap of 10: after round 6 and round 8. With a cap of 2: only the
+final warning, after round 0.
+
+### The request after the last allowed round offers no tools
+
+The final warning says the results of this round's calls are the last
+the model will see. For that to be true, the request after round
+`limit - 1` must offer no tools. Today it still offers them:
+`atRoundCap` is `toolCallRound >= limit`, and the counter goes up only
+after that request returns, so the model is offered tools once more,
+any call is refused, and only the request after the refusal is bare.
+This spec changes `atRoundCap` to `toolCallRound + 1 >= limit`. With a
+cap of 3 the requests offer `[tools, tools, tools, none]` instead of
+`[tools, tools, tools, tools, none]`. The `tooManyRounds` refusal stays
+as the fallback for a model that calls a tool it was not offered.
 
 Which warnings have fired is recorded in `runnerState.roundWarnings`,
 inside the step that pushes them, so a resumed pass sends each one once.
@@ -530,7 +570,8 @@ The producer needs the cap, the round, the option, and the call's key.
 It no longer says "no more tools will be offered", which is only true
 for the rest of this call. This message is a tool result paired with a
 tool call, so it does not expire and stays in the thread; the wording is
-what keeps it from misleading a later call.
+what keeps it from misleading a later call. With the change above it is
+reached only when a model calls a tool it was not offered.
 
 ### What this PR does not do
 
@@ -542,10 +583,12 @@ what keeps it from misleading a later call.
 
 ## Part 5: Interrupts, checkpoints, and isolation
 
-**Interrupts and resume.** Every push and every expire is inside a step:
-the `pushPrompt` step (claim), the request step's body and `finally`
-(memory facts), the round boundary's producer step (the warning), the
-`.invoke`/hand-back path (handoff), and the new `expireLlmCall` step. A
+**Interrupts and resume.** Every push is inside a step: the `pushPrompt`
+step (claim), the request step's body (memory facts), the round
+boundary's producer step (the warning), and the `.invoke`/hand-back path
+(handoff). The removals happen where each owner ends: the request's
+`finally`, `closeHandoff`, and the `runPrompt` `finally` under
+`shouldPop`, which is false only when the call is leaving paused. A
 checkpoint taken inside a call carries the thread with each message's
 metadata and `runnerState.roundWarnings`, so the resumed pass neither
 re-sends a warning nor forgets to remove one. A paused call's warning is
@@ -592,7 +635,10 @@ system message pushed inside a handoff scope expires with the handoff by
 default.
 
 Unit, in `lib/runtime/prompt.toolRounds.test.ts` with the recording
-client: with cap 5 and defaults, the request after round 1 carries the
+client: the warning is gone from the thread after a call that ends
+through `endTurn`, and after one that throws (a cancel); it is still on
+the thread after a call that returned paused on an interrupt; with cap 5
+and defaults, the request after round 1 carries the
 first warning with `{limit}` and `{remaining}` filled, the request after
 round 3 carries the final text, no other request carries either, and
 the thread after the call holds neither; `remaining: 0` sends only the
@@ -605,8 +651,9 @@ Unit, `lib/runtime/turnBoundary.test.ts`: the producer fires once per
 threshold and records it in `runnerState`, so a second `take` at the same
 round returns nothing.
 
-Unit, `lib/runtime/promptEvents.test.ts`: the statelog dump carries each
-message's label under the same `label` key as before.
+Unit, `lib/runtime/promptLabels.test.ts`: the statelog dump carries each
+message's label under the same top-level `label` key and no `metadata`
+key, so it is byte-identical to today's.
 
 Agency-js, `tests/agency-js/handoff`: the existing `persona`,
 `pauseWithPersona`, `nested`, and `cancelledHandoff` cases must pass
@@ -614,10 +661,13 @@ unchanged. One new case, `warningInsideHandoff`: a handoff body whose
 `llm()` has cap 2 pushes a final warning on the caller's thread, and the
 caller's next request does not carry it.
 
-Agency-js, a new `tests/agency-js/round-warning`: a call with cap 3 and a
-pause inside round 2, resumed; the model saw the warning once and the
-thread is clean after the call. This is the resume case the round-cap
-doc notes nobody tests yet.
+Agency-js, a new `tests/agency-js/round-warning`: a call with cap 5 and
+a pause inside round 2, resumed. The first warning fired after round 1,
+before the pause; after the resume, the boundary after round 2 would
+fire it again if `runnerState.roundWarnings` had not survived the
+checkpoint. Exactly one request carries each warning, and a second
+`llm()` call on the same thread sees neither. This is the resume case
+the round-cap doc notes nobody tests yet.
 
 Agency, `tests/agency/memory/llm-injection.agency`: unchanged assertion
 that the facts reach the model; add that the thread does not hold them
@@ -633,7 +683,8 @@ request and absent from the second's.
   three expiries and where each fires, the push rule for roles, the
   claim rule for unkeyed messages, how old checkpoints revive, the
   rule that a clone keeps expiring messages and why, the handoff-body
-  effect, and the rule above with the list of the four
+  effect, one sentence that the `metadata` option of `llm()` is an
+  unrelated thing, and the rule above with the list of the four
   sanctioned edits. Added to the `CLAUDE.md` index and the
   `agency-runtime-docs` skill.
 - `docs/dev/runtime/threads.md`: the `messageLabels` and `messageScopes`
@@ -677,8 +728,8 @@ agency-lang:
   from the message.
 - `lib/runtime/turnBoundary.ts`: `roundWarningProducer`, the new
   `BoundaryContext` fields, the template fill.
-- `lib/runtime/toolLoopGuards.ts`: the refusal text; the option's
-  defaults and merge, beside `roundCap`.
+- `lib/runtime/toolLoopGuards.ts`: the refusal text; `atRoundCap` offers
+  no tools on the request after the last allowed round.
 - `lib/stdlib/thread.ts`, `stdlib/thread.agency`: the `expires`
   argument.
 - `lib/stdlib/llm.ts`, `stdlib/llm.agency`, `lib/typeChecker/builtins.ts`:

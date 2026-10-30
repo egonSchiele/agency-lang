@@ -49,6 +49,15 @@ From Claude Code's skills documentation, fetched 2026-10-30:
 5. **Approval of the scans:** each folder's scan is approved with `with approve`, the same way `projectCommands` already scans `.claude/commands`. The scans run in a `static const`, during global initialization. Since #987 the root run policy is installed before that (`installRunPolicyHandler` in `initFreshExecCtx`, `lib/runtime/node.ts:135-160`), so `agency run --policy ... agent.agency` or `--reject std::skills::skillsDir` can still reject a scan, and the rules of handlers make that rejection win over the inner `with approve`. `agency agent` itself passes no root policy: the launcher hands the child only its budget (`withRootCarriers(process.env, { budget })`, `lib/cli/runBundledAgent.ts:266`), and the user's agent policy is a handler that `runSession` installs around each turn (`lib/turn.agency:127`), after the statics have run. So nothing in `~/.agency-agent/policy.json` or the agent's `--policy` flag can stop these scans. This is the owner's decision; the dev doc says it plainly.
 6. **Approval of the reads:** the recommended policy approves reads under `<home>/.claude/skills` and `./.claude/skills`, the same way it approves the agent home's `skills` folder. That needs a new `<home>` placeholder. Project folders in parent directories are not covered, so reading one of those skills prompts in an interactive session and is rejected in a one-shot run. A user's saved `policy.json` gets the new rule through `/policy`; saved policies are not migrated.
 7. **Who gets the tools:** the coordinator only, beside `learned_skills`. Subagents are unchanged.
+8. **Other Claude Code skill features.** Keep to what is easy and adds little code. Supported:
+   - The boolean spellings Claude Code accepts for its switches: `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, in any letter case.
+   - A missing `description` defaults to the first non-empty line of the body.
+   - `when_to_use` is added to the end of the description, after a space.
+   - The description, with `when_to_use`, is cut at 1,536 characters, Claude Code's limit for the listing.
+   - `${CLAUDE_SKILL_DIR}` in a skill's body becomes the skill's folder when the skill runs as `/name`. A skill the model reads through the skills tool is read as written, as with every other file.
+   - Names Claude Code refuses are skipped: a name or folder name with control characters, zero-width or bidirectional-control characters, `<` or `>`, leading or trailing spaces, or two spaces in a row. The folder `synced` and the names `anthropic-skills` and `anthropic-skills:*` are reserved and skipped.
+
+   Not supported: positional arguments (`$ARGUMENTS[N]`, `$0`, the `arguments` field), a possible follow-up because it changes `expandSlash` for `.claude/commands` files too; shell injection (`` !`command` ``); `allowed-tools` and `disallowed-tools`; `model` and `effort`; `context: fork`, `agent`, and `background`; `hooks`; `paths`; and watching the folders for changes (the owner declined it: the folders are scanned once, at startup). The frontmatter of an unsupported field is ignored, as Claude Code ignores fields it does not know.
 
 ## Global Constraints
 
@@ -70,7 +79,7 @@ From Claude Code's skills documentation, fetched 2026-10-30:
 2. **Agent started outside any git repository.** Expect only the current directory's `.claude/skills`. Parents must not be read, or a run in `~/Downloads/x` would pick up whatever is in `~` and `/`.
 3. **A higher folder's skill turned off for one half.** A manual-only personal `deploy` and a plain project `deploy`: expect no `deploy` entry for the model and one `deploy` command, from the personal folder.
 4. **A project skill named like a built-in command** (`.claude/skills/clear/SKILL.md`). Expect `/clear` to still clear the screen. The model can still read the skill.
-5. **Prompt size.** Every listed skill's description goes to the model on every call. On the owner's machine that is seven personal skills plus the nine `agency-*-docs` skills in this repo, about 3,600 characters of descriptions before the XML. Measure both folders together and report the number. If it is large, try `skillsToolFromEntries`'s `brief` mode, which drops the XML.
+5. **Prompt size.** Every listed skill's description goes to the model on every call. On the owner's machine that is seven personal skills plus the nine `agency-*-docs` skills in this repo, about 3,600 characters of descriptions before the XML. The 1,536-character cap on each description (Decision 8) bounds one skill, not the total. Measure both folders together and report the number. If it is large, try `skillsToolFromEntries`'s `brief` mode, which drops the XML.
 
 Each of these has a test or a measurement in the task that owns the code.
 
@@ -81,6 +90,7 @@ Each of these has a test or a measurement in the task that owns the code.
 **Files:**
 - Modify: `stdlib/skills.agency` (new types and function near `scanSkillsSubdirs`; the switch helpers used by `scanEntries` at line 283; `commandsDir` at line 838 and `expandSlash` at line 897 move onto the shared command type)
 - Modify: `lib/stdlib/gitignore.ts` (export a run-free wrapper over `repositoryAncestors`)
+- Modify: `lib/stdlib/skills.ts` and `lib/stdlib/skills.test.ts` (the refused-name check)
 - Create: `tests/agency/skills-claude.agency`, `tests/agency/skills-claude.test.json`
 - Create fixture: `tests/agency/skills-claude-fixture/` with these skills, each a folder holding `SKILL.md`:
   - `normal`: `name: normal`, `description: A normal skill.`, `argument-hint: <file>`, body `Run on $ARGUMENTS.`
@@ -91,6 +101,13 @@ Each of these has a test or a measurement in the task that owns the code.
   - `word`: `description: Word flag.`, `user-invocable: No`, body `Word body.`
   - `renamed`: `name: other-name`, `description: Renamed.`, body `Renamed body.`
   - `bare`: no frontmatter, body `Bare body.`
+  - `first-line`: `name: first-line` and no `description`, body `\n\nFirst line here.\n\nMore text.` (two blank lines first)
+  - `when`: `description: Base.`, `when_to_use: Say deploy.`, body `When body.`
+  - `long`: a `description` of 2,000 `a` characters, body `Long body.`
+  - `skill-dir`: `description: Uses its folder.`, body `Read ${CLAUDE_SKILL_DIR}/notes.md.`
+  - `synced`: `description: Reserved folder.`, body `Synced.`
+  - `reserved`: `name: anthropic-skills:demo`, body `Reserved.`
+  - `angle`: `name: bad<name>`, body `Angle.`
 
 **Interfaces:**
 - Produces, exported from `std::skills`:
@@ -115,13 +132,19 @@ Each of these has a test or a measurement in the task that owns the code.
 - `commandsDir` now returns `SkillCommand[]`, and `expandSlash` takes `SkillCommand[]`. Both build and read the same record, so the two command sources cannot drift apart.
 - `skillsDir(dir, "standard")` stops listing skills with `disable-model-invocation: true`.
 - From `lib/stdlib/gitignore.ts`: `export async function _repositoryAncestors(dir: string): Promise<string[] | null>`.
+- From `lib/stdlib/skills.ts`: `export function _refusedSkillName(name: string): boolean`, true for a name Claude Code would refuse or reserve (Decision 8).
+- In `stdlib/skills.agency`, private: `static const MAX_SKILL_DESCRIPTION_CHARS = 1536`, and `skillDescription(data: any, body: string): string`.
 
 - [ ] **Step 1: Write the fixture and the failing tests.** Each node returns a boolean, and each test.json entry expects `"true"` with `exact`. Load the scan with `scanClaudeSkills(__dirname + "/skills-claude-fixture") with approve`, then unwrap it.
-  - `namesAreEverySkill`: the sorted `names` equal `["bare", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "word"]`.
-  - `entriesAreModelUsableSkills`: the sorted entry names equal `["bare", "model-only", "normal", "other-name", "word"]`. `manual-only` and `neither` are absent. `quoted` is absent, because the string `"true"` counts.
-  - `commandsAreUserRunnableSkills`: the sorted command names equal `["bare", "manual-only", "normal", "other-name", "quoted"]`. `word` is absent, because `No` counts as false in any letter case. Together with the line above, `neither` appears in neither list (Review Focus 3's single-folder half).
+  - `namesAreEverySkill`: the sorted `names` equal `["bare", "first-line", "long", "manual-only", "model-only", "neither", "normal", "other-name", "quoted", "skill-dir", "when", "word"]`. `synced`, `anthropic-skills:demo`, and `bad<name>` are absent, so a refused name is not even claimed for precedence.
+  - `entriesAreModelUsableSkills`: the sorted entry names equal `["bare", "first-line", "long", "model-only", "normal", "other-name", "skill-dir", "when", "word"]`. `manual-only` and `neither` are absent. `quoted` is absent, because the string `"true"` counts.
+  - `commandsAreUserRunnableSkills`: the sorted command names equal `["bare", "first-line", "long", "manual-only", "normal", "other-name", "quoted", "skill-dir", "when"]`. `word` is absent, because `No` counts as false in any letter case. Together with the line above, `neither` appears in neither list (Review Focus 3's single-folder half).
   - `commandBodyNamesItsFolder`: the `normal` command's body equals `"Base directory for this skill: " + scan.dir + "/normal\n\nRun on $ARGUMENTS."`.
-  - `commandCarriesArgumentHint`: the `normal` command's `argHint` is `"<file>"` and its `description` is `"A normal skill."`. The `bare` command's `description` and `argHint` are both `""`.
+  - `commandCarriesArgumentHint`: the `normal` command's `argHint` is `"<file>"` and its `description` is `"A normal skill."`. The `bare` command's `description` is `"Bare body."`, from its first line, and its `argHint` is `""`.
+  - `descriptionDefaultsToFirstLine`: the `first-line` entry's description is `"First line here."`.
+  - `whenToUseIsAppended`: the `when` entry's description is `"Base. Say deploy."`.
+  - `descriptionIsCapped`: the `long` entry's description has length 1536.
+  - `skillDirIsSubstituted`: the `skill-dir` command's body contains `"Read " + scan.dir + "/skill-dir/notes.md."` and no longer contains `CLAUDE_SKILL_DIR`.
   - `commandExpandsWithArguments`: `expandSlash("/normal notes.md", scan.commands)` ends with `"Run on notes.md."`.
   - `missingDirectoryIsAFailure`: `scanClaudeSkills(__dirname + "/no-such-folder") with approve` is a failure.
   - `skillsDirHidesManualOnlySkills`: `skillsDir(fixture, "standard") with approve` has a description that does not contain `<name>manual-only</name>` and does contain `<name>normal</name>`.
@@ -136,21 +159,28 @@ Each of these has a test or a measurement in the task that owns the code.
     - `modelInvocable(data: any): boolean` is `!frontmatterFlagToBool(data, "disable-model-invocation", false)`.
     - `userInvocable(data: any): boolean` is `frontmatterFlagToBool(data, "user-invocable", true)`.
   - `scanEntries` drops a standard-layout entry when `modelInvocable(data)` is false. That makes `skillsDir` follow the rule too.
-  - A private `commandRecord(name: string, data: any, body: string): SkillCommand`. It holds the defaults `commandsDir` applies today: `description` and `argHint` (from `argument-hint`) become `""` when missing. Move `commandsDir`'s record building onto it, change `commandsDir`'s return type to `SkillCommand[]`, and change `expandSlash`'s `commands` parameter to `SkillCommand[]`.
+  - A private `skillDescription(data: any, body: string): string`. It takes `description`, or else the first non-empty line of `body` (trimmed); adds `when_to_use` after a space when present; and cuts the result to `MAX_SKILL_DESCRIPTION_CHARS`. Only `scanClaudeSkills` uses it, so `skillsDir`'s descriptions are unchanged.
+  - A private `commandRecord(name: string, description: string, data: any, body: string): SkillCommand`. It holds the `argHint` default `commandsDir` applies today: `""` when `argument-hint` is missing. `commandsDir` passes `fm.description ?? ""` as the description, so its output is unchanged. Move `commandsDir`'s record building onto it, change `commandsDir`'s return type to `SkillCommand[]`, and change `expandSlash`'s `commands` parameter to `SkillCommand[]`.
   - `scanClaudeSkills`, tagged `@capabilities(fileRead)` like `skillsDir`, because it calls `_glob` and `_read` directly:
     1. Resolve `dir` with `_realDir`, returning the failure.
     2. Raise `std::skills::skillsDir` with `{ dir: real, layout: "standard" }` and the same message `skillsDir` uses, so an existing always-rule for a folder covers it.
     3. `_glob` `*/SKILL.md` once, up to `MAX_SKILL_FILES`, and `_read` each file once. Parse its frontmatter with the same tolerance `scanEntries` has (`catch {}`).
-    4. From each file, take its name (frontmatter `name`, or else the folder name, as in `standardEntry`) and add it to `names`. When `modelInvocable(data)`, add `standardEntry(path, data)` to `entries`. When `userInvocable(data)`, add `commandRecord(name, data, body)` to `commands`, where `body` is `"Base directory for this skill: ${real}/${folder}\n\n"` followed by `stripFm(raw)`.
+    4. From each file, take its name (frontmatter `name`, or else the folder name, as in `standardEntry`). Skip the file when `_refusedSkillName` is true for the name or the folder name. Otherwise add the name to `names`, and let `description = skillDescription(data, stripFm(raw))`. When `modelInvocable(data)`, add `standardEntry(path, data)` with its `description` replaced by that one to `entries`. When `userInvocable(data)`, add `commandRecord(name, description, data, body)` to `commands`. `body` is `"Base directory for this skill: ${real}/${folder}\n\n"` followed by `stripFm(raw)` with every `${CLAUDE_SKILL_DIR}` replaced by `${real}/${folder}`. In Agency source, write that token as `"\${CLAUDE_SKILL_DIR}"`; a bare `${` opens an interpolation (`docs/dev/language/triple-quoted-string-escapes.md`).
   - Docstrings for `scanClaudeSkills` and both types, which become the stdlib reference page. The `scanClaudeSkills` docstring says it raises only `std::skills::skillsDir`, even though it also produces commands, so a rule that rejects `std::skills::commandsDir` for a folder does not stop that folder's skill commands.
 
-- [ ] **Step 4: Expose the repository walk.** `lib/stdlib/gitignore.ts:94` already has `repositoryAncestors(host, dir)`. It returns the folders above `dir` up to the one holding `.git`, outermost first. It returns `[]` when `dir` is itself the repository root, and `null` when there is no repository. Add an exported `_repositoryAncestors(dir: string): Promise<string[] | null>` beside it. On its first line it reads `currentHost()` and passes that to `repositoryAncestors`. Task 2 calls this; do not write a second walk.
+- [ ] **Step 4: Add `_refusedSkillName` to `lib/stdlib/skills.ts`, test first in `lib/stdlib/skills.test.ts`.** Cases:
+  - refused: `"a\u0007b"` (control character), `"a\u200Bb"` (zero-width space), `"a\u202Eb"` (bidirectional control), `"bad<name>"`, `"a>b"`, `" lead"`, `"trail "`, `"two  spaces"`, `"synced"`, `"anthropic-skills"`, `"anthropic-skills:demo"`.
+  - allowed: `"review-pr"`, `"My Skill"`, `"anthropic-skillset"`.
 
-- [ ] **Step 5: Run the tests; confirm they pass, and that the existing `skills-dir` and `commands-dir` tests still pass.**
+  One regular expression for the characters, and two comparisons for the reserved names. Run `npx vitest run lib/stdlib/skills.test.ts > <scratch>/skills-ts.log 2>&1` and expect it to fail before the change and pass after.
+
+- [ ] **Step 5: Expose the repository walk.** `lib/stdlib/gitignore.ts:94` already has `repositoryAncestors(host, dir)`. It returns the folders above `dir` up to the one holding `.git`, outermost first. It returns `[]` when `dir` is itself the repository root, and `null` when there is no repository. Add an exported `_repositoryAncestors(dir: string): Promise<string[] | null>` beside it. On its first line it reads `currentHost()` and passes that to `repositoryAncestors`. Task 2 calls this; do not write a second walk.
+
+- [ ] **Step 6: Run the tests; confirm they pass, and that the existing `skills-dir` and `commands-dir` tests still pass.**
   Run: `make > <scratch>/make.log 2>&1; for t in skills-claude skills-dir commands-dir; do pnpm run agency test tests/agency/$t.agency > <scratch>/$t.log 2>&1; echo $t=$?; done; pnpm run typecheck > <scratch>/tc.log 2>&1; echo typecheck=$?`
-  Expected: all exit 0. `commands-dir` passing unchanged is the check that moving its record building onto `commandRecord` changed nothing.
+  Expected: all exit 0. `commands-dir` passing unchanged is the check that moving its record building onto `commandRecord` changed nothing, and `skills-dir` passing unchanged is the check that `skillsDir`'s descriptions did not move.
 
-- [ ] **Step 6: Commit** `stdlib/skills.agency`, `lib/stdlib/gitignore.ts`, the fixture, both test files, and the regenerated `docs/site/stdlib/skills.md`.
+- [ ] **Step 7: Commit** `stdlib/skills.agency`, `lib/stdlib/gitignore.ts`, `lib/stdlib/skills.ts`, `lib/stdlib/skills.test.ts`, the fixture, both test files, and the regenerated `docs/site/stdlib/skills.md`.
 
 ### Task 2: Find, scan, and merge the skill folders in the agent
 
@@ -311,6 +341,7 @@ The functions, in order:
   - Approval of the scans: `with approve` in a `static const`, before the agent policy is installed, so nothing in the user's policy can stop them. A `.claude/commands` file does nothing until the user types its name, but a skill's description reaches the model on every call. So a cloned repository's `.claude/skills` reaches the model as soon as the agent starts in it.
   - Approval of the reads: the recommended policy covers `<home>/.claude/skills` and `./.claude/skills`. A skill in a parent project folder prompts on read, and fails in a one-shot run. A saved `policy.json` gets the rule through `/policy`. A manual-only skill's linked files are read with the generic `read` tool and follow the same rules.
   - Statics are not part of a checkpoint. A session resumed with `--resume` runs in a new process, which scans the folders again, so its tools and commands are the folders as they are now.
+  - The Claude Code features Decision 8 supports, where each lives (`skillDescription`, `_refusedSkillName`, the `${CLAUDE_SKILL_DIR}` replacement in `scanClaudeSkills`), and the list it does not support.
   - What is not read: nested folders, plugins, `--add-dir`, `synced/`.
 
 - [ ] **Step 2: Update `agent-brains.md:128-130`.** The rule there allows one kind of effectful brain static, bundled file reads. Add the second kind this work introduces: the scans of the user's skill and command folders (`projectCommands` already did this for `.claude/commands`). Say that these run before the policy exists, and point at `claude-skills.md`.
@@ -324,5 +355,5 @@ The functions, in order:
 ## Self-review notes
 
 - Every decision maps to a task: folders and the stop rule (Tasks 1 and 2), precedence by name (Task 2) and for commands (Task 4), the base-directory line (Task 1), the model-use switch (Task 1), scan approval (Task 2) and read approval (Task 3), coordinator only (Task 4).
-- Names used across tasks: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand`, `_repositoryAncestors` (Task 1); `SkillLabel`, `SkillDir`, `SkillSource`, `projectFolders`, `claudeSkillDirs`, `mergeSkillSources`, `skillToolsFor`, `skillCommandsFor`, `claudeSkillTools`, `claudeSkillCommands`, and the private `loadSkillSources` (Task 2); `HOME_PLACEHOLDER`, `substituteHome`, `substitutePlaceholders`, `PolicyDirs.home`, `expandHomeDir` (Task 3); `slashCommands`, `paletteFrom` (Task 4).
-- Where each rule lives, once: the two frontmatter switches in `modelInvocable` and `userInvocable`; command fields and defaults in `commandRecord`; the repository walk in `repositoryAncestors`; "no repository means only the start folder" in `projectFolders`; precedence in `mergeSkillSources` (by `names`) and in the order of `slashCommands()`; the placeholders in `substitutePlaceholders`.
+- Names used across tasks: `scanClaudeSkills`, `ClaudeSkillsScan`, `SkillCommand`, `_repositoryAncestors`, `_refusedSkillName`, `skillDescription`, `MAX_SKILL_DESCRIPTION_CHARS` (Task 1); `SkillLabel`, `SkillDir`, `SkillSource`, `projectFolders`, `claudeSkillDirs`, `mergeSkillSources`, `skillToolsFor`, `skillCommandsFor`, `claudeSkillTools`, `claudeSkillCommands`, and the private `loadSkillSources` (Task 2); `HOME_PLACEHOLDER`, `substituteHome`, `substitutePlaceholders`, `PolicyDirs.home`, `expandHomeDir` (Task 3); `slashCommands`, `paletteFrom` (Task 4).
+- Where each rule lives, once: boolean spellings in `frontmatterFlagToBool`; the two frontmatter switches in `modelInvocable` and `userInvocable`; description defaults, `when_to_use`, and the cap in `skillDescription`; refused and reserved names in `_refusedSkillName`; command fields and defaults in `commandRecord`; the repository walk in `repositoryAncestors`; "no repository means only the start folder" in `projectFolders`; precedence in `mergeSkillSources` (by `names`) and in the order of `slashCommands()`; the placeholders in `substitutePlaceholders`.

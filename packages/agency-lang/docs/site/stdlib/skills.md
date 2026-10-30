@@ -35,7 +35,7 @@ export type SkillEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L49))
 
 ### SkillGroup
 
@@ -51,7 +51,47 @@ export type SkillGroup = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L346))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L356))
+
+### SkillCommand
+
+One slash command: what `commandsDir` reads from a `.claude/commands`
+  file, and what `scanClaudeSkills` makes from a skill. `expandSlash` takes
+  either.
+
+```ts
+/** One slash command: what `commandsDir` reads from a `.claude/commands`
+  file, and what `scanClaudeSkills` makes from a skill. `expandSlash` takes
+  either. */
+export type SkillCommand = {
+  name: string;
+  description: string;
+  argHint: string;
+  body: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L423))
+
+### ClaudeSkillsScan
+
+One scan of a Claude Code skills folder. `names` holds every skill found,
+  before either frontmatter switch applies, so a caller merging several
+  folders can let a name in one folder hide the same name in the next.
+
+```ts
+/** One scan of a Claude Code skills folder. `names` holds every skill found,
+  before either frontmatter switch applies, so a caller merging several
+  folders can let a name in one folder hide the same name in the next. */
+export type ClaudeSkillsScan = {
+  dir: string;
+  names: string[];
+  entries: SkillEntry[];
+  commands: SkillCommand[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L433))
 
 ## Effects
 
@@ -90,7 +130,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L222))
 
 ### std::skills::commandsDir
 
@@ -101,7 +141,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L227))
 
 ### std::skills::save
 
@@ -114,7 +154,7 @@ effect std::skills::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L411))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L573))
 
 ### std::skills::review
 
@@ -127,7 +167,7 @@ effect std::skills::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L530))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L692))
 
 ## Constants
 
@@ -137,7 +177,7 @@ effect std::skills::review {
 export static const MAX_TOOL_NAME_LEN = 64
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L111))
 
 ## Functions
 
@@ -172,7 +212,7 @@ rebuild the tool without rescanning.
 | name | `string` | "" |
 | brief | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L235))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L236))
 
 ### skillsDir
 
@@ -202,7 +242,7 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L320))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L330))
 
 ### scanSkillsSubdirs
 
@@ -240,7 +280,44 @@ needs as its `dir`.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L359))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L369))
+
+### scanClaudeSkills
+
+```ts
+scanClaudeSkills(
+  dir: string,
+): Result<ClaudeSkillsScan> raises <std::skills::skillsDir>
+```
+
+Scan a Claude Code skills folder for the skills a model may read and the
+  skills a user may run as slash commands. Raises one std::skills::skillsDir
+  interrupt for the folder, which also covers the commands: a rule that
+  rejects std::skills::commandsDir does not stop them.
+
+  @param dir - The skills folder, such as ~/.claude/skills
+
+Scan a Claude Code skills folder: one subdirectory per skill, each with a
+`SKILL.md`. Each file is read once, and it yields up to two things: an entry
+in the skills tool's listing, unless its frontmatter sets
+`disable-model-invocation: true`, and a slash command, unless it sets
+`user-invocable: false`. A command's body starts with `Base directory for
+this skill: <folder>`, and `${CLAUDE_SKILL_DIR}` in it becomes that folder.
+A name Claude Code refuses or reserves is skipped.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+
+**Returns:** `Result<ClaudeSkillsScan>`
+
+**Throws:** `std::skills::skillsDir`
+
+**Needs:** `fileRead`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L519))
 
 ### writeSkill
 
@@ -284,7 +361,7 @@ draft-revise-accept loop is `designSkill`, which ends by calling this.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L470))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L632))
 
 ### designSkill
 
@@ -337,7 +414,7 @@ the write. This is the function to hand to a model as a tool.
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L638))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L800))
 
 ### docsEntries
 
@@ -360,7 +437,7 @@ Scan one section of the packaged Agency documentation. Pass the result to
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L685))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L847))
 
 ### docsToolFromEntries
 
@@ -386,7 +463,7 @@ Build a docs tool for an LLM from entries docsEntries returned.
 | entries | `SkillEntry[]` |  |
 | brief | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L698))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L860))
 
 ### docsSkill
 
@@ -408,7 +485,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L717))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L879))
 
 ### bundledDocsDir
 
@@ -421,7 +498,7 @@ The directory holding the Agency docs that ship inside the package. A
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L727))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L889))
 
 ### agentSkill
 
@@ -443,7 +520,7 @@ Build a skills tool over the skills shipped for one agent. The returned
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L736))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L898))
 
 ### agentPrompt
 
@@ -466,12 +543,12 @@ Read one of the prompt files shipped for the stdlib agents. A failure
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L757))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L919))
 
 ### commandsDir
 
 ```ts
-commandsDir(dir: string): any[]
+commandsDir(dir: string): SkillCommand[]
 ```
 
 Discover .md files under `dir` and parse each as a slash-command
@@ -515,18 +592,18 @@ root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 |---|---|---|
 | dir | `string` |  |
 
-**Returns:** `any[]`
+**Returns:** `SkillCommand[]`
 
 **Throws:** `std::skills::commandsDir`
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L838))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L1000))
 
 ### expandSlash
 
 ```ts
-expandSlash(msg: string, commands: any[]): string
+expandSlash(msg: string, commands: SkillCommand[]): string
 ```
 
 Expand a /command in `msg` into its command body. Returns the rendered
@@ -556,8 +633,8 @@ agency agent`, yielding `"/foo\n"`) dispatch correctly.
 | Name | Type | Default |
 |---|---|---|
 | msg | `string` |  |
-| commands | `any[]` |  |
+| commands | `SkillCommand[]` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L897))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L1053))

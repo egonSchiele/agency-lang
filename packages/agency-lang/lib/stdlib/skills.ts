@@ -70,3 +70,28 @@ export function _agentSkillsDir(agent: string): string {
 export function _agentPromptsDir(): string {
   return path.join(stdlibDir(), "agents", "prompts");
 }
+
+// The characters Claude Code refuses in a skill name or folder name: control
+// characters, zero-width and bidirectional-control characters, private-use
+// characters, unusual blanks, and `<` and `>`.
+const REFUSED_NAME_CHARS =
+  /[\u0000-\u001F\u007F-\u009F\u00A0\u1680\u2000-\u200F\u2028-\u202F\u205F\u2066-\u2069\u3000\uE000-\uF8FF\uFEFF<>]/;
+
+// Names Claude Code keeps for its own synced skills.
+const RESERVED_SKILL_FOLDER = "synced";
+const RESERVED_SKILL_PREFIX = "anthropic-skills";
+
+/** True when Claude Code would refuse `name` as a skill name or folder name,
+ *  or reserves it, so a skill scan skips it. */
+export function _refusedSkillName(name: string): boolean {
+  if (REFUSED_NAME_CHARS.test(name)) {
+    return true;
+  }
+  if (name !== name.trim() || name.includes("  ")) {
+    return true;
+  }
+  if (name === RESERVED_SKILL_FOLDER || name === RESERVED_SKILL_PREFIX) {
+    return true;
+  }
+  return name.startsWith(`${RESERVED_SKILL_PREFIX}:`);
+}

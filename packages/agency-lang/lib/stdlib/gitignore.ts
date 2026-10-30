@@ -6,6 +6,7 @@
 import path from "#path";
 import picomatch from "picomatch";
 import type { Host } from "../host/host.js";
+import { currentHost } from "../runtime/currentHost.js";
 
 type Rule = {
   /** Matches the path itself, relative to the directory the .gitignore lives in. */
@@ -103,6 +104,12 @@ export async function repositoryAncestors(host: Host, dir: string): Promise<stri
     if (parent === current) return null;
     current = parent;
   }
+}
+
+/** `repositoryAncestors` for Agency code, which has no host to pass. */
+export async function _repositoryAncestors(dir: string): Promise<string[] | null> {
+  const host = currentHost();
+  return repositoryAncestors(host, dir);
 }
 
 // These two read above the walk root, where no approval names a root, so

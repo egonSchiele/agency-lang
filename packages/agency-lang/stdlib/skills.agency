@@ -21,6 +21,7 @@ import {
   _agentSkillsDir,
   _agentPromptsDir,
   _stringifyFrontmatter,
+  _refusedSkillName,
  } from "agency-lang/stdlib-lib/skills.js"
 
 
@@ -298,12 +299,21 @@ def scanEntries(
   if (pathsResult is failure) {
     return []
   }
-  return map(pathsResult.value) as path {
+  const parsed = map(pathsResult.value) as path {
     const data = (try _read(root, "${sub}/${path}", 0, 0) |> frontmatter) catch {}
-    if (layout == "standard") {
-      return standardEntry(path, data)
+    return {
+      path: path,
+      data: data
     }
-    return flatEntry(path, data)
+  }
+  if (layout == "standard") {
+    const usable = filter(parsed, \file -> modelInvocable(file.data))
+    return map(usable) as file {
+      return standardEntry(file.path, file.data)
+    }
+  }
+  return map(parsed) as file {
+    return flatEntry(file.path, file.data)
   }
 }
 
@@ -405,6 +415,158 @@ export def scanSkillsSubdirs(
     }
   }
   return success(out)
+}
+
+/** One slash command: what `commandsDir` reads from a `.claude/commands`
+  file, and what `scanClaudeSkills` makes from a skill. `expandSlash` takes
+  either. */
+export type SkillCommand = {
+  name: string;
+  description: string;
+  argHint: string;
+  body: string
+}
+
+/** One scan of a Claude Code skills folder. `names` holds every skill found,
+  before either frontmatter switch applies, so a caller merging several
+  folders can let a name in one folder hide the same name in the next. */
+export type ClaudeSkillsScan = {
+  dir: string;
+  names: string[];
+  entries: SkillEntry[];
+  commands: SkillCommand[]
+}
+
+// Claude Code cuts a skill's description, `when_to_use` included, at this
+// many characters in the skill listing.
+static const MAX_SKILL_DESCRIPTION_CHARS = 1536
+
+static const TRUE_WORDS = ["true", "yes", "on", "1"]
+static const FALSE_WORDS = ["false", "no", "off", "0"]
+
+// Written with `\$` so it is the literal token, not an interpolation.
+static const CLAUDE_SKILL_DIR_TOKEN = "\${CLAUDE_SKILL_DIR}"
+
+// A frontmatter switch read the way Claude Code reads its boolean fields: a
+// YAML boolean, a number, or a word, in any letter case.
+def frontmatterFlagToBool(data: any, key: string, fallback: boolean): boolean {
+  if (data == null || data[key] == null) {
+    return fallback
+  }
+  const value = "${data[key]}"
+  const word = value.trim().toLowerCase()
+  if (TRUE_WORDS.includes(word)) {
+    return true
+  }
+  if (FALSE_WORDS.includes(word)) {
+    return false
+  }
+  return fallback
+}
+
+// `disable-model-invocation: true` keeps a skill out of the model's listing.
+def modelInvocable(data: any): boolean {
+  return !frontmatterFlagToBool(data, "disable-model-invocation", false)
+}
+
+// `user-invocable: false` keeps a skill from running as `/name`.
+def userInvocable(data: any): boolean {
+  return frontmatterFlagToBool(data, "user-invocable", true)
+}
+
+def firstNonEmptyLine(text: string): string {
+  for (line in text.split("\n")) {
+    if (line.trim() != "") {
+      return line.trim()
+    }
+  }
+  return ""
+}
+
+// Claude Code's listing text for a skill: its description, or else the
+// first line of its body, then `when_to_use`, cut to the listing limit.
+def skillDescription(data: any, body: string): string {
+  let text = "${data.description ?? firstNonEmptyLine(body)}"
+  const whenToUse = "${data.when_to_use ?? ""}"
+  if (text == "") {
+    text = whenToUse
+  } else if (whenToUse != "") {
+    text = "${text} ${whenToUse}"
+  }
+  return text.slice(0, MAX_SKILL_DESCRIPTION_CHARS)
+}
+
+def commandRecord(name: string, description: string, data: any, body: string): SkillCommand {
+  const argHintRaw = data["argument-hint"] ?? ""
+  return {
+    name: name,
+    description: description,
+    argHint: "${argHintRaw}",
+    body: body
+  }
+}
+
+/**
+Scan a Claude Code skills folder: one subdirectory per skill, each with a
+`SKILL.md`. Each file is read once, and it yields up to two things: an entry
+in the skills tool's listing, unless its frontmatter sets
+`disable-model-invocation: true`, and a slash command, unless it sets
+`user-invocable: false`. A command's body starts with `Base directory for
+this skill: <folder>`, and `${CLAUDE_SKILL_DIR}` in it becomes that folder.
+A name Claude Code refuses or reserves is skipped.
+*/
+@capabilities(fileRead)
+export def scanClaudeSkills(dir: string): Result<ClaudeSkillsScan> raises <std::skills::skillsDir> {
+  """
+  Scan a Claude Code skills folder for the skills a model may read and the
+  skills a user may run as slash commands. Raises one std::skills::skillsDir
+  interrupt for the folder, which also covers the commands: a rule that
+  rejects std::skills::commandsDir does not stop them.
+
+  @param dir - The skills folder, such as ~/.claude/skills
+  """
+  const real = try _realDir(dir)
+  if (real is failure) {
+    return real
+  }
+  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
+    dir: real.value,
+    layout: "standard"
+  })
+
+  const pathsResult = try _glob(real.value, ".", "*/SKILL.md", MAX_SKILL_FILES)
+  if (pathsResult is failure) {
+    return pathsResult
+  }
+  let names: string[] = []
+  let entries: SkillEntry[] = []
+  let commands: SkillCommand[] = []
+  for (path in pathsResult.value) {
+    const raw = try _read(real.value, path, 0, 0) catch ""
+    const data = frontmatter(raw) catch {}
+    const folder = path.replace("/SKILL.md", "")
+    const name = "${data.name ?? folder}"
+    if (_refusedSkillName(name) || _refusedSkillName(folder)) {
+      continue
+    }
+    names.push(name)
+    const text = stripFm(raw)
+    const description = skillDescription(data, text)
+    if (modelInvocable(data)) {
+      entries.push({ ...standardEntry(path, data), description: description })
+    }
+    if (userInvocable(data)) {
+      const skillFolder = "${real.value}/${folder}"
+      const body = "Base directory for this skill: ${skillFolder}\n\n" + text.replaceAll(CLAUDE_SKILL_DIR_TOKEN, skillFolder)
+      commands.push(commandRecord(name, description, data, body))
+    }
+  }
+  return success({
+    dir: real.value,
+    names: names,
+    entries: entries,
+    commands: commands
+  })
 }
 
 @alwaysUnder(dir)
@@ -835,7 +997,7 @@ For project-level commands (e.g. `.claude/commands` at the project
 root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 */
 @capabilities(fileRead)
-export def commandsDir(dir: string): any[] {
+export def commandsDir(dir: string): SkillCommand[] {
   """
   Discover .md files under `dir` and parse each as a slash-command
   template. Returns [] if `dir` is missing or empty.
@@ -861,17 +1023,11 @@ export def commandsDir(dir: string): any[] {
       // false, so the older `!= null` guard let `undefined` through
       // and stringified it as `"undefined"`. `??` treats both nullish.
       const descriptionRaw = fm.description ?? ""
-      const argHintRaw = fm["argument-hint"] ?? ""
       let name = p
       if (name.endsWith(".md")) {
         name = name.slice(0, name.length - 3)
       }
-      return {
-        name: name,
-        description: "${descriptionRaw}",
-        argHint: "${argHintRaw}",
-        body: stripFm(raw)
-      }
+      return commandRecord(name, "${descriptionRaw}", fm, stripFm(raw))
     }
   }
   return []
@@ -894,7 +1050,7 @@ newline) after `/<name>`. `expandSlash` tolerates leading and
 trailing whitespace on `msg`, so piped invocations (`echo /foo |
 agency agent`, yielding `"/foo\n"`) dispatch correctly.
 */
-export def expandSlash(msg: string, commands: any[]): string {
+export def expandSlash(msg: string, commands: SkillCommand[]): string {
   """
   Expand a /command in `msg` into its command body. Returns the rendered
   body with $ARGUMENTS substituted, or `msg` unchanged if no command matches.

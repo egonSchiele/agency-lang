@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { _docsDir } from "./skills.js";
+import { _docsDir, _refusedSkillName } from "./skills.js";
 import { _glob } from "./shell.js";
 
 describe("_docsDir", () => {
@@ -38,4 +38,31 @@ describe("stdlib docs recursive glob", () => {
     expect(recursive.length).toBeGreaterThan(0);
     expect(recursive.sort()).toEqual(flat.sort());
   });
+});
+
+describe("_refusedSkillName", () => {
+  const refused = [
+    "a\u0007b",
+    "a\u200Bb",
+    "a\u202Eb",
+    "bad<name>",
+    "a>b",
+    " lead",
+    "trail ",
+    "two  spaces",
+    "synced",
+    "anthropic-skills",
+    "anthropic-skills:demo",
+  ];
+  for (const name of refused) {
+    it(`refuses ${JSON.stringify(name)}`, () => {
+      expect(_refusedSkillName(name)).toBe(true);
+    });
+  }
+
+  for (const name of ["review-pr", "My Skill", "anthropic-skillset"]) {
+    it(`allows ${JSON.stringify(name)}`, () => {
+      expect(_refusedSkillName(name)).toBe(false);
+    });
+  }
 });
